@@ -1,0 +1,25 @@
+{
+    "Defaults": {},
+    "Shuffle_B_0": {
+      "preferred_impl_style": "hls"
+    },
+    "Shuffle_A_0": {
+      "preferred_impl_style": "hls"
+    },
+    "MVAU_dyn_0": {
+      "preferred_impl_style": "rtl"
+    },
+    "Thresholding_0": {
+      "preferred_impl_style": "rtl"
+    },
+    "Softmax_0": {
+      "preferred_impl_style": "hls"
+    },
+    "MVAU_dyn_1": {
+    "preferred_impl_style": "rtl"
+    },
+    "Thresholding_1": {
+    "preferred_impl_style": "rtl"
+    }
+  }
+  

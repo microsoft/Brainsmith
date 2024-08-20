@@ -1,0 +1,110 @@
+// Copyright (C) 2024, Advanced Micro Devices, Inc. All rights reserved.
+//
+// This file is subject to the Xilinx Design License Agreement located
+// in the LICENSE.md file in the root directory of this repository.
+//
+// This file contains confidential and proprietary information of Xilinx, Inc.
+// and is protected under U.S. and international copyright and other
+// intellectual property laws.
+//
+// DISCLAIMER
+// This disclaimer is not a license and does not grant any rights to the materials
+// distributed herewith. Except as otherwise provided in a valid license issued to
+// you by Xilinx, and to the maximum extent permitted by applicable law: (1) THESE
+// MATERIALS ARE MADE AVAILABLE "AS IS" AND WITH ALL FAULTS, AND XILINX HEREBY
+// DISCLAIMS ALL WARRANTIES AND CONDITIONS, EXPRESS, IMPLIED, OR STATUTORY,
+// INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, NONINFRINGEMENT, OR
+// FITNESS FOR ANY PARTICULAR PURPOSE; and (2) Xilinx shall not be liable (whether
+// in contract or tort, including negligence, or under any other theory of
+// liability) for any loss or damage of any kind or nature related to, arising
+// under or in connection with these materials, including for any direct, or any
+// indirect, special, incidental, or consequential loss or damage (including loss
+// of data, profits, goodwill, or any type of loss or damage suffered as a result
+// of any action brought by a third party) even if such damage or loss was
+// reasonably foreseeable or Xilinx had been advised of the possibility of the
+// same.
+//
+// CRITICAL APPLICATIONS
+// Xilinx products are not designed or intended to be fail-safe, or for use in
+// any application requiring failsafe performance, such as life-support or safety
+// devices or systems, Class III medical devices, nuclear facilities, applications
+// related to the deployment of airbags, or any other applications that could lead
+// to death, personal injury, or severe property or environmental damage
+// (individually and collectively, "Critical Applications"). Customer assumes the
+// sole risk and liability of any use of Xilinx products in Critical Applications,
+// subject only to applicable laws and regulations governing limitations on product
+// liability.
+//
+// THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
+#include "input_gen.hpp"
+
+// Number of feature maps processed in a test
+constexpr unsigned  ROUNDS = 2;
+
+// Test specified instance against expected reference
+template<unsigned  FM_SIZE, unsigned... V, typename  T>
+bool test(hls::stream<T> &ref) {
+	hls::stream<T>  src;
+	hls::stream<T>  dst;
+
+	for(unsigned  i = 0; i < ROUNDS*FM_SIZE; i++)  src.write(i);
+
+	bool  ok = true;
+	unsigned  timeout = 0;
+	while(timeout < FM_SIZE) {
+		input_gen<-1, FM_SIZE, V...>(src, dst);
+		if(dst.empty())  timeout++;
+		else {
+			T const  y = dst.read();
+			T const  r = ref.read();
+
+			std::cout << ">> " << y;
+			if(y != r) {
+				std::cout << " != " << r;
+				ok = false;
+			}
+			std::cout << std::endl;
+			timeout = 0;
+		}
+	}
+	return  ok && ref.empty();
+
+} // test()
+
+
+int main() {
+
+	bool  ok = true;
+	auto const  heading = [](char const *const  hdg) {
+		std::cout << '\n' << hdg << "\n=====" << std::endl;
+	};
+
+	//-----------------------------------------------------------------------
+	heading("BERT Shuffle A"); {
+		constexpr unsigned  S = 128;	// Sequence
+		constexpr unsigned  H =  12;	// Heads
+		constexpr unsigned  I =  32;	// Inner
+		//	h = [0,H)
+		//		s = [0,S)
+		//			i = [0,I)
+		//	H*S*I: H*I *s + I *h + i
+
+		// Reference Computation
+		hls::stream<unsigned>  ref;
+		for(unsigned  ii = 0; ii < ROUNDS; ii++) {
+			for(unsigned  h = 0; h < H; h++) {
+				for(unsigned  s = 0; s < S; s++) {
+					for(unsigned  i = 0; i < I; i++) {
+						ref.write((ii*H*S*I) + (I *h + i + H*I *s));
+					}
+				}
+			}
+		}
+
+		// DUT Invocation
+		ok &= test<H*S*I, H, I, S, H*I, I, 1>(ref);
+	}
+
+	return  ok? 0 : 1;
+
+} // main()

@@ -1,0 +1,15 @@
+{
+    "Defaults": {},
+    "TL": {
+        "N_FINN_partitions": 2,
+        "FINN_Partitions_all": "partition_0 partition_2",
+        "N_layers": 1,
+        "Head_size": 32,
+        "Mtrx_height": 128,
+        "Mtrx_width": 384,
+        "Activation_width": 8,
+        "N_sim_loops": 1,
+        "Model_name": "bert-simplified-int8-20240610.onnx"
+    }
+}
+  

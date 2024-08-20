@@ -1,0 +1,205 @@
+# Copyright (C) 2024, Advanced Micro Devices, Inc. All rights reserved.
+#
+# This file is subject to the Xilinx Design License Agreement located
+# in the LICENSE.md file in the root directory of this repository.
+#
+# This file contains confidential and proprietary information of Xilinx, Inc.
+# and is protected under U.S. and international copyright and other
+# intellectual property laws.
+#
+# DISCLAIMER
+# This disclaimer is not a license and does not grant any rights to the materials
+# distributed herewith. Except as otherwise provided in a valid license issued to
+# you by Xilinx, and to the maximum extent permitted by applicable law: (1) THESE
+# MATERIALS ARE MADE AVAILABLE "AS IS" AND WITH ALL FAULTS, AND XILINX HEREBY
+# DISCLAIMS ALL WARRANTIES AND CONDITIONS, EXPRESS, IMPLIED, OR STATUTORY,
+# INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, NONINFRINGEMENT, OR
+# FITNESS FOR ANY PARTICULAR PURPOSE; and (2) Xilinx shall not be liable (whether
+# in contract or tort, including negligence, or under any other theory of
+# liability) for any loss or damage of any kind or nature related to, arising
+# under or in connection with these materials, including for any direct, or any
+# indirect, special, incidental, or consequential loss or damage (including loss
+# of data, profits, goodwill, or any type of loss or damage suffered as a result
+# of any action brought by a third party) even if such damage or loss was
+# reasonably foreseeable or Xilinx had been advised of the possibility of the
+# same.
+#
+# CRITICAL APPLICATIONS
+# Xilinx products are not designed or intended to be fail-safe, or for use in
+# any application requiring failsafe performance, such as life-support or safety
+# devices or systems, Class III medical devices, nuclear facilities, applications
+# related to the deployment of airbags, or any other applications that could lead
+# to death, personal injury, or severe property or environmental damage
+# (individually and collectively, "Critical Applications"). Customer assumes the
+# sole risk and liability of any use of Xilinx products in Critical Applications,
+# subject only to applicable laws and regulations governing limitations on product
+# liability.
+#
+# THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
+
+
+# Static layer
+proc cr_bd_design_static { parentCell } {
+   upvar #0 cfg cnfg
+
+   # CHANGE DESIGN NAME HERE
+   set design_name design_static
+
+   common::send_msg_id "BD_TCL-003" "INFO" "Currently there is no design <$design_name> in project, so creating one..."
+
+   create_bd_design $design_name
+
+
+   set bCheckIPsPassed 1
+   ##################################################################
+   # CHECK IPs
+   ##################################################################
+   set bCheckIPs 1
+   if { $bCheckIPs == 1 } {
+      set list_check_ips "\ 
+   xilinx.com:ip:versal_cips:3.4\
+   xilinx.com:ip:clk_wizard:1.0\
+   xilinx.com:ip:proc_sys_reset:5.0\
+   "
+
+      set list_ips_missing ""
+      common::send_gid_msg -ssname BD::TCL -id 2011 -severity "INFO" "Checking if the following IPs exist in the project's IP catalog: $list_check_ips ."
+
+      foreach ip_vlnv $list_check_ips {
+         set ip_obj [get_ipdefs -all $ip_vlnv]
+         if { $ip_obj eq "" } {
+            lappend list_ips_missing $ip_vlnv
+         }
+      }
+
+      if { $list_ips_missing ne "" } {
+         catch {common::send_gid_msg -ssname BD::TCL -id 2012 -severity "ERROR" "The following IPs are not found in the IP Catalog:\n  $list_ips_missing\n\nResolution: Please add the repository containing the IP(s) to the project." }
+         set bCheckIPsPassed 0
+      }
+
+   }
+
+   if { $bCheckIPsPassed != 1 } {
+   common::send_gid_msg -ssname BD::TCL -id 2023 -severity "WARNING" "Will not continue with creation of design due to the error(s) above."
+   return 3
+   }
+
+   ##################################################################
+   # DESIGN PROCs
+   ##################################################################
+
+
+
+   # Procedure to create entire design; Provide argument to make
+   # procedure reusable. If parentCell is "", will use root.
+   proc create_root_design { parentCell } {
+
+   variable script_folder
+   variable design_name
+
+   if { $parentCell eq "" } {
+      set parentCell [get_bd_cells /]
+   }
+
+   # Get object for parentCell
+   set parentObj [get_bd_cells $parentCell]
+   if { $parentObj == "" } {
+      catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
+      return
+   }
+
+   # Make sure parentObj is hier blk
+   set parentType [get_property TYPE $parentObj]
+   if { $parentType ne "hier" } {
+      catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+      return
+   }
+
+   # Save current instance; Restore later
+   set oldCurInst [current_bd_instance .]
+
+   # Set parent object as current
+   current_bd_instance $parentObj
+
+
+   # Create interface ports
+
+   # Create ports
+   set ps_resetn [ create_bd_port -dir O -from 0 -to 0 -type rst ps_resetn ]
+   set aresetn [ create_bd_port -dir O -from 0 -to 0 -type rst aresetn ]
+   set aclk [ create_bd_port -dir O -type clk aclk ]
+   set aclk_dp [ create_bd_port -dir O -type clk aclk_dp ]
+   set ps_clk [ create_bd_port -dir O -type clk ps_clk ]
+
+   # Create instance: versal_cips_0, and set properties
+   set versal_cips_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:versal_cips:3.4 versal_cips_0 ]
+   set_property -dict [list \
+      CONFIG.BOOT_MODE {Custom} \
+      CONFIG.DDR_MEMORY_MODE {Custom} \
+      CONFIG.DEBUG_MODE {JTAG} \
+      CONFIG.DESIGN_MODE {1} \
+      CONFIG.PS_PMC_CONFIG { \
+         DEBUG_MODE {JTAG} \
+         PS_HSDP_EGRESS_TRAFFIC {JTAG} \
+         PS_HSDP_INGRESS_TRAFFIC {JTAG} \
+         PS_HSDP_MODE {NONE} \
+         PS_NUM_FABRIC_RESETS {1} \
+         PS_USE_PMCPL_CLK0 {1} \
+         SMON_ALARMS {Set_Alarms_On} \
+         SMON_ENABLE_TEMP_AVERAGING {0} \
+         SMON_TEMP_AVERAGING_SAMPLES {0} \
+      } \
+   ] $versal_cips_0
+
+
+   # Create instance: clk_wizard_0, and set properties
+   set clk_wizard_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wizard:1.0 clk_wizard_0 ]
+   set_property -dict [list \
+      CONFIG.CLKOUT_DRIVES {BUFG,BUFG,BUFG,BUFG,BUFG,BUFG,BUFG} \
+      CONFIG.CLKOUT_DYN_PS {None,None,None,None,None,None,None} \
+      CONFIG.CLKOUT_GROUPING {Auto,Auto,Auto,Auto,Auto,Auto,Auto} \
+      CONFIG.CLKOUT_MATCHED_ROUTING {false,false,false,false,false,false,false} \
+      CONFIG.CLKOUT_PORT {clk_out1,clk_out2,clk_out3,clk_out4,clk_out5,clk_out6,clk_out7} \
+      CONFIG.CLKOUT_REQUESTED_DUTY_CYCLE {50.000,50.000,50.000,50.000,50.000,50.000,50.000} \
+      CONFIG.CLKOUT_REQUESTED_OUT_FREQUENCY {${ACLK_F}.000,${ACLK_F_DP}.000,100.000,100.000,100.000,100.000,100.000} \
+      CONFIG.CLKOUT_REQUESTED_PHASE {0.000,0.000,0.000,0.000,0.000,0.000,0.000} \
+      CONFIG.CLKOUT_USED {true,true,false,false,false,false,false} \
+      CONFIG.USE_PHASE_ALIGNMENT {true} \
+   ] $clk_wizard_0
+
+
+   # Create instance: proc_sys_reset_0, and set properties
+   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
+
+   # Create instance: proc_sys_reset_1, and set properties
+   set proc_sys_reset_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_1 ]
+
+   # Create port connections
+   connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins clk_wizard_0/clk_out1] [get_bd_pins proc_sys_reset_1/slowest_sync_clk] [get_bd_ports aclk]
+   connect_bd_net -net clk_wizard_0_clk_out2 [get_bd_pins clk_wizard_0/clk_out2] [get_bd_ports aclk_dp]
+   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins proc_sys_reset_0/peripheral_aresetn] [get_bd_ports ps_resetn]
+   connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_pins proc_sys_reset_1/peripheral_aresetn] [get_bd_ports aresetn]
+   connect_bd_net -net versal_cips_0_pl0_ref_clk [get_bd_pins versal_cips_0/pl0_ref_clk] [get_bd_pins clk_wizard_0/clk_in1] [get_bd_pins proc_sys_reset_0/slowest_sync_clk] [get_bd_ports ps_clk]
+   connect_bd_net -net versal_cips_0_pl0_resetn [get_bd_pins versal_cips_0/pl0_resetn] [get_bd_pins proc_sys_reset_0/ext_reset_in] [get_bd_pins proc_sys_reset_1/ext_reset_in]
+
+   # Create address segments
+
+
+   # Restore current instance
+   current_bd_instance $oldCurInst
+
+   validate_bd_design
+   save_bd_design
+   }
+   # End of create_root_design()
+
+
+   ##################################################################
+   # MAIN FLOW
+   ##################################################################
+
+   create_root_design ""
+
+   return 0
+}
+

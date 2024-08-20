@@ -1,0 +1,50 @@
+{
+    "Defaults": {},
+    "p1_Shuffle_B_0": {
+      "PE": 4
+    },
+    "p1_Shuffle_A_0": {
+      "PE": 4
+    },
+    "p1_MVAU_dyn_rtl_0": {
+      "PE": 32,
+      "SIMD": 16,
+      "ram_style": "block",
+      "resType": "dsp",
+      "mem_mode": "internal_decoupled",
+      "runtime_writeable_weights": 0,
+      "pumpedCompute": 1
+    },
+    "p1_Thresholding_rtl_0": {
+      "PE": 16,
+      "runtime_writeable_weights": 0,
+      "depth_trigger_uram": 0,
+      "depth_trigger_bram": 0
+    },
+    "p1_Softmax_0": {
+      "SIMD": 4,
+      "WIDTH": 128
+    },
+    "p1_MVAU_dyn_rtl_1": {
+      "PE": 32,
+      "SIMD": 16,
+      "ram_style": "block",
+      "resType": "dsp",
+      "mem_mode": "internal_decoupled",
+      "runtime_writeable_weights": 0,
+      "pumpedCompute": 1
+    },
+    "p1_Thresholding_rtl_1": {
+      "PE": 4,
+      "runtime_writeable_weights": 0,
+      "depth_trigger_uram": 0,
+      "depth_trigger_bram": 0
+    },
+    "p1_Shuffle_C_0": {
+      "PE": 4
+    },
+    "p1_Layernorm_0": {
+      "PE": 4 
+    }
+  }
+  
