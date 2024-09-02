@@ -38,6 +38,7 @@
 # THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
 
 import argparse
+import os
 
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
@@ -101,7 +102,8 @@ gen_hardware_steps = [
 
 my_output_dir = build_dir + "/output_gen_ip_" + model_name + version_name
 model_file = build_dir + "/output_create_partitions/intermediate_models/partitions/" + model_name + ".onnx"
-
+folding_file = os.path.abspath("../config/folding_{model_name}.json")
+specialize_config_file = os.path.abspath(f"../config/specialize_layers_{model_name}.json")
 cfg = build_cfg.DataflowBuildConfig(
     auto_fifo_depths=False,
     steps=gen_hardware_steps,

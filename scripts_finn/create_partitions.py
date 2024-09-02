@@ -43,6 +43,7 @@ import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 from custom_steps import custom_step_create_dataflow_partitions, custom_step_tidy_up
 from finn.builder.build_dataflow_steps import step_qonnx_to_finn, step_tidy_up
+import os
 
 gen_hardware_steps = [
     step_qonnx_to_finn,
@@ -61,7 +62,7 @@ build_dir = args.build_dir
 model_name = args.model_name
 
 my_output_dir = build_dir + "/output_create_partitions"
-model_file = "../models/" + model_name
+model_file = os.path.abspath("../models/" + model_name)
 
 cfg = build_cfg.DataflowBuildConfig(
     standalone_thresholds=True,
