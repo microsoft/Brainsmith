@@ -40,7 +40,7 @@
 # configuration for thresholding layers
 
 import argparse
-import math
+import os
 import json
 
 from distutils.dir_util import copy_tree
@@ -108,11 +108,11 @@ def create_model_from_node(node, graph):
 
 
 if __name__ == "__main__":
-    config_path = "../config/top_template.json"
+    config_path = os.path.abspath("../config/top_template.json")
     with open(config_path, "r") as f:
         top_model_config = json.load(f)
     top_model_file = top_model_config["TL"]["Model_name"]
-    top_model = ModelWrapper("../models/" + top_model_file)
+    top_model = ModelWrapper(os.path.abspath("../models/" + top_model_file))
     # extract matrix height and matrix width
     matmul = top_model.get_nodes_by_op_type("MatMul")
     input_matrix = matmul[0].input[0]
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     bitwidth_tensor = quant[0].input[3]
     bitwidth = int(top_model.get_initializer(bitwidth_tensor))
     top_model_config["TL"]["Activation_width"] = bitwidth
-    json_filename = "../config/top_new.json"
+    json_filename = os.path.abspath("../config/top_new.json")
     with open(json_filename, "w") as f:
         json.dump(top_model_config, f, indent=2)
     # extract generated threshold files
