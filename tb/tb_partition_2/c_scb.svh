@@ -110,7 +110,7 @@ class c_scb;
         $fatal("Failed to open output file for reading");
       end
       
-      fo = $fopen("/scratch/dkorolij/ms-bert/scripts_finn/refio/output.txt", "w");
+      fo = $fopen("./output.txt", "w");
       if (fo == 0) begin
         $fatal("Failed to open output file for reading");
       end
