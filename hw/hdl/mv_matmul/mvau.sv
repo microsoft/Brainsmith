@@ -317,7 +317,8 @@ module mvau #(
 				.vld(dsp_vld), .p(dsp_p)
 			);
 		"mvu_4sx4u":
-			mvu_4sx4u #(.PE(PE), .SIMD(DSP_SIMD), .ACCU_WIDTH(ACCU_WIDTH), .SIGNED_ACTIVATIONS(SIGNED_ACTIVATIONS), .FORCE_BEHAVIORAL(FORCE_BEHAVIORAL)) core (
+			mvu_4sx4u #(.PE(PE), .SIMD(DSP_SIMD), .ACCU_WIDTH(ACCU_WIDTH), .WEIGHT_WIDTH(WEIGHT_WIDTH), .ACTIVATION_WIDTH(ACTIVATION_WIDTH), .SIGNED_ACTIVATIONS(SIGNED_ACTIVATIONS), 
+			.VERSION(2), .FORCE_BEHAVIORAL(FORCE_BEHAVIORAL)) core (
 				.clk(dsp_clk), .rst, .en(dsp_en),
 				.last(dsp_last), .zero(dsp_zero), .w(dsp_w), .a(dsp_a),
 				.vld(dsp_vld), .p(dsp_p)

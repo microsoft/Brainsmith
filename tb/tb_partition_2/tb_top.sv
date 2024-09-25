@@ -78,11 +78,16 @@ module tb_top;
     AXI4S #(.AXI4S_DATA_BITS(384)) matrix_a_00 ();
 
     p2_top #(
-        .SIMD_P2_0(SIMD_P2_0),
-        .SIMD_P2_1(SIMD_P2_1),
-        .PE_P2(PE_P2),
+        .SIMD_0(SIMD_P2_0),
+        .SIMD_1(SIMD_P2_1),
+        .PE(PE_P2),
+        
+        .INIT_FILE_0(INIT_FILE_P2_0),
+        .INIT_FILE_1(INIT_FILE_P2_1),
+        .INIT_FILE_2(INIT_FILE_P2_2),
+ 
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH),
-        .MM_KERNEL(0),
+        .MM_KERNEL(1),
         .PUMPED_COMPUTE(1)
     ) inst_DUT (
         .ap_clk(clk),
@@ -115,8 +120,8 @@ module tb_top;
     end
 
     // Dump
-    initial begin
-        $dumpfile("dump.vcd"); $dumpvars;
-    end
+    //initial begin
+    //    $dumpfile("dump.vcd"); $dumpvars;
+    //end
 
 endmodule

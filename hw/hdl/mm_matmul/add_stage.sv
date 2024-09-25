@@ -58,87 +58,35 @@ module add_stage #(
     output logic                                            olast
 );
 
-localparam integer T_HEIGHT = SIMD-1;
-localparam integer ADD_LAT = T_HEIGHT + 1;
-
-// TODO: Use DSPs for this, if not then do tree reduction instead ...
-logic signed [PE-1:0][T_HEIGHT:0][SIMD-1:0][ACCU_WIDTH-1:0] add_s;
+logic [PE-1:0] oval_int;
+logic [PE-1:0] olast_int;
+logic [PE-1:0] inc_acc_int;
 
 for(genvar i = 0; i < PE; i++) begin
-    for(genvar j = 0; j < SIMD; j++) begin
-        assign add_s[i][0][j] = ACCU_WIDTH'(signed'(idat_mul[i][j]));
-    end
+    add_stage_single #(
+		.SIMD(SIMD),
+		.ACTIVATION_WIDTH(ACTIVATION_WIDTH),
+		.ACCU_WIDTH(ACCU_WIDTH)	
+	) inst_add_stage (
+		.clk(clk),
+		.rst(rst),
+		.en(en),
+		
+		.idat_mul(idat_mul[i]),
+		.ival(ival),
+		.ilast(ilast),
+
+		.i_acc(i_acc[i]),
+		.inc_acc(inc_acc_int[i]),
+
+		.odat(odat[i]),
+		.oval(oval_int[i]),
+		.olast(olast_int[i])
+	);
 end
 
-always_ff @(posedge clk) begin
-    if(rst) begin
-        for(int i = 0; i < PE; i++) begin
-            for(int j = 1; j <= T_HEIGHT; j++) begin
-                add_s[i][j] <= 0;
-            end
-        end
-    end
-    else begin
-        if(en) begin
-            for(int i = 0; i < PE; i++) begin
-                for(int j = 1; j <= T_HEIGHT; j++) begin
-                    add_s[i][j][0] <= $signed(add_s[i][j-1][0]) + $signed(add_s[i][j-1][1]);
-
-                    for(int k = 0; k < T_HEIGHT-j; k++) begin
-                        add_s[i][j][k+1] <= add_s[i][j-1][k+2];
-                    end
-                end
-            end
-        end
-    end
-end
-
-logic signed [PE-1:0][ACCU_WIDTH-1:0] odat_int;
-
-// Add ACC
-always_ff @(posedge clk) begin
-    if(rst) begin
-        odat_int <= 0;
-    end
-    else begin
-        if(en) begin
-            for(int i = 0; i < PE; i++) begin
-                odat_int[i] <= $signed(add_s[i][T_HEIGHT][0]) + $signed(i_acc[i]);
-            end
-        end
-    end
-end
-
-assign odat = odat_int;
-
-// REG
-logic [ADD_LAT:0] val;
-logic [ADD_LAT:0] last;
-
-assign val[0] = ival;
-assign last[0] = ilast;
-
-always_ff @(posedge clk) begin
-    if(rst) begin
-        for(int i = 1; i <= ADD_LAT; i++) begin
-            val[i] <= 0;
-            last[i] <= 0;
-        end
-    end
-    else begin
-        if(en) begin
-            for(int i = 1; i <= ADD_LAT; i++) begin
-                val[i] <= val[i-1];
-                last[i] <= last[i-1];
-            end
-        end 
-    end
-end
-
-assign oval = val[ADD_LAT];
-assign olast = last[ADD_LAT];
-
-assign inc_acc = en && val[ADD_LAT-1];
-
+assign oval = oval_int[0];
+assign olast = olast_int[0];
+assign inc_acc = inc_acc_int[0];
 
 endmodule

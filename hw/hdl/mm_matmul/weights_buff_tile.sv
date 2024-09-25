@@ -52,7 +52,7 @@ module weights_buff_tile #(
 
     input   logic  ivld,
     output  logic  irdy,
-    input   logic  [PE-1:0][ACTIVATION_WIDTH-1:0] idat,
+    input   logic  [PE*ACTIVATION_WIDTH-1:0] idat,
 
     output  logic  ovld,
     input   logic  ordy,
@@ -84,8 +84,8 @@ logic rd_0_C, rd_0_N;
 logic rd_1_C, rd_1_N;
 
 // -- Mem
-logic [PE-1:0][SIMD-1:0][ACTIVATION_WIDTH-1:0] mem_0_C, mem_0_N;
-logic [PE-1:0][SIMD-1:0][ACTIVATION_WIDTH-1:0] mem_1_C, mem_1_N;
+(* ram_style = "distributed" *) logic [SIMD-1:0][PE*ACTIVATION_WIDTH-1:0] mem_0_C, mem_0_N;
+(* ram_style = "distributed" *) logic [SIMD-1:0][PE*ACTIVATION_WIDTH-1:0] mem_1_C, mem_1_N;
 
 // -- Signals
 logic done_0, done_1; // Completion
@@ -145,9 +145,7 @@ always_comb begin : DP_PROC_WR
                 irdy = 1'b1;
 
                 if(ivld) begin
-                    for(int i = 0; i < PE; i++) begin
-                        mem_0_N[i][curr_C] = idat[i];
-                    end
+                    mem_0_N[curr_C] = idat;
 
                     curr_N = (curr_C == SIMD-1) ? 0 : curr_C + 1;
 
@@ -165,9 +163,7 @@ always_comb begin : DP_PROC_WR
                 irdy = 1'b1;
 
                 if(ivld) begin
-                    for(int i = 0; i < PE; i++) begin
-                        mem_1_N[i][curr_C] = idat[i];
-                    end
+                    mem_1_N[curr_C] = idat;
 
                     curr_N = (curr_C == SIMD-1) ? 0 : curr_C + 1;
 
@@ -192,9 +188,18 @@ state_rd_t state_rd_C, state_rd_N;
 
 reps_cnt_t cons_r_C, cons_r_N;
 
-logic [PE*SIMD*ACTIVATION_WIDTH-1:0] odat_int;
+logic [SIMD-1:0][PE-1:0][ACTIVATION_WIDTH-1:0] odat_int;
+logic [PE-1:0][SIMD-1:0][ACTIVATION_WIDTH-1:0] odat_int_2;
 logic ovld_int;
 logic ordy_int;
+
+always_comb begin
+    for(int i = 0; i < PE; i++) begin
+        for(int j = 0; j < SIMD; j++) begin
+            odat_int_2[i][j] = odat_int[j][i];
+        end
+    end
+end
 
 // -- REG
 always_ff @( posedge clk ) begin : REG_PROC_RD
@@ -292,7 +297,7 @@ Q_srl #(
     .reset(rst),
     .count(count),
     .maxcount(maxcount),
-    .i_d(odat_int),
+    .i_d(odat_int_2),
     .i_v(ovld_int),
     .i_r(ordy_int),
     .o_d(odat),

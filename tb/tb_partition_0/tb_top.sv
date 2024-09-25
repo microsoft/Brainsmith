@@ -20,8 +20,7 @@
 // under or in connection with these materials, including for any direct, or any
 // indirect, special, incidental, or consequential loss or damage (including loss
 // of data, profits, goodwill, or any type of loss or damage suffered as a result
-// of any action brought by a third party) even if such damage or loss was
-// reasonably foreseeable or Xilinx had been advised of the possibility of the
+// of any action brought by a third party) even if such damage or loss was// reasonably foreseeable or Xilinx had been advised of the possibility of the
 // same.
 //
 // CRITICAL APPLICATIONS
@@ -80,9 +79,17 @@ module tb_top;
     p0_top #(
         .SIMD_P0(SIMD_P0),
         .PE_P0(PE_P0),
+
+        .INIT_FILE_0(INIT_FILE_P0_0),
+        .INIT_FILE_1(INIT_FILE_P0_1),
+        .INIT_FILE_2(INIT_FILE_P0_2),
+        .THRESHOLDS_PATH_0(THRESHOLDS_PATH_P0_0),
+        .THRESHOLDS_PATH_1(THRESHOLDS_PATH_P0_1),
+        .THRESHOLDS_PATH_2(THRESHOLDS_PATH_P0_2),
+
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH),
-        .MM_KERNEL(0),
-        .PUMPED_COMPUTE(1)
+        .MM_KERNEL(MM_KERNEL),
+        .PUMPED_COMPUTE(0)
     ) inst_DUT (
         .ap_clk(clk),
         .ap_clk2x(clk_dp),
@@ -115,8 +122,8 @@ module tb_top;
     end
 
     // Dump
-    initial begin
-        $dumpfile("dump.vcd"); $dumpvars;
-    end
+    //initial begin
+       // $dumpfile("dump.vcd"); $dumpvars;
+    //end
 
 endmodule

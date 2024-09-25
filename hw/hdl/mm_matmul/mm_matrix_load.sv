@@ -351,9 +351,10 @@ assign odat_int = odat_C;
 // Matrix
 // ----------------------------------------------------------------------------
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(WGT_ADDR_BITS),
-    .DATA_BITS(PE*ACTIVATION_WIDTH)
+    .DATA_BITS(PE*ACTIVATION_WIDTH),
+    .RAM_TYPE("distributed")
 ) inst_ram_tp_c_0 (
     .clk(clk),
     .a_en(1'b1),
@@ -366,9 +367,10 @@ ram_tp_c #(
     .b_data_out(odat_0)
 );
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(WGT_ADDR_BITS),
-    .DATA_BITS(PE*ACTIVATION_WIDTH)
+    .DATA_BITS(PE*ACTIVATION_WIDTH),
+    .RAM_TYPE("distributed")
 ) inst_ram_tp_c_1 (
     .clk(clk),
     .a_en(1'b1),

@@ -37,26 +37,6 @@
 #
 # THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
 # CS
-create_ip -name axis_vio -vendor xilinx.com -library ip -version 1.0 -module_name vio_top
-set_property -dict [list \
-  CONFIG.C_NUM_PROBE_IN {6} \
-  CONFIG.C_NUM_PROBE_OUT {6} \
-  CONFIG.C_PROBE_IN2_WIDTH {64} \
-  CONFIG.C_PROBE_IN3_WIDTH {64} \
-  CONFIG.C_PROBE_IN4_WIDTH {16} \
-  CONFIG.C_PROBE_OUT1_WIDTH {32} \
-  CONFIG.C_PROBE_OUT2_WIDTH {16} \
-  CONFIG.C_PROBE_OUT3_WIDTH {32} \
-  CONFIG.C_PROBE_OUT4_WIDTH {16} \
-  CONFIG.C_PROBE_OUT5_WIDTH {32} \
-  CONFIG.C_PROBE_OUT5_INIT_VAL {0x0d15ea5e} \
-] [get_ips vio_top]
-
-create_ip -name axis_ila -vendor xilinx.com -library ip -version 1.2 -module_name ila_0
-set_property -dict [list \
-  CONFIG.C_EN_STRG_QUAL {1} \
-  CONFIG.C_NUM_OF_PROBES {4} \
-] [get_ips ila_0]
 
 # Bypass buff
 create_ip -name axis_data_fifo -vendor xilinx.com -library ip -version 2.0 -module_name axis_buff
@@ -65,6 +45,13 @@ set_property -dict [list \
   CONFIG.FIFO_MEMORY_TYPE {auto} \
   CONFIG.TDATA_NUM_BYTES {4} \
 ] [get_ips axis_buff]
+
+create_ip -name axis_data_fifo -vendor xilinx.com -library ip -version 2.0 -module_name axis_buff_p2
+set_property -dict [list \
+  CONFIG.FIFO_DEPTH {32768} \
+  CONFIG.FIFO_MEMORY_TYPE {auto} \
+  CONFIG.TDATA_NUM_BYTES {5} \
+] [get_ips axis_buff_p2]
 
 create_ip -name dsp_macro -vendor xilinx.com -library ip -version 1.0 -module_name dsp_macro_0
 set_property -dict [list \
@@ -100,10 +87,6 @@ set_property -dict [list \
 create_ip -name axis_register_slice -vendor xilinx.com -library ip -version 1.1 -module_name axis_reg_32
 set_property CONFIG.TDATA_NUM_BYTES {4} [get_ips axis_reg_32]
 
-# Instrumentation
-create_ip -name dup_wrapper -vendor user.org -library hls -version 1.0 -module_name dup_wrapper_0
-create_ip -name dup_wrapper_p0 -vendor user.org -library hls -version 1.0 -module_name dup_wrapper_p0_0
-
 # Shuffles
 create_ip -name shuffleA -vendor user.org -library hls -version 1.0 -module_name shuffleA_0
 create_ip -name shuffleB -vendor user.org -library hls -version 1.0 -module_name shuffleB_0
@@ -112,3 +95,29 @@ create_ip -name shuffleC -vendor user.org -library hls -version 1.0 -module_name
 # Softmax
 #create_ip -name softmaxquant -vendor user.org -library hls -version 1.0 -module_name softmaxquant_0
 #create_ip -name layernorm -vendor user.org -library hls -version 1.0 -module_name layernorm_0
+
+# Clock gen
+create_ip -name clk_wiz -vendor xilinx.com -library ip -version 6.0 -module_name clk_wiz_0
+set_property -dict [list \
+  CONFIG.CLKIN1_JITTER_PS {40.0} \
+  CONFIG.CLKOUT1_DRIVES {Buffer} \
+  CONFIG.CLKOUT1_JITTER {74.376} \
+  CONFIG.CLKOUT1_PHASE_ERROR {78.266} \
+  CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {500.000} \
+  CONFIG.CLKOUT2_DRIVES {Buffer} \
+  CONFIG.CLKOUT3_DRIVES {Buffer} \
+  CONFIG.CLKOUT4_DRIVES {Buffer} \
+  CONFIG.CLKOUT5_DRIVES {Buffer} \
+  CONFIG.CLKOUT6_DRIVES {Buffer} \
+  CONFIG.CLKOUT7_DRIVES {Buffer} \
+  CONFIG.MMCM_CLKFBOUT_MULT_F {4.750} \
+  CONFIG.MMCM_CLKIN1_PERIOD {4.000} \
+  CONFIG.MMCM_CLKIN2_PERIOD {10.0} \
+  CONFIG.MMCM_CLKOUT0_DIVIDE_F {2.375} \
+  CONFIG.MMCM_DIVCLK_DIVIDE {1} \
+  CONFIG.PRIM_IN_FREQ {250.000} \
+  CONFIG.SECONDARY_SOURCE {Single_ended_clock_capable_pin} \
+  CONFIG.USE_LOCKED {false} \
+  CONFIG.USE_PHASE_ALIGNMENT {true} \
+  CONFIG.USE_RESET {false} \
+] [get_ips clk_wiz_0]

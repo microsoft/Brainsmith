@@ -73,6 +73,8 @@ localparam integer NF_BITS = $clog2(NF);
 localparam integer SF_NF_BITS = $clog2(SF*NF);
 localparam integer N_RPLYS_BITS = $clog2(N_RPLYS);
 
+logic [NF-1:0][ADDR_BITS-1:0] offsets;
+
 typedef enum logic  {ST_WR_0, ST_WR_1} state_wr_t;
 typedef enum logic  {ST_RD_0, ST_RD_1} state_rd_t;
 typedef logic [NF_BITS:0] nf_t;
@@ -103,6 +105,11 @@ logic [ADDR_BITS-1:0] a_addr_1;
 logic [SIMD-1:0][ACTIVATION_WIDTH-1:0] a_data_in_1;
 
 logic done_0, done_1; // Completion
+
+// -- Offsets
+for(genvar i = 0; i < NF; i++) begin
+    assign offsets[i] = i * SF;
+end
 
 // -- REG
 always_ff @( posedge clk ) begin : REG_PROC_WR
@@ -151,11 +158,11 @@ always_comb begin : DP_PROC_WR
     irdy = 1'b0;
 
     a_we_0 = 0;
-    a_addr_0 = (curr_nf_C << $clog2(SF)) + curr_sf_C;
+    a_addr_0 = offsets[curr_nf_C] + curr_sf_C;
     a_data_in_0 = idat;
 
     a_we_1 = 0;
-    a_addr_1 = (curr_nf_C << $clog2(SF)) + curr_sf_C;
+    a_addr_1 = offsets[curr_nf_C] + curr_sf_C;
     a_data_in_1 = idat;
 
     case (state_wr_C)
@@ -370,9 +377,10 @@ assign odat_int = odat_C;
 // Matrix
 // ----------------------------------------------------------------------------
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(ADDR_BITS),
-    .DATA_BITS(SIMD*ACTIVATION_WIDTH)
+    .DATA_BITS(SIMD*ACTIVATION_WIDTH),
+    .RAM_TYPE("block")
 ) inst_ram_tp_c_0 (
     .clk(clk),
     .a_en(1'b1),
@@ -385,9 +393,10 @@ ram_tp_c #(
     .b_data_out(odat_0)
 );
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(ADDR_BITS),
-    .DATA_BITS(SIMD*ACTIVATION_WIDTH)
+    .DATA_BITS(SIMD*ACTIVATION_WIDTH),
+    .RAM_TYPE("block")
 ) inst_ram_tp_c_1 (
     .clk(clk),
     .a_en(1'b1),

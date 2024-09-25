@@ -41,33 +41,51 @@
  * @brief	Partition 0 top level
  * @author	Dario Korolija <dario.korolija@amd.com>
  *****************************************************************************/
-`timescale 1ns / 1ps
-
 module p0_top #(
-    parameter integer                               MH = 384,
-    parameter integer                               MW = 384,
-    parameter integer                               SIMD_P0 = 4,
-    parameter integer                               PE_P0 = 4,
+    parameter integer                               SIMD = 4,
+    parameter integer                               PE = 4,
+
+    parameter integer                               MH_MM = 384,
+    parameter integer                               MW_MM = 384,
+    parameter integer                               SIMD_MM = 48,
+    parameter integer                               PE_MM = 32,
+    parameter integer                               TH_MM = 2*PE_MM,
+    parameter integer                               PE_THR = 4,
+
+    parameter                                       INIT_FILE_0 = "",
+    parameter                                       INIT_FILE_1 = "",
+    parameter                                       INIT_FILE_2 = "",                 
+
     parameter integer                               ACTIVATION_WIDTH = 8,
-    parameter integer                               MM_KERNEL = 0,
-    parameter integer                               PUMPED_COMPUTE = 1
+    parameter integer                               PUMPED_COMPUTE = 1,
+    parameter integer                               MM_KERNEL = 0
 ) (
     input  logic                                    ap_clk,
     input  logic                                    ap_clk2x,
     input  logic                                    ap_rst_n,
     
-    AXI4S.s                                         s_axis_0,
-    AXI4S.m                                         m_axis_0,
-    AXI4S.m                                         m_axis_1,
-    AXI4S.m                                         m_axis_2
+    AXI4S.slave                                         s_axis_0,
+    AXI4S.master                                        m_axis_0,
+    AXI4S.master                                        m_axis_1,
+    AXI4S.master                                        m_axis_2
 );
 
 if(MM_KERNEL == 1) begin
     partition_0_mm #(
-        .MH(MH),
-        .MW(MW),
-        .SIMD_P0(SIMD_P0),
-        .PE_P0(PE_P0),
+        .SIMD(SIMD),
+        .PE(PE),
+        
+        .MH_MM(MH_MM),
+        .MW_MM(MW_MM),
+        .SIMD_MM(SIMD_MM),
+        .PE_MM(PE_MM),
+        .TH_MM(TH_MM),
+        .PE_THR(PE_THR),
+
+        .INIT_FILE_0(INIT_FILE_0),
+        .INIT_FILE_1(INIT_FILE_1),
+        .INIT_FILE_2(INIT_FILE_2),
+        
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH),
         .PUMPED_COMPUTE(PUMPED_COMPUTE)
     ) inst_p0_top (

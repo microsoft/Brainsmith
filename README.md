@@ -60,18 +60,6 @@ Additionally, compilation reports and design checkpoints will be generated under
 
 Within the default project, simulation of the whole design (all partitions) can be done through regular Vivado simulation flow (GUI).   
 
-Simulating the whole design can be achieved with the following steps:
-```
-mkdir build && cd build
-cmake ../ -DGEN_FINN_PATH=<path_to_existing_build>
-make sim
-```
-
-This will then create a Vivado project that can be used to simulate the design. The following command will open that Vivado project:
-```
-vivado <path to repo>/build/sim/bwave_tb.xpr
-```
-
 In the Vivado GUI the behavioural simulation can then be run by navigating, on the left command panel, to:
 ```
 Run Simulation -> Run Behavioral Simulation 
@@ -88,7 +76,7 @@ To do this, steps remain similar:
 ```
 mkdir build && cd build
 cmake ../ -DGEN_FINN_PATH=<path_to_existing_build> -DTB_NAME=<desired_core_to_simulate> -DSIM_RUN=<run_cmd_line_sim>
-make sim
+make project
 ```
 
 The added arguments here are the `TB_NAME` and `SIM_RUN`. The first represents the name of the directory where simulation particular simulation files are placed under `tb` directory.
@@ -101,7 +89,7 @@ Some examples of commands for simulating portions of the design are given below:
 ```
 mkdir build && cd build
 cmake ../ -DTB_NAME=tb_partition_0
-make sim
+make project
 vivado <path to repo>/build/sim/bwave_tb.xpr
 ```
 
@@ -109,7 +97,7 @@ vivado <path to repo>/build/sim/bwave_tb.xpr
 ```
 mkdir build && cd build
 cmake ../ -DTB_NAME=tb_partition_1
-make sim
+make project
 vivado <path to repo>/build/sim/bwave_tb.xpr
 ```
 
@@ -117,7 +105,7 @@ vivado <path to repo>/build/sim/bwave_tb.xpr
 ```
 mkdir build && cd build
 cmake ../ -DTB_NAME=tb_partition_2
-make sim
+make project
 vivado <path to repo>/build/sim/bwave_tb.xpr
 ```
 

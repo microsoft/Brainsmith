@@ -44,12 +44,20 @@ if ${GEN_FINN} :
     print("Generating FINN partitions ...")
 
     scripts_with_args = [
-        ("${CMAKE_SOURCE_DIR}/scripts_finn/create_partitions.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "${TL_Model_name}"]),
-        ("${CMAKE_SOURCE_DIR}/scripts_finn/prepare_custom_partition.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--pe0", "${p1_Thresholding_rtl_0_PE}", "--pe1", "${p1_Thresholding_rtl_1_PE}"]),
-        ("${CMAKE_SOURCE_DIR}/scripts_finn/generate_ip.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_0"]),
-        ("${CMAKE_SOURCE_DIR}/scripts_finn/generate_ip.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_2"]),
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/create_partitions.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "${TL_Model_name}", "--dev_name", "${FPGA_PART}"]),
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/prepare_custom_partition.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--pe0", "${p1_Thresholding_rtl_0_PE}", "--pe1", "${p1_Thresholding_rtl_1_PE}", "--dev_name", "${FPGA_PART}", "--act_width", "${TL_Activation_width}"]),
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/generate_ip.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_0", "--dev_name", "${FPGA_PART}"]),
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/generate_ip.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_2", "--dev_name", "${FPGA_PART}"]),
         ("${CMAKE_SOURCE_DIR}/scripts_finn/generate_refio.py", ["--build_dir", "${CMAKE_BINARY_DIR}"]),
+        
     ]
+    scripts_with_args_mm = [
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/copy_weight_files.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_0", "--dev_name", "${FPGA_PART}"]),
+        ("${CMAKE_SOURCE_DIR}/scripts_finn/copy_weight_files.py", ["--build_dir", "${CMAKE_BINARY_DIR}", "--model_name", "partition_2", "--dev_name", "${FPGA_PART}"]),
+    ]
+
+    if ${TL_MM_kernel}:
+        scripts_with_args = scripts_with_args + scripts_with_args_mm
 
     # Function to run a script and print its output in real-time
     def run_script(script, args):

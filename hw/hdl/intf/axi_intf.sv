@@ -57,17 +57,125 @@ task tie_off_s ();
 endtask
 
 // Master
-modport m (
+modport master (
 	import tie_off_m,
 	input tready,
 	output tdata, tvalid
 );
 
 // Slave
-modport s (
+modport slave (
     import tie_off_s,
     input tdata, tvalid,
     output tready
+);
+
+endinterface
+
+// ----------------------------------------------------------------------------
+// AXI4 lite
+// ----------------------------------------------------------------------------
+interface AXI4L #(
+	parameter AXI4L_ADDR_BITS = 32,
+	parameter AXI4L_DATA_BITS = 32
+) (
+	input  logic aclk
+);
+
+typedef logic [AXI4L_ADDR_BITS-1:0] addr_t;
+typedef logic [AXI4L_DATA_BITS-1:0] data_t;
+typedef logic [AXI4L_DATA_BITS/8-1:0] strb_t;
+
+// AR channel
+addr_t 			araddr;
+logic			arready;
+logic			arvalid;
+
+// AW channel
+addr_t 			awaddr;
+logic			awready;
+logic			awvalid;
+ 
+// R channel
+data_t 			rdata;
+logic[1:0]		rresp;
+logic 			rready;
+logic			rvalid;
+
+// W channel
+data_t 			wdata;
+strb_t 			wstrb;
+logic			wready;
+logic			wvalid;
+
+// B channel
+logic[1:0]		bresp;
+logic			bready;
+logic			bvalid;
+
+// Tie off unused master signals
+task tie_off_m ();
+	araddr    = 0;
+    arvalid   = 1'b0;	
+    awaddr    = 0;	
+    awvalid   = 1'b0;	
+    bready    = 1'b0;	
+    rready    = 1'b0;	
+    wdata     = 0;	
+    wstrb     = 0;	
+    wvalid    = 1'b0;	
+endtask
+
+// Tie off unused slave signals
+task tie_off_s ();
+	arready  = 1'b0;     
+    awready  = 1'b0;
+    bresp    = 2'b0;
+    bvalid   = 1'b0;
+    rdata    = 0;
+    rresp    = 2'b0;
+    rvalid   = 1'b0;
+    wready   = 1'b0;
+endtask
+
+// Master
+modport master (
+	import tie_off_m,
+	// AR
+	input awready,
+	output awaddr, awvalid,
+	// AW
+	input arready,
+	output araddr, arvalid,
+	// R
+	input rresp, rdata, rvalid,
+	output rready,
+	// W
+	input wready,
+	output wdata, wstrb, wvalid,
+	// B
+	input bresp, bvalid,
+	output bready
+);
+
+// Slave
+modport slave (
+	import tie_off_s,
+	// AR
+	input awaddr, awvalid,
+	output awready,
+	// AW
+	input araddr, arvalid,
+	output arready,
+	// R
+	input rready,
+	output rresp, rdata, rvalid,
+	// W
+	input wdata, wstrb, wvalid,
+	output wready,
+	// B
+	input bready,
+	output bresp, bvalid
 );
 
 endinterface

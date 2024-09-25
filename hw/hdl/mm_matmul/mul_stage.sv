@@ -62,7 +62,7 @@ module mul_stage #(
 localparam integer MUL_LAT = FORCE_BEHAVIOURAL ? 2 : 5;
 
 // DSPs
-logic [PE-1:0][SIMD-1:0][2*ACTIVATION_WIDTH-1:0] odat_int;
+logic [PE-1:0][SIMD-1:0][2*ACTIVATION_WIDTH-1:0] odat_int = 0;
 
 for(genvar i = 0; i < PE; i++) begin
     for(genvar j = 0; j < SIMD; j++) begin

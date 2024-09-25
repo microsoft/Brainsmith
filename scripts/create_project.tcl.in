@@ -84,7 +84,8 @@ add_files "$hw_dir/hdl/intf"
 add_files "$hw_dir/hdl/common"
 add_files "$hw_dir/hdl/mv_matmul"
 add_files "$hw_dir/hdl/mm_matmul"
-add_files "$hw_dir/hdl/thresholding"
+add_files "$hw_dir/hdl/thresholding_p1"
+add_files "$hw_dir/hdl/thresholding_new"
 add_files "$hw_dir/hdl/stitched"
 add_files "${CMAKE_BINARY_DIR}/pkt_types.sv"
 
@@ -92,12 +93,29 @@ add_files "$hw_dir/hdl/partition_0"
 add_files "$hw_dir/hdl/partition_1"
 add_files "$hw_dir/hdl/partition_2"
 
+# Add thresholding
+if {${TL_MM_kernel} eq 1} {
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_0/p0_Thresholding_rtl_0_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_1/p0_Thresholding_rtl_1_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_2/p0_Thresholding_rtl_2_axi_wrapper.v"
+
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_0/p2_Thresholding_rtl_0_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_1/p2_Thresholding_rtl_1_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_2/p2_Thresholding_rtl_2_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_3/p2_Thresholding_rtl_3_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_4/p2_Thresholding_rtl_4_axi_wrapper.v"
+
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/memstream_axi.sv"
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/memstream.sv"
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/axilite_if.v"
+}
+
 # Add simulation files
 add_files "${CMAKE_SOURCE_DIR}/tb/common"
-add_files "${CMAKE_SOURCE_DIR}/tb/tb_partitions_012"
+add_files "${CMAKE_SOURCE_DIR}/tb/${TB_NAME}"
 
-# Add top file
-add_files "$hw_dir/hdl/top/shell_top.sv"
+# Add top files
+add_files "$hw_dir/hdl/top"
 
 # Add dependencies
 add_files "${FINN_PATH}/finn/finn-rtllib/mvu/mvu_4sx4u.sv"
@@ -108,7 +126,12 @@ add_files "${FINN_PATH}/finn/finn-rtllib/dwc/hdl/dwc.sv"
 add_files "${FINN_PATH}/finn/finn-rtllib/fifo/hdl/Q_srl.v"
 
 # Top level
-set_property "top" "shell_top" [current_fileset]
+if {${SHELL_XRT} eq 0} {
+    set_property "top" "shell_top" [current_fileset]
+} else {
+    set_property "top" "xrt_top" [current_fileset]
+}
+
 set_property top tb_top [get_filesets sim_1]
 
 # Create a project-local constraint file to take debugging constraints that we
@@ -122,25 +145,29 @@ set_property target_constrs_file "$proj_dir/$project.srcs/constrs_1/local.xdc" [
 # BLOCK DESIGN CIPS
 ########################################################################################################
 
-source "$build_dir/cr_bd.tcl" -notrace
-cr_bd_design_static ""
-set_property SYNTH_CHECKPOINT_MODE "Hierarchical" [get_files design_static.bd ]
+if {${SHELL_XRT} eq 0} {
+    source "$build_dir/cr_bd.tcl" -notrace
+    cr_bd_design_static ""
+    set_property SYNTH_CHECKPOINT_MODE "Hierarchical" [get_files design_static.bd ]
+}
 
 ########################################################################################################
 # BLOCK DESIGN FINN 
 ########################################################################################################
 
-set ip_repo_get [get_property ip_repo_paths [current_project]]
-set partitions_list { ${TL_FINN_Partitions_all} }
-set ip_repo_lcl { }
+if {${TL_MM_kernel} eq 0} {
+    set ip_repo_get [get_property ip_repo_paths [current_project]]
+    set partitions_list { ${TL_FINN_Partitions_all} }
+    set ip_repo_lcl { }
 
-foreach partition $partitions_list {  
-    proc call_bd_gen_partition {r_path p} {
-        set output [exec python "$r_path/bd_gen.py" $p]
-        puts $output
+    foreach partition $partitions_list {  
+        proc call_bd_gen_partition {r_path p} {
+            set output [exec python "$r_path/bd_gen.py" $p]
+            puts $output
+        }
+        call_bd_gen_partition $build_dir $partition
+        source "$build_dir/make_bd_$partition.tcl" -notrace
     }
-    call_bd_gen_partition $build_dir $partition
-    source "$build_dir/make_bd_$partition.tcl" -notrace
 }
 
 ########################################################################################################
@@ -163,6 +190,34 @@ if {${GEN_FINN} eq 0} {
 ########################################################################################################
 
 source "$build_dir/inst_ip.tcl" -notrace
+if {${SHELL_XRT} eq 0} {
+    source "$build_dir/inst_ip_shell.tcl" -notrace
+}
+
+########################################################################################################
+# Export XO
+########################################################################################################
+
+#if {${SHELL_XRT} eq 1} {
+#    # Export the XO, copy commands
+#}
+
+########################################################################################################
+# Simulation
+########################################################################################################
+
+set_property -name {xsim.simulate.runtime} -value {10000us} -objects [get_filesets sim_1]
+set_property dataflow_viewer_settings "min_width=16"   [current_fileset]
+
+if {${SIM_RUN} eq 1} {
+    #puts "**** Launching sim ..."
+    #puts "****"
+
+    launch_simulation
+    
+    puts "**** Simulation flow completed!"
+    puts "****"
+}
 
 ########################################################################################################
 # STATIC PROJECT CREATED

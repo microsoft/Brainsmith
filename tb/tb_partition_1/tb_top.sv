@@ -79,22 +79,22 @@ module tb_top;
     //
     
     p1_top #(
-        .PE_0(PE_P1_0),
-        .SIMD_0(SIMD_P1_0),
-        .MH_0(H_SIZE),
-        .MW_0(MH),
+        .PE_MM_0(PE_P1_0),
+        .SIMD_MM_0(SIMD_P1_0),
+        .MH_MM_0(H_SIZE),
+        .MW_MM_0(MH),
         .MH_OUTER_0(MH),
-        .THRESHOLDS_PATH_0(THRESHOLDS_PATH_0), 
+        .THRESHOLDS_PATH_0(THRESHOLDS_PATH_P1_0), 
 
-        .PE_1(PE_P1_1),
-        .SIMD_1(SIMD_P1_1),
-        .MH_1(MH),
-        .MW_1(H_SIZE),
-        .MH_OUTER_1(MH),
-        .THRESHOLDS_PATH_1(THRESHOLDS_PATH_1),
+        .PE_MM_1(PE_P1_1),
+        .SIMD_MM_1(SIMD_P1_1),
+        .MH_MM_1(MH),
+        .MW_MM_1(H_SIZE),
+        .MH_MM_OUTER_1(MH),
+        .THRESHOLDS_PATH_1(THRESHOLDS_PATH_P1_1),
 
         .MM_KERNEL(0),
-        .PUMPED_COMPUTE(1),
+        .PUMPED_COMPUTE(0),
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH)
     ) inst_DUT (
         .ap_clk(clk),
@@ -128,8 +128,8 @@ module tb_top;
     end
 
     // Dump
-    initial begin
-        $dumpfile("dump.vcd"); $dumpvars;
-    end
+    //initial begin
+    //    $dumpfile("dump.vcd"); $dumpvars;
+    //end
 
 endmodule

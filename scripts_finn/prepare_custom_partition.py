@@ -40,7 +40,7 @@
 # configuration for thresholding layers
 
 import argparse
-import os
+import math
 import json
 
 from distutils.dir_util import copy_tree
@@ -60,13 +60,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--build_dir", default="")
 parser.add_argument("--pe0", default="16")
 parser.add_argument("--pe1", default="4")
+parser.add_argument("--dev_name", default="xcv80-lsva4737-2MHP-e-S")
+parser.add_argument("--act_width", default="8")
 # parse arguments
 args = parser.parse_args()
 build_dir = args.build_dir
 pe0 = int(args.pe0)
 pe1 = int(args.pe1)
+dev_name = args.dev_name
+act_width = int(args.act_width)
 
-fpga_part = "xcv80-lsva4737-2MHP-e-S"
+fpga_part = dev_name
 clk_ns = 5.0
 
 folding_config = {
@@ -79,7 +83,10 @@ folding_config = {
     },
 }
 
-idt = [DataType["INT21"], DataType["INT23"]] # This should be parametrized as well
+if act_width == 8:
+    idt = [DataType["INT21"], DataType["INT23"]] # This should be parametrized as well
+else:
+    idt = [DataType["INT13"], DataType["INT15"]] # This should be parametrized as well
 
 def create_model_from_node(node, graph):
     node_inputs = list(filter(lambda x: x.name in node.input, graph.input))
@@ -108,11 +115,11 @@ def create_model_from_node(node, graph):
 
 
 if __name__ == "__main__":
-    config_path = os.path.abspath("../config/top_template.json")
+    config_path = "../config/top_template.json"
     with open(config_path, "r") as f:
         top_model_config = json.load(f)
     top_model_file = top_model_config["TL"]["Model_name"]
-    top_model = ModelWrapper(os.path.abspath("../models/" + top_model_file))
+    top_model = ModelWrapper("../models/" + top_model_file)
     # extract matrix height and matrix width
     matmul = top_model.get_nodes_by_op_type("MatMul")
     input_matrix = matmul[0].input[0]
@@ -129,7 +136,7 @@ if __name__ == "__main__":
     bitwidth_tensor = quant[0].input[3]
     bitwidth = int(top_model.get_initializer(bitwidth_tensor))
     top_model_config["TL"]["Activation_width"] = bitwidth
-    json_filename = os.path.abspath("../config/top_new.json")
+    json_filename = "../config/top_new.json"
     with open(json_filename, "w") as f:
         json.dump(top_model_config, f, indent=2)
     # extract generated threshold files

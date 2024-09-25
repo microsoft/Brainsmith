@@ -49,7 +49,7 @@ module instrumentation_producer (
     input  logic                    aresetn,
 
     // Data
-    AXI4S.m                         m_finn_in,
+    AXI4S.master                        m_finn_in,
 
     // Control
     input  logic [31:0]             s_n_beats_in, // in bytes
