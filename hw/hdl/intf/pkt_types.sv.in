@@ -50,10 +50,18 @@ package cTypes;
 // Activation width
     parameter integer ACTIVATION_WIDTH = ${TL_Activation_width};
 
+// Custom partitions
+    parameter integer MM_KERNEL = ${TL_MM_kernel};
+    parameter integer PUMPED_COMPUTE = ${TL_Pumped_compute};
+
 // Partition 0
     // Parallelization
     parameter integer SIMD_P0 = ${p0_DuplicateStreams_hls_0_PE};
     parameter integer PE_P0 = ${p0_Thresholding_rtl_0_PE};
+
+    parameter integer SIMD_P0_MM = ${p0_MVAU_rtl_0_SIMD};
+    parameter integer PE_P0_MM = ${p0_MVAU_rtl_0_PE}; 
+    parameter integer PE_P0_THR = ${p0_Thresholding_rtl_0_PE};
 
     // Weights
     parameter INIT_FILE_P0_0     = "${GEN_FINN_PATH}/mvau_weight_files_partition_0/p0_MVAU_rtl_0/memblock.dat";
@@ -72,9 +80,14 @@ package cTypes;
     parameter P0_OUT_2_FILE_PATH    = "${GEN_FINN_PATH}/refio/int_results/Add_2_out0.txt";
 
 // Partition 1
+    // Parallelization
+    parameter integer SIMD_P1 = ${p1_Shuffle_A_0_PE};
+    parameter integer PE_P1 = ${p1_Thresholding_rtl_1_PE};
+
     // Shuffle
     parameter integer PE_SHUFFLE_A = ${p1_Shuffle_A_0_PE};
     parameter integer PE_SHUFFLE_B = ${p1_Shuffle_B_0_PE};
+    parameter integer PE_SHUFFLE_C = ${p1_Shuffle_C_0_PE};
 
     // Softmax
     parameter integer PE_SOFTMAX = ${p1_Softmax_0_SIMD};
@@ -84,16 +97,18 @@ package cTypes;
     parameter integer N_HEADS = MW / H_SIZE;
 
     // MatMul 0
-    parameter integer SIMD_P1_0 = ${p1_MVAU_dyn_rtl_0_SIMD};
-    parameter integer PE_P1_0 = ${p1_MVAU_dyn_rtl_0_PE};
+    parameter integer SIMD_P1_MM_0 = ${p1_MVAU_dyn_rtl_0_SIMD};
+    parameter integer PE_P1_MM_0 = ${p1_MVAU_dyn_rtl_0_PE};
+    parameter integer PE_P1_THR_0 = ${p1_Thresholding_rtl_0_PE};
 
     // MatMul 1
-    parameter integer SIMD_P1_1 = ${p1_MVAU_dyn_rtl_1_SIMD};
-    parameter integer PE_P1_1 = ${p1_MVAU_dyn_rtl_1_PE};
+    parameter integer SIMD_P1_MM_1 = ${p1_MVAU_dyn_rtl_1_SIMD};
+    parameter integer PE_P1_MM_1= ${p1_MVAU_dyn_rtl_1_PE};
+    parameter integer PE_P1_THR_1 = ${p1_Thresholding_rtl_1_PE};
 
     // Thresholds
-    parameter THRESHOLDS_PATH_0     = "${GEN_FINN_PATH}/thresholds_partition_1/Thresholding_rtl_0/Thresholding_rtl_0_";
-    parameter THRESHOLDS_PATH_1     = "${GEN_FINN_PATH}/thresholds_partition_1/Thresholding_rtl_1/Thresholding_rtl_1_";
+    parameter THRESHOLDS_PATH_P1_0     = "${GEN_FINN_PATH}/thresholds_partition_1/Thresholding_rtl_0/Thresholding_rtl_0_";
+    parameter THRESHOLDS_PATH_P1_1     = "${GEN_FINN_PATH}/thresholds_partition_1/Thresholding_rtl_1/Thresholding_rtl_1_";
 
     // Reference
     parameter P1_IN_0_FILE_PATH     = "${GEN_FINN_PATH}/refio/int_results/Add_0_out0.txt";
@@ -107,6 +122,18 @@ package cTypes;
     parameter integer SIMD_P2_1 = ${p2_AddStreams_hls_0_PE};
     parameter integer PE_P2 = ${p2_Thresholding_rtl_4_PE};
 
+    parameter integer SIMD_P2_MM_0 = ${p2_MVAU_rtl_0_SIMD};
+    parameter integer PE_P2_MM_0 = ${p2_MVAU_rtl_0_PE}; 
+    parameter integer PE_P2_THR_0 = ${p2_Thresholding_rtl_0_PE};
+
+    parameter integer SIMD_P2_MM_1 = ${p2_MVAU_rtl_1_SIMD};
+    parameter integer PE_P2_MM_1 = ${p2_MVAU_rtl_1_PE}; 
+    parameter integer PE_P2_THR_1 = ${p2_Thresholding_rtl_1_PE};
+
+    parameter integer SIMD_P2_MM_2 = ${p2_MVAU_rtl_2_SIMD};
+    parameter integer PE_P2_MM_2 = ${p2_MVAU_rtl_2_PE}; 
+    parameter integer PE_P2_THR_2 = ${p2_Thresholding_rtl_2_PE};
+
     // Weights
     parameter INIT_FILE_P2_0     = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_MVAU_rtl_0/memblock.dat";
     parameter INIT_FILE_P2_1     = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_MVAU_rtl_1/memblock.dat";
@@ -116,6 +143,8 @@ package cTypes;
     parameter THRESHOLDS_PATH_P2_0    = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_Thresholding_rtl_0/p2_Thresholding_rtl_0_";
     parameter THRESHOLDS_PATH_P2_1    = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_Thresholding_rtl_1/p2_Thresholding_rtl_1_";
     parameter THRESHOLDS_PATH_P2_2    = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_Thresholding_rtl_2/p2_Thresholding_rtl_2_";
+    parameter THRESHOLDS_PATH_P2_3    = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_Thresholding_rtl_3/p2_Thresholding_rtl_3_";
+    parameter THRESHOLDS_PATH_P2_4    = "${GEN_FINN_PATH}/mvau_weight_files_partition_2/p2_Thresholding_rtl_4/p2_Thresholding_rtl_4_";
 
     // Reference
     parameter P2_IN_0_FILE_PATH     = "${GEN_FINN_PATH}/refio/int_results/Reshape_3_out0.txt";

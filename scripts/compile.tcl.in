@@ -78,7 +78,7 @@ source "${CMAKE_BINARY_DIR}/base.tcl"
 ########################################################################################################
 # Project
 ########################################################################################################
-set proj_dir        "$build_dir/$project"
+set proj_dir        "$build_dir"
 
 puts $proj_dir
 open_project "$proj_dir/finn_bwave/$project.xpr"

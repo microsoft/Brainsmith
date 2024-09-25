@@ -65,7 +65,8 @@ localparam int unsigned  NF = MW/PE;
 
 localparam integer SIMD_BITS = $clog2(SIMD);
 localparam integer WGT_ADDR_BITS = $clog2(NF * SF);
-localparam integer WGT_EN_BITS = PE*ACTIVATION_WIDTH/8;
+localparam integer RAM_BITS = (ACTIVATION_WIDTH + 7)/8 * 8;
+localparam integer WGT_EN_BITS = RAM_BITS / 8;
 localparam integer NF_BITS = $clog2(NF);
 localparam integer MH_BITS = $clog2(MH);
 localparam integer SF_NF_BITS = $clog2(SF*NF);
@@ -75,10 +76,10 @@ logic [NF-1:0][WGT_ADDR_BITS-1:0] offsets;
 
 typedef enum logic  {ST_WR_0, ST_WR_1} state_wr_t;
 typedef enum logic  {ST_RD_0, ST_RD_1} state_rd_t;
-typedef logic [NF_BITS:0] nf_cnt_t;
-typedef logic [MH_BITS:0] sf_wr_cnt_t;
-typedef logic [SF_NF_BITS:0] sf_rd_cnt_t;
-typedef logic [N_REPS_BITS:0] reps_cnt_t;
+typedef logic [NF_BITS:0] nf_t;
+typedef logic [MH_BITS:0] sf_wr_t;
+typedef logic [SF_NF_BITS:0] sf_rd_t;
+typedef logic [N_REPS_BITS:0] reps_t;
 
 // ----------------------------------------------------------------------------
 // Writer
@@ -87,8 +88,8 @@ typedef logic [N_REPS_BITS:0] reps_cnt_t;
 // -- Regs
 state_wr_t state_wr_C, state_wr_N;
 
-nf_cnt_t curr_nf_C, curr_nf_N;
-sf_wr_cnt_t  curr_sf_C, curr_sf_N;
+nf_t curr_nf_C, curr_nf_N;
+sf_wr_t  curr_sf_C, curr_sf_N;
 
 logic rd_0_C, rd_0_N;
 logic rd_1_C, rd_1_N;
@@ -224,8 +225,8 @@ end
 // -- Regs
 state_rd_t state_rd_C, state_rd_N;
 
-sf_rd_cnt_t cons_sf_C, cons_sf_N;
-reps_cnt_t cons_r_C, cons_r_N;
+sf_rd_t cons_sf_C, cons_sf_N;
+reps_t cons_r_C, cons_r_N;
 
 logic vld_0_s0_C, vld_0_s0_N;
 logic vld_0_s1_C, vld_0_s1_N;
@@ -361,9 +362,10 @@ end
 // ----------------------------------------------------------------------------
 
 for(genvar i = 0; i < SIMD; i++) begin
-    ram_tp_c #( 
+    ram_p_c #( 
         .ADDR_BITS($clog2(NF*SF)),
-        .DATA_BITS(PE*ACTIVATION_WIDTH)
+        .DATA_BITS(RAM_BITS),
+        .RAM_TYPE("distributed")
     ) inst_ram_tp_c_0 (
         .clk(clk),
         .a_en(1'b1),
@@ -378,9 +380,10 @@ for(genvar i = 0; i < SIMD; i++) begin
 end
 
 for(genvar i = 0; i < SIMD; i++) begin
-    ram_tp_c #( 
+    ram_p_c #( 
         .ADDR_BITS($clog2(NF*SF)),
-        .DATA_BITS(PE*ACTIVATION_WIDTH)
+        .DATA_BITS(RAM_BITS),
+        .RAM_TYPE("distributed")
     ) inst_ram_tp_c_1 (
         .clk(clk),
         .a_en(1'b1),

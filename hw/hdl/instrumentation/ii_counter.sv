@@ -51,7 +51,7 @@ module ii_counter #(
     input  logic                    hshake,
 
     // Queue out 
-    AXI4S.m                         q_out
+    AXI4S.master                        q_out
 );
 
 //

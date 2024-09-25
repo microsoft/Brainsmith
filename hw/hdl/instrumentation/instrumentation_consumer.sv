@@ -49,7 +49,7 @@ module instrumentation_consumer (
     input  logic                    aresetn,
 
     // Data
-    AXI4S.s                         s_finn_out,
+    AXI4S.slave                         s_finn_out,
 
     // Control
     input  logic [31:0]             s_n_beats_out, // out bytes

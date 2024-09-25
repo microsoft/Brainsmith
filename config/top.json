@@ -7,9 +7,11 @@
         "Head_size": 32,
         "Mtrx_height": 128,
         "Mtrx_width": 384,
-        "Activation_width": 8,
-        "N_sim_loops": 1,
-        "Model_name": "bert-simplified-int8-20240610.onnx"
+        "Activation_width": 4,
+        "N_sim_loops": 3,
+        "Model_name": "bert-simplified-seq128-int4-clean.onnx",
+        "MM_kernel": 1,
+        "Pumped_compute": 0
     }
 }
-  
+   

@@ -43,7 +43,6 @@ import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 from custom_steps import custom_step_create_dataflow_partitions, custom_step_tidy_up
 from finn.builder.build_dataflow_steps import step_qonnx_to_finn, step_tidy_up
-import os
 
 gen_hardware_steps = [
     step_qonnx_to_finn,
@@ -55,21 +54,23 @@ gen_hardware_steps = [
 parser = argparse.ArgumentParser()
 parser.add_argument("--build_dir", default="")
 parser.add_argument("--model_name", default="")
+parser.add_argument("--dev_name", default="xcv80-lsva4737-2MHP-e-S")
 
 # parse arguments
 args = parser.parse_args()
 build_dir = args.build_dir
 model_name = args.model_name
+dev_name = args.dev_name
 
 my_output_dir = build_dir + "/output_create_partitions"
-model_file = os.path.abspath("../models/" + model_name)
+model_file = "../models/" + model_name
 
 cfg = build_cfg.DataflowBuildConfig(
     standalone_thresholds=True,
     steps=gen_hardware_steps,
     output_dir=my_output_dir,
     synth_clk_period_ns=5,
-    fpga_part="xcv80-lsva4737-2MHP-e-S",
+    fpga_part=dev_name,
     generate_outputs=[],
 )
 

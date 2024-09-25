@@ -39,8 +39,8 @@
 import os
 import sys
 
-in_path = 'global_expected_full.npz'
-out_path = 'int_results_'
+in_path = '/scratch/dkorolij/ms-bert-dev/build_sim_p1/refio/global_expected_full.npz'
+out_path = './tmp.txt'
 array_name = sys.argv[1]
 
 import numpy as np
@@ -76,8 +76,8 @@ else:
         # Write each int8 value as signed hexadecimal to the file
         for val in np.nditer(array):
 
-            #hex_val = int32_to_signed_hex(val)
-            hex_val = int8_to_signed_hex(val)
+            hex_val = int32_to_signed_hex(val)
+            #hex_val = int8_to_signed_hex(val)
             f.write(hex_val + '\n')
     
     print(f"Data from array '{array_name}' written")

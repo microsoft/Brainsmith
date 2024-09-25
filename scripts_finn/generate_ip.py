@@ -38,7 +38,6 @@
 # THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
 
 import argparse
-import os
 
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
@@ -65,11 +64,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--build_dir", default="")
 parser.add_argument("--model_name", default="partition_0")
 parser.add_argument("--version_name", default="")
+parser.add_argument("--dev_name", default="xcv80-lsva4737-2MHP-e-S")
 # parse arguments
 args = parser.parse_args()
 build_dir = args.build_dir
 model_name = args.model_name
 version_name = args.version_name
+dev_name = args.dev_name
 
 # check if argument is allowed
 assert model_name in [
@@ -102,15 +103,14 @@ gen_hardware_steps = [
 
 my_output_dir = build_dir + "/output_gen_ip_" + model_name + version_name
 model_file = build_dir + "/output_create_partitions/intermediate_models/partitions/" + model_name + ".onnx"
-folding_file = os.path.abspath("../config/folding_{model_name}.json")
-specialize_config_file = os.path.abspath(f"../config/specialize_layers_{model_name}.json")
+
 cfg = build_cfg.DataflowBuildConfig(
     auto_fifo_depths=False,
     steps=gen_hardware_steps,
     output_dir=my_output_dir,
     prefix_node_names=prefix,
     synth_clk_period_ns=3.3,
-    fpga_part="xcv80-lsva4737-2MHP-e-S",
+    fpga_part=dev_name,
     enable_build_pdb_debug=True,
     standalone_thresholds=True,
     folding_config_file="../config/folding_%s.json" % model_name,

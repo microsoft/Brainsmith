@@ -161,34 +161,57 @@ module shell_top (
     // P0-P1-P2 test
     for(genvar i = 0; i < N_LAYERS; i++) begin
         p012_top #(
+            // P0
             .SIMD_P0(SIMD_P0),
             .PE_P0(PE_P0),
 
-            .SIMD_P1(PE_SHUFFLE_A),
-            .PE_P1(PE_SHUFFLE_B),
+            .SIMD_P0_MM(SIMD_P0_MM),
+            .PE_P0_MM(PE_P0_MM),
+            .PE_P0_THR(PE_P0_THR),
 
-            .SIMD_MM_0(SIMD_P1_0),
-            .PE_MM_0(PE_P1_0),
-            .MH_MM_0(H_SIZE),
-            .MW_MM_0(MH),
-            .N_VECTORS_MM_0(MH),
+            .INIT_FILE_P0_0(INIT_FILE_P0_0),
+            .INIT_FILE_P0_1(INIT_FILE_P0_1),
+            .INIT_FILE_P0_2(INIT_FILE_P0_2),
+            
+            // P1
+            .SIMD_P1(SIMD_P1),
+            .PE_P1(PE_P1),
+            
+            .SIMD_P1_MM_0(SIMD_P1_MM_0),
+            .PE_P1_MM_0(PE_P1_MM_0),
+            .PE_P1_THR_0(PE_P1_THR_0),
 
-            .SIMD_MM_1(SIMD_P1_1),
-            .PE_MM_1(PE_P1_1),
-            .MH_MM_1(MH),
-            .MW_MM_1(H_SIZE),
-            .N_VECTORS_MM_1(MH),
+            .SIMD_P1_MM_1(SIMD_P1_MM_1),
+            .PE_P1_MM_1(PE_P1_MM_1),
+            .PE_P1_THR_1(PE_P1_THR_1),
 
+            .THRESHOLDS_PATH_P1_0(THRESHOLDS_PATH_P1_0),
+            .THRESHOLDS_PATH_P1_1(THRESHOLDS_PATH_P1_1),
+
+            // P2
             .SIMD_P2_0(SIMD_P2_0),
             .SIMD_P2_1(SIMD_P2_1),
             .PE_P2(PE_P2),
 
-            .MH(MH),
-            .MW(MW),
+            .SIMD_P2_MM_0(SIMD_P2_MM_0),
+            .PE_P2_MM_0(PE_P2_MM_0),
+            .PE_P2_THR_0(PE_P2_THR_0),
+
+            .SIMD_P2_MM_1(SIMD_P2_MM_1),
+            .PE_P2_MM_1(PE_P2_MM_1),
+            .PE_P2_THR_1(PE_P2_THR_1),
+
+            .SIMD_P2_MM_2(SIMD_P2_MM_2),
+            .PE_P2_MM_2(PE_P2_MM_2),
+            .PE_P2_THR_2(PE_P2_THR_2),
+
+            .INIT_FILE_P2_0(INIT_FILE_P2_0),
+            .INIT_FILE_P2_1(INIT_FILE_P2_1),
+            .INIT_FILE_P2_2(INIT_FILE_P2_2),
 
             .ACTIVATION_WIDTH(ACTIVATION_WIDTH),
-            .PUMPED_COMPUTE(1),
-            .MM_KERNEL(0)
+            .PUMPED_COMPUTE(0),
+            .MM_KERNEL(MM_KERNEL)
         ) inst_p012_top (
             .ap_clk(aclk),
             .ap_clk2x(aclk_dp),

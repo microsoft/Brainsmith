@@ -47,8 +47,8 @@ module dwc_buff_top #(
     input  logic                            ap_clk,
     input  logic                            ap_rst_n,
 
-    AXI4S.s                                 s_axis,
-    AXI4S.m                                 m_axis
+    AXI4S.slave                                 s_axis,
+    AXI4S.master                                m_axis
 );
 
 dwc_buff #(

@@ -43,8 +43,8 @@ module dwcc #(
     input  logic                        aclk,
     input  logic                        aresetn,
 
-    AXI4S.s                             s_axis,
-    AXI4S.m                             m_axis
+    AXI4S.slave                             s_axis,
+    AXI4S.master                            m_axis
 );
 
 dwc_axi #(

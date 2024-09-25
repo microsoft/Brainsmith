@@ -134,6 +134,7 @@ class c_scb;
           if ($fscanf(fh[i], "%h", tmp_val) == 1) begin
             if(tmp_val != mtrx_b[i][j]) begin
               fail = 1;
+              $display("FAIL:  mtrx [%d] [%d], tmp_val %x, dut %x", i, j, tmp_val, mtrx_b[i][j]);
             end
             j++;
           end

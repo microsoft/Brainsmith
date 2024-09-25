@@ -17,7 +17,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p2_StreamingFIFO_rtl_2": {
@@ -85,7 +85,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p2_StreamingFIFO_rtl_10": {
@@ -121,7 +121,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p2_StreamingFIFO_rtl_14": {

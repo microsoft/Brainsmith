@@ -49,8 +49,8 @@ module instrumentation_top (
     input  logic                    aresetn,
 
     // Data
-    AXI4S.s                         s_finn_out [N_STREMS_IN],
-    AXI4S.m                         m_finn_in [N_STREAMS_OUT],
+    AXI4S.slave                         s_finn_out [N_STREMS_IN],
+    AXI4S.master                        m_finn_in [N_STREAMS_OUT],
 
     // Control
     input  logic [31:0]             s_n_beats_in, // in bytes

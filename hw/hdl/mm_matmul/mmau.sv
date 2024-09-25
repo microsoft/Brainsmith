@@ -175,7 +175,34 @@ module mmau #(
 	uwire acc_t odat;
 	logic ovld;
 
-	// MUL stage
+	// MUL-ADD stage
+`define MULADD
+`ifdef MULADD
+	mul_add_stage #(
+		.SIMD(SIMD),
+		.PE(PE),
+		.ACTIVATION_WIDTH(ACTIVATION_WIDTH),
+		.ACCU_WIDTH(ACCU_WIDTH)
+	) inst_mul_add_stage (
+		.clk(clk),
+		.clk2x(clk2x),
+		.rst(rst),
+		.en(en),
+
+		.amvau_i(amvau),
+		.mvu_w(mvu_w),
+		.ival(istb),
+		.ilast(alast),
+
+		.i_acc(acc_out),
+		.inc_acc(inc_acc),
+
+		.odat(p_add),
+		.oval(p_add_val),
+		.olast(p_add_last)
+	);
+`else
+    // MUL stage
 	mul_stage #(
 		.SIMD(SIMD),
 		.PE(PE),
@@ -217,7 +244,8 @@ module mmau #(
 		.oval(p_add_val),
 		.olast(p_add_last)
 	);
-
+`endif
+    
 	// ACC stage
 	acc_stage #(
 		.PE(PE),

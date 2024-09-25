@@ -45,66 +45,48 @@
 
 module p1_top #(
     // MatMul 0
-	int unsigned PE_0 = 32,
-	int unsigned SIMD_0 = 16,
-    int unsigned MH_0 = 32,
-    int unsigned MW_0 = 128,
+    int unsigned SIMD_MM_0 = 16,
+	int unsigned PE_MM_0 = 32,
+    int unsigned MH_MM_0 = 32,
+    int unsigned MW_MM_0 = 128,
+    int unsigned TH_MM_0 = PE_MM_0,
     int unsigned MH_OUTER_0 = 128,
-    
-    int unsigned PE_THR_0 = PE_0/(MH_0/SIMD_0),
-    bit PUMPED_COMPUTE_0 = 1,
-    parameter  THRESHOLDS_PATH_0 = "",
-
-    // MatMul 1
-	int unsigned PE_1 = 32,
-	int unsigned SIMD_1 = 16,
-    int unsigned MH_1 = 128,
-    int unsigned MW_1 = 32,
-    int unsigned MH_OUTER_1 = 128,
-
-    int unsigned PE_THR_1 = PE_1/(MH_1/SIMD_1),
-    bit PUMPED_COMPUTE_1 = 1,
-    parameter  THRESHOLDS_PATH_1 = "",
-
-    // MV
+    int unsigned PE_THR_0 = PE_MM_0/(MH_MM_0/SIMD_MM_0),
+    int unsigned N_TILES_0 = MH_OUTER_0 / TH_MM_0,
     int unsigned N_VECTORS_0 = MH_OUTER_0,
+    
+    // MatMul 1
+	int unsigned SIMD_MM_1 = 16,
+    int unsigned PE_MM_1 = 32,
+    int unsigned MH_MM_1 = 128,
+    int unsigned MW_MM_1 = 32,
+    int unsigned TH_MM_1 = PE_MM_1,
+    int unsigned MH_OUTER_1 = 128,
+    int unsigned PE_THR_1 = PE_MM_1/(MH_MM_1/SIMD_MM_1),
+    int unsigned N_TILES_1 = MH_OUTER_1 / TH_MM_1,
     int unsigned N_VECTORS_1 = MH_OUTER_1,
-    // MM
-    int unsigned MM_KERNEL = 0,
-    int unsigned TILE_H_0 = PE_0,
-    int unsigned TILE_H_1 = PE_1,
-    int unsigned N_TILES_0 = MH_OUTER_0 / TILE_H_0,
-    int unsigned N_TILES_1 = MH_OUTER_1 / TILE_H_1,
+
+    // Init
+    parameter THRESHOLDS_PATH_0 = "",
+    parameter THRESHOLDS_PATH_1 = "",
 
     // Shuffles
     int unsigned PE_SHUFFLE_A = 4,
     int unsigned PE_SHUFFLE_B = 4,
+    int unsigned PE_SHUFFLE_C = 4,
 
     // Softmax
     int unsigned EN_SOFTMAX = 0,
     int unsigned PE_SOFTMAX = PE_THR_0,
 
-    // Activation bits
+    // Data
     int unsigned ACTIVATION_WIDTH = 8,
-
-    // Safely deducible parameters
-    localparam int unsigned  B_STREAM_WIDTH_0           = PE_0 * ACTIVATION_WIDTH,
-	localparam int unsigned  B_STREAM_WIDTH_BA_0        = (B_STREAM_WIDTH_0 + 7)/8 * 8,
-	localparam int unsigned  A_STREAM_WIDTH_0           = SIMD_0 * ACTIVATION_WIDTH,
-	localparam int unsigned  A_STREAM_WIDTH_BA_0        = (A_STREAM_WIDTH_0  + 7)/8 * 8,
-	localparam int unsigned  C_STREAM_WIDTH_0           = PE_THR_0 * ACTIVATION_WIDTH,
-	localparam int unsigned  C_STREAM_WIDTH_BA_0        = (C_STREAM_WIDTH_0 + 7)/8 * 8,
-	localparam bit  		 SIMD_UNEVEN_0  = SIMD_0 % 2,
-
-	localparam int unsigned  B_STREAM_WIDTH_1           = PE_1 * ACTIVATION_WIDTH,
-	localparam int unsigned  B_STREAM_WIDTH_BA_1        = (B_STREAM_WIDTH_1 + 7)/8 * 8,
-	localparam int unsigned  A_STREAM_WIDTH_1           = SIMD_1 * ACTIVATION_WIDTH,
-	localparam int unsigned  A_STREAM_WIDTH_BA_1        = (A_STREAM_WIDTH_1  + 7)/8 * 8,
-	localparam int unsigned  C_STREAM_WIDTH_1           = PE_THR_1 * ACTIVATION_WIDTH,
-	localparam int unsigned  C_STREAM_WIDTH_BA_1        = (C_STREAM_WIDTH_1 + 7)/8 * 8,
-	localparam bit  		 SIMD_UNEVEN_1  = SIMD_1 % 2,
+    parameter integer                               ACCU_WIDTH_0 = 2*ACTIVATION_WIDTH+$clog2(MH_MM_0),
+    parameter integer                               ACCU_WIDTH_1 = 2*ACTIVATION_WIDTH+$clog2(MH_MM_1),
 
     // Rest
+    bit PUMPED_COMPUTE = 0,
+    int unsigned MM_KERNEL = 0,
     parameter Q_DEPTH = 16,
     bit IS_MVU = 1,
     int unsigned SEGMENTLEN = 2,
@@ -118,23 +100,41 @@ module p1_top #(
 	input	logic  ap_rst_n,
 
 	// B matrix stream MatMul 0
-    AXI4S.s                             s_axis_0_b,
+    AXI4S.slave                            s_axis_0_b,
 
     // A matrix stream MatMul 0
-    AXI4S.s                             s_axis_0_a,
+    AXI4S.slave                            s_axis_0_a,
 
     // B matrix stream MatMul 1
-    AXI4S.s                             s_axis_1_b,
+    AXI4S.slave                            s_axis_1_b,
 
     // C matrix stream MatMul 1
-    AXI4S.m                             m_axis_1_c
+    AXI4S.master                            m_axis_1_c
 );
 
 //
 // Params
 //
 
-localparam COMPUTE_CORE = (ACTIVATION_WIDTH == 8) ? "mvu_vvu_8sx9_dsp58" : "mvu_4sx4u";
+localparam int unsigned  B_STREAM_WIDTH_0           = PE_MM_0 * ACTIVATION_WIDTH;
+localparam int unsigned  B_STREAM_WIDTH_BA_0        = (B_STREAM_WIDTH_0 + 7)/8 * 8;
+localparam int unsigned  A_STREAM_WIDTH_0           = SIMD_MM_0 * ACTIVATION_WIDTH;
+localparam int unsigned  A_STREAM_WIDTH_BA_0        = (A_STREAM_WIDTH_0  + 7)/8 * 8;
+localparam int unsigned  C_STREAM_WIDTH_0           = PE_MM_0 * ACCU_WIDTH_0;
+localparam int unsigned  C_STREAM_WIDTH_BA_0        = (C_STREAM_WIDTH_0 + 7)/8 * 8;
+
+localparam int unsigned  B_STREAM_WIDTH_1           = PE_MM_1 * ACTIVATION_WIDTH;
+localparam int unsigned  B_STREAM_WIDTH_BA_1        = (B_STREAM_WIDTH_1 + 7)/8 * 8;
+localparam int unsigned  A_STREAM_WIDTH_1           = SIMD_MM_1 * ACTIVATION_WIDTH;
+localparam int unsigned  A_STREAM_WIDTH_BA_1        = (A_STREAM_WIDTH_1  + 7)/8 * 8;
+localparam int unsigned  C_STREAM_WIDTH_1           = PE_MM_1 * ACCU_WIDTH_1;
+localparam int unsigned  C_STREAM_WIDTH_BA_1        = (C_STREAM_WIDTH_1 + 7)/8 * 8;
+
+localparam COMPUTE_CORE = (ACTIVATION_WIDTH == 8) ? "mvu_8sx8u_dsp48" : "mvu_4sx4u";
+//localparam COMPUTE_CORE = (ACTIVATION_WIDTH == 8) ? "mvu_vvu_8sx9_dsp58" : "mvu_4sx4u";
+localparam BIAS_INT = (ACTIVATION_WIDTH == 8) ? -128 : -8;
+localparam int unsigned  DWC_STREAM_WIDTH_0  = PE_THR_0 * ACCU_WIDTH_0;
+localparam int unsigned  DWC_STREAM_WIDTH_1  = PE_THR_1 * ACCU_WIDTH_1;
 
 //
 // Instantiation
@@ -143,17 +143,23 @@ localparam COMPUTE_CORE = (ACTIVATION_WIDTH == 8) ? "mvu_vvu_8sx9_dsp58" : "mvu_
 AXI4S #(.AXI4S_DATA_BITS(PE_SHUFFLE_B*ACTIVATION_WIDTH)) axis_0_b ();
 AXI4S #(.AXI4S_DATA_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH)) axis_0_a ();
 AXI4S #(.AXI4S_DATA_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH)) axis_1_b ();
-AXI4S #(.AXI4S_DATA_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH)) axis_1_c ();
+AXI4S #(.AXI4S_DATA_BITS(PE_SHUFFLE_C*ACTIVATION_WIDTH)) axis_1_c ();
 
 AXI4S #(.AXI4S_DATA_BITS(B_STREAM_WIDTH_BA_0)) axis_dwc_0_b ();
 AXI4S #(.AXI4S_DATA_BITS(A_STREAM_WIDTH_BA_0)) axis_dwc_0_a ();
 AXI4S #(.AXI4S_DATA_BITS(B_STREAM_WIDTH_BA_1)) axis_dwc_1_b ();
-AXI4S #(.AXI4S_DATA_BITS(C_STREAM_WIDTH_BA_1)) axis_dwc_1_c ();
 
 AXI4S #(.AXI4S_DATA_BITS(C_STREAM_WIDTH_BA_0)) axis_mm_0_c ();
+AXI4S #(.AXI4S_DATA_BITS(DWC_STREAM_WIDTH_0)) axis_mm_0_buf_c ();
+AXI4S #(.AXI4S_DATA_BITS(PE_THR_0*ACTIVATION_WIDTH)) axis_mm_0_thr_c ();
+
 AXI4S #(.AXI4S_DATA_BITS(PE_SOFTMAX*ACTIVATION_WIDTH)) axis_sm_in ();
 AXI4S #(.AXI4S_DATA_BITS(PE_SOFTMAX*ACTIVATION_WIDTH)) axis_sm_out ();
 AXI4S #(.AXI4S_DATA_BITS(A_STREAM_WIDTH_BA_1)) axis_mm_1_a ();
+
+AXI4S #(.AXI4S_DATA_BITS(C_STREAM_WIDTH_BA_1)) axis_mm_1_c ();
+AXI4S #(.AXI4S_DATA_BITS(DWC_STREAM_WIDTH_1)) axis_mm_1_buf_c ();
+AXI4S #(.AXI4S_DATA_BITS(PE_THR_1*ACTIVATION_WIDTH)) axis_mm_1_thr_c ();
 
 // Shuffle-A
 shuffleB_0 inst_shuffle_0_b (
@@ -201,20 +207,18 @@ shuffleA_0 inst_shuffle_1_b (
     .dst_TREADY     (axis_1_b.tready)
 );
 
-dwc_buff_top #(.I_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH), .O_BITS(B_STREAM_WIDTH_BA_0), .O_QDEPTH((MH_1 * MW_1) / PE_1)) inst_dwc_buff_1_b (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_1_b), .m_axis(axis_dwc_1_b));
+dwc_buff_top #(.I_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH), .O_BITS(B_STREAM_WIDTH_BA_0), .O_QDEPTH((MH_MM_1 * MW_MM_1) / PE_MM_1)) inst_dwc_buff_1_b (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_1_b), .m_axis(axis_dwc_1_b));
 
 // MatMul
 if(MM_KERNEL == 0) begin
     mv_matmul_dyn #(
-        .PE(PE_0),
-        .SIMD(SIMD_0),
-        .MH(MH_0),
-        .MW(MW_0),
+        .PE(PE_MM_0),
+        .SIMD(SIMD_MM_0),
+        .MH(MH_MM_0),
+        .MW(MW_MM_0),
         .N_VECTORS(N_VECTORS_0),
-        .PE_THR(PE_THR_0),
-        .TH(TILE_H_0),
-        .PUMPED_COMPUTE(PUMPED_COMPUTE_0),
-        .THRESHOLDS_PATH(THRESHOLDS_PATH_0),
+
+        .PUMPED_COMPUTE(PUMPED_COMPUTE),
         .COMPUTE_CORE(COMPUTE_CORE),
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH)
     ) inst_MatMul_0 (
@@ -237,15 +241,14 @@ if(MM_KERNEL == 0) begin
 end
 else begin
     mm_matmul_dyn #(
-        .PE(PE_0),
-        .SIMD(SIMD_0),
-        .MH(MH_0),
-        .MW(MW_0),
-        .TH(TILE_H_0),
+        .PE(PE_MM_0),
+        .SIMD(SIMD_MM_0),
+        .MH(MH_MM_0),
+        .MW(MW_MM_0),
+        .TH(TH_MM_0),
         .N_TILES(N_TILES_0),
-        .PE_THR(PE_THR_0),
-        .PUMPED_COMPUTE(PUMPED_COMPUTE_0),
-        .THRESHOLDS_PATH(THRESHOLDS_PATH_0),
+
+        .PUMPED_COMPUTE(PUMPED_COMPUTE),
         .COMPUTE_CORE(COMPUTE_CORE),
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH)
     ) inst_MatMul_0 (
@@ -267,8 +270,50 @@ else begin
     );
 end
 
+dwc_buff_top #(.I_BITS(C_STREAM_WIDTH_BA_0), .O_BITS(DWC_STREAM_WIDTH_0)) inst_dwc_mm_0 (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_0_c), .m_axis(axis_mm_0_buf_c));
+
+// Threshold 0
+thresholding_axi_p1 #(
+    .N(ACTIVATION_WIDTH),
+    .WI(ACCU_WIDTH_0),
+    .WT(ACCU_WIDTH_0),
+    .C(PE_THR_0),
+    .PE(PE_THR_0),
+    .THRESHOLDS_PATH(THRESHOLDS_PATH_0),
+    .BIAS(BIAS_INT)
+) inst_thr_0 (
+    .ap_clk(ap_clk),
+    .ap_rst_n(ap_rst_n),
+
+    .s_axilite_AWVALID(1'b0),
+    .s_axilite_AWREADY(),
+    .s_axilite_AWADDR(0),
+    .s_axilite_WVALID(0),
+    .s_axilite_WREADY(),
+    .s_axilite_WDATA(0),
+    .s_axilite_WSTRB(0),
+    .s_axilite_BVALID(),
+    .s_axilite_BREADY(1'b1),
+    .s_axilite_BRESP(),
+    .s_axilite_ARVALID(1'b0),
+    .s_axilite_ARREADY(),
+    .s_axilite_ARADDR(0),
+    .s_axilite_RVALID(),
+    .s_axilite_RREADY(1'b1),
+    .s_axilite_RDATA(),
+    .s_axilite_RRESP(),
+    
+    .s_axis_tdata (axis_mm_0_buf_c.tdata),
+    .s_axis_tvalid(axis_mm_0_buf_c.tvalid),
+    .s_axis_tready(axis_mm_0_buf_c.tready),
+    
+    .m_axis_tdata (axis_mm_0_thr_c.tdata),
+    .m_axis_tvalid(axis_mm_0_thr_c.tvalid),
+    .m_axis_tready(axis_mm_0_thr_c.tready)
+);
+
 if(EN_SOFTMAX) begin
-dwc_buff_top #(.I_BITS(C_STREAM_WIDTH_BA_0), .O_BITS(PE_SOFTMAX*ACTIVATION_WIDTH)) inst_buff_sm_in (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_0_c), .m_axis(axis_sm_in));
+dwc_buff_top #(.I_BITS(PE_THR_0*ACTIVATION_WIDTH), .O_BITS(PE_SOFTMAX*ACTIVATION_WIDTH)) inst_buff_sm_in (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_0_thr_c), .m_axis(axis_sm_in));
 
 // Softmax
 softmaxquant_0 inst_softmax (
@@ -287,21 +332,19 @@ softmaxquant_0 inst_softmax (
 dwc_buff_top #(.I_BITS(PE_SOFTMAX*ACTIVATION_WIDTH), .O_BITS(A_STREAM_WIDTH_BA_1)) inst_buff_sm_out (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_sm_out), .m_axis(axis_mm_1_a));
 end
 else begin
-dwc_buff_top #(.I_BITS(C_STREAM_WIDTH_BA_0), .O_BITS(A_STREAM_WIDTH_BA_1)) inst_buff_sm (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_0_c), .m_axis(axis_mm_1_a));
+dwc_buff_top #(.I_BITS(PE_THR_0*ACTIVATION_WIDTH), .O_BITS(A_STREAM_WIDTH_BA_1)) inst_buff_sm (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_0_thr_c), .m_axis(axis_mm_1_a));
 end
 
 // MatMul
 if(MM_KERNEL == 0) begin
     mv_matmul_dyn #(
-        .PE(PE_1),
-        .SIMD(SIMD_1),
-        .MH(MH_1),
-        .MW(MW_1),
+        .PE(PE_MM_1),
+        .SIMD(SIMD_MM_1),
+        .MH(MH_MM_1),
+        .MW(MW_MM_1),
         .N_VECTORS(N_VECTORS_1),
-        .PE_THR(PE_THR_1),
-        .PUMPED_COMPUTE(PUMPED_COMPUTE_1),
-        .THRESHOLDS_PATH(THRESHOLDS_PATH_1),
-        .TH(TILE_H_1),
+
+        .PUMPED_COMPUTE(PUMPED_COMPUTE),
         .COMPUTE_CORE(COMPUTE_CORE),
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH)
     ) inst_MatMul_1 (
@@ -317,22 +360,21 @@ if(MM_KERNEL == 0) begin
         .s_axis_a_tready    (axis_mm_1_a.tready),
         .s_axis_a_tdata     (axis_mm_1_a.tdata),
 
-        .m_axis_c_tvalid    (axis_dwc_1_c.tvalid),
-        .m_axis_c_tready    (axis_dwc_1_c.tready),
-        .m_axis_c_tdata     (axis_dwc_1_c.tdata)
+        .m_axis_c_tvalid    (axis_mm_1_c.tvalid),
+        .m_axis_c_tready    (axis_mm_1_c.tready),
+        .m_axis_c_tdata     (axis_mm_1_c.tdata)
     );
 end
 else begin
     mm_matmul_dyn #(
-        .PE(PE_1),
-        .SIMD(SIMD_1),
-        .MH(MH_1),
-        .MW(MW_1),
-        .TH(TILE_H_1),
+        .PE(PE_MM_1),
+        .SIMD(SIMD_MM_1),
+        .MH(MH_MM_1),
+        .MW(MW_MM_1),
+        .TH(TH_MM_1),
         .N_TILES(N_TILES_1),
-        .PE_THR(PE_THR_1),
-        .PUMPED_COMPUTE(PUMPED_COMPUTE_1),
-        .THRESHOLDS_PATH(THRESHOLDS_PATH_1),
+
+        .PUMPED_COMPUTE(PUMPED_COMPUTE),
         .COMPUTE_CORE(COMPUTE_CORE),
         .ACTIVATION_WIDTH(ACTIVATION_WIDTH)
     ) inst_MatMul_1 (
@@ -348,16 +390,57 @@ else begin
         .s_axis_a_tready    (axis_mm_1_a.tready),
         .s_axis_a_tdata     (axis_mm_1_a.tdata),
 
-        .m_axis_c_tvalid    (axis_dwc_1_c.tvalid),
-        .m_axis_c_tready    (axis_dwc_1_c.tready),
-        .m_axis_c_tdata     (axis_dwc_1_c.tdata)
+        .m_axis_c_tvalid    (axis_mm_1_c.tvalid),
+        .m_axis_c_tready    (axis_mm_1_c.tready),
+        .m_axis_c_tdata     (axis_mm_1_c.tdata)
     );
 end
 
-dwc_buff_top #(.I_BITS(C_STREAM_WIDTH_BA_1), .O_BITS(PE_SHUFFLE_A*ACTIVATION_WIDTH)) inst_dwc_buff_1_c (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_dwc_1_c), .m_axis(axis_1_c));
+dwc_buff_top #(.I_BITS(C_STREAM_WIDTH_BA_1), .O_BITS(DWC_STREAM_WIDTH_1)) inst_dwc_mm_1 (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_1_c), .m_axis(axis_mm_1_buf_c));
+
+// Threshold 1
+thresholding_axi_p1 #(
+    .N(ACTIVATION_WIDTH),
+    .WI(ACCU_WIDTH_1),
+    .WT(ACCU_WIDTH_1),
+    .C(PE_THR_1),
+    .PE(PE_THR_1),
+    .THRESHOLDS_PATH(THRESHOLDS_PATH_1),
+    .BIAS(BIAS_INT)
+) inst_thr_1 (
+    .ap_clk(ap_clk),
+    .ap_rst_n(ap_rst_n),
+
+    .s_axilite_AWVALID(1'b0),
+    .s_axilite_AWREADY(),
+    .s_axilite_AWADDR(0),
+    .s_axilite_WVALID(0),
+    .s_axilite_WREADY(),
+    .s_axilite_WDATA(0),
+    .s_axilite_WSTRB(0),
+    .s_axilite_BVALID(),
+    .s_axilite_BREADY(1'b1),
+    .s_axilite_BRESP(),
+    .s_axilite_ARVALID(1'b0),
+    .s_axilite_ARREADY(),
+    .s_axilite_ARADDR(0),
+    .s_axilite_RVALID(),
+    .s_axilite_RREADY(1'b1),
+    .s_axilite_RDATA(),
+    .s_axilite_RRESP(),
+    
+    .s_axis_tdata (axis_mm_1_buf_c.tdata),
+    .s_axis_tvalid(axis_mm_1_buf_c.tvalid),
+    .s_axis_tready(axis_mm_1_buf_c.tready),
+    
+    .m_axis_tdata (axis_mm_1_thr_c.tdata),
+    .m_axis_tvalid(axis_mm_1_thr_c.tvalid),
+    .m_axis_tready(axis_mm_1_thr_c.tready)
+);
+
+dwc_buff_top #(.I_BITS(PE_THR_1*ACTIVATION_WIDTH), .O_BITS(PE_SHUFFLE_C*ACTIVATION_WIDTH)) inst_dwc_buff_1_c (.ap_clk(ap_clk), .ap_rst_n(ap_rst_n), .s_axis(axis_mm_1_thr_c), .m_axis(axis_1_c));
 
 // Shuffle
-
 shuffleC_0 inst_shuffle_1_c (
     .ap_clk         (ap_clk),
     .ap_rst_n       (ap_rst_n),

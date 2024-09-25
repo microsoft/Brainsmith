@@ -58,11 +58,14 @@ module shuffle_out #(
 // Consts and types
 // ----------------------------------------------------------------------------
 localparam integer ADDR_BITS = $clog2(NF * SF);
-localparam integer EN_BITS = PE * ACTIVATION_WIDTH / 8;
+localparam integer RAM_BITS = (PE*ACTIVATION_WIDTH + 7)/8 * 8;
+localparam integer EN_BITS = RAM_BITS / 8;
 
 localparam integer SF_BITS = $clog2(SF);
 localparam integer NF_BITS = $clog2(NF);
 localparam integer SF_NF_BITS = $clog2(SF*NF);
+
+logic [SF-1:0][ADDR_BITS-1:0] offsets;
 
 typedef enum logic  {ST_WR_0, ST_WR_1} state_wr_t;
 typedef enum logic  {ST_RD_0, ST_RD_1} state_rd_t;
@@ -93,6 +96,11 @@ logic [ADDR_BITS-1:0] a_addr_1;
 logic [PE-1:0][ACTIVATION_WIDTH-1:0] a_data_in_1;
 
 logic done_0, done_1; // Completion
+
+// -- Offsets
+for(genvar i = 0; i < SF; i++) begin
+    assign offsets[i] = i * NF;
+end
 
 // -- REG
 always_ff @( posedge clk ) begin : REG_PROC_WR
@@ -141,11 +149,11 @@ always_comb begin : DP_PROC_WR
     irdy = 1'b0;
 
     a_we_0 = 0;
-    a_addr_0 = (curr_sf_C << $clog2(NF)) + curr_nf_C;
+    a_addr_0 = offsets[curr_sf_C] + curr_nf_C;
     a_data_in_0 = idat;
 
     a_we_1 = 0;
-    a_addr_1 = (curr_sf_C << $clog2(NF)) + curr_nf_C;
+    a_addr_1= offsets[curr_sf_C] + curr_nf_C;
     a_data_in_1 = idat;
 
     case (state_wr_C)
@@ -325,9 +333,10 @@ assign odat = odat_C;
 // Matrix
 // ----------------------------------------------------------------------------
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(ADDR_BITS),
-    .DATA_BITS(PE*ACTIVATION_WIDTH)
+    .DATA_BITS(RAM_BITS),
+    .RAM_TYPE("block")
 ) inst_ram_tp_c_0 (
     .clk(clk),
     .a_en(1'b1),
@@ -340,9 +349,10 @@ ram_tp_c #(
     .b_data_out(odat_0)
 );
 
-ram_tp_c #( 
+ram_p_c #( 
     .ADDR_BITS(ADDR_BITS),
-    .DATA_BITS(PE*ACTIVATION_WIDTH)
+    .DATA_BITS(RAM_BITS),
+    .RAM_TYPE("block")
 ) inst_ram_tp_c_1 (
     .clk(clk),
     .a_en(1'b1),

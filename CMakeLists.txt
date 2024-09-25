@@ -47,25 +47,38 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 #
 # Check Python Version
 #
-find_package(Python3 3.8 REQUIRED)
-message(STATUS "Found Python Version: ${Python3_VERSION}")
+#find_package(Python3 3.8 REQUIRED)
+#message(STATUS "Found Python Version: ${Python3_VERSION}")
 
 #
 # FINN
 #
 set(FINN_PATH "${CMAKE_SOURCE_DIR}/scripts_finn/" CACHE STRING "FINN path.")
 set(GEN_FINN_PATH "" CACHE STRING "Generated FINN partitions path.")
+set(SHELL_XRT 0 CACHE STRING "Generate FINN top level only.")
 
 #
 # Build optimizations
 #
 set(BUILD_OPT 1 CACHE STRING "Build optimizations (increases compilation time).")
 set(SIM_RUN 0 CACHE STRING "Run command line simulation during `make sim`.")
+set(COMP_CORES 16 CACHE STRING "Number of compilation cores.")
 
 #
 # Device
 #
-set(FPGA_PART xcv80-lsva4737-2MHP-e-S CACHE STRING "FPGA device.")
+
+set(FDEV_NAME "v80" CACHE STRING "FPGA device.")
+
+if(FDEV_NAME STREQUAL "v80")
+  set(FPGA_PART xcv80-lsva4737-2MHP-e-S CACHE STRING "FPGA device.")
+elseif(FDEV_NAME STREQUAL "u250")
+  set(FPGA_PART xcu250-figd2104-2L-e CACHE STRING "FPGA device.")
+else()
+  message(FATAL_ERROR "Target device not supported.")
+endif()
+message("** Target platform ${FDEV_NAME}")
+
 set(ACLK_F 250 CACHE STRING "Clock frequency.")
 set(EN_XTERM 1 CACHE STRING "Terminal.")
 set(TB_NAME "tb_partitions_012" CACHE STRING "testbench dir.")
@@ -172,9 +185,12 @@ configure_file(${CMAKE_SOURCE_DIR}/scripts/base.tcl.in ${CMAKE_BINARY_DIR}/base.
 configure_file(${CMAKE_SOURCE_DIR}/scripts/comp_hls.tcl.in ${CMAKE_BINARY_DIR}/comp_hls.tcl)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/cr_bd.tcl.in ${CMAKE_BINARY_DIR}/cr_bd.tcl)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/inst_ip.tcl.in ${CMAKE_BINARY_DIR}/inst_ip.tcl)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/inst_ip_shell.tcl.in ${CMAKE_BINARY_DIR}/inst_ip_shell.tcl)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/create_project.tcl.in ${CMAKE_BINARY_DIR}/create_project.tcl)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/cr_sim.tcl.in ${CMAKE_BINARY_DIR}/cr_sim.tcl)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/compile.tcl.in ${CMAKE_BINARY_DIR}/compile.tcl)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/synth.tcl.in ${CMAKE_BINARY_DIR}/synth.tcl)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/create_export.tcl.in ${CMAKE_BINARY_DIR}/create_export.tcl)
 
 
 # Commands
@@ -183,8 +199,10 @@ set(DOCKER_SCRIPT_PATH "${FINN_PATH}finn")
 set(FINN_GEN_CMD COMMAND ${CMAKE_COMMAND} -E chdir ${DOCKER_SCRIPT_PATH} ${CMAKE_COMMAND} -E env bash run-docker.sh build_custom ${CMAKE_BINARY_DIR} build_all)
 set(HLS_SYNTH_CMD COMMAND ${VIVADO_HLS_BINARY} -f comp_hls.tcl -tclargs ${target} WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set(BUILD_PRJCT COMMAND ${VIVADO_BINARY} -mode tcl -source ${CMAKE_BINARY_DIR}/create_project.tcl -notrace WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set(SYNTH_CMD COMMAND ${VIVADO_BINARY} -mode tcl -source ${CMAKE_BINARY_DIR}/synth.tcl -notrace WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set(COMP_CMD COMMAND ${VIVADO_BINARY} -mode tcl -source ${CMAKE_BINARY_DIR}/compile.tcl -notrace WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set(BUILD_SIM COMMAND ${VIVADO_BINARY} -mode tcl -source ${CMAKE_BINARY_DIR}/cr_sim.tcl -notrace WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set(BUILD_EXPORT COMMAND ${VIVADO_BINARY} -mode tcl -source ${CMAKE_BINARY_DIR}/create_export.tcl -notrace WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 if(VITIS_HLS) 
   message("** Vitis toolchain")
@@ -203,21 +221,32 @@ if(GEN_FINN)
     ${BUILD_PRJCT}
   )
 
-  add_custom_target(sim
-    ${FINN_GEN_CMD} 
+  add_custom_target(export
+    ${FINN_GEN_CMD}
     ${HLS_SYNTH_CMD}
-    ${BUILD_SIM}
+    ${BUILD_EXPORT}
   )
 else()
   add_custom_target(project
     ${BUILD_PRJCT}
   )
-
-  add_custom_target(sim 
-    ${BUILD_SIM}
-  )
 endif()
 
 add_custom_target(compile
+    DEPENDS ${CMAKE_BINARY_DIR}/checkpoints/design_routed.dcp
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/checkpoints/design_routed.dcp
     ${COMP_CMD}
-  )
+    DEPENDS ${CMAKE_BINARY_DIR}/checkpoints/design_synthed.dcp
+)
+
+add_custom_target(synth
+    DEPENDS ${CMAKE_BINARY_DIR}/checkpoints/design_synthed.dcp
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/checkpoints/design_synthed.dcp
+    ${SYNTH_CMD}
+)

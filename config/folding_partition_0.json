@@ -45,7 +45,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p0_MVAU_rtl_1": {
@@ -55,7 +55,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p0_MVAU_rtl_2": {
@@ -65,7 +65,7 @@
     "resType": "dsp",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0,
-    "pumpedCompute": 1,
+    "pumpedCompute": 0,
     "pumpedMemory": 0 
   },
   "p0_StreamingFIFO_rtl_7": {

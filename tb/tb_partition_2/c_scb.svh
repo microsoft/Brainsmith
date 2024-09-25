@@ -68,7 +68,7 @@ class c_scb;
   //
   // C-tor
   //
-  function new(string name,  mailbox drv2scb_a_0, mailbox drv2scb_a_1, mailbox mon2scb_c, string refio_c);
+  function new(string name,  mailbox drv2scb_a_0, mailbox drv2scb_a_1, mailbox mon2scb_c, input string refio_c);
     this.name = name;
     this.drv2scb_a_0 = drv2scb_a_0;
     this.drv2scb_a_1 = drv2scb_a_1;
@@ -84,7 +84,6 @@ class c_scb;
     parameter N_TRS_OUT = (MH * MW) / PE_P2;
 
     int fh;
-    int fo;
     logic [ACTIVATION_WIDTH-1:0] tmp_val;
     int j = 0;
 
@@ -110,34 +109,25 @@ class c_scb;
         $fatal("Failed to open output file for reading");
       end
       
-      fo = $fopen("./output.txt", "w");
-      if (fo == 0) begin
-        $fatal("Failed to open output file for reading");
-      end
-      
       j = 0;
       while (!$feof(fh)) begin
         // Read hex value from file
         if ($fscanf(fh, "%h", tmp_val) == 1) begin
           if(tmp_val != mtrx_c[j]) begin
             fail = 1;
-            $fwrite(fo,"-----------NO MATCH %d - DUT: %x, RD: %x\n", j, mtrx_c[j], tmp_val);
-          end
-          else begin
-            $fwrite(fo,"MATCH %d - DUT: %x, RD: %x\n", j, mtrx_c[j], tmp_val);      
+            $display("FAIL:  mtrx [%d], tmp_val %x, dut %x", j, tmp_val, mtrx_c[j]);
           end
           j++;
         end
       end
 
       $fclose(fh);
-      $fclose(fo);
 
       if(fail) begin
-        $display("\nERR:  Results do not match .onnx graph!");
+        $display("ERR:  Results do not match .onnx graph!");
       end
       else begin
-        $display("\nResults match .onnx graph!");
+        $display("Results match .onnx graph!");
       end
 
     end

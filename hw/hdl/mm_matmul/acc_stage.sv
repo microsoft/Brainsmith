@@ -45,58 +45,78 @@ module acc_stage #(
     input  logic                                            rst,
     input  logic                                            en,
 
-    input  logic [PE-1:0][ACCU_WIDTH-1:0]                   idat,
+    input  logic [PE*ACCU_WIDTH-1:0]                        idat,
     input  logic                                            ival,
     input  logic                                            ilast,
 
-    output logic [PE-1:0][ACCU_WIDTH-1:0]                   o_acc,
+    output logic [PE*ACCU_WIDTH-1:0]                        o_acc,
     input  logic                                            inc_acc,
 
-    output logic [PE-1:0][ACCU_WIDTH-1:0]                   odat,
+    output logic [PE*ACCU_WIDTH-1:0]                        odat,
     output logic                                            oval
 );
 
-(* ram_style = "distributed" *) logic [PE-1:0][TH-1:0][ACCU_WIDTH-1:0] acc;
+localparam integer TH_BITS = $clog2(TH);
 
-localparam integer TILE_IDX = $clog2(TH);
+logic [TH_BITS-1:0] cnt_prep = 0;
+logic prep = 1'b1;
 
-logic [TILE_IDX-1:0] rd_pntr;
-logic [TILE_IDX-1:0] wr_pntr;
+logic fifo_in_tvalid, fifo_in_tready;
+logic fifo_out_tvalid, fifo_out_tready;
+logic [PE*ACCU_WIDTH-1:0] fifo_in_tdata, fifo_out_tdata;
+
+Q_srl #(
+    .depth(TH), .width(PE*ACCU_WIDTH)
+) inst_q (
+    .clock(clk),
+    .reset(rst),
+    .count(),
+    .maxcount(),
+    .i_d(fifo_in_tdata),
+    .i_v(fifo_in_tvalid),
+    .i_r(fifo_in_tready),
+    .o_d(fifo_out_tdata),
+    .o_v(fifo_out_tvalid),
+    .o_r(fifo_out_tready)
+);
 
 always_ff @(posedge clk) begin
     if(rst) begin
-        acc <= 0;
         odat <= 0;
         oval <= 1'b0;
 
-        rd_pntr <= 0;
-        wr_pntr <= 0;
+        cnt_prep <= 0;
+        prep <= 1'b1;
     end
     else begin
-        if(en) begin
-            rd_pntr <= inc_acc ? rd_pntr + 1 : rd_pntr;
-            
-            if(ival) begin
-                if(wr_pntr == TH-1) begin
-                    wr_pntr <= 0;
-                end
-                else begin
-                    wr_pntr <= wr_pntr + 1;
-                end
+        if(cnt_prep == TH-1) begin
+            prep <= 1'b0;
+            cnt_prep <= 0;
+        end
+        else begin
+            cnt_prep <= cnt_prep + 1;
+        end
 
-                for(int i = 0; i < PE; i++) begin
-                    acc[i][wr_pntr] <= ilast ? 0 : idat[i];
-                    odat[i] <= idat[i];
-                end
-                
+        if(en) begin
+            if(ival) begin
+                odat <= idat;
                 oval <= ival && ilast;
             end
         end 
     end
 end
 
-for(genvar i = 0; i < PE; i++) begin
-    assign o_acc[i] = acc[i][rd_pntr];
+always_comb begin
+    fifo_in_tvalid = 1'b0;
+    fifo_in_tdata = 0;
+
+    if(en) begin
+        fifo_in_tvalid = prep ? 1'b1 : ival;
+        fifo_in_tdata = prep ? 0 : (ilast ? 0 : idat); 
+    end
 end
+
+assign o_acc = fifo_out_tdata;
+assign fifo_out_tready = inc_acc;
 
 endmodule

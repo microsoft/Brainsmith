@@ -42,31 +42,32 @@ module mv_matmul_sta #(
     int unsigned MW,
 	int unsigned PE,
 	int unsigned SIMD,
-    int unsigned PE_THR = PE/(MH/SIMD),
 
     int unsigned ACTIVATION_WIDTH = 8,
 	int unsigned ACCU_WIDTH = 2*ACTIVATION_WIDTH+$clog2(MH),
 
     parameter COMPUTE_CORE = "mvu_vvu_8sx9_dsp58",
     bit PUMPED_COMPUTE = 1,
+    bit PUMPED_MEMORY = 0,
 
     // Safely deducible parameters
 	localparam int unsigned  B_STREAM_WIDTH             = PE * SIMD * ACTIVATION_WIDTH,
 	localparam int unsigned  B_STREAM_WIDTH_BA          = (B_STREAM_WIDTH + 7)/8 * 8,
 	localparam int unsigned  A_STREAM_WIDTH             = SIMD * ACTIVATION_WIDTH,
 	localparam int unsigned  A_STREAM_WIDTH_BA          = (A_STREAM_WIDTH  + 7)/8 * 8,
-    localparam int unsigned  C_STREAM_WIDTH             = PE_THR * ACTIVATION_WIDTH,
+    localparam int unsigned  C_STREAM_WIDTH             = PE * ACCU_WIDTH,
 	localparam int unsigned  C_STREAM_WIDTH_BA          = (C_STREAM_WIDTH + 7)/8 * 8,
 
 	localparam bit  		 SIMD_UNEVEN  = SIMD % 2,
 
     // Rest
+    parameter               INIT_FILE = "",
+    parameter               RAM_STYLE = "auto",
     bit IS_MVU = 1,
     int unsigned SEGMENTLEN = 1,
     bit SIGNED_ACTIVATIONS = 1,
     bit FORCE_BEHAVIORAL = 0,
-    bit M_REG_LUT = 1,
-    parameter  THRESHOLDS_PATH = ""	// Directory with initial threshold data
+    bit M_REG_LUT = 1
 ) ( 
     // Global Control
 	input	logic  ap_clk,
@@ -79,20 +80,10 @@ module mv_matmul_sta #(
 	output	logic  s_axis_a_tready,
 
 	// C matrix stream MatMul 1
-	output	logic [C_STREAM_WIDTH_BA-1:0]  m_axis_c_tdata, // after thresholding
+	output	logic [C_STREAM_WIDTH_BA-1:0]  m_axis_c_tdata,
 	output	logic  m_axis_c_tvalid,
 	input	logic  m_axis_c_tready
 );
-
-//
-// Params
-//
-localparam int unsigned  MTRX_LOAD_STREAM_WIDTH      = PE * SIMD * ACCU_WIDTH;
-localparam int unsigned  MTRX_LOAD_STREAM_WIDTH_BA   = (MVAU_STREAM_WIDTH + 7)/8 * 8;
-
-localparam int unsigned  MVAU_STREAM_WIDTH      = PE * ACCU_WIDTH;
-localparam int unsigned  MVAU_STREAM_WIDTH_BA   = (MVAU_STREAM_WIDTH + 7)/8 * 8;
-localparam int unsigned  DWC_STREAM_WIDTH       = PE_THR * ACCU_WIDTH;
 
 //
 // Signals
@@ -104,25 +95,18 @@ uwire mu_w_t axis_b_tdata;
 logic axis_b_tvalid;
 logic axis_b_tready;
 
-// Data S0 and S1
-logic [MVAU_STREAM_WIDTH_BA-1:0]  axis_s0_tdata;
-logic axis_s0_tvalid;
-logic axis_s0_tready;
-
-logic [DWC_STREAM_WIDTH-1:0]  axis_s1_tdata;
-logic axis_s1_tvalid;
-logic axis_s1_tready;
-
 //
 // Instantiations
 //
 
 // Memstream component
 mv_memstream #(
+    .MH(MH), .MW(MW),
     .PE(PE), .SIMD(SIMD),
     .ACTIVATION_WIDTH(ACTIVATION_WIDTH),
-    .MH(MH), .MW(MW),
-    .N_ROWS(N_ROWS)
+    .INIT_FILE(INIT_FILE),
+    .RAM_STYLE(RAM_STYLE),
+    .PUMPED_MEMORY(PUMPED_MEMORY)
 ) inst_matrix_load (
     .clk(ap_clk), 
     .rst(~ap_rst_n),
@@ -160,81 +144,9 @@ mvau #(
     .s_axis_a_tvalid    (s_axis_a_tvalid),
     .s_axis_a_tready    (s_axis_a_tready),
 
-    .m_axis_c_tdata     (axis_s0_tdata),
-    .m_axis_c_tvalid    (axis_s0_tvalid),
-    .m_axis_c_tready    (axis_s0_tready)
-);
-
-// DWC 
-if(PE_THR != PE) begin
-    dwc_buff #(
-        .I_BITS(MVAU_STREAM_WIDTH_BA),
-        .O_BITS(DWC_STREAM_WIDTH)
-    ) inst_dwc_buff (
-        .ap_clk             (ap_clk),
-        .ap_rst_n           (ap_rst_n),
-
-        .s_axis_tvalid      (axis_s0_tvalid),
-        .s_axis_tready      (axis_s0_tready),
-        .s_axis_tdata       (axis_s0_tdata),
-
-        .m_axis_tvalid      (axis_s1_tvalid),
-        .m_axis_tready      (axis_s1_tready),
-        .m_axis_tdata       (axis_s1_tdata)
-    );
-end
-else begin
-    assign axis_s1_tvalid   = axis_s0_tvalid;
-    assign axis_s1_tdata    = axis_s0_tdata;
-    assign axis_s0_tready   = axis_s1_tready;
-end
-
-// Threshold 
-thresholding_axi_p1 #(
-    .N(ACTIVATION_WIDTH),
-    .WI(ACCU_WIDTH),
-    .WT(ACCU_WIDTH),  
-    .C(PE_THR),
-    .PE(PE_THR),
-    .USE_AXILITE(0),
-    .THRESHOLDS_PATH(THRESHOLDS_PATH)
-) inst_threshold_0 (
-    .ap_clk             (ap_clk),
-    .ap_rst_n           (ap_rst_n),
-
-    .s_axis_tready      (axis_s1_tready),
-    .s_axis_tvalid      (axis_s1_tvalid),
-    .s_axis_tdata       (axis_s1_tdata),
-
-    .m_axis_tready      (m_axis_c_tready),
-    .m_axis_tvalid      (m_axis_c_tvalid),
-    .m_axis_tdata       (m_axis_c_tdata),
-
-    //.in0_V_TREADY      (axis_s0_tready[0]),
-    //.in0_V_TVALID      (axis_s0_tvalid[0]),
-    //.in0_V_TDATA       (axis_s0_tdata[0]),
-
-    //.out_V_TREADY      (axis_s0_tready[1]),
-    //.out_V_TVALID      (axis_s0_tvalid[1]),
-    //.out_V_TDATA       (axis_s0_tdata[1]),
-    
-    .s_axilite_AWVALID  (1'b0),
-    .s_axilite_AWREADY  (),
-    .s_axilite_AWADDR   (0),
-    .s_axilite_WVALID   (1'b0),
-    .s_axilite_WREADY   (),
-    .s_axilite_WDATA    (0),
-    .s_axilite_WSTRB    (0),
-    .s_axilite_BVALID   (),
-    .s_axilite_BREADY   (1'b1),
-    .s_axilite_BRESP    (),
-    .s_axilite_ARVALID  (1'b0),
-    .s_axilite_ARREADY  (),
-    .s_axilite_ARADDR   (0),
-    .s_axilite_RVALID   (),
-    .s_axilite_RREADY   (1'b1),
-    .s_axilite_RDATA    (),
-    .s_axilite_RRESP    ()
+    .m_axis_c_tdata     (m_axis_c_tdata),
+    .m_axis_c_tvalid    (m_axis_c_tvalid),
+    .m_axis_c_tready    (m_axis_c_tready)
 );
 
 endmodule

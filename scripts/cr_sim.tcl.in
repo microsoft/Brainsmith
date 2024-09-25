@@ -98,13 +98,31 @@ add_files "${CMAKE_SOURCE_DIR}/hw//hdl/intf"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/common"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/mv_matmul"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/mm_matmul"
-add_files "${CMAKE_SOURCE_DIR}/hw//hdl/thresholding"
+add_files "${CMAKE_SOURCE_DIR}/hw//hdl/thresholding_p1"
+add_files "${CMAKE_SOURCE_DIR}/hw//hdl/thresholding_new"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/stitched"
 add_files "${CMAKE_BINARY_DIR}/pkt_types.sv"
 
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/partition_0"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/partition_1"
 add_files "${CMAKE_SOURCE_DIR}/hw//hdl/partition_2"
+
+# Add thresholding
+if {${TL_MM_kernel} eq 1} {
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_0/p0_Thresholding_rtl_0_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_1/p0_Thresholding_rtl_1_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_0/p0_Thresholding_rtl_2/p0_Thresholding_rtl_2_axi_wrapper.v"
+
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_0/p2_Thresholding_rtl_0_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_1/p2_Thresholding_rtl_1_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_2/p2_Thresholding_rtl_2_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_3/p2_Thresholding_rtl_3_axi_wrapper.v"
+    add_files "$build_dir/mvau_weight_files_partition_2/p2_Thresholding_rtl_4/p2_Thresholding_rtl_4_axi_wrapper.v"
+
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/memstream_axi.sv"
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/memstream.sv"
+    add_files "${FINN_PATH}/finn/finn-rtllib/memstream/hdl/axilite_if.v"
+}
 
 # Add simulation files
 add_files "${CMAKE_SOURCE_DIR}/tb/common"
@@ -129,17 +147,19 @@ puts "****"
 # Block designs
 ########################################################################################################
 
-set ip_repo_get [get_property ip_repo_paths [current_project]]
-set partitions_list { ${TL_FINN_Partitions_all} }
-set ip_repo_lcl { }
+if {${TL_MM_kernel} eq 0} {
+    set ip_repo_get [get_property ip_repo_paths [current_project]]
+    set partitions_list { ${TL_FINN_Partitions_all} }
+    set ip_repo_lcl { }
 
-foreach partition $partitions_list {  
-    proc call_bd_gen_partition {r_path p} {
-        set output [exec python "$r_path/bd_gen.py" $p]
-        puts $output
+    foreach partition $partitions_list {  
+        proc call_bd_gen_partition {r_path p} {
+            set output [exec python "$r_path/bd_gen.py" $p]
+            puts $output
+        }
+        call_bd_gen_partition $build_dir $partition
+        source "$build_dir/make_bd_$partition.tcl" -notrace
     }
-    call_bd_gen_partition $build_dir $partition
-    source "$build_dir/make_bd_$partition.tcl" -notrace
 }
 
 ########################################################################################################

@@ -104,7 +104,8 @@ localparam int unsigned  NF = MW/PE;
 
 localparam integer SIMD_BITS = $clog2(SIMD);
 localparam integer WGT_ADDR_BITS = $clog2(NF * SF);
-localparam integer WGT_EN_BITS = ACTIVATION_WIDTH / 8;
+localparam integer RAM_BITS = (ACTIVATION_WIDTH + 7)/8 * 8;
+localparam integer WGT_EN_BITS = RAM_BITS / 8;
 localparam integer NF_BITS = $clog2(NF);
 localparam integer MH_BITS = $clog2(MH);
 localparam integer SF_NF_BITS = $clog2(SF*NF);
@@ -113,7 +114,7 @@ localparam integer N_REPS_BITS = $clog2(N_REPS);
 logic [NF-1:0][WGT_ADDR_BITS-1:0] offsets;
 
 typedef enum logic  {ST_WR_0, ST_WR_1} state_wr_t;
-typedef enum logic[2:0]  {ST_WAIT_0, ST_WAIT_1, ST_RD_0, ST_RD_1} state_rd_t;
+typedef enum logic  {ST_RD_0, ST_RD_1} state_rd_t;
 typedef logic [NF_BITS:0] nf_t;
 typedef logic [MH_BITS:0] sf_wr_t;
 typedef logic [SF_NF_BITS:0] sf_rd_t;
@@ -288,7 +289,7 @@ logic  [PE-1:0][SIMD-1:0][ACTIVATION_WIDTH-1:0] odat_0, odat_1;
 // -- REG
 always_ff @( posedge clk ) begin : REG_PROC_RD
     if(rst) begin
-        state_rd_C <= ST_WAIT_0;
+        state_rd_C <= ST_RD_0;
 
         cons_sf_C <= 0;
         cons_r_C  <= 0;
@@ -320,23 +321,21 @@ always_comb begin : NSL_PROC_RD
     state_rd_N = state_rd_C;
 
     case (state_rd_C)
-        ST_WAIT_0:
-            state_rd_N = rd_0_C ? ST_RD_0 : ST_WAIT_0;
-
-        ST_WAIT_1:
-            state_rd_N = rd_1_C ? ST_RD_1 : ST_WAIT_1;
-
         ST_RD_0:
-            if(ordy) begin
-                if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
-                    state_rd_N = ST_WAIT_1;
+            if(rd_0_C) begin
+                if(ordy) begin
+                    if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
+                        state_rd_N = ST_RD_1;
+                    end
                 end
             end
 
         ST_RD_1:
-            if(ordy) begin
-                if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
-                    state_rd_N = ST_WAIT_0;
+            if(rd_1_C) begin
+                if(ordy) begin
+                    if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
+                        state_rd_N = ST_RD_0;
+                    end
                 end
             end
         
@@ -363,29 +362,33 @@ always_comb begin : DP_PROC_RD
 
     case (state_rd_C)
         ST_RD_0: begin
-            if(ordy) begin
-                vld_0_s0_N = 1'b1;
+            if(rd_0_C) begin
+                if(ordy) begin
+                    vld_0_s0_N = 1'b1;
 
-                cons_sf_N = (cons_sf_C == NF*SF-1) ? 0 : cons_sf_C + 1;
-                cons_r_N = (cons_sf_C == NF*SF-1) ? cons_r_C + 1 : cons_r_C;
+                    cons_sf_N = (cons_sf_C == NF*SF-1) ? 0 : cons_sf_C + 1;
+                    cons_r_N = (cons_sf_C == NF*SF-1) ? cons_r_C + 1 : cons_r_C;
 
-                if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
-                    done_0 = 1'b1;
-                    cons_r_N = 0;
+                    if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
+                        done_0 = 1'b1;
+                        cons_r_N = 0;
+                    end
                 end
             end
         end
 
         ST_RD_1: begin
-            if(ordy) begin
-                vld_1_s0_N = 1'b1;
+            if(rd_1_C) begin
+                if(ordy) begin
+                    vld_1_s0_N = 1'b1;
 
-                cons_sf_N = (cons_sf_C == NF*SF-1) ? 0 : cons_sf_C + 1;
-                cons_r_N = (cons_sf_C == NF*SF-1) ? cons_r_C + 1 : cons_r_C;
+                    cons_sf_N = (cons_sf_C == NF*SF-1) ? 0 : cons_sf_C + 1;
+                    cons_r_N = (cons_sf_C == NF*SF-1) ? cons_r_C + 1 : cons_r_C;
 
-                if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
-                    done_1 = 1'b1;
-                    cons_r_N = 0;
+                    if((cons_sf_C == NF*SF-1) && (cons_r_C == N_REPS-1)) begin
+                        done_1 = 1'b1;
+                        cons_r_N = 0;
+                    end
                 end
             end
         end
@@ -401,9 +404,10 @@ assign odat = odat_C;
 
 for(genvar i = 0; i < PE; i++) begin
     for(genvar j = 0; j < SIMD; j++) begin
-        ram_tp_c #( 
+        ram_p_c #( 
             .ADDR_BITS($clog2(NF*SF)),
-            .DATA_BITS(ACTIVATION_WIDTH)
+            .DATA_BITS(RAM_BITS),
+            .RAM_TYPE("distributed")
         ) inst_ram_tp_c_0 (
             .clk(clk),
             .a_en(1'b1),
@@ -420,9 +424,10 @@ end
 
 for(genvar i = 0; i < PE; i++) begin
     for(genvar j = 0; j < SIMD; j++) begin
-        ram_tp_c #( 
+        ram_p_c #( 
             .ADDR_BITS($clog2(NF*SF)),
-            .DATA_BITS(ACTIVATION_WIDTH)
+            .DATA_BITS(RAM_BITS),
+            .RAM_TYPE("distributed")
         ) inst_ram_tp_c_1 (
             .clk(clk),
             .a_en(1'b1),
