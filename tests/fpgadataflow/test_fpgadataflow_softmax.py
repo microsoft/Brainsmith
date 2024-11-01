@@ -39,7 +39,7 @@ from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
-import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
+import brainsmith.transformation.convert_to_hw_layers as to_hw
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
