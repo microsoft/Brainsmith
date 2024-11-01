@@ -106,7 +106,7 @@ def make_single_quantsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType
         "QuantSoftmax",
         ["global_in"],
         ["global_out"],
-        domain="finn.custom_op.fpgadataflow",
+        domain="brainwave.custom_op",
         backend="fpgadataflow",
         ifm_dim=list(ifm_dim),
         input_data_type = idt.name,

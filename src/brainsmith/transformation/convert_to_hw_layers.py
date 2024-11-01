@@ -48,7 +48,7 @@ class InferQuantSoftmax(Transformation):
                     "QuantSoftmax",
                     [n.input[0]],  # input tensor(s)
                     [consumer.output[0]],  # output tensor(s)
-                    domain="finn.custom_op.fpgadataflow",
+                    domain="brainsmith.custom_op",
                     backend="fpgadataflow",
                     ifm_dim=input_shape,
                     input_data_type=idt0.name,

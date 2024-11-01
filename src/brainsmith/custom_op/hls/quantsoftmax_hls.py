@@ -31,7 +31,7 @@ import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from brainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
 from finn.util.basic import CppBuilder
 
 
