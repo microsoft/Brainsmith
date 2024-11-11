@@ -1,4 +1,4 @@
-from brainsmith.custom_op.hls.quantsoftmax_hls import QuantSoftmax_hls
+from finnbrainsmith.custom_op.fpgadataflow.hls.quantsoftmax_hls import QuantSoftmax_hls
 
 custom_op = dict()
 

@@ -39,7 +39,7 @@ from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
-import brainsmith.transformation.convert_to_hw_layers as to_hw
+import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -106,7 +106,7 @@ def make_single_quantsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType
         "QuantSoftmax",
         ["global_in"],
         ["global_out"],
-        domain="brainwave.custom_op",
+        domain="finnbrainsmith.custom_op.fpgadataflow",
         backend="fpgadataflow",
         ifm_dim=list(ifm_dim),
         input_data_type = idt.name,
