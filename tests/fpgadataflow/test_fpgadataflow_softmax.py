@@ -40,6 +40,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
+import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -157,7 +158,7 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
         model = model.transform(ConvertQONNXtoFINN())
         model = model.transform(InferShapes())
         model = model.transform(InferDataTypes())
-        model = model.transform(to_hw.InferQuantSoftmax())
+        model = model.transform(to_bs_hw.InferQuantSoftmax())
         model = model.transform(GiveUniqueNodeNames())
         # isolate fpga dataflow layers
         parent_model = model.transform(CreateDataflowPartition())
