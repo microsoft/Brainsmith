@@ -10,6 +10,9 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
 from qonnx.util.onnx import nchw_to_nhwc
+from finnbrainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
+from finnbrainsmith.transformation.shuffle_helpers import innerloop_moves 
+
 
 class InferShuffle(Transformation):
     """
@@ -66,6 +69,8 @@ class InferShuffle(Transformation):
                 assert len(perm.ints) == len(in_reshaped), "Permutation list does not match the reshaped input dimension"
                 assert len(perm.ints) == len(out_reshaped), "Permutation list does not match the reshaped out dimension"
 
+                print(f"{shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints)=}")
+
                 simd = 1 # TODO: allow for this to be increased
                 new_node = helper.make_node(
                             "Shuffle",
@@ -79,6 +84,8 @@ class InferShuffle(Transformation):
                             out_reshaped=out_reshaped,
                             data_type=idt.name,
                             name=f"Shuffle_{n.name}",
+                            loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
+                            inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
                             simd=simd
                         )
                 new_node.attribute.extend([perm])
