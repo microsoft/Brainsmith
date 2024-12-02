@@ -26,7 +26,6 @@ class InferShuffle(Transformation):
         for n in graph.node:
             if(n.op_type == "Transpose"):
                 node_ind += 1 # Do I really need to track this? Isn't there a better way?
-                print(f"Found a transpose that we need to convert to a shuffle {n.name}")
                 to_remove = [n]
 
                 new_in_tensor = None
@@ -42,12 +41,10 @@ class InferShuffle(Transformation):
                     in_reshaped = model.get_tensor_shape(producer.output[0])
                     to_remove.append(producer)
                     node_ind -= 1
-                    print(f"\tIt has a reshape at it's input {producer.name}")
                 else:
                     new_in_tensor = n.input[0]
                     in_shape = model.get_tensor_shape(n.input[0]) #TODO:What if a producer has multiple outputs?
                     in_reshaped = in_shape
-                print(f"\t{in_shape=} {in_reshaped=}")
 
                 # Detect a reshape at the output
                 consumer = model.find_consumer(n.output[0])
@@ -57,15 +54,17 @@ class InferShuffle(Transformation):
                     new_out_tensor = consumer.output[0]
                     to_remove.append(consumer)
                     node_ind += 1
-                    print(f"\tIt has a reshape at it's output {consumer.name}")
                 else:
                     out_reshaped = out_shape
                     new_out_tensor = n.output[0] 
-                print(f"\t{out_shape=} {out_reshaped=}")
 
                 idt = model.get_tensor_datatype(new_in_tensor)
                 odt = model.get_tensor_datatype(new_out_tensor)
+
+                # Some sanity checks for the transformation
                 assert idt == odt, "Input datatype and output datatype of the shuffle must be the same, did something go wrong during transformation?"
+                assert len(perm.ints) == len(in_reshaped), "Permutation list does not match the reshaped input dimension"
+                assert len(perm.ints) == len(out_reshaped), "Permutation list does not match the reshaped out dimension"
 
                 simd = 1 # TODO: allow for this to be increased
                 new_node = helper.make_node(
