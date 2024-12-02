@@ -2,12 +2,14 @@ import onnx
 import argparse
 from onnxsim import simplify  
 from qonnx.util.cleanup import cleanup
+from qonnx.transformation.general import SortCommutativeInputsInitializerLast
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 
 def custom_step_cleanup(model, cfg):
+    model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     
     nodes_to_remove = []
