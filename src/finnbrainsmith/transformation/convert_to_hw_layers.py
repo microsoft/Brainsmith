@@ -89,9 +89,9 @@ class InferShuffle(Transformation):
                     graph.node.remove(i) # Is this okay to do while iterating? (QuantSoftMax does...)
                 graph_modified = True
 
-        #if graph_modified:
-        #    model = model.transform(InferShapes())
-        #    model = model.transform(InferDataTypes())
+        if graph_modified:
+            model = model.transform(InferShapes())
+            model = model.transform(InferDataTypes())
 
         return (model, graph_modified)
 

@@ -15,6 +15,13 @@ class Shuffle(HWCustomOp):
 
     def get_nodeattr_types(self):
         my_attrs = {
+                "data_type" : ("s", True, ""),
+                "in_reshaped" : ("ints", True, []),
+                "in_shape" : ("ints", True, []),
+                "out_reshaped" : ("ints", True, []),
+                "out_shape" : ("ints", True, []),
+                "perm" : ("ints", True, []),
+                "simd": ("i", False, 1)
         }
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
@@ -23,40 +30,54 @@ class Shuffle(HWCustomOp):
         return self.get_nodeattr("in_shape")
 
     def get_normal_output_shape(self, ind=0):
-        pass
+        return self.get_nodeattr("out_reshaped")
 
     def get_number_output_values(self):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def quantise_to_int(self, arr, dtype):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def execute_node(self, context, graph):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_input_datatype(self, ind=0):
-        pass
+        data_type = DataType[self.get_nodeattr("data_type")]
+        return data_type
 
     def make_shape_compatible_op(self, model):
-        pass
+        in_shape = self.get_normal_input_shape()
+        out_shape = self.get_normal_output_shape()
+        return make_node(
+            "Shuffle",
+            inputs=[self.onnx_node.input[0]],
+            outputs=[self.onnx_node.output[0]],
+            in_shape=list(in_shape),
+            out_shape=list(out_shape)
+        )
 
     def infer_node_datatype(self, model):
-        pass
+        node = self.onnx_node
+        dt = model.get_tensor_datatype(node.input[0])
+        if dt != self.get_input_datatype():
+            warn_str = f"data_type changing for {node.name}: {str(self.get_input_datatype())} -> {str(dt)}"
+            warnings.warn(warn_str)
+        self.set_nodeattr("data_type", dt.name)
 
     def verify_node(self):
-        raise NotImplementedError
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_instream_width(self, ind=0):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_outstream_width(self, ind=0):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_output_datatype(self, ind=0):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_folded_output_shape(self, ind=0):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
 
     def get_folded_input_shape(self, ind=0):
-        pass
+        raise NotImplementedError("This function is not yet immplemented.")
