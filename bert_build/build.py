@@ -5,6 +5,7 @@ from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import SortCommutativeInputsInitializerLast
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
+from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
@@ -30,6 +31,10 @@ def custom_step_cleanup(model, cfg):
     for node in nodes_to_remove:
         remove_node_and_rewire(model, node)
 
+    return model
+
+def attempt_convert_step(model, cfg):
+    model = model.transform(ConvertQONNXtoFINN())
     return model
 
 def main(model_path:str):
