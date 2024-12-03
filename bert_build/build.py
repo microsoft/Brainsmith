@@ -11,8 +11,6 @@ import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 
-test_fpga_part = "xczu3eg-sbva484-1-e"
-
 def custom_infer_shuffle(model, cfg):
     model = model.transform(to_bs_hw.InferShuffle())
     return model
@@ -41,7 +39,7 @@ def attempt_convert_step(model, cfg):
     return model
 
 def attempt_specialise_layers(model, cfg):
-    model = model.transform(SpecializeLayers(fpgapart=test_fpga_part))
+    model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
     return model
 
 def main(model_path:str):
