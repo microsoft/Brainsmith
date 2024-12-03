@@ -1,0 +1,236 @@
+# Copyright (C) 2024, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+#
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+#
+# * Neither the name of FINN nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import numpy as np
+import os
+
+import finn.util.pyxsi_rpcclient as pyxsi_rpcclient
+from finn.custom_op.fpgadataflow import templates
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
+from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+from finn.custom_op.fpgadataflow.layernorm import LayerNorm
+from finn.util.basic import make_build_dir
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
+
+
+class LayerNorm_hls(LayerNorm, HLSBackend):
+    def __init__(self, onnx_node, **kwargs):
+        super().__init__(onnx_node, **kwargs)
+
+    def get_nodeattr_types(self):
+        my_attrs = {
+            "rtlsim_backend": ("s", True, "pyxsi"),
+            "custom_hls_dir": ("s", False, "layernorm"),
+            }
+        my_attrs.update(LayerNorm.get_nodeattr_types(self))
+        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+        return my_attrs
+
+    def global_includes(self):
+        self.code_gen_dict["$GLOBALS$"] = [
+            "#include <hls_vector.h>",
+            '#include "layernorm.hpp"',
+            '#include "ln_utils.hpp"'
+        ]
+
+    def defines(self, var):
+        idtype = self.get_input_datatype()
+        odtype = self.get_output_datatype()
+        self.code_gen_dict["$DEFINES$"] = [
+            f"constexpr unsigned SIMD = {self.get_nodeattr('simd')};",
+            f"constexpr unsigned W = {self.get_nodeattr('ifm_dim')[-1]};",
+            f"constexpr unsigned epsilon = {self.get_nodeattr('epsilon')};",
+            f"using TI = {idtype.get_hls_datatype_str()};",
+            f"using TO = {odtype.get_hls_datatype_str()};"
+        ]
+
+    def docompute(self):
+        self.code_gen_dict["$DOCOMPUTE$"] = [
+            f"""
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_{self.hls_sname()}, out_{self.hls_sname()});
+            """
+        ]
+
+    def blackboxfunction(self):
+        self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
+            f"""
+            void {self.onnx_node.name}(
+                hls::stream<hls::vector<TI,SIMD>> &in0_{self.hls_sname()},
+                hls::stream<hls::vector<TO,SIMD>> &out_{self.hls_sname()}
+                )
+            """
+        ]
+
+    def pragmas(self):
+        self.code_gen_dict["$PRAGMAS$"] = [
+            f"#pragma HLS interface AXIS port=in0_{self.hls_sname()}",
+            f"#pragma HLS interface AXIS port=out_{self.hls_sname()}",
+            f"#pragma HLS aggregate variable=in0_{self.hls_sname()} compact=bit",
+            f"#pragma HLS aggregate variable=out_{self.hls_sname()} compact=bit",
+            f"#pragma HLS interface ap_ctrl_none port=return",
+            f"#pragma HLS dataflow disable_start_propagation",
+        ]
+
+
+    def execute_node(self, context, graph):
+        # Get the configured execution mode
+        mode = self.get_nodeattr("exec_mode")
+        # # Lookup table mapping execution modes to implementing methods
+        # exec_fns = {
+        #     "python": self._execute_node_python,
+        #     "cppsim": self._execute_node_cppsim,
+        #     "rtlsim": self._execute_node_rtlsim,
+        # }
+        # # Select and execute the function by mode string
+        # exec_fns[mode](context, graph)
+
+        node = self.onnx_node
+        exp_ishape = self.get_normal_input_shape()
+        exp_oshape = self.get_normal_output_shape()
+        folded_ishape = self.get_folded_input_shape()
+        export_idt = self.get_input_datatype()
+
+        # Generate input
+        inp = context[node.input[0]]
+        inp = inp.reshape(folded_ishape)
+
+        if mode == "python":
+            self._execute_node_python(context, graph)
+        elif mode == "cppsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+            # Execute the precompiled model
+            super().exec_precompiled_singlenode_model()
+            # Load output npy file
+            super().npy_to_dynamic_output(context)
+        elif mode == "rtlsim":
+            # Generate & format input
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+            nbits = self.get_instream_width()
+            rtlsim_inp = npy_to_rtlsim_input(
+                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits
+            )
+            # Setup RTLsim
+            sim = self.get_rtlsim()
+            super().reset_rtlsim(sim)
+            super().toggle_clk(sim)
+
+            # rtlsim_output = self.rtlsim(sim, rtlsim_inp)
+            io_dict = {
+                "inputs": {"in0": rtlsim_inp},
+                "outputs":{"out": []}
+                    }
+            self.rtlsim_multi_io(sim, io_dict)
+            out = io_dict["outputs"]["out"]
+
+            odt = self.get_output_datatype()
+            target_bits = odt.bitwidth()
+            packed_bits = self.get_outstream_width()
+            out_npy_path = "{}/output.npy".format(code_gen_dir)
+            out_shape = self.get_folded_output_shape()
+            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
+
+            # load and reshape output
+            output = np.load(out_npy_path)
+            oshape = self.get_normal_output_shape()
+            output = np.asarray([output], dtype=np.float32).reshape(*oshape)
+            context[node.output[0]] = output
+
+        else:
+            raise Exception(f"Unsupported execution mode: {mode}")
+
+
+   # Executes elementwise operation in C++ simulation
+   # def _execute_node_cppsim(self, context, graph):
+   #     # Get the node wrapped by this custom op
+   #     node = self.onnx_node
+   #     # Get key parameters and inputs for execution
+   #     code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+   #     inp = context[node.input[0]]
+   #     inp = inp.reshape(self.get_folded_input_shape())
+   #     # Save the folded inputs to file to be used by simulation
+   #     np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+   #     # Execute the precompiled model
+   #     super().exec_precompiled_singlenode_model()
+   #     # Load the output numpy file generated by the C++ simulation
+   #     super().npy_to_dynamic_output(context)
+
+
+    def prepare_rtlsim(self):
+        verilog_files = self.get_all_verilog_filenames(abspath=True)
+        single_src_dir = make_build_dir("rtlsim_" + self.onnx_node.name + "_")
+
+        ret = pyxsi_rpcclient.compile_sim_obj(
+            self.get_verilog_top_module_name(), verilog_files, single_src_dir
+        )
+
+        # save generated lib filename in attribute
+        self.set_nodeattr("rtlsim_so", ret[0] + "/" + ret[1])
+
+
+    def code_generation_cppsim(self, model):
+        """Generates c++ code for simulation (cppsim)."""
+        self.code_gen_dict["$READNPYDATA$"] = [""]
+        self.code_gen_dict["$DATAOUTSTREAM$"] = [""]
+        self.code_gen_dict["$STREAMDECLARATIONS$"] = [""]
+        node = self.onnx_node
+        path = self.get_nodeattr("code_gen_dir_cppsim")
+        self.code_gen_dict["$AP_INT_MAX_W$"] = [str(self.get_ap_int_max_w())]
+        self.generate_params(model, path)
+        self.global_includes()
+        self.defines("cppsim")
+        self.pragmas()
+        oshape = self.get_folded_output_shape()
+        oshape_str = str(oshape).replace("(", "{").replace(")", "}")
+        self.code_gen_dict["$DOCOMPUTE$"] = [
+            f"""
+            static hls::stream<hls::vector<TI,SIMD>> in0_V;
+            static hls::stream<hls::vector<TO,SIMD>> out_V;
+
+            npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
+            int stream_size = in0_V.size();
+
+            while(out_V.size() != stream_size){{
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out_V);
+            }}
+
+            vectorstream2npy<TO, float, SIMD>(out_V, {oshape_str}, "{path}/output.npy");
+            """
+        ]
+        self.save_as_npy()
+
+        template = templates.docompute_template
+
+        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
+        with open(code_gen_dir, "w") as f:
+            for key in self.code_gen_dict:
+                # transform list into long string separated by '\n'
+                code_gen_line = "\n".join(self.code_gen_dict[key])
+                template = template.replace(key, code_gen_line)
+            f.write(template)
