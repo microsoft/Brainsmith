@@ -6,9 +6,12 @@ from qonnx.transformation.general import SortCommutativeInputsInitializerLast
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
+from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
+
+test_fpga_part = "xczu3eg-sbva484-1-e"
 
 def custom_infer_shuffle(model, cfg):
     model = model.transform(to_bs_hw.InferShuffle())
@@ -37,10 +40,14 @@ def attempt_convert_step(model, cfg):
     model = model.transform(ConvertQONNXtoFINN())
     return model
 
+def attempt_specialise_layers(model, cfg):
+    model = model.transform(SpecializeLayers(fpgapart=test_fpga_part))
+    return model
+
 def main(model_path:str):
     model = onnx.load(model_path)  
     
-    steps = [ custom_step_cleanup, custom_infer_shuffle, custom_infer_quantsoftmax ]
+    steps = [ custom_step_cleanup, custom_infer_shuffle, custom_infer_quantsoftmax, attempt_specialise_layers ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
