@@ -7,6 +7,9 @@ from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+import finn.transformation.streamline as absorb
+from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
@@ -34,6 +37,12 @@ def custom_step_cleanup(model, cfg):
 
     return model
 
+def custom_streamlining_step(model,cfg):
+    model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
+    model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
+    model = model.transform(RoundAndClipThresholds())
+    return model
+
 def attempt_convert_step(model, cfg):
     model = model.transform(ConvertQONNXtoFINN())
     return model
@@ -42,10 +51,20 @@ def attempt_specialise_layers(model, cfg):
     model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
     return model
 
+def custom_step_infer_hardware(model, cfg):
+    # infer duplicate streams
+    model = model.transform(to_hw.InferDuplicateStreamsLayer())
+    model = model.transform(to_hw.InferAddStreamsLayer())
+    model = model.transform(to_hw.InferStreamingEltwise())
+    model = model.transform(to_hw.InferLookupLayer())
+    model = model.transform(to_hw.InferThresholdingLayer())
+    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
+    return model
+
 def main(model_path:str):
     model = onnx.load(model_path)  
     
-    steps = [ custom_step_cleanup, custom_infer_shuffle, custom_infer_quantsoftmax, attempt_specialise_layers ]
+    steps = [ custom_step_cleanup, custom_streamlining_step, custom_step_infer_hardware, custom_infer_shuffle, custom_infer_quantsoftmax, attempt_specialise_layers ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
