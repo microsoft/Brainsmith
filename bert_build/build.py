@@ -13,6 +13,10 @@ def custom_infer_shuffle(model, cfg):
     model = model.transform(to_bs_hw.InferShuffle())
     return model
 
+def custom_infer_quantsoftmax(model, cfg):
+    model = model.transform(to_bs_hw.InferQuantSoftmax())
+    return model
+
 def custom_step_cleanup(model, cfg):
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
@@ -31,7 +35,7 @@ def custom_step_cleanup(model, cfg):
 def main(model_path:str):
     model = onnx.load(model_path)  
     
-    steps = [ custom_step_cleanup, custom_infer_shuffle ]
+    steps = [ custom_step_cleanup, custom_infer_shuffle, custom_infer_quantsoftmax ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
