@@ -20,6 +20,7 @@ class Shuffle(HWCustomOp):
                 "in_shape" : ("ints", True, []),
                 "out_reshaped" : ("ints", True, []),
                 "out_shape" : ("ints", True, []),
+                "loop_coeffs" : ("ints", True, []), 
                 "perm" : ("ints", True, []),
                 "simd": ("i", False, 1)
         }
@@ -68,13 +69,18 @@ class Shuffle(HWCustomOp):
         raise NotImplementedError("This function is not yet immplemented.")
 
     def get_instream_width(self, ind=0):
-        raise NotImplementedError("This function is not yet immplemented.")
+        ibits = self.get_input_datatype().bitwidth()
+        simd = self.get_nodeattr("simd")
+        return ibits * simd
 
     def get_outstream_width(self, ind=0):
-        raise NotImplementedError("This function is not yet immplemented.")
+        obits = self.get_output_datatype().bitwidth()
+        simd = self.get_nodeattr("simd")
+        return obits * simd
 
     def get_output_datatype(self, ind=0):
-        raise NotImplementedError("This function is not yet immplemented.")
+        data_type = DataType[self.get_nodeattr("data_type")]
+        return data_type
 
     def get_folded_output_shape(self, ind=0):
         raise NotImplementedError("This function is not yet immplemented.")
