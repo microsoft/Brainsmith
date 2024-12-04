@@ -25,7 +25,7 @@ def register_custom_op(cls):
 # Import the submodule containing specializations of ElementwiseBinaryOperation
 # Note: This will automatically register all decorated classes into this domain
 
-from finn.custom_op.general.norms import FuncLayerNorm
+from finnbrainsmith.custom_op.general.norms import FuncLayerNorm
 
 # make sure new HLSCustomOp subclasses are imported here so that they get
 # registered and plug in correctly into the infrastructure

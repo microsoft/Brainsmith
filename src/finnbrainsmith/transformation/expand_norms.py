@@ -3,6 +3,7 @@ from onnx import helper as oh
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
+from qonnx.core.datatype import DataType
 
 
 class ExpandNorms(Transformation):
@@ -35,12 +36,13 @@ class ExpandNorms(Transformation):
                 out_dtype = model.get_tensor_datatype(act_out)
                 act_dtype = oh.np_dtype_to_tensor_dtype(np.dtype(in_dtype.to_numpy_dt()))
                 act_shape = model.get_tensor_shape(ln_act_in)
+                
                 # Create functional layernorm node
                 func_ln_node = oh.make_node(
                     "FuncLayerNorm",
                     [ln_act_in],
                     [act_out],
-                    domain="finn.custom_op.general",
+                    domain="finnbrainsmith.custom_op.general",
                     backend="general",
                     axis=axis,
                     epsilon=epsilon,

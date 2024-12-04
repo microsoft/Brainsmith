@@ -203,7 +203,7 @@ class InferLayerNorm(Transformation):
                     "LayerNorm",
                     [act_in],
                     [act_out],
-                    domain="finn.custom_op.fpgadataflow",
+                    domain="finnbrainsmith.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     SIMD=simd,
                     ifm_dim=shape_in,

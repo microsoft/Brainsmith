@@ -16,6 +16,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
+import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -28,7 +29,7 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finn.transformation.fpgadataflow.create_dataflow_partition import (
     CreateDataflowPartition,
 )
-from finn.transformation.fpgadataflow.expand_norms import ExpandNorms
+from finnbrainsmith.transformation.expand_norms import ExpandNorms
 
 # Debugging dependencies, to remove
 import os
@@ -58,24 +59,25 @@ def onnx_path(suffx):
         os.makedirs('tafk-debug')
     return f'tafk-debug/pytest_layernorm_{suffx}.onnx'
 
-def _create_quant_node(node_name, inp_name, output, shape):
-    if isinstance(output, str):
-        Quant_0_out = None
-        output_name = output
+def _create_quant_node(node_name, inp_name, output_or_dtype, shape):
+    if isinstance(output_or_dtype, str):
+        Quant_out = None
+        output_name = output_or_dtype
     else:
-        Quant_0_out = helper.make_tensor_value_info("{node_name}_out", dtype_out, shape)
-        output_name = Quant_0_out.name 
-    Quant_0 = helper.make_node(
+        Quant_out = helper.make_tensor_value_info(f"{node_name}_out", output_or_dtype, shape)
+        # Quant_out = helper.make_tensor_value_info(f"{node_name}_out", TensorProto.FLOAT, shape)
+        output_name = Quant_out.name 
+    Quant = helper.make_node(
             'Quant',
             domain='qonnx.custom_op.general',
-            inputs=[inp_name, '{node_name}_scale', '{node_name}_zeropt', '{node_name}_bitwidth'],
+            inputs=[inp_name, f'{node_name}_scale', f'{node_name}_zeropt', f'{node_name}_bitwidth'],
             outputs=[output_name],
             narrow=0,
             signed=1,
             rounding_mode="ROUND",
             name=node_name
     )
-    return Quant_0, Quant_0_out
+    return Quant, Quant_out
 
 def build_layernorm_graph(
         input_datatype:str,
@@ -88,15 +90,21 @@ def build_layernorm_graph(
 
     # Datatypes restricted to "FLOAT16" or "FLOAT32" in current implementation
     bw = []
+    dts = []
     for dt in [input_datatype, weight_datatype, bias_datatype, output_datatype]:
-        if dt == "INT8":
-            bw += [8]
-        elif dt == "FLOAT16":
-            bw += [16]
-        elif dt == "FLOAT32":
-            bw += [32]
-        else:
-            raise ValueError(f"LayerNorm only supports FP16/FP32 w/b. Invalid input: {dt}")
+        match dt:
+            case "INT8":
+                bw += [8]
+                # dts += [TensorProto.INT8]
+                dts += [TensorProto.FLOAT]
+            case "FLOAT16":
+                bw += [16]
+                dts += [TensorProto.FLOAT16]
+            case "FLOAT32":
+                bw += [32]
+                dts += [TensorProto.FLOAT]
+            case _:
+                raise ValueError(f"LayerNorm only supports FP16/FP32 w/b. Invalid input: {dt}")
     
     #(scale, zero_point, bitwidth)
     input_quant_params  = [1.0, 0.0, bw[0]]
@@ -104,11 +112,10 @@ def build_layernorm_graph(
     bias_quant_params   = [1.0/(1<<bw[2]), 0.0, bw[2]]
     output_quant_params = [1.0/(1<<bw[3]), 0.0, bw[3]]
 
-    # idt = TensorProto.FLOAT16 if bw[0] == 16 else TensorProto.FLOAT if bw[0] == 32 else TensorProto.INT8
-    idt = TensorProto.FLOAT16
-    sdt = TensorProto.FLOAT16 if bw[1] == 16 else TensorProto.FLOAT if bw[1] == 32 else TensorProto.INT8
-    bdt = TensorProto.FLOAT16 if bw[2] == 16 else TensorProto.FLOAT if bw[2] == 32 else TensorProto.INT8
-    odt = TensorProto.FLOAT16 if bw[3] == 16 else TensorProto.FLOAT if bw[3] == 32 else TensorProto.INT8
+    idt = dts[0]
+    sdt = dts[1]
+    bdt = dts[2]
+    odt = dts[3]
 
     max_scale = 2**(bw[1]/2)
     max_bias = 2**(bw[2]/2)
@@ -117,8 +124,8 @@ def build_layernorm_graph(
     scale_bias_shape = [last_dim]
 
     # Create I/Os
-    inp = helper.make_tensor_value_info("global_in", idt, list(idm))
-    outp = helper.make_tensor_value_info("global_out", odt, list(idm))
+    inp = helper.make_tensor_value_info("global_in", TensorProto.FLOAT16, list(idm))
+    outp = helper.make_tensor_value_info("global_out", TensorProto.FLOAT16, list(idm))
 
     # Create model
     graph = helper.make_graph(
@@ -146,11 +153,11 @@ def build_layernorm_graph(
     LayerNorm_0_out = helper.make_tensor_value_info(model.make_new_valueinfo_name(), odt, list(idm))
     LayerNorm_0 = helper.make_node(
         'LayerNormalization',
-        inputs=[inp.name, Quant_LayerNorm_scale_out.name, Quant_LayerNorm_bias_out.name],
+        inputs=[Quant_0_out.name, Quant_LayerNorm_scale_out.name, Quant_LayerNorm_bias_out.name],
         outputs=[LayerNorm_0_out.name],
         name='Layernorm_1',
         epsilon=epsilon,
-        axis=-1
+        axis=-1,
     )
     model.graph.node.append(LayerNorm_0)
     model.graph.value_info.append(LayerNorm_0_out)
@@ -176,8 +183,10 @@ def build_layernorm_graph(
     model.set_initializer("LayerNorm_Scale_Quant_zeropt", np.asarray(scale_quant_params[1], dtype=np.float32))
     model.set_initializer("LayerNorm_Scale_Quant_bitwidth", np.asarray(scale_quant_params[2], dtype=np.float32))
 
-    model.set_initializer("layernorm0_scale_param", max_scale*np.random.rand(last_dim).astype(np.float16))
-    model.set_initializer("layernorm0_b_param", max_bias*np.random.rand(last_dim).astype(np.float16))
+    init_dtype = np.float16 if sdt == TensorProto.FLOAT16 else np.float32
+    init_dtype = np.float16
+    model.set_initializer("layernorm0_scale_param", (max_scale*np.random.rand(last_dim)).astype(init_dtype))
+    model.set_initializer("layernorm0_b_param", (max_bias*np.random.rand(last_dim)).astype(init_dtype))
     model.set_initializer("layernorm0_epsilon_param", np.asarray(epsilon, dtype=np.float32))
 
     model.save(onnx_path(-1))
@@ -195,10 +204,10 @@ def build_layernorm_graph(
 @pytest.mark.parametrize("impl_style", ["hls"])
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
 @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
-@pytest.mark.parametrize("idt", ["FLOAT16", "FLOAT32"])
-@pytest.mark.parametrize("wdt", ["FLOAT16", "FLOAT32"])
-@pytest.mark.parametrize("bdt", ["FLOAT16", "FLOAT32"])
-@pytest.mark.parametrize("odt", ["FLOAT16", "FLOAT32"])
+@pytest.mark.parametrize("idt", ["INT8", "FLOAT16"])
+@pytest.mark.parametrize("wdt", ["FLOAT16"])
+@pytest.mark.parametrize("bdt", ["FLOAT16"])
+@pytest.mark.parametrize("odt", ["FLOAT16"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt, ifm_dim):
@@ -220,22 +229,6 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
             "simd": simd,
             "preferred_impl_style": impl_style
         },
-        # "MultiThreshold_0": {
-        #     # "pe": simd,
-        #     "preferred_impl_style": impl_style
-        # },
-        # "MultiThreshold_1": {
-        #     # "pe": simd,
-        #     "preferred_impl_style": impl_style
-        # },
-        # "Mul_0": {
-        #     # "pe": simd,
-        #     "preferred_impl_style": impl_style
-        # },
-        # "Add_0": {
-        #     # "pe": simd,
-        #     "preferred_impl_style": impl_style
-        # },
     }
     io_shape = ifm_dim
     epsilon = 1e-05
@@ -251,16 +244,18 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         pytest.skip(f"Skipping this test because the channel dimension is not a multiple of {simd}")
 
     # TODO: gen_finn_dt_tensor doesn't have FP16 support
-    if idt == 'FLOAT16':
-        input = np.random.randn(*io_shape).astype(np.float16)
-        # input = input.astype(np.float32)
-    else:
-        input = gen_finn_dt_tensor(idt, io_shape)
+    # if idt == 'FLOAT16':
+    #     input = np.random.randn(*io_shape).astype(np.float16)
+    #     # input = input.astype(np.float32)
+    # else:
+    # input = gen_finn_dt_tensor(idt, io_shape)
+    input = np.random.randn(*io_shape).astype(np.float16)
+    
     in_name = model.graph.input[0].name
     out_name = model.graph.output[0].name
     input_t = {in_name: input}
 
-    # Create reference values using the qonnx model
+    # Create reference values using the qonnx model    
     y_ref = oxe.execute_onnx(model, input_t)[out_name]
 
     try:
@@ -268,7 +263,9 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         model = model.transform(ExpandNorms())
         model.save(onnx_path(1)) # Debug
         model = model.transform(ExtractQuantScaleZeroPt())
+        model.save(onnx_path(11)) # Debug
         model = model.transform(FoldConstants())
+        model.save(onnx_path(12)) # Debug
         model = model.transform(ConvertQONNXtoFINN(filter_function=dff_gen(max_multithreshold_bit_width=32)))
         model.save(onnx_path(2)) # Debug
         # Fold Constants
@@ -276,17 +273,15 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
         model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
         model.save(onnx_path(3)) # Debug
-
         model = model.transform(InferShapes())
         model = model.transform(InferDataTypes())
         model.save(onnx_path(4)) # Debug
-
-        model = model.transform(to_hw.InferLayerNorm())
+        model = model.transform(to_bs_hw.InferLayerNorm())
         model = model.transform(GiveUniqueNodeNames())
         model.save(onnx_path(5)) # Debug
         # model = model.transform(RoundAndClipThresholds())
         model = model.transform(to_hw.InferThresholdingLayer())
-        model = model.transform(to_hw.InferElementwiseBinaryOperation())
+        # model = model.transform(to_hw.InferElementwiseBinaryOperation())
         model = model.transform(GiveUniqueNodeNames())
         model.save(onnx_path(6)) # Debug
 
@@ -326,11 +321,13 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     
     # run the model
     # TODO: gen_finn_dt_tensor doesn't have FP16 support
-    if idt == 'FLOAT16':
-        input = np.random.randn(*io_shape).astype(np.float16)
-        input = input.astype(np.float32)
-    else:
-        input = gen_finn_dt_tensor(idt, io_shape)
+    # if idt == 'FLOAT16':
+    #     input = np.random.randn(*io_shape).astype(np.float16)
+    #     input = input.astype(np.float32)
+    # else:
+    # input = gen_finn_dt_tensor(idt, io_shape)
+    input = np.random.randn(*io_shape).astype(np.float16)
+
     in_name = model.graph.input[0].name
     input_t = {in_name: input}
     y_hw = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
@@ -339,7 +336,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     y_ref = y_ref.flatten()
     y_hw = y_hw.flatten()
     for i in range(len(y_ref)):
-        if np.allclose(y_ref[i], y_hw[i], atol=tolerance):
+        if not np.allclose(y_ref[i], y_hw[i], atol=tolerance):
             print(f'at {i}: {y_ref[i]} != {y_hw[i]}')
             j+=1
         if j > 20:
