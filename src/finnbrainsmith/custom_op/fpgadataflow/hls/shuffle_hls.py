@@ -178,4 +178,4 @@ class Shuffle_hls(Shuffle, HLSBackend):
 
     def prepare_rtlsim(self):
         # this node currently does not support rtlsim
-        raise NotImplementedError("QuantSoftmax_hls does not support rtlsim")
+        raise NotImplementedError("Shuffle_hls does not yet support rtlsim")
