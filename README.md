@@ -38,4 +38,4 @@ cd bert_build
 python build.py -i bert-tiny-1layer_relu_scale_1_fp16_quant_qonnx.onnx
 ```
 
-Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc.. from the files in the `dips/finnbrainsmith` directory and run the changes in the docker container.
+Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc.. from the files in the `deps/finnbrainsmith` directory and run the changes in the docker container.
