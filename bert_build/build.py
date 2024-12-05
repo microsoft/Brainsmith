@@ -5,6 +5,7 @@ from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import SortCommutativeInputsInitializerLast
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
+from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 import finn.transformation.streamline as absorb
@@ -13,6 +14,11 @@ import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
+from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
+from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
+from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
+from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
+from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
 def custom_infer_shuffle(model, cfg):
     model = model.transform(to_bs_hw.InferShuffle())
@@ -49,6 +55,8 @@ def attempt_convert_step(model, cfg):
 
 def attempt_specialise_layers(model, cfg):
     model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
+    model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(GiveReadableTensorNames())
     return model
 
 def custom_step_infer_hardware(model, cfg):
@@ -61,10 +69,22 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
+def custom_step_create_ip(model, cfg):
+    model = model.transform(PrepareIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    model = model.transform(HLSSynthIP())
+    model = model.transform(CreateStitchedIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    return model
+
 def main(model_path:str):
     model = onnx.load(model_path)  
     
-    steps = [ custom_step_cleanup, custom_streamlining_step, custom_step_infer_hardware, custom_infer_shuffle, custom_infer_quantsoftmax, attempt_specialise_layers ]
+    steps = [ custom_step_cleanup, 
+              custom_streamlining_step, 
+              custom_step_infer_hardware, 
+              custom_infer_shuffle, 
+              custom_infer_quantsoftmax, 
+              attempt_specialise_layers,
+              custom_step_create_ip]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,

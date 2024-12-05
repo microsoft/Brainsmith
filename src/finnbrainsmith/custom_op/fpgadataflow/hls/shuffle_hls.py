@@ -49,14 +49,13 @@ class Shuffle_hls(Shuffle, HLSBackend):
             '#include <hls_stream.h>',
         ]
 
-
     def defines(self, var):
         simd = self.get_nodeattr("simd")
         dtype = self.get_input_datatype()
         self.code_gen_dict["$DEFINES$"] = [
             f"""
             constexpr unsigned  SIMD = {simd}; 
-            using  TE = {dtype.get_hls_datatype_str()};       // element type
+            using  TE = {dtype.get_hls_datatype_str()};
             using  TV = hls::vector<TE, SIMD>;
             """
         ]
