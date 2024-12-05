@@ -73,7 +73,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             #pragma HLS stream variable=dst0 depth=2
 
             move(in0_{self.hls_sname()}, src0);
-	    input_gen<-1, {','.join(map(str,interleaved))}>(src0, dst0);
+	    input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(src0, dst0);
 	    move(dst0, out_{self.hls_sname()});
             """
         ]
@@ -93,8 +93,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             f"""
             #pragma HLS interface AXIS port=in0_{self.hls_sname()}
             #pragma HLS interface AXIS port=out_{self.hls_sname()}
-	    #pragma HLS aggregate  variable=src compact=bit
-	    #pragma HLS aggregate  variable=dst compact=bit
+	    #pragma HLS aggregate variable=in0_{self.hls_sname()} compact=bit
+	    #pragma HLS aggregate variable=out_{self.hls_sname()} compact=bit
 
             #pragma HLS interface ap_ctrl_none port=return
             #pragma HLS dataflow disable_start_propagation
