@@ -83,8 +83,7 @@ def main(model_path:str):
               custom_step_infer_hardware, 
               custom_infer_shuffle, 
               custom_infer_quantsoftmax, 
-              attempt_specialise_layers,
-              custom_step_create_ip]
+              attempt_specialise_layers ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
