@@ -29,7 +29,7 @@
 import numpy as np
 import os
 
-from finn.custom_op.fpgadataflow import templates
+from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.shuffle import Shuffle 
 from finn.util.basic import CppBuilder
@@ -152,10 +152,10 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
-            static hls::stream<hls::vector<TI,SIMD>>  in0_V;
-            static hls::stream<hls::vector<TO,SIMD>>  out_V;
+            static hls::stream<TV>  in0_V;
+            static hls::stream<TV>  out_V;
 
-            npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
+            npy2vectorstream<TE, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
             // TODO: Call Kernel
@@ -163,12 +163,12 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
                 {self.onnx_node.name}(in0_V, out_V);
             }}
 
-            vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
+            vectorstream2npy<TE, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
             """
         ]
         self.save_as_npy()
 
-        template = templates.docompute_template
+        template = brainsmith_templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:

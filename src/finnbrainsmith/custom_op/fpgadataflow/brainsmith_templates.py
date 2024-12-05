@@ -27,6 +27,38 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# template for single node execution
+docompute_template = """
+#define AP_INT_MAX_W $AP_INT_MAX_W$
+#include "cnpy.h"
+#include "npy2apintstream.hpp"
+#include "npy2vectorstream.hpp"
+#include <vector>
+#include "bnn-library.h"
+
+// includes for network parameters
+$GLOBALS$
+
+// defines for network parameters
+$DEFINES$
+
+int main(){
+$PRAGMAS$
+
+$STREAMDECLARATIONS$
+
+$READNPYDATA$
+
+$DOCOMPUTE$
+
+$DATAOUTSTREAM$
+
+$SAVEASCNPY$
+
+}
+
+"""
+
 # tcl script for IP generation
 ipgentcl_template = """
 set config_proj_name $PROJECTNAME$
@@ -58,3 +90,4 @@ csynth_design
 export_design -format ip_catalog
 exit 0
 """
+

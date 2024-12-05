@@ -5,6 +5,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 
+import finn.core.onnx_exec as oxe
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -18,7 +19,6 @@ test_fpga_part:str = "xcv80-lsva4737-2MHP-e-S"
 test_synth_clk_period_ns:int = 5
 
 def make_single_shuffle_modelwrapper(
-        impl_style:str="hls",
         simd:int=1,
         data_type=DataType["UINT8"],
         in_reshaped:tuple[int]=(1, 128, 12, 32),
@@ -83,10 +83,35 @@ def test_convert_to_hw_shuffle_layer():
     model = model.transform(CreateStitchedIP(test_fpga_part, test_synth_clk_period_ns))
     
 
+@pytest.mark.parametrize("in_shape", [(1, 128, 384)])
+@pytest.mark.parametrize("in_reshaped", [(1, 128, 12, 32)])
+@pytest.mark.parametrize("out_shape", [(1, 12, 128, 32)])
+@pytest.mark.parametrize("out_reshaped", [(1, 12, 128, 32)])
+@pytest.mark.parametrize("perm", [(0, 2, 1, 3)])
+@pytest.mark.parametrize("datatype", ["INT8"])
+@pytest.mark.parametrize("simd", ["simd1"])
 @pytest.mark.fpgadataflow
-def test_cppsim_shuffle_layer():
+def test_cppsim_shuffle_layer(in_shape, in_reshaped, out_shape, out_reshaped, perm, datatype, simd):
     ''' Checks cppsim of the shuffle_hls layer '''
-    model = make_single_shuffle_modelwrapper()
+    dt = DataType[datatype]
+    simd = int(simd[-1])
+
+    model = make_single_shuffle_modelwrapper(
+                simd=simd,
+                data_type=dt,
+                in_reshaped=in_reshaped,
+                in_shape=in_shape,
+                inner_moves=False,
+                loop_coeffs=(49152, 49152, 4096, 32),
+                out_reshaped=out_reshaped,
+                out_shape=out_shape,
+                perm=perm
+            )
+
+    input = gen_finn_dt_tensor(dt, in_shape)
+    in_name = model.graph.input[0].name
+    out_name = model.graph.output[0].name
+    input_t = {in_name : input}
 
     # Attempt to build the HLS for this
     model = model.transform(SpecializeLayers(test_fpga_part))
@@ -96,4 +121,8 @@ def test_cppsim_shuffle_layer():
     model = model.transform(SetExecMode("cppsim"))
     model = model.transform(PrepareCppSim())
     model = model.transform(CompileCppSim())
+
+    y_hw = oxe.execute_onnx(model, input_t)[out_name]
+
+    
 
