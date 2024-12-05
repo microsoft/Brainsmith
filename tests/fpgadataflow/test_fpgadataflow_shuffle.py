@@ -5,6 +5,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 
+from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
@@ -82,5 +83,17 @@ def test_convert_to_hw_shuffle_layer():
     model = model.transform(CreateStitchedIP(test_fpga_part, test_synth_clk_period_ns))
     
 
+@pytest.mark.fpgadataflow
+def test_cppsim_shuffle_layer():
+    ''' Checks cppsim of the shuffle_hls layer '''
+    model = make_single_shuffle_modelwrapper()
 
+    # Attempt to build the HLS for this
+    model = model.transform(SpecializeLayers(test_fpga_part))
+    model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(GiveReadableTensorNames())
+
+    model = model.transform(SetExecMode("cppsim"))
+    model = model.transform(PrepareCppSim())
+    model = model.transform(CompileCppSim())
 

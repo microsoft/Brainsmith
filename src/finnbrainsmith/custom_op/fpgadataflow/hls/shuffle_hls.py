@@ -159,6 +159,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             int stream_size = in0_V.size();
 
             // TODO: Call Kernel
+            while(out_V.size() != stream_size) {{
+                {self.onnx_node.name}(in0_V, out_V);
+            }}
 
             vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
             """
