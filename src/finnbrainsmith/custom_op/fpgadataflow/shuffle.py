@@ -28,7 +28,7 @@ class Shuffle(HWCustomOp):
         return my_attrs
 
     def get_normal_input_shape(self, ind=0):
-        return self.get_nodeattr("in_shape")
+        return self.get_nodeattr("in_reshaped")
 
     def get_normal_output_shape(self, ind=0):
         return self.get_nodeattr("out_reshaped")
@@ -83,7 +83,17 @@ class Shuffle(HWCustomOp):
         return data_type
 
     def get_folded_output_shape(self, ind=0):
-        raise NotImplementedError("This function is not yet immplemented.")
+        normal_oshape = list(self.get_normal_output_shape())
+        simd = self.get_nodeattr("simd")
+        assert normal_oshape[-1] % simd == 0, "SIMD must divid into output dimension"
+        fold = int(normal_oshape[-1] / simd)
+        folded_oshape = normal_oshape[:-1] + [fold, simd]
+        return tuple(folded_oshape)
 
     def get_folded_input_shape(self, ind=0):
-        raise NotImplementedError("This function is not yet immplemented.")
+        normal_ishape = list(self.get_normal_input_shape())
+        simd = self.get_nodeattr("simd")
+        assert normal_ishape[-1] % simd == 0, "SIMD must divid into input dimension"
+        fold = int(normal_ishape[-1] / simd)
+        folded_ishape = normal_ishape[:-1] + [fold, simd]
+        return tuple(folded_ishape)

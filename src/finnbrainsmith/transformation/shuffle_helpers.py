@@ -8,9 +8,10 @@ def shuffle_perfect_loopnest_coeffs(
     Given an input shape and permutation matrix calculate the
     coefficients for the perfect loop nest for HLS generation.
     """
-    out_shape = [shape[i] for i in perm]
-    coeffs = [np.prod(out_shape[i:]) for i in range(len(out_shape))]
-    return tuple(coeffs) 
+    adjusted_shape = list(shape) + [1]
+    input_coeffs = [np.prod(adjusted_shape[i+1:]) for i in range(len(shape))]
+    out_coeffs = [input_coeffs[i] for i in perm]
+    return tuple(out_coeffs)
 
 def innerloop_moves(
         shape:tuple[int],

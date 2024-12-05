@@ -41,7 +41,7 @@
 
 #include <ap_int.h>
 #include <hls_stream.h>
-#include "utils.hpp"
+#include "bs_utils.hpp"
 
 #include <algorithm>
 #include <tuple>

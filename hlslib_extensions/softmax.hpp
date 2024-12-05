@@ -45,7 +45,7 @@
 #include <cmath>
 #include <climits>
 #include <type_traits>
-#include "sm_utils.hpp"
+#include "bs_utils.hpp"
 
 // First stage of the pipeline:
 //
