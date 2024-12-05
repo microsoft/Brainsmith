@@ -110,12 +110,12 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
             inp = context[node.input[0]]
-            inp.reshape(folded_ishape)
+            inp = inp.reshape(folded_ishape)
             np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
             # execute the precompiled model
             super().exec_precompiled_singlenode_model()
             # Load output npy file
-            #super().npy_to_dynamic_output(context)
+            super().npy_to_dynamic_output(context)
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
