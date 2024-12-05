@@ -28,7 +28,7 @@ class Shuffle(HWCustomOp):
         return my_attrs
 
     def get_normal_input_shape(self, ind=0):
-        return self.get_nodeattr("in_shape")
+        return self.get_nodeattr("in_reshaped")
 
     def get_normal_output_shape(self, ind=0):
         return self.get_nodeattr("out_reshaped")

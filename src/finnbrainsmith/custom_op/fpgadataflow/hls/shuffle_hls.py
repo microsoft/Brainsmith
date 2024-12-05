@@ -64,7 +64,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         simd = self.get_nodeattr("simd")
         out_reshaped = self.get_nodeattr("out_reshaped")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [int(item) for pair in zip(loop_coeffs, out_reshaped) for item in pair] 
+        interleaved = [int(item) for pair in zip(out_reshaped, loop_coeffs) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
@@ -103,7 +103,21 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
 
     def execute_node(self, context, graph):
-        raise NotImplementedError("This function is not yet immplemented.")
+        mode = self.get_nodeattr("exec_mode")
+        node = self.onnx_node
+        folded_ishape = self.get_folded_input_shape()
+
+        if mode == "cppsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+            inp = context[node.input[0]]
+            inp.reshape(folded_ishape)
+            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+            # execute the precompiled model
+            super().exec_precompiled_singlenode_model()
+            # Load output npy file
+            #super().npy_to_dynamic_output(context)
+        else:
+            raise Exception(f"Unsupported execution mode: {mode}")
 
 
     def compile_singlenode_code(self):
@@ -150,6 +164,12 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         self.pragmas()
         oshape = self.get_folded_output_shape()
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
+
+        simd = self.get_nodeattr("simd")
+        out_reshaped = self.get_nodeattr("out_reshaped")
+        loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
+        interleaved = [int(item) for pair in zip(out_reshaped,loop_coeffs) for item in pair]
+
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             static hls::stream<TV>  in0_V;
@@ -160,7 +180,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
             // TODO: Call Kernel
             while(out_V.size() != stream_size) {{
-                {self.onnx_node.name}(in0_V, out_V);
+                //{self.onnx_node.name}(in0_V, out_V);
+                input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(in0_V, out_V);
             }}
 
             vectorstream2npy<TE, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");

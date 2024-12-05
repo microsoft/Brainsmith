@@ -14,6 +14,8 @@ from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
+from finnbrainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
+
 
 test_fpga_part:str = "xcv80-lsva4737-2MHP-e-S"
 test_synth_clk_period_ns:int = 5
@@ -102,7 +104,7 @@ def test_cppsim_shuffle_layer(in_shape, in_reshaped, out_shape, out_reshaped, pe
                 in_reshaped=in_reshaped,
                 in_shape=in_shape,
                 inner_moves=False,
-                loop_coeffs=(49152, 49152, 4096, 32),
+                loop_coeffs=shuffle_perfect_loopnest_coeffs(in_reshaped,perm),
                 out_reshaped=out_reshaped,
                 out_shape=out_shape,
                 perm=perm
