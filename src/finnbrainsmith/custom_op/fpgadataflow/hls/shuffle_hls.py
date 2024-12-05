@@ -30,16 +30,16 @@ import numpy as np
 import os
 
 from finn.custom_op.fpgadataflow import templates
-from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.shuffle import Shuffle 
 from finn.util.basic import CppBuilder
 
-class Shuffle_hls(Shuffle, HLSBackend):
+class Shuffle_hls(Shuffle, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        return Shuffle.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
+        return Shuffle.get_nodeattr_types(self) | BS_HLSBackend.get_nodeattr_types(self)
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
@@ -64,7 +64,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
         simd = self.get_nodeattr("simd")
         out_reshaped = self.get_nodeattr("out_reshaped")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [item for pair in zip(loop_coeffs, out_reshaped) for item in pair] 
+        interleaved = [int(item) for pair in zip(loop_coeffs, out_reshaped) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
@@ -73,7 +73,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
             #pragma HLS stream variable=dst0 depth=2
 
             move(src, src0);
-	    input_gen<-1, {'.'.join(map(str,interleaved))}>(src0, dst0);
+	    input_gen<-1, {','.join(map(str,interleaved))}>(src0, dst0);
 	    move(dst0, dst);
             """
         ]
@@ -118,7 +118,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
         builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/finnbrainsmith/hlslib_extensions")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")

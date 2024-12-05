@@ -30,19 +30,19 @@ import numpy as np
 import os
 
 from finn.custom_op.fpgadataflow import templates
-from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
 from finn.util.basic import CppBuilder
 
 
-class QuantSoftmax_hls(QuantSoftmax, HLSBackend):
+class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
         my_attrs = {}
         my_attrs.update(QuantSoftmax.get_nodeattr_types(self))
-        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+        my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
