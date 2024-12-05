@@ -72,9 +72,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             #pragma HLS stream variable=src0 depth=2
             #pragma HLS stream variable=dst0 depth=2
 
-            move(src, src0);
+            move(in0_{self.hls_sname()}, src0);
 	    input_gen<-1, {','.join(map(str,interleaved))}>(src0, dst0);
-	    move(dst0, dst);
+	    move(dst0, out_{self.hls_sname()});
             """
         ]
 
@@ -91,8 +91,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
     def pragmas(self):
         self.code_gen_dict["$PRAGMAS$"] = [
             f"""
-            #pragma HLS interface AXIS port=src
-            #pragma HLS interface AXIS port=dst
+            #pragma HLS interface AXIS port=in0_{self.hls_sname()}
+            #pragma HLS interface AXIS port=out_{self.hls_sname()}
 	    #pragma HLS aggregate  variable=src compact=bit
 	    #pragma HLS aggregate  variable=dst compact=bit
 
