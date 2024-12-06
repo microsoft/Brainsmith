@@ -112,19 +112,19 @@ def test_pytorch_to_ip_gen():
             "in_shape" : (1,128,384), # Shuffle A
             "in_reshaped" : (1,128,12,32),
             "out_shape" : (1,12,128,32),
-            "out_reshaped" : (1,12,128,32),
+            "out_reshaped" : None,
             "perm" : (0,2,1,3)
     }, 
     {
             "in_shape" : (1,128,384), # Shuffle B 
             "in_reshaped" : (1,128,12,32),
             "out_shape" : (1,12,32,128),
-            "out_reshaped" : (1,12,32,128),
+            "out_reshaped" : None,
             "perm" : (0,2,3,1)
     }, 
     {
             "in_shape" : (1,12,128,32), # Shuffle C 
-            "in_reshaped" : (1,12,128,32),
+            "in_reshaped" : None,
             "out_shape" : (1,128,12,32),
             "out_reshaped" : (1,128,384),
             "perm" : (0,2,1,3)
