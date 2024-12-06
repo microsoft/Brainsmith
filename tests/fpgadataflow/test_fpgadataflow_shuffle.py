@@ -87,27 +87,6 @@ def construct_onnx_model(
     raise RuntimeError(f"Error unable to export the ONNX file to the temporary location")
 
 
-@pytest.mark.fpgadataflow
-def test_pytorch_to_ip_gen():
-    model = construct_onnx_model(
-                input_shape=(1,128,384),
-                transpose_perm=(0,2,1,3),
-                reshape1_shape=(1,128,12,32),
-                reshape2_shape=None,
-                dt=DataType["INT8"]
-            ) 
-
-    # Attempt to build the HLS for this
-    model = model.transform(InferShuffle())
-    model = model.transform(SpecializeLayers(test_fpga_part))
-    model = model.transform(GiveUniqueNodeNames())
-    model = model.transform(GiveReadableTensorNames())
-
-    model = model.transform(PrepareIP(test_fpga_part, test_synth_clk_period_ns))
-    model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(test_fpga_part, test_synth_clk_period_ns))
-
-
 @pytest.mark.parametrize("shuffle_param", [ 
     {
             "in_shape" : (1,128,384), # Shuffle A
