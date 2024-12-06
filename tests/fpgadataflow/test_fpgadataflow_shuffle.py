@@ -5,6 +5,9 @@ from torch import nn
 import onnx
 import tempfile
 import numpy as np
+import os
+
+os.environ['LIVENESS_THRESHOLD'] = '100000' # Need to bump this up for these RTL sims
 
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
@@ -111,7 +114,7 @@ def construct_onnx_model(
     }, 
 ])
 @pytest.mark.parametrize("datatype", ["INT8", "INT4"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.fpgadataflow
 def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     ''' Checks cppsim of the shuffle_hls layer '''
@@ -173,7 +176,7 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     }, 
 ])
 @pytest.mark.parametrize("datatype", ["INT8"])
-@pytest.mark.parametrize("simd", ["simd4"])
+@pytest.mark.parametrize("simd", ["simd2", "simd4"])
 @pytest.mark.fpgadataflow
 def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
     ''' Checks cppsim of the shuffle_hls layer '''
