@@ -32,6 +32,7 @@ import os
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.shuffle import Shuffle 
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
 class Shuffle_hls(Shuffle, BS_HLSBackend):
@@ -106,6 +107,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
         folded_ishape = self.get_folded_input_shape()
+        export_dt = self.get_input_datatype()
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
@@ -127,7 +129,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             sim = self.get_rtlsim()
             nbits = self.get_instream_width()
             rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_idt, nbits 
+                f"{code_gen_dir}/input_0.npy", export_dt, nbits 
             )
             super().reset_rtlsim(sim)
             super().toggle_clk(sim)
@@ -139,11 +141,11 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             self.rtlsim_multi_io(sim, io_dict)
 
             out = io_dict["outputs"]["out"]
-            target_bits = dt.bitwidth()
+            target_bits = export_dt.bitwidth()
             packed_bits = self.get_outstream_width()
             out_npy_path = f"{code_gen_dir}/output.npy"
             out_shape = self.get_folded_output_shape()
-            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
+            rtlsim_output_to_npy(out, out_npy_path, export_dt, out_shape, packed_bits, target_bits)
 
             # load and reshape output
             output = np.load(out_npy_path)
