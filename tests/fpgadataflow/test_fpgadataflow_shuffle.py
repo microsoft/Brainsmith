@@ -47,10 +47,10 @@ class PytorchShuffle(nn.Module):
 
     def forward(self, x):
         if self.reshape1_shape is not None:
-            x = x.view(*self.reshape1_shape)
+            x = x.reshape(*self.reshape1_shape)
         x = x.permute(*self.transpose_perm)
         if self.reshape2_shape is not None:
-            x = x.view(*self.reshape2_shape)
+            x = x.reshape(*self.reshape2_shape)
         return x
 
 def construct_onnx_model(
@@ -107,24 +107,43 @@ def test_pytorch_to_ip_gen():
     model = model.transform(CreateStitchedIP(test_fpga_part, test_synth_clk_period_ns))
 
 
-@pytest.mark.parametrize("in_shape", [(1, 128, 384)])
-@pytest.mark.parametrize("in_reshaped", [(1, 128, 12, 32)])
-@pytest.mark.parametrize("out_shape", [(1, 12, 128, 32)])
-@pytest.mark.parametrize("out_reshaped", [(1, 12, 128, 32)])
-@pytest.mark.parametrize("perm", [(0, 2, 1, 3)])
+@pytest.mark.parametrize("shuffle_param", [ 
+    {
+            "in_shape" : (1,128,384), # Shuffle A
+            "in_reshaped" : (1,128,12,32),
+            "out_shape" : (1,12,128,32),
+            "out_reshaped" : (1,12,128,32),
+            "perm" : (0,2,1,3)
+    }, 
+    {
+            "in_shape" : (1,128,384), # Shuffle B 
+            "in_reshaped" : (1,128,12,32),
+            "out_shape" : (1,12,32,128),
+            "out_reshaped" : (1,12,32,128),
+            "perm" : (0,2,3,1)
+    }, 
+    {
+            "in_shape" : (1,12,128,32), # Shuffle C 
+            "in_reshaped" : (1,12,128,32),
+            "out_shape" : (1,128,12,32),
+            "out_reshaped" : (1,128,384),
+            "perm" : (0,2,1,3)
+    }, 
+])
 @pytest.mark.parametrize("datatype", ["INT8"])
 @pytest.mark.parametrize("simd", ["simd1"])
 @pytest.mark.fpgadataflow
-def test_cppsim_shuffle_layer(in_shape, in_reshaped, out_shape, out_reshaped, perm, datatype, simd):
+def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     ''' Checks cppsim of the shuffle_hls layer '''
     dt = DataType[datatype]
     simd = int(simd[-1])
+    in_shape = shuffle_param["in_shape"]
 
     model = construct_onnx_model(
             input_shape=in_shape,
-            transpose_perm=perm,
-            reshape1_shape=in_reshaped,
-            reshape2_shape=out_reshaped,
+            transpose_perm=shuffle_param["perm"],
+            reshape1_shape=shuffle_param["in_reshaped"],
+            reshape2_shape=shuffle_param["out_reshaped"],
             dt=dt
     )
 
