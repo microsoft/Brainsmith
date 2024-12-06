@@ -215,9 +215,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             npy2vectorstream<TE, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
-            // TODO: Call Kernel
             while(out_V.size() != stream_size) {{
-                //{self.onnx_node.name}(in0_V, out_V);
                 input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(in0_V, out_V);
             }}
 
