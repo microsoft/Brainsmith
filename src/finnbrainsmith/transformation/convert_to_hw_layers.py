@@ -27,8 +27,8 @@ class InferShuffle(Transformation):
         graph_modified = False
         node_ind = 0
         for n in graph.node:
+            node_ind += 1 # Do I really need to track this? Isn't there a better way?
             if(n.op_type == "Transpose"):
-                node_ind += 1 # Do I really need to track this? Isn't there a better way?
                 to_remove = [n]
 
                 new_in_tensor = None
@@ -39,8 +39,14 @@ class InferShuffle(Transformation):
                 # Detect a reshape at the input
                 producer = model.find_producer(n.input[0])
                 if ( producer.op_type == "Reshape" ):
-                    new_in_tensor = model.find_producer(producer.input[0]).output[0]
-                    in_shape = model.get_tensor_shape(model.find_producer(producer.input[0]).output[0]) 
+
+                    if model.find_producer(producer.input[0]) is not None:
+                        new_in_tensor = model.find_producer(producer.input[0]).output[0]
+                        in_shape = model.get_tensor_shape(model.find_producer(producer.input[0]).output[0]) 
+                    else: # The input of the graph is feeding the reshape
+                        new_in_tensor = producer.input[0] 
+                        in_shape = model.get_tensor_shape(producer.input[0]) 
+
                     in_reshaped = model.get_tensor_shape(producer.output[0])
                     to_remove.append(producer)
                     node_ind -= 1
@@ -52,11 +58,12 @@ class InferShuffle(Transformation):
                 # Detect a reshape at the output
                 consumer = model.find_consumer(n.output[0])
                 out_shape = model.get_tensor_shape(n.output[0]) 
-                if ( consumer.op_type == "Reshape" ):
-                    out_reshape = model.get_tensor_shape(consumer.output[0]) 
-                    new_out_tensor = consumer.output[0]
-                    to_remove.append(consumer)
-                    node_ind += 1
+                if consumer is not None:
+                    if ( consumer.op_type == "Reshape" ):
+                        out_reshape = model.get_tensor_shape(consumer.output[0]) 
+                        new_out_tensor = consumer.output[0]
+                        to_remove.append(consumer)
+                        node_ind += 1
                 else:
                     out_reshaped = out_shape
                     new_out_tensor = n.output[0] 
