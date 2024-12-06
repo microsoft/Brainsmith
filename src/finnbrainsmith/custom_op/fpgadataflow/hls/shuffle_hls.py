@@ -32,6 +32,7 @@ import os
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.shuffle import Shuffle 
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
 class Shuffle_hls(Shuffle, BS_HLSBackend):
@@ -62,9 +63,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
     def docompute(self):
         simd = self.get_nodeattr("simd")
-        out_reshaped = self.get_nodeattr("out_reshaped")
+        out_shape = self.get_nodeattr("out_shape")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [int(item) for pair in zip(out_reshaped, loop_coeffs) for item in pair] 
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
@@ -73,7 +74,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             #pragma HLS stream variable=dst0 depth=2
 
             move(in0_{self.hls_sname()}, src0);
-	    input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(src0, dst0);
+	    input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(src0, dst0);
 	    move(dst0, out_{self.hls_sname()});
             """
         ]
@@ -106,16 +107,52 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
         folded_ishape = self.get_folded_input_shape()
+        export_dt = self.get_input_datatype()
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            inp = context[node.input[0]]
-            inp = inp.reshape(folded_ishape)
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        elif mode == "rtlsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+
+        inp = context[node.input[0]]
+        inp = inp.reshape(folded_ishape)
+        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        
+
+        if mode == "cppsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
             # execute the precompiled model
             super().exec_precompiled_singlenode_model()
             # Load output npy file
             super().npy_to_dynamic_output(context)
+        elif mode =="rtlsim":
+            sim = self.get_rtlsim()
+            nbits = self.get_instream_width()
+            rtlsim_inp = npy_to_rtlsim_input(
+                f"{code_gen_dir}/input_0.npy", export_dt, nbits 
+            )
+            super().reset_rtlsim(sim)
+            super().toggle_clk(sim)
+
+            io_dict = {
+                "inputs" : {"in0" : rtlsim_inp},
+                "outputs" : {"out" : []}
+            }
+            self.rtlsim_multi_io(sim, io_dict)
+
+            out = io_dict["outputs"]["out"]
+            target_bits = export_dt.bitwidth()
+            packed_bits = self.get_outstream_width()
+            out_npy_path = f"{code_gen_dir}/output.npy"
+            out_shape = self.get_folded_output_shape()
+            rtlsim_output_to_npy(out, out_npy_path, export_dt, out_shape, packed_bits, target_bits)
+
+            # load and reshape output
+            output = np.load(out_npy_path)
+            oshape = self.get_normal_output_shape()
+            output = np.asarray([output], dtype=np.float32,).reshape(*oshape)
+            context[node.output[0]] = output
+
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
@@ -166,9 +203,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
         simd = self.get_nodeattr("simd")
-        out_reshaped = self.get_nodeattr("out_reshaped")
+        out_shape = self.get_nodeattr("out_shape")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [int(item) for pair in zip(out_reshaped,loop_coeffs) for item in pair]
+        interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
@@ -178,10 +215,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             npy2vectorstream<TE, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
-            // TODO: Call Kernel
             while(out_V.size() != stream_size) {{
-                //{self.onnx_node.name}(in0_V, out_V);
-                input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(in0_V, out_V);
+                input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(in0_V, out_V);
             }}
 
             vectorstream2npy<TE, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
@@ -198,7 +233,3 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
-    def prepare_rtlsim(self):
-        # this node currently does not support rtlsim
-        raise NotImplementedError("Shuffle_hls does not yet support rtlsim")

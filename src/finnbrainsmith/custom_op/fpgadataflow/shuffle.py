@@ -34,7 +34,8 @@ class Shuffle(HWCustomOp):
         return self.get_nodeattr("out_reshaped")
 
     def get_number_output_values(self):
-        raise NotImplementedError("This function is not yet immplemented.")
+        folded_oshape = self.get_folded_output_shape()
+        return np.prod(folded_oshape[:-1]) # [STF] Not sure this is correct...
 
     def quantise_to_int(self, arr, dtype):
         raise NotImplementedError("This function is not yet immplemented.")

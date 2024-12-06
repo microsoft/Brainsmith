@@ -27,7 +27,7 @@ class InferShuffle(Transformation):
         graph_modified = False
         node_ind = 0
         for n in graph.node:
-            node_ind += 1
+            node_ind += 1 # Do I really need to track this? Isn't there a better way?
             if(n.op_type == "Transpose"):
                 to_remove = [n]
 
@@ -36,42 +36,55 @@ class InferShuffle(Transformation):
 
                 perm = n.attribute[0] 
 
-                # Detect a reshape at the input
-                producer = model.find_producer(n.input[0])
-                if ( producer.op_type == "Reshape" ):
-                    new_in_tensor = model.find_producer(producer.input[0]).output[0]
-                    in_shape = model.get_tensor_shape(model.find_producer(producer.input[0]).output[0]) 
-                    in_reshaped = model.get_tensor_shape(producer.output[0])
-                    to_remove.append(producer)
-                    node_ind -= 1
-                else:
-                    new_in_tensor = n.input[0]
-                    in_shape = model.get_tensor_shape(n.input[0]) #TODO:What if a producer has multiple outputs?
-                    in_reshaped = in_shape
+                new_in_tensor = n.input[0]
+                in_shape = model.get_tensor_shape(n.input[0]) 
+                in_reshaped = in_shape 
 
-                # Detect a reshape at the output
+                # Detect a reshape at the input and capture it
+                producer = model.find_producer(n.input[0])
+                if producer is not None:
+                    if ( producer.op_type == "Reshape" ):
+                        new_in_tensor = producer.input[0]
+                        in_shape = model.get_tensor_shape(new_in_tensor) 
+                        in_reshaped = model.get_tensor_shape(n.input[0]) 
+                        to_remove.append(producer)
+                        node_ind -= 1
+
+                new_out_tensor = n.output[0] 
+                out_shape = model.get_tensor_shape(new_out_tensor)
+                out_reshaped = out_shape
+
+                # Detect a reshape at the output and capture it
                 consumer = model.find_consumer(n.output[0])
-                out_shape = model.get_tensor_shape(n.output[0]) 
-                if ( consumer.op_type == "Reshape" ):
-                    out_reshape = model.get_tensor_shape(consumer.output[0]) 
-                    new_out_tensor = consumer.output[0]
-                    to_remove.append(consumer)
-                    node_ind += 1
-                else:
-                    out_reshaped = out_shape
-                    new_out_tensor = n.output[0] 
+                if consumer is not None:
+                    if ( consumer.op_type == "Reshape" ):
+                        new_out_tensor = consumer.output[0]
+                        out_shape = model.get_tensor_shape(n.output[0])
+                        out_reshaped = model.get_tensor_shape(new_out_tensor)
+                        to_remove.append(consumer)
+                        node_ind -= 1
 
                 idt = model.get_tensor_datatype(new_in_tensor)
                 odt = model.get_tensor_datatype(new_out_tensor)
 
                 # Some sanity checks for the transformation
-                assert idt == odt, "Input datatype and output datatype of the shuffle must be the same, did something go wrong during transformation?"
-                assert len(perm.ints) == len(in_reshaped), "Permutation list does not match the reshaped input dimension"
-                assert len(perm.ints) == len(out_reshaped), "Permutation list does not match the reshaped out dimension"
+                if(idt != odt): 
+                    raise RuntimeError(f"""
+                    Input datatype and output datatype of the shuffle must be the same, 
+                    did something go wrong during transformation?
+                """)
 
-                print(f"{shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints)=}")
+                if (len(perm.ints) != len(in_reshaped)):
+                    raise RuntimeError(f"""
+                    Permutation list {perm.ints=} does not match the reshaped input dimension {in_reshaped=}
+                """)
 
-                simd = 1 # TODO: allow for this to be increased
+                if (len(perm.ints) != len(out_shape)):
+                    raise RuntimeError(f"""
+                    Permutation list {perm.ints=} does not match the reshaped out dimension {out_reshaped=}
+                """)
+
+                simd = 1 
                 new_node = helper.make_node(
                             "Shuffle",
                             [new_in_tensor],
