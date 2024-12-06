@@ -7,7 +7,7 @@ import tempfile
 import numpy as np
 import os
 
-os.environ['LIVENESS_THRESHOLD'] = '100000' # Need to bump this up for these RTL sims
+os.environ['LIVENESS_THRESHOLD'] = '1000000' # Need to bump this up for these RTL sims
 
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
