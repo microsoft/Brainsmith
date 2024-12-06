@@ -63,9 +63,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
     def docompute(self):
         simd = self.get_nodeattr("simd")
-        out_reshaped = self.get_nodeattr("out_reshaped")
+        out_shape = self.get_nodeattr("out_shape")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [int(item) for pair in zip(out_reshaped, loop_coeffs) for item in pair] 
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
@@ -74,7 +74,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             #pragma HLS stream variable=dst0 depth=2
 
             move(in0_{self.hls_sname()}, src0);
-	    input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(src0, dst0);
+	    input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(src0, dst0);
 	    move(dst0, out_{self.hls_sname()});
             """
         ]
@@ -203,9 +203,9 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
         simd = self.get_nodeattr("simd")
-        out_reshaped = self.get_nodeattr("out_reshaped")
+        out_shape = self.get_nodeattr("out_shape")
         loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
-        interleaved = [int(item) for pair in zip(out_reshaped,loop_coeffs) for item in pair]
+        interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
@@ -216,7 +216,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             int stream_size = in0_V.size();
 
             while(out_V.size() != stream_size) {{
-                input_gen<-1,{np.prod(out_reshaped)},{','.join(map(str,interleaved))}>(in0_V, out_V);
+                input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(in0_V, out_V);
             }}
 
             vectorstream2npy<TE, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
