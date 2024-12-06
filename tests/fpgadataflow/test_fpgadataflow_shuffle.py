@@ -24,6 +24,7 @@ from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
+from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
 from finnbrainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
@@ -130,8 +131,8 @@ def test_pytorch_to_ip_gen():
             "perm" : (0,2,1,3)
     }, 
 ])
-@pytest.mark.parametrize("datatype", ["INT8"])
-@pytest.mark.parametrize("simd", ["simd1"])
+@pytest.mark.parametrize("datatype", ["INT8", "INT4"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
 @pytest.mark.fpgadataflow
 def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     ''' Checks cppsim of the shuffle_hls layer '''
@@ -156,6 +157,7 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     y_ref = oxe.execute_onnx(model, input_t)[out_name]
 
     # Attempt to build the HLS for this
+    model = model.transform(InferShuffle())
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())
@@ -163,6 +165,69 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     model = model.transform(SetExecMode("cppsim"))
     model = model.transform(PrepareCppSim())
     model = model.transform(CompileCppSim())
+
+    y_hw = oxe.execute_onnx(model, input_t)[out_name]
+
+    y_hw_flat = y_hw.flatten()
+    y_ref_flat = y_ref.flatten()
+    for i in range(len(y_hw_flat)):
+        if not np.allclose(y_hw_flat[i], y_ref_flat[i]):
+            print(f"Index {i}, Expected {y_ref_flat[i]} -- Got {y_hw_flat[i]}")
+
+    assert np.allclose(y_ref, y_hw), "Model output does not match expected output"
+    
+
+@pytest.mark.parametrize("shuffle_param", [ 
+    {
+            "in_shape" : (1,128,384), # Shuffle A
+            "in_reshaped" : (1,128,12,32),
+            "out_shape" : (1,12,128,32),
+            "out_reshaped" : None,
+            "perm" : (0,2,1,3)
+    }, 
+    {
+            "in_shape" : (1,12,128,32), # Shuffle C 
+            "in_reshaped" : None,
+            "out_shape" : (1,128,12,32),
+            "out_reshaped" : (1,128,384),
+            "perm" : (0,2,1,3)
+    }, 
+])
+@pytest.mark.parametrize("datatype", ["INT8"])
+@pytest.mark.parametrize("simd", ["simd4"])
+@pytest.mark.fpgadataflow
+def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
+    ''' Checks cppsim of the shuffle_hls layer '''
+    dt = DataType[datatype]
+    simd = int(simd[-1])
+    in_shape = shuffle_param["in_shape"]
+
+    model = construct_onnx_model(
+            input_shape=in_shape,
+            transpose_perm=shuffle_param["perm"],
+            reshape1_shape=shuffle_param["in_reshaped"],
+            reshape2_shape=shuffle_param["out_reshaped"],
+            dt=dt
+    )
+
+    input = gen_finn_dt_tensor(dt, in_shape)
+    in_name = model.graph.input[0].name
+    out_name = model.graph.output[0].name
+    input_t = {in_name : input}
+
+    # Get a reference for the shuffle 
+    y_ref = oxe.execute_onnx(model, input_t)[out_name]
+
+    # Attempt to build the HLS for this
+    model = model.transform(InferShuffle())
+    model = model.transform(SpecializeLayers(test_fpga_part))
+    model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(GiveReadableTensorNames())
+
+    model = model.transform(SetExecMode("rtlsim"))
+    model = model.transform(PrepareIP(test_fpga_part, test_synth_clk_period_ns))
+    model = model.transform(HLSSynthIP())
+    model = model.transform(PrepareRTLSim())
 
     y_hw = oxe.execute_onnx(model, input_t)[out_name]
 
