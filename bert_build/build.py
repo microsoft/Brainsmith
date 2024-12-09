@@ -79,6 +79,7 @@ def main(model_path:str):
     model = onnx.load(model_path)  
     
     steps = [ custom_step_cleanup, 
+              attempt_convert_step,
               custom_streamlining_step, 
               custom_step_infer_hardware, 
               custom_infer_shuffle, 
