@@ -29,7 +29,7 @@
 import numpy as np
 import os
 
-from finn.custom_op.fpgadataflow import templates
+from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
 from finn.util.basic import CppBuilder
@@ -129,7 +129,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/custom_hls")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
@@ -177,7 +177,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         ]
         self.save_as_npy()
 
-        template = templates.docompute_template
+        template = brainsmith_templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:

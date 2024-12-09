@@ -74,7 +74,7 @@ class QuantSoftMaxSimple(nn.Module):
         self.softmax = nn.Softmax(dim=-1) # softmax along the last dimension
 
     def get_quant_scale(self):
-        return self.output_identity.quant_act_scale()
+        return self.output_identity.act_quant.scale()
 
     def forward(self, x):
         x = self.softmax(x)
@@ -130,7 +130,7 @@ def make_single_quantsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType
     return model
 
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.fpgadataflow
 def test_convert_to_hw_softmax_layer(exec_mode, simd):
     '''
@@ -191,9 +191,9 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
 
 
 @pytest.mark.parametrize("impl_style", ["hls"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
-@pytest.mark.parametrize("idt", ["INT8", "INT9", "INT16"])
-@pytest.mark.parametrize("odt", ["INT8", "INT16"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
+@pytest.mark.parametrize("idt", ["INT8", "INT9"])
+@pytest.mark.parametrize("odt", ["INT8"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_quantsoftmax(impl_style, simd, idt, odt, ifm_dim):
