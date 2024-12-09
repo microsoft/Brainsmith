@@ -129,7 +129,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/custom_hls")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
