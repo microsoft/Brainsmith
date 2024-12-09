@@ -74,7 +74,7 @@ class QuantSoftMaxSimple(nn.Module):
         self.softmax = nn.Softmax(dim=-1) # softmax along the last dimension
 
     def get_quant_scale(self):
-        return self.output_identity.quant_act_scale()
+        return self.output_identity.act_quant.scale()
 
     def forward(self, x):
         x = self.softmax(x)
