@@ -32,10 +32,22 @@ Feel free to adjust this if you work off a different feature fork/branch.
 cd deps/finnbrainsmith
 ```
 
-5. You can then try and push the latest ONNX version of the tiny BERT model through the design
+5. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
 ```
 cd bert_build
-python build.py -i bert-tiny-1layer_relu_scale_1_fp16_quant_qonnx.onnx
+python endtoend.py -o finnbrainsmith_bert.onnx
+```
+
+6. You can also run a suite of tests on the finnbrainsmith repository which will check:
+ 
+* Shuffle hardware generation and correctness
+* QuantSoftMax hardware generation and correctness
+* EndtoEnd flow
+
+To run the tests
+```
+cd tests
+pytest ./
 ```
 
 Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc.. from the files in the `deps/finnbrainsmith` directory and run the changes in the docker container.
