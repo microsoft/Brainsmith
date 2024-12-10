@@ -29,13 +29,12 @@ def custom_step_remove_head(model, cfg):
     # Remove nodes
     to_remove.append(current_node)
     for node in to_remove:
-        remove_node_and_rewire(model, node)
+        model.graph.node.remove(node)
 
     # Reconnect input
     for con in consumers:
         for i,ip in enumerate(con.input):
-            import pdb; pdb.set_trace()
-            if ip == LN_output: 
+            if ip == LN_output:
                 con.input[i] = model.graph.input[0].name
 
     return model
@@ -58,7 +57,7 @@ def main(model_path:str):
     cleanup(in_file="simp_"+model_path, out_file="qonnx_cleanup_"+model_path)
     
     
-    steps = [ custom_step_cleanup ]
+    steps = [ custom_step_cleanup, custom_step_remove_head ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
