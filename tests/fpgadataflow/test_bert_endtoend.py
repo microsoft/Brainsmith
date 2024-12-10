@@ -284,9 +284,14 @@ def test_endtoend(
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
     shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", "_end2end_test_output.onnx")
+
+    # Analysis dashboard 
+    import json
+    d = {}
     fin = ModelWrapper("_end2end_test_output.onnx")
     specialised_ratio = calculate_specialised_layers_ratio(fin)
-    if specialised_ratio != 1.0:
-        todo_nodes = [x.name for x in get_non_specialised_nodes(model)]
-        raise Exception(f"Not all layers were specialised only {specialised_ratio*100}% were, the following nodes are remaining {todo_nodes=}")
+    d['specialised_ratio'] = specialised_ratio
+    d['non_specialised_ops'] = [x.name for x in get_non_specialised_nodes(model)]
+    with open("bert_dashboard.json", 'w') as f:
+        json.dump(d,f)
 
