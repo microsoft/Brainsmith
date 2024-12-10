@@ -177,6 +177,12 @@ def build_layernorm_graph(
     model.set_initializer("layernorm0_b_param", (max_bias*np.random.rand(last_dim)).astype(np.float32))
     model.set_initializer("layernorm0_epsilon_param", np.asarray(epsilon, dtype=np.float32))
 
+    # Datatype annotations
+    model.set_tensor_datatype(Quant_0_out.name, DataType[input_datatype])
+    model.set_tensor_datatype(Quant_LayerNorm_scale_out.name, DataType[weight_datatype])
+    model.set_tensor_datatype(Quant_LayerNorm_bias_out.name, DataType[bias_datatype])
+    model.set_tensor_datatype(LayerNorm_0_out.name, DataType[output_datatype])
+
     model.save(onnx_path(-1))
 
     # Force the opset to 17 (TODO: Must be a better way to do this)

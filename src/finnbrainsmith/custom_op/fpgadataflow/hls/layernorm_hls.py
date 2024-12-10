@@ -29,16 +29,17 @@
 import numpy as np
 import os
 
-import finn.util.pyxsi_rpcclient as pyxsi_rpcclient
-from finn.custom_op.fpgadataflow import templates
+# import finn.util.pyxsi_rpcclient as pyxsi_rpcclient
+from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
-from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.custom_op.fpgadataflow.layernorm import LayerNorm
+from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
+from finnbrainsmith.custom_op.fpgadataflow.layernorm import LayerNorm
 from finn.util.basic import make_build_dir
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
+from finn.util.basic import CppBuilder
 
 
-class LayerNorm_hls(LayerNorm, HLSBackend):
+class LayerNorm_hls(LayerNorm, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
@@ -48,7 +49,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             "custom_hls_dir": ("s", False, "layernorm"),
             }
         my_attrs.update(LayerNorm.get_nodeattr_types(self))
-        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+        my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
@@ -186,9 +187,9 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         verilog_files = self.get_all_verilog_filenames(abspath=True)
         single_src_dir = make_build_dir("rtlsim_" + self.onnx_node.name + "_")
 
-        ret = pyxsi_rpcclient.compile_sim_obj(
-            self.get_verilog_top_module_name(), verilog_files, single_src_dir
-        )
+        # ret = pyxsi_rpcclient.compile_sim_obj(
+        #     self.get_verilog_top_module_name(), verilog_files, single_src_dir
+        # )
 
         # save generated lib filename in attribute
         self.set_nodeattr("rtlsim_so", ret[0] + "/" + ret[1])
@@ -225,7 +226,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         ]
         self.save_as_npy()
 
-        template = templates.docompute_template
+        template = brainsmith_templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:
@@ -234,3 +235,34 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
+
+
+
+
+
+    def compile_singlenode_code(self):
+        """Builds the bash script for compilation using the CppBuilder from
+        finn.util.basic and executes the script to produce the executable."""
+        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+        builder = CppBuilder()
+        # to enable additional debug features please uncommand the next line
+        # builder.append_includes("-DDEBUG")
+        builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
+        builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
+        builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
+        builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        builder.append_includes("--std=c++14")
+        builder.append_includes("-O3")
+        builder.append_sources(code_gen_dir + "/*.cpp")
+        builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
+        builder.append_includes("-lz")
+        builder.append_includes(
+            '-fno-builtin -fno-inline -Wl,-rpath,"$HLS_PATH/lnx64/lib/csim" -L$HLS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
+        )
+        builder.append_includes(
+            "-L$HLS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
+        )
+        builder.set_executable_path(code_gen_dir + "/node_model")
+        builder.build(code_gen_dir)
+        self.set_nodeattr("executable_path", builder.executable_path)
