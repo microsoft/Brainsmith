@@ -116,6 +116,35 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
             super().exec_precompiled_singlenode_model()
             # # load output npy file
             super().npy_to_dynamic_output(context)
+        elif mode == "rtlsim":
+            sim = self.get_rtlsim()
+            nbits = self.get_instream_width()
+            rtlsim_inp = npy_to_rtlsim_input(
+                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits    
+            )
+            super().reset_rtlsim(sim)
+            super().toggle_clk(sim)
+
+            #rtlsim_output = self.rtlsim(sim, rtlsim_inp)
+            io_dict = {
+                "inputs": {"in0": rtlsim_inp},
+                "outputs":{"out": []}
+                    }
+            self.rtlsim_multi_io(sim, io_dict)
+            out = io_dict["outputs"]["out"]
+
+            odt = self.get_output_datatype()
+            target_bits = odt.bitwidth()
+            packed_bits = self.get_outstream_width()
+            out_npy_path = "{}/output.npy".format(code_gen_dir)
+            out_shape = self.get_folded_output_shape()
+            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
+
+            # load and reshape output
+            output = np.load(out_npy_path)
+            oshape = self.get_normal_output_shape()
+            output = np.asarray([output], dtype=np.float32).reshape(*oshape)
+            context[node.output[0]] = output
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
