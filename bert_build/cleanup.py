@@ -39,6 +39,32 @@ def custom_step_remove_head(model, cfg):
 
     return model
 
+def recurse_model_tail_removal(model, to_remove, node):
+    """ Helper function for recursively walking the BERT graph from the second
+    output up to the last LayerNorm to remove it """
+    if node is not None:
+        if node.op_type != "LayerNormalization":
+            to_remove.append(node)
+            for tensor in node.input:
+                recurse_model_tail_removal(model, to_remove, model.find_producer(tensor))
+    return
+
+def custom_step_remove_tail(model, cfg):
+    """ Removes from global_out_1 all the way back to the first LayerNorm """
+    out_names = [x.name for x in model.graph.output]
+    assert "global_out_1" in out_names, "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
+    
+    to_remove = []
+    current_node = model.find_producer('global_out_1')
+    recurse_model_tail_removal(model, to_remove, current_node)
+    
+    for node in to_remove:
+        model.graph.node.remove(node)
+    del model.graph.output[out_names.index('global_out_1')]
+    
+    return model
+
+
 def custom_step_cleanup(model, cfg):
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
@@ -57,7 +83,7 @@ def main(model_path:str):
     cleanup(in_file="simp_"+model_path, out_file="qonnx_cleanup_"+model_path)
     
     
-    steps = [ custom_step_cleanup, custom_step_remove_head ]
+    steps = [ custom_step_cleanup, custom_step_remove_head, custom_step_remove_tail ]
     
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
