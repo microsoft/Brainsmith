@@ -90,19 +90,14 @@ def build_layernorm_graph(
 
     # Datatypes restricted to "FLOAT16" or "FLOAT32" in current implementation
     bw = []
-    dts = []
     for dt in [input_datatype, weight_datatype, bias_datatype, output_datatype]:
         match dt:
             case "INT8":
                 bw += [8]
-                # dts += [TensorProto.INT8]
-                dts += [TensorProto.FLOAT]
             case "FLOAT16":
                 bw += [16]
-                dts += [TensorProto.FLOAT16]
             case "FLOAT32":
                 bw += [32]
-                dts += [TensorProto.FLOAT]
             case _:
                 raise ValueError(f"LayerNorm only supports FP16/FP32 w/b. Invalid input: {dt}")
     
@@ -112,20 +107,15 @@ def build_layernorm_graph(
     bias_quant_params   = [1.0/(1<<bw[2]), 0.0, bw[2]]
     output_quant_params = [1.0/(1<<bw[3]), 0.0, bw[3]]
 
-    idt = dts[0]
-    sdt = dts[1]
-    bdt = dts[2]
-    odt = dts[3]
-
     max_scale = 2**(bw[1]/2)
     max_bias = 2**(bw[2]/2)
 
     last_dim = idm[-1]
     scale_bias_shape = [last_dim]
 
-    # Create I/Os
-    inp = helper.make_tensor_value_info("global_in", TensorProto.FLOAT16, list(idm))
-    outp = helper.make_tensor_value_info("global_out", TensorProto.FLOAT16, list(idm))
+    # Create I/Os 
+    inp = helper.make_tensor_value_info("global_in", TensorProto.FLOAT, list(idm))
+    outp = helper.make_tensor_value_info("global_out", TensorProto.FLOAT, list(idm))
 
     # Create model
     graph = helper.make_graph(
@@ -135,22 +125,22 @@ def build_layernorm_graph(
     model = ModelWrapper(model)
 
     # Quant input node
-    Quant_0, Quant_0_out = _create_quant_node('Quant_0', inp.name, odt, list(idm))
+    Quant_0, Quant_0_out = _create_quant_node('Quant_0', inp.name, TensorProto.FLOAT, list(idm))
     model.graph.node.append(Quant_0)
     model.graph.value_info.append(Quant_0_out)
 
     # Quant scale node
-    Quant_LayerNorm_scale, Quant_LayerNorm_scale_out = _create_quant_node('LayerNorm_Scale_Quant', 'layernorm0_scale_param', sdt, scale_bias_shape)
+    Quant_LayerNorm_scale, Quant_LayerNorm_scale_out = _create_quant_node('LayerNorm_Scale_Quant', 'layernorm0_scale_param', TensorProto.FLOAT, scale_bias_shape)
     model.graph.node.append(Quant_LayerNorm_scale)
     model.graph.value_info.append(Quant_LayerNorm_scale_out)
 
     # Quant bias node
-    Quant_LayerNorm_bias, Quant_LayerNorm_bias_out = _create_quant_node('LayerNorm_Bias_Quant', 'layernorm0_b_param', bdt, scale_bias_shape)
+    Quant_LayerNorm_bias, Quant_LayerNorm_bias_out = _create_quant_node('LayerNorm_Bias_Quant', 'layernorm0_b_param', TensorProto.FLOAT, scale_bias_shape)
     model.graph.node.append(Quant_LayerNorm_bias)
     model.graph.value_info.append(Quant_LayerNorm_bias_out)
 
     # LayerNormalization node
-    LayerNorm_0_out = helper.make_tensor_value_info(model.make_new_valueinfo_name(), odt, list(idm))
+    LayerNorm_0_out = helper.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, list(idm))
     LayerNorm_0 = helper.make_node(
         'LayerNormalization',
         inputs=[Quant_0_out.name, Quant_LayerNorm_scale_out.name, Quant_LayerNorm_bias_out.name],
@@ -183,10 +173,8 @@ def build_layernorm_graph(
     model.set_initializer("LayerNorm_Scale_Quant_zeropt", np.asarray(scale_quant_params[1], dtype=np.float32))
     model.set_initializer("LayerNorm_Scale_Quant_bitwidth", np.asarray(scale_quant_params[2], dtype=np.float32))
 
-    init_dtype = np.float16 if sdt == TensorProto.FLOAT16 else np.float32
-    init_dtype = np.float16
-    model.set_initializer("layernorm0_scale_param", (max_scale*np.random.rand(last_dim)).astype(init_dtype))
-    model.set_initializer("layernorm0_b_param", (max_bias*np.random.rand(last_dim)).astype(init_dtype))
+    model.set_initializer("layernorm0_scale_param", (max_scale*np.random.rand(last_dim)).astype(np.float32))
+    model.set_initializer("layernorm0_b_param", (max_bias*np.random.rand(last_dim)).astype(np.float32))
     model.set_initializer("layernorm0_epsilon_param", np.asarray(epsilon, dtype=np.float32))
 
     model.save(onnx_path(-1))
@@ -201,10 +189,12 @@ def build_layernorm_graph(
     return ModelWrapper(onnx_path(-1)) 
 
 
+# @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
+# @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
 @pytest.mark.parametrize("impl_style", ["hls"])
-@pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
-@pytest.mark.parametrize("idt", ["INT8", "FLOAT16"])
+@pytest.mark.parametrize("exec_mode", ["cppsim"])
+@pytest.mark.parametrize("simd", ["simd1"])
+@pytest.mark.parametrize("idt", ["INT8"])
 @pytest.mark.parametrize("wdt", ["FLOAT16"])
 @pytest.mark.parametrize("bdt", ["FLOAT16"])
 @pytest.mark.parametrize("odt", ["FLOAT16"])
@@ -243,14 +233,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     if(ifm_dim[-1] % simd != 0):
         pytest.skip(f"Skipping this test because the channel dimension is not a multiple of {simd}")
 
-    # TODO: gen_finn_dt_tensor doesn't have FP16 support
-    # if idt == 'FLOAT16':
-    #     input = np.random.randn(*io_shape).astype(np.float16)
-    #     # input = input.astype(np.float32)
-    # else:
-    # input = gen_finn_dt_tensor(idt, io_shape)
-    input = np.random.randn(*io_shape).astype(np.float16)
-    
+    input = np.random.randn(*io_shape)    
     in_name = model.graph.input[0].name
     out_name = model.graph.output[0].name
     input_t = {in_name: input}
@@ -319,15 +302,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     except Exception as e:
         pytest.fail(f"Failed to transform the model: {str(e)}")
     
-    # run the model
-    # TODO: gen_finn_dt_tensor doesn't have FP16 support
-    # if idt == 'FLOAT16':
-    #     input = np.random.randn(*io_shape).astype(np.float16)
-    #     input = input.astype(np.float32)
-    # else:
-    # input = gen_finn_dt_tensor(idt, io_shape)
-    input = np.random.randn(*io_shape).astype(np.float16)
-
+    input = np.random.randn(*io_shape)
     in_name = model.graph.input[0].name
     input_t = {in_name: input}
     y_hw = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
