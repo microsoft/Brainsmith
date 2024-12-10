@@ -34,7 +34,6 @@ from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBa
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
 from finn.util.basic import CppBuilder
 
-
 class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
@@ -215,7 +214,3 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
-    def prepare_rtlsim(self):
-        # this node currently does not support rtlsim
-        raise NotImplementedError("QuantSoftmax_hls does not support rtlsim")
