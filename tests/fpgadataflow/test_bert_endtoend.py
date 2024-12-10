@@ -23,6 +23,8 @@ from onnxsim import simplify
 from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.infer_shapes import InferShapes
+
 
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
@@ -230,15 +232,12 @@ def calculate_specialised_layers_ratio(model)->float:
     return len(get_non_specialised_nodes(model))/len(model.graph.node)
 
 
-@pytest.mark.parametrize("hidden_size", [384])
-@pytest.mark.parametrize("num_attention_heads", [12])
-@pytest.mark.parametrize("intermediate_size", [1536])
-@pytest.mark.parametrize("gen_ip", [True, False])
-def test_endtoend(
-        hidden_size:int,
-        num_attention_heads:int,
-        intermediate_size:int,
-        gen_ip:bool
+@pytest.fixture(scope="module")
+def model(
+        hidden_size:int=384,
+        num_attention_heads:int=12,
+        intermediate_size:int=1536,
+        gen_ip:bool=False
     ):
     tmp = "./intermediate_models"
     os.makedirs(tmp, exist_ok=True)
@@ -285,13 +284,34 @@ def test_endtoend(
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
     shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", "_end2end_test_output.onnx")
 
-    # Analysis dashboard 
-    import json
-    d = {}
-    fin = ModelWrapper("_end2end_test_output.onnx")
-    specialised_ratio = calculate_specialised_layers_ratio(fin)
-    d['specialised_ratio'] = specialised_ratio
-    d['non_specialised_ops'] = [x.name for x in get_non_specialised_nodes(model)]
-    with open("bert_dashboard.json", 'w') as f:
-        json.dump(d,f)
+    return ModelWrapper("_end2end_test_output.onnx")
 
+def get_specialised_nodes(model)->list:
+    """ Returns the list of nodes in the model that have not been specialised """
+    specialised = []
+    for node in model.graph.node:
+        if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
+            specialised.append(node)
+    return specialised
+
+def calculate_specialised_layers_ratio(model)->float:
+    """ Returns the percentage of layers that were sucessfully specialised """
+    return len(get_specialised_nodes(model))/len(model.graph.node)
+
+## The tests on the model are below
+
+def test_model_build(model):
+    """ Test to make sure that the model is sound """
+    model = model.transform(InferShapes())
+
+def test_all_layers_specialised(model):
+    """ Test to determine if all the layers in the model have been specialised """
+    ratio = calculate_specialised_layers_ratio(model)
+    if ratio < 1.0:
+        raise RuntimeError(f"Not all layers were specialised only {ratio*100}% were")
+
+def test_create_ip(model):
+    """ Test to see if we can create IP from the specialised model """
+    model = model.transform(PrepareIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    model = model.transform(HLSSynthIP())
+    model = model.transform(CreateStitchedIP(cfg.fpga_part, cfg.synth_clk_period_ns))
