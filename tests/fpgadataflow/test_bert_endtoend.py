@@ -219,10 +219,12 @@ def custom_step_create_ip(model, cfg):
 @pytest.mark.parametrize("hidden_size", [384])
 @pytest.mark.parametrize("num_attention_heads", [12])
 @pytest.mark.parametrize("intermediate_size", [1536])
+@pytest.mark.parametrize("gen_ip", [True, False])
 def test_endtoend(
         hidden_size:int,
         num_attention_heads:int,
-        intermediate_size:int
+        intermediate_size:int,
+        gen_ip:bool
     ):
     tmp = "./intermediate_models"
     os.makedirs(tmp, exist_ok=True)
@@ -253,6 +255,9 @@ def test_endtoend(
               custom_step_infer_hardware,
               attempt_specialise_layers
             ]
+
+    if gen_ip:
+        steps.append(custom_step_create_ip)
 
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
