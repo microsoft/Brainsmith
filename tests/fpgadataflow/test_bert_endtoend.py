@@ -264,5 +264,5 @@ def test_endtoend(
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
-    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", "_end2end_test_output.onnx")
 
