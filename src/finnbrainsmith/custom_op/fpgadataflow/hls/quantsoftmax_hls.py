@@ -32,6 +32,7 @@ import os
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
 class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
@@ -104,13 +105,22 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
+        exp_ishape = self.get_normal_input_shape()
+        exp_oshape = self.get_normal_output_shape()
         folded_ishape = self.get_folded_input_shape()
+        export_idt = self.get_input_datatype()
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            inp = context[node.input[0]]
-            inp = inp.reshape(folded_ishape)
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        elif mode == "rtlsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+
+
+        inp = context[node.input[0]]
+        inp = inp.reshape(folded_ishape)
+        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)        
+
+        if mode == "cppsim":
             # # execute the precompiled model
             super().exec_precompiled_singlenode_model()
             # # load output npy file

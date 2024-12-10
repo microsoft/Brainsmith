@@ -31,7 +31,8 @@ class QuantSoftmax(HWCustomOp):
         return self.get_normal_input_shape()
 
     def get_number_output_values(self):
-        raise NotImplementedError("This function is not yet implemented.")
+        folded_oshape = self.get_folded_output_shape()
+        return np.prod(folded_oshape[:-1])
 
     def quantise_to_int(self, arr, dtype):
         max_val = np.iinfo(dtype).max
