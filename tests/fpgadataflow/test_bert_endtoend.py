@@ -300,7 +300,7 @@ def calculate_specialised_layers_ratio(model)->float:
 
 ## The tests on the model are below
 
-def test_model_build(model):
+def test_model_run_to_specialised(model):
     """ Test to make sure that the model is sound """
     model = model.transform(InferShapes())
 
@@ -312,6 +312,8 @@ def test_all_layers_specialised(model):
 
 def test_create_ip(model):
     """ Test to see if we can create IP from the specialised model """
-    model = model.transform(PrepareIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    fpga_part = "xcv80-lsva4737-2MHP-e-S"
+    synth_clk_period_ns=5
+    model = model.transform(PrepareIP(fpga_part, synth_clk_period_ns))
     model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    model = model.transform(CreateStitchedIP(fpga_part,synth_clk_period_ns))
