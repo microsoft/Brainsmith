@@ -22,6 +22,7 @@ from brevitas.graph.calibrate import calibration_mode
 from onnxsim import simplify  
 from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
+from qonnx.core.modelwrapper import ModelWrapper
 
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
@@ -216,6 +217,19 @@ def custom_step_create_ip(model, cfg):
     model = model.transform(CreateStitchedIP(cfg.fpga_part, cfg.synth_clk_period_ns))
     return model
     
+def get_non_specialised_nodes(model)->list:
+    """ Returns the list of nodes in the model that have not been specialised """
+    specialised = []
+    for node in model.graph.node:
+        if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
+            specialised.append(node)
+    return specialised
+
+def calculate_specialised_layers_ratio(model)->float:
+    """ Returns the percentage of layers that were sucessfully specialised """
+    return len(get_non_specialised_nodes(model))/len(model.graph.node)
+
+
 @pytest.mark.parametrize("hidden_size", [384])
 @pytest.mark.parametrize("num_attention_heads", [12])
 @pytest.mark.parametrize("intermediate_size", [1536])
@@ -270,4 +284,9 @@ def test_endtoend(
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
     shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", "_end2end_test_output.onnx")
+    fin = ModelWrapper("_end2end_test_output.onnx")
+    specialised_ratio = calculate_specialised_layers_ratio(fin)
+    if specialised_ratio != 1.0:
+        todo_nodes = [x.name for x in get_non_specialised_nodes(model)]
+        raise Exception(f"Not all layers were specialised only {specialised_ratio*100}% were, the following nodes are remaining {todo_nodes=}")
 
