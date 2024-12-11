@@ -32,8 +32,8 @@ import os
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-
 
 class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
@@ -105,17 +105,55 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
+        exp_ishape = self.get_normal_input_shape()
+        exp_oshape = self.get_normal_output_shape()
         folded_ishape = self.get_folded_input_shape()
+        export_idt = self.get_input_datatype()
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            inp = context[node.input[0]]
-            inp = inp.reshape(folded_ishape)
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        elif mode == "rtlsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+
+
+        inp = context[node.input[0]]
+        inp = inp.reshape(folded_ishape)
+        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)        
+
+        if mode == "cppsim":
             # # execute the precompiled model
             super().exec_precompiled_singlenode_model()
             # # load output npy file
             super().npy_to_dynamic_output(context)
+        elif mode == "rtlsim":
+            sim = self.get_rtlsim()
+            nbits = self.get_instream_width()
+            rtlsim_inp = npy_to_rtlsim_input(
+                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits    
+            )
+            super().reset_rtlsim(sim)
+            super().toggle_clk(sim)
+
+            #rtlsim_output = self.rtlsim(sim, rtlsim_inp)
+            io_dict = {
+                "inputs": {"in0": rtlsim_inp},
+                "outputs":{"out": []}
+                    }
+            self.rtlsim_multi_io(sim, io_dict)
+            out = io_dict["outputs"]["out"]
+
+            odt = self.get_output_datatype()
+            target_bits = odt.bitwidth()
+            packed_bits = self.get_outstream_width()
+            out_npy_path = "{}/output.npy".format(code_gen_dir)
+            out_shape = self.get_folded_output_shape()
+            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
+
+            # load and reshape output
+            output = np.load(out_npy_path)
+            oshape = self.get_normal_output_shape()
+            output = np.asarray([output], dtype=np.float32).reshape(*oshape)
+            context[node.output[0]] = output
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
@@ -186,7 +224,3 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
-    def prepare_rtlsim(self):
-        # this node currently does not support rtlsim
-        raise NotImplementedError("QuantSoftmax_hls does not support rtlsim")

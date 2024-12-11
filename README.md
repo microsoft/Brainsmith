@@ -14,9 +14,9 @@ git clone https://github.com/Xilinx/finn.git -b custom/transformer
 We need to add _this_ repo to this file to install it as a plugin. Add the following to the bottom of the `python_repos.txt` file:
 ```
 dir,url,commit_hash
-qonnx,https://github.com/fastmachinelearning/qonnx.git,c1c12d2549c5de4478371d9999db991691007c10
+qonnx,https://github.com/fastmachinelearning/qonnx.git,ca91dbe24e8d0122ba981070b918be31fb60750e
 finn-experimental,https://github.com/Xilinx/finn-experimental.git,0724be21111a21f0d81a072fccc1c446e053f851
-brevitas,https://github.com/Xilinx/brevitas.git,d4834bd2a0fad3c1fbc0ff7e1346d5dcb3797ea4
+brevitas,https://github.com/Xilinx/brevitas.git,0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5
 pyverilator,https://github.com/maltanar/pyverilator.git,ce0a08c20cb8c1d1e84181d6f392390f846adbd1
 finnbrainsmith,git@github.com:Xilinx-Projects/finn_brainwave.git,plugin
 ```
@@ -32,10 +32,22 @@ Feel free to adjust this if you work off a different feature fork/branch.
 cd deps/finnbrainsmith
 ```
 
-5. You can then try and push the latest ONNX version of the tiny BERT model through the design
+5. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
 ```
 cd bert_build
-python build.py -i bert-tiny-1layer_relu_scale_1_fp16_quant_qonnx.onnx
+python endtoend.py -o finnbrainsmith_bert.onnx
+```
+
+6. You can also run a suite of tests on the finnbrainsmith repository which will check:
+ 
+* Shuffle hardware generation and correctness
+* QuantSoftMax hardware generation and correctness
+* EndtoEnd flow
+
+To run the tests
+```
+cd tests
+pytest ./
 ```
 
 Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc.. from the files in the `deps/finnbrainsmith` directory and run the changes in the docker container.
