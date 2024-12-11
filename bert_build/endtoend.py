@@ -24,7 +24,8 @@ from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNode
 
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-import finn.transformation.streamline as absorb
+import finn.transformation.streamline.absorb as absorb
+import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finn.builder.build_dataflow as build
@@ -186,6 +187,8 @@ def custom_streamlining_step(model,cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
+    model = model.transform(reorder.MoveScalarMulPastMatMul())
+    model = model.transform(reorder.MoveScalarLinearPastInvariants())
     return model
 
 def attempt_convert_step(model, cfg):
@@ -201,12 +204,12 @@ def attempt_specialise_layers(model, cfg):
 def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferAddStreamsLayer())
-    model = model.transform(to_hw.InferStreamingEltwise())
+    model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_hw.InferLookupLayer())
-    model = model.transform(to_hw.InferThresholdingLayer())
-    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     model = model.transform(to_bs_hw.InferShuffle())
     model = model.transform(to_bs_hw.InferQuantSoftmax())
+    model = model.transform(to_hw.InferThresholdingLayer())
+    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
 def custom_step_create_ip(model, cfg):
