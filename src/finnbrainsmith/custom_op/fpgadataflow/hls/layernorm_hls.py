@@ -65,7 +65,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         self.code_gen_dict["$DEFINES$"] = [
             f"constexpr unsigned SIMD = {self.get_nodeattr('simd')};",
             f"constexpr unsigned W = {self.get_nodeattr('ifm_dim')[-1]};",
-            f"constexpr unsigned epsilon = {self.get_nodeattr('epsilon')};",
+            f"constexpr float epsilon = {self.get_nodeattr('epsilon')};",
             f"using TI = {idtype.get_hls_datatype_str()};",
             f"using TO = {odtype.get_hls_datatype_str()};"
         ]
@@ -119,6 +119,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         # Generate input
         inp = context[node.input[0]]
         inp = inp.reshape(folded_ishape)
+        inp = inp.astype(np.float32)
 
         if mode == "python":
             self._execute_node_python(context, graph)
