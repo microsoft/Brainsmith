@@ -169,17 +169,12 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
         builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
         builder.append_sources(code_gen_dir + "/*.cpp")
         builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
-        builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$HLS_PATH/lnx64/lib/csim" -L$HLS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
-        )
-        builder.append_includes(
-            "-L$HLS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
-        )
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
         self.set_nodeattr("executable_path", builder.executable_path)
