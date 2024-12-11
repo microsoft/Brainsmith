@@ -145,7 +145,7 @@ struct TreeReduction {
 };
 
 template<typename T>
-struct TreeReduction<2> {
+struct TreeReduction<T, 2> {
     static T reduce(const hls::vector<T, 2>& input) {
 #pragma HLS INLINE
         return input[0] + input[1];
@@ -153,7 +153,7 @@ struct TreeReduction<2> {
 };
 
 template<typename T>
-struct TreeReduction<1> {
+struct TreeReduction<T, 1> {
     static T reduce(const hls::vector<T, 1>& input) {
 #pragma HLS INLINE
         return input[0];

@@ -78,9 +78,9 @@ void mean_stage(
 		out_s.write(out);
 
 		// Mean calc
-		sum += TreeReduction<SIMD>::reduce(out);
+		sum += TreeReduction<TO,SIMD>::reduce(out);
 		count+=SIMD;
-		mean = sum / count;
+		mean = sum / TO(count);
 
 		if (count == N) {
 			count = 0;
@@ -146,10 +146,10 @@ void var_stage(
 #pragma HLS UNROLL
 			pow_res[i] = hls::pow((in[i] - mean), 2.0f); 
 		}
-		pow_sum += TreeReduction<SIMD>::reduce(pow_res);  
+		pow_sum += TreeReduction<TO,SIMD>::reduce(pow_res);  
 
 		count += SIMD;
-		var = pow_sum / count;
+		var = pow_sum / TO(count);
 	}
 
 	if (!mean_s.empty() && !valid) {
