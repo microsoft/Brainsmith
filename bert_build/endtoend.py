@@ -20,7 +20,8 @@ from brevitas.graph.calibrate import calibration_mode
 
 from onnxsim import simplify  
 from qonnx.util.cleanup import cleanup
-from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
+from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ConvertDivToMul
+from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
@@ -189,9 +190,12 @@ def custom_streamlining_step(model,cfg):
     model = model.transform(RoundAndClipThresholds())
     model = model.transform(reorder.MoveScalarMulPastMatMul())
     model = model.transform(reorder.MoveScalarLinearPastInvariants())
+    model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     return model
 
 def attempt_convert_step(model, cfg):
+    model = model.transform(ExtractQuantScaleZeroPt())
+    model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
 
