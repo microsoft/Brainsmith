@@ -230,7 +230,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     epsilon = 1e-05
     tolerance = 2
     
-    model = build_layernorm_graph(idt, wdt, bdt, odt, epsilon, ifm_dim)
+    model = build_layernorm_graph(idt.name, wdt.name, bdt.name, odt.name, epsilon, ifm_dim)
     # model = build_func_layernorm_graph(idt, odt, epsilon, ifm_dim)
 
     model = model.transform(InferShapes())
