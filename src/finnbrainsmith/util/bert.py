@@ -2,7 +2,7 @@ import onnx
 import argparse
 from onnxsim import simplify
 from qonnx.util.cleanup import cleanup
-from qonnx.transformation.general import SortCommutativeInputsInitializerLast
+from qonnx.transformation.general import SortCommutativeInputsInitializerLast, RemoveUnusedTensors, GiveReadableTensorNames
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
 
@@ -31,11 +31,19 @@ def custom_step_remove_head(model, cfg):
     for node in to_remove:
         model.graph.node.remove(node)
 
+    in_vi = model.get_tensor_valueinfo(LN_output)
+    model.graph.input.pop()
+    model.graph.input.append(in_vi)
+    model.graph.value_info.remove(in_vi)
+
     # Reconnect input
     for con in consumers:
         for i,ip in enumerate(con.input):
             if ip == LN_output:
                 con.input[i] = model.graph.input[0].name
+
+    model = model.transform(RemoveUnusedTensors())
+    model = model.transform(GiveReadableTensorNames())
 
     return model
 
