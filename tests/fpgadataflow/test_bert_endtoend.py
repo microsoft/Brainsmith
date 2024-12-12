@@ -97,6 +97,12 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
+def custom_step_specialise_layers(model, cfg):
+    model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
+    model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(GiveReadableTensorNames())
+    return model
+
 def custom_step_create_ip(model, cfg):
     model = model.transform(PrepareIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
     model = model.transform(HLSSynthIP())
@@ -120,7 +126,7 @@ steps = [
     custom_step_infer_hardware,  
 
     # Specialise the hardware layers
-    step_specialize_layers,
+    custom_step_specialise_layers,
 
     # How far do we get
     step_target_fps_parallelization,
@@ -166,27 +172,27 @@ def calculate_specialised_layers_ratio(model)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
     return len(get_non_specialised_nodes(model))/len(model.graph.node)
 
-def get_specialised_nodes(step_specialize_layers)->list:
+def get_specialised_nodes(custom_step_specialise_layers)->list:
     """ Returns the list of nodes in the model that have not been specialised """
-    model = step_specialize_layers
+    model = custom_step_specialise_layers
     specialised = []
     for node in model.graph.node:
         if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
             specialised.append(node)
     return specialised
 
-def calculate_specialised_layers_ratio(step_specialize_layers)->float:
+def calculate_specialised_layers_ratio(custom_step_specialise_layers)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
-    model = step_specialize_layers
+    model = custom_step_specialise_layers
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
-def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
+def test_is_every_layer_specialised(custom_step_specialise_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
-    model = step_specialize_layers
+    model = custom_step_specialise_layers
     ratio = calculate_specialised_layers_ratio(model)
     d = {}
     d["specialised_ratio"] = ratio
-    d["specialised_layers"] = [type(x) for x in get_specialised_nodes(model)]
+    d["specialised_layers"] = [x.name for x in get_specialised_nodes(model)]
     d["non_specialised_layers"] = [x.name for x in model.graph.node if x not in get_specialised_nodes(model)]
     dashboard["step_specialize_layers"] = d
     if ratio < 1.0:
@@ -195,9 +201,9 @@ def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
 ##############################################
 #       How many layers produce hardware 
 ##############################################
-def test_how_many_layers_produce_hardware(step_specialize_layers):
+def test_how_many_layers_produce_hardware(custom_step_specialise_layers):
     """ Test to see if we can create IP from the specialised model """
-    model = step_specialize_layers
+    model = custom_step_specialise_layers
     with tempfile.TemporaryDirectory() as temp_dir:
         os.environ["FINN_BUILD_DIR"] = temp_dir
         try:
