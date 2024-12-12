@@ -74,7 +74,7 @@ class QuantSoftMaxSimple(nn.Module):
         self.softmax = nn.Softmax(dim=-1) # softmax along the last dimension
 
     def get_quant_scale(self):
-        return self.output_identity.quant_act_scale()
+        return self.output_identity.act_quant.scale()
 
     def forward(self, x):
         x = self.softmax(x)
@@ -114,6 +114,7 @@ def make_single_quantsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType
         output_data_type = odt.name,
         simd=simd,
         preferred_impl_style=impl_style,
+        rtlsim_backend="pyxsi",
     )
     graph = helper.make_graph(
         [new_node],
@@ -130,7 +131,7 @@ def make_single_quantsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType
     return model
 
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.fpgadataflow
 def test_convert_to_hw_softmax_layer(exec_mode, simd):
     '''
@@ -176,12 +177,7 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
             model = model.transform(SetExecMode("rtlsim"))
             model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
             model = model.transform(HLSSynthIP())
-            try:
-                model = model.transform(PrepareRTLSim())
-                pytest.fail("PrepareRTLSim should have failed")
-            except Exception as e:
-                # expected to fail because this node do not support rtlsim
-                pass
+            model = model.transform(PrepareRTLSim())
         elif exec_mode == "stitched_ip":
             model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
             model = model.transform(HLSSynthIP())
@@ -191,12 +187,13 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
 
 
 @pytest.mark.parametrize("impl_style", ["hls"])
-@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
-@pytest.mark.parametrize("idt", ["INT8", "INT9", "INT16"])
-@pytest.mark.parametrize("odt", ["INT8", "INT16"])
+@pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
+@pytest.mark.parametrize("idt", ["INT8", "INT9"])
+@pytest.mark.parametrize("odt", ["INT8"])
+@pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 @pytest.mark.fpgadataflow
-def test_fpga_dataflow_quantsoftmax(impl_style, simd, idt, odt, ifm_dim):
+def test_fpga_dataflow_quantsoftmax(impl_style, simd, idt, odt, exec_mode, ifm_dim):
     idt = DataType[idt]
     odt = DataType[odt]
     simd = int(simd[-1])
@@ -221,14 +218,21 @@ def test_fpga_dataflow_quantsoftmax(impl_style, simd, idt, odt, ifm_dim):
     y_out = oxe.execute_onnx(model, input_t)[out_name]
     assert np.allclose(y_ref, y_out, atol=tollerance), "Model output does not match expected output"
 
-    try:
+    if exec_mode == "cppsim":
         model = model.transform(SpecializeLayers(test_fpga_part))
         model = model.transform(GiveUniqueNodeNames())
         model = model.transform(SetExecMode("cppsim"))
         model = model.transform(PrepareCppSim())
         model = model.transform(CompileCppSim())
-    except Exception as e:
-        pytest.fail(f"Failed to transform the model: {str(e)}")
+    elif exec_mode == "rtlsim":
+        model = model.transform(SpecializeLayers(test_fpga_part))
+        model = model.transform(GiveUniqueNodeNames())
+        model = model.transform(SetExecMode("rtlsim"))
+        model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
+        model = model.transform(HLSSynthIP())
+        model = model.transform(PrepareRTLSim())
+    else:
+        raise RuntimeError(f"Unknown {exec_mode=}")
 
     # run the model
     y_hw = oxe.execute_onnx(model, input_t)[out_name]

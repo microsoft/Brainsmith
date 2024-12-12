@@ -29,11 +29,11 @@
 import numpy as np
 import os
 
-from finn.custom_op.fpgadataflow import templates
+from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-
 
 class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
@@ -105,17 +105,55 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
+        exp_ishape = self.get_normal_input_shape()
+        exp_oshape = self.get_normal_output_shape()
         folded_ishape = self.get_folded_input_shape()
+        export_idt = self.get_input_datatype()
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            inp = context[node.input[0]]
-            inp = inp.reshape(folded_ishape)
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        elif mode == "rtlsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+
+
+        inp = context[node.input[0]]
+        inp = inp.reshape(folded_ishape)
+        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)        
+
+        if mode == "cppsim":
             # # execute the precompiled model
             super().exec_precompiled_singlenode_model()
             # # load output npy file
             super().npy_to_dynamic_output(context)
+        elif mode == "rtlsim":
+            sim = self.get_rtlsim()
+            nbits = self.get_instream_width()
+            rtlsim_inp = npy_to_rtlsim_input(
+                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits    
+            )
+            super().reset_rtlsim(sim)
+            super().toggle_clk(sim)
+
+            #rtlsim_output = self.rtlsim(sim, rtlsim_inp)
+            io_dict = {
+                "inputs": {"in0": rtlsim_inp},
+                "outputs":{"out": []}
+                    }
+            self.rtlsim_multi_io(sim, io_dict)
+            out = io_dict["outputs"]["out"]
+
+            odt = self.get_output_datatype()
+            target_bits = odt.bitwidth()
+            packed_bits = self.get_outstream_width()
+            out_npy_path = "{}/output.npy".format(code_gen_dir)
+            out_shape = self.get_folded_output_shape()
+            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
+
+            # load and reshape output
+            output = np.load(out_npy_path)
+            oshape = self.get_normal_output_shape()
+            output = np.asarray([output], dtype=np.float32).reshape(*oshape)
+            context[node.output[0]] = output
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
@@ -129,18 +167,19 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/custom_hls")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
         builder.append_sources(code_gen_dir + "/*.cpp")
         builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
         builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$HLS_PATH/lnx64/lib/csim" -L$HLS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
+            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
         )
         builder.append_includes(
-            "-L$HLS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
+            '-Wl,-rpath,"$VITIS_PATH/lnx64/tools/fpo_v7_1" -L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel'
         )
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
@@ -177,7 +216,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         ]
         self.save_as_npy()
 
-        template = templates.docompute_template
+        template = brainsmith_templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:
@@ -186,7 +225,3 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
-    def prepare_rtlsim(self):
-        # this node currently does not support rtlsim
-        raise NotImplementedError("QuantSoftmax_hls does not support rtlsim")

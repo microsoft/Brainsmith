@@ -1,4 +1,5 @@
 import onnx  
+import os
 import argparse
 from onnxsim import simplify  
 from qonnx.util.cleanup import cleanup
@@ -7,47 +8,32 @@ from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.remove import remove_node_and_rewire
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
-
-def custom_step_cleanup(model, cfg):
-    model = model.transform(SortCommutativeInputsInitializerLast())
-    model = model.transform(RemoveIdentityOps())
-    
-    nodes_to_remove = []
-    for node in model.graph.node:
-        if node.op_type == "Dropout":
-            print(f"Found a Dropout node {node.name} to remove")
-            nodes_to_remove.append(node)
-
-    for node in nodes_to_remove:
-        remove_node_and_rewire(model, node)
-
-    return model
+from finnbrainsmith.util.bert import custom_step_remove_head, custom_step_remove_tail, custom_step_cleanup
 
 def main(model_path:str):
+    tmp = "./intermediate_models"
+    os.makedirs(tmp, exist_ok=True)
+
+    # Initial model cleanup
     model = onnx.load(model_path)  
-    
     model_simp, check = simplify(model)  
     if check:  
-        print("Simplification successful.")  
-        onnx.save(model_simp, "simp_"+model_path)  
+        onnx.save(model_simp, f"{tmp}/simp.onnx")  
     else:  
-        print("Simplification failed.")  
+        raise RuntimeError(f"Unable to simplify the Brevitas bert model")
+    cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
     
-    cleanup(in_file="simp_"+model_path, out_file="qonnx_cleanup_"+model_path)
-    
-    
-    steps = [ custom_step_cleanup ]
-    
+    steps = [ custom_step_cleanup, custom_step_remove_head, custom_step_remove_tail ]
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
         steps=steps,
-        output_dir="./",
+        output_dir=tmp,
         synth_clk_period_ns=5,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[],
     )
     
-    _ = build.build_dataflow_cfg("qonnx_cleanup_"+model_path, cfg)
+    cleaned_up_model = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
 
 
 if __name__ == "__main__":

@@ -28,21 +28,6 @@ def custom_infer_quantsoftmax(model, cfg):
     model = model.transform(to_bs_hw.InferQuantSoftmax())
     return model
 
-def custom_step_cleanup(model, cfg):
-    model = model.transform(SortCommutativeInputsInitializerLast())
-    model = model.transform(RemoveIdentityOps())
-
-    nodes_to_remove = []
-    for node in model.graph.node:
-        if node.op_type == "Dropout":
-            print(f"Found a Dropout node {node.name} to remove")
-            nodes_to_remove.append(node)
-
-    for node in nodes_to_remove:
-        remove_node_and_rewire(model, node)
-
-    return model
-
 def custom_streamlining_step(model,cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
@@ -78,7 +63,7 @@ def custom_step_create_ip(model, cfg):
 def main(model_path:str):
     model = onnx.load(model_path)  
     
-    steps = [ custom_step_cleanup, 
+    steps = [ attempt_convert_step,
               custom_streamlining_step, 
               custom_step_infer_hardware, 
               custom_infer_shuffle, 
