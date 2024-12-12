@@ -125,6 +125,9 @@ steps = [
     # Infer Hardware
     custom_step_infer_hardware,  
 
+    # dataflow partition
+    #step_create_dataflow_partition,
+
     # Specialise the hardware layers
     custom_step_specialise_layers,
 
