@@ -42,6 +42,25 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finnbrainsmith.util.bert import custom_step_remove_head, custom_step_remove_tail, custom_step_cleanup
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 
+test_synth_clk_period_ns=5
+test_fpga_part="xcv80-lsva4737-2MHP-e-S"
+
+# dashboard
+# Save a json file with the current status of the endtoend flow for tracking
+import json
+dashboard = {}
+
+@pytest.fixture
+def save_dashboard():
+    """ save the dashboard to a file at the end of a test.
+        runs at the end of all tests.
+    """
+    print("Starting test")
+    yield
+    with open("end2end_test_dashboard.json", "w") as fp:
+        json.dump(dashboard, fp, indent=4)
+
+
 # Global consts used by Brevitas build step
 bit_width=8
 dtype=torch.float32
@@ -186,23 +205,23 @@ def gen_initial_bert_model(
             opset_version=17,
         )
 
-def custom_streamlining_step(model,cfg):
+def custom_streamlining_step(model):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
     return model
 
-def attempt_convert_step(model, cfg):
+def qonnx2finn_convert_step(model):
     model = model.transform(ConvertQONNXtoFINN())
     return model
 
-def attempt_specialise_layers(model, cfg):
-    model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
+def specialise_layers_step(model):
+    model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())
     return model
 
-def custom_step_infer_hardware(model, cfg):
+def custom_step_infer_hardware(model):
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferAddStreamsLayer())
     model = model.transform(to_hw.InferStreamingEltwise())
@@ -213,10 +232,10 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_bs_hw.InferQuantSoftmax())
     return model
 
-def custom_step_create_ip(model, cfg):
-    model = model.transform(PrepareIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+def custom_step_create_ip(model):
+    model = model.transform(PrepareIP(test_fpga_part, test_synth_clk_period_ns))
     model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(cfg.fpga_part, cfg.synth_clk_period_ns))
+    model = model.transform(CreateStitchedIP(test_fpga_part, test_synth_clk_period_ns))
     return model
     
 def get_non_specialised_nodes(model)->list:
@@ -232,7 +251,7 @@ def calculate_specialised_layers_ratio(model)->float:
     return len(get_non_specialised_nodes(model))/len(model.graph.node)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def model(
         hidden_size:int=384,
         num_attention_heads:int=12,
@@ -259,59 +278,94 @@ def model(
         raise RuntimeError(f"Unable to simplify the Brevitas bert model")
     cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
     
-    steps = [ 
-              custom_step_cleanup, 
-              custom_step_remove_head, 
-              custom_step_remove_tail,
-              attempt_convert_step,
-              custom_streamlining_step,
-              custom_step_infer_hardware,
-              attempt_specialise_layers
-            ]
+    return ModelWrapper(f"{tmp}/qonnx_cleanup.onnx")
 
-    if gen_ip:
-        steps.append(custom_step_create_ip)
+@pytest.fixture(scope='module')
+def cleanup_model(model):
+    return custom_step_cleanup(model, None)
 
-    cfg = build_cfg.DataflowBuildConfig(
-        standalone_thresholds=True,
-        steps=steps,
-        output_dir=tmp,
-        synth_clk_period_ns=5,
-        fpga_part="xcv80-lsva4737-2MHP-e-S",
-        generate_outputs=[],
-    )
-    
-    _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
-    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", "_end2end_test_output.onnx")
+@pytest.fixture(scope='module')
+def remove_head_model(cleanup_model):
+    return custom_step_remove_head(cleanup_model, None)
 
-    return ModelWrapper("_end2end_test_output.onnx")
+@pytest.fixture(scope='module')
+def remove_tail_model(remove_head_model):
+    return custom_step_remove_tail(remove_head_model, None)
 
-def get_specialised_nodes(model)->list:
+@pytest.fixture(scope='module')
+def qonnx2finn_convert_model(remove_tail_model):
+    return qonnx2finn_convert_step(remove_tail_model)
+
+@pytest.fixture(scope='module')
+def streamline_model(qonnx2finn_convert_model):
+    return custom_streamlining_step(qonnx2finn_convert_model)
+
+@pytest.fixture(scope='module')
+def infer_hw_model(streamline_model):
+    return custom_step_infer_hardware(streamline_model)
+
+@pytest.fixture(scope='module')
+def specialise_layers_model(infer_hw_model):
+    return specialise_layers_step(infer_hw_model)
+
+
+##############################################
+#    Do Steps complete tests 
+##############################################
+def test_model_initial_model_soundness(model):
+    """ Test to make sure that the model is sound """
+    _ = model.transform(InferShapes())
+
+def test_model_head_removal_completes(remove_head_model):
+    _ = remove_head_model.transform(InferShapes()) 
+
+def test_model_tail_removal_completes(remove_tail_model):
+    _ = remove_tail_model.transform(InferShapes()) 
+
+def test_qonnx_conversion_completes(qonnx2finn_convert_model):
+    _ = qonnx2finn_convert_model.transform(InferShapes()) 
+
+def test_streamlining_completes(streamline_model):
+    _ = streamline_model.transform(InferShapes()) 
+
+def test_infer_hw_completes(infer_hw_model):
+    _ = infer_hw_model.transform(InferShapes())
+
+def test_specialise_step_completes(specialise_layers_model):
+    _ = specialise_layers_model.transform(InferShapes())
+
+##############################################
+#    Specialised layers testing
+##############################################
+def get_specialised_nodes(specialise_layers_model)->list:
     """ Returns the list of nodes in the model that have not been specialised """
+    model = specialise_layers_model
     specialised = []
     for node in model.graph.node:
         if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
             specialised.append(node)
     return specialised
 
-def calculate_specialised_layers_ratio(model)->float:
+def calculate_specialised_layers_ratio(specialise_layers_model)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
+    model = specialise_layers_model
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
-## The tests on the model are below
 
-def test_model_run_to_specialised(model):
-    """ Test to make sure that the model is sound """
-    model = model.transform(InferShapes())
-
-def test_all_layers_specialised(model):
+def test_all_layers_specialised(specialise_layers_model, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
+    model = specialise_layers_model
     ratio = calculate_specialised_layers_ratio(model)
+    dashboard["specialised_ratio"] = ratio
     if ratio < 1.0:
         raise RuntimeError(f"Not all layers were specialised only {ratio*100}% were")
 
-def test_create_ip(model):
+##############################################
+#       Create IP testing 
+##############################################
+def test_create_ip(specialise_layers_model):
     """ Test to see if we can create IP from the specialised model """
+    model = specialise_layers_model
     fpga_part = "xcv80-lsva4737-2MHP-e-S"
     synth_clk_period_ns=5
     model = model.transform(PrepareIP(fpga_part, synth_clk_period_ns))
