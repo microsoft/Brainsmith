@@ -106,7 +106,7 @@ steps = [
     custom_step_remove_head,  
     custom_step_remove_tail,  
 
-    # Convertion
+    # Conversion
     custom_step_qonnx2finn, 
 
     # Streamlining
@@ -118,6 +118,21 @@ steps = [
 
     # Specialise the hardware layers
     step_specialize_layers,
+
+    # How far do we get
+    step_target_fps_parallelization,
+    step_apply_folding_config,
+    step_minimize_bit_width,
+    step_generate_estimate_reports,
+    step_hw_codegen,
+    step_hw_ipgen,
+    step_set_fifo_depths,
+    step_create_stitched_ip,
+    step_measure_rtlsim_performance,
+    step_out_of_context_synthesis,
+    step_synthesize_bitfile,
+    step_make_pynq_driver,
+    step_deployment_package,
 ]  
   
 create_dynamic_fixtures(steps, globals(), test_cfg)
@@ -125,7 +140,7 @@ create_dynamic_fixtures(steps, globals(), test_cfg)
 ##############################################
 #    Do custom steps complete  
 ##############################################
-# Generate tests for each step
+# Generate tests for each step and at the start a complete model generation
 for step_func in steps:
     def test_model_generation(request, step_func=step_func):
         step_fixture = request.getfixturevalue(step_func.__name__)
@@ -168,7 +183,7 @@ def calculate_specialised_layers_ratio(step_specialize_layers)->float:
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
 
-def test_all_layers_specialised(step_specialize_layers, save_dashboard):
+def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
     model = step_specialize_layers
     ratio = calculate_specialised_layers_ratio(model)
@@ -181,22 +196,22 @@ def test_all_layers_specialised(step_specialize_layers, save_dashboard):
 ##############################################
 #       Generate Hardware Testing 
 ##############################################
-def test_hw_generation_step(step_specialize_layers, save_dashboard):
-    model = step_specialize_layers
-    #step_hw_codegen, step_hw_ipgen
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.environ["FINN_HOST_BUILD_DIR"] = temp_dir
-        try:
-            model = step_hw_codegen(model, cfg)
-        except:
-            pass
-
-        dashboard['gen_hw_list'] = os.listdir(temp_dir)
-        dashboard['gen_hw_ratio'] = len(model.graph.node) / len(os.listdir(temp_dir))
-
-        if len(model.graph.node) > len(os.listdir(temp_dir)):
-            raise RuntimeError(f"Only {len(oslistdir(temp_dir))/len(model.graph.node):.2f}% of layers have generated hardware")
-
+#def test_shanes_hw_generation_step(step_specialize_layers, save_dashboard):
+#    model = step_specialize_layers
+#    #step_hw_codegen, step_hw_ipgen
+#    with tempfile.TemporaryDirectory() as temp_dir:
+#        os.environ["FINN_HOST_BUILD_DIR"] = temp_dir
+#        try:
+#            model = step_hw_codegen(model, cfg)
+#        except:
+#            pass
+#
+#        dashboard['gen_hw_list'] = os.listdir(temp_dir)
+#        dashboard['gen_hw_ratio'] = len(model.graph.node) / len(os.listdir(temp_dir))
+#
+#        if len(model.graph.node) > len(os.listdir(temp_dir)):
+#            raise RuntimeError(f"Only {len(oslistdir(temp_dir))/len(model.graph.node):.2f}% of layers have generated hardware")
+#
 ##############################################
 #       Create IP testing 
 ##############################################
