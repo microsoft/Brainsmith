@@ -6,24 +6,24 @@ import argparse
 import math
 import tempfile
 
-from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ConvertDivToMul
-from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
+from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 from qonnx.transformation.infer_shapes import InferShapes
-from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-import finn.transformation.streamline as absorb
-import finn.transformation.streamline.reorder as reorder
-from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
-from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
-from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
-from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 import finn.builder.build_dataflow_config as build_cfg
 
-from finnbrainsmith.util.bert import custom_step_remove_head, custom_step_remove_tail, custom_step_cleanup
-import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from finnbrainsmith.util.bert import (
+        custom_step_remove_head, 
+        custom_step_remove_tail, 
+        custom_step_cleanup,
+        custom_step_create_ip, 
+        custom_step_specialise_layers, 
+        custom_step_infer_hardware, 
+        custom_streamlining_step, 
+        custom_step_qonnx2finn
+)
+
 from bert_testing_utils import create_dynamic_fixtures, model 
 
 # The default steps
@@ -71,44 +71,6 @@ def save_dashboard():
     with open("end2end_test_dashboard.json", "w") as fp:
         json.dump(dashboard, fp, indent=4)
 
-def custom_step_qonnx2finn(model, cfg):
-    model = model.transform(ExtractQuantScaleZeroPt())
-    model = model.transform(ConvertDivToMul())
-    model = model.transform(ConvertQONNXtoFINN())
-    return model
-
-def custom_streamlining_step(model, cfg):
-    model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
-    model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
-    model = model.transform(RoundAndClipThresholds())
-    model = model.transform(reorder.MoveScalarMulPastMatMul())
-    model = model.transform(reorder.MoveScalarLinearPastInvariants())
-    model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
-    return model
-
-def custom_step_infer_hardware(model, cfg):
-    model = model.transform(to_hw.InferDuplicateStreamsLayer())
-    model = model.transform(to_hw.InferAddStreamsLayer())
-    model = model.transform(to_hw.InferElementwiseBinaryOperation())
-    model = model.transform(to_hw.InferLookupLayer())
-    model = model.transform(to_bs_hw.InferShuffle())
-    model = model.transform(to_bs_hw.InferQuantSoftmax())
-    model = model.transform(to_hw.InferThresholdingLayer())
-    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
-    return model
-
-def custom_step_specialise_layers(model, cfg):
-    model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
-    model = model.transform(GiveUniqueNodeNames())
-    model = model.transform(GiveReadableTensorNames())
-    return model
-
-def custom_step_create_ip(model, cfg):
-    model = model.transform(PrepareIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
-    model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
-    return model
-    
 steps = [  
 
     # Cleanup and custom graph surgery
