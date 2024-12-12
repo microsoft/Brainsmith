@@ -12,6 +12,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 import finn.transformation.streamline as absorb
+import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -80,17 +81,20 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
+    model = model.transform(reorder.MoveScalarMulPastMatMul())
+    model = model.transform(reorder.MoveScalarLinearPastInvariants())
+    model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     return model
 
 def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferAddStreamsLayer())
-    model = model.transform(to_hw.InferStreamingEltwise())
+    model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_hw.InferLookupLayer())
-    model = model.transform(to_hw.InferThresholdingLayer())
-    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     model = model.transform(to_bs_hw.InferShuffle())
     model = model.transform(to_bs_hw.InferQuantSoftmax())
+    model = model.transform(to_hw.InferThresholdingLayer())
+    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
 def custom_step_create_ip(model, cfg):
@@ -122,7 +126,7 @@ steps = [
     # How far do we get
     step_target_fps_parallelization,
     step_apply_folding_config,
-    #step_minimize_bit_width,
+    step_minimize_bit_width,
     step_generate_estimate_reports,
     step_hw_codegen,
     step_hw_ipgen,
@@ -134,7 +138,7 @@ steps = [
 create_dynamic_fixtures(steps, globals(), test_cfg)
 
 ##############################################
-#    Do custom steps complete  
+#    Test buildflow steps 
 ##############################################
 # Generate tests for each step and at the start a complete model generation
 for step_func in steps:
@@ -163,7 +167,6 @@ def calculate_specialised_layers_ratio(model)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
     return len(get_non_specialised_nodes(model))/len(model.graph.node)
 
-
 def get_specialised_nodes(step_specialize_layers)->list:
     """ Returns the list of nodes in the model that have not been specialised """
     model = step_specialize_layers
@@ -178,7 +181,6 @@ def calculate_specialised_layers_ratio(step_specialize_layers)->float:
     model = step_specialize_layers
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
-
 def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
     model = step_specialize_layers
@@ -190,32 +192,24 @@ def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
         raise RuntimeError(f"Not all layers were specialised only {ratio*100}% were")
 
 ##############################################
-#       Generate Hardware Testing 
+#       How many layers produce hardware 
 ##############################################
-#def test_shanes_hw_generation_step(step_specialize_layers, save_dashboard):
-#    model = step_specialize_layers
-#    #step_hw_codegen, step_hw_ipgen
-#    with tempfile.TemporaryDirectory() as temp_dir:
-#        os.environ["FINN_HOST_BUILD_DIR"] = temp_dir
-#        try:
-#            model = step_hw_codegen(model, cfg)
-#        except:
-#            pass
-#
-#        dashboard['gen_hw_list'] = os.listdir(temp_dir)
-#        dashboard['gen_hw_ratio'] = len(model.graph.node) / len(os.listdir(temp_dir))
-#
-#        if len(model.graph.node) > len(os.listdir(temp_dir)):
-#            raise RuntimeError(f"Only {len(oslistdir(temp_dir))/len(model.graph.node):.2f}% of layers have generated hardware")
-#
-##############################################
-#       Create IP testing 
-##############################################
-def test_create_ip(step_specialize_layers):
+def test_how_many_layers_produce_hardware(step_specialize_layers):
     """ Test to see if we can create IP from the specialised model """
     model = step_specialize_layers
-    model = model.transform(PrepareIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
-    model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.environ["FINN_BUILD_DIR"] = temp_dir
+        try:
+            model = model.transform(PrepareIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
+            model = model.transform(HLSSynthIP())
+            model = model.transform(CreateStitchedIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
+        except:
+            pass
+
+        dashboard['gen_hw_list'] = os.listdir(temp_dir)
+        dashboard['gen_hw_ratio'] = len(model.graph.node) / len(os.listdir(temp_dir))
+
+        if len(model.graph.node) > len(os.listdir(temp_dir)):
+            raise RuntimeError(f"Only {len(os.listdir(temp_dir))/len(model.graph.node):.2f}% of layers have generated hardware")
 
 
