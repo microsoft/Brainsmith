@@ -117,7 +117,6 @@ steps = [
     custom_streamlining_step,  
 
     # Infer Hardware
-    step_convert_to_hw,
     custom_step_infer_hardware,  
 
     # Specialise the hardware layers
@@ -185,9 +184,11 @@ def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
     model = step_specialize_layers
     ratio = calculate_specialised_layers_ratio(model)
-    dashboard["specialised_ratio"] = ratio
-    dashboard["specialised_layers"] = [x.name for x in get_specialised_nodes(model)]
-    dashboard["non_specialised_layers"] = [x.name for x in model.graph.node if x not in get_specialised_nodes(model)]
+    d = {}
+    d["specialised_ratio"] = ratio
+    d["specialised_layers"] = [type(x) for x in get_specialised_nodes(model)]
+    d["non_specialised_layers"] = [x.name for x in model.graph.node if x not in get_specialised_nodes(model)]
+    dashboard["step_specialize_layers"] = d
     if ratio < 1.0:
         raise RuntimeError(f"Not all layers were specialised only {ratio*100}% were")
 
