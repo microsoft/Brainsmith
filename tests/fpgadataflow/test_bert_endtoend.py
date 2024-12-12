@@ -6,7 +6,8 @@ import argparse
 import math
 import tempfile
 
-from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
+from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ConvertDivToMul
+from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 from qonnx.transformation.infer_shapes import InferShapes
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
@@ -20,12 +21,32 @@ from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 import finn.builder.build_dataflow_config as build_cfg
 
-from finn.builder.build_dataflow_steps import step_hw_codegen, step_hw_ipgen 
-
 from finnbrainsmith.util.bert import custom_step_remove_head, custom_step_remove_tail, custom_step_cleanup
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from bert_testing_utils import create_dynamic_fixtures, model 
 
-from bert_testing_utils import create_dynamic_fixtures, model, save_dashboard  
+# The default steps
+from finn.builder.build_dataflow_steps import (
+    step_qonnx_to_finn,
+    step_tidy_up,
+    step_streamline,
+    step_convert_to_hw,
+    step_create_dataflow_partition,
+    step_specialize_layers,
+    step_target_fps_parallelization,
+    step_apply_folding_config,
+    step_minimize_bit_width,
+    step_generate_estimate_reports,
+    step_hw_codegen,
+    step_hw_ipgen,
+    step_set_fifo_depths,
+    step_create_stitched_ip,
+    step_measure_rtlsim_performance,
+    step_out_of_context_synthesis,
+    step_synthesize_bitfile,
+    step_make_pynq_driver,
+    step_deployment_package,
+)
 
 test_cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
@@ -36,20 +57,29 @@ test_cfg = build_cfg.DataflowBuildConfig(
         generate_outputs=[],
     )
 
+# Save a json file with the current status of the endtoend flow for tracking
+import json
+dashboard = {}
+
+@pytest.fixture
+def save_dashboard():
+    """ save the dashboard to a file at the end of a test.
+        runs at the end of all tests.
+    """
+    yield
+    with open("end2end_test_dashboard.json", "w") as fp:
+        json.dump(dashboard, fp, indent=4)
+
+def custom_step_qonnx2finn(model, cfg):
+    model = model.transform(ExtractQuantScaleZeroPt())
+    model = model.transform(ConvertDivToMul())
+    model = model.transform(ConvertQONNXtoFINN())
+    return model
+
 def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
-    return model
-
-def qonnx2finn_convert_step(model, cfg):
-    model = model.transform(ConvertQONNXtoFINN())
-    return model
-
-def specialise_layers_step(model,cfg):
-    model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
-    model = model.transform(GiveUniqueNodeNames())
-    model = model.transform(GiveReadableTensorNames())
     return model
 
 def custom_step_infer_hardware(model, cfg):
@@ -69,26 +99,25 @@ def custom_step_create_ip(model, cfg):
     model = model.transform(CreateStitchedIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
     return model
     
-def get_non_specialised_nodes(model)->list:
-    """ Returns the list of nodes in the model that have not been specialised """
-    specialised = []
-    for node in model.graph.node:
-        if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
-            specialised.append(node)
-    return specialised
-
-def calculate_specialised_layers_ratio(model)->float:
-    """ Returns the percentage of layers that were sucessfully specialised """
-    return len(get_non_specialised_nodes(model))/len(model.graph.node)
-
 steps = [  
+
+    # Cleanup and custom graph surgery
     custom_step_cleanup,  
     custom_step_remove_head,  
     custom_step_remove_tail,  
-    qonnx2finn_convert_step,  
+
+    # Convertion
+    custom_step_qonnx2finn, 
+
+    # Streamlining
     custom_streamlining_step,  
+
+    # Infer Hardware
+    step_convert_to_hw,
     custom_step_infer_hardware,  
-    specialise_layers_step,  
+
+    # Specialise the hardware layers
+    step_specialize_layers,
 ]  
   
 create_dynamic_fixtures(steps, globals(), test_cfg)
@@ -106,8 +135,8 @@ def test_model_head_removal_completes(custom_step_remove_head):
 def test_model_tail_removal_completes(custom_step_remove_tail):
     _ = custom_step_remove_tail.transform(InferShapes()) 
 
-def test_qonnx_conversion_completes(qonnx2finn_convert_step):
-    _ = qonnx2finn_convert_step.transform(InferShapes()) 
+def test_qonnx_conversion_completes(custom_qonnx2finn_step):
+    _ = custom_qonnx2finn_step.transform(InferShapes()) 
 
 def test_streamlining_completes(custom_streamlining_step):
     _ = custom_streamlining_step.transform(InferShapes()) 
@@ -115,30 +144,44 @@ def test_streamlining_completes(custom_streamlining_step):
 def test_infer_hw_completes(custom_step_infer_hardware):
     _ = custom_step_infer_hardware.transform(InferShapes())
 
-def test_specialise_step_completes(specialise_layers_step):
-    _ = specialise_layers_step.transform(InferShapes())
+def test_specialise_step_completes(step_specialize_layers):
+    _ = step_specialize_layers.transform(InferShapes())
 
 ##############################################
 #    Specialised layers testing
 ##############################################
-def get_specialised_nodes(specialise_layers_step)->list:
+
+def get_non_specialised_nodes(model)->list:
     """ Returns the list of nodes in the model that have not been specialised """
-    model = specialise_layers_step
     specialised = []
     for node in model.graph.node:
         if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
             specialised.append(node)
     return specialised
 
-def calculate_specialised_layers_ratio(specialise_layers_step)->float:
+def calculate_specialised_layers_ratio(model)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
-    model = specialise_layers_step
+    return len(get_non_specialised_nodes(model))/len(model.graph.node)
+
+
+def get_specialised_nodes(step_specialize_layers)->list:
+    """ Returns the list of nodes in the model that have not been specialised """
+    model = step_specialize_layers
+    specialised = []
+    for node in model.graph.node:
+        if node.op_type.endswith("rtl") or node.op_type.endswith("hls"):
+            specialised.append(node)
+    return specialised
+
+def calculate_specialised_layers_ratio(step_specialize_layers)->float:
+    """ Returns the percentage of layers that were sucessfully specialised """
+    model = step_specialize_layers
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
 
-def test_all_layers_specialised(specialise_layers_step, save_dashboard):
+def test_all_layers_specialised(step_specialize_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
-    model = specialise_layers_step
+    model = step_specialize_layers
     ratio = calculate_specialised_layers_ratio(model)
     dashboard["specialised_ratio"] = ratio
     dashboard["specialised_layers"] = [x.name for x in get_specialised_nodes(model)]
@@ -149,8 +192,8 @@ def test_all_layers_specialised(specialise_layers_step, save_dashboard):
 ##############################################
 #       Generate Hardware Testing 
 ##############################################
-def test_hw_generation_step(specialise_layers_step, save_dashboard):
-    model = specialise_layers_step
+def test_hw_generation_step(step_specialize_layers, save_dashboard):
+    model = step_specialize_layers
     #step_hw_codegen, step_hw_ipgen
     with tempfile.TemporaryDirectory() as temp_dir:
         os.environ["FINN_HOST_BUILD_DIR"] = temp_dir
@@ -168,9 +211,9 @@ def test_hw_generation_step(specialise_layers_step, save_dashboard):
 ##############################################
 #       Create IP testing 
 ##############################################
-def test_create_ip(specialise_layers_step):
+def test_create_ip(step_specialize_layers):
     """ Test to see if we can create IP from the specialised model """
-    model = specialise_layers_step
+    model = step_specialize_layers
     model = model.transform(PrepareIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
     model = model.transform(HLSSynthIP())
     model = model.transform(CreateStitchedIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))

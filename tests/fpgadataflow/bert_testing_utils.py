@@ -27,21 +27,6 @@ from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_wi
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
 
-# dashboard
-# Save a json file with the current status of the endtoend flow for tracking
-import json
-dashboard = {}
-
-@pytest.fixture
-def save_dashboard():
-    """ save the dashboard to a file at the end of a test.
-        runs at the end of all tests.
-    """
-    yield
-    with open("end2end_test_dashboard.json", "w") as fp:
-        json.dump(dashboard, fp, indent=4)
-
-
 # Global consts used by Brevitas build step
 bit_width=8
 dtype=torch.float32
