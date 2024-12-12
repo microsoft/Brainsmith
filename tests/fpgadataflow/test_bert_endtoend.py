@@ -125,27 +125,16 @@ create_dynamic_fixtures(steps, globals(), test_cfg)
 ##############################################
 #    Do custom steps complete  
 ##############################################
-def test_model_initial_model_soundness(model):
-    """ Test to make sure that the model is sound """
-    _ = model.transform(InferShapes())
+# Generate tests for each step
+for step_func in steps:
+    def test_model_generation(request, step_func=step_func):
+        step_fixture = request.getfixturevalue(step_func.__name__)
+        _ = step_fixture.transform(InferShapes())
 
-def test_model_head_removal_completes(custom_step_remove_head):
-    _ = custom_step_remove_head.transform(InferShapes()) 
+    test_func_name = f"test_{step_func.__name__}"
+    test_model_generation.__name__ = test_func_name
 
-def test_model_tail_removal_completes(custom_step_remove_tail):
-    _ = custom_step_remove_tail.transform(InferShapes()) 
-
-def test_qonnx_conversion_completes(custom_qonnx2finn_step):
-    _ = custom_qonnx2finn_step.transform(InferShapes()) 
-
-def test_streamlining_completes(custom_streamlining_step):
-    _ = custom_streamlining_step.transform(InferShapes()) 
-
-def test_infer_hw_completes(custom_step_infer_hardware):
-    _ = custom_step_infer_hardware.transform(InferShapes())
-
-def test_specialise_step_completes(step_specialize_layers):
-    _ = step_specialize_layers.transform(InferShapes())
+    globals()[test_func_name] = pytest.mark.usefixtures(step_func.__name__)(test_model_generation)
 
 ##############################################
 #    Specialised layers testing
