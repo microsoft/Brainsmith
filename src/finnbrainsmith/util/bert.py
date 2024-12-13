@@ -25,12 +25,66 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
 
 def custom_step_qonnx2finn(model, cfg):
+    """
+    BERT custom step for converting between QONNX and FINN-ONNX
+
+    The SoftMax custom op requires some extra care here, hence
+    the requirement for this plugin step.
+
+    QuantSoftMax makes use of the fact that the output
+    of SoftMax is well defined between [0,1] so we can
+    specify the output as a fixed-point number with 0
+    integer bits and N fractional bits (where N is the
+    bitwidth of the output datatype).
+
+    For an INT8 model this means we will have:
+        SoftMax -> Quant node (scale=1/255)
+    in the ONNX model.
+
+    We then call ExtractQuantScaleZeroPt to pull the
+    scale calculation out of the Quant. which gives us
+
+        SoftMax -> Div(1/255) -> Quant (scale=1) -> Mul(1/255)
+
+    Then we convert the Div node to a Mul node with
+    ConvertDivToMul :
+        
+        SoftMax -> Mul(255) -> Quant (scale=1) -> Mul(1/255)
+
+    Then we call ConvertQONNXtoFINN to get:
+        
+        SoftMax -> Mul(255) -> MultiThreshold -> Mul(1/255)
+
+    By having these steps we can have a scale factor of 1
+    in the Quant node, then we can deal with the leftover 
+    mul nodes later in the streamlining_step streamlining it into
+    a MultiThreshold node. (see custom_streamlining_step below) 
+
+    """
     model = model.transform(ExtractQuantScaleZeroPt())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
 
 def custom_streamlining_step(model, cfg):
+    """
+    BERT custom step for streamlining
+
+    Some additional streamlining steps are required here
+    to handle the Mul nodes leftover from the SoftMax
+    transformations done in custom_step_qonnx2finn.
+
+    In particular, we need to move the Mul operation
+    at the output of the QuantSoftMax lower in the graph
+    so that it has the option to be merged into a MultiThreshold 
+    node. In particular:
+
+        * MoveScalarMulPastMatMul : moves the Mul past the DynMatMul
+        * ModeScalarLinearPartInvariants : moves the Mul over the
+          reshape and transpose
+        * AbsorbMulIntoMultiThreshold : absorbs the Mul into the MT
+
+    """
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
@@ -40,10 +94,29 @@ def custom_streamlining_step(model, cfg):
     return model
 
 def custom_step_infer_hardware(model, cfg):
+    """ 
+    BERT custom step for infer hardware 
+
+    Because we have some custom operations in this plugin module we
+    need a custom step for infering the hardware for those operations.
+
+    Such as:
+        InferShuffler - to infer the Shuffle operations
+        InferQuantSoftmax - to infer the QuantSoftMax
+
+    However, we can also see some extra infer steps that
+    are not part of the plugin. Some of these are currently
+    not handled by the default steps in FINN and need to be 
+    added here, for instace:
+        
+        InferDuplicateStreamsLayer - is needed because we have
+        need to have explicit fork nodes, the hardware gen
+        cannot connect to the same stream twice, it needs to be
+        explictly duplicated.
+
+    """
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
-    model = model.transform(to_hw.InferAddStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
-    model = model.transform(to_hw.InferLookupLayer())
     model = model.transform(to_bs_hw.InferShuffle())
     model = model.transform(to_bs_hw.InferQuantSoftmax())
     model = model.transform(to_hw.InferThresholdingLayer())
