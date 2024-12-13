@@ -36,6 +36,29 @@ from finnbrainsmith.util.bert import (
         custom_step_qonnx2finn
 )
 
+from finn.builder.build_dataflow_steps import (
+    step_qonnx_to_finn,
+    step_tidy_up,
+    step_streamline,
+    step_convert_to_hw,
+    step_create_dataflow_partition,
+    step_specialize_layers,
+    step_target_fps_parallelization,
+    step_apply_folding_config,
+    step_minimize_bit_width,
+    step_generate_estimate_reports,
+    step_hw_codegen,
+    step_hw_ipgen,
+    step_set_fifo_depths,
+    step_create_stitched_ip,
+    step_measure_rtlsim_performance,
+    step_out_of_context_synthesis,
+    step_synthesize_bitfile,
+    step_make_pynq_driver,
+    step_deployment_package,
+)
+
+
 
 # Global consts used by Brevitas build step
 bit_width=8
@@ -202,15 +225,39 @@ def main(args):
         raise RuntimeError(f"Unable to simplify the Brevitas bert model")
     cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
     
-    steps = [ 
-              custom_step_cleanup, 
-              custom_step_remove_head, 
-              custom_step_remove_tail,
-              attempt_convert_step,
-              custom_streamlining_step,
-              custom_step_infer_hardware,
-              attempt_specialise_layers
-            ]
+    steps = [
+    
+        # Cleanup and custom graph surgery
+        custom_step_cleanup,
+        custom_step_remove_head,
+        custom_step_remove_tail,
+    
+        # Conversion
+        custom_step_qonnx2finn,
+    
+        # Streamlining
+        custom_streamlining_step,
+    
+        # Infer Hardware
+        custom_step_infer_hardware,
+    
+        # dataflow partition
+        #step_create_dataflow_partition,
+    
+        # Specialise the hardware layers
+        custom_step_specialise_layers,
+    
+        # How far do we get
+        step_target_fps_parallelization,
+        step_apply_folding_config,
+        step_minimize_bit_width,
+        step_generate_estimate_reports,
+        step_hw_codegen,
+        step_hw_ipgen,
+        step_set_fifo_depths,
+        step_create_stitched_ip,
+        step_measure_rtlsim_performance,
+    ]
 
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
