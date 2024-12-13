@@ -19,8 +19,6 @@ from finnbrainsmith.util.bert import (
         custom_step_remove_head, 
         custom_step_remove_tail, 
         custom_step_cleanup,
-        custom_step_create_ip, 
-        custom_step_specialise_layers, 
         custom_step_infer_hardware, 
         custom_streamlining_step, 
         custom_step_qonnx2finn
@@ -92,7 +90,7 @@ steps = [
     #step_create_dataflow_partition,
 
     # Specialise the hardware layers
-    custom_step_specialise_layers,
+    step_specialize_layers,
 
     # How far do we get
     step_target_fps_parallelization,
@@ -147,14 +145,13 @@ def get_specialised_nodes(custom_step_specialise_layers)->list:
             specialised.append(node)
     return specialised
 
-def calculate_specialised_layers_ratio(custom_step_specialise_layers)->float:
+def calculate_specialised_layers_ratio(model)->float:
     """ Returns the percentage of layers that were sucessfully specialised """
-    model = custom_step_specialise_layers
     return len(get_specialised_nodes(model))/len(model.graph.node)
 
-def test_is_every_layer_specialised(custom_step_specialise_layers, save_dashboard):
+def test_is_every_layer_specialised(step_specialize_layers, save_dashboard):
     """ Test to determine if all the layers in the model have been specialised """
-    model = custom_step_specialise_layers
+    model = step_specialize_layers 
     ratio = calculate_specialised_layers_ratio(model)
     d = {}
     d["specialised_ratio"] = ratio

@@ -29,8 +29,6 @@ from finnbrainsmith.util.bert import (
         custom_step_remove_head,
         custom_step_remove_tail,
         custom_step_cleanup,
-        custom_step_create_ip,
-        custom_step_specialise_layers,
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn
@@ -245,7 +243,7 @@ def main(args):
         #step_create_dataflow_partition,
     
         # Specialise the hardware layers
-        custom_step_specialise_layers,
+        step_specialize_layers,
     
         # How far do we get
         step_target_fps_parallelization,

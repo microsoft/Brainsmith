@@ -50,19 +50,6 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
-def custom_step_specialise_layers(model, cfg):
-    model = model.transform(SpecializeLayers(fpgapart=cfg.fpga_part))
-    model = model.transform(GiveUniqueNodeNames())
-    model = model.transform(GiveReadableTensorNames())
-    return model
-
-def custom_step_create_ip(model, cfg):
-    model = model.transform(PrepareIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
-    model = model.transform(HLSSynthIP())
-    model = model.transform(CreateStitchedIP(cfg._resolve_fpga_part(), cfg._resolve_hls_clk_period()))
-    return model
-
-
 def custom_step_remove_head(model, cfg):
     """ Removes all nodes up to the first LayerNormalisation Node and then rewires the input """
     assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
