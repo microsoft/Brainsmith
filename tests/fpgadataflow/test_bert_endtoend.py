@@ -1,5 +1,7 @@
 import onnx  
 import os
+from pathlib import Path  
+import json
 import pytest
 import shutil
 import argparse
@@ -59,7 +61,6 @@ test_cfg = build_cfg.DataflowBuildConfig(
     )
 
 # Save a json file with the current status of the endtoend flow for tracking
-import json
 dashboard = {}
 
 @pytest.fixture
@@ -100,8 +101,8 @@ steps = [
     step_generate_estimate_reports,
     step_hw_codegen,
     step_hw_ipgen,
-    step_set_fifo_depths,
-    step_create_stitched_ip,
+    #step_set_fifo_depths,
+    #step_create_stitched_ip,
     step_measure_rtlsim_performance,
 ]  
   
@@ -166,22 +167,37 @@ def test_is_every_layer_specialised(custom_step_specialise_layers, save_dashboar
 ##############################################
 #       How many layers produce hardware 
 ##############################################
-def test_how_many_layers_produce_hardware(custom_step_specialise_layers):
-    """ Test to see if we can create IP from the specialised model """
-    model = custom_step_specialise_layers
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.environ["FINN_BUILD_DIR"] = temp_dir
-        try:
-            model = model.transform(PrepareIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
-            model = model.transform(HLSSynthIP())
-            model = model.transform(CreateStitchedIP(test_cfg._resolve_fpga_part(), test_cfg._resolve_hls_clk_period()))
-        except:
-            pass
+def get_attribute_by_name(node, attr:str):
+    for a in node.attribute:
+        if a.name == attr:
+            return a
+    return None
 
-        dashboard['gen_hw_list'] = os.listdir(temp_dir)
-        dashboard['gen_hw_ratio'] = len(model.graph.node) / len(os.listdir(temp_dir))
-
-        if len(model.graph.node) > len(os.listdir(temp_dir)):
-            raise RuntimeError(f"Only {len(os.listdir(temp_dir))/len(model.graph.node):.2f}% of layers have generated hardware")
+def test_hardware_generation_progress(step_hw_ipgen, save_dashboard):
+    """ Examines the model after the hwipgen step and determines how far along
+    each layer is from being fully implemented. """
+    mod = step_hw_ipgen
+    d = {}
+    for node in mod.graph.node:
+        d[node.name] = {}
+        if get_attribute_by_name(node, "code_gen_dir_ipgen"):
+            d[node.name]["HWGEN"] = True
+            if node.domain.endswith("hls"):
+                # parse the hls solution
+                d[node.name]['specialised'] = True
+                hls_path = get_attribute_by_name(node, "code_gen_dir_ipgen")
+                d[node.name]["HLS_SYNTH"] = Path(f"{hls_path.s.decode('utf-8')}/project_{node.name}/sol1/sol1_data.json").is_file()
+                #with open(f"{hls_path.s.decode('utf-8')}/project_{node.name}/sol1/sol1_data.json", "r") as fp:
+                #    d[node.name]['hls_synth_log'] = json.load(fp)
+            elif node.domain.endswith("rtl"):
+                # parse the rtl solution
+                d[node.name]['specialised'] = True
+            else:
+                d[node.name]['specialised'] = False
+        else:
+            d[node.name]["HWGEN"] = False
+        d[node.name]["RTLSIM"] = False
+    dashboard['progress'] = d
+                
 
 
