@@ -1,9 +1,18 @@
+import os  
+import pytest  
 import onnx  
+from onnxsim import simplify  
+from qonnx.util.cleanup import cleanup
+from qonnx.core.modelwrapper import ModelWrapper
+  
+import onnx
 import os
+import pytest
 import shutil
 import argparse
 import math
 import torch
+import tempfile
 from torch import nn
 from transformers import BertConfig, BertModel
 from transformers import AutoModel
@@ -17,46 +26,6 @@ import brevitas.onnx as bo
 from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
-
-from onnxsim import simplify  
-from qonnx.util.cleanup import cleanup
-from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ConvertDivToMul
-from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
-import finn.builder.build_dataflow as build
-import finn.builder.build_dataflow_config as build_cfg
-
-from finnbrainsmith.util.bert import (
-        custom_step_remove_head,
-        custom_step_remove_tail,
-        custom_step_cleanup,
-        custom_step_infer_hardware,
-        custom_streamlining_step,
-        custom_step_qonnx2finn
-)
-
-from finn.builder.build_dataflow_steps import (
-    step_qonnx_to_finn,
-    step_tidy_up,
-    step_streamline,
-    step_convert_to_hw,
-    step_create_dataflow_partition,
-    step_specialize_layers,
-    step_target_fps_parallelization,
-    step_apply_folding_config,
-    step_minimize_bit_width,
-    step_generate_estimate_reports,
-    step_hw_codegen,
-    step_hw_ipgen,
-    step_set_fifo_depths,
-    step_create_stitched_ip,
-    step_measure_rtlsim_performance,
-    step_out_of_context_synthesis,
-    step_synthesize_bitfile,
-    step_make_pynq_driver,
-    step_deployment_package,
-)
-
-
 
 # Global consts used by Brevitas build step
 bit_width=8
@@ -202,80 +171,50 @@ def gen_initial_bert_model(
             opset_version=17,
         )
 
-def main(args):
-    tmp = "./intermediate_models"
-    os.makedirs(tmp, exist_ok=True)
+def create_dynamic_fixtures(step_functions, globals_dict, cfg):  
+    for i, step_func in enumerate(step_functions):  
+        # Define the fixture function  
+        def fixture_func(request, step_func=step_func, prev_fixture_name=step_functions[i-1].__name__ if i > 0 else 'model'):  
+            prev_fixture = request.getfixturevalue(prev_fixture_name)  
+            return step_func(prev_fixture, cfg)  
+  
+        # Assign the fixture function to the module scope  
+        fixture_func.__name__ = step_func.__name__  
+        fixture_func = pytest.fixture(scope='module')(fixture_func)  
+  
+        # Add the fixture to the provided globals dictionary  
+        globals_dict[step_func.__name__] = fixture_func  
+  
+        # Debugging output  
+        print(f"Fixture created: {step_func.__name__}")  
 
-    # Initial model generation
-    gen_initial_bert_model(
-        outfile=f"{tmp}/initial.onnx",
-        hidden_size=args.hidden_size,
-        num_attention_heads=args.num_attention_heads,
-        intermediate_size=args.intermediate_size
-    )
-
-    # Initial model cleanup
+# Fixture for building the initial model  
+@pytest.fixture(scope='module')  
+def model(  
+        hidden_size: int = 384,  
+        num_attention_heads: int = 12,  
+        intermediate_size: int = 1536,  
+        gen_ip: bool = False  
+    ):  
+    tmp = "./intermediate_models"  
+    os.makedirs(tmp, exist_ok=True)  
+  
+    # Initial model generation  
+    gen_initial_bert_model(  
+        outfile=f"{tmp}/initial.onnx",  
+        hidden_size=hidden_size,  
+        num_attention_heads=num_attention_heads,  
+        intermediate_size=intermediate_size  
+    )  
+  
+    # Initial model cleanup  
     model = onnx.load(f"{tmp}/initial.onnx")  
     model_simp, check = simplify(model)  
     if check:  
         onnx.save(model_simp, f"{tmp}/simp.onnx")  
     else:  
-        raise RuntimeError(f"Unable to simplify the Brevitas bert model")
-    cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
-    
-    steps = [
-    
-        # Cleanup and custom graph surgery
-        custom_step_cleanup,
-        custom_step_remove_head,
-        custom_step_remove_tail,
-    
-        # Conversion
-        custom_step_qonnx2finn,
-    
-        # Streamlining
-        custom_streamlining_step,
-    
-        # Infer Hardware
-        custom_step_infer_hardware,
-    
-        # dataflow partition
-        #step_create_dataflow_partition,
-    
-        # Specialise the hardware layers
-        step_specialize_layers,
-    
-        # How far do we get
-        step_target_fps_parallelization,
-        step_apply_folding_config,
-        step_minimize_bit_width,
-        step_generate_estimate_reports,
-        step_hw_codegen,
-        step_hw_ipgen,
-        #step_set_fifo_depths,
-        #step_create_stitched_ip,
-        #step_measure_rtlsim_performance,
-    ]
+        raise RuntimeError("Unable to simplify the Brevitas bert model")  
+    cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")  
+  
+    return ModelWrapper(f"{tmp}/qonnx_cleanup.onnx")  
 
-    cfg = build_cfg.DataflowBuildConfig(
-        standalone_thresholds=True,
-        steps=steps,
-        output_dir=tmp,
-        synth_clk_period_ns=5,
-        fpga_part="xcv80-lsva4737-2MHP-e-S",
-        generate_outputs=[],
-    )
-    
-    _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
-    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='TinyBERT cleanup script')
-    parser.add_argument('-o', '--output', help='Input ONNX file path', required=True)
-    parser.add_argument('-z', '--hidden_size', type=int, default=384, help='Sets BERT hidden_size parameter')
-    parser.add_argument('-n', '--num_attention_heads', type=int, default=12, help='Sets BERT num_attention_heads parameter')
-    parser.add_argument('-i', '--intermediate_size', type=int, default=1536, help='Sets BERT intermediate_size parameter')
-
-    args = parser.parse_args()
-    main(args)
