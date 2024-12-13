@@ -101,8 +101,8 @@ steps = [
     step_generate_estimate_reports,
     step_hw_codegen,
     step_hw_ipgen,
-    #step_set_fifo_depths,
-    #step_create_stitched_ip,
+    step_set_fifo_depths,
+    step_create_stitched_ip,
     step_measure_rtlsim_performance,
 ]  
   
@@ -180,20 +180,20 @@ def test_hardware_generation_progress(step_hw_ipgen, save_dashboard):
     d = {}
     for node in mod.graph.node:
         d[node.name] = {}
+
+        if node.domain.endswith("hls") or node.domain.endswith("rtl"):
+            d[node.name]['specialised'] = True
+        else:
+            d[node.name]['specialised'] = False
+
         if get_attribute_by_name(node, "code_gen_dir_ipgen"):
             d[node.name]["HWGEN"] = True
             if node.domain.endswith("hls"):
                 # parse the hls solution
-                d[node.name]['specialised'] = True
                 hls_path = get_attribute_by_name(node, "code_gen_dir_ipgen")
                 d[node.name]["HLS_SYNTH"] = Path(f"{hls_path.s.decode('utf-8')}/project_{node.name}/sol1/sol1_data.json").is_file()
                 #with open(f"{hls_path.s.decode('utf-8')}/project_{node.name}/sol1/sol1_data.json", "r") as fp:
                 #    d[node.name]['hls_synth_log'] = json.load(fp)
-            elif node.domain.endswith("rtl"):
-                # parse the rtl solution
-                d[node.name]['specialised'] = True
-            else:
-                d[node.name]['specialised'] = False
         else:
             d[node.name]["HWGEN"] = False
         d[node.name]["RTLSIM"] = False
