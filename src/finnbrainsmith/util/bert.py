@@ -23,6 +23,9 @@ from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
+# Temporary imports - remove once FloatQuant is available
+from qonnx.transformation.base import Transformation
+from qonnx.core.datatype import DataType
 
 def custom_step_qonnx2finn(model, cfg):
     """
@@ -191,7 +194,51 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
+    
+    model = model.transform(QuantizeLayerNormalization(
+        input_datatype ='FLOAT16',
+        weight_datatype='FLOAT16',
+        bias_datatype  ='FLOAT16',
+        output_datatype='FLOAT16')
+    )
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
 
+
+class QuantizeLayerNormalization(Transformation):
+    """Add quantization to LayerNormalization nodes in the graph. 
+    Temporary implementation pending full quantization support in FINN. """
+
+    def __init__(self, input_datatype=None, weight_datatype=None, bias_datatype=None, output_datatype=None):
+        super().__init__()
+        self.idt = input_datatype
+        self.wdt = weight_datatype
+        self.bdt = bias_datatype
+        self.odt = output_datatype
+
+    def apply(self, model):
+        graph = model.graph
+        node_ind = 0
+        graph_modified = False
+        print('Beginning...')
+        for node in graph.node:
+            print('Outer')
+            node_ind += 1
+            print(node.name)
+            # Detect LayerNorm
+            if node.op_type == "LayerNormalization":
+                print('Inner')
+                # Get tensors
+                act_in = node.input[0]
+                act_out = node.output[0]
+                scale = node.input[1]
+                bias = node.input[2] if len(node.input) > 2 else None
+                # Datatype annotations
+                model.set_tensor_datatype(act_in, DataType[self.idt])
+                model.set_tensor_datatype(scale, DataType[self.wdt])
+                model.set_tensor_datatype(act_out, DataType[self.odt])
+                if bias:
+                    model.set_tensor_datatype(bias, DataType[self.bdt])
+                graph_modified = True
+        return (model, graph_modified)

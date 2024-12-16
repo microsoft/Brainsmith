@@ -56,8 +56,6 @@ from finn.builder.build_dataflow_steps import (
     step_deployment_package,
 )
 
-
-
 # Global consts used by Brevitas build step
 bit_width=8
 dtype=torch.float32
@@ -229,6 +227,8 @@ def main(args):
         custom_step_cleanup,
         custom_step_remove_head,
         custom_step_remove_tail,
+
+        # LayerNormalization to LayerNorm
     
         # Conversion
         custom_step_qonnx2finn,

@@ -1,5 +1,6 @@
 import numpy as np
 from onnx import helper as oh
+from onnx import TensorProto
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
@@ -31,10 +32,15 @@ class ExpandNorms(Transformation):
                 axis = getattr(get_by_name(node.attribute, "axis"), "i", -1)
                 epsilon = getattr(get_by_name(node.attribute, "epsilon"), "f", 1e-5)
                 # Get tensor attributes
-                # TODO: This is a terrible way of converting to the correct tensor_dtype code in ONNX 
-                in_dtype = model.get_tensor_datatype(ln_act_in)
-                out_dtype = model.get_tensor_datatype(act_out)
-                act_dtype = oh.np_dtype_to_tensor_dtype(np.dtype(in_dtype.to_numpy_dt()))
+                # TODO: This is a terrible way of converting to the correct tensor_dtype code in ONNX
+                idt = model.get_tensor_datatype(ln_act_in)
+                wdt = model.get_tensor_datatype(scale)
+                if bias:
+                    bdt = model.get_tensor_datatype(bias)
+                odt = model.get_tensor_datatype(act_out)
+
+                # out_dtype = model.get_tensor_datatype(act_out)
+                # act_dtype = oh.np_dtype_to_tensor_dtype(np.dtype(in_dtype.to_numpy_dt()))
                 act_shape = model.get_tensor_shape(ln_act_in)
                 
                 # Create functional layernorm node
@@ -46,26 +52,29 @@ class ExpandNorms(Transformation):
                     backend="general",
                     axis=axis,
                     epsilon=epsilon,
-                    InputDataType=in_dtype.name,
-                    OutputDataType=out_dtype.name
+                    InputDataType=idt.name,
+                    OutputDataType=odt.name
                 )
 
                 # Get scale, eliminate if all ones
                 elementwise_affine = not np.all(scale==1)
                 if elementwise_affine:
                     # Create new input tensor
-                    scale_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), act_dtype, act_shape)
+                    scale_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(scale_act_in)
+                    
                     # Update previous output tensor
                     func_ln_node.output[0] = scale_act_in.name
                     # Create Mul node to replace scale
                     mul_node = oh.make_node("Mul", [scale_act_in.name, scale], [act_out])
+                    
+                    model.set_tensor_datatype(scale_act_in.name, idt)
 
                 # Check if optional bias exists
                 has_bias = bias is not None
                 if has_bias:
                     # Create new input tensor
-                    bias_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), act_dtype, act_shape)
+                    bias_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(bias_act_in)
                     # Update previous output tensor
                     if elementwise_affine:
@@ -74,6 +83,11 @@ class ExpandNorms(Transformation):
                         func_ln_node.output[0] = scale_act_in.name
                     # Create Add node to replace bias
                     add_node = oh.make_node("Add", [bias_act_in.name, bias], [act_out])
+                    
+                    model.set_tensor_datatype(bias_act_in.name, wdt)
+                # else:
+                #     model.set_tensor_datatype(bias_act_in.name, wdt)
+                    
 
                 # Insert new nodes
                 insert_point = node_ind

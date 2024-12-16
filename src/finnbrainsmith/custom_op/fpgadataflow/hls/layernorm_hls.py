@@ -115,6 +115,10 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         exp_oshape = self.get_normal_output_shape()
         folded_ishape = self.get_folded_input_shape()
         export_idt = self.get_input_datatype()
+        
+        # # Cast context to FP32
+        # for k in context.keys():
+        #     context[k] = context[k].astype(np.float32)
 
         # Generate input
         inp = context[node.input[0]]
