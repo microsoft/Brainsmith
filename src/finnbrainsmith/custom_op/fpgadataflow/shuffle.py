@@ -41,9 +41,9 @@ class Shuffle(HWCustomOp):
         node = self.onnx_node
         input_data = context[node.input[0]]
         input_reshaped = input_data.reshape(self.get_nodeattr("in_reshaped")) 
-        transposed = np.transpose(input_reshaped, self.get_nodeattr("perm"))
+        transposed = np.transpose(input_reshaped, axes=self.get_nodeattr("perm"))
         output_reshaped = transposed.reshape(self.get_nodeattr("out_reshaped"))
-        return output_reshaped
+        context[node.output[0]] = output_reshaped
 
     def get_input_datatype(self, ind=0):
         data_type = DataType[self.get_nodeattr("data_type")]
