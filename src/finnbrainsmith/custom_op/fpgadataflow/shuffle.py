@@ -37,11 +37,13 @@ class Shuffle(HWCustomOp):
         folded_oshape = self.get_folded_output_shape()
         return np.prod(folded_oshape[:-1]) # [STF] Not sure this is correct...
 
-    def quantise_to_int(self, arr, dtype):
-        raise NotImplementedError("This function is not yet immplemented.")
-
     def execute_node(self, context, graph):
-        raise NotImplementedError("This function is not yet immplemented.")
+        node = self.onnx_node
+        input_data = context[node.input[0]]
+        input_reshaped = input_data.reshape(self.get_nodeattr("in_reshaped")) 
+        transposed = np.transpose(input_reshaped, self.get_nodeattr("perm"))
+        output_reshaped = transposed.reshape(self.get_nodeattr("out_reshaped"))
+        return output_reshaped
 
     def get_input_datatype(self, ind=0):
         data_type = DataType[self.get_nodeattr("data_type")]
