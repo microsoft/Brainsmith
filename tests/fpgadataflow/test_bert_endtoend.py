@@ -7,13 +7,19 @@ import shutil
 import argparse
 import math
 import tempfile
+import numpy as np
 
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.util.basic import gen_finn_dt_tensor
+from qonnx.core.datatype import DataType
+
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 import finn.builder.build_dataflow_config as build_cfg
+import finn.core.onnx_exec as oxe
 
 from finnbrainsmith.util.bert import (
         custom_step_remove_head, 
@@ -119,6 +125,67 @@ for step_func in steps:
     test_model_generation.__name__ = test_func_name
 
     globals()[test_func_name] = pytest.mark.usefixtures(step_func.__name__)(test_model_generation)
+
+
+
+##############################################
+#          Validate steps 
+##############################################
+
+def test_validate_custom_streamlining_step(custom_step_remove_tail, custom_streamlining_step):
+    """ Using the pruned model produced by Brevitas as a reference
+    perform validation of the custom_streamlining_step """
+
+    input_m = custom_step_remove_tail.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = custom_step_remove_tail.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+    y_out = oxe.execute_onnx(custom_streamlining_step, input_t)[out_name] 
+
+    assert np.allclose(y_ref, y_out), "custom_streamlining_step output does not match custom_step_remove_tail"
+
+
+def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_step_infer_hardware):
+    """ Using the pruned model produced by Brevitas as a reference
+    perform validation of the custom_step_infer_hardware """
+
+    input_m = custom_step_remove_tail.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = custom_step_remove_tail.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+    y_out = oxe.execute_onnx(custom_step_infer_hardware, input_t)[out_name] 
+
+    assert np.allclose(y_ref, y_out), "custom_step_infer_hardware output does not match custom_step_remove_tail"
+
+def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_specialize_layers):
+    """ Using the pruned model produced by Brevitas as a reference
+    perform validation of the step_specialize_layers """
+
+    input_m = custom_step_remove_tail.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = custom_step_remove_tail.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+
+    cppsim_model = step_specialize_layers.transform(SetExecMode("cppsim"))
+    cppsim_model = cppsim_model.transform(PrepareCppSim())
+    cppsim_model = cppsim_model.transform(CompileCppSim())
+    y_out = oxe.execute_onnx(cppsim_model, input_t)[out_name] 
+
+    assert np.allclose(y_ref, y_out), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
+
+
 
 ##############################################
 #    Specialised layers testing
