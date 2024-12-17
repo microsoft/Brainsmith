@@ -218,7 +218,7 @@ class InferLayerNorm(Transformation):
                     [act_out],
                     domain="finnbrainsmith.custom_op.fpgadataflow",
                     backend="fpgadataflow",
-                    SIMD=simd,
+                    simd=simd,
                     ifm_dim=shape_in,
                     epsilon=helper.get_node_attr_value(node, "epsilon"),
                     inputDataType=idt.name,

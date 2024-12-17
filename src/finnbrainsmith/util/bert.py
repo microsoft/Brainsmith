@@ -14,12 +14,14 @@ from qonnx.transformation.remove import remove_node_and_rewire
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
+from qonnx.transformation.fold_constants import FoldConstants
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 from finnbrainsmith.transformation.expand_norms import ExpandNorms
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from finnbrainsmith.transformation.expand_norms import ExpandNorms
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
@@ -65,7 +67,9 @@ def custom_step_qonnx2finn(model, cfg):
     a MultiThreshold node. (see custom_streamlining_step below) 
 
     """
+    model = model.transform(ExpandNorms())
     model = model.transform(ExtractQuantScaleZeroPt())
+    model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
@@ -90,6 +94,7 @@ def custom_streamlining_step(model, cfg):
 
     """
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
+    model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
     model = model.transform(reorder.MoveScalarMulPastMatMul())
@@ -119,6 +124,7 @@ def custom_step_infer_hardware(model, cfg):
         explictly duplicated.
 
     """
+    model = model.transform(to_bs_hw.InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_bs_hw.InferShuffle())
@@ -195,14 +201,12 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
-    
-    model = model.transform(QuantizeLayerNormalization(
-        input_datatype ='FLOAT16',
-        weight_datatype='FLOAT16',
-        bias_datatype  ='FLOAT16',
-        output_datatype='FLOAT16')
-    )
-    model = model.transform(ExpandNorms())
+    #model = model.transform(QuantizeLayerNormalization(
+    #    input_datatype ='INT8',
+    #    weight_datatype='FLOAT16',
+    #    bias_datatype  ='FLOAT16',
+    #    output_datatype='FLOAT16')
+    #)
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
@@ -243,4 +247,7 @@ class QuantizeLayerNormalization(Transformation):
                     model.set_tensor_datatype(bias, DataType[self.bdt])
                 graph_modified = True
         return (model, graph_modified)
+<<<<<<< HEAD
     
+=======
+>>>>>>> origin/feature/plugin/layernorm_stf

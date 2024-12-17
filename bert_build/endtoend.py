@@ -240,7 +240,7 @@ def main(args):
         custom_step_infer_hardware,
     
         # dataflow partition
-        #step_create_dataflow_partition,
+        step_create_dataflow_partition,
     
         # Specialise the hardware layers
         step_specialize_layers,
@@ -252,9 +252,9 @@ def main(args):
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
-        #step_set_fifo_depths,
-        #step_create_stitched_ip,
-        #step_measure_rtlsim_performance,
+        step_set_fifo_depths,
+        step_create_stitched_ip,
+        step_measure_rtlsim_performance,
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
