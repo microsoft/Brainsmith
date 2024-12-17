@@ -17,6 +17,7 @@ from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from finnbrainsmith.transformation.expand_norms import ExpandNorms
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
@@ -201,10 +202,10 @@ def custom_step_cleanup(model, cfg):
         bias_datatype  ='FLOAT16',
         output_datatype='FLOAT16')
     )
+    model = model.transform(ExpandNorms())
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
-
 
 class QuantizeLayerNormalization(Transformation):
     """Add quantization to LayerNormalization nodes in the graph. 
@@ -242,3 +243,4 @@ class QuantizeLayerNormalization(Transformation):
                     model.set_tensor_datatype(bias, DataType[self.bdt])
                 graph_modified = True
         return (model, graph_modified)
+    

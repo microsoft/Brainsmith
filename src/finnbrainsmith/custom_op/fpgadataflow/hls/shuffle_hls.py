@@ -170,7 +170,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
         builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
-        builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")

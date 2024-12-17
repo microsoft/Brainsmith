@@ -50,14 +50,15 @@ from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from qonnx.transformation.base import Transformation
 
 test_fpga_part = "xczu3eg-sbva484-1-e"
 target_clk_ns = 5
 
 def onnx_path(suffx):
-    if not os.path.exists('tafk-debug'):
-        os.makedirs('tafk-debug')
-    return f'tafk-debug/pytest_layernorm_{suffx}.onnx'
+    if not os.path.exists('graphs-tafk-debug'):
+        os.makedirs('graphs-tafk-debug')
+    return f'graphs-tafk-debug/pytest_layernorm_{suffx}.onnx'
 
 def _create_quant_node(node_name, inp_name, output_or_dtype, shape):
     if isinstance(output_or_dtype, str):
@@ -131,11 +132,16 @@ def build_layernorm_graph(
     model.graph.value_info.append(LayerNorm_scale_out)
     model.graph.value_info.append(LayerNorm_bias_out)
 
+    # Quant input node
+    Quant_0, Quant_0_out = _create_quant_node('Quant_0', act_in.name, TensorProto.FLOAT, list(idm))
+    model.graph.node.append(Quant_0)
+    model.graph.value_info.append(Quant_0_out)
+
     # LayerNormalization node
     LayerNorm_0_out = helper.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, list(idm))
     LayerNorm_0 = helper.make_node(
         'LayerNormalization',
-        inputs=[act_in.name, LayerNorm_scale_out.name, LayerNorm_bias_out.name],
+        inputs=[Quant_0_out.name, LayerNorm_scale_out.name, LayerNorm_bias_out.name],
         outputs=[act_out.name],
         name='Layernorm_1',
         epsilon=epsilon,
@@ -148,6 +154,10 @@ def build_layernorm_graph(
     model.set_initializer("LayerNorm_Scale_Quant", (max_scale*np.random.rand(last_dim)).astype(np.float32))
     model.set_initializer("LayerNorm_Bias_Quant", (max_bias*np.random.rand(last_dim)).astype(np.float32))
     model.set_initializer("layernorm0_epsilon_param", np.asarray(epsilon, dtype=np.float32))
+    # Quant node initializers
+    model.set_initializer("Quant_0_scale", np.asarray(input_quant_params[0], dtype=np.float32))
+    model.set_initializer("Quant_0_zeropt", np.asarray(input_quant_params[1], dtype=np.float32))
+    model.set_initializer("Quant_0_bitwidth", np.asarray(input_quant_params[2], dtype=np.float32))
 
     model.save(onnx_path(-1))
 
@@ -161,7 +171,7 @@ def build_layernorm_graph(
     model_w = ModelWrapper(onnx_path(-1)) 
 
     # Datatype annotations
-    model_w.set_tensor_datatype(act_in.name, input_datatype)
+    model_w.set_tensor_datatype(Quant_0_out.name, input_datatype)
     model_w.set_tensor_datatype(LayerNorm_scale_out.name, weight_datatype)
     model_w.set_tensor_datatype(LayerNorm_bias_out.name, bias_datatype)
     model_w.set_tensor_datatype(act_out.name, output_datatype)
@@ -226,8 +236,15 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 
     # Create reference values using the qonnx model    
     y_ref = oxe.execute_onnx(model, input_t)[out_name]
+    print()
 
     try:
+        # model = model.transform(QuantizeLayerNormalization(
+        #     input_datatype ='INT8',
+        #     weight_datatype='FLOAT16',
+        #     bias_datatype  ='FLOAT16',
+        #     output_datatype='FLOAT16')
+        # )
         # Lower graph to HWCustomOps
         model = model.transform(ExpandNorms())
         model.save(onnx_path(1)) # Debug
@@ -292,6 +309,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     in_name = model.graph.input[0].name
     input_t = {in_name: input}
     # import pdb; pdb.set_trace()
+
     y_hw = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
 
     j = 0
@@ -307,3 +325,43 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     assert np.allclose(y_ref, y_hw, atol=tolerance), "HW sim output does not match expected output"
 
     print(f"Test matches")
+
+
+class QuantizeLayerNormalization(Transformation):
+    """Add quantization to LayerNormalization nodes in the graph. 
+    Temporary implementation pending full quantization support in FINN."""
+
+    def __init__(self, input_datatype=None, weight_datatype=None, bias_datatype=None, output_datatype=None):
+        super().__init__()
+        self.idt = input_datatype
+        self.wdt = weight_datatype
+        self.bdt = bias_datatype
+        self.odt = output_datatype
+
+    def apply(self, model):
+        graph = model.graph
+        node_ind = 0
+        graph_modified = False
+        print('Beginning...')
+        for node in graph.node:
+            print('Outer')
+            node_ind += 1
+            print(node.name)
+            # Detect LayerNorm
+            if node.op_type == "LayerNormalization":
+                print('Inner')
+                # Get tensors
+                act_in = node.input[0]
+                act_out = node.output[0]
+                scale = node.input[1]
+                bias = node.input[2] if len(node.input) > 2 else None
+                # Datatype annotations
+                model.set_tensor_datatype(act_in, DataType[self.idt])
+                model.set_tensor_datatype(scale, DataType[self.wdt])
+                model.set_tensor_datatype(act_out, DataType[self.odt])
+                if bias:
+                    model.set_tensor_datatype(bias, DataType[self.bdt])
+                graph_modified = True
+                print('     Done')
+        return (model, graph_modified)
+    
