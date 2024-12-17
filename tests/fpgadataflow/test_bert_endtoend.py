@@ -132,6 +132,15 @@ for step_func in steps:
 #          Validate steps 
 ##############################################
 
+def _compare_contexts(y_ref, y_out):
+    both = set(y_ref.keys()).intersection(set(y_out.keys()))
+    for tensor in both:
+        print(f"{tensor}  : ref shape {y_ref[tensor].shape}   out shape {y_out[tensor].shape}")
+        if (y_ref[tensor].shape == y_out[tensor].shape) :
+            print(f"\t{tensor}  :  {np.allclose(y_ref[tensor], y_out[tensor])}")
+        print("")
+    return
+
 def test_validate_custom_streamlining_step(custom_step_remove_tail, custom_streamlining_step):
     """ Using the pruned model produced by Brevitas as a reference
     perform validation of the custom_streamlining_step """
@@ -160,10 +169,15 @@ def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_ste
     input_t = { input_m.name : in_tensor}
     out_name = custom_step_remove_tail.graph.output[0].name
 
-    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
-    y_out = oxe.execute_onnx(custom_step_infer_hardware, input_t)[out_name] 
+    custom_step_remove_tail.save("custom_step_remove_tail.onnx")
+    custom_step_infer_hardware.save("custom_step_infer_hardware.onnx")
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t, return_full_exec_context=True) 
+    y_out = oxe.execute_onnx(custom_step_infer_hardware, input_t, return_full_exec_context=True)
 
-    assert np.allclose(y_ref, y_out), "custom_step_infer_hardware output does not match custom_step_remove_tail"
+    if not np.allclose(y_ref[out_name], y_out[out_name]):
+        _compare_contexts(y_ref, y_out)
+        raise RuntimeError(f"y_ref != y_out") 
+        #import pdb; pdb.set_trace()
 
 def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_specialize_layers):
     """ Using the pruned model produced by Brevitas as a reference

@@ -28,6 +28,7 @@
 
 import pytest
 import torch
+import os
 from onnx import helper
 import finn.core.onnx_exec as oxe
 from brevitas.export import export_qonnx
@@ -189,11 +190,12 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
 @pytest.mark.parametrize("impl_style", ["hls"])
 @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.parametrize("idt", ["INT8", "INT9"])
-@pytest.mark.parametrize("odt", ["INT8"])
+@pytest.mark.parametrize("odt", ["INT8", "UINT8"])
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_quantsoftmax(impl_style, simd, idt, odt, exec_mode, ifm_dim):
+    os.environ['LIVENESS_THRESHOLD'] = '50000000' # Need to bump this up for these RTL sims
     idt = DataType[idt]
     odt = DataType[odt]
     simd = int(simd[-1])
