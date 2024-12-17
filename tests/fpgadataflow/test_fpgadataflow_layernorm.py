@@ -175,9 +175,9 @@ def build_layernorm_graph(
 @pytest.mark.parametrize("exec_mode", ["cppsim"])
 @pytest.mark.parametrize("simd", ["simd1"])
 @pytest.mark.parametrize("idt", ["INT8"])
-@pytest.mark.parametrize("wdt", ["FLOAT16"])
-@pytest.mark.parametrize("bdt", ["FLOAT16"])
-@pytest.mark.parametrize("odt", ["FLOAT16"])
+@pytest.mark.parametrize("wdt", ["FLOAT32"])
+@pytest.mark.parametrize("bdt", ["FLOAT32"])
+@pytest.mark.parametrize("odt", ["FLOAT32"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt, ifm_dim):
