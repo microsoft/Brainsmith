@@ -252,9 +252,9 @@ def main(args):
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
+        step_measure_rtlsim_performance,
         step_set_fifo_depths,
         step_create_stitched_ip,
-        step_measure_rtlsim_performance,
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
@@ -262,8 +262,10 @@ def main(args):
         steps=steps,
         output_dir=tmp,
         synth_clk_period_ns=5,
+        stitched_ip_gen_dcp=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
-        generate_outputs=[],
+        generate_outputs=[
+            ],
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)

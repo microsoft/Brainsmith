@@ -149,48 +149,40 @@ class LayerNorm(HWCustomOp):
         out_width = o_bits * self.get_nodeattr("simd")
         return out_width
 
-    def calc_wmem(self):
-        """Calculates and returns WMEM."""
-        pass
+    #def calc_wmem(self):
+    #    """Calculates and returns WMEM."""
+    #    pass
 
-    def calc_tmem(self):
-        """Calculates and returns TMEM."""
-        pass
+    #def calc_tmem(self):
+    #    """Calculates and returns TMEM."""
+    #    pass
 
-    def uram_estimation(self):
-        pass
+    #def uram_estimation(self):
+    #    pass
 
-    def bram_estimation(self):
-        pass
+    #def bram_estimation(self):
+    #    pass
 
-    def bram_efficiency_estimation(self):
-        pass
+    #def bram_efficiency_estimation(self):
+    #    pass
 
-    def uram_efficiency_estimation(self):
-        """Function for URAM efficiency estimation: actual parameter storage
-        needed divided by the allocated URAM storage (from estimation)"""
-        pass
+    #def uram_efficiency_estimation(self):
+    #    """Function for URAM efficiency estimation: actual parameter storage
+    #    needed divided by the allocated URAM storage (from estimation)"""
+    #    pass
 
-    def get_exp_cycles(self):
-        pass
+    #def minimize_accumulator_width(self, model):
+    #    """Minimize the accumulator bit width according to the weight values,
+    #    input data types, and size of dot product"""
+    #    pass
 
-    def minimize_accumulator_width(self, model):
-        """Minimize the accumulator bit width according to the weight values,
-        input data types, and size of dot product"""
-        pass
+    #def generate_params(self, model, path):
+    #    pass
 
-    def generate_params(self, model, path):
-        pass
+    #def get_op_and_param_counts(self):
+    #    pass
 
-    def get_op_and_param_counts(self):
-        pass
+    #def derive_characteristic_fxns(self, period):
+    #    pass
 
-    def derive_characteristic_fxns(self, period):
-        pass
-
-    def get_verilog_top_module_intf_names(self):
-        pass
-
-    def code_generation_ipi(self):
-        pass
 

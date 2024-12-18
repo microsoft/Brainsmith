@@ -152,6 +152,10 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
+    def get_exp_cycles(self):
+        oshape = self.get_normal_output_shape()
+        return  oshape[-1] + 68 + 4
+
     def code_generation_cppsim(self, model):
         """Generates c++ code for simulation (cppsim)."""
         self.code_gen_dict["$READNPYDATA$"] = [""]
