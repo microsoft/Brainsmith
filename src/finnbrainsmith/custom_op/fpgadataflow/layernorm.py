@@ -44,7 +44,8 @@ class LayerNorm(HWCustomOp):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        my_attrs = {
+        my_attrs = super().get_nodeattr_types()
+        my_attrs.update({
             "simd": ("i", True, 0),
             "ifm_dim": ("ints", True, []),
             "epsilon": ("f", True, 1e-5),
@@ -56,8 +57,7 @@ class LayerNorm(HWCustomOp):
             "exec_mode": (
                 "s", False, "python", {"", "rtlsim", "cppsim", "python"}
             ),
-        }
-        my_attrs.update(super().get_nodeattr_types())
+        })
         return my_attrs
 
     def execute_node(self, context, graph):

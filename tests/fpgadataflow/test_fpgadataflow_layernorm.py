@@ -126,7 +126,7 @@ def build_func_layernorm_graph(
     # model_w.set_tensor_datatype(Quant_0_out.name, input_datatype)
     # model_w.set_tensor_datatype(LayerNorm_scale_out.name, weight_datatype)
     # model_w.set_tensor_datatype(LayerNorm_bias_out.name, bias_datatype)
-    model_w.set_tensor_datatype(act_out.name, output_datatype)
+    # model_w.set_tensor_datatype(act_out.name, output_datatype)
 
     return model_w
 
@@ -267,10 +267,10 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     }
     io_shape = ifm_dim
     epsilon = 1e-05
-    tolerance = 0
+    tolerance = 1e-05
     
-    model = build_layernorm_graph(idt, wdt, bdt, odt, epsilon, ifm_dim)
-    # model = build_func_layernorm_graph(idt, odt, epsilon, ifm_dim)
+    # model = build_layernorm_graph(idt, wdt, bdt, odt, epsilon, ifm_dim)
+    model = build_func_layernorm_graph(idt, odt, epsilon, ifm_dim)
 
     model = model.transform(InferShapes())
     model.save(onnx_path(0))
@@ -283,8 +283,9 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     out_name = model.graph.output[0].name
     input_t = {in_name: input}
 
-    # Create reference values using the qonnx model    
-    y_ref = oxe.execute_onnx(model, input_t)[out_name]
+    # Create reference values using the qonnx model
+    context_ref = oxe.execute_onnx(model, input_t)
+    y_ref = context_ref[out_name]
 
     # import pdb; pdb.set_trace()
     
@@ -332,9 +333,9 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         model = model.transform(GiveUniqueNodeNames())
         model.save(onnx_path(7)) # Debug
         
-        # model = model.transform(SetExecMode("python"))
-        # y_python = oxe.execute_onnx(model, input_t)[out_name]
-        # assert np.allclose(y_ref, y_python, atol=tolerance), "HWCustomOp output does not match expected output"
+        model = model.transform(SetExecMode("python"))
+        y_python = oxe.execute_onnx(model, input_t)[out_name]
+        assert np.allclose(y_ref, y_python, atol=tolerance), "HWCustomOp output does not match expected output"
 
         # Execute selected sim
         if exec_mode == "cppsim":
