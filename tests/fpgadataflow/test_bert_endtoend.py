@@ -176,8 +176,7 @@ def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_ste
 
     if not np.allclose(y_ref[out_name], y_out[out_name]):
         _compare_contexts(y_ref, y_out)
-        raise RuntimeError(f"y_ref != y_out") 
-        #import pdb; pdb.set_trace()
+        raise RuntimeError(f"y_ref != y_out")
 
 def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_specialize_layers):
     """ Using the pruned model produced by Brevitas as a reference

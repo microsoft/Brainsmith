@@ -37,7 +37,6 @@ class FuncLayerNorm(CustomOp):
         dtype = DataType[self.get_nodeattr("OutputDataType")]
         model.set_tensor_datatype(node.output[0], dtype)
     
-
     def execute_node(self, context, graph):
         node = self.onnx_node
         # Get tensor values
@@ -49,11 +48,14 @@ class FuncLayerNorm(CustomOp):
         # Get attributes
         norm_shape = ishape[self.get_nodeattr("axis"):]
         epsilon = self.get_nodeattr("epsilon")
-        # Compute functional LayerNorm (no learned params)
-        mean = np.mean(in_act, axis=norm_shape)
-        variance = np.var(in_act, axis=norm_shape)
+        # Compute functional LayerNorm (no learned params)    
+        mean = np.mean(in_act, axis=-1)
+        variance = np.var(in_act, axis=-1)
+        mean = np.expand_dims(mean, axis=-1)
+        variance = np.expand_dims(variance, axis=-1)
         std_dev = np.sqrt(variance + epsilon)
-        return (in_act - mean)/std_dev
+        context[node.output[0]] = (in_act - mean)/std_dev
+        # return context[node.output[0]]
     
     def verify_node(self):
         """Verifies that all attributes the node needs are there and

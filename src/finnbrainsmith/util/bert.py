@@ -18,7 +18,6 @@ from qonnx.transformation.fold_constants import FoldConstants
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-from finnbrainsmith.transformation.expand_norms import ExpandNorms
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finnbrainsmith.transformation.expand_norms import ExpandNorms
@@ -247,7 +246,3 @@ class QuantizeLayerNormalization(Transformation):
                     model.set_tensor_datatype(bias, DataType[self.bdt])
                 graph_modified = True
         return (model, graph_modified)
-<<<<<<< HEAD
-    
-=======
->>>>>>> origin/feature/plugin/layernorm_stf

@@ -80,6 +80,55 @@ def _create_quant_node(node_name, inp_name, output_or_dtype, shape):
     )
     return Quant, Quant_out
 
+def build_func_layernorm_graph(
+        input_datatype:str,
+        output_datatype:str,
+        epsilon:float,
+        idm:tuple, # Input dimension
+        ):
+    # Create I/Os
+    act_in = helper.make_tensor_value_info("global_in", TensorProto.FLOAT, idm)
+    act_out = helper.make_tensor_value_info("global_out", TensorProto.FLOAT, idm)
+
+    # Create model
+    graph = helper.make_graph(
+        nodes=[], name="LayerNorm_graph", inputs=[act_in], outputs=[act_out]
+    )
+    model = qonnx_make_model(graph, producer_name="LayerNorm_graph")
+    model = ModelWrapper(model)
+
+    # Create functional layernorm node
+    func_ln_node = helper.make_node(
+        "FuncLayerNorm",
+        [act_in.name],
+        [act_out.name],
+        domain="finnbrainsmith.custom_op.general",
+        backend="general",
+        axis=-1,
+        epsilon=epsilon,
+        InputDataType=input_datatype.name,
+        OutputDataType=output_datatype.name
+    )
+    model.graph.node.append(func_ln_node)
+
+    model.save(onnx_path(-1))
+
+    # Force the opset to 17 (TODO: Must be a better way to do this)
+    _model = onnx.load(onnx_path(-1))
+    op = onnx.OperatorSetIdProto()
+    op.version = 17
+    _model_opset17 = helper.make_model(_model.graph, opset_imports=[op])    
+    onnx.save(_model_opset17, onnx_path(-1))
+
+    model_w = ModelWrapper(onnx_path(-1)) 
+
+    # Datatype annotations
+    # model_w.set_tensor_datatype(Quant_0_out.name, input_datatype)
+    # model_w.set_tensor_datatype(LayerNorm_scale_out.name, weight_datatype)
+    # model_w.set_tensor_datatype(LayerNorm_bias_out.name, bias_datatype)
+    model_w.set_tensor_datatype(act_out.name, output_datatype)
+
+    return model_w
 
 def build_layernorm_graph(
         input_datatype:str,
@@ -109,8 +158,8 @@ def build_layernorm_graph(
     bias_quant_params   = [1.0/(1<<bw[2]), 0.0, bw[2]]
     output_quant_params = [1.0/(1<<bw[3]), 0.0, bw[3]]
 
-    max_scale = 2**(bw[1]/2)
-    max_bias = 2**(bw[2]/2)
+    max_scale = 2**(8/2)
+    max_bias = 2**(8/2)
 
     last_dim = idm[-1]
     scale_bias_shape = [last_dim]
@@ -218,7 +267,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
     }
     io_shape = ifm_dim
     epsilon = 1e-05
-    tolerance = 2
+    tolerance = 0
     
     model = build_layernorm_graph(idt, wdt, bdt, odt, epsilon, ifm_dim)
     # model = build_func_layernorm_graph(idt, odt, epsilon, ifm_dim)
@@ -236,9 +285,10 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 
     # Create reference values using the qonnx model    
     y_ref = oxe.execute_onnx(model, input_t)[out_name]
-    print()
 
-    try:
+    # import pdb; pdb.set_trace()
+    
+    if True:
         # model = model.transform(QuantizeLayerNormalization(
         #     input_datatype ='INT8',
         #     weight_datatype='FLOAT16',
@@ -249,9 +299,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         model = model.transform(ExpandNorms())
         model.save(onnx_path(1)) # Debug
         model = model.transform(ExtractQuantScaleZeroPt())
-        model.save(onnx_path(11)) # Debug
         model = model.transform(FoldConstants())
-        model.save(onnx_path(12)) # Debug
         model = model.transform(ConvertQONNXtoFINN(filter_function=dff_gen(max_multithreshold_bit_width=32)))
         model.save(onnx_path(2)) # Debug
         # Fold Constants
@@ -302,7 +350,8 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
             model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
             model = model.transform(HLSSynthIP())
             model = model.transform(CreateStitchedIP(test_fpga_part, target_clk_ns))
-    except Exception as e:
+    # except Exception as e:
+    else:
         pytest.fail(f"Failed to transform the model: {str(e)}")
     
     input = np.random.randn(*io_shape).astype(np.float32)
@@ -319,6 +368,8 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
         if not np.allclose(y_ref[i], y_hw[i], atol=tolerance):
             print(f'at {i}: {y_ref[i]} != {y_hw[i]}')
             j+=1
+        else:
+            print(f'at {i}: {y_ref[i]} == {y_hw[i]}')
         if j > 20:
             assert False, "Too much!"
 

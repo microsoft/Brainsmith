@@ -97,7 +97,6 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
             f"#pragma HLS dataflow disable_start_propagation",
         ]
 
-
     def execute_node(self, context, graph):
         # Get the configured execution mode
         mode = self.get_nodeattr("exec_mode")
@@ -227,10 +226,6 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
-
-
-
 
     def compile_singlenode_code(self):
         """Builds the bash script for compilation using the CppBuilder from
