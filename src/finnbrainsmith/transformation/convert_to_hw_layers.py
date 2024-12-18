@@ -170,6 +170,15 @@ class InferQuantSoftmax(Transformation):
             model = model.transform(InferDataTypes())
         return (model, graph_modified)
 
+def elements_are_consecutive(indices):
+    if indices.size == 1:
+        return True
+    else:
+        indices.sort()
+        return np.all(np.diff(indices) == 1)
+
+
+
 class InferCropFromGather(Transformation):
     """
     Find gather layers that can be converted into a Crop layer
@@ -182,7 +191,6 @@ class InferCropFromGather(Transformation):
 
     def is_initializer(self, tensor_name, model):
         return model.get_initializer(tensor_name) is not None
-
 
     def apply(self, model):
         graph = model.graph
@@ -206,6 +214,7 @@ class InferCropFromGather(Transformation):
                 axis = get_by_name(n.attribute, "axis").i
                 assert axis in [max_index, max_index - 1], "Crop Operates on two innermost dimensions"
                 is_vertical = axis == max_index # otherwise horizontal
+                assert is_vertical == False, "This operator does not current support vertical crops"
 
                 # ensure that the output shape matches the expected output shape
                 output_shape = model.get_tensor_shape(n.output[0])
@@ -213,21 +222,15 @@ class InferCropFromGather(Transformation):
                 # assume that the indices input is an int64 scalar
                 indices = model.get_initializer(n.input[1])
                 assert indices.dtype == np.int64, "Indices must be int64 scalar"
-                print(indices, type(indices))
-                # set the number of pixels to crop off each edge
-                if is_vertical:
-                    crop_north = 0
-                    crop_south = 0
-                    crop_west  = int(indices)
-                    crop_east  = input_shape[axis] - int(indices) - 1
-                else:
-                    width =  input_shape[-1]
-                    assert width % self.simd == 0, "Width must be divisible by SIMD"
+                assert elements_are_consecutive(indices[0]), "Indices must be consecutive"
 
-                    crop_north = int(indices)
-                    crop_south = input_shape[axis] - int(indices) - 1
-                    crop_east = 0
-                    crop_west = 0
+                # set the number of pixels to crop off each edge
+                width =  input_shape[-1]
+                assert width % self.simd == 0, "Width must be divisible by SIMD"
+                crop_north = int(np.min(indices))
+                crop_south = input_shape[axis] - int(np.max(indices)) - 1
+                crop_east = 0
+                crop_west = 0
 
                 idt0 = model.get_tensor_datatype(n.input[0])
                 odt0 = model.get_tensor_datatype(n.output[0])
