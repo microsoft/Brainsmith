@@ -88,8 +88,8 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
-    #model = model.transform(reorder.MoveScalarMulPastMatMul())
-    #model = model.transform(reorder.MoveScalarLinearPastInvariants())
+    model = model.transform(reorder.MoveScalarMulPastMatMul())
+    model = model.transform(reorder.MoveScalarLinearPastInvariants())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     return model
 
@@ -101,7 +101,7 @@ def custom_step_infer_hardware(model, cfg):
     need a custom step for infering the hardware for those operations.
 
     Such as:
-        InferShuffler - to infer the Shuffle operations
+        InferShuffle - to infer the Shuffle operations
         InferQuantSoftmax - to infer the QuantSoftMax
 
     However, we can also see some extra infer steps that
