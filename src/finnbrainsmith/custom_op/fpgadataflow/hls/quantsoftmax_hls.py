@@ -53,7 +53,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         ]
 
     def defines(self, var):
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         idtype = self.get_input_datatype()
         odtype = self.get_output_datatype()
         w = self.get_nodeattr("ifm_dim")[-1]

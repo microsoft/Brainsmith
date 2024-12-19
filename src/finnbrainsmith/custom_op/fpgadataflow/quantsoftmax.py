@@ -16,10 +16,11 @@ class QuantSoftmax(HWCustomOp):
     def get_nodeattr_types(self):
         my_attrs = {
             "ifm_dim": ("ints", True, []),
-            "simd": ("i", False, 1),
+            "SIMD": ("i", False, 1),
             # FINN DataTypes for inputs, weights, outputs
             "input_data_type": ("s", True, ""),
             "output_data_type": ("s", True, ""),
+            "NumChannels" : ("i", False, 128)
         }
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
@@ -89,12 +90,12 @@ class QuantSoftmax(HWCustomOp):
 
     def get_instream_width(self, ind=0):
         ibits = self.get_input_datatype().bitwidth()
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         return ibits * simd
 
     def get_outstream_width(self, ind=0):
         obits = self.get_output_datatype().bitwidth()
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         return obits * simd
 
     def get_output_datatype(self, ind=0):
@@ -110,7 +111,7 @@ class QuantSoftmax(HWCustomOp):
 
     def get_folded_input_shape(self, ind=0):
         normal_ishape = list(self.get_normal_input_shape())
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         assert normal_ishape[-1] % simd == 0, "SIMD must divide into input dimension"
         fold = int(normal_ishape[-1] / simd)
         folded_ishape = normal_ishape[:-1] + [fold, simd]

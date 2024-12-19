@@ -158,7 +158,8 @@ class InferQuantSoftmax(Transformation):
                     input_data_type=idt0.name,
                     output_data_type=odt0.name,
                     name="Quant" + n.name,
-                    simd=simd,
+                    SIMD=simd,
+                    NumChannels=input_shape[-1],
                 )
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
