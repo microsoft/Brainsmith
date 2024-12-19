@@ -69,7 +69,6 @@ void max_calc_stage(
 		hls::vector<T,SIMD+1> max_v;
 		hls::vector<T,SIMD> const in = ins.read();
 
-
 		for(unsigned i=0; i<SIMD; i++){
 #pragma HLS UNROLL 
 			out[i] = in[i]; 
@@ -295,16 +294,15 @@ void smaxquant(
 	hls::stream<hls::vector<TO,SIMD>> &dst
 ) {
 #pragma HLS DATAFLOW disable_start_propagation
-	hls::stream<hls::vector<float,SIMD>> smax_out;
-#pragma HLS stream variable=smax_out depth=2
 	static_assert(N%SIMD == 0, "SIMD must be a factor of N"); 
 
-	smax<N,SIMD,TI>(src, smax_out);
-
 	if constexpr (QUANT) {
+		hls::stream<hls::vector<float,SIMD>> smax_out;
+#pragma HLS stream variable=smax_out depth=2
+		smax<N,SIMD,TI>(src, smax_out);
 		quant_stage<N,SIMD,TO>(smax_out, dst);
 	} else {
-		move(dst,smax_out);
+		smax<N,SIMD,TI>(src, dst);
 	}
 
 } // smaxquant()

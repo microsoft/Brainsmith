@@ -100,6 +100,7 @@ class InferShuffle(Transformation):
                             loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
                             inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
                             SIMD=simd,
+                            
                             NumChannels=in_reshaped[-1]
                         )
                 new_node.attribute.extend([perm])
@@ -115,6 +116,44 @@ class InferShuffle(Transformation):
 
         return (model, graph_modified)
 
+class InferHWSoftmax(Transformation):
+    """
+    Infers a regular softmax node without merging the multithreshold
+    and setting the softmax to perform the quantisation.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def apply(self, model):
+        graph = model.graph
+        node_ind = 0
+        graph_modified = False
+        for n in graph.node:
+            if n.op_type == "SoftMax":
+                input_shape = model.get_tensor_shape(n.input[0])
+                idt0 = model.get_tensor_datatype(n.input[0])
+                new_node = helper.make_node(
+                    "HWSoftmax",
+                    [n.input[0]],  # input tensor(s)
+                    [consumer.output[0]],  # output tensor(s)
+                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    backend="fpgadataflow",
+                    ifm_dim=input_shape,
+                    input_data_type=idt0.name,
+                    output_data_type=float,
+                    name=n.name,
+                    SIMD=simd,
+                    NumChannels=input_shape[-1],
+                )
+                graph.node.insert(node_ind, new_node)
+                graph.node.remove(n)
+                graph_modified = True
+
+        if graph_modified:
+            model = model.transform(InferShapes())
+            model = model.transform(InferDataTypes())
+        return (model, graph_modified)
 
 class InferQuantSoftmax(Transformation):
     """
