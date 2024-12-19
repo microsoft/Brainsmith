@@ -99,7 +99,8 @@ class InferShuffle(Transformation):
                             name=f"Shuffle_{n.name}",
                             loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
                             inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
-                            simd=simd
+                            SIMD=simd,
+                            NumChannels=in_reshaped[-1]
                         )
                 new_node.attribute.extend([perm])
                 graph.node.insert(node_ind, new_node)
