@@ -88,8 +88,8 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
-    model = model.transform(reorder.MoveScalarMulPastMatMul())
-    model = model.transform(reorder.MoveScalarLinearPastInvariants())
+    #model = model.transform(reorder.MoveScalarMulPastMatMul())
+    #model = model.transform(reorder.MoveScalarLinearPastInvariants())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     return model
 
@@ -118,7 +118,8 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_bs_hw.InferShuffle())
-    model = model.transform(to_bs_hw.InferQuantSoftmax())
+    #model = model.transform(to_bs_hw.InferQuantSoftmax())
+    model = model.transform(to_bs_hw.InferHWSoftmax())
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
