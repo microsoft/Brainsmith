@@ -74,7 +74,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 static hls::stream<hls::vector<TO,SIMD>>  dst0;
 
                 move(in0_{self.hls_sname()}, src0);
-                smaxquant<W,SIMD,TI,TO>(src0, dst0);
+                smaxquant<W,SIMD,TI,TO, true>(src0, dst0);
                 move(dst0, out_{self.hls_sname()});
         """
         ]
@@ -208,7 +208,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
             int stream_size = in0_V.size();
 
             while(out_V.size() != stream_size){{
-                smaxquant<W, SIMD, TI, TO>(in0_V, out_V);
+                smaxquant<W, SIMD, TI, TO, true>(in0_V, out_V);
             }}
 
             vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
