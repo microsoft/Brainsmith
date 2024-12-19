@@ -99,7 +99,8 @@ class InferShuffle(Transformation):
                             name=f"Shuffle_{n.name}",
                             loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
                             inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
-                            simd=simd
+                            SIMD=simd,
+                            NumChannels=in_reshaped[-1]
                         )
                 new_node.attribute.extend([perm])
                 graph.node.insert(node_ind, new_node)
@@ -157,7 +158,8 @@ class InferQuantSoftmax(Transformation):
                     input_data_type=idt0.name,
                     output_data_type=odt0.name,
                     name="Quant" + n.name,
-                    simd=simd,
+                    SIMD=simd,
+                    NumChannels=input_shape[-1],
                 )
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
