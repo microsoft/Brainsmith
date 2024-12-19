@@ -22,7 +22,8 @@ class Shuffle(HWCustomOp):
                 "out_shape" : ("ints", True, []),
                 "loop_coeffs" : ("ints", True, []), 
                 "perm" : ("ints", True, []),
-                "simd": ("i", False, 1)
+                "SIMD": ("i", False, 1),
+                "NumChannels": ("i", False, 128) 
         }
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
@@ -73,12 +74,12 @@ class Shuffle(HWCustomOp):
 
     def get_instream_width(self, ind=0):
         ibits = self.get_input_datatype().bitwidth()
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         return ibits * simd
 
     def get_outstream_width(self, ind=0):
         obits = self.get_output_datatype().bitwidth()
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         return obits * simd
 
     def get_output_datatype(self, ind=0):
@@ -87,7 +88,7 @@ class Shuffle(HWCustomOp):
 
     def get_folded_output_shape(self, ind=0):
         normal_oshape = list(self.get_normal_output_shape())
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         assert normal_oshape[-1] % simd == 0, "SIMD must divid into output dimension"
         fold = int(normal_oshape[-1] / simd)
         folded_oshape = normal_oshape[:-1] + [fold, simd]
@@ -95,7 +96,7 @@ class Shuffle(HWCustomOp):
 
     def get_folded_input_shape(self, ind=0):
         normal_ishape = list(self.get_normal_input_shape())
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         assert normal_ishape[-1] % simd == 0, "SIMD must divid into input dimension"
         fold = int(normal_ishape[-1] / simd)
         folded_ishape = normal_ishape[:-1] + [fold, simd]
