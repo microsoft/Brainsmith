@@ -62,7 +62,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         idtype = self.get_input_datatype()
         odtype = self.get_output_datatype()
         self.code_gen_dict["$DEFINES$"] = [
-            f"constexpr unsigned SIMD = {self.get_nodeattr('simd')};",
+            f"constexpr unsigned SIMD = {self.get_nodeattr('SIMD')};",
             f"constexpr unsigned W = {self.get_nodeattr('ifm_dim')[-1]};",
             f"constexpr float epsilon = {self.get_nodeattr('epsilon')};",
             f"using TI = {idtype.get_hls_datatype_str()};",

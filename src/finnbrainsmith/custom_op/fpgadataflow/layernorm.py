@@ -46,7 +46,8 @@ class LayerNorm(HWCustomOp):
     def get_nodeattr_types(self):
         my_attrs = super().get_nodeattr_types()
         my_attrs.update({
-            "simd": ("i", True, 0),
+            "SIMD": ("i", True, 0),
+            "NumChannels": ("i", True, 128),
             "ifm_dim": ("ints", True, []),
             "epsilon": ("f", True, 1e-5),
             # FINN DataTypes for inputs, weight, bias, outputs
@@ -97,7 +98,7 @@ class LayerNorm(HWCustomOp):
         # insert a time multiplexing axis to remain compatible with the
         # shapes produced by the rest of the dataflow pipeline
         normal_ishape = list(self.get_normal_input_shape())
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
         assert normal_ishape[-1] % simd == 0, "SIMD must divide into input dimension"
         fold = int(normal_ishape[-1] / simd)
         folded_ishape = normal_ishape[:-1] + [fold, simd]
@@ -141,12 +142,12 @@ class LayerNorm(HWCustomOp):
 
     def get_instream_width(self, ind=0):
         i_bits = self.get_input_datatype().bitwidth()
-        in_width = i_bits * self.get_nodeattr("simd")
+        in_width = i_bits * self.get_nodeattr("SIMD")
         return in_width
 
     def get_outstream_width(self, ind=0):
         o_bits = self.get_output_datatype().bitwidth()
-        out_width = o_bits * self.get_nodeattr("simd")
+        out_width = o_bits * self.get_nodeattr("SIMD")
         return out_width
 
     #def calc_wmem(self):
