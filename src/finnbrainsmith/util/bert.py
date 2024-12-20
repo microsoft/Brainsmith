@@ -14,15 +14,20 @@ from qonnx.transformation.remove import remove_node_and_rewire
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
+from qonnx.transformation.fold_constants import FoldConstants
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from finnbrainsmith.transformation.expand_norms import ExpandNorms
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
+# Temporary imports - remove once FloatQuant is available
+from qonnx.transformation.base import Transformation
+from qonnx.core.datatype import DataType
 
 def custom_step_qonnx2finn(model, cfg):
     """
@@ -61,7 +66,9 @@ def custom_step_qonnx2finn(model, cfg):
     a MultiThreshold node. (see custom_streamlining_step below) 
 
     """
+    model = model.transform(ExpandNorms())
     model = model.transform(ExtractQuantScaleZeroPt())
+    model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
@@ -86,6 +93,7 @@ def custom_streamlining_step(model, cfg):
 
     """
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
+    model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
     model = model.transform(reorder.MoveScalarMulPastMatMul())
@@ -115,6 +123,7 @@ def custom_step_infer_hardware(model, cfg):
         explictly duplicated.
 
     """
+    model = model.transform(to_bs_hw.InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_bs_hw.InferShuffle())
@@ -192,7 +201,49 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
+    #model = model.transform(QuantizeLayerNormalization(
+    #    input_datatype ='INT8',
+    #    weight_datatype='FLOAT16',
+    #    bias_datatype  ='FLOAT16',
+    #    output_datatype='FLOAT16')
+    #)
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
 
+class QuantizeLayerNormalization(Transformation):
+    """Add quantization to LayerNormalization nodes in the graph. 
+    Temporary implementation pending full quantization support in FINN. """
+
+    def __init__(self, input_datatype=None, weight_datatype=None, bias_datatype=None, output_datatype=None):
+        super().__init__()
+        self.idt = input_datatype
+        self.wdt = weight_datatype
+        self.bdt = bias_datatype
+        self.odt = output_datatype
+
+    def apply(self, model):
+        graph = model.graph
+        node_ind = 0
+        graph_modified = False
+        print('Beginning...')
+        for node in graph.node:
+            print('Outer')
+            node_ind += 1
+            print(node.name)
+            # Detect LayerNorm
+            if node.op_type == "LayerNormalization":
+                print('Inner')
+                # Get tensors
+                act_in = node.input[0]
+                act_out = node.output[0]
+                scale = node.input[1]
+                bias = node.input[2] if len(node.input) > 2 else None
+                # Datatype annotations
+                model.set_tensor_datatype(act_in, DataType[self.idt])
+                model.set_tensor_datatype(scale, DataType[self.wdt])
+                model.set_tensor_datatype(act_out, DataType[self.odt])
+                if bias:
+                    model.set_tensor_datatype(bias, DataType[self.bdt])
+                graph_modified = True
+        return (model, graph_modified)

@@ -29,54 +29,51 @@
 import numpy as np
 import os
 
+# import finn.util.pyxsi_rpcclient as pyxsi_rpcclient
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
-from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from finnbrainsmith.custom_op.fpgadataflow.layernorm import LayerNorm
+from finn.util.basic import make_build_dir
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
-class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
+
+class LayerNorm_hls(LayerNorm, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        my_attrs = {}
-        my_attrs.update(QuantSoftmax.get_nodeattr_types(self))
+        my_attrs = {
+            "rtlsim_backend": ("s", True, "pyxsi"),
+            }
         my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
+        my_attrs.update(LayerNorm.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
             "#include <hls_vector.h>",
-            '#include "softmax.hpp"',
-            '#include "utils.hpp"',
+            '#include "layernorm.hpp"',
+            '#include "ln_utils.hpp"'
         ]
 
     def defines(self, var):
-        simd = self.get_nodeattr("SIMD")
         idtype = self.get_input_datatype()
         odtype = self.get_output_datatype()
-        w = self.get_nodeattr("ifm_dim")[-1]
         self.code_gen_dict["$DEFINES$"] = [
-            f"""
-            constexpr unsigned  SIMD = {simd};
-            constexpr unsigned  W = {w};
-            using  TI = {idtype.get_hls_datatype_str()};
-            using  TO = {odtype.get_hls_datatype_str()};
-            using  F = float;
-           """
+            f"constexpr unsigned SIMD = {self.get_nodeattr('SIMD')};",
+            f"constexpr unsigned W = {self.get_nodeattr('ifm_dim')[-1]};",
+            f"constexpr float epsilon = {self.get_nodeattr('epsilon')};",
+            f"using TI = {idtype.get_hls_datatype_str()};",
+            f"using TO = {odtype.get_hls_datatype_str()};"
         ]
 
     def docompute(self):
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
-                static hls::stream<hls::vector<TI,SIMD>>  src0;
-                static hls::stream<hls::vector<TO,SIMD>>  dst0;
-
-                move(in0_{self.hls_sname()}, src0);
-                smaxquant<W,SIMD,TI,TO, true>(src0, dst0);
-                move(dst0, out_{self.hls_sname()});
-        """
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_{self.hls_sname()}, out_{self.hls_sname()});
+            """
         ]
 
     def blackboxfunction(self):
@@ -91,54 +88,47 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
 
     def pragmas(self):
         self.code_gen_dict["$PRAGMAS$"] = [
-            f"""
-            #pragma HLS interface AXIS port=in0_{self.hls_sname()}
-            #pragma HLS interface AXIS port=out_{self.hls_sname()}
-            #pragma HLS aggregate  variable=in0_{self.hls_sname()} compact=bit
-            #pragma HLS aggregate  variable=out_{self.hls_sname()} compact=bit
-
-            #pragma HLS interface ap_ctrl_none port=return
-            #pragma HLS dataflow disable_start_propagation
-            """
+            f"#pragma HLS interface AXIS port=in0_{self.hls_sname()}",
+            f"#pragma HLS interface AXIS port=out_{self.hls_sname()}",
+            f"#pragma HLS aggregate variable=in0_{self.hls_sname()} compact=bit",
+            f"#pragma HLS aggregate variable=out_{self.hls_sname()} compact=bit",
+            f"#pragma HLS interface ap_ctrl_none port=return",
+            f"#pragma HLS dataflow disable_start_propagation",
         ]
 
-    def get_exp_cycles(self):
-        exp_oshape = self.get_normal_output_shape()
-        return exp_oshape[-1] + 28 + 4 
-
     def execute_node(self, context, graph):
+        # Get the configured execution mode
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
-        exp_ishape = self.get_normal_input_shape()
-        exp_oshape = self.get_normal_output_shape()
         folded_ishape = self.get_folded_input_shape()
         export_idt = self.get_input_datatype()
 
-        if mode == "cppsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-        elif mode == "rtlsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
-
-
+        # Generate input
         inp = context[node.input[0]]
         inp = inp.reshape(folded_ishape)
-        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)        
+        inp = inp.astype(np.float32)
 
-        if mode == "cppsim":
-            # # execute the precompiled model
+        if mode == "python":
+            self._execute_node_python(context, graph)
+        elif mode == "cppsim":
+            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+            # Execute the precompiled model
             super().exec_precompiled_singlenode_model()
-            # # load output npy file
+            # Load output npy file
             super().npy_to_dynamic_output(context)
         elif mode == "rtlsim":
-            sim = self.get_rtlsim()
+            # Generate & format input
+            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
             nbits = self.get_instream_width()
             rtlsim_inp = npy_to_rtlsim_input(
-                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits    
+                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits
             )
+            # Setup RTLsim
+            sim = self.get_rtlsim()
             super().reset_rtlsim(sim)
             super().toggle_clk(sim)
-
-            #rtlsim_output = self.rtlsim(sim, rtlsim_inp)
             io_dict = {
                 "inputs": {"in0": rtlsim_inp},
                 "outputs":{"out": []}
@@ -158,36 +148,13 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
             oshape = self.get_normal_output_shape()
             output = np.asarray([output], dtype=np.float32).reshape(*oshape)
             context[node.output[0]] = output
+
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
-    def compile_singlenode_code(self):
-        """Builds the bash script for compilation using the CppBuilder from
-        finn.util.basic and executes the script to produce the executable."""
-        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-        builder = CppBuilder()
-        # to enable additional debug features please uncommand the next line
-        # builder.append_includes("-DDEBUG")
-        builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
-        builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
-        builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
-        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
-        builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
-        builder.append_includes("--std=c++14")
-        builder.append_includes("-O3")
-        builder.append_sources(code_gen_dir + "/*.cpp")
-        builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
-        builder.append_includes("-lz")
-        builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
-        )
-        builder.append_includes(
-            '-Wl,-rpath,"$VITIS_PATH/lnx64/tools/fpo_v7_1" -L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel'
-        )
-        builder.set_executable_path(code_gen_dir + "/node_model")
-        builder.build(code_gen_dir)
-        self.set_nodeattr("executable_path", builder.executable_path)
+    def get_exp_cycles(self):
+        oshape = self.get_normal_output_shape()
+        return  oshape[-1] + 68 + 4
 
     def code_generation_cppsim(self, model):
         """Generates c++ code for simulation (cppsim)."""
@@ -205,17 +172,17 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
-            static hls::stream<hls::vector<TI,SIMD>>  in0_V;
-            static hls::stream<hls::vector<TO,SIMD>>  out_V;
+            static hls::stream<hls::vector<TI,SIMD>> in0_V;
+            static hls::stream<hls::vector<TO,SIMD>> out_V;
 
             npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
             while(out_V.size() != stream_size){{
-                smaxquant<W, SIMD, TI, TO, true>(in0_V, out_V);
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out_V);
             }}
 
-            vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
+            vectorstream2npy<TO, float, SIMD>(out_V, {oshape_str}, "{path}/output.npy");
             """
         ]
         self.save_as_npy()
@@ -229,3 +196,31 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
+
+    def compile_singlenode_code(self):
+        """Builds the bash script for compilation using the CppBuilder from
+        finn.util.basic and executes the script to produce the executable."""
+        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
+        builder = CppBuilder()
+        # to enable additional debug features please uncommand the next line
+        builder.append_includes("-DDEBUG")
+        builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
+        builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
+        builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
+        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
+        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
+        builder.append_includes("--std=c++14")
+        builder.append_includes("-O3")
+        builder.append_sources(code_gen_dir + "/*.cpp")
+        builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
+        builder.append_includes("-lz")
+        builder.append_includes(
+            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
+        )
+        builder.append_includes(
+            "-L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
+        )
+        builder.set_executable_path(code_gen_dir + "/node_model")
+        builder.build(code_gen_dir)
+        self.set_nodeattr("executable_path", builder.executable_path)

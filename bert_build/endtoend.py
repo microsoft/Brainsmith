@@ -56,8 +56,6 @@ from finn.builder.build_dataflow_steps import (
     step_deployment_package,
 )
 
-
-
 # Global consts used by Brevitas build step
 bit_width=8
 dtype=torch.float32
@@ -229,6 +227,8 @@ def main(args):
         custom_step_cleanup,
         custom_step_remove_head,
         custom_step_remove_tail,
+
+        # LayerNormalization to LayerNorm
     
         # Conversion
         custom_step_qonnx2finn,
@@ -240,7 +240,7 @@ def main(args):
         custom_step_infer_hardware,
     
         # dataflow partition
-        #step_create_dataflow_partition,
+        step_create_dataflow_partition,
     
         # Specialise the hardware layers
         step_specialize_layers,
@@ -252,18 +252,22 @@ def main(args):
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
+        step_measure_rtlsim_performance,
         step_set_fifo_depths,
-        #step_create_stitched_ip,
-        #step_measure_rtlsim_performance,
+        step_create_stitched_ip,
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
         steps=steps,
+        target_fps=1000,
         output_dir=tmp,
         synth_clk_period_ns=5,
+        stitched_ip_gen_dcp=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
-        generate_outputs=[],
+        generate_outputs=[
+            build_cfg.DataflowOutputType.STITCHED_IP,
+            ],
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)

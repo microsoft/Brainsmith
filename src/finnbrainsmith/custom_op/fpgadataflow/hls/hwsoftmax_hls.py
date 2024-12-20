@@ -31,17 +31,17 @@ import os
 
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
-from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
+from finnbrainsmith.custom_op.fpgadataflow.hwsoftmax import HWSoftmax
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
-class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
+class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
         my_attrs = {}
-        my_attrs.update(QuantSoftmax.get_nodeattr_types(self))
+        my_attrs.update(HWSoftmax.get_nodeattr_types(self))
         my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
         return my_attrs
 
@@ -74,7 +74,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
                 static hls::stream<hls::vector<TO,SIMD>>  dst0;
 
                 move(in0_{self.hls_sname()}, src0);
-                smaxquant<W,SIMD,TI,TO, true>(src0, dst0);
+                smaxquant<W,SIMD,TI,TO,false>(src0, dst0);
                 move(dst0, out_{self.hls_sname()});
         """
         ]
@@ -101,10 +101,6 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
             #pragma HLS dataflow disable_start_propagation
             """
         ]
-
-    def get_exp_cycles(self):
-        exp_oshape = self.get_normal_output_shape()
-        return exp_oshape[-1] + 28 + 4 
 
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
@@ -172,7 +168,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
         builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
-        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
@@ -212,7 +208,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
             int stream_size = in0_V.size();
 
             while(out_V.size() != stream_size){{
-                smaxquant<W, SIMD, TI, TO, true>(in0_V, out_V);
+                smaxquant<W, SIMD, TI, TO, false>(in0_V, out_V);
             }}
 
             vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");

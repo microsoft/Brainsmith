@@ -61,6 +61,11 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
             """
         ]
 
+    def get_exp_cycles(self):
+        out_shape = self.get_nodeattr("out_shape")
+        simd = self.get_nodeattr("SIMD")
+        return np.prod(out_shape)/simd 
+
     def docompute(self):
         simd = self.get_nodeattr("SIMD")
         out_shape = self.get_nodeattr("out_shape")
@@ -170,7 +175,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
         builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
         builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
         builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
-        builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
+        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
