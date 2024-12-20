@@ -246,8 +246,8 @@ def main(args):
         step_specialize_layers,
     
         # How far do we get
-        step_target_fps_parallelization,
-        step_apply_folding_config,
+        #step_target_fps_parallelization,
+        #step_apply_folding_config,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,

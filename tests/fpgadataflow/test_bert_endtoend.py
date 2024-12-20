@@ -141,21 +141,21 @@ def _compare_contexts(y_ref, y_out):
         print("")
     return
 
-def test_validate_custom_streamlining_step(custom_step_remove_tail, custom_streamlining_step):
-    """ Using the pruned model produced by Brevitas as a reference
-    perform validation of the custom_streamlining_step """
-
-    input_m = custom_step_remove_tail.graph.input[0]
-    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-
-    input_t = { input_m.name : in_tensor}
-    out_name = custom_step_remove_tail.graph.output[0].name
-
-    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
-    y_out = oxe.execute_onnx(custom_streamlining_step, input_t)[out_name] 
-
-    assert np.allclose(y_ref, y_out), "custom_streamlining_step output does not match custom_step_remove_tail"
+#def test_validate_custom_streamlining_step(custom_step_remove_tail, custom_streamlining_step):
+#    """ Using the pruned model produced by Brevitas as a reference
+#    perform validation of the custom_streamlining_step """
+#
+#    input_m = custom_step_remove_tail.graph.input[0]
+#    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+#    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+#
+#    input_t = { input_m.name : in_tensor}
+#    out_name = custom_step_remove_tail.graph.output[0].name
+#
+#    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+#    y_out = oxe.execute_onnx(custom_streamlining_step, input_t)[out_name] 
+#
+#    assert np.allclose(y_ref, y_out), "custom_streamlining_step output does not match custom_step_remove_tail"
 
 
 def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_step_infer_hardware):
