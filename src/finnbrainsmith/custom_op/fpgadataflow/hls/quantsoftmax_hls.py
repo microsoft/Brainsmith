@@ -104,7 +104,7 @@ class QuantSoftmax_hls(QuantSoftmax, BS_HLSBackend):
 
     def get_exp_cycles(self):
         exp_oshape = self.get_normal_output_shape()
-        return exp_oshape[-1] + 28 + 4 
+        return int(exp_oshape[-1] + 28 + 4) 
 
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")

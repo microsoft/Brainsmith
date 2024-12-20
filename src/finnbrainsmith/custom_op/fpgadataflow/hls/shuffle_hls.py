@@ -64,7 +64,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
     def get_exp_cycles(self):
         out_shape = self.get_nodeattr("out_shape")
         simd = self.get_nodeattr("SIMD")
-        return np.prod(out_shape)/simd 
+        return int(np.prod(out_shape)/simd) 
 
     def docompute(self):
         simd = self.get_nodeattr("SIMD")
