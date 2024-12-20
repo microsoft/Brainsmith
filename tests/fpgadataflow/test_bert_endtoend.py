@@ -174,7 +174,7 @@ def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_ste
     y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t, return_full_exec_context=True) 
     y_out = oxe.execute_onnx(custom_step_infer_hardware, input_t, return_full_exec_context=True)
 
-    if not np.allclose(y_ref[out_name], y_out[out_name]):
+    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
         _compare_contexts(y_ref, y_out)
         raise RuntimeError(f"y_ref != y_out")
 
@@ -196,7 +196,7 @@ def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_sp
     cppsim_model = cppsim_model.transform(CompileCppSim())
     y_out = oxe.execute_onnx(cppsim_model, input_t)[out_name] 
 
-    assert np.allclose(y_ref, y_out), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
+    assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
 
 
 

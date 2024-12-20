@@ -109,7 +109,7 @@ def custom_step_infer_hardware(model, cfg):
     need a custom step for infering the hardware for those operations.
 
     Such as:
-        InferShuffler - to infer the Shuffle operations
+        InferShuffle - to infer the Shuffle operations
         InferQuantSoftmax - to infer the QuantSoftMax
 
     However, we can also see some extra infer steps that
@@ -127,7 +127,8 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(to_bs_hw.InferShuffle())
-    model = model.transform(to_bs_hw.InferQuantSoftmax())
+    #model = model.transform(to_bs_hw.InferQuantSoftmax())
+    model = model.transform(to_bs_hw.InferHWSoftmax())
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model

@@ -69,7 +69,6 @@ void max_calc_stage(
 		hls::vector<T,SIMD+1> max_v;
 		hls::vector<T,SIMD> const in = ins.read();
 
-
 		for(unsigned i=0; i<SIMD; i++){
 #pragma HLS UNROLL 
 			out[i] = in[i]; 
@@ -254,7 +253,7 @@ T quant_threshold(TF val) {
 
 
 
-// Quantisation pipeline stage
+// Quantisation pipeline stage (Optional)
 //
 // Trigger: When a SIMD vector is received from the preceeding stage 
 // 
@@ -287,18 +286,23 @@ template<
 	 unsigned N, // The width of the input dimension 
 	 unsigned SIMD, // Amount of parallelism (how many items consumed/produced at a time 
 	 typename TI, // Input type param  
-	 typename TO // Output type param
+	 typename TO, // Output type param
+	 bool QUANT // If true the optional Quant stage is included on the output
 	 >
 void smaxquant(
 	hls::stream<hls::vector<TI,SIMD>> &src,
 	hls::stream<hls::vector<TO,SIMD>> &dst
 ) {
 #pragma HLS DATAFLOW disable_start_propagation
-	hls::stream<hls::vector<float,SIMD>> smax_out;
-#pragma HLS stream variable=smax_out depth=2
 	static_assert(N%SIMD == 0, "SIMD must be a factor of N"); 
 
-	smax<N,SIMD,TI>(src, smax_out);
-	quant_stage<N,SIMD,TO>(smax_out, dst);
+	if constexpr (QUANT) {
+		hls::stream<hls::vector<float,SIMD>> smax_out;
+#pragma HLS stream variable=smax_out depth=2
+		smax<N,SIMD,TI>(src, smax_out);
+		quant_stage<N,SIMD,TO>(smax_out, dst);
+	} else {
+		smax<N,SIMD,TI>(src, dst);
+	}
 
 } // smaxquant()
