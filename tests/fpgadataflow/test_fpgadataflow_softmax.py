@@ -64,7 +64,7 @@ import torch
 import torch.nn as nn
 import brevitas.nn as qnn
 import numpy as np
-test_fpga_part = "xczu3eg-sbva484-1-e"
+test_fpga_part:str = "xcv80-lsva4737-2MHP-e-S"
 target_clk_ns = 5
 export_onnx_path = "pytest_quantsoftmax_dut.onnx"
 
@@ -173,6 +173,7 @@ def make_single_hwsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType["U
         simd=simd,
         preferred_impl_style=impl_style,
         rtlsim_backend="pyxsi",
+        rtlsim_trace="hwsoftmax_debug_trace.wdb",
     )
     graph = helper.make_graph(
         [new_node],
@@ -248,7 +249,7 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
 @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.parametrize("idt", ["INT8", "INT9"])
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
-@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
+@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 128, 128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_hwsoftmax(impl_style, simd, idt, exec_mode, ifm_dim):
     os.environ['LIVENESS_THRESHOLD'] = '50000000' # Need to bump this up for these RTL sims
