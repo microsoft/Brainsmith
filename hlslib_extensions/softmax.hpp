@@ -59,10 +59,17 @@ void max_calc_stage(
 	hls::stream<T> &maxs
 ) {
 #pragma HLS pipeline II=1 style=flp
-	static ap_uint<clog2(N/SIMD)> count = 0;
+	static ap_uint<clog2(N/SIMD)+1> count = 0;
 	static T max = 0;
 #pragma HLS reset variable=count
 #pragma HLS reset variable=max
+
+	if (count == (N/SIMD)) {
+		count = 0;
+		maxs.write(max);
+		max = 0;
+		return;
+	}
 
 	if(!ins.empty()){
 		hls::vector<T,SIMD> out;
@@ -80,11 +87,6 @@ void max_calc_stage(
 		max = MaxReduction<SIMD+1, T>::max(max_v);
 
 		count++;
-		if (count == (N/SIMD)-1) {
-			count = 0;
-			maxs.write(max);
-			max = 0;
-		}
 	}
 }
 
@@ -194,14 +196,14 @@ void smax(
     static_assert(N%SIMD == 0, "N must be a multiple of SIMD");
 
     static hls::stream<hls::vector<T,SIMD>> max_data_s;
-#pragma HLS stream variable=max_data_s depth=N
+#pragma HLS stream variable=max_data_s depth=2*N
     static hls::stream<T> max_s;
-#pragma HLS stream variable=max_s depth=2
+#pragma HLS stream variable=max_s depth=4
 
     static hls::stream<hls::vector<float,SIMD>> exp_data_s;
-#pragma HLS stream variable=exp_data_s depth=N
+#pragma HLS stream variable=exp_data_s depth=2*N
     static hls::stream<float> sum_s;
-#pragma HLS stream variable=sum_s depth=2
+#pragma HLS stream variable=sum_s depth=4
 
     max_calc_stage<N, SIMD, T>(src, max_data_s, max_s);
     exp_sum_calc<N, SIMD, T>(max_data_s, max_s, exp_data_s, sum_s);
@@ -209,19 +211,6 @@ void smax(
 
 } // smax()
 
-// Helper trait to determine if a type is signed  
-template <typename T>  
-struct is_ap_int_signed : std::false_type {};  
-  
-// Specialization for ap_int  
-template <int N>  
-struct is_ap_int_signed<ap_int<N>> : std::true_type {};  
-  
-// Specialization for ap_uint  
-template <int N>  
-struct is_ap_int_signed<ap_uint<N>> : std::false_type {}; 
-
-// Threshold/quantisation at the output of the softmax 
 template<
         typename T, // The quantised output type (Needs to be signed)
         typename TF // The float based input type
@@ -231,24 +220,12 @@ T quant_threshold(TF val) {
 
 	const int T_width = sizeof(T) * 8;  
     	ap_fixed<T_width, 1> fixed_val = val;  
-
-	if(is_ap_int_signed<T>::value) {
-    	    	T mask = (1 << (T_width - 1)) - 1;  
-    	    	if (val >= 1.0f) {  
-    	        	return mask;  
-    	    	}  
-
-    	    	T fractional_part = static_cast<T>(fixed_val.range(T_width - 2, 0));  
-    	    	return fractional_part;  
-	} else {
-    		T mask = ~static_cast<T>(0);
-    		if (val >= 1.0f) {
-    		    return mask;
-    		}
-
-    		T fractional_part = static_cast<T>(fixed_val.range(T_width - 1, 0));
-    		return fractional_part;
-	}
+    	T mask = ~static_cast<T>(0);
+    	if (val >= 1.0f) {
+    		   return mask;
+    	}
+    	T fractional_part = static_cast<T>(fixed_val.range(T_width - 1, 0));
+    	return fractional_part;
 }
 
 

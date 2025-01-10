@@ -249,10 +249,10 @@ def test_convert_to_hw_softmax_layer(exec_mode, simd):
 @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd4"])
 @pytest.mark.parametrize("idt", ["INT8", "INT9"])
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
-@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 128, 128)])
+@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1,12,128,128), (1,12,64,128)])
 @pytest.mark.fpgadataflow
 def test_fpga_dataflow_hwsoftmax(impl_style, simd, idt, exec_mode, ifm_dim):
-    os.environ['LIVENESS_THRESHOLD'] = '50000000' # Need to bump this up for these RTL sims
+    os.environ['LIVENESS_THRESHOLD'] = '500000' # Need to bump this up for these RTL sims
     idt = DataType[idt]
     odt = DataType["FLOAT32"]
     simd = int(simd[-1])
