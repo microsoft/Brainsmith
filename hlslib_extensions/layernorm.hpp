@@ -60,7 +60,7 @@ void mean_stage(
 ) {
 #pragma HLS pipeline II=1 style=flp
 
-	static ap_uint<clog2(N)> count = 0; 
+	static ap_uint<clog2(N)+1> count = 0; 
 	static TO sum = TO(0.0f);
 	static TO mean = TO(0.0f);
 #pragma HLS reset variable=count
@@ -116,7 +116,7 @@ void var_stage(
 	hls::stream<varmean_t<TO>> &varmean_s
 ) {
 #pragma HLS pipeline II=1 style=flp 
-	static ap_uint<clog2(N)> count = 0; 
+	static ap_uint<clog2(N) + 1> count = 0; 
 	static TO pow_sum = TO(0.0f);
 	static TO var = TO(0.0f);
 	static TO mean = TO(0.0f);

@@ -246,8 +246,8 @@ def main(args):
         step_specialize_layers,
     
         # How far do we get
-        #step_target_fps_parallelization,
-        #step_apply_folding_config,
+        step_target_fps_parallelization,
+        step_apply_folding_config,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
@@ -263,7 +263,7 @@ def main(args):
         target_fps=1000,
         output_dir=tmp,
         synth_clk_period_ns=5,
-        stitched_ip_gen_dcp=True,
+        #stitched_ip_gen_dcp=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
