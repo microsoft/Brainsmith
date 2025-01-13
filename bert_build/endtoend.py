@@ -260,9 +260,9 @@ def main(args):
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
         steps=steps,
-        target_fps=1000,
+        target_fps=3000,
         output_dir=tmp,
-        synth_clk_period_ns=5,
+        synth_clk_period_ns=3.33,
         #stitched_ip_gen_dcp=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
