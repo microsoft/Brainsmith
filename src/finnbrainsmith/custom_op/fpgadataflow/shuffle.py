@@ -68,6 +68,7 @@ class Shuffle(HWCustomOp):
             warn_str = f"data_type changing for {node.name}: {str(self.get_input_datatype())} -> {str(dt)}"
             warnings.warn(warn_str)
         self.set_nodeattr("data_type", dt.name)
+        model.set_tensor_datatype(node.output[0], dt)
 
     def verify_node(self):
         raise NotImplementedError("This function is not yet immplemented.")
