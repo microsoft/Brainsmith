@@ -246,7 +246,7 @@ def main(args):
         step_specialize_layers,
     
         # How far do we get
-        step_target_fps_parallelization,
+        #step_target_fps_parallelization,
         step_apply_folding_config,
         step_minimize_bit_width,
         step_generate_estimate_reports,
@@ -263,11 +263,23 @@ def main(args):
         target_fps=3000,
         output_dir=tmp,
         synth_clk_period_ns=3.33,
-        #stitched_ip_gen_dcp=True,
+        #folding_config_file="./config/folding_config.json",
+        folding_config_file="./config/folding_config_with_fifo.json",
+        auto_fifo_depths=False,
+        stitched_ip_gen_dcp=False,
+        start_step="step_create_stitched_ip",
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
             ],
+        verify_input_npy="input.npy",
+        verify_expected_output_npy="expected_output.npy",
+        verify_steps=[
+            #build_cfg.VerificationStepType.TIDY_UP_PYTHON,
+            #build_cfg.VerificationStepType.STREAMLINED_PYTHON,
+            #build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
+            build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
+        ],
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
