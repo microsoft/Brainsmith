@@ -267,7 +267,6 @@ def main(args):
         folding_config_file="./config/folding_config_with_fifo.json",
         auto_fifo_depths=False,
         stitched_ip_gen_dcp=False,
-        start_step="step_create_stitched_ip",
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
@@ -275,9 +274,9 @@ def main(args):
         verify_input_npy="input.npy",
         verify_expected_output_npy="expected_output.npy",
         verify_steps=[
-            #build_cfg.VerificationStepType.TIDY_UP_PYTHON,
-            #build_cfg.VerificationStepType.STREAMLINED_PYTHON,
-            #build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
+            build_cfg.VerificationStepType.TIDY_UP_PYTHON,
+            build_cfg.VerificationStepType.STREAMLINED_PYTHON,
+            build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
             build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
         ],
     )
