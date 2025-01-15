@@ -147,22 +147,13 @@ def _compare_contexts(y_ref, y_out):
         print("")
     return
 
-#def test_validate_custom_streamlining_step(custom_step_remove_tail, custom_streamlining_step):
-#    """ Using the pruned model produced by Brevitas as a reference
-#    perform validation of the custom_streamlining_step """
-#
-#    input_m = custom_step_remove_tail.graph.input[0]
-#    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-#    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-#
-#    input_t = { input_m.name : in_tensor}
-#    out_name = custom_step_remove_tail.graph.output[0].name
-#
-#    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
-#    y_out = oxe.execute_onnx(custom_streamlining_step, input_t)[out_name] 
-#
-#    assert np.allclose(y_ref, y_out), "custom_streamlining_step output does not match custom_step_remove_tail"
-
+def _save_context(arrays_dict, dict_name):  
+    if not os.path.exists(dict_name):  
+        os.makedirs(dict_name)  
+      
+    for key, array in arrays_dict.items():  
+        filename = os.path.join(dict_name, f"{key}.npy")  
+        np.save(filename, array)  
 
 def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_step_infer_hardware):
     """ Using the pruned model produced by Brevitas as a reference
@@ -204,7 +195,7 @@ def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_sp
 
     assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
 
-def test_validate_step_specialize_layers_rtlsim(custom_step_remove_tail, step_create_stitched_ip):
+def test_validate_node_by_node_rtlsim(custom_step_remove_tail, step_specialize_layers):
     """ Using the pruned model produced by Brevitas as a reference
     perform  """
 
@@ -215,13 +206,41 @@ def test_validate_step_specialize_layers_rtlsim(custom_step_remove_tail, step_cr
     input_t = { input_m.name : in_tensor}
     out_name = custom_step_remove_tail.graph.output[0].name
 
-    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t) 
+
+    rtlsim_model = step_specialise_layers.transform(SetExecMode("rtlsim"))
+    rtlsim_model = rtlsim_model.transform(PrepareRTLSim())
+    y_out = oxe.execute_onnx(rtlsim_model, input_t) 
+
+    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
+        _compare_contexts(y_ref, y_out)
+        _save_context(y_ref, "stitched_ip_rtlsim_context/y_ref")
+        _save_context(y_out, "stitched_ip_rtlsim_context/y_out")
+        raise RuntimeError(f"y_ref != y_out")
+
+
+def test_validate_stitched_ip_rtlsim(custom_step_remove_tail, step_create_stitched_ip):
+    """ Using the pruned model produced by Brevitas as a reference
+    perform  """
+
+    input_m = custom_step_remove_tail.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = custom_step_remove_tail.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t) 
 
     rtlsim_model = step_create_stitched_ip.transform(SetExecMode("rtlsim"))
     rtlsim_model = rtlsim_model.transform(PrepareRTLSim())
-    y_out = oxe.execute_onnx(rtlsim_model, input_t)[out_name] 
+    y_out = oxe.execute_onnx(rtlsim_model, input_t) 
 
-    assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
+    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
+        _compare_contexts(y_ref, y_out)
+        _save_context(y_ref, "stitched_ip_rtlsim_context/y_ref")
+        _save_context(y_out, "stitched_ip_rtlsim_context/y_out")
+        raise RuntimeError(f"y_ref != y_out")
 
 ##############################################
 #    Specialised layers testing
