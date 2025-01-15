@@ -266,7 +266,7 @@ def main(args):
         #folding_config_file="./config/folding_config.json",
         folding_config_file="./config/folding_config_with_fifo.json",
         auto_fifo_depths=False,
-        stitched_ip_gen_dcp=False,
+        stitched_ip_gen_dcp=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,

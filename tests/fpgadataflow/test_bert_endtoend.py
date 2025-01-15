@@ -18,6 +18,7 @@ from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
+from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 import finn.builder.build_dataflow_config as build_cfg
 import finn.core.onnx_exec as oxe
 
@@ -59,9 +60,14 @@ test_cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
         steps=[],
         output_dir='./',
-        synth_clk_period_ns=5,
+        synth_clk_period_ns=3.33,
+        stitched_ip_gen_dcp=False,
+        folding_config_file="./config/folding_config_with_fifo.json",
+        auto_fifo_depths=False,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
-        generate_outputs=[],
+        generate_outputs=[
+            build_cfg.DataflowOutputType.STITCHED_IP,
+            ],
     )
 
 # Save a json file with the current status of the endtoend flow for tracking
@@ -198,7 +204,24 @@ def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_sp
 
     assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
 
+def test_validate_step_specialize_layers_rtlsim(custom_step_remove_tail, step_create_stitched_ip):
+    """ Using the pruned model produced by Brevitas as a reference
+    perform  """
 
+    input_m = custom_step_remove_tail.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = custom_step_remove_tail.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t)[out_name] 
+
+    rtlsim_model = step_create_stitched_ip.transform(SetExecMode("rtlsim"))
+    rtlsim_model = rtlsim_model.transform(PrepareRTLSim())
+    y_out = oxe.execute_onnx(rtlsim_model, input_t)[out_name] 
+
+    assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
 
 ##############################################
 #    Specialised layers testing
