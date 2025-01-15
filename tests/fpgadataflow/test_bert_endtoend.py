@@ -214,8 +214,8 @@ def test_validate_node_by_node_rtlsim(custom_step_remove_tail, step_specialize_l
 
     if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
         _compare_contexts(y_ref, y_out)
-        _save_context(y_ref, "stitched_ip_rtlsim_context/y_ref")
-        _save_context(y_out, "stitched_ip_rtlsim_context/y_out")
+        _save_context(y_ref, "node_by_node_rtlsim_context/y_ref")
+        _save_context(y_out, "node_by_node_rtlsim_context/y_out")
         raise RuntimeError(f"y_ref != y_out")
 
 
