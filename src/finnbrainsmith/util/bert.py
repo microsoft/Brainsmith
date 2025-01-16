@@ -25,9 +25,20 @@ from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
+# Included for getting reference IO from model with head/tail removed
+import finn.core.onnx_exec as oxe
+from qonnx.util.basic import gen_finn_dt_tensor
+from qonnx.core.datatype import DataType
+import numpy as np
+
+#Debugging
+from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
+from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
+from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
+from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
+
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
-from qonnx.core.datatype import DataType
 
 def custom_step_qonnx2finn(model, cfg):
     """
@@ -72,6 +83,57 @@ def custom_step_qonnx2finn(model, cfg):
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
+
+def custom_step_generate_reference_io(model, cfg):
+    """
+    This step is to generate a reference IO pair for the 
+    onnx model where the head and the tail have been 
+    chopped off.
+    """
+    input_m = model.graph.input[0]
+    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
+    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+    np.save("input.npy", in_tensor)
+
+    input_t = { input_m.name : in_tensor}
+    out_name = model.graph.output[0].name
+
+    y_ref = oxe.execute_onnx(model, input_t, True)
+    np.save("expected_output.npy", y_ref[out_name])
+    np.savez("expected_context.npz", **y_ref) 
+    return model
+
+
+# Debugging custom step for comparing the contexts at various points
+# along the compilation flow
+def custom_step_execute_and_save_context_prefolding(model, cfg):
+    input_m = model.graph.input[0]
+    in_tensor = np.load("input.npy")
+    input_t = { input_m.name : in_tensor}
+    cppsim_model = model.transform(SetExecMode("cppsim"))
+    cppsim_model = cppsim_model.transform(PrepareCppSim())
+    cppsim_model = cppsim_model.transform(CompileCppSim())
+    out_name = cppsim_model.graph.output[0].name
+    y_ref = oxe.execute_onnx(cppsim_model, input_t, True)
+    np.save("prefolding_cppsim_output.npy", y_ref[out_name])
+    np.savez("prefolding_cppsim_context.npz", **y_ref) 
+    return model
+
+# Debugging custom step for comparing the contexts at various points
+# along the compilation flow
+def custom_step_execute_and_save_context_postfolding(model, cfg):
+    input_m = model.graph.input[0]
+    in_tensor = np.load("input.npy")
+    input_t = { input_m.name : in_tensor}
+    cppsim_model = model.transform(SetExecMode("cppsim"))
+    cppsim_model = cppsim_model.transform(PrepareCppSim())
+    cppsim_model = cppsim_model.transform(CompileCppSim())
+    out_name = cppsim_model.graph.output[0].name
+    y_ref = oxe.execute_onnx(cppsim_model, input_t, True)
+    np.save("postfolding_cppsim_output.npy", y_ref[out_name])
+    np.savez("postfolding_cppsim_context.npz", **y_ref) 
+    return model
+
 
 def custom_streamlining_step(model, cfg):
     """

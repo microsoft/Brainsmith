@@ -28,10 +28,13 @@ import finn.builder.build_dataflow_config as build_cfg
 from finnbrainsmith.util.bert import (
         custom_step_remove_head,
         custom_step_remove_tail,
+        custom_step_generate_reference_io,
         custom_step_cleanup,
         custom_step_infer_hardware,
         custom_streamlining_step,
-        custom_step_qonnx2finn
+        custom_step_qonnx2finn,
+        custom_step_execute_and_save_context_prefolding,
+        custom_step_execute_and_save_context_postfolding,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -200,6 +203,8 @@ def gen_initial_bert_model(
             opset_version=17,
         )
 
+
+
 def main(args):
     tmp = "./intermediate_models"
     os.makedirs(tmp, exist_ok=True)
@@ -228,10 +233,9 @@ def main(args):
         custom_step_remove_head,
         custom_step_remove_tail,
 
-        # LayerNormalization to LayerNorm
-    
         # Conversion
         custom_step_qonnx2finn,
+        custom_step_generate_reference_io,
     
         # Streamlining
         custom_streamlining_step,
@@ -247,7 +251,11 @@ def main(args):
     
         # How far do we get
         #step_target_fps_parallelization,
+
+
+        custom_step_execute_and_save_context_prefolding,
         step_apply_folding_config,
+        custom_step_execute_and_save_context_postfolding,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
@@ -273,6 +281,7 @@ def main(args):
             ],
         verify_input_npy="input.npy",
         verify_expected_output_npy="expected_output.npy",
+        verify_save_full_context=True,
         verify_steps=[
             build_cfg.VerificationStepType.TIDY_UP_PYTHON,
             build_cfg.VerificationStepType.STREAMLINED_PYTHON,

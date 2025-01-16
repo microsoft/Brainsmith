@@ -37,10 +37,10 @@
     "runtime_writeable_weights": 0
   },
   "Shuffle_hls_0": {
-    "SIMD": 4 
+    "SIMD": 1 
   },
   "Shuffle_hls_1": {
-    "SIMD": 4 
+    "SIMD": 1 
   },
   "Shuffle_hls_2": {
     "SIMD": 1 
@@ -95,7 +95,7 @@
     "runtime_writeable_weights": 0
   },
   "Shuffle_hls_3": {
-    "SIMD":4 
+    "SIMD":1 
   },
   "Thresholding_rtl_6": {
     "PE": 4,
