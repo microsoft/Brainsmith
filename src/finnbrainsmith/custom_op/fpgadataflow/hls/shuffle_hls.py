@@ -69,7 +69,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
     def docompute(self):
         simd = self.get_nodeattr("SIMD")
         out_shape = self.get_nodeattr("out_shape")
-        loop_coeffs = [x for x in self.get_nodeattr("loop_coeffs")]
+        out_shape[-1] = int(out_shape[-1]/simd)
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
         interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
@@ -204,7 +205,8 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
         simd = self.get_nodeattr("SIMD")
         out_shape = self.get_nodeattr("out_shape")
-        loop_coeffs = [x/simd for x in self.get_nodeattr("loop_coeffs")]
+        out_shape[-1] = int(out_shape[-1]/simd)
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
         interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
