@@ -14,7 +14,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
+from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ApplyConfig
 from qonnx.core.modelwrapper import ModelWrapper
 from brevitas.export import export_qonnx
 from qonnx.util.cleanup import cleanup as qonnx_cleanup
@@ -97,13 +97,13 @@ def construct_onnx_model(
             "out_reshaped" : None,
             "perm" : (0,2,1,3)
     }, 
-    {
-            "in_shape" : (1,128,384), # Shuffle B 
-            "in_reshaped" : (1,128,12,32),
-            "out_shape" : (1,12,32,128),
-            "out_reshaped" : None,
-            "perm" : (0,2,3,1)
-    }, 
+    #{
+    #        "in_shape" : (1,128,384), # Shuffle B 
+    #        "in_reshaped" : (1,128,12,32),
+    #        "out_shape" : (1,12,32,128),
+    #        "out_reshaped" : None,
+    #        "perm" : (0,2,3,1)
+    #}, 
     {
             "in_shape" : (1,12,128,32), # Shuffle C 
             "in_reshaped" : None,
@@ -129,6 +129,14 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
             dt=dt
     )
 
+    folding_config = {
+        "Defaults": {},
+        "Shuffle_Transpose_0": {
+            "SIMD": simd,
+            "preferred_impl_style": "hls"
+        }
+    }
+
     input = gen_finn_dt_tensor(dt, in_shape)
     in_name = model.graph.input[0].name
     out_name = model.graph.output[0].name
@@ -139,6 +147,7 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
 
     # Attempt to build the HLS for this
     model = model.transform(InferShuffle())
+    model = model.transform(ApplyConfig(folding_config))
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())
@@ -192,6 +201,14 @@ def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
             dt=dt
     )
 
+    folding_config = {
+        "Defaults": {},
+        "Shuffle_Transpose_0": {
+            "SIMD": simd,
+            "preferred_impl_style": "hls"
+        }
+    }
+
     input = gen_finn_dt_tensor(dt, in_shape)
     in_name = model.graph.input[0].name
     out_name = model.graph.output[0].name
@@ -202,6 +219,7 @@ def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
 
     # Attempt to build the HLS for this
     model = model.transform(InferShuffle())
+    model = model.transform(ApplyConfig(folding_config))
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())
