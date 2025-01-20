@@ -294,7 +294,10 @@ def main(args):
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
-    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+    if args.stop_step is None:
+        shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+    else:
+        shutil.copy2(f"{tmp}/intermediate_models/{args.stop_step}.onnx", args.output)
 
 
 if __name__ == "__main__":
