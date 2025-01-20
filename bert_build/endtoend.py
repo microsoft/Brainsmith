@@ -269,8 +269,6 @@ def main(args):
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
         
-        step_further_specialise_rw_layers, # RW nodes run a gate level sim? (Just simulate the RW layers at this stage as they are the only thing to change)
-
         step_create_stitched_ip,
     ]
 
