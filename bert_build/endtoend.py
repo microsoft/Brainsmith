@@ -33,8 +33,6 @@ from finnbrainsmith.util.bert import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
-        custom_step_execute_and_save_context_prefolding,
-        custom_step_execute_and_save_context_postfolding,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -258,9 +256,7 @@ def main(args):
         #step_target_fps_parallelization,
 
 
-        custom_step_execute_and_save_context_prefolding,
         step_apply_folding_config,
-        custom_step_execute_and_save_context_postfolding,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
