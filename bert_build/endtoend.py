@@ -247,7 +247,7 @@ def main(args):
         stop_step=args.stop_step,
         auto_fifo_depths=True if args.param is None else False,
         stitched_ip_gen_dcp=args.dcp,
-        fpga_part="xcv80-lsva4737-2MHP-e-S",
+        board="V80",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
             ],
