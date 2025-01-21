@@ -211,60 +211,13 @@ void smax(
 
 } // smax()
 
-template<
-        typename T, // The quantised output type (Needs to be signed)
-        typename TF // The float based input type
->
-T quant_threshold(TF val) {
-#pragma HLS INLINE
 
-	const int T_width = sizeof(T) * 8;  
-    	ap_fixed<T_width, 1> fixed_val = val;  
-    	T mask = ~static_cast<T>(0);
-    	if (val >= 1.0f) {
-    		   return mask;
-    	}
-    	T fractional_part = static_cast<T>(fixed_val.range(T_width - 1, 0));
-    	return fractional_part;
-}
-
-
-
-// Quantisation pipeline stage (Optional)
-//
-// Trigger: When a SIMD vector is received from the preceeding stage 
-// 
-// Desc: Apply quantisation to the SIMD elements and write them into the
-// SIMD width output stream.
-template<
-	unsigned N,
-	unsigned SIMD,
-	typename T
->
-void quant_stage(
-		hls::stream<hls::vector<float,SIMD>> &in,
-		hls::stream<hls::vector<T, SIMD>> &out
-) {
-#pragma HLS pipeline II=1 style=flp
-	if(!in.empty()) {
-		hls::vector<float, SIMD> const x = in.read();
-		hls::vector<T,SIMD> y;
-		for(unsigned i=0; i<SIMD; i++) {
-#pragma HLS UNROLL
-			y[i] = quant_threshold<T>(x[i]);
-		}
-		out.write(y);
-	}
-}
-
-// Quantised version of softmax
-// This is the same as the float softmax with an additional baked in quantisation stage at the end
 template<
 	 unsigned N, // The width of the input dimension 
 	 unsigned SIMD, // Amount of parallelism (how many items consumed/produced at a time 
 	 typename TI, // Input type param  
 	 typename TO, // Output type param
-	 bool QUANT // If true the optional Quant stage is included on the output
+	 bool QUANT // If true the optional Quant stage (NOT CURRENTLY USED) 
 	 >
 void smaxquant(
 	hls::stream<hls::vector<TI,SIMD>> &src,
@@ -272,14 +225,6 @@ void smaxquant(
 ) {
 #pragma HLS DATAFLOW disable_start_propagation
 	static_assert(N%SIMD == 0, "SIMD must be a factor of N"); 
-
-	if (QUANT) {
-		hls::stream<hls::vector<float,SIMD>> smax_out;
-#pragma HLS stream variable=smax_out depth=2
-		smax<N,SIMD,TI>(src, smax_out);
-		quant_stage<N,SIMD,TO>(smax_out, dst);
-	} else {
-		smax<N,SIMD,TI>(src, dst);
-	}
+	smax<N,SIMD,TI>(src, dst);
 
 } // smaxquant()

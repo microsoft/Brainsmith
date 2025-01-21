@@ -128,8 +128,6 @@ def gen_initial_bert_model(
     token_type_ids = torch.randint(high=2, size=(batch_size,seq_len), dtype=torch.int64)
     inp = {
         'input_ids': input_ids,
-    #    'attention_mask': attention_mask,
-    #    'token_type_ids': token_type_ids,
     }
     
     input_names = inp.keys()
@@ -143,12 +141,6 @@ def gen_initial_bert_model(
     
     post_output = model(**inp)
     
-    # Old version (some old transformers version)
-    #print(pre_output.pooler_output.shape)
-    #print(pre_output.pooler_output)
-    #print(f"{pre_output.pooler_output.shape} - {post_output.pooler_output.shape}")
-    #print(pre_output.pooler_output - post_output.pooler_output)
-    
     # Sanity check that the layer replacement worked
     print(pre_output["pooler_output"].shape)
     print(pre_output["pooler_output"])
@@ -160,7 +152,6 @@ def gen_initial_bert_model(
     layerwise_compute_layer_map[nn.Linear] = (
         qnn.QuantLinear,
         {
-            #'input_quant': IntActPerTensorFloatConstScale,
             'input_quant': lambda module: UintActPerTensorFloatConstScale if module.in_features == config.intermediate_size and unsigned_hidden_act else IntActPerTensorFloatConstScale,
             'weight_quant': IntWeightPerTensorFloatConstScale,
             'output_quant': None,
@@ -195,12 +186,6 @@ def gen_initial_bert_model(
             outfile,
             do_constant_folding=True,
             input_names=['input_ids'],
-            #dynamic_axes={
-            #    'input_ids': {
-            #        0: 'batch_size',
-            #        1: 'sequence_length',
-            #    },  
-            #},  
             opset_version=17,
         )
 
@@ -230,41 +215,25 @@ def main(args):
     cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
     
     steps = [
-    
         # Cleanup and custom graph surgery
         custom_step_cleanup,
         custom_step_remove_head,
         custom_step_remove_tail,
-
-        # Conversion
         custom_step_qonnx2finn,
+
         custom_step_generate_reference_io,
-    
-        # Streamlining
         custom_streamlining_step,
-    
-        # Infer Hardware
         custom_step_infer_hardware,
-    
-        # dataflow partition
         step_create_dataflow_partition,
-    
-        # Specialise the hardware layers
         step_specialize_layers,
-    
-        # How far do we get
-        #step_target_fps_parallelization,
-
-
+        step_target_fps_parallelization,
         step_apply_folding_config,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
-
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
-        
         step_create_stitched_ip,
     ]
 
@@ -305,7 +274,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', help='Output ONNX file path', required=True)
     parser.add_argument('-z', '--hidden_size', type=int, default=384, help='Sets BERT hidden_size parameter')
     parser.add_argument('-n', '--num_attention_heads', type=int, default=12, help='Sets BERT num_attention_heads parameter')
-    parser.add_argument('-l', '--num_hidden_layers', type=int, default=3, help='Number of hidden layers')
+    parser.add_argument('-l', '--num_hidden_layers', type=int, default=1, help='Number of hidden layers')
     parser.add_argument('-i', '--intermediate_size', type=int, default=1536, help='Sets BERT intermediate_size parameter')
     parser.add_argument('-b', '--bitwidth', type=int, default=8, help='The quantisation bitwidth (either 4 or 8)')
     parser.add_argument('-f', '--fps', type=int, default=3000, help='The target fps for auto folding')
