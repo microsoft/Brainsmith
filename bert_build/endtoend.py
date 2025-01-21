@@ -1,3 +1,6 @@
+import warnings  
+warnings.simplefilter("ignore")  
+
 import onnx  
 import os
 import shutil
@@ -142,10 +145,10 @@ def gen_initial_bert_model(
     post_output = model(**inp)
     
     # Sanity check that the layer replacement worked
-    print(pre_output["pooler_output"].shape)
-    print(pre_output["pooler_output"])
-    print(f"{pre_output['pooler_output'].shape} - {post_output['pooler_output'].shape}")
-    print(pre_output['pooler_output'] - post_output['pooler_output'])
+    #print(pre_output["pooler_output"].shape)
+    #print(pre_output["pooler_output"])
+    #print(f"{pre_output['pooler_output'].shape} - {post_output['pooler_output'].shape}")
+    #print(pre_output['pooler_output'] - post_output['pooler_output'])
     
     unsigned_hidden_act = config.hidden_act == 'relu'
     layerwise_compute_layer_map = {}
