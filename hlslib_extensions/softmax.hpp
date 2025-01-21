@@ -273,7 +273,7 @@ void smaxquant(
 #pragma HLS DATAFLOW disable_start_propagation
 	static_assert(N%SIMD == 0, "SIMD must be a factor of N"); 
 
-	if constexpr (QUANT) {
+	if (QUANT) {
 		hls::stream<hls::vector<float,SIMD>> smax_out;
 #pragma HLS stream variable=smax_out depth=2
 		smax<N,SIMD,TI>(src, smax_out);
