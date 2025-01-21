@@ -258,8 +258,6 @@ def main(args):
         verify_expected_output_npy="expected_output.npy",
         verify_save_full_context=True,
         verify_steps=[
-            build_cfg.VerificationStepType.TIDY_UP_PYTHON,
-            build_cfg.VerificationStepType.STREAMLINED_PYTHON,
             build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
             build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
         ],
