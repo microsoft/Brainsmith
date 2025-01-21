@@ -33,8 +33,6 @@ from finnbrainsmith.util.bert import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
-        custom_step_execute_and_save_context_prefolding,
-        custom_step_execute_and_save_context_postfolding,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -59,54 +57,57 @@ from finn.builder.build_dataflow_steps import (
     step_deployment_package,
 )
 
-# Global consts used by Brevitas build step
-bit_width=8
-dtype=torch.float32
-smax_val=2**(bit_width-1)-1
-umax_val=2**(bit_width)-1
-
-class IntActPerTensorFloatConstScale(Int8ActPerTensorFloat):
-    scaling_impl_type="const"
-    restrict_scaling_type="fp"
-    narrow_range=True
-    max_val=smax_val
-    min_val=-smax_val
-
-class IntWeightPerTensorFloatConstScale(Int8WeightPerTensorFloat):
-    scaling_impl_type="const"
-    restrict_scaling_type="fp"
-    narrow_range=True
-    scaling_const=smax_val
-
-class UintActPerTensorFloatConstScale(Uint8ActPerTensorFloat):
-    scaling_impl_type="const"
-    restrict_scaling_type="fp"
-    max_val=umax_val
-
-class UintActPerTensorFloatConstScale1(Uint8ActPerTensorFloat):
-    scaling_impl_type="const"
-    restrict_scaling_type="fp"
-    max_val=1.0
-
-class IntActTanh(Int8ActPerTensorFloat):
-    scaling_impl_type="const"
-    restrict_scaling_type="fp"
-    narrow_range=True
-    max_val=1.0
-    min_val=-1.0
-
 def gen_initial_bert_model(
         outfile:str="bert.onnx",
         hidden_size:int=384,
+        num_hidden_layers:int=3,
         num_attention_heads:int=12,
-        intermediate_size:int=1536
+        intermediate_size:int=1536,
+        bitwidth:int=8
         )->None:
     """ Generates the initial BERT model from Brevitas. (Write more here) """
+
+    # Global consts used by Brevitas build step
+    bit_width=bitwidth
+    dtype=torch.float32
+    smax_val=2**(bit_width-1)-1
+    umax_val=2**(bit_width)-1
+
+    class IntActPerTensorFloatConstScale(Int8ActPerTensorFloat):
+        scaling_impl_type="const"
+        restrict_scaling_type="fp"
+        narrow_range=True
+        max_val=smax_val
+        min_val=-smax_val
+    
+    class IntWeightPerTensorFloatConstScale(Int8WeightPerTensorFloat):
+        scaling_impl_type="const"
+        restrict_scaling_type="fp"
+        narrow_range=True
+        scaling_const=smax_val
+    
+    class UintActPerTensorFloatConstScale(Uint8ActPerTensorFloat):
+        scaling_impl_type="const"
+        restrict_scaling_type="fp"
+        max_val=umax_val
+    
+    class UintActPerTensorFloatConstScale1(Uint8ActPerTensorFloat):
+        scaling_impl_type="const"
+        restrict_scaling_type="fp"
+        max_val=1.0
+    
+    class IntActTanh(Int8ActPerTensorFloat):
+        scaling_impl_type="const"
+        restrict_scaling_type="fp"
+        narrow_range=True
+        max_val=1.0
+        min_val=-1.0
+
     config = BertConfig(
-      hidden_size=384,
-      num_hidden_layers=1,
-      num_attention_heads=12,
-      intermediate_size=1536,
+      hidden_size=hidden_size,
+      num_hidden_layers=num_hidden_layers,
+      num_attention_heads=num_attention_heads,
+      intermediate_size=intermediate_size,
       attn_implementation="sdpa",
       hidden_act="relu",
     )
@@ -114,7 +115,7 @@ def gen_initial_bert_model(
     model.to(dtype=dtype)
     model.eval()
     vocab_size = model.config.vocab_size
-    seq_len = 128
+    seq_len = int(intermediate_size/num_attention_heads) # [SF] This is not correct fix 
     batch_size = 1
     
     with torch.no_grad():
@@ -213,8 +214,10 @@ def main(args):
     gen_initial_bert_model(
         outfile=f"{tmp}/initial.onnx",
         hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_hidden_layers,
         num_attention_heads=args.num_attention_heads,
-        intermediate_size=args.intermediate_size
+        intermediate_size=args.intermediate_size,
+        bitwidth=args.bitwidth
     )
 
     # Initial model cleanup
@@ -253,28 +256,28 @@ def main(args):
         #step_target_fps_parallelization,
 
 
-        custom_step_execute_and_save_context_prefolding,
         step_apply_folding_config,
-        custom_step_execute_and_save_context_postfolding,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
+
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
+        
         step_create_stitched_ip,
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
         steps=steps,
-        target_fps=3000,
+        target_fps=args.fps,
         output_dir=tmp,
-        synth_clk_period_ns=3.33,
-        #folding_config_file="./config/folding_config.json",
-        folding_config_file="./config/folding_config_with_fifo.json",
-        auto_fifo_depths=False,
-        stitched_ip_gen_dcp=True,
+        synth_clk_period_ns=args.clk,
+        folding_config_file=args.param,
+        stop_step=args.stop_step,
+        auto_fifo_depths=True if args.param is None else False,
+        stitched_ip_gen_dcp=args.dcp,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
@@ -291,15 +294,25 @@ def main(args):
     )
     
     _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
-    shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+    if args.stop_step is None:
+        shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+    else:
+        shutil.copy2(f"{tmp}/intermediate_models/{args.stop_step}.onnx", args.output)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='TinyBERT cleanup script')
-    parser.add_argument('-o', '--output', help='Input ONNX file path', required=True)
+    parser = argparse.ArgumentParser(description='TinyBERT FINN demo script')
+    parser.add_argument('-o', '--output', help='Output ONNX file path', required=True)
     parser.add_argument('-z', '--hidden_size', type=int, default=384, help='Sets BERT hidden_size parameter')
     parser.add_argument('-n', '--num_attention_heads', type=int, default=12, help='Sets BERT num_attention_heads parameter')
+    parser.add_argument('-l', '--num_hidden_layers', type=int, default=3, help='Number of hidden layers')
     parser.add_argument('-i', '--intermediate_size', type=int, default=1536, help='Sets BERT intermediate_size parameter')
+    parser.add_argument('-b', '--bitwidth', type=int, default=8, help='The quantisation bitwidth (either 4 or 8)')
+    parser.add_argument('-f', '--fps', type=int, default=3000, help='The target fps for auto folding')
+    parser.add_argument('-c', '--clk', type=float, default=3.33, help='The target clock rate for the hardware')
+    parser.add_argument('-s', '--stop_step', type=str, default=None, help='Step to stop at in the build flow')
+    parser.add_argument('-p', '--param', type=str, default=None, help='Use a preconfigured file for the folding parameters')
+    parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
 
     args = parser.parse_args()
     main(args)
