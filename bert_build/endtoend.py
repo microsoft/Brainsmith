@@ -249,6 +249,7 @@ def main(args):
         folding_config_file=args.param,
         stop_step=args.stop_step,
         auto_fifo_depths=True if args.param is None else False,
+        split_large_fifos=True,
         stitched_ip_gen_dcp=args.dcp,
         board="V80",
         generate_outputs=[
