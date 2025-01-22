@@ -71,40 +71,7 @@ def gen_initial_bert_model(
     """ Generates the initial BERT model from Brevitas. (Write more here) """
 
     # Global consts used by Brevitas build step
-    bit_width=bitwidth
     dtype=torch.float32
-    smax_val=2**(bit_width-1)-1
-    umax_val=2**(bit_width)-1
-
-    class IntActPerTensorFloatConstScale(Int8ActPerTensorFloat):
-        scaling_impl_type="const"
-        restrict_scaling_type="fp"
-        narrow_range=True
-        max_val=smax_val
-        min_val=-smax_val
-    
-    class IntWeightPerTensorFloatConstScale(Int8WeightPerTensorFloat):
-        scaling_impl_type="const"
-        restrict_scaling_type="fp"
-        narrow_range=True
-        scaling_const=smax_val
-    
-    class UintActPerTensorFloatConstScale(Uint8ActPerTensorFloat):
-        scaling_impl_type="const"
-        restrict_scaling_type="fp"
-        max_val=umax_val
-    
-    class UintActPerTensorFloatConstScale1(Uint8ActPerTensorFloat):
-        scaling_impl_type="const"
-        restrict_scaling_type="fp"
-        max_val=1.0
-    
-    class IntActTanh(Int8ActPerTensorFloat):
-        scaling_impl_type="const"
-        restrict_scaling_type="fp"
-        narrow_range=True
-        max_val=1.0
-        min_val=-1.0
 
     config = BertConfig(
       hidden_size=hidden_size,
@@ -118,13 +85,8 @@ def gen_initial_bert_model(
     model.to(dtype=dtype)
     model.eval()
     vocab_size = model.config.vocab_size
-    seq_len = int(intermediate_size/num_attention_heads) # [SF] This is not correct fix 
+    seq_len = 128 
     batch_size = 1
-    
-    with torch.no_grad():
-        for name, module in model.named_modules():
-            if type(module) == nn.Linear:
-                module.weight *= (smax_val / (module.weight.abs().max() * math.sqrt(float(module.out_features))))
     
     input_ids = torch.randint(vocab_size, (batch_size,seq_len), dtype=torch.int64)
     attention_mask = torch.randint(high=2, size=(batch_size,seq_len), dtype=torch.float32)
@@ -155,33 +117,34 @@ def gen_initial_bert_model(
     layerwise_compute_layer_map[nn.Linear] = (
         qnn.QuantLinear,
         {
-            'input_quant': lambda module: UintActPerTensorFloatConstScale if module.in_features == config.intermediate_size and unsigned_hidden_act else IntActPerTensorFloatConstScale,
-            'weight_quant': IntWeightPerTensorFloatConstScale,
+            #'input_quant': Int8ActPerTensorFloat,
+            'input_quant': lambda module: Uint8ActPerTensorFloat if module.in_features == config.intermediate_size and unsigned_hidden_act else Int8ActPerTensorFloat,
+            'weight_quant': Int8WeightPerTensorFloat,
             'output_quant': None,
             'bias_quant': None,
             'return_quant_tensor': False})
     layerwise_compute_layer_map[qnn.ScaledDotProductAttention] = (
         qnn.QuantScaledDotProductAttention,
         {
-            'softmax_input_quant': IntActPerTensorFloatConstScale,
-            'attn_output_weights_quant': UintActPerTensorFloatConstScale1,
-            'q_scaled_quant': IntActPerTensorFloatConstScale,
-            'k_transposed_quant': IntActPerTensorFloatConstScale,
-            'v_quant': IntActPerTensorFloatConstScale,
+            'softmax_input_quant': Int8ActPerTensorFloat,
+            'attn_output_weights_quant': Uint8ActPerTensorFloat,
+            'q_scaled_quant': Int8ActPerTensorFloat,
+            'k_transposed_quant': Int8ActPerTensorFloat,
+            'v_quant': Int8ActPerTensorFloat,
             'attn_output_quant': None,
             'return_quant_tensor': False})
     layerwise_compute_layer_map[nn.Tanh] = (
         qnn.QuantTanh,
         {
             'input_quant': None,
-            'act_quant': IntActTanh,
+            'act_quant': Int8ActPerTensorFloat,
             'return_quant_tensor': False})
     
     quant_model = layerwise_quantize(model, compute_layer_map=layerwise_compute_layer_map)
     quant_model.to(dtype=dtype)
     with torch.no_grad(), calibration_mode(quant_model):
         quant_model(**inp)
-    
+        
     with torch.no_grad():
         bo.export_qonnx(
             quant_model,
