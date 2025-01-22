@@ -1,8 +1,10 @@
 
-.PHONY: single_layer
+.PHONY: single_layer three_layer
 
 single_layer: l_1_n_12_z_384_i_1536.onnx
 three_layer : l_3_n_12_z_384_i_1536.onnx
+numeric_stability: numeric_stability.onnx
+nf_change_test : nf_change_test.onnx
 
 l_1_n_12_z_384_i_1536.onnx: ./config/l_1_n_12_z_384_i_1536.json
 	python endtoend.py -o l_1_n_12_z_384_i_1536.onnx -n 12 -l 1 -z 384 -i 1536 -p ./config/l_1_n_12_z_384_i_1536.json
@@ -11,3 +13,11 @@ l_1_n_12_z_384_i_1536.onnx: ./config/l_1_n_12_z_384_i_1536.json
 l_3_n_12_z_384_i_1536.onnx: ./config/l_3_n_12_z_384_i_1536.json
 	python endtoend.py -o l_3_n_12_z_384_i_1536.onnx -n 12 -l 3 -z 384 -i 1536 -p ./config/l_3_n_12_z_384_i_1536.json
 	mv ./intermediate_models ./l_3_n_12_z_384_i_1536
+
+nf_change_test.onnx:
+	python endtoend.py -o nf_change_test.onnx -n 12 -l 1 -z 384 -i 1536 -s step_apply_folding_config
+	mv intermediate_models ./nf_change_test
+
+numeric_stability.onnx:
+	python endtoend.py -o numeric_stability.onnx -n 12 -l 3 -z 384 -i 1536 -s step_apply_folding_config
+	mv intermediate_models ./numeric_stability
