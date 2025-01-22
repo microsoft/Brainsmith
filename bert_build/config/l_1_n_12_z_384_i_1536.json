@@ -1,36 +1,36 @@
 {
   "Defaults": {},
   "DuplicateStreams_hls_0": {
-    "PE":4 
+    "PE":1 
   },
   "Thresholding_rtl_0": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "DuplicateStreams_hls_1": {
-    "PE": 4 
+    "PE": 1 
   },
   "MVAU_rtl_0": {
-    "PE": 32,
-    "SIMD": 48,
+    "PE": 8,
+    "SIMD": 12,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "MVAU_rtl_1": {
-    "PE": 32,
-    "SIMD": 48,
+    "PE": 8,
+    "SIMD": 12,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "MVAU_rtl_2": {
-    "PE": 32,
-    "SIMD": 48,
+    "PE": 8,
+    "SIMD": 12,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
@@ -46,49 +46,49 @@
     "SIMD": 1 
   },
   "Thresholding_rtl_1": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "Thresholding_rtl_2": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "Thresholding_rtl_3": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "DynMVU_rtl_0": {
-    "PE": 32,
-    "SIMD": 16,
+    "PE": 8,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "external",
     "runtime_writeable_weights": 0
   },
   "Thresholding_rtl_4": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "HWSoftmax_hls_0": {
-    "SIMD": 4 
+    "SIMD": 1 
   },
   "Thresholding_rtl_5": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "DynMVU_rtl_1": {
-    "PE": 32,
-    "SIMD": 16,
+    "PE": 8,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "external",
@@ -98,67 +98,67 @@
     "SIMD":1 
   },
   "Thresholding_rtl_6": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_3": {
-    "PE": 32,
-    "SIMD": 48,
+    "PE": 8,
+    "SIMD": 12,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "ElementwiseAdd_hls_0": {
-    "PE": 4,
+    "PE": 1,
     "ram_style": "auto"
   },
   "LayerNorm_hls_0": {
-    "SIMD": 4 
+    "SIMD": 1 
   },
   "ElementwiseAdd_hls_1": {
-    "PE": 4,
+    "PE": 1,
     "ram_style": "auto"
   },
   "DuplicateStreams_hls_2": {
-    "PE": 4 
+    "PE": 1 
   },
   "Thresholding_rtl_7": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_4": {
-    "PE": 64,
-    "SIMD": 96,
+    "PE": 16,
+    "SIMD": 24,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "Thresholding_rtl_8": {
-    "PE": 4,
+    "PE": 1,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_5": {
-    "PE": 64,
-    "SIMD": 96,
+    "PE": 16,
+    "SIMD": 24,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "ElementwiseAdd_hls_2": {
-    "PE": 4,
+    "PE": 1,
     "ram_style": "auto"
   },
   "LayerNorm_hls_1": {
-    "SIMD": 4 
+    "SIMD": 1 
   },
   "StreamingFIFO_rtl_0": {
 	  "ram_style": "auto",
@@ -167,7 +167,7 @@
    },
   "StreamingFIFO_rtl_1": {
 	  "ram_style": "auto",
-	  "depth": 32000,
+	  "depth": 140333,
 	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_2": {
@@ -197,18 +197,18 @@
    },
   "StreamingFIFO_rtl_7": {
 	  "ram_style": "auto",
-	  "depth": 6,
-	  "impl_style": "rtl"
+	  "depth": 3071,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_8": {
 	  "ram_style": "auto",
-	  "depth": 6,
-	  "impl_style": "rtl"
+	  "depth": 3071,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_9": {
 	  "ram_style": "auto",
-	  "depth": 6,
-	  "impl_style": "rtl"
+	  "depth": 3071,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_10": {
 	  "ram_style": "auto",
@@ -217,8 +217,8 @@
    },
   "StreamingFIFO_rtl_11": {
 	  "ram_style": "auto",
-	  "depth": 26049,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_12": {
 	  "ram_style": "auto",
@@ -227,8 +227,8 @@
    },
   "StreamingFIFO_rtl_13": {
 	  "ram_style": "auto",
-	  "depth": 32000,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_14": {
 	  "ram_style": "auto",
@@ -237,8 +237,8 @@
    },
   "StreamingFIFO_rtl_15": {
 	  "ram_style": "auto",
-	  "depth": 32000,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_16": {
 	  "ram_style": "auto",
@@ -272,38 +272,38 @@
    },
   "StreamingFIFO_rtl_22": {
 	  "ram_style": "auto",
-	  "depth": 5882,
+	  "depth": 5259,
 	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_23": {
 	  "ram_style": "auto",
-	  "depth": 11920,
+	  "depth": 9887,
 	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_24": {
 	  "ram_style": "auto",
-	  "depth": 2,
-	  "impl_style": "rtl"
+	  "depth": 4099,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_25": {
 	  "ram_style": "auto",
-	  "depth": 979,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_26": {
-	  "ram_style": "auto",
-	  "depth": 383,
-	  "impl_style": "vivado"
-   },
-  "StreamingFIFO_rtl_27": {
 	  "ram_style": "auto",
 	  "depth": 2,
 	  "impl_style": "rtl"
    },
+  "StreamingFIFO_rtl_27": {
+	  "ram_style": "auto",
+	  "depth": 35834,
+	  "impl_style": "vivado"
+   },
   "StreamingFIFO_rtl_28": {
 	  "ram_style": "auto",
-	  "depth": 11438,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_29": {
 	  "ram_style": "auto",
@@ -312,7 +312,7 @@
    },
   "StreamingFIFO_rtl_30": {
 	  "ram_style": "auto",
-	  "depth": 2,
+	  "depth": 15,
 	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_31": {
@@ -327,8 +327,8 @@
    },
   "StreamingFIFO_rtl_33": {
 	  "ram_style": "auto",
-	  "depth": 26394,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_34": {
 	  "ram_style": "auto",
@@ -337,12 +337,12 @@
    },
   "StreamingFIFO_rtl_35": {
 	  "ram_style": "auto",
-	  "depth": 2,
-	  "impl_style": "rtl"
+	  "depth": 3076,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_36": {
 	  "ram_style": "auto",
-	  "depth": 6,
+	  "depth": 2,
 	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_37": {
@@ -357,8 +357,8 @@
    },
   "StreamingFIFO_rtl_39": {
 	  "ram_style": "auto",
-	  "depth": 805,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_40": {
 	  "ram_style": "auto",
@@ -367,13 +367,13 @@
    },
   "StreamingFIFO_rtl_41": {
 	  "ram_style": "auto",
-	  "depth": 2,
-	  "impl_style": "rtl"
+	  "depth": 781,
+	  "impl_style": "vivado"
    },
   "StreamingFIFO_rtl_42": {
 	  "ram_style": "auto",
-	  "depth": 32000,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_43": {
 	  "ram_style": "auto",
@@ -382,18 +382,18 @@
    },
   "StreamingFIFO_rtl_44": {
 	  "ram_style": "auto",
-	  "depth": 2,
+	  "depth": 13,
 	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_45": {
 	  "ram_style": "auto",
-	  "depth": 4,
+	  "depth": 2,
 	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_46": {
 	  "ram_style": "auto",
-	  "depth": 9097,
-	  "impl_style": "vivado"
+	  "depth": 2,
+	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_47": {
 	  "ram_style": "auto",
@@ -402,7 +402,7 @@
    },
   "StreamingFIFO_rtl_48": {
 	  "ram_style": "auto",
-	  "depth": 2,
+	  "depth": 57,
 	  "impl_style": "rtl"
    },
   "StreamingFIFO_rtl_49": {
