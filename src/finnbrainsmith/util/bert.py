@@ -15,6 +15,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from qonnx.transformation.fold_constants import FoldConstants
+from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
@@ -78,7 +79,7 @@ def custom_step_qonnx2finn(model, cfg):
 
     """
     model = model.transform(ExpandNorms())
-    model = model.transform(ExtractQuantScaleZeroPt())
+    #model = model.transform(ExtractQuantScaleZeroPt())
     model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
@@ -101,37 +102,6 @@ def custom_step_generate_reference_io(model, cfg):
     y_ref = oxe.execute_onnx(model, input_t, True)
     np.save("expected_output.npy", y_ref[out_name])
     np.savez("expected_context.npz", **y_ref) 
-    return model
-
-
-# Debugging custom step for comparing the contexts at various points
-# along the compilation flow
-def custom_step_execute_and_save_context_prefolding(model, cfg):
-    input_m = model.graph.input[0]
-    in_tensor = np.load("input.npy")
-    input_t = { input_m.name : in_tensor}
-    cppsim_model = model.transform(SetExecMode("cppsim"))
-    cppsim_model = cppsim_model.transform(PrepareCppSim())
-    cppsim_model = cppsim_model.transform(CompileCppSim())
-    out_name = cppsim_model.graph.output[0].name
-    y_ref = oxe.execute_onnx(cppsim_model, input_t, True)
-    np.save("prefolding_cppsim_output.npy", y_ref[out_name])
-    np.savez("prefolding_cppsim_context.npz", **y_ref) 
-    return model
-
-# Debugging custom step for comparing the contexts at various points
-# along the compilation flow
-def custom_step_execute_and_save_context_postfolding(model, cfg):
-    input_m = model.graph.input[0]
-    in_tensor = np.load("input.npy")
-    input_t = { input_m.name : in_tensor}
-    cppsim_model = model.transform(SetExecMode("cppsim"))
-    cppsim_model = cppsim_model.transform(PrepareCppSim())
-    cppsim_model = cppsim_model.transform(CompileCppSim())
-    out_name = cppsim_model.graph.output[0].name
-    y_ref = oxe.execute_onnx(cppsim_model, input_t, True)
-    np.save("postfolding_cppsim_output.npy", y_ref[out_name])
-    np.savez("postfolding_cppsim_context.npz", **y_ref) 
     return model
 
 
@@ -158,9 +128,13 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(RoundAndClipThresholds())
+    model = model.transform(reorder.MoveOpPastFork(["Mul"]))
     model = model.transform(reorder.MoveScalarMulPastMatMul())
     model = model.transform(reorder.MoveScalarLinearPastInvariants())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
+    model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
+    model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
+    model = model.transform(GiveUniqueNodeNames())
     return model
 
 def custom_step_infer_hardware(model, cfg):
