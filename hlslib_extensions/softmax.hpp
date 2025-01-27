@@ -182,19 +182,3 @@ void smax(
 } // smax()
 
 
-template<
-	 unsigned N, // The width of the input dimension 
-	 unsigned SIMD, // Amount of parallelism (how many items consumed/produced at a time 
-	 typename TI, // Input type param  
-	 typename TO, // Output type param
-	 bool QUANT // If true the optional Quant stage (NOT CURRENTLY USED) 
-	 >
-void smaxquant(
-	hls::stream<hls::vector<TI,SIMD>> &src,
-	hls::stream<hls::vector<TO,SIMD>> &dst
-) {
-#pragma HLS DATAFLOW disable_start_propagation
-	static_assert(N%SIMD == 0, "SIMD must be a factor of N"); 
-	smax<N,SIMD,TI>(src, dst);
-
-} // smaxquant()

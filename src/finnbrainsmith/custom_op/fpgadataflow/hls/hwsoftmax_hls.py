@@ -43,7 +43,6 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
             constexpr unsigned  SIMD = {simd};
             constexpr unsigned  W = {w};
             using  TI = {idtype.get_hls_datatype_str()};
-            using  TO = {odtype.get_hls_datatype_str()};
             using  F = float;
            """
         ]
@@ -52,10 +51,10 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
                 static hls::stream<hls::vector<TI,SIMD>>  src0;
-                static hls::stream<hls::vector<TO,SIMD>>  dst0;
+                static hls::stream<hls::vector<float,SIMD>>  dst0;
 
                 move(in0_{self.hls_sname()}, src0);
-                smaxquant<W,SIMD,TI,TO,false>(src0, dst0);
+                smax<W,SIMD,TI>(src0, dst0);
                 move(dst0, out_{self.hls_sname()});
         """
         ]
@@ -65,7 +64,7 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
             f"""
             void {self.onnx_node.name}(
                 hls::stream<hls::vector<TI,SIMD>> &in0_{self.hls_sname()},
-                hls::stream<hls::vector<TO,SIMD>> &out_{self.hls_sname()}
+                hls::stream<hls::vector<float,SIMD>> &out_{self.hls_sname()}
                 )
             """
         ]
@@ -183,16 +182,16 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             static hls::stream<hls::vector<TI,SIMD>>  in0_V;
-            static hls::stream<hls::vector<TO,SIMD>>  out_V;
+            static hls::stream<hls::vector<float,SIMD>>  out_V;
 
             npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
             while(out_V.size() != stream_size){{
-                smaxquant<W, SIMD, TI, TO, false>(in0_V, out_V);
+                smax<W, SIMD, TI>(in0_V, out_V);
             }}
 
-            vectorstream2npy<TO, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
+            vectorstream2npy<float, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
             """
         ]
         self.save_as_npy()
