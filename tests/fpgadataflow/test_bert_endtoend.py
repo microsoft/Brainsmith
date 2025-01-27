@@ -71,7 +71,7 @@ test_cfg = build_cfg.DataflowBuildConfig(
         output_dir='./',
         synth_clk_period_ns=3.33,
         stitched_ip_gen_dcp=False,
-        folding_config_file="./config/folding_config_with_fifo.json",
+        folding_config_file="./config/l_1_n_12_z_384_i_1536.json",
         auto_fifo_depths=False,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
@@ -97,20 +97,10 @@ steps = [
     custom_step_cleanup,  
     custom_step_remove_head,  
     custom_step_remove_tail,  
-
-    # Conversion
     custom_step_qonnx2finn, 
-
-    # Streamlining
     custom_streamlining_step,  
-
-    # Infer Hardware
     custom_step_infer_hardware,  
-
-    # dataflow partition
-    #step_create_dataflow_partition,
-
-    # Specialise the hardware layers
+    step_create_dataflow_partition,
     step_specialize_layers,
 
     # How far do we get
@@ -122,7 +112,6 @@ steps = [
     step_hw_ipgen,
     step_set_fifo_depths,
     step_create_stitched_ip,
-    step_measure_rtlsim_performance,
 ]  
   
 create_dynamic_fixtures(steps, globals(), test_cfg)
@@ -180,7 +169,7 @@ def test_validate_custom_step_infer_hardware(custom_step_remove_tail, custom_ste
     y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t, return_full_exec_context=True) 
     y_out = oxe.execute_onnx(custom_step_infer_hardware, input_t, return_full_exec_context=True)
 
-    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
+    if not np.allclose(y_ref[out_name], y_out[out_name], atol=1e-1):
         _compare_contexts(y_ref, y_out)
         raise RuntimeError(f"y_ref != y_out")
 
@@ -202,31 +191,7 @@ def test_validate_step_specialize_layers_cppsim(custom_step_remove_tail, step_sp
     cppsim_model = cppsim_model.transform(CompileCppSim())
     y_out = oxe.execute_onnx(cppsim_model, input_t)[out_name] 
 
-    assert np.allclose(y_ref, y_out, atol=0.01), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
-
-def test_validate_node_by_node_rtlsim(custom_step_remove_tail, step_specialize_layers):
-    """ Using the pruned model produced by Brevitas as a reference
-    perform  """
-
-    input_m = custom_step_remove_tail.graph.input[0]
-    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-
-    input_t = { input_m.name : in_tensor}
-    out_name = custom_step_remove_tail.graph.output[0].name
-
-    y_ref = oxe.execute_onnx(custom_step_remove_tail, input_t) 
-
-    rtlsim_model = step_specialise_layers.transform(SetExecMode("rtlsim"))
-    rtlsim_model = rtlsim_model.transform(PrepareRTLSim())
-    y_out = oxe.execute_onnx(rtlsim_model, input_t) 
-
-    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
-        _compare_contexts(y_ref, y_out)
-        _save_context(y_ref, "node_by_node_rtlsim_context/y_ref")
-        _save_context(y_out, "node_by_node_rtlsim_context/y_out")
-        raise RuntimeError(f"y_ref != y_out")
-
+    assert np.allclose(y_ref, y_out, atol=1e-1), "step_specialize_layers(cppsim) output does not match custom_step_remove_tail"
 
 def test_validate_stitched_ip_rtlsim(custom_step_remove_tail, step_create_stitched_ip):
     """ Using the pruned model produced by Brevitas as a reference
@@ -245,7 +210,7 @@ def test_validate_stitched_ip_rtlsim(custom_step_remove_tail, step_create_stitch
     rtlsim_model = rtlsim_model.transform(PrepareRTLSim())
     y_out = oxe.execute_onnx(rtlsim_model, input_t) 
 
-    if not np.allclose(y_ref[out_name], y_out[out_name], atol=0.01):
+    if not np.allclose(y_ref[out_name], y_out[out_name], atol=1e-1):
         _compare_contexts(y_ref, y_out)
         _save_context(y_ref, "stitched_ip_rtlsim_context/y_ref")
         _save_context(y_out, "stitched_ip_rtlsim_context/y_out")

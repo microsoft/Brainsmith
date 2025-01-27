@@ -99,7 +99,7 @@ void exp_sum_calc(
 #pragma HLS UNROLL
 			out[i] = hls::exp(float(in[i]) - max); 	
 		}
-		sum += TreeReduction<SIMD>::reduce(out); 
+		sum += TreeReduction<float,SIMD>::reduce(out); 
 		outs.write(out);
 		
 		count++;

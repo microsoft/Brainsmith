@@ -55,7 +55,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         self.code_gen_dict["$GLOBALS$"] = [
             "#include <hls_vector.h>",
             '#include "layernorm.hpp"',
-            '#include "ln_utils.hpp"'
+            '#include "bs_utils.hpp"'
         ]
 
     def defines(self, var):

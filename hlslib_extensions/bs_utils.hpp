@@ -96,12 +96,12 @@ struct MaxReduction<1, T> {
 
 // Recursive reduction tree for the total summation
 // Code for the Nth stage
-template<unsigned N>
+template<typename T, unsigned N>
 struct TreeReduction {
-    static float reduce(const hls::vector<float, N>& input) {
+    static T reduce(const hls::vector<T, N>& input) {
 #pragma HLS INLINE
         constexpr unsigned M = (N + 1) / 2;
-        hls::vector<float, M> sum;
+        hls::vector<T, M> sum;
 
         for(unsigned i = 0; i < M; ++i) {
 #pragma HLS unroll
@@ -111,25 +111,24 @@ struct TreeReduction {
                 sum[i] = input[2*i]; // Handle the case where the input size is odd
         }
 
-        return TreeReduction<M>::reduce(sum);
+        return TreeReduction<T, M>::reduce(sum);
     }
 };
 
-template<>
-struct TreeReduction<2> {
-    static float reduce(const hls::vector<float, 2>& input) {
+template<typename T>
+struct TreeReduction<T, 2> {
+    static T reduce(const hls::vector<T, 2>& input) {
 #pragma HLS INLINE
         return input[0] + input[1];
     }
 };
 
-template<>
-struct TreeReduction<1> {
-    static float reduce(const hls::vector<float, 1>& input) {
+template<typename T>
+struct TreeReduction<T, 1> {
+    static T reduce(const hls::vector<T, 1>& input) {
 #pragma HLS INLINE
         return input[0];
     }
 };
-
 
 #endif
