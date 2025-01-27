@@ -1,33 +1,53 @@
-# Project
+## BrainSmith FINN Plugin repo
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This repo contains a plugin for the FINN dataflow compiler as part of the Microsoft/AMD BrainSmith project.
+This repo is a collection of operators and transformations that FINN can pick up and load into the FINN docker.
 
-As the maintainer of this project, please make a few updates:
+### Quick start
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+1. To use the repo requires a specific FINN branch. Please clone the following:
+```bash
+git clone https://github.com/Xilinx/finn.git -b custom/transformer
+```
 
-## Contributing
+2. Within this branch, you should see a `python_repos.txt` file; these are Python repositories that are pulled in and installed during the build-up of the docker container.
+We need to add _this_ repo to this file to install it as a plugin. Add the following to the bottom of the `python_repos.txt` file:
+```
+dir,url,commit_hash
+qonnx,https://github.com/fastmachinelearning/qonnx.git,ca91dbe24e8d0122ba981070b918be31fb60750e
+finn-experimental,https://github.com/Xilinx/finn-experimental.git,0724be21111a21f0d81a072fccc1c446e053f851
+brevitas,https://github.com/Xilinx/brevitas.git,0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5
+pyverilator,https://github.com/maltanar/pyverilator.git,ce0a08c20cb8c1d1e84181d6f392390f846adbd1
+finnbrainsmith,git@github.com:microsoft/BrainSmith.git,main
+```
+Feel free to adjust this if you work off a different feature fork/branch.
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+3. Launch the docker container:
+```
+./run-docker.sh
+```
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+4. Within the docker container, navigate to the plugin directory:
+```
+cd deps/finnbrainsmith
+```
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+5. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
+```
+cd bert_build
+python endtoend.py -o finnbrainsmith_bert.onnx
+```
 
-## Trademarks
+6. You can also run a suite of tests on the finnbrainsmith repository which will check:
+ 
+* Shuffle hardware generation and correctness
+* QuantSoftMax hardware generation and correctness
+* EndtoEnd flow
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+To run the tests
+```
+cd tests
+pytest ./
+```
+
+Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc.. from the files in the `deps/finnbrainsmith` directory and run the changes in the docker container.
