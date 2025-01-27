@@ -1,140 +1,7 @@
 {
   "Defaults": {},
-
-  "MVAU_rtl_6": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_7": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_8": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_9": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_10": {
-    "PE": 16,
-    "SIMD": 24,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_11": {
-    "PE": 16,
-    "SIMD": 24,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-
-  "MVAU_rtl_12": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_13": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_14": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_15": {
-    "PE": 8,
-    "SIMD": 12,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_16": {
-    "PE": 16,
-    "SIMD": 24,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-  "MVAU_rtl_17": {
-    "PE": 16,
-    "SIMD": 24,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "internal_decoupled",
-    "runtime_writeable_weights": 0
-  },
-
-  "DynMVU_rtl_2": {
-    "PE": 8,
-    "SIMD": 4,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "external",
-    "runtime_writeable_weights": 0
-  },
-  "DynMVU_rtl_3": {
-    "PE": 8,
-    "SIMD": 4,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "external",
-    "runtime_writeable_weights": 0
-  },
-
-  "DynMVU_rtl_4": {
-    "PE": 8,
-    "SIMD": 4,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "external",
-    "runtime_writeable_weights": 0
-  },
-  "DynMVU_rtl_5": {
-    "PE": 8,
-    "SIMD": 4,
-    "ram_style": "auto",
-    "resType": "auto",
-    "mem_mode": "external",
-    "runtime_writeable_weights": 0
-  },
-
   "DuplicateStreams_hls_0": {
-    "PE":1 
+    "PE": 1
   },
   "Thresholding_rtl_0": {
     "PE": 1,
@@ -143,40 +10,40 @@
     "depth_trigger_bram": 0
   },
   "DuplicateStreams_hls_1": {
-    "PE": 1 
+    "PE": 1
   },
   "MVAU_rtl_0": {
-    "PE": 8,
-    "SIMD": 12,
+    "PE": 32,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "MVAU_rtl_1": {
-    "PE": 8,
-    "SIMD": 12,
+    "PE": 32,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "MVAU_rtl_2": {
-    "PE": 8,
-    "SIMD": 12,
+    "PE": 32,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "Shuffle_hls_0": {
-    "SIMD": 1 
+    "SIMD": 1
   },
   "Shuffle_hls_1": {
-    "SIMD": 1 
+    "SIMD": 1
   },
   "Shuffle_hls_2": {
-    "SIMD": 1 
+    "SIMD": 1
   },
   "Thresholding_rtl_1": {
     "PE": 1,
@@ -197,7 +64,7 @@
     "depth_trigger_bram": 0
   },
   "DynMVU_rtl_0": {
-    "PE": 8,
+    "PE": 16,
     "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
@@ -205,22 +72,26 @@
     "runtime_writeable_weights": 0
   },
   "Thresholding_rtl_4": {
-    "PE": 1,
+    "PE": 2,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
+  "ElementwiseMul_hls_0": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
   "HWSoftmax_hls_0": {
-    "SIMD": 1 
+    "SIMD": 1
   },
   "Thresholding_rtl_5": {
-    "PE": 1,
+    "PE": 2,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "DynMVU_rtl_1": {
-    "PE": 8,
+    "PE": 16,
     "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
@@ -228,7 +99,7 @@
     "runtime_writeable_weights": 0
   },
   "Shuffle_hls_3": {
-    "SIMD":1 
+    "SIMD": 1
   },
   "Thresholding_rtl_6": {
     "PE": 1,
@@ -237,26 +108,30 @@
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_3": {
-    "PE": 8,
-    "SIMD": 12,
+    "PE": 32,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
+  },
+  "ElementwiseMul_hls_1": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_2": {
+    "PE": 1,
+    "ram_style": "auto"
   },
   "ElementwiseAdd_hls_0": {
     "PE": 1,
     "ram_style": "auto"
   },
   "LayerNorm_hls_0": {
-    "SIMD": 1 
-  },
-  "ElementwiseAdd_hls_1": {
-    "PE": 1,
-    "ram_style": "auto"
+    "SIMD": 1
   },
   "DuplicateStreams_hls_2": {
-    "PE": 1 
+    "PE": 1
   },
   "Thresholding_rtl_7": {
     "PE": 1,
@@ -265,229 +140,1269 @@
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_4": {
-    "PE": 16,
-    "SIMD": 24,
+    "PE": 128,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
   "Thresholding_rtl_8": {
-    "PE": 1,
+    "PE": 2,
     "runtime_writeable_weights": 0,
     "depth_trigger_uram": 0,
     "depth_trigger_bram": 0
   },
   "MVAU_rtl_5": {
-    "PE": 16,
-    "SIMD": 24,
+    "PE": 128,
+    "SIMD": 4,
     "ram_style": "auto",
     "resType": "auto",
     "mem_mode": "internal_decoupled",
     "runtime_writeable_weights": 0
   },
-  "ElementwiseAdd_hls_2": {
+  "ElementwiseMul_hls_3": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_4": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseAdd_hls_1": {
     "PE": 1,
     "ram_style": "auto"
   },
   "LayerNorm_hls_1": {
-    "SIMD": 1 
+    "SIMD": 1
+  },
+  "DuplicateStreams_hls_3": {
+    "PE": 1
+  },
+  "Thresholding_rtl_9": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DuplicateStreams_hls_4": {
+    "PE": 1
+  },
+  "MVAU_rtl_6": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "MVAU_rtl_7": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "MVAU_rtl_8": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "Shuffle_hls_4": {
+    "SIMD": 1
+  },
+  "Shuffle_hls_5": {
+    "SIMD": 1
+  },
+  "Shuffle_hls_6": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_10": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "Thresholding_rtl_11": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "Thresholding_rtl_12": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DynMVU_rtl_2": {
+    "PE": 16,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "external",
+    "runtime_writeable_weights": 0
+  },
+  "Thresholding_rtl_13": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "ElementwiseMul_hls_5": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "HWSoftmax_hls_1": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_14": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DynMVU_rtl_3": {
+    "PE": 16,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "external",
+    "runtime_writeable_weights": 0
+  },
+  "Shuffle_hls_7": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_15": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_9": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "ElementwiseMul_hls_6": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_7": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseAdd_hls_2": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "LayerNorm_hls_2": {
+    "SIMD": 1
+  },
+  "DuplicateStreams_hls_5": {
+    "PE": 1
+  },
+  "Thresholding_rtl_16": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_10": {
+    "PE": 128,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "Thresholding_rtl_17": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_11": {
+    "PE": 128,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "ElementwiseMul_hls_8": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_9": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseAdd_hls_3": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "LayerNorm_hls_3": {
+    "SIMD": 1
+  },
+  "DuplicateStreams_hls_6": {
+    "PE": 1
+  },
+  "Thresholding_rtl_18": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DuplicateStreams_hls_7": {
+    "PE": 1
+  },
+  "MVAU_rtl_12": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "MVAU_rtl_13": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "MVAU_rtl_14": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "Shuffle_hls_8": {
+    "SIMD": 1
+  },
+  "Shuffle_hls_9": {
+    "SIMD": 1
+  },
+  "Shuffle_hls_10": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_19": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "Thresholding_rtl_20": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "Thresholding_rtl_21": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DynMVU_rtl_4": {
+    "PE": 16,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "external",
+    "runtime_writeable_weights": 0
+  },
+  "Thresholding_rtl_22": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "ElementwiseMul_hls_10": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "HWSoftmax_hls_2": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_23": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "DynMVU_rtl_5": {
+    "PE": 16,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "external",
+    "runtime_writeable_weights": 0
+  },
+  "Shuffle_hls_11": {
+    "SIMD": 1
+  },
+  "Thresholding_rtl_24": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_15": {
+    "PE": 32,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "ElementwiseMul_hls_11": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_12": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseAdd_hls_4": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "LayerNorm_hls_4": {
+    "SIMD": 1
+  },
+  "DuplicateStreams_hls_8": {
+    "PE": 1
+  },
+  "Thresholding_rtl_25": {
+    "PE": 1,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_16": {
+    "PE": 128,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "Thresholding_rtl_26": {
+    "PE": 2,
+    "runtime_writeable_weights": 0,
+    "depth_trigger_uram": 0,
+    "depth_trigger_bram": 0
+  },
+  "MVAU_rtl_17": {
+    "PE": 128,
+    "SIMD": 4,
+    "ram_style": "auto",
+    "resType": "auto",
+    "mem_mode": "internal_decoupled",
+    "runtime_writeable_weights": 0
+  },
+  "ElementwiseMul_hls_13": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseMul_hls_14": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "ElementwiseAdd_hls_5": {
+    "PE": 1,
+    "ram_style": "auto"
+  },
+  "LayerNorm_hls_5": {
+    "SIMD": 1
   },
 
-  "StreamingFIFO_rtl_1": {
-	"ram_style" : "auto",
-	"depth" : 138797,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_7": {
-	"ram_style" : "auto",
-	"depth" : 3071,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_8": {
-	"ram_style" : "auto",
-	"depth" : 3071,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_9": {
-	"ram_style" : "auto",
-	"depth" : 3071,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_22": {
-	"ram_style" : "auto",
-	"depth" : 5251,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_23": {
-	"ram_style" : "auto",
-	"depth" : 9887,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_24": {
-	"ram_style" : "auto",
-	"depth" : 4099,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_27": {
-	"ram_style" : "auto",
-	"depth" : 31296,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_30": {
-	"ram_style" : "auto",
-	"depth" : 15,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_35": {
-	"ram_style" : "auto",
-	"depth" : 3076,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_41": {
-	"ram_style" : "auto",
-	"depth" : 781,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_44": {
-	"ram_style" : "auto",
-	"depth" : 13,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_48": {
-	"ram_style" : "auto",
-	"depth" : 57,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_54": {
-	"ram_style" : "auto",
-	"depth" : 95309,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_60": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_61": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_62": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_75": {
-	"ram_style" : "auto",
-	"depth" : 4227,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_76": {
-	"ram_style" : "auto",
-	"depth" : 9871,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_77": {
-	"ram_style" : "auto",
-	"depth" : 4099,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_80": {
-	"ram_style" : "auto",
-	"depth" : 2898,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_83": {
-	"ram_style" : "auto",
-	"depth" : 15,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_88": {
-	"ram_style" : "auto",
-	"depth" : 3076,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_94": {
-	"ram_style" : "auto",
-	"depth" : 781,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_97": {
-	"ram_style" : "auto",
-	"depth" : 13,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_101": {
-	"ram_style" : "auto",
-	"depth" : 57,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_107": {
-	"ram_style" : "auto",
-	"depth" : 95309,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_113": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_114": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_115": {
-	"ram_style" : "auto",
-	"depth" : 26,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_128": {
-	"ram_style" : "auto",
-	"depth" : 4227,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_129": {
-	"ram_style" : "auto",
-	"depth" : 9871,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_130": {
-	"ram_style" : "auto",
-	"depth" : 4099,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_133": {
-	"ram_style" : "auto",
-	"depth" : 2898,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_136": {
-	"ram_style" : "auto",
-	"depth" : 15,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_141": {
-	"ram_style" : "auto",
-	"depth" : 3076,
-	"impl_style": "vivado"
-  },
+    "StreamingFIFO_rtl_0": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_1": {
+        "ram_style": "auto",
+        "depth": 118621,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_10": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_100": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_101": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_102": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_103": {
+        "ram_style": "auto",
+        "depth": 765,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_104": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_105": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_106": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_107": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_108": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_109": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_11": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_110": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_111": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_112": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_113": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_114": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_115": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_116": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_117": {
+        "ram_style": "auto",
+        "depth": 94301,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_118": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_119": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_12": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_120": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_121": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_122": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_123": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_124": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_125": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_126": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_127": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_128": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_129": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_13": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_130": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_131": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_132": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_133": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_134": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_135": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_136": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_137": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_138": {
+        "ram_style": "auto",
+        "depth": 2049,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_139": {
+        "ram_style": "auto",
+        "depth": 7143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_14": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_140": {
+        "ram_style": "auto",
+        "depth": 1279,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_141": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_142": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_143": {
+        "ram_style": "auto",
+        "depth": 49152,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_144": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_145": {
+        "ram_style": "auto",
+        "depth": 2898,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_146": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_147": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_148": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_149": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_15": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_150": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_151": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_152": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_153": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_154": {
+        "ram_style": "auto",
+        "depth": 8143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_155": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_156": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_157": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_158": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_159": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_16": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_160": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_161": {
+        "ram_style": "auto",
+        "depth": 765,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_162": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_163": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_164": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_165": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_166": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_167": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_168": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_169": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_17": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_170": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_171": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_172": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_173": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_174": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_18": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_19": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_2": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_20": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_21": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_22": {
+        "ram_style": "auto",
+        "depth": 2559,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_23": {
+        "ram_style": "auto",
+        "depth": 7143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_24": {
+        "ram_style": "auto",
+        "depth": 1279,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_25": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_26": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_27": {
+        "ram_style": "auto",
+        "depth": 49152,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_28": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_29": {
+        "ram_style": "auto",
+        "depth": 28322,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_3": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_30": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_31": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_32": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_33": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_34": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_35": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_36": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_37": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_38": {
+        "ram_style": "auto",
+        "depth": 8143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_39": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_4": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_40": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_41": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_42": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_43": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_44": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_45": {
+        "ram_style": "auto",
+        "depth": 765,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_46": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_47": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_48": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_49": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_5": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_50": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_51": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_52": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_53": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_54": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_55": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_56": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_57": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_58": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_59": {
+        "ram_style": "auto",
+        "depth": 94301,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_6": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_60": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_61": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_62": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_63": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_64": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_65": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_66": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_67": {
+        "ram_style": "auto",
+        "depth": 16,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_68": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_69": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_7": {
+        "ram_style": "auto",
+        "depth": 8127,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_70": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_71": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_72": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_73": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_74": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_75": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_76": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_77": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_78": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_79": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_8": {
+        "ram_style": "auto",
+        "depth": 8127,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_80": {
+        "ram_style": "auto",
+        "depth": 2049,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_81": {
+        "ram_style": "auto",
+        "depth": 7143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_82": {
+        "ram_style": "auto",
+        "depth": 1279,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_83": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_84": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_85": {
+        "ram_style": "auto",
+        "depth": 49152,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_86": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_87": {
+        "ram_style": "auto",
+        "depth": 2898,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_88": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_89": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_9": {
+        "ram_style": "auto",
+        "depth": 8127,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_90": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_91": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_92": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_93": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_94": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_95": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_96": {
+        "ram_style": "auto",
+        "depth": 8143,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_97": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_98": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    },
+    "StreamingFIFO_rtl_99": {
+        "ram_style": "auto",
+        "depth": 2,
+        "impl_style": "vivado"
+    }
 
-  "StreamingFIFO_rtl_147": {
-	"ram_style" : "auto",
-	"depth" : 781,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_150": {
-	"ram_style" : "auto",
-	"depth" : 13,
-	"impl_style": "vivado"
-  },
-  "StreamingFIFO_rtl_154": {
-	"ram_style" : "auto",
-	"depth" : 57,
-	"impl_style": "vivado"
-  } 
 }
