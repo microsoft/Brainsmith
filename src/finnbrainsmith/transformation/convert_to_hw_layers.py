@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
+
 import numpy as np
 import qonnx.core.data_layout as DataLayout
 import warnings

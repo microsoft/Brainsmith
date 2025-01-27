@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Josh Monson <joshmonson@microsoft.com>
+############################################################################
+
 import pytest
 import onnxruntime as ort
 import numpy as np

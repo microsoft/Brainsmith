@@ -1,5 +1,15 @@
 #!/bin/bash  
   
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
+
+
 for fps in 1000 2000 3000; do  
   for heads in 12 24 36; do  
     for hidden_size in 384 192 96; do  

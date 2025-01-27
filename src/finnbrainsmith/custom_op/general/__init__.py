@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
+
 # The base class of all generic custom operations before specializing to either
 # HLS or RTL backend
 from qonnx.custom_op.base import CustomOp

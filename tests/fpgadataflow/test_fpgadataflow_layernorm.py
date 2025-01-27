@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 from typing import Tuple
 import pytest
 import torch

@@ -1,3 +1,13 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
+
 import numpy as np
 from onnx import helper
 from qonnx.custom_op.base import CustomOp

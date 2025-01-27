@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT 
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
+
 from finnbrainsmith.custom_op.fpgadataflow.layernorm import LayerNorm
 from finnbrainsmith.custom_op.fpgadataflow.quantsoftmax import QuantSoftmax
 from finnbrainsmith.custom_op.fpgadataflow.hwsoftmax import HWSoftmax
