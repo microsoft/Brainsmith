@@ -1,5 +1,5 @@
 
-.PHONY: single_layer
+.PHONY: single_layer three_layer
 
 single_layer: l_1_n_12_z_384_i_1536.onnx
 three_layer : l_3_n_12_z_384_i_1536.onnx
