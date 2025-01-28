@@ -129,6 +129,7 @@ def gen_initial_bert_model(
             #'input_quant': Int8ActPerTensorFloat,
             'input_quant': lambda module: Uint8ActPerTensorFloat if module.in_features == config.intermediate_size and unsigned_hidden_act else Int8ActPerTensorFloat,
             'weight_quant': Int8WeightPerTensorFloat,
+            'weight_bit_width': bitwidth,
             'output_quant': None,
             'bias_quant': None,
             'return_quant_tensor': False})
@@ -136,10 +137,15 @@ def gen_initial_bert_model(
         qnn.QuantScaledDotProductAttention,
         {
             'softmax_input_quant': Int8ActPerTensorFloat,
+            'softmax_input_bit_width': bitwidth,
             'attn_output_weights_quant': Uint8ActPerTensorFloat,
+            'attn_output_weights_bit_width': bitwidth,
             'q_scaled_quant': Int8ActPerTensorFloat,
+            'q_scaled_bit_width': bitwidth,
             'k_transposed_quant': Int8ActPerTensorFloat,
+            'k_transposed_bit_width': bitwidth,
             'v_quant': Int8ActPerTensorFloat,
+            'v_bit_width': bitwidth,
             'attn_output_quant': None,
             'return_quant_tensor': False})
     layerwise_compute_layer_map[nn.Tanh] = (
@@ -147,6 +153,7 @@ def gen_initial_bert_model(
         {
             'input_quant': None,
             'act_quant': Int8ActPerTensorFloat,
+            'act_bit_width': bitwidth,
             'return_quant_tensor': False})
     
     quant_model = layerwise_quantize(model, compute_layer_map=layerwise_compute_layer_map)
