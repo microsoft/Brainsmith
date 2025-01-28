@@ -75,7 +75,8 @@ def gen_initial_bert_model(
         num_hidden_layers:int=3,
         num_attention_heads:int=12,
         intermediate_size:int=1536,
-        bitwidth:int=8
+        bitwidth:int=8,
+        seqlen:int=128
         )->None:
     """ Generates the initial BERT model from Brevitas. (Write more here) """
 
@@ -94,7 +95,7 @@ def gen_initial_bert_model(
     model.to(dtype=dtype)
     model.eval()
     vocab_size = model.config.vocab_size
-    seq_len = 128 
+    seq_len = seqlen 
     batch_size = 1
     
     input_ids = torch.randint(vocab_size, (batch_size,seq_len), dtype=torch.int64)
@@ -184,7 +185,8 @@ def main(args):
         num_hidden_layers=args.num_hidden_layers,
         num_attention_heads=args.num_attention_heads,
         intermediate_size=args.intermediate_size,
-        bitwidth=args.bitwidth
+        bitwidth=args.bitwidth,
+        seqlen=args.seqlen
     )
 
     # Initial model cleanup
@@ -262,6 +264,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--clk', type=float, default=3.33, help='The target clock rate for the hardware')
     parser.add_argument('-s', '--stop_step', type=str, default=None, help='Step to stop at in the build flow')
     parser.add_argument('-p', '--param', type=str, default=None, help='Use a preconfigured file for the folding parameters')
+    parser.add_argument('-q', '--seqlen', type=int, default=128, help='Sets the sequence length parameter')
     parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
 
     args = parser.parse_args()
