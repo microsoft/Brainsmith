@@ -10,12 +10,12 @@
 ############################################################################
 
 for fps in 1000; do  
-  for heads in 12; do  
-    for hidden_size in 384; do  
-        for bitwidth in 8; do  
-        	for seqlen in 128; do  
-                	python endtoend.py -o ${heads}_${hidden_size}_${bitwidth}_${fps}_${seqlen}.onnx -s step_minimize_bit_width -n $heads -z $hidden_size -f $fps -b $bitwidth -q ${seqlen} 
-                	mv intermediate_models ${heads}_${hidden_size}_${bitwidth}_${fps}_$seqlen  
+  for heads in 12 24; do  
+    for hidden_size in 384 192; do  
+        for bitwidth in 8 4; do  
+        	for seqlen in 128 64 32; do  
+                	python endtoend.py -o h${heads}_hs${hidden_size}_b${bitwidth}_t${fps}_s${seqlen}.onnx -s step_minimize_bit_width -n $heads -z $hidden_size -f $fps -b $bitwidth -q ${seqlen} 
+                	mv intermediate_models h${heads}_hs${hidden_size}_b${bitwidth}_t${fps}_s$seqlen  
 		done
             done  
         done  
