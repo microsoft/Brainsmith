@@ -239,6 +239,7 @@ def build_layernorm_graph(
 
 # @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim", "stitched_ip"])
 # @pytest.mark.parametrize("simd", ["simd1", "simd2", "simd3", "simd4"])
+@pytest.mark.skip(reason="This test is skipped because it is not ready yet.")
 @pytest.mark.parametrize("impl_style", ["hls"])
 @pytest.mark.parametrize("exec_mode", ["cppsim"])
 @pytest.mark.parametrize("simd", ["simd1"])

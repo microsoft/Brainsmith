@@ -73,6 +73,7 @@ test_cfg = build_cfg.DataflowBuildConfig(
         stitched_ip_gen_dcp=False,
         folding_config_file="./config/l_1_n_12_z_384_i_1536.json",
         auto_fifo_depths=False,
+        #split_large_fifos=True,
         fpga_part="xcv80-lsva4737-2MHP-e-S",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,

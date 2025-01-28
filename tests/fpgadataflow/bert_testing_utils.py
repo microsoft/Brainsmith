@@ -45,6 +45,7 @@ def gen_initial_bert_model(
         intermediate_size:int=1536
         )->None:
     """ Generates the initial BERT model from Brevitas. (Write more here) """
+    dtype = torch.float32
     config = BertConfig(
       hidden_size=384,
       num_hidden_layers=1,
