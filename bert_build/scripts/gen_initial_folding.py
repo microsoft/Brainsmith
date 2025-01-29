@@ -10,14 +10,14 @@
 import argparse
 import json
 
-def mvau(simd:int, pe:int, runtime_writable:int)->dict:
+def mvau(simd:int, pe:int, runtime_writeable:int)->dict:
 	d = {}
 	d["PE"] = pe
 	d["SIMD"] = simd
 	d["ram_style"] = "auto"
 	d["resType"] = "auto"
 	d["mem_mode"] = "internal_decoupled"
-	d["runtime_writable_weights"] = runtime_writable 
+	d["runtime_writeable_weights"] = runtime_writeable 
 	return d
 
 def dupstreams(pe:int)->dict:
@@ -30,10 +30,10 @@ def shuffle(simd:int)->dict:
 	d["SIMD"] = simd
 	return d
 
-def thresholding(pe:int, runtime_writable:int)->dict:
+def thresholding(pe:int, runtime_writeable:int)->dict:
 	d = {}
 	d["PE"] = pe
-	d["runtime_writable_weights"] = runtime_writable
+	d["runtime_writeable_weights"] = runtime_writeable
 	d["depth_trigger_uram"] = 0
 	d["depth_trigger_bram"] = 0
 	return d
@@ -45,7 +45,7 @@ def dynmvu(pe:int, simd:int)->dict:
 	d["ram_style"] = "auto"
 	d["resType"] = "auto"
 	d["mem_mode"] = "external"
-	d["runtime_writable_weights"] = 0
+	d["runtime_writeable_weights"] = 0
 	return d	
 
 def eltwiseadd(pe:int)->dict:
@@ -79,9 +79,9 @@ def main(args):
 		# Generate all MVAUs
 		for m in range(0,6):
 			if m==4 or m==5:
-				d = mvau(2*args.simd, 2*args.pe, args.runtime_writable_weights)
+				d = mvau(2*args.simd, 2*args.pe, args.runtime_writeable_weights)
 			else:
-				d = mvau(args.simd, args.pe, args.runtime_writable_weights)
+				d = mvau(args.simd, args.pe, args.runtime_writeable_weights)
 			c[f"MVAU_rtl_{m+(6*n)}"] = d
 		
 		# Duplicate streams
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 	parser.add_argument('-p', '--pe', type=int, help='Sets the common SIMD setting for the MVAU', default=32)
 	parser.add_argument('-t', '--other', type=int, help='Sets the SIMD/PE for the other operators between the MVAUs', default=4)
 	parser.add_argument('-n', '--num_layers', type=int, help='Sets the number of hidden layers', default=3)
-	parser.add_argument('-w', '--runtime_writable_weights', type=int, help='if 1 Make the weights runtime writable for the MVAUs', default=0)
+	parser.add_argument('-w', '--runtime_writeable_weights', type=int, help='if 1 Make the weights runtime writeable for the MVAUs', default=0)
 	parser.add_argument('-f', '--shuffleb', type=bool, help='Is shuffleB parallelisable yet?', default=False)
 
 	args = parser.parse_args()
