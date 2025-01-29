@@ -229,7 +229,7 @@ def main(args):
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
-        auto_fifo_depths=True if args.param is None else False,
+        auto_fifo_depths=args.fifodepth,
         split_large_fifos=True,
         stitched_ip_gen_dcp=args.dcp,
         board="V80",
@@ -264,6 +264,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--clk', type=float, default=3.33, help='The target clock rate for the hardware')
     parser.add_argument('-s', '--stop_step', type=str, default=None, help='Step to stop at in the build flow')
     parser.add_argument('-p', '--param', type=str, default=None, help='Use a preconfigured file for the folding parameters')
+    parser.add_argument('-d', '--fifodepth', type=bool, default=True, help='Skip the FIFO depth stage')
     parser.add_argument('-q', '--seqlen', type=int, default=128, help='Sets the sequence length parameter')
     parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
 
