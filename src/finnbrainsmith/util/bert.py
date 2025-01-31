@@ -30,7 +30,7 @@ import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
-import finnbrainsmith.transformation.specialize_layer as SpecializeLayerVisitor 
+import finnbrainsmith.transformation.specialize_layer as bs_specialize 
 from finnbrainsmith.transformation.expand_norms import ExpandNorms
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
@@ -184,7 +184,7 @@ def custom_step_specialize_hardware(model, cfg):
     Custom step that specialises hardware (such as the shuffles) depending on certain
     rules.
     """
-    model = model.transform(SpecializeLayerVisitor(cfg._resolve_fpga_part()))
+    model = model.transform(bs_specialize.SpecializeLayersVisitor(cfg._resolve_fpga_part()) )
     return model
 
 def custom_step_remove_head(model, cfg):

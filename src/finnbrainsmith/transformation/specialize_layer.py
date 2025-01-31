@@ -29,7 +29,7 @@ def specilise_factory(hwop:NodeProto, fpgapart:str)->Optional[NodeProto]:
         )
     return None
 
-class SpecializeLayerVisitor(Transformation):
+class SpecializeLayersVisitor(Transformation):
     """ Visits every node in the graph and calls it's specialise function
     adding relevant global state information, such as the fpgapart.
     """
