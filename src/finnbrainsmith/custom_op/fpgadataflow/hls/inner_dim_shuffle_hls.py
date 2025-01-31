@@ -23,7 +23,7 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
         if self.get_nodeattr("inner_mover") != 1:
             raise RuntimeError(f"InnerDimShuffle created for a Shuffle where inner dim is not moved")
 	
-	self._relax = False # Used to constrain the input to space where feasible schedule can be found via brute force
+        self._relax = False # Used to constrain the input to space where feasible schedule can be found via brute force
 
         self.simd = self.get_nodeattr("SIMD")
 
@@ -39,7 +39,7 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
 
         # Check for constraints? 
         #         Should I throw an error here? Or fallback to a SIMD=1?
-	self._checks()
+        self._checks()
 
         # If all else fails brute force
 

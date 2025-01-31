@@ -45,6 +45,7 @@ from finnbrainsmith.util.bert import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
+        custom_step_specialize_hardware,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -210,6 +211,7 @@ def main(args):
         custom_step_infer_hardware,
         step_create_dataflow_partition,
         step_specialize_layers,
+        custom_step_specialize_hardware,
         step_target_fps_parallelization,
         step_apply_folding_config,
         step_minimize_bit_width,

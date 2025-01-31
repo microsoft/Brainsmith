@@ -1,6 +1,7 @@
 from finnbrainsmith.custom_op.fpgadataflow.hls.layernorm_hls import LayerNorm_hls
 from finnbrainsmith.custom_op.fpgadataflow.hls.hwsoftmax_hls import HWSoftmax_hls
 from finnbrainsmith.custom_op.fpgadataflow.hls.shuffle_hls import Shuffle_hls
+from finnbrainsmith.custom_op.fpgadataflow.hls.inner_dim_shuffle_hls import InnerDimShuffle_hls 
 from finnbrainsmith.custom_op.fpgadataflow.hls.crop_hls import Crop_hls
 
 custom_op = dict()
@@ -11,4 +12,5 @@ custom_op = dict()
 custom_op["LayerNorm_hls"] = LayerNorm_hls
 custom_op["HWSoftmax_hls"] = HWSoftmax_hls
 custom_op["Shuffle_hls"] = Shuffle_hls
+custom_op["InnerDimShuffle_hls"] = InnerDimShuffle_hls
 custom_op["Crop_hls"] = Crop_hls
