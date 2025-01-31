@@ -30,6 +30,7 @@ class Shuffle(HWCustomOp):
                 "out_reshaped" : ("ints", True, []),
                 "out_shape" : ("ints", True, []),
                 "loop_coeffs" : ("ints", True, []), 
+                "inner_moves" : ("i", True, 0),
                 "perm" : ("ints", True, []),
                 "SIMD": ("i", False, 1),
                 "NumChannels": ("i", False, 128) 

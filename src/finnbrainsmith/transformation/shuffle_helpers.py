@@ -76,7 +76,7 @@ def calculate_wr_rot_period(simd:int, i:int)->int:
     else:
         return int(i/simd)
 
-def simplify_transpose(self, shape, perm):
+def simplify_transpose(shape, perm):
    """Detect if a multi-dimensional transpose can be reduced to a 2D transpose 
    and return the simplified transpose.
 

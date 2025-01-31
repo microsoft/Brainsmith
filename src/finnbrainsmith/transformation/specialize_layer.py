@@ -12,21 +12,26 @@ from finnbrainsmith.custom_op.fpgadataflow.hls import custom_op as hls_variants
 from typing import Optional
 from onnx.helper import NodeProto
 from qonnx.transformation.base import Transformation
+from qonnx.custom_op.registry import getCustomOp
 
-def specilise_factory(hwop:NodeProto, fpgapart:str)->Optional[NodeProto]:
+def specialise_factory(hwop:NodeProto, fpgapart:str)->Optional[NodeProto]:
     """ Given a ONNX node produce a new version that is specialised """
     if hwop.op_type == "Shuffle": 
-        if hwop.get_nodeattr("inner_dim") == 1 and hwop.get_nodeattr("SIMD") > 1:
+        node = getCustomOp(hwop)
+        if node.get_nodeattr("inner_moves") == 1: #and node.get_nodeattr("SIMD") > 1:
             optype = "InnerDimShuffle_hls"
         else:
             optype = "Shuffle_hls"
 
-        return make_node(
+        new_node = make_node(
                 optype, 
                 hwop.input,
                 hwop.output,
                 domain="finnbrainsmith.custom_op.fpgadataflow.hls"
-        )
+            )
+        for attr in hwop.attribute:
+            new_node.attribute.append(attr)
+        return new_node
     return None
 
 class SpecializeLayersVisitor(Transformation):
@@ -47,12 +52,12 @@ class SpecializeLayersVisitor(Transformation):
                 continue
             node_ind += 1
 
-            new_node = specialise_factory()
-            graph.node.insert(node_ind, new_node)
+            new_node = specialise_factory(node, self.fpgapart)
+            if not new_node is None:
+                graph.node.insert(node_ind, new_node)
+                graph.node.remove(node)
+                graph_modified = True
 
-            # remove old nodes
-            graph.node.remove(node)
-            graph_modified = True
         return (model, graph_modified)
 
 

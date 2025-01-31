@@ -19,8 +19,10 @@ from finn.util.basic import CppBuilder
 
 class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
     def __init__(self, onnx_node, **kwargs):
+        super().__init__(onnx_node, **kwargs)
+
         # Assert that it does have an inner dim moving
-        if self.get_nodeattr("inner_mover") != 1:
+        if self.get_nodeattr("inner_moves") != 1:
             raise RuntimeError(f"InnerDimShuffle created for a Shuffle where inner dim is not moved")
 	
         self._relax = False # Used to constrain the input to space where feasible schedule can be found via brute force
@@ -46,8 +48,6 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
         # Verify that the transformation and banking was correct
 
         # Then we can continue onto hls generation
-
-        super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
         return Shuffle.get_nodeattr_types(self) | BS_HLSBackend.get_nodeattr_types(self)
@@ -245,6 +245,11 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
+
+    @property
+    def postshape(self)->tuple[int,...]:
+        """ Returns what the shape of the output will be after the operation """
+        return tuple([self.shape[x] for x in self.perm])
 
     def _checks(self)->None:
         """ Checks the sanity of the inputs, raises exceptions if they are incorrect """
