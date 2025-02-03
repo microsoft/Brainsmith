@@ -17,6 +17,7 @@ three_layer : l_3_n_12_z_384_i_1536.onnx
 folding_three_layers: l3_simd24_pe16.onnx
 max_folding_three_layers: l3_simd48_pe32.onnx
 small_folding_three_layers: l3_simd12_pe8.onnx
+runtime_writable_weights_experiment: l1_simd12_pe8_runtime_writeable.onnx
 
 l_1_n_12_z_384_i_1536.onnx: ./config/l_1_n_12_z_384_i_1536.json
 	python endtoend.py -o l_1_n_12_z_384_i_1536.onnx -n 12 -l 1 -z 384 -i 1536 -x False -p ./config/l_1_n_12_z_384_i_1536.json
@@ -32,11 +33,16 @@ l3_simd24_pe16.onnx:
 	mv ./intermediate_models ./l3_simd24_pe16
 
 l3_simd48_pe32.onnx: 
-	python scripts/gen_initial_folding.py --simd 24 --pe 16 --num_layers 3 -o l3_simd48_pe32.json
+	python scripts/gen_initial_folding.py --simd 48 --pe 32 --num_layers 3 -o l3_simd48_pe32.json
 	python endtoend.py -o l3_simd48_pe32.onnx -n 12 -l 3 -z 384 -i 1536 -x True -p ./l3_simd48_pe32.json
 	mv ./intermediate_models ./l3_simd48_pe32
 
 l3_simd12_pe8.onnx: 
-	python scripts/gen_initial_folding.py --simd 24 --pe 16 --num_layers 3 -o l3_simd12_pe8.json
+	python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 3 -o l3_simd12_pe8.json
 	python endtoend.py -o l3_simd12_pe8.onnx -n 12 -l 3 -z 384 -i 1536 -x True -p ./l3_simd12_pe8.json
 	mv ./intermediate_models ./l3_simd12_pe8
+
+l1_simd12_pe8_runtime_writeable.onnx: 
+	python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -w 1 -o l1_simd12_pe8_runtime_writeable.json
+	python endtoend.py -o l1_simd12_pe8_runtime_writeable.onnx -n 12 -l 3 -z 384 -i 1536 -x True -p ./l1_simd12_pe8_runtime_writeable.json
+	mv ./intermediate_models ./l1_simd12_pe8_runtime_writeable
