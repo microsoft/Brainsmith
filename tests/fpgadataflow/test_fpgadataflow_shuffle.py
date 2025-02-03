@@ -40,6 +40,7 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
 from finnbrainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
 from finnbrainsmith.transformation.convert_to_hw_layers import InferShuffle
+import finnbrainsmith.transformation.specialize_layer as bs_specialize
 
 test_fpga_part:str = "xcv80-lsva4737-2MHP-e-S"
 test_synth_clk_period_ns:int = 5
@@ -106,13 +107,13 @@ def construct_onnx_model(
             "out_reshaped" : None,
             "perm" : (0,2,1,3)
     }, 
-    #{
-    #        "in_shape" : (1,128,384), # Shuffle B 
-    #        "in_reshaped" : (1,128,12,32),
-    #        "out_shape" : (1,12,32,128),
-    #        "out_reshaped" : None,
-    #        "perm" : (0,2,3,1)
-    #}, 
+    {
+            "in_shape" : (1,128,384), # Shuffle B 
+            "in_reshaped" : (1,128,12,32),
+            "out_shape" : (1,12,32,128),
+            "out_reshaped" : None,
+            "perm" : (0,2,3,1)
+    }, 
     {
             "in_shape" : (1,12,128,32), # Shuffle C 
             "in_reshaped" : None,
@@ -157,6 +158,7 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     # Attempt to build the HLS for this
     model = model.transform(InferShuffle())
     model = model.transform(ApplyConfig(folding_config))
+    model = model.transform(bs_specialize.SpecializeLayersVisitor(test_fpga_part))
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())
@@ -164,6 +166,7 @@ def test_cppsim_shuffle_layer(shuffle_param, datatype, simd):
     model = model.transform(SetExecMode("cppsim"))
     model = model.transform(PrepareCppSim())
     model = model.transform(CompileCppSim())
+    model.save("stf_debug.onnx")
 
     y_hw = oxe.execute_onnx(model, input_t)[out_name]
 
@@ -229,6 +232,7 @@ def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
     # Attempt to build the HLS for this
     model = model.transform(InferShuffle())
     model = model.transform(ApplyConfig(folding_config))
+    model = model.transform(bs_specialize.SpecializeLayersVisitor(test_fpga_part))
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(GiveReadableTensorNames())

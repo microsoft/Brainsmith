@@ -53,6 +53,19 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
         for i in range(0, self.simd):
             self.banks.append([])
 
+        self._solve_rotation_periods()
+            
+        # Verify that the transformation and banking was correct
+        if not self.validate: 
+            raise RuntimeError(f"Error! The bank scheduling for {self.name} is not correct shape:{self.shape} wr_rot_period={self.wr_rot_period} rd_rot_period={self.rd_rot_period}")
+
+
+    def _solve_rotation_periods(self)->None:
+        """ 
+            Solves the rotation period of the inner dim transpose
+            sets wr_rot_period and rd_rot_period either analytically (if possible)
+            or via brute force search.
+        """
         # Attempt to analytically solve the bank scheduling problem
         if len(self.shape) == 2 and len(self.perm) == 2: 
             self.wr_rot_period = calculate_wr_rot_period(self.simd, self.shape[-1])
@@ -62,12 +75,14 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
             # Brute force solve
             self.wr_rot_period = self._brute_force_wr_rot_period()
             self.rd_rot_period = self._brute_force_rd_rot_period()
-            
-        # Verify that the transformation and banking was correct
-        if not self.validate: 
-            raise RuntimeError(f"Error! The bank scheduling for {self.name} is not correct shape:{self.shape} wr_rot_period={self.wr_rot_period} rd_rot_period={self.rd_rot_period}")
-	
-        # Then we can continue onto hls generation
+        self.set_nodeattr("wr_rot_period", self.wr_rot_period)
+        self.set_nodeattr("rd_rot_period", self.rd_rot_period)
+
+    def get_nodeattr_types(self):
+        attr = Shuffle.get_nodeattr_types(self) | BS_HLSBackend.get_nodeattr_types(self)
+        attr["wr_rot_period"] = ("i", True, None) 
+        attr["rd_rot_period"] = ("i", True, None)
+        return attr 
 
     def _populate_unbanked_layout(self) -> tuple[dict[int,tuple[int,...]], dict[tuple[int,...], int]]:  
         """ 
@@ -323,8 +338,6 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
                     return (bidx, lidx)
         raise RuntimeError(f"Unable to find item {item} in the banks")
 
-    def get_nodeattr_types(self):
-        return Shuffle.get_nodeattr_types(self) | BS_HLSBackend.get_nodeattr_types(self)
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
