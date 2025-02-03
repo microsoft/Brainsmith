@@ -9,6 +9,7 @@
 
 import numpy as np
 import os
+import copy
 
 from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
@@ -34,20 +35,293 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
         self.perm = self.get_nodeattr("perm")
         self.shape, self.perm = simplify_transpose(self.shape, self.perm)
 
-        # Attempt to analytically solve the bank scheduling problem
-        if len(self.shape) == 2 and len(self.perm) == 2: 
-            self.wr_rot_period = calculate_wr_rot_period(self.simd, self.shape[-1])
-            self.rd_rot_period = int(self.shape[0]/self.simd) 
-
         # Check for constraints? 
         #         Should I throw an error here? Or fallback to a SIMD=1?
         self._checks()
 
-        # If all else fails brute force
+        # Internal representation of unbanked memory layout
+        # Each memory location is given a unique signature that we can
+        # use for tracking how bank allocation has happened.
+        self.in_mem_layout, self.in_addr_map = self._populate_unbanked_layout()
 
+        # How SIMD data items are allocated to banks (can be rotated)
+        self.wr_alloc = list(range(0,self.simd))
+        self.rd_alloc = [0] + [self.simd - i for i in range(1, self.simd)] 
+
+        # Internal model of hardware banks
+        self.banks = []
+        for i in range(0, self.simd):
+            self.banks.append([])
+
+        # Attempt to analytically solve the bank scheduling problem
+        if len(self.shape) == 2 and len(self.perm) == 2: 
+            self.wr_rot_period = calculate_wr_rot_period(self.simd, self.shape[-1])
+            self.rd_rot_period = int(self.shape[0]/self.simd) 
+            self._attempt_allocation() # Should pass with no issues here 
+        else:
+            # Brute force solve
+            self.wr_rot_period = self._brute_force_wr_rot_period()
+            self.rd_rot_period = self._brute_force_rd_rot_period()
+            
         # Verify that the transformation and banking was correct
-
+        if not self.validate: 
+            raise RuntimeError(f"Error! The bank scheduling for {self.name} is not correct shape:{self.shape} wr_rot_period={self.wr_rot_period} rd_rot_period={self.rd_rot_period}")
+	
         # Then we can continue onto hls generation
+
+    def _populate_unbanked_layout(self) -> tuple[dict[int,tuple[int,...]], dict[tuple[int,...], int]]:  
+        """ 
+		Creates a data layout that is not considering banking for an arbitrary number of dimensions.
+                Each element has a unique signature that can be used to track it as different banking schemes are used.
+		returns two mappings:
+			* an indices tuple to linear address :  int -> tuple[int, ...]
+			* a linear address to indices tuple  :  tuple[int, ...] -> int
+
+		This is used at various points for either checking that a schedule is correct, or bruteforcing one
+	"""  
+        in_mem_layout = {}  
+        in_addr_map = {}  
+        total_elements = 1  
+        for dim in self.shape:  
+            total_elements *= dim  
+  
+        for addr in range(total_elements):  
+            indices = []  
+            remainder = addr  
+            for dim in reversed(self.shape):  
+                indices.append(remainder % dim)  
+                remainder //= dim  
+            indices.reverse()  
+            in_mem_layout[addr] = tuple(indices)  
+            in_addr_map[tuple(indices)] = addr  
+        return (in_mem_layout, in_addr_map)
+
+    def _brute_force_wr_rot_period(self, give_up=500)->int:
+        """ 
+            Find a feasible rotation pointer for this setup.
+            Will attempt and allocation, ensure there are no colflicts, and then ensure that we can have a constant rd_ropt_period.
+            There is plenty of room for optimisation here and improving the search speed.
+        """
+        for i in range(give_up):
+            self.wr_rot_period = i
+            self._attempt_allocation(i)
+            if not self._detect_bank_conflict() and (len(set(self._brute_force_rd_rot_period()))==1):
+                return i
+        return None 
+
+    def _brute_force_rd_rot_period(self)->int:
+        """ 
+            From the access pattern exhaustively determine the 
+            read period from the banks and access pattern.
+
+            Again this is currently quite a slow operation with space to optimise
+        """
+        first = True
+        curr_count = 0
+        counts = []
+        for pattern in self.read_bank_schedule:
+            if not first:
+                curr_count += 1
+                if prev_pattern != pattern:
+                    counts.append(curr_count)
+                    curr_count = 0
+            first = False
+            prev_pattern = pattern
+        assert len(set(counts)) == 1, f"We do not have a static read rotation period rd_rot_period={counts} {self.shape=} {self.simd=}"
+        return counts
+
+    def _detect_bank_conflict(self)->bool:
+        """ 
+            Walks through the read pattern and determines if there are any bank conflicts 
+        """
+        conflict = False
+        for rd in self.addr(self.readorder):
+            if not self._disjoint_banks(rd):
+                conflict = True
+        return conflict 
+
+    def _disjoint_banks(self, items)->bool:   
+        """
+           For a given set of items return true if they are in disjoint banks
+        """
+        for bank_idx, bank in enumerate(self.banks):
+            hits=[]
+            for i in items:
+                if i in bank:
+                    hits.append(i)
+            if len(hits) != 1:
+                return False
+        return True
+
+    def _clear_banks(self):
+        """ 
+            Clears all the data from the banks 
+        """
+        self.banks = []
+        self._plot_data = []
+        for i in range(0,self.simd):
+            self.banks.append([])  
+
+    def _attempt_allocation(self):
+        """ 
+            Attempts to allocate based on the bank write rotation period 
+            self.wr_rot_period 
+        """
+        self._clear_banks()
+        rot_count = 0
+        for wr in self.addr(self.writeorder):
+            for b in range(self.simd):
+                self.banks[self.wr_alloc[b]].append(wr[b])
+            rot_count += 1
+            if rot_count == self.wr_rot_period:
+                self.rotate_wr_alloc()
+                rot_count = 0
+
+    @property
+    def validate(self)->bool:
+        """ 
+            Validates that the transpose was correct. 
+            This will use python models of the banks, write rotation
+            and read rotation to compare against a numpy implementation.
+        """
+        seen=0 # For more helpful error reporting
+        ref = self._create_numpy_readpattern
+        for rd_simd in self.read:
+            for rd in rd_simd:
+                item = ref.pop(0)
+                if item != rd:
+                    raise RuntimeError(f"""
+                    Error: mismatch between the numpy golden reference and the parallel shuffle.
+                    expected {item}, but got, {rd} on read index {seen}
+                    """)
+                seen += 1
+        return True
+
+    @property
+    def _create_numpy_readpattern(self)->list[int]:
+        """ 
+          Create the golden read pattern using the numpy.transpose op.
+          This is used for validation. 
+        """
+        total_elements = np.prod(self.shape)  
+        flat_array = np.arange(total_elements)    
+        input_array = flat_array.reshape(self.shape)  
+
+        reshaped_array = np.transpose(input_array, self.perm)
+        assert (reshaped_array.shape == self.postshape), f"Error: the calculated postshape {self.postshape} does not match the numpy model {reshaped_array.shape}"
+    
+        # Iterate through the transposed array
+        read_pattern = []
+        for index, value in np.ndenumerate(reshaped_array):
+            read_pattern.append(value)
+        return read_pattern
+
+    @property
+    def read(self)->list[int]:
+        """ 
+          Behaviourally read using the read pointer from the banks
+          and generate a flattened list of the output in order.
+          This is mimicking the same behaviour as the hardware unit. 
+        """
+        overall_output = []
+        count=0
+        for simd_row in self.addr(self.readorder):
+            t = [int(x/self.simd) for x in simd_row] # The bank addresses
+            out_line = []
+            for b in range(self.simd):
+                out_line.append(self.banks[self.rd_alloc[b]][t[b]])
+            count += 1
+            if count == self.rd_rot_period: 
+                self.rotate_rd_alloc()
+                count=0
+            overall_output.append(out_line)
+        return overall_output
+
+    def rotate_wr_alloc(self)->None:
+        self.wr_alloc = self.wr_alloc[-1:] + self.wr_alloc[:-1]
+        
+    def rotate_rd_alloc(self)->None: 
+        self.rd_alloc = self.rd_alloc[-1:] + self.rd_alloc[:-1]
+
+    def addr(self, order:list[tuple[int,...]])->list[int]:
+        """ 
+            For a given read/write order in terms of indices tuple
+            return the address in local memory model (index) 
+        """
+        res = []
+        for s in order:
+            res_s = []
+            for i in s:
+                res_s.append(self.in_addr_map[i])
+            res.append(res_s)
+        return res
+
+    @property
+    def writeorder(self)->list[tuple[int,...]]:
+        """ 
+            Recursivley walk the input shape and generate the write order, taking into account SIMD 
+        """
+        result = []
+        simd = []
+        
+        def nested_loop(dim:int, indices:list[int]):
+            if dim == len(self.shape):
+                simd.append(tuple(indices))
+                if len(simd) == self.simd:
+                    result.append(copy.deepcopy(simd))
+                    simd.clear()
+                return
+            for i in range(self.shape[dim]):
+                nested_loop(dim + 1, indices + [i])
+                
+        nested_loop(0, [])
+        return result
+
+    @property
+    def readorder(self)->list[tuple[int,...]]:
+        """ 
+           Recursivly walk the postshape and generate the readorder, taking into account SIMD
+        """
+        result = []
+        simd = []
+        
+        def nested_loop(dim:int, indices:list[int]):
+            if dim == len(self.postshape):
+                reordered_indices = tuple(indices[self.perm.index(i)] for i in range(len(self.shape)))
+                simd.append(tuple(reordered_indices))
+                if len(simd) == self.simd:
+                    result.append(copy.deepcopy(simd))
+                    simd.clear()
+                return
+            for i in range(self.postshape[dim]):
+                nested_loop(dim + 1, indices + [i])
+                
+        nested_loop(0, [])
+        return result
+
+    @property
+    def read_bank_schedule(self)->list[list[int]]:
+        """ 
+           Returns the order in which the banks are read from every iteration 
+        """
+        bank_schedule = []
+        for rd_simd in self.addr(self.readorder):
+            bs_simd = []
+            for rd in rd_simd:
+                b,i = self._find_bank_location(rd)
+                bs_simd.append(b)
+            bank_schedule.append(bs_simd)
+        return bank_schedule
+
+    def _find_bank_location(self, item:int)->tuple[int,int]:
+        """ 
+            Given a unique index to an item find it's bank and the index into that bank 
+        """
+        for bidx, b in enumerate(self.banks):
+            for lidx, l in enumerate(b):
+                if item==l:
+                    return (bidx, lidx)
+        raise RuntimeError(f"Unable to find item {item} in the banks")
 
     def get_nodeattr_types(self):
         return Shuffle.get_nodeattr_types(self) | BS_HLSBackend.get_nodeattr_types(self)
