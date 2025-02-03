@@ -11,14 +11,17 @@ import argparse
 import json
 
 def mvau(simd:int, pe:int, runtime_writeable:int)->dict:
-	d = {}
-	d["PE"] = pe
-	d["SIMD"] = simd
-	d["ram_style"] = "auto"
-	d["resType"] = "auto"
-	d["mem_mode"] = "internal_decoupled"
-	d["runtime_writeable_weights"] = runtime_writeable 
-	return d
+        d = {}
+        d["PE"] = pe
+        d["SIMD"] = simd
+        d["ram_style"] = "auto"
+        d["resType"] = "auto"
+        d["runtime_writeable_weights"] = runtime_writeable 
+        if runtime_writeable:
+            d["mem_mode"] = "external"
+        else:
+            d["mem_mode"] = "internal_decoupled"
+        return d
 
 def dupstreams(pe:int)->dict:
 	d={}
