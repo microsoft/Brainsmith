@@ -119,7 +119,7 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
         """
         for i in range(give_up):
             self.wr_rot_period = i
-            self._attempt_allocation(i)
+            self._attempt_allocation()
             if not self._detect_bank_conflict() and (len(set(self._brute_force_rd_rot_period()))==1):
                 return i
         return None 
@@ -142,7 +142,6 @@ class InnerDimShuffle_hls(Shuffle, BS_HLSBackend):
                     curr_count = 0
             first = False
             prev_pattern = pattern
-        assert len(set(counts)) == 1, f"We do not have a static read rotation period rd_rot_period={counts} {self.shape=} {self.simd=}"
         return counts
 
     def _detect_bank_conflict(self)->bool:
