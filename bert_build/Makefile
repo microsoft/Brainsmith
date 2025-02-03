@@ -43,6 +43,6 @@ l3_simd12_pe8.onnx:
 	mv ./intermediate_models ./l3_simd12_pe8
 
 l1_simd12_pe8_runtime_writeable.onnx: 
-	python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -w 1 -o l1_simd12_pe8_runtime_writeable.json
+	python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -w 1 -o l1_simd12_pe8_runtime_writeable.json
 	python endtoend.py -o l1_simd12_pe8_runtime_writeable.onnx -n 12 -l 3 -z 384 -i 1536 -x True -p ./l1_simd12_pe8_runtime_writeable.json
 	mv ./intermediate_models ./l1_simd12_pe8_runtime_writeable
