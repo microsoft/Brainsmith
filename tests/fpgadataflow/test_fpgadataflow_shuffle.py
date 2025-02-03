@@ -115,6 +115,13 @@ def construct_onnx_model(
             "perm" : (0,2,3,1)
     }, 
     {
+            "in_shape" : (2,4,3), # Brute Force cannot be simplified into 2D case 
+            "in_reshaped" : None,
+            "out_shape" : (2,3,4),
+            "out_reshaped" : None,
+            "perm" : (0,2,1)
+    }, 
+    {
             "in_shape" : (1,12,128,32), # Shuffle C 
             "in_reshaped" : None,
             "out_shape" : (1,128,12,32),
