@@ -210,8 +210,8 @@ def main(args):
         custom_streamlining_step,
         custom_step_infer_hardware,
         step_create_dataflow_partition,
-        step_specialize_layers,
         custom_step_specialize_hardware,
+        step_specialize_layers,
         step_target_fps_parallelization,
         step_apply_folding_config,
         step_minimize_bit_width,
@@ -234,6 +234,7 @@ def main(args):
         auto_fifo_depths=args.fifodepth,
         split_large_fifos=True,
         stitched_ip_gen_dcp=args.dcp,
+        start_step="step_create_dataflow_partition",
         board="V80",
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
