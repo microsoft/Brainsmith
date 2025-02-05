@@ -8,6 +8,7 @@
 ############################################################################
 
 import numpy as np
+from functools import partial
 import copy
 
 def shuffle_perfect_loopnest_coeffs(
