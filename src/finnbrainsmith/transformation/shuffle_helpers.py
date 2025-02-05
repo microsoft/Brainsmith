@@ -166,6 +166,7 @@ class ParallelInnerShuffle:
         # How SIMD data items are allocated to banks (can be rotated)
         self.wr_alloc = list(range(0,self.simd))
         self.rd_alloc = [0] + [self.simd - i for i in range(1, self.simd)]
+        #self.rd_alloc = list(range(0,self.simd))
 
         # Internal model of hardware banks
         self.banks = []
@@ -317,6 +318,7 @@ class ParallelInnerShuffle:
                 item = ref.pop(0)
                 if item != rd:
                     raise RuntimeError(f"""
+                    shape={self.shape} perm={self.perm} simd={self.simd}
                     Error: mismatch between the numpy golden reference and the parallel shuffle.
                     expected {item}, but got, {rd} on read index {seen}
                     """)

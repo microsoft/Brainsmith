@@ -109,6 +109,21 @@ def test_2D_transpose_rotation_calculation(simd):
         if not t.validate:
             raise RuntimeError(f"{shape=} {simd=} is not valid {t.rd_rot_period=} {t.wr_rot_period=}")
 
+@pytest.mark.parametrize("transpose_param", [
+    {
+        "shape" : (4, 8, 12),
+        "perm" : (0, 2, 1),
+        "simd" : 4
+    },
+    {
+        "shape" : (22, 64, 12),
+        "perm" : (2, 1, 0),
+        "simd" : 11 
+    }
+    ])
+def test_3D_transpose_rotation_calculation(transpose_param):
+    t = ParallelInnerShuffle(shape=transpose_param["shape"], perm=transpose_param["perm"], simd=transpose_param["simd"])
+
 
 @pytest.mark.parametrize("shuffle_param", [ 
     {
