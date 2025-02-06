@@ -156,6 +156,18 @@ def test_fpga_dataflow_hwsoftmax(impl_style, simd, idt, exec_mode, ifm_dim):
     # run the model
     y_hw = oxe.execute_onnx(model, input_t)[out_name]
 
+    # Ensure the number of cycles the layer takes to run in rtlsim
+    # aligns with the expected number of cycles.
+    if exec_mode == "rtlsim":
+        op_type = "FMPadding_" + impl_style
+        node = model.get_nodes_by_op_type(op_type)[0]
+        inst = getCustomOp(node)
+        cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
+        exp_cycles_dict = model.analysis(exp_cycles_per_layer)
+        exp_cycles = exp_cycles_dict[node.name]
+        assert np.isclose(exp_cycles, cycles_rtlsim, atol=10)
+        assert exp_cycles != 0
+
     y_hw_flat = y_hw.flatten()
     y_ref_flat = y_ref.flatten()
     for i in range(len(y_hw_flat)):
