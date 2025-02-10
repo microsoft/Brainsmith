@@ -174,13 +174,20 @@ def gen_initial_bert_model(
 
 
 
-def main(args):
-    tmp = "./intermediate_models"
-    os.makedirs(tmp, exist_ok=True)
+def runthrough(args):
+    # Create build directory
+    os.makedirs(args.output, exist_ok=True)
+    build_path = f"{args.output}/{args.model}" 
+    try:
+        os.makedirs(build_path)
+    except FileExistsError:
+        raise RuntimeError(f"Output model directory {args.model} already exists")
+
+    tmp_path = build_path + "./intermediate_models"
 
     # Initial model generation
     gen_initial_bert_model(
-        outfile=f"{tmp}/initial.onnx",
+        outfile=f"{tmp_path}/initial.onnx",
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_hidden_layers,
         num_attention_heads=args.num_attention_heads,
@@ -190,13 +197,13 @@ def main(args):
     )
 
     # Initial model cleanup
-    model = onnx.load(f"{tmp}/initial.onnx")  
+    model = onnx.load(f"{tmp_path}/initial.onnx")  
     model_simp, check = simplify(model)  
     if check:  
-        onnx.save(model_simp, f"{tmp}/simp.onnx")  
+        onnx.save(model_simp, f"{tmp_path}/simp.onnx")  
     else:  
         raise RuntimeError(f"Unable to simplify the Brevitas bert model")
-    cleanup(in_file=f"{tmp}/simp.onnx", out_file=f"{tmp}/qonnx_cleanup.onnx")
+    cleanup(in_file=f"{tmp_path}/simp.onnx", out_file=f"{tmp_path}/qonnx_cleanup.onnx")
     
     steps = [
         # Cleanup and custom graph surgery
@@ -225,7 +232,7 @@ def main(args):
         standalone_thresholds=True,
         steps=steps,
         target_fps=args.fps,
-        output_dir=tmp,
+        output_dir=build_path,
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
@@ -245,16 +252,17 @@ def main(args):
         ],
     )
     
-    _ = build.build_dataflow_cfg(f"{tmp}/qonnx_cleanup.onnx", cfg)
+    _ = build.build_dataflow_cfg(f"{tmp_path}/qonnx_cleanup.onnx", cfg)
     if args.stop_step is None:
-        shutil.copy2(f"{tmp}/intermediate_models/{steps[-1].__name__}.onnx", args.output)
+        shutil.copy2(f"{tmp_path}/{steps[-1].__name__}.onnx", args.model)
     else:
-        shutil.copy2(f"{tmp}/intermediate_models/{args.stop_step}.onnx", args.output)
+        shutil.copy2(f"{tmp_path}/{args.stop_step}.onnx", args.model)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='TinyBERT FINN demo script')
-    parser.add_argument('-o', '--output', help='Output ONNX file path', required=True)
+    parser.add_argument('-m', '--model', help='Output ONNX model name', required=True)
+    parser.add_argument('-o', '--output', type=str, default='./builds/', help='Output build path', required=True)
     parser.add_argument('-z', '--hidden_size', type=int, default=384, help='Sets BERT hidden_size parameter')
     parser.add_argument('-n', '--num_attention_heads', type=int, default=12, help='Sets BERT num_attention_heads parameter')
     parser.add_argument('-l', '--num_hidden_layers', type=int, default=1, help='Number of hidden layers')
