@@ -3,7 +3,16 @@ import os
 
 import jobs.bert as bert
 
-def main(args):
+
+def load_custom_library(args, steps):
+    # Load the custom library
+    if args.custom_library is not None:
+        custom_library = importlib.import_module(args.custom_library)
+        custom_library_steps = custom_library.get_steps()
+        steps.extend(custom_library_steps)
+    return steps
+
+def run_job(args, steps):
     tmp = "./intermediate_models"
     os.makedirs(tmp, exist_ok=True)
 
