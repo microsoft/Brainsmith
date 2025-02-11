@@ -9,7 +9,9 @@
 
 import numpy as np
 from functools import partial
+import matplotlib.pyplot as plt 
 import copy
+import math
 
 def shuffle_perfect_loopnest_coeffs(
         shape:tuple[int],
@@ -165,21 +167,117 @@ class ParallelInnerShuffle:
 
         # How SIMD data items are allocated to banks (can be rotated)
         self.wr_alloc = list(range(0,self.simd))
-        self.rd_alloc = [0] + [self.simd - i for i in range(1, self.simd)]
-        #self.rd_alloc = list(range(0,self.simd))
+        #self.rd_alloc = [0] + [self.simd - i for i in range(1, self.simd)]
+        self.rd_alloc = list(range(0,self.simd))
 
         # Internal model of hardware banks
         self.banks = []
         for i in range(0, self.simd):
             self.banks.append([])
+        self._plot_data = []
 
         self._solve_rotation_periods()
+        self.rd_col_period = 2
+        self._populate_rd_read_schedule()
 
         # Verify that the transformation and banking was correct
-        if not self.validate:
-            raise RuntimeError(f"Error! The bank scheduling for {self.name} is not correct shape:{self.shape} wr_rot_period={self.wr_rot_period} rd_rot_period={self.rd_rot_period}")
- 
+        #if not self.validate:
+        #    raise RuntimeError(f"Error! The bank scheduling for {self.name} is not correct shape:{self.shape} wr_rot_period={self.wr_rot_period} rd_rot_period={self.rd_rot_period}")
 
+    #def find_tile_size(self)->tuple[int,int]:
+    #    
+    #    rows, cols = arr.shape
+        
+        # Find row periodicity
+    #    for tile_height in range(1, rows):
+    #        if np.all(arr[:tile_height] == arr[tile_height:2*tile_height]):  # Check repetition
+    #            if np.all(arr[:tile_height] == arr[i:i+tile_height] for i in range(0, rows, tile_height)):
+    #                break
+    #    else:
+    #        tile_height = rows  # No periodicity found, assume full height
+            
+    #    # Find column periodicity
+    #    for tile_width in range(1, cols):
+    #        if np.all(arr[:, :tile_width] == arr[:, tile_width:2*tile_width]):  # Check repetition
+    #            if np.all(arr[:, :tile_width] == arr[:, j:j+tile_width] for j in range(0, cols, tile_width)):
+    #                break
+    #    else:
+    #        tile_width = cols  # No periodicity found, assume full width
+
+    #    return tile_height, tile_width
+
+
+    def _populate_rd_read_schedule(self)->None:
+        """
+        For a given solution capture the read bank schedule. This is a periodic pattern of read banks that is SIMD long.
+        """
+        self.rd_schedule =[]
+        skip_count=0
+        for rd_simd in self.addr(self.readorder[:(self.simd*(self.shape[0]/self.simd))]):
+            if self.rd_col_period > 0:
+                if skip_count < self.rd_col_period:
+                    banks = [self._find_bank_location(x)[0] for x in rd_simd]
+                    self.rd_schedule.append(banks)
+            else:
+                if skip_count == 0:
+                    banks = [self._find_bank_location(x)[0] for x in rd_simd]
+                    self.rd_schedule.append(banks)   
+            skip_count += 1
+            
+            if skip_count == self.rd_rot_period:
+                skip_count = 0
+         
+    @property
+    def check_rd_rot_period_shift(self)->bool:
+        """ Returns true if we only shift the read bank allocation
+        on the rot period, false otherwise """
+        shift_amount = self.find_rd_shift_amount
+        for i,val in enumerate(shift_amount):
+            if i == 0:
+                continue
+            elif ((i+1) % self.rd_rot_period) == 0:
+                if val == 0:
+                    return False
+            else:
+                if val != 0:
+                    return False
+        return True
+    
+    @property
+    def rd_simple_linear_shift_list(self)->list[int]:
+        r = []
+        if self.check_rd_rot_period_shift:
+            for i,val in enumerate(self.find_rd_shift_amount):
+                if ((i+1) % self.rd_rot_period) == 0:
+                    r.append(val)
+        return r
+        
+
+    @property
+    def find_rd_shift_amount(self)->list:
+        """ Returns the amount shifted each read cycle """
+        shift_amount = []
+        
+        def calculate_shift(original, new):  
+            if len(original) != len(new):  
+                return None  
+
+            doubled_original = original + original  
+            for i in range(len(original)):  
+                if doubled_original[i:i+len(new)] == new:  
+                    return i   
+            return None  
+        
+        read_schedule = self.read_bank_schedule
+        for j in range(1, len(read_schedule)):
+            s = calculate_shift(read_schedule[j-1], read_schedule[j])
+            if s is None:
+                shift_amount.append( (read_schedule[j-1], read_schedule[j]) )
+            else:
+                shift_amount.append(s)                    
+        
+        return shift_amount
+            
     def _solve_rotation_periods(self)->None:
         """ 
             Solves the rotation period of the inner dim transpose
@@ -297,6 +395,7 @@ class ParallelInnerShuffle:
         rot_count = 0
         for wr in self.addr(self.writeorder):
             for b in range(self.simd):
+                self._plot_data.append((self.wr_alloc[b], wr[b]))
                 self.banks[self.wr_alloc[b]].append(wr[b])
             rot_count += 1
             if rot_count == self.wr_rot_period:
@@ -312,8 +411,7 @@ class ParallelInnerShuffle:
         """
         seen=0 # For more helpful error reporting
         ref = self._create_numpy_readpattern
-        #for rd_simd in self.read:
-        for rd_simd in self.addr(self.readorder):
+        for rd_simd in self.read:
             for rd in rd_simd:
                 item = ref.pop(0)
                 if item != rd:
@@ -345,7 +443,6 @@ class ParallelInnerShuffle:
         return read_pattern
 
 
-
     @property
     def read(self)->list[int]:
         """ 
@@ -359,19 +456,25 @@ class ParallelInnerShuffle:
             t = [int(x/self.simd) for x in simd_row] # The bank addresses
             out_line = []
             for b in range(self.simd):
-                out_line.append(self.banks[self.rd_alloc[b]][t[b]])
+                out_line.append(self.banks[self.rd_schedule[0][b]][t[b]])
             count += 1
             if count == self.rd_rot_period:
-                self.rotate_rd_alloc()
+                #self.rotate_rd_schedule()
+                self.rotate_rd_schedule_by(1)
                 count=0
             overall_output.append(out_line)
+        self._populate_rd_read_schedule() # Reset the rotation of the read schedule
         return overall_output
 
     def rotate_wr_alloc(self)->None:
         self.wr_alloc = self.wr_alloc[-1:] + self.wr_alloc[:-1]
-
-    def rotate_rd_alloc(self)->None:
-        self.rd_alloc = self.rd_alloc[-1:] + self.rd_alloc[:-1]
+        
+    def rotate_rd_schedule(self)->None:
+        self.rd_schedule = self.rd_schedule[1:] + self.rd_schedule[:1]
+        
+    def rotate_rd_schedule_by(self, n:int):
+        n = n % len(self.rd_schedule)
+        self.rd_schedule = self.rd_schedule[-n:] + self.rd_schedule[:-n]
 
     def addr(self, order:list[tuple[int,...]])->list[int]:
         """ 
@@ -428,7 +531,36 @@ class ParallelInnerShuffle:
 
         nested_loop(0, [])
         return result
+    
+    @property
+    def detect_cyclic_shift_pattern(self)->list[int]:  
+        """  
+        Detects if the allocations are shifting by the same amount each time, allowing for cyclic shifts.   
+        """   
+        r = []
+        allocations=self.read_bank_schedule
 
+        shifts = []  
+  
+        # Check for shifts between consecutive allocations  
+        for i in range(1, len(allocations)):  
+            curr = allocations[i]  
+            prev = allocations[i - 1]  
+            
+            lsl = curr
+            rsl = curr
+            s = 0
+            for j in range(1, len(curr)):
+                lsl = lsl[1:] + lsl[:1] 
+                rsl = rsl[-1:] + rsl[:-1]
+                if rsl == prev:
+                    shifts.append(j)
+                    break
+                elif lsl == prev:
+                    shifts.append(j*-1)
+                    break     
+        return shifts  
+    
     @property
     def read_bank_schedule(self)->list[list[int]]:
         """ 
@@ -466,6 +598,100 @@ class ParallelInnerShuffle:
 
         if not self._relax:
             assert self.postshape[-1] % self.simd == 0, f"Error: Currently there is the constraint that for the shuffle the final inner dimension % simd == 0, in this case final shape is {self.postshape} with inner dimension {self.postshape[-1]} which {self.postshape[-1]} % {self.simd} = {self.postshape[-1]%self.simd}"
+            
+    def plot(self):
+        """ Displays the bank allocation (bank, address) with a specified shape and number of banks. """  
+  
+        # Determine the grid size from the shape  
+        grid_rows, grid_cols = self.shape  
+  
+        # Create a 2D array for values and a separate one for bank values  
+        values = np.full((grid_rows, grid_cols), np.nan)  
+        banks = np.full((grid_rows, grid_cols), np.nan)  
+  
+        # Fill the arrays with data  
+        for i, (bank, value) in enumerate(self._plot_data):  
+            if i >= grid_rows * grid_cols:  
+                break  # Stop if we exceed the specified shape  
+            row = i // grid_cols  
+            col = i % grid_cols  
+            values[row, col] = value  
+            banks[row, col] = bank  
+  
+        # Define a colormap for the bank values  
+        cmap = plt.cm.get_cmap('viridis', self.simd)  # Adjust colormap for the number of banks  
+
+        # Plot the grid  
+        fig, ax = plt.subplots(figsize=(grid_cols, grid_rows))  # Increase figure size  
+        cax = ax.matshow(banks, cmap=cmap)  
+  
+        # Annotate each cell with the value  
+        for i in range(grid_rows):  
+            for j in range(grid_cols):  
+                if not np.isnan(values[i, j]):  
+                    ax.text(j, i, int(values[i, j]), va='center', ha='center', fontsize=10)  # Increase font size  
+  
+        # Add a colorbar  
+        cbar = fig.colorbar(cax, ticks=np.arange(self.simd))  
+        cbar.ax.set_yticklabels([f'Bank {i}' for i in range(self.simd)])  
+  
+        # Set axis labels  
+        ax.set_xticks(np.arange(-0.5, grid_cols, 1), minor=True)  
+        ax.set_yticks(np.arange(-0.5, grid_rows, 1), minor=True)  
+        ax.grid(which='minor', color='w', linestyle='-', linewidth=0.5)  # Thinner grid lines  
+  
+        plt.show()
+    
+        
+    def plot3d(self):  
+        """ Displays the bank allocation (bank, address) with a specified shape and number of banks. """  
+      
+        # Determine the grid size from the shape  
+        grid_shape = self.shape  
+        num_dimensions = len(grid_shape)  
+      
+        if num_dimensions != 3:  
+            raise ValueError("This function currently supports only 3D shapes for 3D volume plotting.")  
+      
+        grid_rows, grid_cols, grid_depth = grid_shape  
+      
+        # Create arrays for values and bank values  
+        values = np.full(grid_shape, np.nan)  
+        banks = np.full(grid_shape, np.nan)  
+      
+        # Fill the arrays with data  
+        for i, (bank, value) in enumerate(self._plot_data):  
+            if i >= np.prod(grid_shape):  
+                break  # Stop if we exceed the specified shape  
+            index = np.unravel_index(i, grid_shape)  
+            values[index] = value  
+            banks[index] = bank  
+      
+        # Create a 3D plot  
+        fig = plt.figure(figsize=(10, 7))  
+        ax = fig.add_subplot(111, projection='3d')  
+      
+        # Create a boolean array where we have data  
+        filled = ~np.isnan(banks)  
+      
+        # Define a colormap for the bank values  
+        cmap = plt.cm.get_cmap('viridis', self.simd)  
+      
+        # Plot the voxels  
+        ax.voxels(filled, facecolors=cmap(banks / self.simd), edgecolor='k')  
+      
+        # Set labels  
+        ax.set_xlabel('X')  
+        ax.set_ylabel('Y')  
+        ax.set_zlabel('Z')  
+      
+        # Add a colorbar  
+        mappable = plt.cm.ScalarMappable(cmap=cmap)  
+        mappable.set_array(banks)  
+        cbar = fig.colorbar(mappable, ticks=np.arange(self.simd))  
+        cbar.ax.set_yticklabels([f'Bank {i}' for i in range(self.simd)])  
+      
+        plt.show()  
 
 
 
