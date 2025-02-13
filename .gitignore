@@ -475,3 +475,6 @@ misc/
 *.upgrade_log
 *.d
 old/
+
+# Downloaded dependency repos
+deps/
