@@ -33,20 +33,23 @@ recho () {
 mv ${BSMITH_ROOT}/deps/qonnx/pyproject.toml ${BSMITH_ROOT}/deps/qonnx/pyproject.tmp
 pip install --user -e ${BSMITH_ROOT}/deps/qonnx
 mv ${BSMITH_ROOT}/deps/qonnx/pyproject.tmp ${BSMITH_ROOT}/deps/qonnx/pyproject.toml
+# finn-experimental
+pip install --user -e ${BSMITH_ROOT}/deps/finn-experimental
+# brevitas
+pip install --user -e ${BSMITH_ROOT}/deps/brevitas
+# pyverilator
+pip install --user -e ${BSMITH_ROOT}/deps/pyverilator
+# finn
+pip install --user -e ${BSMITH_ROOT}/deps/finn
 
-cat <(tail -n +3 python_repos.txt) | while IFS=',' read -a arr ; do
-    # extract line to $arr as array separated by ','
-    pip install --user -e ${BSMITH_ROOT}/deps/"${arr[0]}"
-done
-
-# if [ -f "${BSMITH_ROOT}/setup.py" ];then
-#   # run pip install for BrainSmith
-#   pip install --user -e ${BSMITH_ROOT}
-# else
-#   recho "Unable to find BrainSmith source code in ${BSMITH_ROOT}"
-#   recho "Ensure you have passed -v <path-to-brainsmith-repo>:<path-to-brainsmith-repo> to the docker run command"
-#   exit -1
-# fi
+if [ -f "${BSMITH_ROOT}/setup.py" ];then
+  # run pip install for BrainSmith
+  pip install --user -e ${BSMITH_ROOT}
+else
+  recho "Unable to find BrainSmith source code in ${BSMITH_ROOT}"
+  recho "Ensure you have passed -v <path-to-brainsmith-repo>:<path-to-brainsmith-repo> to the docker run command"
+  exit -1
+fi
 
 if [ -f "$VITIS_PATH/settings64.sh" ];then
   # source Vitis env.vars
