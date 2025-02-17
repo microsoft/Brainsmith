@@ -1,7 +1,14 @@
 #!/bin/bash
 # Copyright (c) Microsoft Corporation.
+# Copyright (c) 2020-2022, Xilinx, Inc.
+# Copyright (c) 2022-2024, Advanced Micro Devices, Inc.
 # Licensed under the MIT License.
 
+FINN_COMMIT="custom/transformer"
+QONNX_COMMIT="2281a777d84aa5cbd7469085c2e534fb4a03ccf9"
+FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
+BREVITAS_COMMIT="d4834bd2a0fad3c1fbc0ff7e1346d5dcb3797ea4"
+PYVERILATOR_COMMIT="ce0a08c20cb8c1d1e84181d6f392390f846adbd1"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
 HLSLIB_COMMIT="7783acaac835e702da25aa6b7103254b3cbcdf83"
 OMX_COMMIT="0b59762f9e4c4f7e5aa535ee9bc29f292434ca7a"
@@ -12,6 +19,11 @@ KV260_BDF_COMMIT="98e0d3efc901f0b974006bc4370c2a7ad8856c79"
 EXP_BOARD_FILES_MD5="226ca927a16ea4ce579f1332675e9e9a"
 PYXSI_COMMIT="4f4ec10a3631c4c44b5bc0ede698d41c924d2b86"
 
+FINN_URL="https://github.com/Xilinx/finn.git"
+QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
+FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
+BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
+PYVERILATOR_URL="https://github.com/maltanar/pyverilator.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
 HLSLIB_URL="https://github.com/Xilinx/finn-hlslib.git"
 OMX_URL="https://github.com/maltanar/oh-my-xilinx.git"
@@ -21,6 +33,11 @@ RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 
+FINN_DIR="finn"
+QONNX_DIR="qonnx"
+FINN_EXP_DIR="finn-experimental"
+BREVITAS_DIR="brevitas"
+PYVERILATOR_DIR="pyverilator"
 CNPY_DIR="cnpy"
 HLSLIB_DIR="finn-hlslib"
 OMX_DIR="oh-my-xilinx"
@@ -81,12 +98,11 @@ fetch_board_files() {
     cd $OLD_PWD
 }
 
-
-cat <(tail -n +2 python_repos.txt) | while IFS=',' read -a arr ; do
-    # extract line to $arr as array separated by ','
-    fetch_repo "${arr[1]}" "${arr[2]}" "${arr[0]}"
-done
-
+fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
+fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
+fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR
+fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR
+fetch_repo $PYVERILATOR_URL $PYVERILATOR_COMMIT $PYVERILATOR_DIR
 fetch_repo $CNPY_URL $CNPY_COMMIT $CNPY_DIR
 fetch_repo $HLSLIB_URL $HLSLIB_COMMIT $HLSLIB_DIR
 fetch_repo $OMX_URL $OMX_COMMIT $OMX_DIR
