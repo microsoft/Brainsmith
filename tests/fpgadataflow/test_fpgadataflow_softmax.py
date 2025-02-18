@@ -23,6 +23,7 @@ from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -159,7 +160,7 @@ def test_fpga_dataflow_hwsoftmax(impl_style, simd, idt, exec_mode, ifm_dim):
     # Ensure the number of cycles the layer takes to run in rtlsim
     # aligns with the expected number of cycles.
     if exec_mode == "rtlsim":
-        op_type = "FMPadding_" + impl_style
+        op_type = "HWSoftmax_" + impl_style
         node = model.get_nodes_by_op_type(op_type)[0]
         inst = getCustomOp(node)
         cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
