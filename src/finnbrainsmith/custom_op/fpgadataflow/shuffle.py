@@ -32,6 +32,7 @@ class Shuffle(HWCustomOp):
                 "loop_coeffs" : ("ints", True, []), 
                 "perm" : ("ints", True, []),
                 "SIMD": ("i", False, 1),
+                "inner_moves" : ("i", True, 0),
                 "NumChannels": ("i", False, 128) 
         }
         my_attrs.update(super().get_nodeattr_types())

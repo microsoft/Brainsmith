@@ -33,6 +33,11 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
     def defines(self, var):
         simd = self.get_nodeattr("SIMD")
+
+        # Temporary check to make sure that if we have the inner_dim moving our SIMD is constrained to 1
+        if ( self.get_nodeattr("inner_moves") == 1 ) and (simd > 1) :
+            raise RuntimeError(f"Node has an inner_dim moving and a SIMD > 1 which is currently not permitted.")
+
         dtype = self.get_input_datatype()
         self.code_gen_dict["$DEFINES$"] = [
             f"""

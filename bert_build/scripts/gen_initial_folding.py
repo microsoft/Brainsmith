@@ -91,11 +91,17 @@ def main(args):
 
 		# Shuffles
 		for m in range(0,4):
-			if m != 1 and not(args.shuffleb):
-				d = shuffle(args.other)
-			else:
-				d = shuffle(1)
-			c[f"Shuffle_hls_{m +(4*n)}"] = d
+                        if n < 2:
+                            if m != 2 and not(args.shuffleb):
+                                d = shuffle(args.other)
+                            else:
+                                d = shuffle(1)
+                        else:
+                            if m != 1 and not(args.shuffleb):
+                                d = shuffle(args.other)
+                            else:
+                                d = shuffle(1)
+                        c[f"Shuffle_hls_{m +(4*n)}"] = d
 
 		# Thresholding
 		for m in range(0,9):
