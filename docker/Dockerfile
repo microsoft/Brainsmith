@@ -7,7 +7,7 @@ LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahd
 ARG BACKEND
 ARG ENTRYPOINT
 
-WORKDIR /workspace
+# WORKDIR /workspace
 
 # Install system dependencies
 RUN apt-get update && \
@@ -59,7 +59,7 @@ ENV TZ="US/Pacific"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ENV VIVADO_IP_CACHE="/tmp/vivado_ip_cache"
 
-COPY $ENTRYPOINT /usr/local/bin/
+COPY $ENTRYPOINT /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]

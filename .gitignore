@@ -421,7 +421,6 @@ FodyWeavers.xsd
 !.gitkeep
 
 # finn related files
-finn/
 output_*/
 __pycache__/
 thresholds*/
