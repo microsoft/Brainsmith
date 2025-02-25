@@ -1,6 +1,8 @@
 #!/bin/bash
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
+# Copyright (c) Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: BSD-3-Clause
+# Modifications copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
 
 # Load util functions and variables for terminal output
 source docker/terminal-utils.sh
@@ -38,7 +40,7 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 : ${BSMITH_DOCKER_FLAGS=""}
 
 # Determine run command based on CLI arguments
-if [ ! -z "$1" ]; then
+if [ -z "$1" ]; then
     gecho "Running BrainSmith docker container"
     DOCKER_CMD="bash"
     DOCKER_INTERACTIVE="-it"
