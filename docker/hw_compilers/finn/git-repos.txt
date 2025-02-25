@@ -1,0 +1,5 @@
+dir,url,commit_hash
+finn,https://github.com/Xilinx/finn.git,custom/transformer
+qonnx,https://github.com/fastmachinelearning/qonnx.git,a0b90c39d9762797e7629aa0cd68763019e5d290
+finn-experimental,https://github.com/Xilinx/finn-experimental.git,0724be21111a21f0d81a072fccc1c446e053f851
+brevitas,https://github.com/Xilinx/brevitas.git,0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5
