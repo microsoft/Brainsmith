@@ -54,7 +54,8 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
                 static hls::stream<hls::vector<float,SIMD>>  dst0;
 
                 move(in0_{self.hls_sname()}, src0);
-                smax<W,SIMD,TI>(src0, dst0);
+                static SoftMax<TI, float, N, SIMD> sm_inst;
+                sm_inst.exectue(src0, dst0);
                 move(dst0, out_{self.hls_sname()});
         """
         ]
