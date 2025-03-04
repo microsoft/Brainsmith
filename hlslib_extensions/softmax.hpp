@@ -60,7 +60,7 @@
 #ifndef SOFTMAX_HPP
 #define SOFTMAX_HPP
 
-#include "util.hpp"
+#include "bs_utils.hpp"
 #include <ap_fixed.h>
 #include <ap_float.h>
 #include <hls_math.h>

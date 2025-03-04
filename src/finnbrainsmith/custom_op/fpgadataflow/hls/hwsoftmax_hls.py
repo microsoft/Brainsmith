@@ -54,8 +54,8 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
                 static hls::stream<hls::vector<float,SIMD>>  dst0;
 
                 move(in0_{self.hls_sname()}, src0);
-                static SoftMax<TI, float, N, SIMD> sm_inst;
-                sm_inst.exectue(src0, dst0);
+                static SoftMax<TI, float, W, SIMD> sm_inst;
+                sm_inst.execute(src0, dst0);
                 move(dst0, out_{self.hls_sname()});
         """
         ]
@@ -187,9 +187,10 @@ class HWSoftmax_hls(HWSoftmax, BS_HLSBackend):
 
             npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
+            static SoftMax<TI, float, W, SIMD> sm_inst;
 
             while(out_V.size() != stream_size){{
-                smax<W, SIMD, TI>(in0_V, out_V);
+                sm_inst.execute(in0_V, out_V);
             }}
 
             vectorstream2npy<float, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
