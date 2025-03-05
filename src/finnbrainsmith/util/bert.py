@@ -264,14 +264,12 @@ class SetPumpedCompute(Transformation):
 
     def apply(self, model):
         graph = model.graph
-        graph_modified = False
 
         for node in graph.node:
             if (node.op_type == "MVAU_rtl"):
                 inst = registry.getCustomOp(node)
                 inst.set_nodeattr("pumpedCompute", 1)
-                graph_modified = True
-        return(model, graph_modified)
+        return(model, False)
 
 
 class TempShuffleFixer(Transformation):
@@ -283,7 +281,6 @@ class TempShuffleFixer(Transformation):
 
     def apply(self, model):
         graph = model.graph
-        graph_modified = False
 
         for node in graph.node:
             if node.op_type == "Shuffle_hls":
@@ -293,8 +290,7 @@ class TempShuffleFixer(Transformation):
                 if (inner_moves == 1) and (simd > 1):
                     print(f"WARNING: as a safety precaution changing the shuffle where the inner dimension moves to SIMD=1 \n{node=}")
                     inst.set_nodeattr("SIMD", 1)
-                    graph_modified = True
-        return (model, graph_modified)
+        return (model, False)
 
 
 def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
