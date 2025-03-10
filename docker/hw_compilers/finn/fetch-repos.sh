@@ -9,7 +9,6 @@ FINN_URL="https://github.com/Xilinx/finn.git"
 QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
-PYVERILATOR_URL="https://github.com/maltanar/pyverilator.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
 HLSLIB_URL="https://github.com/Xilinx/finn-hlslib.git"
 OMX_URL="https://github.com/maltanar/oh-my-xilinx.git"
@@ -20,10 +19,9 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 
 FINN_COMMIT="custom/transformer"
-QONNX_COMMIT="2281a777d84aa5cbd7469085c2e534fb4a03ccf9"
+QONNX_COMMIT="a0b90c39d9762797e7629aa0cd68763019e5d290"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="d4834bd2a0fad3c1fbc0ff7e1346d5dcb3797ea4"
-PYVERILATOR_COMMIT="ce0a08c20cb8c1d1e84181d6f392390f846adbd1"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
 HLSLIB_COMMIT="7783acaac835e702da25aa6b7103254b3cbcdf83"
 OMX_COMMIT="0b59762f9e4c4f7e5aa535ee9bc29f292434ca7a"
@@ -38,7 +36,6 @@ FINN_DIR="finn"
 QONNX_DIR="qonnx"
 FINN_EXP_DIR="finn-experimental"
 BREVITAS_DIR="brevitas"
-PYVERILATOR_DIR="pyverilator"
 CNPY_DIR="cnpy"
 HLSLIB_DIR="finn-hlslib"
 OMX_DIR="oh-my-xilinx"
@@ -145,7 +142,6 @@ fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
 fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
 fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR
 fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR
-fetch_repo $PYVERILATOR_URL $PYVERILATOR_COMMIT $PYVERILATOR_DIR
 fetch_repo $CNPY_URL $CNPY_COMMIT $CNPY_DIR
 fetch_repo $HLSLIB_URL $HLSLIB_COMMIT $HLSLIB_DIR
 fetch_repo $OMX_URL $OMX_COMMIT $OMX_DIR

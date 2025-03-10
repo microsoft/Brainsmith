@@ -74,7 +74,8 @@ fi
 
 # Create directories if they do not exist
 mkdir -p $BSMITH_BUILD_DIR
-mkdir -p $BSMITH_SSH_KEY_DIR
+# TMP commented out
+# mkdir -p $BSMITH_SSH_KEY_DIR
 
 # Build Docker image in BrainSmith root directory
 if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then

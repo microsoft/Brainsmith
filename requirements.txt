@@ -1,11 +1,12 @@
 bitstring==4.2.3
 clize==5.0.1
 dataclasses-json==0.5.7
+# finn, once updated version is on pypi
 gspread==3.6.0
 importlib-resources==6.1.0
 ipython==8.12.2
 numpy==1.24.1
-onnx==1.17.0
+# onnx==1.17.0
 onnxoptimizer
 onnxruntime==1.18.1
 onnxsim==0.4.36

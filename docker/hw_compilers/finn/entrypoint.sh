@@ -24,11 +24,11 @@ mv ${BSMITH_DIR}/deps/qonnx/pyproject.tmp ${BSMITH_DIR}/deps/qonnx/pyproject.tom
 pip install --user -e ${BSMITH_DIR}/deps/finn-experimental
 # brevitas
 pip install --user -e ${BSMITH_DIR}/deps/brevitas
-# pyverilator
-pip install --user -e ${BSMITH_DIR}/deps/pyverilator
+# finn
+pip install --user -e ${BSMITH_ROOT}/deps/finn
 
 if [ -f "${BSMITH_DIR}/setup.py" ];then
-  # run pip install for finn
+  # run pip install for BrainSmith
   pip install --user -e ${BSMITH_DIR}
 else
   recho "Unable to find FINN source code in ${BSMITH_DIR}"

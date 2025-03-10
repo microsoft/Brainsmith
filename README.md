@@ -17,7 +17,6 @@ dir,url,commit_hash
 qonnx,https://github.com/fastmachinelearning/qonnx.git,ca91dbe24e8d0122ba981070b918be31fb60750e
 finn-experimental,https://github.com/Xilinx/finn-experimental.git,0724be21111a21f0d81a072fccc1c446e053f851
 brevitas,https://github.com/Xilinx/brevitas.git,0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5
-pyverilator,https://github.com/maltanar/pyverilator.git,ce0a08c20cb8c1d1e84181d6f392390f846adbd1
 finnbrainsmith,git@github.com:microsoft/BrainSmith.git,main
 ```
 Feel free to adjust this if you work off a different feature fork/branch.
