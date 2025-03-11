@@ -45,6 +45,7 @@ from finnbrainsmith.util.bert import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
+        custom_step_constrain_folding_and_set_pumped_compute,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -212,13 +213,14 @@ def main(args):
         step_specialize_layers,
         step_target_fps_parallelization,
         step_apply_folding_config,
+        custom_step_constrain_folding_and_set_pumped_compute,
         step_minimize_bit_width,
         step_generate_estimate_reports,
         step_hw_codegen,
         step_hw_ipgen,
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
-        step_create_stitched_ip,
+        step_create_stitched_ip
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
