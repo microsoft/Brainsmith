@@ -16,6 +16,7 @@ import shutil
 import argparse
 import math
 import torch
+import json
 from torch import nn
 from transformers import BertConfig, BertModel
 from transformers import AutoModel
@@ -45,6 +46,7 @@ from finnbrainsmith.util.bert import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
+        custom_step_shell_metadata_handover,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -219,6 +221,7 @@ def main(args):
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
         step_create_stitched_ip,
+        custom_step_shell_metadata_handover,
     ]
 
     cfg = build_cfg.DataflowBuildConfig(
@@ -229,6 +232,7 @@ def main(args):
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
+        start_step="custom_step_shell_metadata_handover",
         auto_fifo_depths=args.fifodepth,
         fifosim_n_inferences=2,
         verification_atol=1e-1,
@@ -253,6 +257,14 @@ def main(args):
     else:
         shutil.copy2(f"{tmp}/intermediate_models/{args.stop_step}.onnx", args.output)
 
+    # Extra metadata for handover
+    handover_file = cfg.output_dir + '/stitched_ip/shell_handover.json'
+    if os.path.exists(handover_file):
+        with open(handover_file, "r") as fp:
+            handover = json.load(fp)
+        handover['num_layers'] = args.num_hidden_layers
+        with open(handover_file, "w") as fp:
+            json.dump(handover, fp, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='TinyBERT FINN demo script')
