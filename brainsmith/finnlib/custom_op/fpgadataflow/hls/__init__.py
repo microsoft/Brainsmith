@@ -1,7 +1,7 @@
-from finnbrainsmith.custom_op.fpgadataflow.hls.layernorm_hls import LayerNorm_hls
-from finnbrainsmith.custom_op.fpgadataflow.hls.hwsoftmax_hls import HWSoftmax_hls
-from finnbrainsmith.custom_op.fpgadataflow.hls.shuffle_hls import Shuffle_hls
-from finnbrainsmith.custom_op.fpgadataflow.hls.crop_hls import Crop_hls
+from brainsmith.finnlib.custom_op.fpgadataflow.hls.layernorm_hls import LayerNorm_hls
+from brainsmith.finnlib.custom_op.fpgadataflow.hls.hwsoftmax_hls import HWSoftmax_hls
+from brainsmith.finnlib.custom_op.fpgadataflow.hls.shuffle_hls import Shuffle_hls
+from brainsmith.finnlib.custom_op.fpgadataflow.hls.crop_hls import Crop_hls
 
 custom_op = dict()
 

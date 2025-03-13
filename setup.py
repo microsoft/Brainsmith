@@ -17,7 +17,7 @@ setup(
         "docker",  # Required dependency for Docker interactions
         # TODO: Add other dependencies here
     ],
-    classifiers =[
+    classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Programming Language :: Python",
         "License :: OSI Approved :: MIT License",

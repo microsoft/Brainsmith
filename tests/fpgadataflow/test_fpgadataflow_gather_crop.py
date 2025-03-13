@@ -24,7 +24,7 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames
 
 
-from finnbrainsmith.transformation.convert_to_hw_layers import InferCropFromGather
+from brainsmith.finnlib.transformation.convert_to_hw_layers import InferCropFromGather
 
 from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper

@@ -30,8 +30,8 @@ import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from finnbrainsmith.transformation.expand_norms import ExpandNorms
+import brainsmith.finnlib.transformation.convert_to_hw_layers as to_bs_hw
+from brainsmith.finnlib.transformation.expand_norms import ExpandNorms
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP

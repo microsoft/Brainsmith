@@ -27,7 +27,6 @@ pip install --user -e ${BSMITH_ROOT}/deps/finn-experimental
 # brevitas
 pip install --user -e ${BSMITH_ROOT}/deps/brevitas
 # finn
-recho "Trying to install FINN"
 pip install --user -e ${BSMITH_ROOT}/deps/finn
 
 if [ -f "${BSMITH_ROOT}/setup.py" ];then

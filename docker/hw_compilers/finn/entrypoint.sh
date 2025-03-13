@@ -25,13 +25,13 @@ pip install --user -e ${BSMITH_DIR}/deps/finn-experimental
 # brevitas
 pip install --user -e ${BSMITH_DIR}/deps/brevitas
 # finn
-pip install --user -e ${BSMITH_ROOT}/deps/finn
+pip install --user -e ${BSMITH_DIR}/deps/finn
 
 if [ -f "${BSMITH_DIR}/setup.py" ];then
   # run pip install for BrainSmith
   pip install --user -e ${BSMITH_DIR}
 else
-  recho "Unable to find FINN source code in ${BSMITH_DIR}"
+  recho "Unable to find BrainSmith source code in ${BSMITH_DIR}"
   recho "Ensure you have passed -v <path-to-finn-repo>:<path-to-finn-repo> to the docker run command"
   exit -1
 fi

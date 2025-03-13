@@ -21,7 +21,7 @@ PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 FINN_COMMIT="custom/transformer"
 QONNX_COMMIT="a0b90c39d9762797e7629aa0cd68763019e5d290"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
-BREVITAS_COMMIT="d4834bd2a0fad3c1fbc0ff7e1346d5dcb3797ea4"
+BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
 HLSLIB_COMMIT="7783acaac835e702da25aa6b7103254b3cbcdf83"
 OMX_COMMIT="0b59762f9e4c4f7e5aa535ee9bc29f292434ca7a"
@@ -138,7 +138,8 @@ fetch_board_files() {
     cd $OLD_PWD
 }
 
-fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
+#fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
+# Temprorarily disabled automatic checkout of FINN repo, using local branch
 fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
 fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR
 fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR

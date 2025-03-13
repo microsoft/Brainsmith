@@ -37,7 +37,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 
-from finnbrainsmith.util.bert import (
+from brainsmith.jobs.bert.bert import (
         custom_step_remove_head,
         custom_step_remove_tail,
         custom_step_generate_reference_io,

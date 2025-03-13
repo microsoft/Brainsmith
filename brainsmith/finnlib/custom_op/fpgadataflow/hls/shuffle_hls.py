@@ -10,9 +10,9 @@
 import numpy as np
 import os
 
-from finnbrainsmith.custom_op.fpgadataflow import brainsmith_templates
-from finnbrainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
-from finnbrainsmith.custom_op.fpgadataflow.shuffle import Shuffle 
+from brainsmith.finnlib.custom_op.fpgadataflow import brainsmith_templates
+from brainsmith.finnlib.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
+from brainsmith.finnlib.custom_op.fpgadataflow.shuffle import Shuffle 
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
