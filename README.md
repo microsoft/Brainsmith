@@ -1,3 +1,5 @@
+## TAFK TODO: Update readme
+
 ## BrainSmith FINN Plugin repo
 
 This repo contains a plugin for the FINN dataflow compiler as part of the Microsoft/AMD BrainSmith project.

@@ -98,7 +98,7 @@ class InferShuffle(Transformation):
                             "Shuffle",
                             [new_in_tensor],
                             [new_out_tensor],
-                            domain="finnbrainsmith.custom_op.fpgadataflow",
+                            domain="brainsmith.finnlib.custom_op.fpgadataflow",
                             backend="fpgadataflow",
                             in_shape=in_shape,
                             in_reshaped=in_reshaped,
@@ -147,7 +147,7 @@ class InferHWSoftmax(Transformation):
                     "HWSoftmax",
                     [n.input[0]],  # input tensor(s)
                     [n.output[0]],  # output tensor(s)
-                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    domain="brainsmith.finnlib.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     ifm_dim=input_shape,
                     input_data_type=idt0.name,
@@ -211,7 +211,7 @@ class InferLayerNorm(Transformation):
                     "LayerNorm",
                     [act_in],
                     [act_out],
-                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    domain="brainsmith.finnlib.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     SIMD=simd,
                     ifm_dim=shape_in,
@@ -301,7 +301,7 @@ class InferCropFromGather(Transformation):
                     "Crop",
                     [n.input[0]],  # input tensor(s)
                     [n.output[0]],  # output tensor(s)
-                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    domain="brainsmith.finnlib.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     data_type=idt0.name,
                     name="Crop" + n.name,

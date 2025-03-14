@@ -149,15 +149,15 @@ class Crop_hls(Crop, BS_HLSBackend):
         builder = CppBuilder()
         # to enable additional debug features please uncommand the next line
         # builder.append_includes("-DDEBUG")
-        builder.append_includes("-I$FINN_ROOT/src/finn/qnn-data/cpp")
-        builder.append_includes("-I$FINN_ROOT/deps/cnpy/")
-        builder.append_includes("-I$FINN_ROOT/deps/finn-hlslib")
-        builder.append_includes("-I$FINN_ROOT/deps/finnbrainsmith/hlslib_extensions")
+        builder.append_includes("-I$BSMITH_DIR/deps/finn/src/finn/qnn-data/cpp")
+        builder.append_includes("-I$BSMITH_DIR/deps/cnpy/")
+        builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
+        builder.append_includes("-I$BSMITH_DIR/brainsmith/hw_kernels/hls")
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
         builder.append_sources(code_gen_dir + "/*.cpp")
-        builder.append_sources("$FINN_ROOT/deps/cnpy/cnpy.cpp")
+        builder.append_sources("$BSMITH_DIR/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
         builder.append_includes(
             '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'

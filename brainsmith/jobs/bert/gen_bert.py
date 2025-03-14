@@ -173,17 +173,17 @@ def gen_initial_bert_model(
         )
 
 
-
-def runthrough(args):
+def main(args):
     # Create build directory
     os.makedirs(args.output, exist_ok=True)
     build_path = f"{args.output}/{args.model}" 
     try:
         os.makedirs(build_path)
     except FileExistsError:
-        raise RuntimeError(f"Output model directory {args.model} already exists")
+        raise RuntimeError(f"Output model directory {args.output} already exists")
 
     tmp_path = build_path + "./intermediate_models"
+    os.makedirs(tmp_path)
 
     # Initial model generation
     gen_initial_bert_model(

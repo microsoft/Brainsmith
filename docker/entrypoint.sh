@@ -22,12 +22,8 @@ recho () {
 mv ${BSMITH_ROOT}/deps/qonnx/pyproject.toml ${BSMITH_ROOT}/deps/qonnx/pyproject.tmp
 pip install --user -e ${BSMITH_ROOT}/deps/qonnx
 mv ${BSMITH_ROOT}/deps/qonnx/pyproject.tmp ${BSMITH_ROOT}/deps/qonnx/pyproject.toml
-# finn-experimental
-pip install --user -e ${BSMITH_ROOT}/deps/finn-experimental
 # brevitas
 pip install --user -e ${BSMITH_ROOT}/deps/brevitas
-# finn
-pip install --user -e ${BSMITH_ROOT}/deps/finn
 
 if [ -f "${BSMITH_ROOT}/setup.py" ];then
   # run pip install for BrainSmith
