@@ -31,8 +31,9 @@ class FuncLayerNorm(CustomOp):
         return my_attrs
 
     def make_shape_compatible_op(self, model):
+        """Return a standard ONNX op which is shape compatible with this CustomOp."""
         node = self.onnx_node
-        return helper.make_node("Relu", [node.input[0]], [node.output[0]])
+        return helper.make_node("Identity", [node.input[0]], [node.output[0]])
 
     def get_input_datatype(self, ind=0):
         """Returns FINN DataType of input."""
