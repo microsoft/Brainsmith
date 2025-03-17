@@ -62,7 +62,8 @@ class ExpandNorms(Transformation):
                     axis=axis,
                     epsilon=epsilon,
                     InputDataType=idt.name,
-                    OutputDataType=odt.name
+                    OutputDataType=odt.name,
+                    name=f"FuncLayerNorm_{node.name}",
                 )
 
                 # Get scale, eliminate if all ones
@@ -96,7 +97,6 @@ class ExpandNorms(Transformation):
                     model.set_tensor_datatype(bias_act_in.name, wdt)
                 # else:
                 #     model.set_tensor_datatype(bias_act_in.name, wdt)
-                    
 
                 # Insert new nodes
                 insert_point = node_ind

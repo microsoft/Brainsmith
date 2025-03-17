@@ -176,13 +176,13 @@ def gen_initial_bert_model(
 def main(args):
     # Create build directory
     os.makedirs(args.output, exist_ok=True)
-    build_path = f"{args.output}/{args.model}" 
+    build_path = f"{args.output}/{args.model}"
     try:
         os.makedirs(build_path)
     except FileExistsError:
-        raise RuntimeError(f"Output model directory {args.output} already exists")
+        raise RuntimeError(f"Output model directory {build_path} already exists")
 
-    tmp_path = build_path + "./intermediate_models"
+    tmp_path = build_path + "/intermediate_models"
     os.makedirs(tmp_path)
 
     # Initial model generation
@@ -197,11 +197,11 @@ def main(args):
     )
 
     # Initial model cleanup
-    model = onnx.load(f"{tmp_path}/initial.onnx")  
-    model_simp, check = simplify(model)  
-    if check:  
-        onnx.save(model_simp, f"{tmp_path}/simp.onnx")  
-    else:  
+    model = onnx.load(f"{tmp_path}/initial.onnx")
+    model_simp, check = simplify(model)
+    if check:
+        onnx.save(model_simp, f"{tmp_path}/simp.onnx")
+    else:
         raise RuntimeError(f"Unable to simplify the Brevitas bert model")
     cleanup(in_file=f"{tmp_path}/simp.onnx", out_file=f"{tmp_path}/qonnx_cleanup.onnx")
     
