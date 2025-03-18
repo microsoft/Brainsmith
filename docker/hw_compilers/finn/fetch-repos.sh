@@ -6,7 +6,7 @@
 
 # Dependency Git URLs, hashes/branches, and directory names
 FINN_URL="https://github.com/Xilinx/finn.git"
-QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
+QONNX_URL="https://github.com/tafk7/qonnx.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
@@ -19,7 +19,7 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 
 FINN_COMMIT="custom/transformer"
-QONNX_COMMIT="a0b90c39d9762797e7629aa0cd68763019e5d290"
+QONNX_COMMIT="custom/brainsmith"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"

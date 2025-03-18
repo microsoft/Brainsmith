@@ -7,13 +7,19 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 
+# Dictionary of HWCustomOp implementations
+custom_op = dict()
+
+# flake8: noqa
+# Disable linting from here, as all import will be flagged E402 and maybe F401
+
+# Import all HWCustomOps
 from brainsmith.finnlib.custom_op.fpgadataflow.layernorm import LayerNorm
 from brainsmith.finnlib.custom_op.fpgadataflow.hwsoftmax import HWSoftmax
 from brainsmith.finnlib.custom_op.fpgadataflow.shuffle import Shuffle
 from brainsmith.finnlib.custom_op.fpgadataflow.crop import Crop
 
-custom_op = dict()
-
+# Register in custom_op dictionary for use in QONNX
 custom_op["LayerNorm"] = LayerNorm
 custom_op["HWSoftmax"] = HWSoftmax
 custom_op["Shuffle"] = Shuffle
