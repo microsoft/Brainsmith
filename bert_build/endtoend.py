@@ -232,7 +232,6 @@ def main(args):
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
-        start_step="custom_step_shell_metadata_handover",
         auto_fifo_depths=args.fifodepth,
         fifosim_n_inferences=2,
         verification_atol=1e-1,
