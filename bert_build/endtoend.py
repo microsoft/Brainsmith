@@ -232,7 +232,6 @@ def main(args):
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
-        start_step="custom_step_shell_metadata_handover",
         auto_fifo_depths=args.fifodepth,
         fifosim_n_inferences=2,
         verification_atol=1e-1,
@@ -273,7 +272,7 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--num_attention_heads', type=int, default=12, help='Sets BERT num_attention_heads parameter')
     parser.add_argument('-l', '--num_hidden_layers', type=int, default=1, help='Number of hidden layers')
     parser.add_argument('-i', '--intermediate_size', type=int, default=1536, help='Sets BERT intermediate_size parameter')
-    parser.add_argument('-b', '--bitwidth', type=int, default=8, help='The quantisation bitwidth (either 4 or 8)')
+    parser.add_argument('-b', '--bitwidth', type=int, default=4, help='The quantisation bitwidth (either 4 or 8)')
     parser.add_argument('-f', '--fps', type=int, default=3000, help='The target fps for auto folding')
     parser.add_argument('-c', '--clk', type=float, default=3.33, help='The target clock rate for the hardware')
     parser.add_argument('-s', '--stop_step', type=str, default=None, help='Step to stop at in the build flow')
