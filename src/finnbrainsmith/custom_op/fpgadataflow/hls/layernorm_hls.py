@@ -44,9 +44,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        my_attrs = {
-            "rtlsim_backend": ("s", True, "pyxsi"),
-            }
+        my_attrs = {}
         my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
         my_attrs.update(LayerNorm.get_nodeattr_types(self))
         return my_attrs
