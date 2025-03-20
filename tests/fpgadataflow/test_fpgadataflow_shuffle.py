@@ -21,6 +21,7 @@ from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.general import GiveReadableTensorNames, GiveUniqueNodeNames, ApplyConfig
@@ -29,6 +30,7 @@ from brevitas.export import export_qonnx
 from qonnx.util.cleanup import cleanup as qonnx_cleanup
 
 import finn.core.onnx_exec as oxe
+from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -239,6 +241,17 @@ def test_rtlsim_shuffle_layer(shuffle_param, datatype, simd):
     model = model.transform(PrepareRTLSim())
 
     y_hw = oxe.execute_onnx(model, input_t)[out_name]
+
+    # Ensure the number of cycles the layer takes to run in rtlsim
+    # aligns with the expected number of cycles.
+    op_type = "Shuffle_hls"
+    node = model.get_nodes_by_op_type(op_type)[0]
+    inst = getCustomOp(node)
+    cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
+    exp_cycles_dict = model.analysis(exp_cycles_per_layer)
+    exp_cycles = exp_cycles_dict[node.name]
+    assert np.isclose(exp_cycles, cycles_rtlsim, atol=10)
+    assert exp_cycles != 0
 
     y_hw_flat = y_hw.flatten()
     y_ref_flat = y_ref.flatten()

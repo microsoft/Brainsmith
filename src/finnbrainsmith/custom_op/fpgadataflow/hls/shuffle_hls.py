@@ -33,6 +33,7 @@ class Shuffle_hls(Shuffle, BS_HLSBackend):
 
     def defines(self, var):
         simd = self.get_nodeattr("SIMD")
+
         dtype = self.get_input_datatype()
         self.code_gen_dict["$DEFINES$"] = [
             f"""
