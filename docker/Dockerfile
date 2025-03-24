@@ -50,7 +50,7 @@ RUN pip install -r /tmp/requirements.txt
 RUN rm /tmp/requirements.txt
 
 # Install pip dependencies for FINN
-COPY docker/hw_compilers/finn/requirements.txt /tmp/
+COPY docker/requirements.finn.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 RUN rm /tmp/requirements.txt
 

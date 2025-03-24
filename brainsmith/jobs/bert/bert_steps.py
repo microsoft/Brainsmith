@@ -49,6 +49,7 @@ from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 
 
+
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
 

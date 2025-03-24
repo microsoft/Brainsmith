@@ -68,8 +68,8 @@ fi
 
 # Determine paths based on the HW Compiler backend
 if [ "$BSMITH_HW_COMPILER" = "finn" ]; then
-  DEPS_PATH="$BSMITH_DIR/docker/hw_compilers/${BSMITH_HW_COMPILER}/fetch-repos.sh"
-  ENTRYPOINT_PATH="docker/hw_compilers/${BSMITH_HW_COMPILER}/entrypoint.sh"
+  DEPS_PATH="$BSMITH_DIR/docker/fetch-repos.sh"
+  ENTRYPOINT_PATH="docker/entrypoint.sh"
 fi
 
 # Create directories if they do not exist

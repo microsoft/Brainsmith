@@ -5,8 +5,9 @@
 # SPDX-License-Identifier: MIT
 
 # Dependency Git URLs, hashes/branches, and directory names
-FINN_URL="https://github.com/Xilinx/finn.git"
-QONNX_URL="https://github.com/tafk7/qonnx.git"
+FINN_URL="https://github.com/tafk7/finn.git"
+# TAFK TODO: Switch to the official repo once the env variables are pushed
+QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
@@ -18,7 +19,7 @@ RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 
-FINN_COMMIT="custom/transformer"
+FINN_COMMIT="custom/repo-structuring"
 QONNX_COMMIT="custom/brainsmith"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
@@ -138,7 +139,7 @@ fetch_board_files() {
     cd $OLD_PWD
 }
 
-#fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
+fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
 # Temprorarily disabled automatic checkout of FINN repo, using local branch
 fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
 fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR

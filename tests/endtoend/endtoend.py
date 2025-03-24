@@ -37,7 +37,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 
-from brainsmith.jobs.bert.bert import (
+from brainsmith.jobs.bert.bert_steps import (
         custom_step_remove_head,
         custom_step_remove_tail,
         custom_step_generate_reference_io,
@@ -173,7 +173,7 @@ def gen_initial_bert_model(
         )
 
 
-def main(args):
+def get_job(args):
     # Create build directory
     os.makedirs(args.output, exist_ok=True)
     build_path = f"{args.output}/{args.model}"
@@ -245,8 +245,8 @@ def main(args):
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
             ],
-        verify_input_npy="input.npy",
-        verify_expected_output_npy="expected_output.npy",
+        verify_input_npy=build_path+"/input.npy",
+        verify_expected_output_npy=build_path+"/expected_output.npy",
         verify_save_full_context=True,
         verify_steps=[
             build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
