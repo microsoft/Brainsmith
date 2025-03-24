@@ -48,6 +48,7 @@ from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 
+
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
 
@@ -104,14 +105,14 @@ def custom_step_generate_reference_io(model, cfg):
     input_m = model.graph.input[0]
     in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
     in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-    np.save("input.npy", in_tensor)
+    np.save(cfg.output_dir+"/input.npy", in_tensor)
 
     input_t = { input_m.name : in_tensor}
     out_name = model.graph.output[0].name
 
     y_ref = oxe.execute_onnx(model, input_t, True)
-    np.save("expected_output.npy", y_ref[out_name])
-    np.savez("expected_context.npz", **y_ref) 
+    np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
+    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref) 
     return model
 
 
@@ -247,15 +248,10 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
-    #model = model.transform(QuantizeLayerNormalization(
-    #    input_datatype ='INT8',
-    #    weight_datatype='FLOAT16',
-    #    bias_datatype  ='FLOAT16',
-    #    output_datatype='FLOAT16')
-    #)
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
+
 
 class SetPumpedCompute(Transformation):
     """ For all MVAUs and DynMatMuls set the pumped compute attribute """
@@ -297,40 +293,3 @@ def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
     model = model.transform(TempShuffleFixer())
     model = model.transform(SetPumpedCompute())
     return model
-
-class QuantizeLayerNormalization(Transformation):
-    """Add quantization to LayerNormalization nodes in the graph. 
-    Temporary implementation pending full quantization support in FINN. """
-
-    def __init__(self, input_datatype=None, weight_datatype=None, bias_datatype=None, output_datatype=None):
-        super().__init__()
-        self.idt = input_datatype
-        self.wdt = weight_datatype
-        self.bdt = bias_datatype
-        self.odt = output_datatype
-
-    def apply(self, model):
-        graph = model.graph
-        node_ind = 0
-        graph_modified = False
-        print('Beginning...')
-        for node in graph.node:
-            print('Outer')
-            node_ind += 1
-            print(node.name)
-            # Detect LayerNorm
-            if node.op_type == "LayerNormalization":
-                print('Inner')
-                # Get tensors
-                act_in = node.input[0]
-                act_out = node.output[0]
-                scale = node.input[1]
-                bias = node.input[2] if len(node.input) > 2 else None
-                # Datatype annotations
-                model.set_tensor_datatype(act_in, DataType[self.idt])
-                model.set_tensor_datatype(scale, DataType[self.wdt])
-                model.set_tensor_datatype(act_out, DataType[self.odt])
-                if bias:
-                    model.set_tensor_datatype(bias, DataType[self.bdt])
-                graph_modified = True
-        return (model, graph_modified)
