@@ -51,7 +51,7 @@ puts "finn-hlslib dir: $config_bnnlibdir"
 set config_customhlsdir "$::env(FINN_ROOT)/custom_hls"
 puts "custom HLS dir: $config_customhlsdir"
 set config_bshlsdir "$::env(FINN_ROOT)/deps/finnbrainsmith/hlslib_extensions"
-puts "BrainSmith HLS dir: $config_bshlsdir"
+puts "Brainsmith HLS dir: $config_bshlsdir"
 set config_toplevelfxn "$TOPFXN$"
 set config_clkperiod $CLKPERIOD$
 

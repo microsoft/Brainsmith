@@ -22,6 +22,7 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
+from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -31,6 +32,9 @@ from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
+# from finn.transformation.fpgadataflow.create_dataflow_partition import (
+#     CreateDataflowPartition,
+# )
 # from finn.transformation.fpgadataflow.create_dataflow_partition import (
 #     CreateDataflowPartition,
 # )
@@ -53,6 +57,7 @@ import numpy as np
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
+# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 # from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 
 test_fpga_part = "xczu3eg-sbva484-1-e"
