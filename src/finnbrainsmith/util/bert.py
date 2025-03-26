@@ -9,7 +9,10 @@
 
 import onnx
 import argparse
+import os
+import json
 from onnxsim import simplify
+import qonnx.custom_op.registry as registry
 from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import (
         SortCommutativeInputsInitializerLast, 
@@ -25,6 +28,7 @@ from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from qonnx.transformation.fold_constants import FoldConstants
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from finn.builder.build_dataflow_config import DataflowOutputType
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
@@ -178,6 +182,69 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
 
+class ExtractShellIntegrationMetadata(Transformation):
+    """ Walks the ONNX graph and extracts all relevant metadata for shell integration
+    handover. """
+    def __init__(self, metadata_file:str):
+        super().__init__()
+        self.metadata_file:str = metadata_file
+        self.md = {}
+
+    def apply(self, model):
+        graph = model.graph
+
+        # Extract instream widths
+        instreams = {}
+        for input_tensor in graph.input:
+            consumer = model.find_consumer(input_tensor.name)
+            inst = registry.getCustomOp(consumer)
+            instream = {}
+            instream['width'] = inst.get_instream_width() 
+            instreams[input_tensor.name] = instream
+            instream['shape'] = inst.get_normal_input_shape() 
+        self.md['insteams'] = instreams
+
+        # Extract outstream widths
+        outstreams = {}
+        for output_tensor in graph.output:
+            producer = model.find_producer(output_tensor.name)
+            inst = registry.getCustomOp(producer)
+            outstream = {}
+            outstream['width'] = inst.get_outstream_width() 
+            outstreams[output_tensor.name] = outstream
+            outstream['shape'] = inst.get_normal_output_shape()
+        self.md['outsteams'] = outstreams
+    
+        static_matmuls = {}
+        for node in graph.node:
+            if (node.op_type == "MVAU_rtl"):
+                inst = registry.getCustomOp(node)
+                mm = {}
+                mm['MH'] = inst.get_nodeattr("MH")
+                mm['MW'] = inst.get_nodeattr("MW")
+                mm['SIMD'] = inst.get_nodeattr("SIMD")
+                mm['PE'] = inst.get_nodeattr("PE")
+                static_matmuls[node.name] = mm
+        self.md["static_matmuls"] = static_matmuls
+
+        with open(self.metadata_file, "w") as fp:
+            json.dump(self.md, fp, indent=4)
+
+        return(model, False)
+
+def custom_step_shell_metadata_handover(model, cfg):
+    """ Extracts the metadata for the shell integration process, such as for the v80.
+    This information is stored in a json file that is passed to the build process
+
+    It adds this to the stitched_ip output directory and checks it exists ahead of time
+    """
+    if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
+        if os.path.isdir(cfg.output_dir + '/stitched_ip'):
+            model = model.transform(ExtractShellIntegrationMetadata(cfg.output_dir + "/stitched_ip/shell_handover.json"))
+            return model
+        else:
+            raise RuntimeError(f"Error: could not find stitched IP directory so unable to create metadata. Please ensure this is called after the create_stitched_ip step")
+
 def custom_step_remove_head(model, cfg):
     """ Removes all nodes up to the first LayerNormalisation Node and then rewires the input """
     assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
@@ -255,6 +322,49 @@ def custom_step_cleanup(model, cfg):
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
+
+class SetPumpedCompute(Transformation):
+    """ For all MVAUs and DynMatMuls set the pumped compute attribute """
+    def __init__(self):
+        super().__init__()
+
+    def apply(self, model):
+        graph = model.graph
+
+        for node in graph.node:
+            if (node.op_type == "MVAU_rtl"):
+                inst = registry.getCustomOp(node)
+                inst.set_nodeattr("pumpedCompute", 1)
+        return(model, False)
+
+
+class TempShuffleFixer(Transformation):
+    """ A temporary transformation that ensures that shuffles are sized correctly for the
+    initial BERT builds """
+
+    def __init__(self):
+        super().__init__()
+
+    def apply(self, model):
+        graph = model.graph
+
+        for node in graph.node:
+            if node.op_type == "Shuffle_hls":
+                inst = registry.getCustomOp(node)
+                inner_moves = inst.get_nodeattr("inner_moves")
+                simd = inst.get_nodeattr("SIMD")
+                if (inner_moves == 1) and (simd > 1):
+                    print(f"WARNING: as a safety precaution changing the shuffle where the inner dimension moves to SIMD=1 \n{node=}")
+                    inst.set_nodeattr("SIMD", 1)
+        return (model, False)
+
+
+def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
+    model = model.transform(TempShuffleFixer())
+    model = model.transform(SetPumpedCompute())
+    return model
+
+
 
 class QuantizeLayerNormalization(Transformation):
     """Add quantization to LayerNormalization nodes in the graph. 
