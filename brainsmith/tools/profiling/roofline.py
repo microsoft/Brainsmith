@@ -84,12 +84,12 @@ def roofline_analysis(model, hw_params, dtypes):
         elif model['arch'] == 'slm_pp':
             print('Analyzing SLM model in Prompt Processing mode...')
             roofline.profile_slm_pp(model=model)
-        if model['arch'] == 'slm_tg':
+        elif model['arch'] == 'slm_tg':
             print('Analyzing SLM model in Token Generation mode...')
             roofline.profile_slm_tg(model=model)
         profile = roofline.get_profile()
         # Find iterations
-        profile['cycles'] = model['num_layers'] if  model['offload'] else 1
+        profile['cycles'] = model['num_layers'] if model['offload'] else 1
         # Iterate if input is chunked
         if 'chunk_size' in model.keys():
             if DEBUG:
@@ -179,4 +179,4 @@ def define_hardware(model, profile, hw_params, dtype):
     print(f'    End-to-End Latency: {e2e_latency/1e-3:.4f} ms')
     print(f'    Per-Token Latency: {x_latency/1e-3:.4f} ms')
     print(f'    HBM: {hbm_bandwidth_cycles/8e9:.2f} + {hbm_bandwidth_spill/8e9:.2f} = {hbm_bandwidth/8e9:.2f}/{int(hbm/8e9)} GB/s = {hbm_bandwidth/hbm:.2f}x')
-    print(f"    sram: {sram_weights:.2f} weights + {sram_act:.2f} activations = {sram_used:.2f}/{sram/8e6:.2f} MB")
+    print(f"    SRAM: {sram_weights:.2f} weights + {sram_act:.2f} activations = {sram_used:.2f}/{sram/8e6:.2f} MB")

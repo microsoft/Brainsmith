@@ -1,11 +1,11 @@
-from roofline import roofline 
+from roofline import roofline_analysis 
 # DLRM Model definitions
-bert_params = { # Parameters common to all BERT models
+dlrm_params = { # Parameters common to all BERT models
     'attn_kernel_fusion' : True,
     'batch' : 1,
     'tile_size' : 1,
 }
-bert_tiny = {
+dlrmv2 = {
     'offload' : False,
     'arch' : 'dlrm',
     'num_layers' : 1,
@@ -251,6 +251,15 @@ v80 = {
     'dsp_hz' : 500e6,
     'hbm_bw' : 820*8e9,
     'hbm_util' : 0.9,
+    # TAFK TODO: To check
+    'dram_bw' : 40*8e9,
+    'dram_util' : 0.9,
+
+
+    'hbm_bw_slr0' : 600*8e9,
+    'hbm_bw_slr1' : 60*8e9,
+    'hbm_bw_slr2' : 60*8e9,
+
     'sram' : 84.125*8e6,
     'sram_util' : 0.9,
     'dsp_4bit' : 4,
@@ -286,10 +295,13 @@ u55c = {
 }
 
 model_params = {}
-model_params.update(bert_params) # Architecture shared params
-model_params.update(bert_large_512) # Model specific params
+# model_params.update(bert_params) # Architecture shared params
+# model_params.update(bert_large_512) # Model specific params
+model_params.update(slm_params) # Architecture shared params
+model_params.update(mistral_4k) # Model specific params
+model_params.update(mistral_tg_batch1) # MLO optimizations
 hw_params = v80
 # hw_params['lut_util'] = 0.0 # Disable LUT compute
 dtypes = [8, 4]
 
-roofline(model_params, hw_params, dtypes)
+roofline_analysis(model_params, hw_params, dtypes)

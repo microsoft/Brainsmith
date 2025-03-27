@@ -4,7 +4,6 @@
 FROM ubuntu:22.04
 LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahdi.Ghandi@microsoft.com>"
 
-ARG BACKEND
 ARG ENTRYPOINT
 
 # WORKDIR /workspace

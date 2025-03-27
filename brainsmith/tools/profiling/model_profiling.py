@@ -207,50 +207,17 @@ class RooflineModel():
 
 ############################## DLRMv2 ##############################
 
-    def profile_mlp_bootm(self, seq_len, hidden_dim, intermediate, pos=5):
-        # Profile values
-        in_dense_act = seq_len*embed_dim
-        output_act = seq_len*hidden_dim
-        mlp_out_compute = seq_len*hidden_dim*intermediate
-        mlp_out_weights = [hidden_dim, intermediate]
-        # Aggregate
-        activations = [output_act, residual_act]
-        compute = [mlp_out_compute]
-        weights = [mlp_out_weights]
-        weights, hbm_bw = self.profile_hbm_bw(weights, pos)
-        # Add to model
-        self.update_pipeline(activations, compute, weights, hbm_bw)
+    def profile_mlp_bottom(self, seq_len, hidden_dim, intermediate, pos=5):
+        pass
 
 
     # Profile compute & memory for DLRMv2
     def profile_dlrm(self, model=None):
         if model is not None:
             self.update_model(model)
-        x
+        pass
         
 
-
-
 ############################## HSTU ##############################
-    def profile_mlp_up(self, seq_len, hidden_dim, intermediate, silu, pos=4):
-        # Profile values
-        input_act = seq_len*hidden_dim
-        mlp_in_compute = seq_len*hidden_dim*intermediate
-        mlp_gate_compute = seq_len*hidden_dim*intermediate
-        mlp_in_weights = [hidden_dim, intermediate]
-        mlp_gate_weights = [hidden_dim, intermediate]
-        # Aggregate
-        activations = [input_act]
-        compute = [mlp_in_compute, mlp_gate_compute] if silu else [mlp_in_compute]
-        weights = [mlp_in_weights, mlp_gate_weights] if silu else [mlp_in_weights]
-        weights, hbm_bw = self.profile_hbm_bw(weights, pos)
-        # Add to model
-        self.update_pipeline(activations, compute, weights, hbm_bw)
-
-
-
-
-
-
-    # Profile comptue & memory for HSTU
-    def
+    def profile_hstu(self, seq_len, hidden_dim, intermediate, silu, pos=4):
+        pass
