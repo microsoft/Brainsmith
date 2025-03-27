@@ -5,7 +5,7 @@ This repo is a collection of operators and transformations that FINN can pick up
 
 ### Quick start
 
-1. Set environment variables (seperate from FINN variables).
+1. Set environment variables (seperate from FINN variables), example below:
 ```
 export BSMITH_ROOT="~/brainsmith"
 export BSMITH_HOST_BUILD_DIR="~/builds/brainsmith"
@@ -26,14 +26,18 @@ git clone git@github.com:microsoft/Brainsmith.git
 ./run-docker.sh
 ```
 
-5. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
+5. Navigate to the job for BERT models. Generate a pre-made configuration file for rapid
+testing:
 ```
-cd brainsmith
-python endtoend.py -j bert
--o finnbrainsmith_bert.onnx
+cd brainsmith/jobs/bert
+python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
+```
+6. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
+```
+python endtoend.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json
 ```
 
-6. Alternatively, you can also run a suite of tests on the finnbrainsmith repository which will check:
+7. Alternatively, you can also run a suite of tests on the finnbrainsmith repository which will check:
  
 * Shuffle hardware generation and correctness
 * QuantSoftMax hardware generation and correctness
