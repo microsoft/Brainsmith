@@ -10,6 +10,7 @@
 import onnx
 import argparse
 import os
+import shutil
 import json
 from onnxsim import simplify
 import qonnx.custom_op.registry as registry
@@ -241,6 +242,9 @@ def custom_step_shell_metadata_handover(model, cfg):
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
             model = model.transform(ExtractShellIntegrationMetadata(cfg.output_dir + "/stitched_ip/shell_handover.json"))
+            # copy over the ref IO *.npy files into the stitched_ip for handover
+            shutil.copy(cfg.verify_input_npy, cfg.output_dir + '/stitched_ip')
+            shutil.copy(cfg.verify_expected_output_npy, cfg.output_dir + '/stitched_ip')
             return model
         else:
             raise RuntimeError(f"Error: could not find stitched IP directory so unable to create metadata. Please ensure this is called after the create_stitched_ip step")
