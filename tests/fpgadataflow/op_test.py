@@ -47,13 +47,13 @@ class OpTest(ABC):
         model: ModelWrapper,
         input_tensors: dict,
         exec_mode: str,
+        target_fpga: str,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then returns it.
-        The model is specialised differently depending on which execution mode is used (cppsim#
+        The model is specialised differently depending on which execution mode is used (cppsim
         or rtlsim)."""
 
-        # May parameterise these in the future.
-        target_fpga = "xcv80-lsva4737-2MHP-e-S"
+        # May parameterise this in the future.
         target_clk_ns = 5
 
         transform_list = [
@@ -76,6 +76,11 @@ class OpTest(ABC):
             transform_list=transform_list,
             validate=True,
         )
+    
+    @pytest.fixture
+    def target_fpga(self) -> str:
+        """The fpga we're targeting for testing. Can be overridden by test classes."""
+        return "xcv80-lsva4737-2MHP-e-S"
 
     @pytest.fixture
     def input_tensors(self, model) -> dict:
@@ -90,7 +95,6 @@ class OpTest(ABC):
                 model.get_tensor_shape(input.name),
             )
             input_t[input.name] = input_value
-        print(input_t)
         return input_t
 
     ##########################################
