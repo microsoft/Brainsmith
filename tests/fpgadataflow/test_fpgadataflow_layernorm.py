@@ -394,7 +394,7 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 Below is an example of a test constructed using the OpTest class.
 """
 
-@pytest.mark.parametrize("simd", [1, 2, 4])
+@pytest.mark.parametrize("simd", [1, 2, 4], ids=["SIMD1", "SIMD2", "SIMD4"])
 @pytest.mark.parametrize("idt", ["INT8", "INT9"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 class TestLayerNorm(OpTest):
