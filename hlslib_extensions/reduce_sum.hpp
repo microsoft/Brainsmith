@@ -27,7 +27,7 @@ template<
 	unsigned N // How much are we summing from the channel
 >
 void reduce_sum (
-		hls::stream<hls::vector<T,SIMD> &src,
+		hls::stream<hls::vector<T,SIMD>> &src,
 		hls::stream<T> &dst
 ) {
 
@@ -37,7 +37,7 @@ void reduce_sum (
 	if (!src.empty()) {
 		hls::vector<T,SIMD> y = src.read();
 		for(unsigned i=0; i<SIMD; i++) {
-			accumulator += tree_reduce<SIMD, T, T>(y
+			accumulator += tree_reduce<SIMD, T, T>(y,
 					[](T a, T b){ return a+b; });
 		}
 
