@@ -186,10 +186,10 @@ class HWReduceSum_hls(HWReduceSum, BS_HLSBackend):
             int stream_size = in0_V.size();
 
             while(out_V.size() != {np.prod(oshape)} ){{
-                reduce_sum(in0_V, out_V);
+                reduce_sum<T,SIMD,N>(in0_V, out_V);
             }}
 
-            vectorstream2npy<float, float, SIMD>(out_V,{oshape_str}, "{path}/output.npy");
+            apintstream2npy<T, T, 8, float>(out_V,{oshape_str}, "{path}/output.npy");
             """
         ]
         self.save_as_npy()

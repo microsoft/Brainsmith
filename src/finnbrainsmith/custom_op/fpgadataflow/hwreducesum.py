@@ -11,7 +11,6 @@ import numpy as np
 import warnings
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
-
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 
@@ -37,7 +36,7 @@ class HWReduceSum(HWCustomOp):
     def get_normal_output_shape(self, ind=0):
         oshape = self.get_normal_input_shape()
         oshape[-1] = 1
-        return oshape 
+        return tuple(oshape) 
 
     def get_number_output_values(self):
         folded_oshape = self.get_folded_output_shape()
