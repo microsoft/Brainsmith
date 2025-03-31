@@ -203,8 +203,6 @@ class RooflineModel():
         self.profile_mlp_down(self.seq_len, self.hidden_dim, self.intermediate)
        
 
-
-
 ############################## DLRMv2 ##############################
 
     def profile_mlp_bottom(self, seq_len, hidden_dim, intermediate, pos=5):

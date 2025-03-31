@@ -8,10 +8,7 @@
 ############################################################################
 
 import onnx
-import argparse
-from onnxsim import simplify
 import qonnx.custom_op.registry as registry
-from qonnx.util.cleanup import cleanup
 from qonnx.transformation.general import (
         SortCommutativeInputsInitializerLast, 
         RemoveUnusedTensors, 
@@ -20,9 +17,7 @@ from qonnx.transformation.general import (
         ConvertDivToMul 
 )
 from qonnx.transformation.remove import RemoveIdentityOps
-from qonnx.transformation.remove import remove_node_and_rewire
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
-from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from qonnx.transformation.fold_constants import FoldConstants
 from qonnx.transformation.infer_datatypes import InferDataTypes
@@ -32,9 +27,6 @@ from finn.transformation.streamline.round_thresholds import RoundAndClipThreshol
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.finnlib.transformation.convert_to_hw_layers as to_bs_hw
 from brainsmith.finnlib.transformation.expand_norms import ExpandNorms
-from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
-from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
-from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
 # Included for getting reference IO from model with head/tail removed
 import finn.core.onnx_exec as oxe

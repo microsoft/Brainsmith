@@ -7,26 +7,20 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 
-import warnings
-warnings.simplefilter("ignore")
-
 import onnx
 import datetime
 import json
 import os
 import shutil
 import uuid
-
 from onnxsim import simplify
 from qonnx.util.cleanup import cleanup
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
-
 from brainsmith.jobs import JOB_REGISTRY
 
 
 def run_job(job_name, model, args):
-
     # Find Job steps
     job_name = args.job
     # Check if the job name is registered

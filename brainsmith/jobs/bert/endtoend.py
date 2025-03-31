@@ -9,7 +9,6 @@
 
 import warnings  
 warnings.simplefilter("ignore")  
-
 import onnx  
 import os
 import argparse
