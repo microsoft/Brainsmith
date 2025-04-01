@@ -21,7 +21,7 @@ export FINN_ROOT="${FINN_DEPS_DIR}/finn"
 source docker/terminal-utils.sh
 
 # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
-# to be fixed in future Ubuntu versions (https://bugs.launchpad.net/ubuntu/+source/setuptools/+bug/1994016)
+# To be fixed in future Ubuntu versions (https://bugs.launchpad.net/ubuntu/+source/setuptools/+bug/1994016)
 mv ${BSMITH_DIR}/deps/qonnx/pyproject.toml ${BSMITH_DIR}/deps/qonnx/pyproject.tmp
 pip install --user -e ${BSMITH_DIR}/deps/qonnx
 mv ${BSMITH_DIR}/deps/qonnx/pyproject.tmp ${BSMITH_DIR}/deps/qonnx/pyproject.toml
@@ -44,17 +44,8 @@ fi
 if [ -f "$VITIS_PATH/settings64.sh" ];then
   # source Vitis env.vars
   export XILINX_VITIS=$VITIS_PATH
-#   export XILINX_XRT=/opt/xilinx/xrt
   source $VITIS_PATH/settings64.sh
   gecho "Found Vitis at $VITIS_PATH"
-#   if [ -f "$XILINX_XRT/setup.sh" ];then
-#     # source XRT
-#     source $XILINX_XRT/setup.sh
-#     gecho "Found XRT at $XILINX_XRT"
-#   else
-#     recho "XRT not found on $XILINX_XRT, did you skip the download or did the installation fail?"
-#     exit -1
-#   fi
 else
   yecho "Unable to find $VITIS_PATH/settings64.sh"
   yecho "Functionality dependent on Vitis will not be available."
@@ -69,6 +60,22 @@ else
     yecho "Functionality dependent on Vivado will not be available."
     yecho "If you need Vivado, ensure VIVADO_PATH is set correctly and mounted into the Docker container."
   fi
+fi
+
+if [ -z "${XILINX_VIVADO}" ]; then
+  yecho "pyxsi is unavailable since Vivado was not found"
+else
+  if [ -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
+    gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
+  else
+    gecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
+    OLDPWD=$(pwd)
+    cd ${BSMITH_DIR}/deps/pyxsi
+    make
+    cd $OLDPWD
+  fi
+  export PYTHONPATH=$PYTHONPATH:${FINN_ROOT}/deps/pyxsi:${FINN_ROOT}/deps/pyxsi/py
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 
 if [ -f "$HLS_PATH/settings64.sh" ];then
