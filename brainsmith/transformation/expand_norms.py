@@ -57,7 +57,7 @@ class ExpandNorms(Transformation):
                     "FuncLayerNorm",
                     [ln_act_in],
                     [act_out],
-                    domain="brainsmith.finnlib.custom_op.general",
+                    domain="brainsmith.custom_op.general",
                     backend="general",
                     axis=axis,
                     epsilon=epsilon,

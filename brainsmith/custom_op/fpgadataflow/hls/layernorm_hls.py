@@ -30,10 +30,10 @@ import numpy as np
 import os
 
 # import finn.util.pyxsi_rpcclient as pyxsi_rpcclient
-from brainsmith.finnlib.custom_op.fpgadataflow import brainsmith_templates
+from brainsmith.custom_op.fpgadataflow import brainsmith_templates
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
-from brainsmith.finnlib.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
-from brainsmith.finnlib.custom_op.fpgadataflow.layernorm import LayerNorm
+from brainsmith.custom_op.fpgadataflow.brainsmith_hlsbackend import BS_HLSBackend
+from brainsmith.custom_op.fpgadataflow.layernorm import LayerNorm
 from finn.util.basic import make_build_dir
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder

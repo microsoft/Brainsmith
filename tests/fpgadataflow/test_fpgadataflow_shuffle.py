@@ -40,8 +40,8 @@ from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 
-from brainsmith.finnlib.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
-from brainsmith.finnlib.transformation.convert_to_hw_layers import InferShuffle
+from brainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
+from brainsmith.transformation.convert_to_hw_layers import InferShuffle
 
 test_fpga_part:str = "xcv80-lsva4737-2MHP-e-S"
 test_synth_clk_period_ns:int = 5

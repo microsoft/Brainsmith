@@ -11,7 +11,7 @@ import os
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.custom_op.fpgadataflow import templates
-from brainsmith.finnlib.custom_op.fpgadataflow import brainsmith_templates
+from brainsmith.custom_op.fpgadataflow import brainsmith_templates
 
 
 class BS_HLSBackend(HLSBackend):

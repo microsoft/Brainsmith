@@ -14,7 +14,7 @@ custom_op = dict()
 # Disable linting from here, as all import will be flagged E402 and maybe F401
 
 # Import all CustomOps
-from brainsmith.finnlib.custom_op.general.norms import FuncLayerNorm
+from brainsmith.custom_op.general.norms import FuncLayerNorm
 
 # Register in custom_op dictionary for use in QONNX
 custom_op["FuncLayerNorm"] = FuncLayerNorm
