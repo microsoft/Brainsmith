@@ -62,10 +62,10 @@ class OpTest(ABC):
             SetExecMode(exec_mode),
         ]
 
-        if exec_mode is "cppsim":
+        if exec_mode == "cppsim":
             transform_list.append(PrepareCppSim())
             transform_list.append(CompileCppSim())
-        if exec_mode is "rtlsim":
+        if exec_mode == "rtlsim":
             transform_list.append(PrepareIP(target_fpga, target_clk_ns))
             transform_list.append(HLSSynthIP())
             transform_list.append(PrepareRTLSim())
@@ -76,14 +76,21 @@ class OpTest(ABC):
             transform_list=transform_list,
             validate=True,
         )
-    
+
     @pytest.fixture
     def target_fpga(self) -> str:
         """The fpga we're targeting for testing. Can be overridden by test classes."""
         return "xcv80-lsva4737-2MHP-e-S"
 
     @pytest.fixture
-    def input_tensors(self, model) -> dict:
+    def target_node(self) -> int:
+        """The index of the node in the model we're focusing on. Allows for multiple nodes to be present,
+        with tests that only target a specific node. Defaults to the first node. Can be overridden.
+        """
+        return 0
+
+    @pytest.fixture
+    def input_tensors(self, model: ModelWrapper) -> dict:
         """Creates the tensor(s) passed to the model, to be used by the simulation during
         testing. This fixture creates a tensor with random values, but can be overriden
         by subclasses to pass specific values."""
@@ -103,11 +110,12 @@ class OpTest(ABC):
 
     # Ensure the number of cycles the layer takes to run in rtlsim
     # aligns with the expected number of cycles.
-    def test_cycles(self, model_specialised: ModelWrapper, exec_mode: str) -> None:
+    def test_cycles(
+        self, model_specialised: ModelWrapper, target_node: int, exec_mode: str
+    ) -> None:
 
         if exec_mode == "rtlsim":
-            # TODO: what if the node we're testing isn't the first node?
-            op_type = model_specialised.graph.node[0].op_type
+            op_type = model_specialised.graph.node[target_node].op_type
             node = model_specialised.get_nodes_by_op_type(op_type)[0]
             inst = getCustomOp(node)
             cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
@@ -162,7 +170,7 @@ class OpTest(ABC):
         # Wrap the ONNX model in a QONNX model wrapper
         model_wrapper = ModelWrapper(model)
 
-        # Annotate the LayerNorm's input/output to the QONNX datatypes.
+        # Annotate the model's input/output to the QONNX datatypes.
         for input in inputs:
             model_wrapper.set_tensor_datatype(input[0]["name"], DataType[input[1]])
         for output in outputs:
@@ -176,7 +184,7 @@ class OpTest(ABC):
         transform_list: List[Transformation],
         validate: bool = False,
         input_tensors: dict = None,
-        tolerance=1e-5,
+        tolerance: float = 1e-5,
     ) -> ModelWrapper:
         """Applies a list of QONNX transformations to a given model. If 'validate' is enabled,
         the function compares the output from model before and after the transforms were
@@ -191,6 +199,9 @@ class OpTest(ABC):
 
         if validate:
             t_output = oxe.execute_onnx(model, input_tensors)[out_name]
-            assert np.allclose(ref_output, t_output, atol=tolerance)
+            if not np.allclose(ref_output, t_output, atol=tolerance):
+                raise RuntimeError(
+                    f"Transformation {transformation} failed expected {ref_output=} but got {t_output=}"
+                )
 
         return model
