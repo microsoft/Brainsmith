@@ -64,5 +64,3 @@ class BS_HLSBackend(HLSBackend):
         f.write(template)
         f.close()
         self.code_gen_dict.clear()
-
-

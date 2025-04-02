@@ -45,7 +45,7 @@ def run_job(job_name, model, args):
         onnx.save(model, f"{model_dir}/simp.onnx")
     # TODO: Make model saving optional for cleanup
     cleanup(in_file=model_dir+"/simp.onnx", out_file=job_dir+"/df_input.onnx")
-    
+
     # TODO: Add general way to generte numpy input/expected output
 
     # Build dataflow
@@ -77,7 +77,10 @@ def run_job(job_name, model, args):
     _ = build.build_dataflow_cfg(job_dir+"/df_input.onnx", df_cfg)
 
     # Export output model
-    final_step = job_steps[-1].__name__ if args.stop_step else args.stop_step
+    if args.stop_step is None:
+        final_step = job_steps[-1].__name__
+    else:
+        final_step = args.stop_step
     shutil.copy2(f"{model_dir}/{final_step}.onnx", f"{job_dir}/output.onnx")
 
     # Extra metadata for handover

@@ -8,7 +8,7 @@
 ############################################################################
 
 import warnings  
-warnings.simplefilter("ignore")  
+warnings.simplefilter("ignore")
 import onnx  
 import os
 import argparse
@@ -55,7 +55,7 @@ def gen_initial_bert_model(
     model.to(dtype=dtype)
     model.eval()
     vocab_size = model.config.vocab_size
-    seq_len = seqlen 
+    seq_len = seqlen
     batch_size = 1
     
     input_ids = torch.randint(vocab_size, (batch_size,seq_len), dtype=torch.int64)
