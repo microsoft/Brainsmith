@@ -16,7 +16,6 @@ import torch
 from torch import nn
 from transformers import BertConfig, BertModel
 from transformers.utils.fx import symbolic_trace
-
 import brevitas.nn as qnn
 from brevitas.quant import Int8ActPerTensorFloat
 from brevitas.quant import Int8WeightPerTensorFloat
@@ -25,7 +24,6 @@ import brevitas.onnx as bo
 from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
-
 from brainsmith.core.run_job import run_job
 
 
@@ -41,7 +39,7 @@ def gen_initial_bert_model(
     """ Generates the initial BERT model from Brevitas. (Write more here) """
 
     # Global consts used by Brevitas build step
-    dtype=torch.float32
+    dtype = torch.float32
 
     config = BertConfig(
       hidden_size=hidden_size,
@@ -57,37 +55,37 @@ def gen_initial_bert_model(
     vocab_size = model.config.vocab_size
     seq_len = seqlen
     batch_size = 1
-    
+
     input_ids = torch.randint(vocab_size, (batch_size,seq_len), dtype=torch.int64)
     attention_mask = torch.randint(high=2, size=(batch_size,seq_len), dtype=torch.float32)
     token_type_ids = torch.randint(high=2, size=(batch_size,seq_len), dtype=torch.int64)
     inp = {
         'input_ids': input_ids,
     }
-    
+
     input_names = inp.keys()
     model = symbolic_trace(model, input_names)
-    
+
     pre_output = model(**inp)
-    
+
     print("Replace SDPA with quantizable variants...")
     model = replace_sdpa_with_quantizable_layers(model)
     print("Replacing done.")
-    
+
     post_output = model(**inp)
-    
+
     # Sanity check that the layer replacement worked
     #print(pre_output["pooler_output"].shape)
     #print(pre_output["pooler_output"])
     #print(f"{pre_output['pooler_output'].shape} - {post_output['pooler_output'].shape}")
     #print(pre_output['pooler_output'] - post_output['pooler_output'])
-    
+
     unsigned_hidden_act = config.hidden_act == 'relu'
     layerwise_compute_layer_map = {}
     layerwise_compute_layer_map[nn.Linear] = (
         qnn.QuantLinear,
         {
-            #'input_quant': Int8ActPerTensorFloat,
+            # 'input_quant': Int8ActPerTensorFloat,
             'input_quant': lambda module: Uint8ActPerTensorFloat if module.in_features == config.intermediate_size and unsigned_hidden_act else Int8ActPerTensorFloat,
             'weight_quant': Int8WeightPerTensorFloat,
             'weight_bit_width': bitwidth,
@@ -116,12 +114,12 @@ def gen_initial_bert_model(
             'act_quant': Int8ActPerTensorFloat,
             'act_bit_width': bitwidth,
             'return_quant_tensor': False})
-    
+
     quant_model = layerwise_quantize(model, compute_layer_map=layerwise_compute_layer_map)
     quant_model.to(dtype=dtype)
     with torch.no_grad(), calibration_mode(quant_model):
         quant_model(**inp)
-        
+
     with torch.no_grad():
         bo.export_qonnx(
             quant_model,

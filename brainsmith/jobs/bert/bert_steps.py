@@ -34,16 +34,15 @@ from qonnx.util.basic import gen_finn_dt_tensor
 from qonnx.core.datatype import DataType
 import numpy as np
 
-#Debugging
+# Debugging
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 
-
-
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
+
 
 def custom_step_qonnx2finn(model, cfg):
     """
@@ -88,6 +87,7 @@ def custom_step_qonnx2finn(model, cfg):
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
     return model
+
 
 def custom_step_generate_reference_io(model, cfg):
     """
@@ -141,6 +141,7 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(GiveUniqueNodeNames())
     return model
 
+
 def custom_step_infer_hardware(model, cfg):
     """ 
     BERT custom step for infer hardware 
@@ -172,6 +173,7 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model
+
 
 def custom_step_remove_head(model, cfg):
     """ Removes all nodes up to the first LayerNormalisation Node and then rewires the input """
@@ -224,6 +226,7 @@ def _recurse_model_tail_removal(model, to_remove, node):
                 _recurse_model_tail_removal(model, to_remove, model.find_producer(tensor))
     return
 
+
 def custom_step_remove_tail(model, cfg):
     """ Removes from global_out_1 all the way back to the first LayerNorm """
     out_names = [x.name for x in model.graph.output]
@@ -238,6 +241,7 @@ def custom_step_remove_tail(model, cfg):
     del model.graph.output[out_names.index('global_out_1')]
 
     return model
+
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
@@ -258,7 +262,7 @@ class SetPumpedCompute(Transformation):
             if (node.op_type == "MVAU_rtl"):
                 inst = registry.getCustomOp(node)
                 inst.set_nodeattr("pumpedCompute", 1)
-        return(model, False)
+        return (model, False)
 
 
 class TempShuffleFixer(Transformation):
