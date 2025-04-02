@@ -21,7 +21,7 @@ from brainsmith.jobs import JOB_REGISTRY
 
 
 def run_job(job_name, model, args):
-    # Find Job steps
+    # Find job steps
     job_name = args.job
     # Check if the job name is registered
     if job_name in JOB_REGISTRY.keys():

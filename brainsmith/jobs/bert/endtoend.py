@@ -26,7 +26,7 @@ from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_wi
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
 
-from brainsmith.run_job import run_job
+from brainsmith.core.run_job import run_job
 
 
 def gen_initial_bert_model(
