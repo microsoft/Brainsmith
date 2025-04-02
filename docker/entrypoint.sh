@@ -68,13 +68,13 @@ else
   if [ -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
     gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
   else
-    gecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
+    yecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
     OLDPWD=$(pwd)
     cd ${BSMITH_DIR}/deps/pyxsi
     make
     cd $OLDPWD
   fi
-  export PYTHONPATH=$PYTHONPATH:${FINN_ROOT}/deps/pyxsi:${FINN_ROOT}/deps/pyxsi/py
+  export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 

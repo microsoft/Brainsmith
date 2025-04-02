@@ -27,6 +27,7 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 # Directories
 : ${BSMITH_BUILD_DIR="/tmp/$DOCKER_INST_NAME"}
 : ${BSMITH_SSH_KEY_DIR="$BSMITH_DIR/ssh_keys"}
+: ${PLATFORM_REPO_PATHS="/opt/xilinx/platforms"}
 # Enable/disable Docker build options
 : ${DOCKER_BUILDKIT="1"}
 : ${BSMITH_DOCKER_PREBUILT="0"}
@@ -74,7 +75,7 @@ fi
 
 # Create directories if they do not exist
 mkdir -p $BSMITH_BUILD_DIR
-# TMP commented out
+# TAFK: Temp commented out
 # mkdir -p $BSMITH_SSH_KEY_DIR
 
 # Build Docker image in BrainSmith root directory

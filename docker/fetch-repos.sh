@@ -90,6 +90,10 @@ if [ ! -z "$BSMITH_XILINX_PATH" ];then
   if [ -d "$VITIS_PATH" ];then
     DOCKER_EXEC+="-e VITIS_PATH=$VITIS_PATH "
   fi
+  if [ -d "$PLATFORM_REPO_PATHS" ];then
+    DOCKER_EXEC+="-v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS "
+    DOCKER_EXEC+="-e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS "
+  fi
 fi
 
 # Define functions
@@ -140,7 +144,6 @@ fetch_board_files() {
 }
 
 fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
-# Temprorarily disabled automatic checkout of FINN repo, using local branch
 fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
 fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR
 fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR

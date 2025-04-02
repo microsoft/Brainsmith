@@ -57,7 +57,6 @@ RUN rm /tmp/requirements.txt
 # Xilinx toolflow specific imports
 ENV TZ="US/Pacific"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-ENV VIVADO_IP_CACHE="/tmp/vivado_ip_cache"
 
 COPY $ENTRYPOINT /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
