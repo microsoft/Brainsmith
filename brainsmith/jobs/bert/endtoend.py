@@ -13,6 +13,7 @@ import onnx
 import os
 import argparse
 import torch
+import json
 from torch import nn
 from transformers import BertConfig, BertModel
 from transformers.utils.fx import symbolic_trace
@@ -151,6 +152,14 @@ def main(args):
     # Run BrainSmith bert job on the generated model
     run_job('bert', model, args)
 
+    # Extra metadata for handover
+    handover_file = cfg.output_dir + '/stitched_ip/shell_handover.json'
+    if os.path.exists(handover_file):
+        with open(handover_file, "r") as fp:
+            handover = json.load(fp)
+        handover['num_layers'] = args.num_hidden_layers
+        with open(handover_file, "w") as fp:
+            json.dump(handover, fp, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='TinyBERT FINN demo script')

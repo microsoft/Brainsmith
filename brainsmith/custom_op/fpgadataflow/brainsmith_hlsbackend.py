@@ -15,7 +15,7 @@ from brainsmith.custom_op.fpgadataflow import brainsmith_templates
 
 
 class BS_HLSBackend(HLSBackend):
-    """ A HLSBackend for BrainSmith that overrides certain methods so that
+    """ A HLSBackend for Brainsmith that overrides certain methods so that
     the plugin include files are part of the build """
 
     def code_generation_ipgen(self, model, fpgapart, clk):

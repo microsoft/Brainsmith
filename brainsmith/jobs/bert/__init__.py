@@ -9,6 +9,7 @@ from brainsmith.jobs.bert.bert_steps import (
         custom_step_infer_hardware,
         custom_streamlining_step,
         custom_step_qonnx2finn,
+        custom_step_shell_metadata_handover,
 )
 
 from finn.builder.build_dataflow_steps import (
@@ -46,4 +47,5 @@ BERT_STEPS = [
         step_measure_rtlsim_performance,
         step_set_fifo_depths,
         step_create_stitched_ip,
+        custom_step_shell_metadata_handover,
     ]
