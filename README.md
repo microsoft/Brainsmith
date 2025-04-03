@@ -21,20 +21,22 @@ git clone git@github.com:microsoft/Brainsmith.git
 
 3. (Optional) Dependencies are specified in `docker/hw_compilers/finn/fetch-repos.sh` which lists specific hashes/branches to pull during docker build. Feel free to adjust these if you work off a different feature fork/branch of key dependencies like FINN or QONNX.
 
-4. Launch the docker container:
+4. Launch the docker container. Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc. and run the changes in docker without rebuilding the container.
 ```
 ./run-docker.sh
 ```
 
-5. Navigate to the job for BERT models. Generate a pre-made configuration file for rapid
-testing:
+5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
+```
+cd brainsmith/jobs/bert
+make single_layer
+```
+
+6. Alternatively, run a simplified test skipping DCP gen
 ```
 cd brainsmith/jobs/bert
 python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-```
-6. You can then try and build a BERT model in brevitas, extract the BERT encoder potion of the design, and push it through the build flow with the following script. 
-```
-python endtoend.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json
+python endtoend.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
 ```
 
 7. Alternatively, you can also run a suite of tests on the finnbrainsmith repository which will check:
@@ -47,5 +49,3 @@ python endtoend.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./confi
 cd tests
 pytest ./
 ```
-
-Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc. and run the changes in docker without rebuilding the container 

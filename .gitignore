@@ -475,5 +475,7 @@ misc/
 *.d
 old/
 
-# Downloaded dependency repos
+# Generated dependency repo
 deps/
+*.egg-info/
+*.egg
