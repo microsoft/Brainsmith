@@ -31,7 +31,7 @@ from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 import finn.builder.build_dataflow_config as build_cfg
 import finn.core.onnx_exec as oxe
 
-from brainsmith.util.bert import (
+from brainsmith.jobs.bert.bert_steps import (
         custom_step_remove_head, 
         custom_step_remove_tail, 
         custom_step_cleanup,
