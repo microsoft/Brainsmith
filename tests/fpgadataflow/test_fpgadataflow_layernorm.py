@@ -107,7 +107,7 @@ def build_func_layernorm_graph(
         "FuncLayerNorm",
         [act_in.name],
         [act_out.name],
-        domain="finnlib.custom_op.general",
+        domain="brainsmith.custom_op.general",
         backend="general",
         axis=-1,
         epsilon=epsilon,

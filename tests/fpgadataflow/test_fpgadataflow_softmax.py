@@ -85,7 +85,7 @@ def make_single_hwsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType["U
         "HWSoftmax",
         ["global_in"],
         ["global_out"],
-        domain="finnlib.custom_op.fpgadataflow",
+        domain="brainsmith.custom_op.fpgadataflow",
         backend="fpgadataflow",
         ifm_dim=list(ifm_dim),
         input_data_type=idt.name,
