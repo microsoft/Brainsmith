@@ -32,7 +32,7 @@ cd brainsmith/jobs/bert
 make single_layer
 ```
 
-6. Alternatively, run a simplified test skipping DCP gen
+6. Alternatively, run a simplified test skipping DCP gen:
 ```
 cd brainsmith/jobs/bert
 python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
