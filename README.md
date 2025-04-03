@@ -1,7 +1,7 @@
-## Brainsmith FINN Plugin repo
+## Brainsmith
 
-This repo contains a plugin for the FINN dataflow compiler as part of the Microsoft/AMD BrainSmith project.
-This repo is a collection of operators and transformations that FINN can pick up and load into the FINN docker.
+Brainsmith is an open-source platform for FPGA AI accelerators.
+This repository is in a pre-release state and under active co-devlopment by Microsoft and AMD.
 
 ### Quick start
 
