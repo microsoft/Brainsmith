@@ -36,7 +36,7 @@ if [ -f "${BSMITH_DIR}/setup.py" ];then
   # run pip install for BrainSmith
   pip install --user -e ${BSMITH_DIR}
 else
-  recho "Unable to find BrainSmith source code in ${BSMITH_DIR}"
+  recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
   recho "Ensure you have passed -v <path-to-finn-repo>:<path-to-finn-repo> to the docker run command"
   exit -1
 fi
