@@ -5,7 +5,7 @@ This repository is in a pre-release state and under active co-devlopment by Micr
 
 ### Quick start
 
-1. Set environment variables (seperate from FINN variables), example below:
+1. Set environment variables (separate from FINN variables), example below:
 ```
 export BSMITH_ROOT="~/brainsmith"
 export BSMITH_HOST_BUILD_DIR="~/builds/brainsmith"
