@@ -33,7 +33,7 @@ pip install --user -e ${BSMITH_DIR}/deps/brevitas
 pip install --user -e ${BSMITH_DIR}/deps/finn
 
 if [ -f "${BSMITH_DIR}/setup.py" ];then
-  # run pip install for BrainSmith
+  # run pip install for Brainsmith
   pip install --user -e ${BSMITH_DIR}
 else
   recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
