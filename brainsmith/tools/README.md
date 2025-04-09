@@ -1,3 +1,3 @@
-## BrainSmith Smithy
+## Brainsmith Smithy
 
-This folder contains tools to generate components for the BrainSmith toolchain.
+This folder contains tools to generate components for the Brainsmith toolchain.
