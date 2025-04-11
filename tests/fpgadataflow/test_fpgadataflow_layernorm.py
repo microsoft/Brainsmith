@@ -1,8 +1,6 @@
 ############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
@@ -20,7 +18,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
@@ -35,10 +33,7 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 # from finn.transformation.fpgadataflow.create_dataflow_partition import (
 #     CreateDataflowPartition,
 # )
-# from finn.transformation.fpgadataflow.create_dataflow_partition import (
-#     CreateDataflowPartition,
-# )
-from finnbrainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.expand_norms import ExpandNorms
 
 # Debugging dependencies, to remove
 import os
@@ -110,7 +105,7 @@ def build_func_layernorm_graph(
         "FuncLayerNorm",
         [act_in.name],
         [act_out.name],
-        domain="finnbrainsmith.custom_op.general",
+        domain="brainsmith.custom_op.general",
         backend="general",
         axis=-1,
         epsilon=epsilon,
