@@ -59,42 +59,6 @@ if [ -z "$PLATFORM_REPO_PATHS" ];then
   recho "This is required to be able to use Alveo PCIe cards."
 fi
 
-# Set environment variables if not already set
-: ${OHMYXILINX="${BSMITH_DIR}/deps/oh-my-xilinx"}
-: ${VIVADO_HLS_LOCAL=$VIVADO_PATH}
-: ${VIVADO_IP_CACHE=$BSMITH_BUILD_DIR/vivado_ip_cache}
-
-# Add flags to Docker run command
-DOCKER_EXEC+="-e VIVADO_IP_CACHE=$BSMITH_BUILD_DIR/vivado_ip_cache "
-DOCKER_EXEC+="-e OHMYXILINX=${BSMITH_DIR}/deps/oh-my-xilinx "
-# Workaround for FlexLM issue, see:
-# https://community.flexera.com/t5/InstallAnywhere-Forum/Issues-when-running-Xilinx-tools-or-Other-vendor-tools-in-docker/m-p/245820#M10647
-DOCKER_EXEC+="-e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1 "
-# Workaround for running multiple Vivado instances simultaneously, see:
-# https://adaptivesupport.amd.com/s/article/63253?language=en_US
-DOCKER_EXEC+="-e XILINX_LOCAL_USER_DATA=no "
-# Xilinx specific commands
-if [ ! -z "$BSMITH_XILINX_PATH" ];then
-  VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
-  VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
-  HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
-  DOCKER_EXEC+="-v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH "
-  if [ -d "$VIVADO_PATH" ];then
-    DOCKER_EXEC+="-e "XILINX_VIVADO=$VIVADO_PATH" "
-    DOCKER_EXEC+="-e VIVADO_PATH=$VIVADO_PATH "
-  fi
-  if [ -d "$HLS_PATH" ];then
-    DOCKER_EXEC+="-e HLS_PATH=$HLS_PATH "
-  fi
-  if [ -d "$VITIS_PATH" ];then
-    DOCKER_EXEC+="-e VITIS_PATH=$VITIS_PATH "
-  fi
-  if [ -d "$PLATFORM_REPO_PATHS" ];then
-    DOCKER_EXEC+="-v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS "
-    DOCKER_EXEC+="-e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS "
-  fi
-fi
-
 # Define functions
 fetch_repo() {
     # URL for git repo to be cloned

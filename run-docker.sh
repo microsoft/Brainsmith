@@ -28,6 +28,10 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 : ${BSMITH_BUILD_DIR="/tmp/$DOCKER_INST_NAME"}
 : ${BSMITH_SSH_KEY_DIR="$BSMITH_DIR/ssh_keys"}
 : ${PLATFORM_REPO_PATHS="/opt/xilinx/platforms"}
+# Xilinx specific variables
+: ${OHMYXILINX="${BSMITH_DIR}/deps/oh-my-xilinx"}
+: ${VIVADO_HLS_LOCAL=$VIVADO_PATH}
+: ${VIVADO_IP_CACHE=$BSMITH_BUILD_DIR/vivado_ip_cache}
 # Enable/disable Docker build options
 : ${DOCKER_BUILDKIT="1"}
 : ${BSMITH_DOCKER_PREBUILT="0"}
@@ -42,19 +46,19 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Determine run command based on CLI arguments
 if [ -z "$1" ]; then
-    gecho "Running BrainSmith docker container"
-    DOCKER_CMD="bash"
-    DOCKER_INTERACTIVE="-it"
+  gecho "Running BrainSmith docker container"
+  DOCKER_CMD="bash"
+  DOCKER_INTERACTIVE="-it"
 elif [ "$1" = "build_df_core" ] || [ "$1" = "build_dataflow" ]; then
-    JOB_DIR=$(readlink -f "$2")
-    gecho "Running $1 for folder $JOB_DIR"
-    BSMITH_DOCKER_FLAGS+="-v $JOB_DIR:$JOB_DIR "
-    DOCKER_CMD="$1 $JOB_DIR"
-    DOCKER_INTERACTIVE="-it"
+  JOB_DIR=$(readlink -f "$2")
+  gecho "Running $1 for folder $JOB_DIR"
+  BSMITH_DOCKER_FLAGS+="-v $JOB_DIR:$JOB_DIR "
+  DOCKER_CMD="$1 $JOB_DIR"
+  DOCKER_INTERACTIVE="-it"
 else
-    gecho "Running BrainSmith docker container with passed arguments"
-    DOCKER_CMD="$@"
-    DOCKER_INTERACTIVE=""
+  gecho "Running BrainSmith docker container with passed arguments"
+  DOCKER_CMD="$@"
+  DOCKER_INTERACTIVE=""
 fi
 
 # Enable GPU support if available
@@ -111,6 +115,36 @@ fi
 # Pull dependencies specific to the selected HW Compiler
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
   source $DEPS_PATH
+  # Add flags to Docker run command
+  DOCKER_EXEC+="-e VIVADO_IP_CACHE=$BSMITH_BUILD_DIR/vivado_ip_cache "
+  DOCKER_EXEC+="-e OHMYXILINX=${BSMITH_DIR}/deps/oh-my-xilinx "
+  # Workaround for FlexLM issue, see:
+  # https://community.flexera.com/t5/InstallAnywhere-Forum/Issues-when-running-Xilinx-tools-or-Other-vendor-tools-in-docker/m-p/245820#M10647
+  DOCKER_EXEC+="-e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1 "
+  # Workaround for running multiple Vivado instances simultaneously, see:
+  # https://adaptivesupport.amd.com/s/article/63253?language=en_US
+  DOCKER_EXEC+="-e XILINX_LOCAL_USER_DATA=no "
+  # Xilinx specific commands
+  if [ ! -z "$BSMITH_XILINX_PATH" ];then
+      VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
+      VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
+      HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
+      DOCKER_EXEC+="-v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH "
+      if [ -d "$VIVADO_PATH" ];then
+        DOCKER_EXEC+="-e "XILINX_VIVADO=$VIVADO_PATH" "
+        DOCKER_EXEC+="-e VIVADO_PATH=$VIVADO_PATH "
+      fi
+      if [ -d "$HLS_PATH" ];then
+        DOCKER_EXEC+="-e HLS_PATH=$HLS_PATH "
+      fi
+      if [ -d "$VITIS_PATH" ];then
+        DOCKER_EXEC+="-e VITIS_PATH=$VITIS_PATH "
+      fi
+      if [ -d "$PLATFORM_REPO_PATHS" ];then
+        DOCKER_EXEC+="-v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS "
+        DOCKER_EXEC+="-e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS "
+      fi
+  fi
 fi
 
 # Compose and execute Docker command
