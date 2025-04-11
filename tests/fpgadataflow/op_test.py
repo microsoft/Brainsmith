@@ -1,3 +1,12 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Daniel Penrose <daniel.penrose@amd.com>
+############################################################################
+
 import pytest
 import onnx
 import numpy as np

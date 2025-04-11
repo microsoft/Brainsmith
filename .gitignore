@@ -421,7 +421,6 @@ FodyWeavers.xsd
 !.gitkeep
 
 # finn related files
-finn/
 output_*/
 __pycache__/
 thresholds*/
@@ -475,3 +474,8 @@ misc/
 *.upgrade_log
 *.d
 old/
+
+# Generated dependency repo
+deps/
+*.egg-info/
+*.egg
