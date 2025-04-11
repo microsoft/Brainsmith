@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 from roofline import roofline_analysis 
 # DLRM Model definitions
 dlrm_params = { # Parameters common to all BERT models

@@ -1,12 +1,9 @@
 ############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-
 
 import numpy as np
 from onnx import helper
@@ -15,7 +12,7 @@ from qonnx.core.datatype import DataType
 
 
 class FuncLayerNorm(CustomOp):
-    
+
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 

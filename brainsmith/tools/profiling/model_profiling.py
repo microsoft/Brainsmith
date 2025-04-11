@@ -1,7 +1,13 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 import numpy as np
 
 PIPELINE_LENGTH = 6
-
 
 class RooflineModel():
     def __init__(self):

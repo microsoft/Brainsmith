@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from brainsmith.custom_op.fpgadataflow.hls.layernorm_hls import LayerNorm_hls
 from brainsmith.custom_op.fpgadataflow.hls.hwsoftmax_hls import HWSoftmax_hls
 from brainsmith.custom_op.fpgadataflow.hls.shuffle_hls import Shuffle_hls

@@ -1,5 +1,9 @@
+############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 
 FROM ubuntu:22.04
 LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahdi.Ghandi@microsoft.com>"

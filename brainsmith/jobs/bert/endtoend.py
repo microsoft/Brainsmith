@@ -7,7 +7,7 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 
-import warnings  
+import warnings
 warnings.simplefilter("ignore")
 import onnx  
 import os

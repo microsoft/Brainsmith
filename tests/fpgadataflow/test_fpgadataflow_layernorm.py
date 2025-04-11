@@ -1,8 +1,6 @@
 ############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################

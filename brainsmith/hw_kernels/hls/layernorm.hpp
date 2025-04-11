@@ -4,7 +4,7 @@
  *
  * SPDX-License-Identifier: MIT 
  *
- * @author      Shane T. Fleming <shane.fleming@amd.com>
+ * @author  Shane T. Fleming <shane.fleming@amd.com>
  ****************************************************************************/
 #ifndef LAYERNORM_HPP
 #define LAYERNORM_HPP

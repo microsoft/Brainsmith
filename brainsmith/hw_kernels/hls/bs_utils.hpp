@@ -7,7 +7,7 @@
  * modifications:
  * SPDX-License-Identifier: MIT 
  *
- * @author      Thomas B. Preußer <thomas.preusser@amd.com>
+ * @author  Thomas B. Preußer <thomas.preusser@amd.com>
  * @author	Shane T. Fleming <shane.fleming@amd.com>
  ****************************************************************************/
 

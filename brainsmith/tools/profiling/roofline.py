@@ -1,7 +1,13 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 from model_profiling import RooflineModel
 
 DEBUG = True
-
 
 def auto_format_with_units(value, unit_type):
     # Scales and units for each type  

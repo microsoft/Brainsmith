@@ -1,17 +1,12 @@
 ############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # @author       Josh Monson <joshmonson@microsoft.com>
 ############################################################################
 
-
 import numpy as np
 import warnings
-
-
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
