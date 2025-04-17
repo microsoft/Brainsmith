@@ -1,7 +1,7 @@
 # install PyTorch
-torch==2.1.1
-torchvision==0.16.1
-torchaudio==2.1.1 --extra-index-url https://download.pytorch.org/whl/cu121
+qtorch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0 --extra-index-url https://download.pytorch.org/whl/cu121
 # extra Python package dependencies (for testing and interaction)
 pygments==2.14.0
 ipykernel==6.21.2

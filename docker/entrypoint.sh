@@ -31,6 +31,10 @@ pip install --user -e ${BSMITH_DIR}/deps/finn-experimental
 pip install --user -e ${BSMITH_DIR}/deps/brevitas
 # finn
 pip install --user -e ${BSMITH_DIR}/deps/finn
+# onnxscript has an issue with setuptools that I can't figure out
+# so manually install it's dependencies here and set PYTHONPATH
+pip install numpy onnx>=1.16 typing_extensions>=4.10 ml_dtypes packaging
+export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/onnxscript
 
 if [ -f "${BSMITH_DIR}/setup.py" ];then
   # run pip install for Brainsmith
