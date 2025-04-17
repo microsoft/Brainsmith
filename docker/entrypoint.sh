@@ -33,6 +33,7 @@ pip install --user -e ${BSMITH_DIR}/deps/brevitas
 pip install --user -e ${BSMITH_DIR}/deps/finn
 # onnxscript has an issue with setuptools that I can't figure out
 # so manually install it's dependencies here and set PYTHONPATH
+# TODO: Reconcile onnxscript deps w/ requirements.txt
 pip install numpy onnx>=1.16 typing_extensions>=4.10 ml_dtypes packaging
 export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/onnxscript
 
