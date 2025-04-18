@@ -19,7 +19,7 @@ env:
 jobs:
   pr-build-test:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: brainsmith-dev2
+    runs-on: pre-release
     timeout-minutes: 30  # 30-minute timeout for PR builds
     steps:
       - name: Checkout repository
