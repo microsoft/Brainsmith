@@ -19,7 +19,7 @@ env:
 jobs:
   pr-build-test:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: brainsmith-dev2
     timeout-minutes: 30  # 30-minute timeout for PR builds
     steps:
       - name: Checkout repository
@@ -43,7 +43,7 @@ jobs:
 
   weekly-full-test:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: brainsmith-dev2
     timeout-minutes: 120  # 2-hour timeout for weekly tests
     
     steps:
@@ -56,20 +56,7 @@ jobs:
         run: |
           mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
           echo "Setting up full environment for weekly test"
-          # Increase Docker memory limits
-          sudo sysctl -w vm.max_map_count=262144
-          # Configure larger Docker daemon settings
-          echo '{
-            "default-shm-size": "2G",
-            "default-ulimits": {
-              "nofile": {
-                "Name": "nofile",
-                "Hard": 64000,
-                "Soft": 64000
-              }
-            }
-          }' | sudo tee /etc/docker/daemon.json
-          sudo systemctl restart docker
+          # No need to configure Docker daemon settings - already configured on self-hosted runner
 
       - name: Run Docker and tests
         run: |
