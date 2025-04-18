@@ -34,7 +34,7 @@ jobs:
 
       - name: Run Docker container
         run: |
-          cd brainsmith
+          cd Brainsmith
           chmod +x run-docker.sh
           ./run-docker.sh exit
         env:
@@ -43,7 +43,7 @@ jobs:
 
   weekly-full-test:
     if: github.event_name == 'schedule'
-    runs-on: brainsmith-dev2
+    runs-on: pre-release
     timeout-minutes: 120  # 2-hour timeout for weekly tests
     
     steps:
@@ -60,7 +60,7 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          cd brainsmith
+          cd Brainsmith
           chmod +x run-docker.sh
           BSMITH_DOCKER_FLAGS="--cpus 2 --memory 8G" ./run-docker.sh "cd tests && pytest ./ -v"
         env:
