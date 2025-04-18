@@ -1,0 +1,101 @@
+name: Brainsmith CI
+
+on:
+  push:
+    branches: [ dev/ci-actions ]
+  pull_request:
+    branches: [ dev/ci-actions ]
+  schedule:
+    - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
+
+env:
+  DOCKER_BUILDKIT: 1
+  BSMITH_ROOT: ${{ github.workspace }}
+  BSMITH_HOST_BUILD_DIR: ${{ github.workspace }}/build
+  BSMITH_DOCKER_PREBUILT: "0"
+  BSMITH_DOCKER_NO_CACHE: "1"
+  BSMITH_SKIP_DEP_REPOS: "0"
+
+jobs:
+  pr-build-test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # 30-minute timeout for PR builds
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up environment
+        run: |
+          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
+          echo "Setting up basic environment for PR test"
+
+      - name: Run Docker container
+        run: |
+          cd brainsmith
+          chmod +x run-docker.sh
+          ./run-docker.sh exit
+        env:
+          BSMITH_XILINX_PATH: "/opt/dummy"  # Dummy path for PR tests
+          BSMITH_XILINX_VERSION: "2024.2"
+
+  weekly-full-test:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2-hour timeout for weekly tests
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up environment
+        run: |
+          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
+          echo "Setting up full environment for weekly test"
+          # Increase Docker memory limits
+          sudo sysctl -w vm.max_map_count=262144
+          # Configure larger Docker daemon settings
+          echo '{
+            "default-shm-size": "2G",
+            "default-ulimits": {
+              "nofile": {
+                "Name": "nofile",
+                "Hard": 64000,
+                "Soft": 64000
+              }
+            }
+          }' | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
+
+      - name: Run Docker and tests
+        run: |
+          cd brainsmith
+          chmod +x run-docker.sh
+          BSMITH_DOCKER_FLAGS="--cpus 2 --memory 8G" ./run-docker.sh "cd tests && pytest ./ -v"
+        env:
+          BSMITH_XILINX_PATH: ${{ secrets.BSMITH_XILINX_PATH }}
+          BSMITH_XILINX_VERSION: ${{ secrets.BSMITH_XILINX_VERSION }}
+          XILINXD_LICENSE_FILE: ${{ secrets.XILINXD_LICENSE_FILE }}
+          BSMITH_DOCKER_EXTRA: "-v ${{ secrets.BSMITH_XILINX_PATH }}:/opt/Xilinx -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --memory=6g --memory-swap=8g --shm-size=2g"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: brainsmith/tests/
+          retention-days: 7
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: |
+            brainsmith/tests/**/*.log
+            ${{ env.BSMITH_HOST_BUILD_DIR }}/**/*.log
+          retention-days: 7
