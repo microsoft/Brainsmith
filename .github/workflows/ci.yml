@@ -15,6 +15,9 @@ env:
   BSMITH_DOCKER_PREBUILT: "0"
   BSMITH_DOCKER_NO_CACHE: "1"
   BSMITH_SKIP_DEP_REPOS: "0"
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  
 
 jobs:
   pr-build-test:
@@ -34,13 +37,8 @@ jobs:
 
       - name: Run Docker container
         run: |
-          pwd
-          ls
           chmod +x run-docker.sh
           ./run-docker.sh exit
-        env:
-          BSMITH_XILINX_PATH: "/opt/dummy"  # Dummy path for PR tests
-          BSMITH_XILINX_VERSION: "2024.2"
 
   weekly-full-test:
     if: github.event_name == 'schedule'
@@ -61,14 +59,9 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          cd Brainsmith
-          chmod +x run-docker.sh
-          BSMITH_DOCKER_FLAGS="--cpus 2 --memory 8G" ./run-docker.sh "cd tests && pytest ./ -v"
+          chmod +x run-docker.sh pytest
         env:
-          BSMITH_XILINX_PATH: ${{ secrets.BSMITH_XILINX_PATH }}
-          BSMITH_XILINX_VERSION: ${{ secrets.BSMITH_XILINX_VERSION }}
-          XILINXD_LICENSE_FILE: ${{ secrets.XILINXD_LICENSE_FILE }}
-          BSMITH_DOCKER_EXTRA: "-v ${{ secrets.BSMITH_XILINX_PATH }}:/opt/Xilinx -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --memory=6g --memory-swap=8g --shm-size=2g"
+          BSMITH_DOCKER_EXTRA: "-v ${{ secrets.BSMITH_XILINX_PATH }}:/opt/Xilinx -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
 
       - name: Upload test results
         if: always()

@@ -46,17 +46,19 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Determine run command based on CLI arguments
 if [ -z "$1" ]; then
-  gecho "Running BrainSmith docker container"
+  gecho "Running Brainsmith docker container"
   DOCKER_CMD="bash"
   DOCKER_INTERACTIVE="-it"
 elif [ "$1" = "build_df_core" ] || [ "$1" = "build_dataflow" ]; then
-  JOB_DIR=$(readlink -f "$2")
-  gecho "Running $1 for folder $JOB_DIR"
-  BSMITH_DOCKER_FLAGS+="-v $JOB_DIR:$JOB_DIR "
-  DOCKER_CMD="$1 $JOB_DIR"
+  # TODO: Add support for one-off builds
+  DOCKER_CMD="bash"
   DOCKER_INTERACTIVE="-it"
+elif [ "$1" = "pytest" ]; then
+  JOB_DIR=$(readlink -f "$2")
+  gecho "Running Brainsmith pytest suite"
+  DOCKER_CMD="cd tests && pytest ./ -v"
 else
-  gecho "Running BrainSmith docker container with passed arguments"
+  gecho "Running Brainsmith docker container with passed arguments"
   DOCKER_CMD="$@"
   DOCKER_INTERACTIVE=""
 fi
@@ -82,7 +84,7 @@ mkdir -p $BSMITH_BUILD_DIR
 # TAFK: Temp commented out
 # mkdir -p $BSMITH_SSH_KEY_DIR
 
-# Build Docker image in BrainSmith root directory
+# Build Docker image in Brainsmith root directory
 if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
   OLD_PWD=$(pwd)
   cd $BSMITH_DIR

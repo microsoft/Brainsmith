@@ -149,7 +149,7 @@ def main(args):
     # if os.path.exists(tmp_model_path):
     #     os.remove(tmp_model_path)
 
-    # Run BrainSmith bert job on the generated model
+    # Run Brainsmith bert job on the generated model
     run_job('bert', model, args)
 
     # Extra metadata for handover
