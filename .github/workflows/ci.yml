@@ -30,18 +30,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up environment
-        run: |
-          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
-          echo "Setting up basic environment for PR test"
-
       - name: Run Docker container
         run: |
           chmod +x run-docker.sh
           ./run-docker.sh exit
 
   weekly-full-test:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request'
+    # TODO: Remove PR check for weekly test
     runs-on: pre-release
     timeout-minutes: 120  # 2-hour timeout for weekly tests
     
@@ -61,7 +57,7 @@ jobs:
         run: |
           chmod +x run-docker.sh pytest
         env:
-          BSMITH_DOCKER_EXTRA: "-v ${{ secrets.BSMITH_XILINX_PATH }}:/opt/Xilinx -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
+          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
 
       - name: Upload test results
         if: always()
