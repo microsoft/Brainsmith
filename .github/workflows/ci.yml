@@ -34,7 +34,8 @@ jobs:
 
       - name: Run Docker container
         run: |
-          cd Brainsmith
+          pwd
+          ls
           chmod +x run-docker.sh
           ./run-docker.sh exit
         env:
