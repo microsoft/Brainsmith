@@ -1,5 +1,6 @@
 import pytest
 import onnx
+import os
 import numpy as np
 import finn.core.onnx_exec as oxe
 from abc import ABC, abstractmethod
@@ -19,6 +20,10 @@ from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+from finn.builder.build_dataflow_steps import step_specialize_layers
+from finn.builder.build_dataflow_config import DataflowBuildConfig
+
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_output")
 
 
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
@@ -45,36 +50,16 @@ class OpTest(ABC):
     def model_specialised(
         self,
         model: ModelWrapper,
-        input_tensors: dict,
-        exec_mode: str,
         target_fpga: str,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then returns it.
         The model is specialised differently depending on which execution mode is used (cppsim
         or rtlsim)."""
 
-        # May parameterise this in the future.
-        target_clk_ns = 5
-
-        transform_list = [
-            SpecializeLayers(target_fpga),
-            GiveUniqueNodeNames(),
-            SetExecMode(exec_mode),
-        ]
-
-        if exec_mode == "cppsim":
-            transform_list.append(PrepareCppSim())
-            transform_list.append(CompileCppSim())
-        if exec_mode == "rtlsim":
-            transform_list.append(PrepareIP(target_fpga, target_clk_ns))
-            transform_list.append(HLSSynthIP())
-            transform_list.append(PrepareRTLSim())
-
-        return self.apply_transforms(
-            model=model,
-            input_tensors=input_tensors,
-            transform_list=transform_list,
-            validate=True,
+        return self.apply_builder_step(
+            model,
+            step_specialize_layers,
+            dict(fpga_part=target_fpga, generate_outputs=["SOMETHING"])
         )
 
     @pytest.fixture
@@ -205,3 +190,27 @@ class OpTest(ABC):
                 )
 
         return model
+
+    def apply_builder_step(
+        self,
+        model: ModelWrapper,
+        step: callable, 
+        cfg_settings: dict = {}
+    ) -> ModelWrapper:
+        """Apply a FINN Builder step to a QONNX ModelWrapper. Takes in the Model,
+        the step function to be executed, and any named parameters of that need to be
+        used in the step's DataflowBuildConfig. These named parameters are passed via a
+        dictionary, with the name of each parameter as its key."""
+        
+        # Default non-optional parameters for the DataflowBuildConfig class
+        if 'output_dir' not in cfg_settings:
+            cfg_settings['output_dir'] = os.path.join(OUTPUT_DIR, model.model.graph.name)
+        if 'synth_clk_period_ns' not in cfg_settings:
+            cfg_settings['synth_clk_period_ns'] = 4.0
+        if 'generate_outputs' not in cfg_settings:
+            cfg_settings['generate_outputs'] = []
+
+        # Create a dummy config so we can call the step correctly.
+        config: DataflowBuildConfig = DataflowBuildConfig(**cfg_settings)
+        
+        return step(model, config)
