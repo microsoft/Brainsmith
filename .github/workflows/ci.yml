@@ -2,9 +2,9 @@ name: Brainsmith CI
 
 on:
   push:
-    branches: [ dev/ci-actions ]
+    branches: [ develop, dev/ci-actions ]
   pull_request:
-    branches: [ dev/ci-actions ]
+    branches: [ develop, dev/ci-actions ]
   schedule:
     - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
 
@@ -20,7 +20,7 @@ env:
   
 
 jobs:
-  pr-build-test:
+  docker-build:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 30  # 30-minute timeout for PR builds
@@ -35,7 +35,7 @@ jobs:
           chmod +x run-docker.sh
           ./run-docker.sh exit
 
-  weekly-full-test:
+  pytest-fpgadataflow:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request'
     # TODO: Remove PR check for weekly test
     runs-on: pre-release
@@ -50,8 +50,6 @@ jobs:
       - name: Set up environment
         run: |
           mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
-          echo "Setting up full environment for weekly test"
-          # No need to configure Docker daemon settings - already configured on self-hosted runner
 
       - name: Run Docker and tests
         run: |
@@ -76,3 +74,25 @@ jobs:
             brainsmith/tests/**/*.log
             ${{ env.BSMITH_HOST_BUILD_DIR }}/**/*.log
           retention-days: 7
+          
+  e2e-build:
+    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request'
+    # TODO: Remove PR check for weekly test
+    runs-on: pre-release
+    timeout-minutes: 480 # 8-hour timeout for weekly tests
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up environment
+        run: |
+          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
+
+      - name: Run Docker and tests
+        run: |
+          chmod +x run-docker.sh e2e
+        env:
+          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
