@@ -26,7 +26,7 @@ def forge(blueprint, model, args):
         steps = REGISTRY[blueprint]
     else:
         # TODO: Add functionality to handle custom jobs
-        pass
+        raise RuntimeError(f"Blueprint {blueprint} not found in registry")
 
     # Create readable, unique build directory
     build_dir = os.path.join(os.environ.get("BSMITH_BUILD_DIR"), args.output)

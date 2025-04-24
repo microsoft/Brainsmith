@@ -49,21 +49,16 @@ if [ -z "$1" ]; then
   gecho "Running Brainsmith docker container"
   DOCKER_CMD="bash"
   DOCKER_INTERACTIVE="-it"
-elif [ "$1" = "build_df_core" ] || [ "$1" = "build_dataflow" ]; then
-  # TODO: Add support for one-off builds
-  DOCKER_CMD="bash"
-  DOCKER_INTERACTIVE="-it"
 elif [ "$1" = "pytest" ]; then
   JOB_DIR=$(readlink -f "$2")
   gecho "Running Brainsmith pytest suite"
-  DOCKER_CMD="pytest ./tests -v --log-file=${BSMITH_BUILD_DIR}/pytest.log --log-file-level=INFO "
+  DOCKER_CMD="pytest ./tests/fpgadataflow -v --log-file=${BSMITH_BUILD_DIR}/pytest.log --log-file-level=INFO "
     #    --log-file-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)" \
     #    --log-file-date-format="%Y-%m-%d %H:%M:%S"
   DOCKER_INTERACTIVE=""
 elif [ "$1" = "e2e" ]; then
-  JOB_DIR=$(readlink -f "$2")
-  gecho "Running Brainsmith end-to-end valdiation test"
-  DOCKER_CMD="cd tests/end2end/bert && make single_layer"
+  gecho "Running Brainsmith end-to-end validation test"
+  DOCKER_CMD="cd demos/bert && make single_layer"
   DOCKER_INTERACTIVE=""
 else
   gecho "Running Brainsmith docker container with passed arguments"

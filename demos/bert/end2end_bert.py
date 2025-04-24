@@ -153,7 +153,9 @@ def main(args):
     forge('bert', model, args)
 
     # Extra metadata for handover
-    handover_file = cfg.output_dir + '/stitched_ip/shell_handover.json'
+    build_dir = os.path.join(os.environ.get("BSMITH_BUILD_DIR"), args.output)
+    handover_file = build_dir + '/stitched_ip/shell_handover.json'
+    
     if os.path.exists(handover_file):
         with open(handover_file, "r") as fp:
             handover = json.load(fp)
