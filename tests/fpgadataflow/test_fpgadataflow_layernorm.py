@@ -413,7 +413,7 @@ class TestLayerNorm(OpTest):
                 dict(op_type="LayerNorm",
                     inputs=['X', 'Scale', 'Bias'],
                     outputs=['Y'],
-                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    domain="brainsmith.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     SIMD=simd,
                     preferred_impl_style="hls",

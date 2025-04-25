@@ -52,13 +52,11 @@ if [ -z "$1" ]; then
 elif [ "$1" = "pytest" ]; then
   JOB_DIR=$(readlink -f "$2")
   gecho "Running Brainsmith pytest suite"
-  DOCKER_CMD="pytest ./tests/fpgadataflow -v --log-file=${BSMITH_BUILD_DIR}/pytest.log --log-file-level=INFO "
-    #    --log-file-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)" \
-    #    --log-file-date-format="%Y-%m-%d %H:%M:%S"
+  DOCKER_CMD="cd tests/fpgadataflow && pytest ./ -v --log-file=${BSMITH_BUILD_DIR}/pytest.log --log-file-level=INFO "
   DOCKER_INTERACTIVE=""
 elif [ "$1" = "e2e" ]; then
   gecho "Running Brainsmith end-to-end validation test"
-  DOCKER_CMD="cd demos/bert && make single_layer"
+  DOCKER_CMD="cd demos/bert && make single_layer "
   DOCKER_INTERACTIVE=""
 else
   gecho "Running Brainsmith docker container with passed arguments"

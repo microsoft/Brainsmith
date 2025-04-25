@@ -53,7 +53,8 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          chmod +x run-docker.sh pytest
+          chmod +x run-docker.sh
+          ./run-docker.sh pytest
         env:
           BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
 
@@ -93,6 +94,7 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          chmod +x run-docker.sh e2e
+          chmod +x run-docker.sh
+          ./run-docker.sh e2e
         env:
           BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
