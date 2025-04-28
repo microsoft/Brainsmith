@@ -17,6 +17,7 @@ env:
   BSMITH_SKIP_DEP_REPOS: "0"
   BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
   BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  NUM_DEFAULT_WORKERS: "14"
   
 
 jobs:
@@ -36,8 +37,7 @@ jobs:
           ./run-docker.sh exit
 
   pytest-fpgadataflow:
-    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request'
-    # TODO: Remove PR check for weekly test
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 120  # 2-hour timeout for weekly tests
     
@@ -77,8 +77,7 @@ jobs:
           retention-days: 7
           
   e2e-build:
-    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request'
-    # TODO: Remove PR check for weekly test
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 480 # 8-hour timeout for weekly tests
     
