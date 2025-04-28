@@ -2,7 +2,7 @@
 # Copyright (C) 2025, Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# SPDX-License-Identifier: MIT 
+# SPDX-License-Identifier: MIT
 #
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
@@ -31,7 +31,7 @@ from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 import finn.builder.build_dataflow_config as build_cfg
 import finn.core.onnx_exec as oxe
 
-from finnbrainsmith.util.bert import (
+from brainsmith.jobs.bert.bert_steps import (
         custom_step_remove_head, 
         custom_step_remove_tail, 
         custom_step_cleanup,

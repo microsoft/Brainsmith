@@ -1,8 +1,6 @@
 ############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
@@ -10,6 +8,7 @@
 import pytest
 import onnx
 import finn.core.onnx_exec as oxe
+from op_test import OpTest
 from op_test import OpTest
 from onnx import TensorProto, OperatorSetIdProto, helper
 from qonnx.core.datatype import DataType
@@ -32,13 +31,7 @@ from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
-# from finn.transformation.fpgadataflow.create_dataflow_partition import (
-#     CreateDataflowPartition,
-# )
-# from finn.transformation.fpgadataflow.create_dataflow_partition import (
-#     CreateDataflowPartition,
-# )
-from finnbrainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.expand_norms import ExpandNorms
 
 # Debugging dependencies, to remove
 import os
@@ -57,6 +50,7 @@ import numpy as np
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
+# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 # from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 # from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 
@@ -110,7 +104,7 @@ def build_func_layernorm_graph(
         "FuncLayerNorm",
         [act_in.name],
         [act_out.name],
-        domain="finnbrainsmith.custom_op.general",
+        domain="brainsmith.custom_op.general",
         backend="general",
         axis=-1,
         epsilon=epsilon,
@@ -395,8 +389,45 @@ Below is an example of a test constructed using the OpTest class.
 """
 
 @pytest.mark.parametrize("simd", [1, 2, 4], ids=["SIMD1", "SIMD2", "SIMD4"])
+Below is an example of a test constructed using the OpTest class.
+"""
+
+@pytest.mark.parametrize("simd", [1, 2, 4], ids=["SIMD1", "SIMD2", "SIMD4"])
 @pytest.mark.parametrize("idt", ["INT8", "INT9"])
 @pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
+class TestLayerNorm(OpTest):
+
+    @pytest.fixture
+    def model(self, simd, idt, ifm_dim)->ModelWrapper:
+
+        odt = "FLOAT32"
+        model:ModelWrapper = self.create_model(
+            inputs = [
+                (dict(name='X', elem_type=TensorProto.FLOAT, shape=ifm_dim), idt),
+            ],
+            inits = [
+                dict(tensor=np.ones(ifm_dim[-1]), name="Scale"),
+                dict(tensor=np.zeros(ifm_dim[-1]), name="Bias"),
+            ],
+            outputs= [
+                (dict(name='Y', elem_type=TensorProto.FLOAT, shape=ifm_dim), odt),
+            ],
+            nodes= [
+                dict(op_type="LayerNorm",
+                    inputs=['X', 'Scale', 'Bias'],
+                    outputs=['Y'],
+                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    backend="fpgadataflow",
+                    SIMD=simd,
+                    preferred_impl_style="hls",
+                    ifm_dim=ifm_dim,
+                    NumChannels=ifm_dim[-1],
+                    epsilon=1e-05,
+                    inputDataType=idt,
+                    outputDataType=odt,),
+            ]
+        )
+        return model
 class TestLayerNorm(OpTest):
 
     @pytest.fixture
