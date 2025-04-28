@@ -11,7 +11,7 @@ on:
 env:
   DOCKER_BUILDKIT: 1
   BSMITH_ROOT: ${{ github.workspace }}
-  BSMITH_HOST_BUILD_DIR: ${{ github.workspace }}/build
+  BSMITH_BUILD_DIR: ${{ github.workspace }}/build
   BSMITH_DOCKER_PREBUILT: "0"
   BSMITH_DOCKER_NO_CACHE: "1"
   BSMITH_SKIP_DEP_REPOS: "0"
@@ -52,7 +52,7 @@ jobs:
 
       - name: Set up environment
         run: |
-          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
+          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
 
       - name: Run Docker and tests
         run: |
@@ -76,7 +76,7 @@ jobs:
           name: test-logs
           path: |
             brainsmith/tests/**/*.log
-            ${{ env.BSMITH_HOST_BUILD_DIR }}/**/*.log
+            ${{ env.BSMITH_BUILD_DIR }}/**/*.log
           retention-days: 7
           
   e2e-build:
@@ -93,7 +93,7 @@ jobs:
 
       - name: Set up environment
         run: |
-          mkdir -p ${{ env.BSMITH_HOST_BUILD_DIR }}
+          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
 
       - name: Run Docker and tests
         run: |
