@@ -23,7 +23,7 @@ env:
 jobs:
   docker-build:
     if: github.event_name == 'schedule' 
-    # if: github.event_name == 'push' || github.event_name == 'pull_request' # Temporarily disabled for validation
+    # github.event_name == 'pull_request' # Temporarily disabled for validation
     runs-on: pre-release
     timeout-minutes: 30  # 30-minute timeout for PR builds
     steps:
@@ -80,7 +80,7 @@ jobs:
           retention-days: 7
           
   e2e-build:
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     # TAFK TODO: Remove push trigger after debugging
     runs-on: pre-release
     timeout-minutes: 480 # 8-hour timeout for weekly tests
