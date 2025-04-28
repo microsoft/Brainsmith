@@ -37,7 +37,11 @@ jobs:
           ./run-docker.sh exit
 
   pytest-fpgadataflow:
+<<<<<<< HEAD
     if: github.event_name == 'schedule' || github.event_name == 'pull_request' || github.event_name == 'push'
+=======
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+>>>>>>> 0393f66b51986a7aaf97c5b0fa7eaf8d3501b273
     runs-on: pre-release
     timeout-minutes: 120  # 2-hour timeout for weekly tests
     
@@ -77,7 +81,11 @@ jobs:
           retention-days: 7
           
   e2e-build:
+<<<<<<< HEAD
     if: github.event_name == 'schedule' || github.event_name == 'pull_request' || github.event_name == 'push'
+=======
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+>>>>>>> 0393f66b51986a7aaf97c5b0fa7eaf8d3501b273
     runs-on: pre-release
     timeout-minutes: 480 # 8-hour timeout for weekly tests
     
