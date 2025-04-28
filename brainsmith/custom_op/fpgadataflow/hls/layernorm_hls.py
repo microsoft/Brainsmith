@@ -51,7 +51,7 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
     def docompute(self):
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
-                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_{self.hls_sname()}, out_{self.hls_sname()});
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out0_V);
             """
         ]
 
@@ -59,18 +59,18 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
             f"""
             void {self.onnx_node.name}(
-                hls::stream<hls::vector<TI,SIMD>> &in0_{self.hls_sname()},
-                hls::stream<hls::vector<TO,SIMD>> &out_{self.hls_sname()}
+                hls::stream<hls::vector<TI,SIMD>> &in0_V,
+                hls::stream<hls::vector<TO,SIMD>> &out0_V
                 )
             """
         ]
 
     def pragmas(self):
         self.code_gen_dict["$PRAGMAS$"] = [
-            f"#pragma HLS interface AXIS port=in0_{self.hls_sname()}",
-            f"#pragma HLS interface AXIS port=out_{self.hls_sname()}",
-            f"#pragma HLS aggregate variable=in0_{self.hls_sname()} compact=bit",
-            f"#pragma HLS aggregate variable=out_{self.hls_sname()} compact=bit",
+            f"#pragma HLS interface AXIS port=in0_V",
+            f"#pragma HLS interface AXIS port=out0_V",
+            f"#pragma HLS aggregate variable=in0_V compact=bit",
+            f"#pragma HLS aggregate variable=out0_V compact=bit",
             f"#pragma HLS interface ap_ctrl_none port=return",
             f"#pragma HLS dataflow disable_start_propagation",
         ]
@@ -110,15 +110,15 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
             super().toggle_clk(sim)
             io_dict = {
                 "inputs": {"in0": rtlsim_inp},
-                "outputs":{"out": []}
+                "outputs":{"out0": []}
                     }
             self.rtlsim_multi_io(sim, io_dict)
-            out = io_dict["outputs"]["out"]
+            out = io_dict["outputs"]["out0"]
 
             odt = self.get_output_datatype()
             target_bits = odt.bitwidth()
             packed_bits = self.get_outstream_width()
-            out_npy_path = "{}/output.npy".format(code_gen_dir)
+            out_npy_path = "{}/output_0.npy".format(code_gen_dir)
             out_shape = self.get_folded_output_shape()
             rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
 
@@ -152,16 +152,16 @@ class LayerNorm_hls(LayerNorm, BS_HLSBackend):
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             static hls::stream<hls::vector<TI,SIMD>> in0_V;
-            static hls::stream<hls::vector<TO,SIMD>> out_V;
+            static hls::stream<hls::vector<TO,SIMD>> out0_V;
 
             npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
-            while(out_V.size() != stream_size){{
-                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out_V);
+            while(out0_V.size() != stream_size){{
+                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out0_V);
             }}
 
-            vectorstream2npy<TO, float, SIMD>(out_V, {oshape_str}, "{path}/output.npy");
+            vectorstream2npy<TO, float, SIMD>(out0_V, {oshape_str}, "{path}/output_0.npy");
             """
         ]
         self.save_as_npy()
