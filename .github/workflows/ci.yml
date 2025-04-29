@@ -2,9 +2,9 @@ name: Brainsmith CI
 
 on:
   push:
-    branches: [ develop, dev/ci-actions ]
+    branches: [ develop ]
   pull_request:
-    branches: [ develop, dev/ci-actions ]
+    branches: [ develop ]
   schedule:
     - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
 
@@ -22,8 +22,7 @@ env:
 
 jobs:
   docker-build:
-    if: github.event_name == 'schedule' 
-    # github.event_name == 'pull_request' # Temporarily disabled for validation
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 30  # 30-minute timeout for PR builds
     steps:
@@ -37,12 +36,32 @@ jobs:
           chmod +x run-docker.sh
           ./run-docker.sh exit
 
-  pytest-fpgadataflow:
-    if: github.event_name == 'schedule' 
-    # || github.event_name == 'pull_request' || github.event_name == 'push' # Temporarily disabled for validation
-    # TAFK TODO: Remove push trigger after debugging
+  e2e-build:
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
-    timeout-minutes: 120  # 2-hour timeout for weekly tests
+    timeout-minutes: 480 # 8-hour timeout
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up environment
+        run: |
+          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
+
+      - name: Run Docker and tests
+        run: |
+          chmod +x run-docker.sh
+          ./run-docker.sh e2e
+        env:
+          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
+
+  pytest-fpgadataflow:
+    if: github.event_name == 'schedule'
+    runs-on: pre-release
+    timeout-minutes: 240 # 4-hour timeout for weekly tests
     
     steps:
       - name: Checkout repository
@@ -78,26 +97,3 @@ jobs:
             brainsmith/tests/**/*.log
             ${{ env.BSMITH_BUILD_DIR }}/**/*.log
           retention-days: 7
-          
-  e2e-build:
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
-    # TAFK TODO: Remove push trigger after debugging
-    runs-on: pre-release
-    timeout-minutes: 480 # 8-hour timeout for weekly tests
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up environment
-        run: |
-          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
-
-      - name: Run Docker and tests
-        run: |
-          chmod +x run-docker.sh
-          ./run-docker.sh e2e
-        env:
-          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
