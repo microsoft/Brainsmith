@@ -60,16 +60,22 @@ class OpTest(ABC):
         self,
         model: ModelWrapper,
         target_fpga: str,
+        save_intermediate_models: bool,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then returns it.
         The model is specialised differently depending on which execution mode is used (cppsim
         or rtlsim)."""
 
-        return self.apply_builder_step(
+        specialised_model: ModelWrapper = self.apply_builder_step(
             model,
             step_specialize_layers,
             dict(fpga_part=target_fpga, generate_outputs=["SOMETHING"])
         )
+
+        if save_intermediate_models:
+            specialised_model.save()
+
+        return specialised_model
 
     @pytest.fixture
     def target_fpga(self) -> str:
@@ -97,6 +103,10 @@ class OpTest(ABC):
             )
             input_t[input.name] = input_value
         return input_t
+
+    @pytest.fixture
+    def save_intermediate_models(self, request) -> dict:
+        return False
 
     ##########################################
     #                  Tests                 #
