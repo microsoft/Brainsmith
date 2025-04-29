@@ -22,7 +22,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
@@ -85,10 +85,10 @@ def make_single_hwsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType["U
         "HWSoftmax",
         ["global_in"],
         ["global_out"],
-        domain="finnbrainsmith.custom_op.fpgadataflow",
+        domain="brainsmith.custom_op.fpgadataflow",
         backend="fpgadataflow",
         ifm_dim=list(ifm_dim),
-        input_data_type = idt.name,
+        input_data_type=idt.name,
         simd=simd,
         preferred_impl_style=impl_style,
         rtlsim_backend="pyxsi",
