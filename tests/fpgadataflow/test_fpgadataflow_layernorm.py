@@ -20,8 +20,6 @@ from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
-from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -46,13 +44,9 @@ from qonnx.transformation.general import (
 import finn.transformation.streamline.absorb as absorb
 import numpy as np
 
-# from finn.builder.build_dataflow_config import DataflowBuildConfig
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
-# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 
 test_fpga_part = "xczu3eg-sbva484-1-e"
 target_clk_ns = 5
