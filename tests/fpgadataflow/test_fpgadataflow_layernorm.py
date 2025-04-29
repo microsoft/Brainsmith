@@ -19,7 +19,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
+import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
@@ -412,7 +412,7 @@ class TestLayerNorm(OpTest):
                 dict(op_type="LayerNorm",
                     inputs=['X', 'Scale', 'Bias'],
                     outputs=['Y'],
-                    domain="finnbrainsmith.custom_op.fpgadataflow",
+                    domain="brainsmith.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     SIMD=simd,
                     preferred_impl_style="hls",
