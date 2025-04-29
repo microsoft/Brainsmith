@@ -9,6 +9,7 @@ import pytest
 import onnx
 import finn.core.onnx_exec as oxe
 from op_test import OpTest
+from op_test import OpTest
 from onnx import TensorProto, OperatorSetIdProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
@@ -18,8 +19,7 @@ from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZer
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
+import finnbrainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
@@ -31,7 +31,7 @@ from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
-from finnbrainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.expand_norms import ExpandNorms
 
 # Debugging dependencies, to remove
 import os
@@ -50,6 +50,7 @@ import numpy as np
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
+# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 # from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 # from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 
@@ -411,7 +412,7 @@ class TestLayerNorm(OpTest):
                 dict(op_type="LayerNorm",
                     inputs=['X', 'Scale', 'Bias'],
                     outputs=['Y'],
-                    domain="brainsmith.custom_op.fpgadataflow",
+                    domain="finnbrainsmith.custom_op.fpgadataflow",
                     backend="fpgadataflow",
                     SIMD=simd,
                     preferred_impl_style="hls",
