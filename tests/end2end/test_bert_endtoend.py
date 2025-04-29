@@ -31,39 +31,9 @@ from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 import finn.builder.build_dataflow_config as build_cfg
 import finn.core.onnx_exec as oxe
 
-from brainsmith.jobs.bert.bert_steps import (
-        custom_step_remove_head, 
-        custom_step_remove_tail, 
-        custom_step_cleanup,
-        custom_step_infer_hardware, 
-        custom_streamlining_step, 
-        custom_step_qonnx2finn
-)
-
+from brainsmith.blueprints.bert import BUILD_STEPS
 from bert_testing_utils import create_dynamic_fixtures, model 
 
-# The default steps
-from finn.builder.build_dataflow_steps import (
-    step_qonnx_to_finn,
-    step_tidy_up,
-    step_streamline,
-    step_convert_to_hw,
-    step_create_dataflow_partition,
-    step_specialize_layers,
-    step_target_fps_parallelization,
-    step_apply_folding_config,
-    step_minimize_bit_width,
-    step_generate_estimate_reports,
-    step_hw_codegen,
-    step_hw_ipgen,
-    step_set_fifo_depths,
-    step_create_stitched_ip,
-    step_measure_rtlsim_performance,
-    step_out_of_context_synthesis,
-    step_synthesize_bitfile,
-    step_make_pynq_driver,
-    step_deployment_package,
-)
 
 test_cfg = build_cfg.DataflowBuildConfig(
         standalone_thresholds=True,
@@ -92,36 +62,14 @@ def save_dashboard():
     with open("end2end_test_dashboard.json", "w") as fp:
         json.dump(dashboard, fp, indent=4)
 
-steps = [  
+create_dynamic_fixtures(BUILD_STEPS, globals(), test_cfg)
 
-    # Cleanup and custom graph surgery
-    custom_step_cleanup,  
-    custom_step_remove_head,  
-    custom_step_remove_tail,  
-    custom_step_qonnx2finn, 
-    custom_streamlining_step,  
-    custom_step_infer_hardware,  
-    step_create_dataflow_partition,
-    step_specialize_layers,
-
-    # How far do we get
-    step_target_fps_parallelization,
-    step_apply_folding_config,
-    step_minimize_bit_width,
-    step_generate_estimate_reports,
-    step_hw_codegen,
-    step_hw_ipgen,
-    step_set_fifo_depths,
-    step_create_stitched_ip,
-]  
-  
-create_dynamic_fixtures(steps, globals(), test_cfg)
 
 ##############################################
 #    Test buildflow steps 
 ##############################################
 # Generate tests for each step and at the start a complete model generation
-for step_func in steps:
+for step_func in BUILD_STEPS:
     def test_model_generation(request, step_func=step_func):
         step_fixture = request.getfixturevalue(step_func.__name__)
         _ = step_fixture.transform(InferShapes())
@@ -130,7 +78,6 @@ for step_func in steps:
     test_model_generation.__name__ = test_func_name
 
     globals()[test_func_name] = pytest.mark.usefixtures(step_func.__name__)(test_model_generation)
-
 
 
 ##############################################
@@ -292,6 +239,3 @@ def test_hardware_generation_progress(step_hw_ipgen, save_dashboard):
             d[node.name]["HWGEN"] = False
         d[node.name]["RTLSIM"] = False
     dashboard['progress'] = d
-                
-
-
