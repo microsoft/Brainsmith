@@ -18,7 +18,24 @@ export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
 export FINN_DEPS_DIR="${BSMITH_DIR}/deps"
 export FINN_ROOT="${FINN_DEPS_DIR}/finn"
 
-source docker/terminal-utils.sh
+# Define colors for terminal output
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Colorful terminal output functions
+yecho () {
+  echo -e "${YELLOW}WARNING: $1${NC}"
+}
+
+gecho () {
+  echo -e "${GREEN}$1${NC}"
+}
+
+recho () {
+  echo -e "${RED}$1${NC}"
+}
 
 # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
 # To be fixed in future Ubuntu versions (https://bugs.launchpad.net/ubuntu/+source/setuptools/+bug/1994016)
@@ -31,11 +48,6 @@ pip install --user -e ${BSMITH_DIR}/deps/finn-experimental
 pip install --user -e ${BSMITH_DIR}/deps/brevitas
 # finn
 pip install --user -e ${BSMITH_DIR}/deps/finn
-# onnxscript has an issue with setuptools that I can't figure out
-# so manually install it's dependencies here and set PYTHONPATH
-# TODO: Reconcile onnxscript deps w/ requirements.txt
-pip install numpy onnx>=1.16 typing_extensions>=4.10 ml_dtypes packaging
-export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/onnxscript
 
 if [ -f "${BSMITH_DIR}/setup.py" ];then
   # run pip install for Brainsmith
@@ -118,4 +130,8 @@ fi
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
 export PATH=$PATH:$HOME/.local/bin
 # execute the provided command(s) as root
-exec "$@"
+if [ $# -gt 0 ]; then
+    exec bash -c "$*"
+else
+    exec bash
+fi

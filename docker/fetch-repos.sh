@@ -17,14 +17,13 @@ XIL_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
-ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
 FINN_COMMIT="custom/transformer"
 QONNX_COMMIT="custom/brainsmith"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
-HLSLIB_COMMIT="7783acaac835e702da25aa6b7103254b3cbcdf83"
+HLSLIB_COMMIT="5c5ad631e3602a8dd5bd3399a016477a407d6ee7"
 OMX_COMMIT="0b59762f9e4c4f7e5aa535ee9bc29f292434ca7a"
 AVNET_BDF_COMMIT="2d49cfc25766f07792c0b314489f21fe916b639b"
 XIL_BDF_COMMIT="8cf4bb674a919ac34e3d99d8d71a9e60af93d14e"
@@ -32,7 +31,6 @@ RFSOC4x2_BDF_COMMIT="13fb6f6c02c7dfd7e4b336b18b959ad5115db696"
 KV260_BDF_COMMIT="98e0d3efc901f0b974006bc4370c2a7ad8856c79"
 EXP_BOARD_FILES_MD5="226ca927a16ea4ce579f1332675e9e9a"
 PYXSI_COMMIT="941bb62a4a3cc2c8cf2a9b89187c60bb0b776658"
-ONNXSCRIPT_COMMIT="main"
 
 FINN_DIR="finn"
 QONNX_DIR="qonnx"
@@ -46,7 +44,6 @@ XIL_BDF_DIR="xil-bdf"
 RFSOC4x2_BDF_DIR="rfsoc4x2-bdf"
 KV260_SOM_BDF_DIR="kv260-som-bdf"
 PYXSI_DIR="pyxsi"
-ONNXSCRIPT_DIR="onnxscript"
 
 # Validate environment variables for licensed Xilinx tools
 if [ -z "$BSMITH_XILINX_PATH" ];then
@@ -121,7 +118,6 @@ fetch_repo $XIL_BDF_URL $XIL_BDF_COMMIT $XIL_BDF_DIR
 fetch_repo $RFSOC4x2_BDF_URL $RFSOC4x2_BDF_COMMIT $RFSOC4x2_BDF_DIR
 fetch_repo $KV260_BDF_URL $KV260_BDF_COMMIT $KV260_SOM_BDF_DIR
 fetch_repo $PYXSI_URL $PYXSI_COMMIT $PYXSI_DIR
-fetch_repo $ONNXSCRIPT_URL $ONNXSCRIPT_COMMIT $ONNXSCRIPT_DIR
 
 # Can skip downloading of board files entirely if desired
 if [ "$FINN_SKIP_BOARD_FILES" = "1" ]; then
