@@ -25,7 +25,7 @@ import brevitas.onnx as bo
 from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
-from brainsmith.core.run_job import run_job
+from brainsmith.core.hw_compiler import forge
 
 
 def gen_initial_bert_model(
@@ -146,14 +146,16 @@ def main(args):
         seqlen=args.seqlen
     )
     model = onnx.load(tmp_model_path)
-    # if os.path.exists(tmp_model_path):
-    #     os.remove(tmp_model_path)
+    if os.path.exists(tmp_model_path):
+        os.remove(tmp_model_path)
 
-    # Run BrainSmith bert job on the generated model
-    run_job('bert', model, args)
+    # Run Brainsmith bert job on the generated model
+    forge('bert', model, args)
 
     # Extra metadata for handover
-    handover_file = cfg.output_dir + '/stitched_ip/shell_handover.json'
+    build_dir = os.path.join(os.environ.get("BSMITH_BUILD_DIR"), args.output)
+    handover_file = build_dir + '/stitched_ip/shell_handover.json'
+    
     if os.path.exists(handover_file):
         with open(handover_file, "r") as fp:
             handover = json.load(fp)
@@ -179,7 +181,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # TODO: Properly parameterize these currently hardcoded values
-    args.job = "bert"
     args.save_intermediate = True
     args.standalone_thresholds = True
     args.fifosim_n_inferences = 2
