@@ -18,7 +18,24 @@ export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
 export FINN_DEPS_DIR="${BSMITH_DIR}/deps"
 export FINN_ROOT="${FINN_DEPS_DIR}/finn"
 
-source docker/terminal-utils.sh
+# Define colors for terminal output
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Colorful terminal output functions
+yecho () {
+  echo -e "${YELLOW}WARNING: $1${NC}"
+}
+
+gecho () {
+  echo -e "${GREEN}$1${NC}"
+}
+
+recho () {
+  echo -e "${RED}$1${NC}"
+}
 
 # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
 # To be fixed in future Ubuntu versions (https://bugs.launchpad.net/ubuntu/+source/setuptools/+bug/1994016)
@@ -117,4 +134,8 @@ fi
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
 export PATH=$PATH:$HOME/.local/bin
 # execute the provided command(s) as root
-exec "$@"
+if [ $# -gt 0 ]; then
+    exec bash -c "$*"
+else
+    exec bash
+fi

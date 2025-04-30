@@ -8,7 +8,7 @@ This repository is in a pre-release state and under active co-devlopment by Micr
 1. Set environment variables (separate from FINN variables), example below:
 ```
 export BSMITH_ROOT="~/brainsmith"
-export BSMITH_HOST_BUILD_DIR="~/builds/brainsmith"
+export BSMITH_BUILD_DIR="~/builds/brainsmith"
 export BSMITH_XILINX_PATH="/tools/Xilinx"
 export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
@@ -28,7 +28,7 @@ git clone git@github.com:microsoft/Brainsmith.git
 
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
 ```
-cd brainsmith/jobs/bert
+cd tests/end2end/bert
 make single_layer
 ```
 
