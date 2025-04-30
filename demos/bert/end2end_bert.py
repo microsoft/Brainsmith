@@ -9,7 +9,9 @@
 
 import warnings
 warnings.simplefilter("ignore")
-import onnx  
+import onnx
+import onnxscript
+from onnxscript.utils import graph_view_utils as gvu
 import os
 import argparse
 import torch
@@ -65,6 +67,36 @@ def gen_initial_bert_model(
     }
 
     input_names = inp.keys()
+
+    onnx_model = torch.onnx.export(model, (input_ids), dynamo=True)
+    onnx_model.save("bert-large-dynamo.onnx")
+    model_proto = onnx.load("bert-large-dynamo.onnx")
+    model_ir    = onnxscript.ir.serde.deserialize_model(model_proto)
+    graph       = model_ir.graph
+    graph = gvu.add_metadata_to_unannotated_constant_nodes(graph)
+    model_proto = onnxscript.ir.serde.serialize_model(model_ir)
+    onnx.save(model_proto, "bert-large-dynamo-constants-annotated.onnx", save_as_external_data=True, all_tensors_to_one_file=True, location="bert-large-dynamo-constants-annotated.onnx.data")
+
+    P = gvu.PytorchHierarchyNode()
+    unadded_nodes = []
+    for node in graph._nodes:
+        added = P.add_node(node)
+        if not added:
+            unadded_nodes.append(node)
+    P.print_hierarchy()
+    print(f"Total nodes: {len(graph._nodes)}")
+    print(f"Unadded nodes: {len(unadded_nodes)}")
+    for node in unadded_nodes:
+        print(f"unadded node: {node}")
+    layer_0_graph_view = gvu.bGraphView('bert-large-layer0', P.get_nodes(['','encoder','encoder.layer.0']))
+    print(f"Layer 0 graph view: {len(layer_0_graph_view._nodes)}")
+    single_layer_0_model = onnxscript.ir.Model(layer_0_graph_view, ir_version=10)
+    proto = onnxscript.ir.serde.serialize_model(single_layer_0_model)
+    onnx.save(proto, 'bert-large-layer-0.onnx')
+
+
+    exit()
+
     model = symbolic_trace(model, input_names)
 
     pre_output = model(**inp)
@@ -118,9 +150,10 @@ def gen_initial_bert_model(
 
     quant_model = layerwise_quantize(model, compute_layer_map=layerwise_compute_layer_map)
     quant_model.to(dtype=dtype)
+    print("calibrating...")
     with torch.no_grad(), calibration_mode(quant_model):
         quant_model(**inp)
-
+    print("exporting...")
     with torch.no_grad():
         bo.export_qonnx(
             quant_model,
@@ -145,6 +178,8 @@ def main(args):
         bitwidth=args.bitwidth,
         seqlen=args.seqlen
     )
+    print("done generating initial model")
+    exit()
     model = onnx.load(tmp_model_path)
     if os.path.exists(tmp_model_path):
         os.remove(tmp_model_path)
