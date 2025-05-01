@@ -14,6 +14,7 @@ import numpy as np
 import finn.core.onnx_exec as oxe
 from abc import ABC, abstractmethod
 from typing import List
+from warnings import warn
 from onnx import helper, numpy_helper, OperatorSetIdProto
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
@@ -69,24 +70,22 @@ class OpTest(ABC):
         specialised_model: ModelWrapper = self.apply_builder_step(
             model,
             step_specialize_layers,
-            dict(fpga_part=target_fpga, generate_outputs=["SOMETHING"])
+            dict(fpga_part=target_fpga)
         )
-
-        if save_intermediate_models:
-            specialised_model.save()
 
         return specialised_model
 
     @pytest.fixture
     def target_fpga(self) -> str:
         """The fpga we're targeting for testing. Can be overridden by test classes."""
+
         return "xcv80-lsva4737-2MHP-e-S"
 
     @pytest.fixture
     def target_node(self) -> int:
         """The index of the node in the model we're focusing on. Allows for multiple nodes to be present,
-        with tests that only target a specific node. Defaults to the first node. Can be overridden.
-        """
+        with tests that only target a specific node. Defaults to the first node. Can be overridden."""
+
         return 0
 
     @pytest.fixture
@@ -105,8 +104,51 @@ class OpTest(ABC):
         return input_t
 
     @pytest.fixture
-    def save_intermediate_models(self, request) -> dict:
-        return False
+    def save_intermediate_models(self) -> dict:
+        """TODO: Comment"""
+
+        return True
+
+    @pytest.fixture(autouse=True)
+    def auto_saver(
+        self,
+        request: pytest.FixtureRequest,
+        save_intermediate_models: bool
+    ):
+        """TODO: Comment"""
+
+        if save_intermediate_models:
+
+            # Attempt to make the directory we'll store our intermediate models in.
+            models_directory = os.path.join(OUTPUT_DIR, request.module.__name__)
+            try:
+                os.mkdir(models_directory)
+            except FileExistsError:
+                warn(f"Overwriting intermediate models in existing directory {models_directory}.")
+
+            # Save the output of each ModelWrapper fixture that starts with "model"
+            # (i.e. model, model_specialised). Assumes these fixtures return ModelWrappers.
+            for fixture in filter(lambda x: x.startswith("model"), request.fixturenames):
+
+                filename = os.path.join(models_directory, fixture) + ".onnx"
+                output = request.getfixturevalue(fixture)
+
+                if isinstance(output, ModelWrapper):
+                    output.save(filename)
+                else:
+                    raise TypeError(f"Model fixture {fixture} has return type {type(output)}. Expected ModelWrapper.")
+
+        return
+
+    @pytest.fixture(autouse=True)
+    def create_output_dir(self):
+        """Automatically makes a test output directory if none exists. This fixture auto-runs
+        before all test functions. If the directory exists, this fixture does nothing."""
+
+        try:
+            os.mkdir(OUTPUT_DIR)
+        except FileExistsError:
+            pass
 
     ##########################################
     #                  Tests                 #
@@ -231,5 +273,5 @@ class OpTest(ABC):
 
         # Create a dummy config so we can call the step correctly.
         config: DataflowBuildConfig = DataflowBuildConfig(**cfg_settings)
-        
+
         return step(model, config)
