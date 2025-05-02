@@ -13,11 +13,50 @@ import json
 import os
 import shutil
 import uuid
+from onnx import StringStringEntryProto
 from onnxsim import simplify
 from qonnx.util.cleanup import cleanup
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
 from brainsmith.blueprints import REGISTRY
+
+
+def perform_model_preprocessing(model, model_dir, build_dir, args):
+
+    # Attempt a cleanup of previous runs (This could all be a lot nicer...)
+    # if os.path.exists("./_tmp_onnxsim.onnx"):
+    #     os.remove("./_tmp_onnxsim.onnx")
+    # if os.path.exists("./_tmp_onnxsim_with_md.onnx"):
+    #     os.remove("./_tmp_onnxsim_with_md.onnx")
+
+    # Extract metadata from the original model
+    metadata = {}
+    for node in model.graph.node:
+        md = {}
+        for prop in node.metadata_props:
+            md[prop.key] = prop.value
+        metadata[node.name] = md
+
+    # Run model Simplification
+    simp_model_no_md, check = simplify(model, perform_optimization=False)
+    if not check:
+        raise RuntimeError("Unable to simplify the Brevitas bert model")
+    if args.save_intermediate:
+        onnx.save(simp_model_no_md, f"{model_dir}/simp_no_md.onnx")
+
+    # Add the metadata back to the simplified model
+    for node in simp_model_no_md.graph.node:
+        if node.name in metadata:
+            md_props = metadata[node.name]
+            for key,value in md_props.items():
+                new_md = StringStringEntryProto(key=key,value=value)
+                node.metadata_props.append(new_md)
+
+    simp_model_with_md = simp_model_no_md
+
+    #onnx.save(cleaned_mod, "./_tmp_onnxsim_with_md.onnx",save_as_external_data=True, all_tensors_to_one_file=True, location="_tmp_onnxsim_with_md.onnx.data")
+    onnx.save(simp_model_with_md, model_dir+"/simp.onnx")
+    cleanup(in_file=model_dir+"/simp.onnx", out_file=build_dir+"/df_input.onnx")
 
 
 def forge(blueprint, model, args):
@@ -34,13 +73,7 @@ def forge(blueprint, model, args):
     os.makedirs(model_dir)
 
     # Perform model preprocessing
-    model, check = simplify(model)
-    if not check:
-        raise RuntimeError("Unable to simplify the Brevitas bert model")
-    if args.save_intermediate:
-        onnx.save(model, f"{model_dir}/simp.onnx")
-    # TODO: Make model saving optional for cleanup
-    cleanup(in_file=model_dir+"/simp.onnx", out_file=build_dir+"/df_input.onnx")
+    perform_model_preprocessing(model, model_dir, build_dir, args)
 
     # TODO: Add general way to generte numpy input/expected output
 
