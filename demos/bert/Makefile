@@ -33,4 +33,4 @@ l1_simd12_pe8:
 
 bert_large:
 	python gen_initial_folding.py --simd 64 --pe 16 --num_layers 2 -t 4 -o ./configs/bert_large.json
-	python end2end_bert.py -o bert_large -n 16 -l 2 -z 1024 -i 4096 -x True -p ./configs/bert_large.json
+	python end2end_bert.py -o bert_large_mlo -n 16 -l 2 -z 1024 -i 4096 -x True -p ./configs/bert_large.json
