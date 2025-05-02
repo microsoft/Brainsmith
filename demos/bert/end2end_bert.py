@@ -17,6 +17,7 @@ import json
 from torch import nn
 from transformers import BertConfig, BertModel
 from transformers.utils.fx import symbolic_trace
+import brevitas.export as bexport
 import brevitas.nn as qnn
 from brevitas.quant import Int8ActPerTensorFloat
 from brevitas.quant import Int8WeightPerTensorFloat
@@ -121,6 +122,9 @@ def gen_initial_bert_model(
     with torch.no_grad(), calibration_mode(quant_model):
         quant_model(**inp)
 
+    custom_translation_table = dict()
+    custom_translation_table[torch.ops.mylibrary.int_quant.default] = bexport.onnx.qonnx.function.Quant
+
     import time
     start_time = time.time()
     with torch.no_grad():
@@ -131,12 +135,14 @@ def gen_initial_bert_model(
             do_constant_folding=True,
             input_names=['input_ids'],
             opset_version=17,
-            dynamo=True
+            dynamo=True,
+            custom_translation_table=custom_translation_table
         )
     end_time = time.time()
     print(f"elapsed qonnx export time {(end_time-start_time)/60} mins")
     print(f"QOnnx export done.")
-    exit(1)
+    print(f"Exported model to {outfile}")
+
 
 def main(args):
     # TODO: Replace this "save and delete" with proper optional saving
