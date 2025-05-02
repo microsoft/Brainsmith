@@ -123,7 +123,7 @@ def gen_initial_bert_model(
         quant_model(**inp)
 
     custom_translation_table = dict()
-    custom_translation_table[torch.ops.mylibrary.int_quant.default] = bexport.onnx.qonnx.function.Quant
+    custom_translation_table[torch.ops.mylibrary.int_quant.default] = bexport.onnx.qonnx.function.QuantWrapper
 
     import time
     start_time = time.time()
