@@ -21,15 +21,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
 from qonnx.util.basic import gen_finn_dt_tensor
 from qonnx.transformation.base import Transformation
-from qonnx.transformation.general import GiveUniqueNodeNames
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
-from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
-from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
-from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
-from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
-from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
-from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
-from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.builder.build_dataflow_steps import step_specialize_layers
 from finn.builder.build_dataflow_config import DataflowBuildConfig
 
@@ -63,9 +55,9 @@ class OpTest(ABC):
         target_fpga: str,
         save_intermediate_models: bool,
     ) -> ModelWrapper:
-        """A fixture that applys layer specialisation to the 'model' fixture, then returns it.
-        The model is specialised differently depending on which execution mode is used (cppsim
-        or rtlsim)."""
+        """A fixture that applys layer specialisation to the 'model' fixture, then
+        returns it. The model is specialised differently depending on which execution
+        mode is used (cppsim or rtlsim)."""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
             model,
@@ -83,8 +75,9 @@ class OpTest(ABC):
 
     @pytest.fixture
     def target_node(self) -> int:
-        """The index of the node in the model we're focusing on. Allows for multiple nodes to be present,
-        with tests that only target a specific node. Defaults to the first node. Can be overridden."""
+        """The index of the node in the model we're focusing on. Allows for multiple
+        nodes to be present, with tests that only target a specific node. Defaults to
+        the first node. Can be overridden."""
 
         return 0
 
@@ -115,7 +108,12 @@ class OpTest(ABC):
         request: pytest.FixtureRequest,
         save_intermediate_models: bool
     ):
-        """TODO: Comment"""
+        """Saves the output of each intermediate model step to a .onnx file.
+        
+        If the 'save_intermediate_models' fixture evaluates to true, this fixture
+        automatically scrapes all fixtures with names that start with 'model'
+        (i.e. 'model', 'model_specialised') and saves their output to a .onnx file
+        (if the fixtures return a ModelWrapper)."""
 
         if save_intermediate_models:
 
@@ -142,8 +140,9 @@ class OpTest(ABC):
 
     @pytest.fixture(autouse=True)
     def create_output_dir(self):
-        """Automatically makes a test output directory if none exists. This fixture auto-runs
-        before all test functions. If the directory exists, this fixture does nothing."""
+        """Automatically makes a test output directory if none exists. This
+        fixture auto-runs before all test functions. If the directory exists,
+        this fixture does nothing."""
 
         try:
             os.mkdir(OUTPUT_DIR)
