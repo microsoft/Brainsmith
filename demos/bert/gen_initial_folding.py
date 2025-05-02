@@ -101,7 +101,12 @@ def main(args):
 
         # DynMVUs
         for m in range(0, 2):
-            d = dynmvu(args.pe, int(args.simd / 3))
+            if args.simd % 3 == 0:
+                d = dynmvu(args.pe, int(args.simd/3))
+            elif args.simd % 4 == 0:
+                d = dynmvu(args.pe, int(args.simd/4))
+            else:
+                d = dynmvu(args.pe, args.simd)
             c[f"DynMVU_rtl_{m + (2 * n)}"] = d
 
         # EltwiseAdds
