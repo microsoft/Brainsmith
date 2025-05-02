@@ -15,8 +15,134 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
 )
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 logger = logging.getLogger(__name__)
+
+def _debug_node(node: Node, prefix: str = "") -> None:
+    """Debug helper to print node structure."""
+    if node is None:
+        return
+    logger.debug(f"{prefix}Node type: {node.type}, text: {node.text.decode('utf8')}")
+    for child in node.children:
+        _debug_node(child, prefix + "  ")
+
+def parse_port_declaration(node: Node) -> Optional[Port]:
+    """Parse a port declaration node.
+    
+    Args:
+        node: port_declaration AST node
+        
+    Returns:
+        Port instance if valid, None otherwise
+        
+    Example SystemVerilog:
+        input logic clk,
+        output logic [WIDTH-1:0] data
+    """
+    if node is None:
+        return None
+
+    logger.debug("\nParsing port declaration:")
+    _debug_node(node)
+
+    # Try to get direction first
+    direction = None
+    direction_types = ["input", "output", "inout"]
+
+    # Look for direction in various places
+    node_text = node.text.decode('utf8')
+    logger.debug(f"Node text: {node_text}")
+    
+    # Check first word
+    first_word = node_text.split()[0] if node_text else ""
+    if first_word in direction_types:
+        direction = Direction(first_word)
+        logger.debug(f"Found direction from first word: {direction}")
+    
+    if direction is None:
+        # Look for direction node
+        dir_node = _find_child(node, ["port_direction"] + direction_types)
+        if dir_node is not None:
+            if dir_node.type == "port_direction":
+                dir_text = dir_node.text.decode('utf8')
+                direction = Direction(dir_text)
+            else:
+                direction = Direction(dir_node.type)
+            logger.debug(f"Found direction from node: {direction}")
+        else:
+            # Search text content
+            for dir_type in direction_types:
+                if _has_text(node, dir_type):
+                    direction = Direction(dir_type)
+                    logger.debug(f"Found direction from text search: {direction}")
+                    break
+    
+    if direction is None:
+        logger.debug("No direction found")
+        return None
+
+    # Get width expression first to exclude it from name search
+    width = "1"  # Default to single bit
+    width_text = None
+    range_nodes = []
+    
+    # Look for different types of range expressions
+    for range_type in ["packed_dimension", "dimension", "range_expression"]:
+        range_node = _find_child(node, range_type)
+        if range_node is not None:
+            range_nodes.append(range_node)
+            logger.debug(f"Found {range_type} node")
+    
+    if range_nodes:
+        # Extract range expression text
+        for range_node in range_nodes:
+            width_parts = []
+            for child in range_node.children:
+                if child.type not in ["[", "]", ":"]:
+                    width_parts.append(child.text.decode('utf8'))
+            if width_parts:
+                width = "".join(width_parts).strip()
+                width_text = f"[{width}]"
+                logger.debug(f"Found width: {width}")
+                break
+    
+    # Get port name - now that we can exclude the width expression
+    name = None
+    name_node = None
+    
+    # First look for last identifier
+    for child in reversed(node.children):
+        if child.type in ["simple_identifier", "identifier", "port_identifier"]:
+            name_node = child
+            break
+    
+    if name_node is not None:
+        name = name_node.text.decode('utf8')
+        logger.debug(f"Found name from identifier node: {name}")
+    else:
+        # Try parsing text for name
+        words = node_text.split()
+        if width_text:
+            # Remove width expression from text
+            node_text = node_text.replace(width_text, "")
+        words = [w.rstrip(";,[") for w in node_text.split()]
+        # Name is usually the last token before ; or [
+        for word in reversed(words):
+            if word not in ["logic", "wire", "reg", "input", "output", "inout"] and word.isidentifier():
+                name = word
+                logger.debug(f"Found name from text: {name}")
+                break
+    
+    if name is None:
+        logger.debug("No name found")
+        return None
+    
+    logger.debug(f"Creating port: name={name}, direction={direction}, width={width}")
+    return Port(
+        name=name,
+        direction=direction,
+        width=width
+    )
 
 def parse_parameter_declaration(node: Node) -> Optional[Parameter]:
     """Parse a parameter declaration node.
@@ -34,7 +160,7 @@ def parse_parameter_declaration(node: Node) -> Optional[Parameter]:
     if node is None:
         return None
 
-    logger.debug("Parsing parameter declaration:")
+    logger.debug("\nParsing parameter declaration:")
     _debug_node(node)
 
     # Skip local parameters
@@ -74,92 +200,6 @@ def parse_parameter_declaration(node: Node) -> Optional[Parameter]:
         default_value=default_value
     )
 
-def parse_port_declaration(node: Node) -> Optional[Port]:
-    """Parse a port declaration node.
-    
-    Args:
-        node: port_declaration AST node
-        
-    Returns:
-        Port instance if valid, None otherwise
-        
-    Example SystemVerilog:
-        input logic clk,
-        output logic [WIDTH-1:0] data
-    """
-    if node is None:
-        return None
-
-    logger.debug("Parsing port declaration:")
-    _debug_node(node)
-    
-    direction = None
-    direction_types = ["input", "output", "inout"]
-    
-    # Check if the node is a data_declaration with direction keyword
-    node_text = node.text.decode('utf8')
-    for dir_type in direction_types:
-        if node_text.startswith(dir_type):
-            direction = Direction(dir_type)
-            break
-    
-    if direction is None:
-        # Try to find direction node
-        dir_node = _find_child(node, ["port_direction"] + direction_types)
-        if dir_node is not None:
-            if dir_node.type == "port_direction":
-                # For ANSI style, use text
-                dir_text = dir_node.text.decode('utf8')
-                direction = Direction(dir_text)
-            else:
-                # For non-ANSI style, use node type
-                direction = Direction(dir_node.type)
-        else:
-            # Try text search
-            for dir_type in direction_types:
-                if _has_text(node, dir_type):
-                    direction = Direction(dir_type)
-                    break
-    
-    if direction is None:
-        return None
-    
-    # Get port name - check all identifiers and take the last one
-    name_node = None
-    for child in node.children:
-        if child.type in ["simple_identifier", "identifier", "port_identifier"]:
-            name_node = child
-    if name_node is None:
-        return None
-    name = name_node.text.decode('utf8')
-    
-    # Get width expression
-    width = "1"  # Default to single bit
-    range_nodes = []
-    
-    # Look for different types of range expressions
-    for range_type in ["packed_dimension", "dimension", "range_expression"]:
-        range_node = _find_child(node, range_type)
-        if range_node is not None:
-            range_nodes.append(range_node)
-    
-    if range_nodes:
-        # Extract range expression text
-        for range_node in range_nodes:
-            width_parts = []
-            for child in range_node.children:
-                if child.type not in ["[", "]", ":"]:
-                    width_parts.append(child.text.decode('utf8'))
-            if width_parts:
-                width = "".join(width_parts).strip()
-                break
-    
-    return Port(
-        name=name,
-        direction=direction,
-        width=width
-    )
-
 def extract_module_header(node: Node) -> Tuple[str, List[Node], List[Node]]:
     """Extract key components from module header.
     
@@ -178,7 +218,7 @@ def extract_module_header(node: Node) -> Tuple[str, List[Node], List[Node]]:
     if node is None:
         raise ValueError("Invalid module node")
 
-    logger.debug("Extracting module header:")
+    logger.debug("\nExtracting module header:")
     _debug_node(node)
 
     # Get module name
@@ -201,7 +241,7 @@ def extract_module_header(node: Node) -> Tuple[str, List[Node], List[Node]]:
         port_list = _find_child(node, type_name)
         if port_list is not None:
             for child in port_list.children:
-                if child.type in ["port_declaration", "ansi_port_declaration", "net_declaration", "data_declaration"]:
+                if child.type in ["port_declaration", "ansi_port_declaration", "net_declaration"]:
                     port_nodes.append(child)
     
     return name, param_nodes, port_nodes
@@ -255,11 +295,3 @@ def _has_text(node: Node, text: str) -> bool:
             return True
     
     return False
-
-def _debug_node(node: Node, prefix: str = "") -> None:
-    """Debug helper to print node structure."""
-    if node is None:
-        return
-    logger.debug(f"{prefix}Node type: {node.type}, text: {node.text.decode('utf8')}")
-    for child in node.children:
-        _debug_node(child, prefix + "  ")
