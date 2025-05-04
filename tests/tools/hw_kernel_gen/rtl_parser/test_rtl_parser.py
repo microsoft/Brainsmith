@@ -19,15 +19,6 @@ logger = logging.getLogger(__name__)
 
 # --- Test Fixtures ---
 
-@pytest.fixture(scope="module")
-def parser():
-    """Provides an RTLParser instance for the test module."""
-    # Assuming grammar path is handled internally by RTLParser constructor
-    try:
-        return RTLParser(debug=True) # Enable debug for more verbose test output if needed
-    except Exception as e:
-        pytest.fail(f"Failed to initialize RTLParser: {e}")
-
 @pytest.fixture(scope="function")
 def temp_sv_file():
     """Creates a temporary directory and a helper function to write SV files."""

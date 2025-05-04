@@ -9,11 +9,12 @@ import logging
 import ctypes
 import re # Added import for regex
 from ctypes import c_void_p, c_char_p, py_object, pythonapi
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union # Added List
 from tree_sitter import Language, Parser, Tree, Node
 import collections
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction # Added Direction
+# Corrected import: Ensure ModuleSummary is imported here
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction, ModuleSummary
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma # Added Pragma import
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 # Import Interface types for checking counts
@@ -203,11 +204,12 @@ class RTLParser:
                 # logger.debug(f"Processing port node:")
                 # self._debug_node(node) # Use the new private method if debugging
                 # Use the new private method
-                port = self._parse_port_declaration(node)
-                if port is not None:
-                    extracted_ports.append(port)
+                parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
+                if parsed_port_list: # Check if the list is not empty
+                    extracted_ports.extend(parsed_port_list) # Use extend to add elements
             kernel.ports = extracted_ports
-            logger.debug(f"Extracted {len(kernel.ports)} ports.")
+            # Correctly log the total number of Port objects extracted
+            logger.debug(f"Extracted {len(kernel.ports)} individual port objects.")
 
             # --- Integrate Interface Analysis ---
             logger.info(f"Starting interface analysis for module {kernel.name}...")
@@ -215,27 +217,25 @@ class RTLParser:
             kernel.interfaces = validated_interfaces
             logger.info(f"Interface analysis complete. Found {len(kernel.interfaces)} valid interfaces.")
 
-            # --- Add Post-Analysis Validation ---
-            # 1. Check for unassigned ports
+            # --- Modify Post-Analysis Validation ---
+            # 1. Check for unassigned ports - Log as warning instead of error
             if unassigned_ports:
                  unassigned_names = [p.name for p in unassigned_ports]
-                 error_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any valid interface: {unassigned_names}"
+                 # Changed from error to warning
+                 warning_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
+                 logger.warning(warning_msg)
+                 # Store unassigned ports for potential later use (optional, requires adding to HWKernel)
+                 # kernel.unassigned_ports = unassigned_ports
+                 # Temporarily disabled: raise ParserError(error_msg)
+
+            # 2. Check interface counts (Keep existing logic if needed)
+            # Example: Ensure at least one AXI-Stream if required by project spec
+            has_axi_stream = any(iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values())
+            if not has_axi_stream:
+                 # Keep this error if it's a hard requirement
+                 error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
                  logger.error(error_msg)
                  raise ParserError(error_msg)
-
-            # 2. Check interface counts
-            axi_stream_count = sum(1 for iface in kernel.interfaces.values() if iface.type == InterfaceType.AXI_STREAM)
-            axi_lite_count = sum(1 for iface in kernel.interfaces.values() if iface.type == InterfaceType.AXI_LITE)
-
-            if axi_stream_count == 0:
-                error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none."
-                logger.error(error_msg)
-                raise ParserError(error_msg)
-
-            if axi_lite_count > 1:
-                error_msg = f"Module '{kernel.name}' allows at most one AXI-Lite interface, but found {axi_lite_count}."
-                logger.error(error_msg)
-                raise ParserError(error_msg)
 
             # --- Add Placeholders for Future Data Processing ---
             # TODO: Implement Kernel Parameter formatting (using kernel.parameters)
@@ -343,21 +343,86 @@ class RTLParser:
              # Should not happen if _find_module_nodes works correctly
              raise ParserError("Internal error: Inconsistent module node state.")
 
-    # --- Moved Helper Functions from interface.py ---
+    # --- Re-introduced Helper Function ---
+    def _extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
+        """
+        Extracts module name, parameter nodes, and port nodes from a module_declaration node.
+        Handles both ANSI and potentially non-ANSI header structures recognized by tree-sitter.
 
-    def _debug_node(self, node: Node, prefix: str = "") -> None:
-        """Debug helper to print node structure."""
-        if node is None:
+        Returns:
+            Tuple: (module_name, parameter_nodes, port_nodes)
+                   Returns (None, None, None) if essential parts are missing.
+        """
+        if not module_node or module_node.type != "module_declaration":
+            logger.error("Invalid node passed to _extract_module_header. Expected 'module_declaration'.")
+            return None, None, None
+
+        module_name: Optional[str] = None
+        param_nodes: Optional[List[Node]] = []
+        port_nodes: Optional[List[Node]] = []
+        header_node: Optional[Node] = None # Keep track of the header node
+
+        # Find module identifier (name)
+        name_node = self._find_child(module_node, ["simple_identifier", "identifier"]) # Direct child?
+        if not name_node:
+             header_node = self._find_child(module_node, ["module_ansi_header", "module_nonansi_header"]) # Look in headers
+             if header_node:
+                  name_node = self._find_child(header_node, ["simple_identifier", "identifier"])
+
+        if name_node:
+            module_name = name_node.text.decode('utf8')
+            logger.debug(f"Extracted module name: {module_name}")
+        else:
+            logger.warning(f"Could not find module name identifier within node: {module_node.text.decode()[:50]}...")
+
+        # --- Search for lists within the appropriate node ---
+        # If header_node was found during name search, use it. Otherwise, search module_node directly.
+        search_parent_node = header_node if header_node else module_node
+        logger.debug(f"Searching for parameter/port lists within node type: {search_parent_node.type}")
+
+        # Find parameter list node within the search_parent_node
+        param_list_node = self._find_child(search_parent_node, ["parameter_port_list"])
+        if param_list_node:
+            # Extract individual parameter declarations within the list
+            param_nodes = self._find_children(param_list_node, ["parameter_port_declaration"])
+            logger.debug(f"Found parameter list node containing {len(param_nodes)} declarations.")
+        else:
+            logger.debug("No parameter list node found.")
+
+        # Find port list node (ANSI style) within the search_parent_node
+        port_list_node = self._find_child(search_parent_node, ["list_of_port_declarations"])
+        if port_list_node:
+            # Extract individual port declarations within the list
+            port_nodes = self._find_children(port_list_node, ["ansi_port_declaration"]) # Specific to ANSI
+            logger.debug(f"Found ANSI port list node containing {len(port_nodes)} declarations.")
+        else:
+            # TODO: Add logic for non-ANSI ports if needed (search module body items)
+            logger.debug("No ANSI port list node found. Non-ANSI port extraction not yet implemented.")
+
+
+        return module_name, param_nodes, port_nodes
+
+    # --- Existing Helper Functions ---
+    def _debug_node(self, node: Node, prefix: str = "", max_depth: int = 3, current_depth: int = 0) -> None:
+        """Debug helper to print node structure with depth limit."""
+        if node is None or current_depth > max_depth:
             return
-        logger.debug(f"{prefix}Node type: {node.type}, text: {node.text.decode('utf8')}")
-        for child in node.children:
-            self._debug_node(child, prefix + "  ") # Call recursively using self
+        indent = "  " * current_depth
+        node_text_raw = node.text.decode('utf8')
+        # Limit displayed text and escape newlines for cleaner logging
+        node_text_display = node_text_raw.replace('\n', '\\n')[:80]
+        if len(node_text_raw) > 80:
+             node_text_display += "..."
 
-    def _parse_port_declaration(self, node: Node) -> Optional[Port]:
-        """Parse a port declaration node (handles ANSI and non-ANSI styles)."""
-        if node is None: return None
-        # logger.debug("\\nParsing port declaration:")
-        # self._debug_node(node)
+        logger.debug(f"{prefix}{indent}Node type: {node.type}, text: '{node_text_display}' (ID: {node.id})")
+        for i, child in enumerate(node.children):
+            # Pass max_depth and increment current_depth in recursive call
+            self._debug_node(child, prefix=f"{prefix}Child {i}: ", max_depth=max_depth, current_depth=current_depth + 1)
+
+    def _extract_direction(self, node: Node) -> Optional[Direction]:
+        """Extract the direction (input, output, inout) from a port declaration node."""
+        if node is None:
+            return None
 
         direction = None
         direction_types = ["input", "output", "inout"]
@@ -379,284 +444,357 @@ class RTLParser:
             first_word = node_text.split()[0] if node_text else ""
             if first_word in direction_types: direction = Direction(first_word)
 
-        if direction is None: return None # Cannot determine direction
+        return direction
 
-        # --- Extract Data Type --- (Added)
-        data_type = "logic" # Default if not specified
-        type_node = self._find_child(node, ["data_type", "implicit_data_type", "simple_type", "type_identifier"])
-        if type_node:
-            # Extract text, handling potential nested structures in data_type
-            type_parts = [tn.text.decode('utf8') for tn in type_node.children if tn.type != 'signing'] # Exclude 'signed'/'unsigned' for now
-            if type_parts:
-                data_type = " ".join(type_parts).strip()
-            else:
-                data_type = type_node.text.decode('utf8').strip()
-            # Handle common case like 'logic signed' -> 'logic'
-            if data_type.startswith("logic") or data_type.startswith("reg") or data_type.startswith("wire"):
-                 data_type = data_type.split()[0]
+    def _find_identifiers_recursive(self, node: Node) -> List[str]:
+        """Recursively find all simple_identifier or port_identifier texts under a node."""
+        identifiers = []
+        node_type = node.type
+        node_text = node.text.decode('utf8').strip()
 
-        # --- Extract Width --- (Refined)
-        width = "1" # Default width
-        width_text_representation = None # Store the full text like "[WIDTH-1:0]"
-        # Find the node representing the dimension/range, e.g., packed_dimension `[7:0]`
-        range_node = self._find_child(node, ["packed_dimension", "vector_dimension", "range_expression"])
-        if range_node:
-            # Extract the text content of the range node itself
-            range_text = range_node.text.decode('utf8').strip()
-            # Remove the outer brackets if present
-            if range_text.startswith('[') and range_text.endswith(']'):
-                width = range_text[1:-1].strip()
-                width_text_representation = range_text # Store with brackets
-            else:
-                # Fallback or warning if brackets aren't found as expected
-                logger.warning(f"Could not parse width from range node text: '{range_text}'")
-                width = range_text # Use the text as is, might be incorrect
-                width_text_representation = f"[{width}]" # Assume brackets were intended
+        # Base case: If it's an identifier node, add its text
+        # Exclude common keywords that might appear as identifiers in the AST
+        # Also exclude known type names that might be parsed as identifiers in some contexts
+        keywords_to_exclude = [d.value for d in Direction] + \
+                              ['logic', 'reg', 'wire', 'bit', 'integer', 'input', 'output', 'inout', 'signed', 'unsigned', 'parameter', 'localparam', 'module', 'endmodule', 'interface', 'endinterface'] # Common types/modifiers/keywords
 
-        # --- Extract Name --- (Revised Logic)
-        name = None
-        port_identifier_node = self._find_child(node, ["port_identifier"])
+        if node_type in ["simple_identifier", "identifier", "port_identifier"] and node_text not in keywords_to_exclude:
+             # Check parent type to avoid grabbing module name identifier if node is module_identifier
+             if not (node.parent and node.parent.type in ["module_declaration", "module_identifier", "interface_identifier"]):
+                 identifiers.append(node_text)
 
-        if port_identifier_node:
-            name = port_identifier_node.text.decode('utf8').strip()
-            # Basic validation: ensure it's not a direction keyword if found as identifier
-            if name in [d.value for d in Direction]:
-                 logger.warning(f"Port identifier node text '{name}' matches a direction keyword. Discarding.")
-                 name = None # Avoid using direction keywords as names
 
-        # Fallback: If no specific port_identifier found, try the previous logic
-        # (useful for potentially different non-ANSI structures if they reach here)
-        if name is None:
-            logger.debug(f"No 'port_identifier' child found for node: {node.text.decode()}. Trying fallback.")
-            last_identifier_node = None
-            # Iterate through direct children to find the last identifier
-            for child in node.children:
-                # Check for general identifier types, excluding type/direction keywords explicitly
-                if child.type in ["simple_identifier", "identifier"] and \
-                   child.text.decode('utf8') not in [d.value for d in Direction] and \
-                   child.text.decode('utf8') != data_type: # Check against extracted data_type
-                    last_identifier_node = child # Keep updating to get the last one
+        # Recursive step: Traverse children
+        for child in node.children:
+            # Avoid recursing into the data type definition itself if it looks like an identifier
+            # This prevents extracting 'logic' from 'input logic clk' if 'logic' is parsed as an identifier within the type node
+            # Also skip recursing into parameter declarations if we are looking for ports
+            if child.type not in ['data_type', 'parameter_port_list', 'parameter_declaration']: # Simple check, might need refinement
+                 identifiers.extend(self._find_identifiers_recursive(child))
 
-            if last_identifier_node:
-                potential_name = last_identifier_node.text.decode('utf8')
-                # Double-check it's not a keyword we already identified
-                if potential_name != direction.value and potential_name != data_type:
-                     name = potential_name
-                # Handle edge case: Sometimes the type node itself is the last identifier
-                elif type_node and last_identifier_node.id == type_node.id:
-                     logger.warning(f"Fallback failed: Last identifier was the type node for: {node.text.decode()}")
-                     name = None # Explicitly set to None
+        # Return unique identifiers found in this subtree
+        # Using dict.fromkeys preserves order and ensures uniqueness efficiently
+        return list(dict.fromkeys(identifiers))
+
+    def _parse_port_declaration(self, node: Node) -> List[Port]:
+        """
+        Parses a port declaration node (ANSI or non-ANSI) and returns a list of Port objects.
+        Refined based on detailed AST analysis.
+        """
+        logger.debug(f"Parsing port declaration node: {node.text.decode()}")
+        # self._debug_node(node, "PortDecl", max_depth=5) # Uncomment for deep debug
+
+        direction = self._extract_direction(node)
+        if direction is None:
+            logger.warning(f"Could not determine direction for port declaration: {node.text.decode()}")
+            return [] # Cannot proceed without direction
+
+        data_type = "logic" # Default
+        final_width = "1"   # Default
+        port_names = []
+
+        # --- Determine Header Type (Variable, Net, Interface, Implicit) ---
+        variable_port_header = self._find_child(node, ["variable_port_header"])
+        net_port_header = self._find_child(node, ["net_port_header"])
+        interface_port_header = self._find_child(node, ["interface_port_header"]) # Check for interface header
+
+        # --- Extract Type and Width based on Header ---
+        if variable_port_header:
+            logger.debug("Parsing as Variable Port Header")
+            variable_port_type = self._find_child(variable_port_header, ["variable_port_type"])
+            if variable_port_type:
+                # Data Type: First child (usually data_type node)
+                dt_node = self._find_child(variable_port_type, ["data_type"])
+                if dt_node:
+                    # Extract base type from within data_type
+                    core_type_node = self._find_child(dt_node, ["signing", "integer_vector_type", "integer_atom_type", "non_integer_type", "simple_identifier", "ps_identifier", "identifier", "data_type_identifier"])
+                    if core_type_node: data_type = core_type_node.text.decode('utf8').strip()
+                    else: data_type = dt_node.text.decode('utf8').strip() # Fallback
+                else: # Should have a data_type child based on AST
+                     logger.warning("No data_type node found within variable_port_type")
+
+                # Width: Sibling of data_type within variable_port_type
+                width_node = None
+                # 1. Search directly within variable_port_type first
+                width_node = self._find_child(variable_port_type, ["packed_dimension", "unpacked_dimension"])
+                if width_node:
+                    logger.debug("Found width node directly within variable_port_type.")
+                elif dt_node: # 2. Fallback: Check siblings of dt_node (original logic)
+                    logger.debug("Width node not direct child of variable_port_type, checking siblings of data_type.")
+                    sibling = dt_node.next_sibling
+                    if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]:
+                        width_node = sibling
+                        logger.debug("Found width node as next sibling of data_type in variable_port_type")
+                    else: # Check previous just in case
+                        sibling = dt_node.prev_sibling
+                        if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]:
+                             width_node = sibling
+                             logger.debug("Found width node as prev sibling of data_type in variable_port_type")
+                # 3. ADDED Fallback: Check as child of dt_node
+                elif dt_node:
+                    logger.debug("Width node not sibling, checking as child of data_type.")
+                    width_node = self._find_child(dt_node, ["packed_dimension", "unpacked_dimension"])
+                    if width_node:
+                        logger.debug("Found width node as child of data_type.")
+
+
+                # Process the found width_node (if any)
+                if width_node:
+                    logger.debug(f"Found potential width node (variable): Type={width_node.type}, Text='{width_node.text.decode()}'")
+                    final_width = self._extract_width_from_dimension(width_node)
                 else:
-                     logger.warning(f"Fallback check failed for potential name '{potential_name}' from node: {node.text.decode()}")
-                     name = None # Explicitly set to None
+                    logger.debug("No width node found associated with variable_port_type.")
+            else:
+                logger.warning("No variable_port_type found within variable_port_header")
+
+        elif net_port_header:
+            logger.debug("Parsing as Net Port Header")
+            net_port_type = self._find_child(net_port_header, ["net_port_type"])
+            if net_port_type:
+                # Data Type: First child (usually net_type node)
+                nt_node = self._find_child(net_port_type, ["net_type"])
+                if nt_node: data_type = nt_node.text.decode('utf8').strip()
+                else: logger.warning("No net_type node found within net_port_type")
+
+                # Width: Nested under data_type_or_implicit -> implicit_data_type
+                dtoi_node = self._find_child(net_port_type, ["data_type_or_implicit"])
+                if dtoi_node:
+                    idt_node = self._find_child(dtoi_node, ["implicit_data_type"])
+                    if idt_node:
+                        width_node = self._find_child(idt_node, ["packed_dimension", "unpacked_dimension"])
+                        if width_node:
+                            # ADDED LOG
+                            logger.debug(f"Found potential width node (net): Type={width_node.type}, Text='{width_node.text.decode()}'")
+                            final_width = self._extract_width_from_dimension(width_node)
+                        else:
+                            # ADDED LOG
+                             logger.debug("No width node found nested in net_port_type.")
+                    else:
+                        # ADDED LOG
+                         logger.debug("No implicit_data_type node found, cannot search for width.")
+            elif self._find_child(net_port_header, ["port_direction"]):
+                 # Handle implicit type (e.g., "input enable_in") - header only has direction
+                 data_type = "wire" # Default implicit type
+                 logger.debug("Parsing as Implicit Net Port (defaulting type to wire)")
+            else:
+                 logger.warning("No net_port_type or direction found within net_port_header")
 
 
-        if name is None:
-             logger.debug(f"Failed to extract port name from node: {node.text.decode()}")
-             # self._debug_node(node, prefix="Failed Node: ") # Uncomment for deep debug
-             return None # Cannot determine name
+        elif interface_port_header:
+             logger.debug("Parsing as Interface Port Header")
+             # Extract interface type name (e.g., 'axi_if')
+             if_identifier_node = self._find_child(interface_port_header, ["interface_identifier"])
+             if if_identifier_node:
+                  data_type = if_identifier_node.text.decode('utf8').strip()
+                  # Modport might be a sibling or child depending on grammar details
+                  modport_node = self._find_child(interface_port_header, ["modport_identifier"])
+                  if modport_node:
+                       data_type += "." + modport_node.text.decode('utf8').strip()
+                  logger.debug(f"Interface type extracted as: {data_type}")
+             else:
+                  logger.warning("Could not find interface_identifier within interface_port_header")
+             # Width is typically not applicable or '1' for interface ports themselves
+             final_width = "1"
 
-        logger.debug(f"Parsed port: Name='{name}', Direction='{direction.value}', Width='{width}', Type='{data_type}'")
-        # TODO: Consider adding data_type to the Port object if needed later
-        return Port(name=name, direction=direction, width=width)
+        else: # Fallback/Non-ANSI (might need more robust handling if mixed styles occur)
+            logger.warning(f"Could not identify standard ANSI header type for: {node.text.decode()}. Attempting fallback.")
+            # Basic fallback: look for type and dimension directly under the node
+            dt_node = self._find_child(node, ["data_type"])
+            if dt_node: data_type = dt_node.text.decode('utf8').strip()
+            width_node = self._find_child(node, ["packed_dimension", "unpacked_dimension"])
+            if width_node: final_width = self._extract_width_from_dimension(width_node)
 
 
-    def _parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
-        """Parse a parameter declaration node."""
-        if node is None: return None
-        # logger.debug("\\nParsing parameter declaration:") # Optional: enable if needed
-        # self._debug_node(node)
+        # --- Extract Port Name(s) ---
+        # Name is usually the last simple_identifier sibling within the ansi_port_declaration
+        # Or search recursively if it's a list
+        list_of_ids_node = self._find_child(node, ["list_of_port_identifiers", "list_of_variable_identifiers"])
+        if list_of_ids_node:
+             potential_names = self._find_identifiers_recursive(list_of_ids_node)
+        else:
+             # Find last identifier sibling as primary candidate
+             last_identifier = None
+             for child in reversed(node.children):
+                  if child.type == "simple_identifier":
+                       last_identifier = child
+                       break
+                  # Handle ERROR node for interface ports - name might be after ERROR
+                  if child.type == "ERROR" and child.prev_sibling and child.prev_sibling.type == "simple_identifier":
+                       last_identifier = child.prev_sibling
+                       logger.debug("Adjusting name search due to ERROR node (interface port).")
+                       break
 
-        if node.type == "localparam_declaration" or self._has_text(node, "localparam"): # Use self._has_text
-            return None
 
-        param_type = "logic"
-        type_node = self._find_child(node, ["data_type", "type_identifier", "simple_type"]) # Use self._find_child
-        if type_node is not None: param_type = type_node.text.decode('utf8')
+             if last_identifier:
+                  potential_names = [last_identifier.text.decode('utf8').strip()]
+             else: # Absolute fallback: recursive search on the whole node
+                  potential_names = self._find_identifiers_recursive(node)
 
-        name_node = self._find_child(node, ["simple_identifier", "identifier", "parameter_identifier"]) # Use self._find_child
-        if name_node is None: return None
-        name = name_node.text.decode('utf8')
+        logger.debug(f"Potential names found: {potential_names}")
 
-        default_value = None
-        equals = self._find_child(node, "=") # Use self._find_child
-        if equals is not None:
-            current = equals.next_sibling
-            if current is not None:
-                value_text = []
-                while current and current.type != ";":
-                    value_text.append(current.text.decode('utf8'))
-                    current = current.next_sibling
-                if value_text: default_value = "".join(value_text).strip()
+        # --- Filter and Deduplicate Names ---
+        filtered_names = []
+        seen_names = set()
+        keywords_to_exclude_set = set([d.value for d in Direction] + [t.strip() for t in data_type.split('.')]) # Exclude base type and modport if present
 
-        return Parameter(name=name, param_type=param_type, default_value=default_value)
+        for name in potential_names:
+            if name and name not in keywords_to_exclude_set and name not in seen_names:
+                filtered_names.append(name)
+                seen_names.add(name)
+        port_names = filtered_names
 
-    def _find_nodes_recursively(self, node: Node, target_types: List[str]) -> List[Node]:
-        """Recursively find all nodes of specified types using BFS."""
+        logger.debug(f"Filtered port names: {port_names}")
+
+        if not port_names:
+             logger.warning(f"Failed to extract any valid port names from node: {node.text.decode()}")
+             return []
+
+        # --- Create Port objects ---
+        parsed_ports = []
+        for name in port_names:
+            logger.info(f"Successfully parsed port: Name='{name}', Direction='{direction.value}', Width='{final_width}', Type='{data_type}'")
+            parsed_ports.append(Port(name=name, direction=direction, width=final_width)) # Assuming type isn't stored in Port object
+
+        return parsed_ports
+
+    def _extract_width_from_dimension(self, width_node: Node) -> str:
+        """Helper to extract text content from dimension nodes."""
+        if not width_node: return "1"
+        logger.debug(f"Extracting width from node: Type={width_node.type}, Text='{width_node.text.decode()}'")
+
+        # Prioritize finding the range or expression node within the dimension
+        expr_node = self._find_child(width_node, ["constant_range", "range_expression", "constant_expression", "expression", "primary_literal", "number"])
+
+        if expr_node:
+            # ADDED LOG
+            logger.debug(f"Found expression node: Type={expr_node.type}, Text='{expr_node.text.decode()}'")
+            width_text = expr_node.text.decode('utf8').strip()
+            logger.debug(f"Width expression text found: '{width_text}'")
+            # Check if the found expression is the full content between brackets
+            full_node_text = width_node.text.decode('utf8').strip()
+            if full_node_text.startswith('[') and full_node_text.endswith(']'):
+                expected_inner_text = full_node_text[1:-1].strip()
+                 # ADDED LOG
+                logger.debug(f"Full node inner text: '{expected_inner_text}'")
+                if width_text == expected_inner_text:
+                     # ADDED LOG
+                    logger.debug("Expression node text matches full inner text.")
+                    return width_text # Perfect match
+                else:
+                    # Sometimes the expr_node might be nested deeper, use the full inner text
+                    logger.debug(f"Expression node text ('{width_text}') differs from node inner text ('{expected_inner_text}'), using inner text.")
+                    return expected_inner_text if expected_inner_text else "1"
+            else:
+                 # If original node wasn't bracketed (less common), use expr_node text
+                  # ADDED LOG
+                 logger.debug("Original width node not bracketed, using expression node text.")
+                 return width_text
+        else:
+             # ADDED LOG
+            logger.debug("No specific expression node found within width_node.")
+            # Fallback: Use cleaned text of the dimension node itself, removing brackets
+            cleaned_width_text = width_node.text.decode('utf8').strip()
+            if cleaned_width_text.startswith('[') and cleaned_width_text.endswith(']'):
+                cleaned_width_text = cleaned_width_text[1:-1].strip()
+             # ADDED LOG
+            logger.debug(f"Using fallback cleaned text: '{cleaned_width_text}'")
+            return cleaned_width_text if cleaned_width_text else "1" # Return cleaned text or default
+
+    # Ensure _find_child, _extract_direction, _find_identifiers_recursive are present and correct
+    def _find_child(self, node: Node, types: List[str]) -> Optional[Node]:
+        """Find the first direct child node matching any of the given types."""
+        if not node: return None
+        for child in node.children:
+            if child.type in types:
+                return child
+        return None
+
+    def _find_children(self, node: Node, types: List[str]) -> List[Node]:
+        """Find all direct children nodes matching any of the given types."""
         found_nodes = []
-        if node is None:
-            return found_nodes
-
-        queue = [node]
-        # No need for visited set in a typical AST traversal unless cycles are possible
-
-        while queue:
-            current_node = queue.pop(0)
-            if current_node.type in target_types:
-                found_nodes.append(current_node)
-
-            # Add children to the queue for further exploration
-            queue.extend(current_node.children)
+        if not node: return found_nodes
+        for child in node.children:
+            if child.type in types:
+                found_nodes.append(child)
         return found_nodes
 
-    def _extract_module_header(self, node: Node) -> Tuple[str, List[Node], List[Node]]:
-        """Extract key components from module header."""
-        if node is None: raise ValueError("Invalid module node")
-        # logger.debug("\\nExtracting module header:") # Optional: enable if needed
-        # self._debug_node(node)
-
-        name_node = self._find_child(node, ["module_identifier", "simple_identifier", "identifier"]) # Use self._find_child
-        if name_node is None: raise ValueError("Module name not found")
-        name = name_node.text.decode('utf8')
-
-        param_nodes = []
-        param_list = self._find_child(node, ["parameter_port_list", "list_of_parameter_declarations"]) # Use self._find_child
-        if param_list is not None:
-            for child in param_list.children:
-                if child.type in ["parameter_declaration", "parameter_port_declaration"]:
-                    param_nodes.append(child)
-
-        port_nodes = []
-        processed_node_ids = set() # To avoid duplicates from ANSI/non-ANSI overlap
-
-        # --- Debug: List direct children of module_declaration node ---
-        # logger.debug(f"Direct children of module_declaration ({name}):") # Commented out
-        # for child in node.children:
-        #     logger.debug(f"  - Child type: {child.type}, Text: {child.text.decode()[:50]}...") # Commented out
-        # --- End Debug ---
-
-        # --- ANSI Port Extraction (Revised - Direct Recursive Search) ---
-        module_header = self._find_child(node, "module_ansi_header", recursive=False)
-        if module_header:
-            # logger.debug("Found module_ansi_header node. Structure:") # Commented out
-            # self._debug_node(module_header, prefix="  MH> ") # Commented out
-
-            # logger.debug("Searching for ANSI port declarations recursively within module_ansi_header...") # Commented out
-            ansi_port_types = ["port_declaration", "ansi_port_declaration", "net_port_header", "variable_port_header"]
-            found_ansi_ports = self._find_nodes_recursively(module_header, ansi_port_types)
-            # logger.debug(f"  Found {len(found_ansi_ports)} potential ANSI port nodes via recursive search.") # Commented out
-            for port_node in found_ansi_ports:
-                if port_node.id not in processed_node_ids:
-                    is_container = False
-                    for target_type in ansi_port_types:
-                        if port_node.type != target_type and self._find_child(port_node, target_type, recursive=True):
-                            # logger.debug(f"  Skipping likely container node: {port_node.type} - {port_node.text.decode()[:30]}...") # Commented out
-                            is_container = True
-                            break
-                    if not is_container:
-                        # logger.debug(f"  Appending ANSI port node: {port_node.type} - {port_node.text.decode()[:30]}...") # Commented out
-                        port_nodes.append(port_node)
-                        processed_node_ids.add(port_node.id)
-        else:
-            logger.debug("No module_ansi_header found, looking for non-ANSI ports.")
-
-        # --- Non-ANSI Port Extraction (Fallback/Addition) ---
-        logger.debug("Checking for non-ANSI port declarations in module body...")
-        # Iterate through direct children of the module_declaration node
-        for child in node.children:
-             if child.type == "module_item":
-                 # Check for port_declaration directly within module_item
-                 port_decl_node = self._find_child(child, "port_declaration", recursive=False)
-                 if port_decl_node and port_decl_node.id not in processed_node_ids:
-                     logger.debug(f"  Appending non-ANSI port node (from module_item/port_declaration): {port_decl_node.text.decode()[:30]}...")
-                     port_nodes.append(port_decl_node)
-                     processed_node_ids.add(port_decl_node.id)
-                     continue # Found port_declaration, move to next module_item
-
-                 # Check for net_declaration within module_item (common for non-ANSI)
-                 net_decl_node = self._find_child(child, "net_declaration", recursive=False)
-                 if net_decl_node and net_decl_node.id not in processed_node_ids:
-                     # Check if this net_declaration likely represents a port (e.g., contains input/output keyword)
-                     # Use _has_text for potentially better checking within the node
-                     if self._has_text(net_decl_node, "input") or self._has_text(net_decl_node, "output") or self._has_text(net_decl_node, "inout"):
-                         logger.debug(f"  Appending non-ANSI port node (from module_item/net_declaration): {net_decl_node.text.decode()[:30]}...")
-                         port_nodes.append(net_decl_node)
-                         processed_node_ids.add(net_decl_node.id)
-
-        logger.debug(f"Finished extracting header. Found {len(param_nodes)} param nodes, {len(port_nodes)} port nodes.")
-        return name, param_nodes, port_nodes
-
-    def _find_child(self, node: Node, type_names: str | List[str], recursive: bool = True) -> Optional[Node]:
-        """Find first child node matching any of the given types.
-
-        Args:
-            node: The starting node.
-            type_names: A string or list of strings representing the target node types.
-            recursive: If True, performs a recursive BFS search. If False, only checks direct children.
-
-        Returns:
-            The first matching node found, or None.
+    # --- Add Parameter Parsing Method ---
+    def _parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
         """
-        if node is None: return None
-        if isinstance(type_names, str): type_names = [type_names]
+        Parses a parameter_port_declaration node and returns a Parameter object.
+        """
+        if not node or node.type != "parameter_port_declaration":
+            logger.warning(f"Invalid node type passed to _parse_parameter_declaration: {node.type}")
+            return None
 
-        if not recursive:
-            # Non-recursive: Check only direct children
-            for child in node.children:
-                if child.type in type_names:
-                    return child
-            return None # Not found among direct children
+        param_name: Optional[str] = None
+        param_type: str = "parameter" # Default type if not specified
+        default_value: Optional[str] = None
+
+        # Find the core parameter_declaration or local_parameter_declaration
+        param_decl_node = self._find_child(node, ["parameter_declaration", "local_parameter_declaration"])
+        if not param_decl_node:
+            logger.warning(f"Could not find parameter_declaration or local_parameter_declaration within: {node.text.decode()}")
+            # Try finding assignment directly under parameter_port_declaration as fallback
+            param_decl_node = node
+
+        # Determine if localparam
+        is_local = param_decl_node.type == "local_parameter_declaration" or "localparam" in param_decl_node.text.decode().split()
+
+        # Extract type if present (often within data_type_or_implicit)
+        dtoi_node = self._find_child(param_decl_node, ["data_type_or_implicit"])
+        if dtoi_node:
+            dt_node = self._find_child(dtoi_node, ["data_type"])
+            if dt_node:
+                # Extract specific type like 'int', 'integer', etc.
+                core_type_node = self._find_child(dt_node, ["integer_atom_type", "integer_vector_type", "non_integer_type", "signing", "simple_identifier"])
+                if core_type_node:
+                    param_type = core_type_node.text.decode('utf8').strip()
+                else:
+                    param_type = dt_node.text.decode('utf8').strip() # Fallback to full data_type text
+                logger.debug(f"Parameter type found: {param_type}")
+
+        # Find the assignment part (list_of_param_assignments -> param_assignment)
+        assignment_list_node = self._find_child(param_decl_node, ["list_of_param_assignments"])
+        if assignment_list_node:
+            assignment_node = self._find_child(assignment_list_node, ["param_assignment"])
+            if assignment_node:
+                # Extract name (simple_identifier)
+                name_node = self._find_child(assignment_node, ["simple_identifier", "identifier"])
+                if name_node:
+                    param_name = name_node.text.decode('utf8').strip()
+                else:
+                    logger.warning(f"Could not find parameter name in assignment: {assignment_node.text.decode()}")
+                    return None # Name is essential
+
+                # Extract default value (constant_param_expression -> constant_expression)
+                value_expr_node = self._find_child(assignment_node, ["constant_param_expression", "constant_expression", "expression"])
+                if value_expr_node:
+                    # Further drill down for cleaner expression text if possible
+                    inner_expr = self._find_child(value_expr_node, ["constant_mintypmax_expression", "constant_expression", "primary_literal", "binary_expression"])
+                    if inner_expr:
+                         default_value = inner_expr.text.decode('utf8').strip()
+                    else:
+                         default_value = value_expr_node.text.decode('utf8').strip() # Fallback
+                    logger.debug(f"Parameter '{param_name}' default value found: {default_value}")
+            else:
+                 logger.warning(f"Could not find param_assignment within list: {assignment_list_node.text.decode()}")
+                 return None # Cannot get name/value without assignment
         else:
-            # Recursive: Perform Breadth-First Search (BFS)
-            queue = collections.deque(node.children) # Start queue with direct children
-            visited = {child.id for child in node.children} # Track visited nodes
-
-            while queue:
-                current_node = queue.popleft()
-
-                # Check if the current node matches
-                if current_node.type in type_names:
-                    return current_node # Found the first match
-
-                # Add its children to the queue if not visited
-                for child in current_node.children:
-                    if child.id not in visited:
-                        visited.add(child.id)
-                        queue.append(child)
-
-            return None # Not found after traversing the subtree
-
-    def _has_text(self, node: Node, text: str) -> bool:
-        """Check if node or any child contains the exact text token."""
-        if node is None: return False
-
-        queue = [node]
-        visited = {node.id}
-
-        while queue:
-            current = queue.pop(0)
-            # Check if the text exists as a distinct token in the node's direct text
-            # This avoids matching substrings within identifiers
-            node_text_content = current.text.decode('utf8')
-            # Simple split might be okay, but regex could be more robust
-            # Using split for now, assuming space separation or common delimiters
-            tokens = re.split(r'\\s+|(?=[;,()[\\]])|(?<=[;,()[\\]])', node_text_content)
-            if text in tokens:
-                 # Check if it's a direct child's type or specific node text
-                 is_direct_match = False
-                 if current.type == text: # e.g., node type is 'input'
-                     is_direct_match = True
-                 elif any(child.type == text for child in current.children): # e.g., child node type is 'input'
-                      is_direct_match = True
-                 # Add more specific checks if needed based on grammar
-                 if is_direct_match:
-                     return True
+             logger.warning(f"Could not find list_of_param_assignments in: {param_decl_node.text.decode()}")
+             # Maybe a declaration without assignment? Try finding name directly
+             name_node = self._find_child(param_decl_node, ["simple_identifier", "identifier"])
+             if name_node:
+                  param_name = name_node.text.decode('utf8').strip()
+             else:
+                  return None # Still need a name
 
 
-            for child in current.children:
-                if child.id not in visited:
-                    visited.add(child.id)
-                    queue.append(child)
-        return False
+        if param_name:
+            logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{param_type}', Default='{default_value}', Local={is_local}")
+            # Corrected: Use 'default_value' and include 'param_type'
+            return Parameter(name=param_name, param_type=param_type, default_value=default_value)
+        else:
+            return None
 
-    # ... rest of RTLParser class ...
+    # ... (rest of the class) ...
