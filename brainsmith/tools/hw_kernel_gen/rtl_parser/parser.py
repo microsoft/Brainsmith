@@ -229,13 +229,13 @@ class RTLParser:
                  # Temporarily disabled: raise ParserError(error_msg)
 
             # 2. Check interface counts (Keep existing logic if needed)
-            # Example: Ensure at least one AXI-Stream if required by project spec
             has_axi_stream = any(iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values())
+            # --- RESTORED CHECK ---
             if not has_axi_stream:
-                 # Keep this error if it's a hard requirement
                  error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
                  logger.error(error_msg)
                  raise ParserError(error_msg)
+            # --- END RESTORED ---
 
             # --- Add Placeholders for Future Data Processing ---
             # TODO: Implement Kernel Parameter formatting (using kernel.parameters)
@@ -484,97 +484,70 @@ class RTLParser:
         logger.debug(f"Parsing port declaration node: {node.text.decode()}")
         # self._debug_node(node, "PortDecl", max_depth=5) # Uncomment for deep debug
 
-        direction = self._extract_direction(node)
-        if direction is None:
-            logger.warning(f"Could not determine direction for port declaration: {node.text.decode()}")
-            return [] # Cannot proceed without direction
-
+        final_width = "1" # Default
         data_type = "logic" # Default
-        final_width = "1"   # Default
-        port_names = []
+        direction = Direction.INPUT # Default
 
-        # --- Determine Header Type (Variable, Net, Interface, Implicit) ---
+        # --- Try finding header types ---
         variable_port_header = self._find_child(node, ["variable_port_header"])
         net_port_header = self._find_child(node, ["net_port_header"])
-        interface_port_header = self._find_child(node, ["interface_port_header"]) # Check for interface header
+        interface_port_header = self._find_child(node, ["interface_port_header"])
 
-        # --- Extract Type and Width based on Header ---
+        width_node = None # Initialize width_node
+
         if variable_port_header:
             logger.debug("Parsing as Variable Port Header")
+            direction = self._extract_direction(self._find_child(variable_port_header, ["port_direction"]))
             variable_port_type = self._find_child(variable_port_header, ["variable_port_type"])
             if variable_port_type:
-                # Data Type: First child (usually data_type node)
                 dt_node = self._find_child(variable_port_type, ["data_type"])
                 if dt_node:
-                    # Extract base type from within data_type
-                    core_type_node = self._find_child(dt_node, ["signing", "integer_vector_type", "integer_atom_type", "non_integer_type", "simple_identifier", "ps_identifier", "identifier", "data_type_identifier"])
-                    if core_type_node: data_type = core_type_node.text.decode('utf8').strip()
-                    else: data_type = dt_node.text.decode('utf8').strip() # Fallback
-                else: # Should have a data_type child based on AST
-                     logger.warning("No data_type node found within variable_port_type")
-
-                # Width: Sibling of data_type within variable_port_type
-                width_node = None
-                # 1. Search directly within variable_port_type first
-                width_node = self._find_child(variable_port_type, ["packed_dimension", "unpacked_dimension"])
-                if width_node:
-                    logger.debug("Found width node directly within variable_port_type.")
-                elif dt_node: # 2. Fallback: Check siblings of dt_node (original logic)
-                    logger.debug("Width node not direct child of variable_port_type, checking siblings of data_type.")
-                    sibling = dt_node.next_sibling
-                    if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]:
-                        width_node = sibling
-                        logger.debug("Found width node as next sibling of data_type in variable_port_type")
-                    else: # Check previous just in case
-                        sibling = dt_node.prev_sibling
-                        if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]:
-                             width_node = sibling
-                             logger.debug("Found width node as prev sibling of data_type in variable_port_type")
-                # 3. ADDED Fallback: Check as child of dt_node
-                elif dt_node:
-                    logger.debug("Width node not sibling, checking as child of data_type.")
-                    width_node = self._find_child(dt_node, ["packed_dimension", "unpacked_dimension"])
-                    if width_node:
-                        logger.debug("Found width node as child of data_type.")
-
-
-                # Process the found width_node (if any)
-                if width_node:
-                    logger.debug(f"Found potential width node (variable): Type={width_node.type}, Text='{width_node.text.decode()}'")
-                    final_width = self._extract_width_from_dimension(width_node)
-                else:
-                    logger.debug("No width node found associated with variable_port_type.")
-            else:
-                logger.warning("No variable_port_type found within variable_port_header")
+                    data_type = dt_node.text.decode('utf8').strip()
+                    # Search for width as sibling or child of data_type first
+                    width_node = self._find_child(dt_node, ["packed_dimension", "unpacked_dimension"]) # Check child
+                    if not width_node: # Check siblings
+                         sibling = dt_node.next_sibling
+                         if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]: width_node = sibling
+                         else:
+                              sibling = dt_node.prev_sibling
+                              if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]: width_node = sibling
+                # Fallback: Search directly within variable_port_type if not found near data_type
+                if not width_node:
+                    width_node = self._find_child(variable_port_type, ["packed_dimension", "unpacked_dimension"])
 
         elif net_port_header:
             logger.debug("Parsing as Net Port Header")
+            direction = self._extract_direction(self._find_child(net_port_header, ["port_direction"]))
             net_port_type = self._find_child(net_port_header, ["net_port_type"])
             if net_port_type:
-                # Data Type: First child (usually net_type node)
+                # Data Type: Can be net_type or within data_type_or_implicit
                 nt_node = self._find_child(net_port_type, ["net_type"])
                 if nt_node: data_type = nt_node.text.decode('utf8').strip()
-                else: logger.warning("No net_type node found within net_port_type")
 
-                # Width: Nested under data_type_or_implicit -> implicit_data_type
                 dtoi_node = self._find_child(net_port_type, ["data_type_or_implicit"])
                 if dtoi_node:
+                    # If data_type exists here, it might override net_type
+                    dt_node = self._find_child(dtoi_node, ["data_type"])
+                    if dt_node: data_type = dt_node.text.decode('utf8').strip()
+
+                    # Width is usually in implicit_data_type or sibling/child of data_type
                     idt_node = self._find_child(dtoi_node, ["implicit_data_type"])
                     if idt_node:
                         width_node = self._find_child(idt_node, ["packed_dimension", "unpacked_dimension"])
-                        if width_node:
-                            # ADDED LOG
-                            logger.debug(f"Found potential width node (net): Type={width_node.type}, Text='{width_node.text.decode()}'")
-                            final_width = self._extract_width_from_dimension(width_node)
-                        else:
-                            # ADDED LOG
-                             logger.debug("No width node found nested in net_port_type.")
-                    else:
-                        # ADDED LOG
-                         logger.debug("No implicit_data_type node found, cannot search for width.")
-            elif self._find_child(net_port_header, ["port_direction"]):
-                 # Handle implicit type (e.g., "input enable_in") - header only has direction
-                 data_type = "wire" # Default implicit type
+                    if not width_node and dt_node: # Check near data_type if present
+                         width_node = self._find_child(dt_node, ["packed_dimension", "unpacked_dimension"]) # Check child
+                         if not width_node: # Check siblings
+                              sibling = dt_node.next_sibling
+                              if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]: width_node = sibling
+                              else:
+                                   sibling = dt_node.prev_sibling
+                                   if sibling and sibling.type in ["packed_dimension", "unpacked_dimension"]: width_node = sibling
+                # Fallback: Search directly within net_port_type
+                if not width_node:
+                     width_node = self._find_child(net_port_type, ["packed_dimension", "unpacked_dimension"])
+
+            elif self._find_child(net_port_header, ["port_direction"]): # Handle implicit type like "input enable;"
+                 data_type = "wire"
                  logger.debug("Parsing as Implicit Net Port (defaulting type to wire)")
             else:
                  logger.warning("No net_port_type or direction found within net_port_header")
@@ -596,13 +569,24 @@ class RTLParser:
              # Width is typically not applicable or '1' for interface ports themselves
              final_width = "1"
 
-        else: # Fallback/Non-ANSI (might need more robust handling if mixed styles occur)
-            logger.warning(f"Could not identify standard ANSI header type for: {node.text.decode()}. Attempting fallback.")
-            # Basic fallback: look for type and dimension directly under the node
-            dt_node = self._find_child(node, ["data_type"])
-            if dt_node: data_type = dt_node.text.decode('utf8').strip()
-            width_node = self._find_child(node, ["packed_dimension", "unpacked_dimension"])
-            if width_node: final_width = self._extract_width_from_dimension(width_node)
+        else: # Non-ANSI -> Raise Error
+             port_text_preview = node.text.decode('utf8').strip().split('\n')[0][:80] # Get first line preview
+             error_msg = (
+                f"Port declaration '{port_text_preview}...' appears to be non-ANSI style "
+                f"(e.g., missing type/width in header). Only ANSI-style port declarations are supported."
+            )
+             logger.error(error_msg)
+             raise ParserError(error_msg)
+             # --- REMOVED Fallback Logic ---
+
+        # --- Process Width Node ---
+        if width_node and not interface_port_header:
+            logger.debug(f"Found potential width node: Type={width_node.type}, Text='{width_node.text.decode()}'")
+            extracted = self._extract_width_from_dimension(width_node)
+            if extracted: final_width = extracted
+            else: logger.warning(f"Width extraction returned empty for node: {width_node.text.decode()}, keeping default '1'.")
+        elif not interface_port_header: # Only log if not an interface
+             logger.debug(f"No width node found. Final width: {final_width}")
 
 
         # --- Extract Port Name(s) ---
