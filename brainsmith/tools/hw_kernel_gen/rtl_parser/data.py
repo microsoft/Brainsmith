@@ -10,7 +10,10 @@ validation.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any # Added Any for metadata flexibility
+
+# Import Interface type for HWKernel
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import Interface
 
 class Direction(Enum):
     """Port direction enumeration."""
@@ -105,29 +108,46 @@ class HWKernel:
         name: Module name
         parameters: List of module parameters
         ports: List of module ports
+        interfaces: Dictionary mapping interface names to validated Interface objects.
         pragmas: List of Brainsmith pragmas
-        metadata: Additional metadata extracted during parsing
+        metadata: Additional metadata extracted during parsing (e.g., source file path)
+        kernel_parameters: Optional[List[Any]] = None # Formatted parameters for compiler
+        compiler_flags: Optional[Dict[str, Any]] = None # Flags derived from pragmas
     """
     name: str
     parameters: List[Parameter] = field(default_factory=list)
     ports: List[Port] = field(default_factory=list)
+    # Added fields for interface analysis results
+    interfaces: Dict[str, Interface] = field(default_factory=dict)
     pragmas: List[Pragma] = field(default_factory=list)
-    metadata: Dict = field(default_factory=dict)
+    # --- Placeholders for future processing ---
+    kernel_parameters: Optional[List[Any]] = None
+    compiler_flags: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         """Validate kernel attributes."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid kernel name: {self.name}")
-        
+
         # Ensure unique parameter names
         param_names = [p.name for p in self.parameters]
         if len(param_names) != len(set(param_names)):
-            raise ValueError("Duplicate parameter names found")
-        
-        # Ensure unique port names
+            # Consider using a dictionary for faster lookups if performance matters
+            counts = {name: param_names.count(name) for name in set(param_names) if param_names.count(name) > 1}
+            raise ValueError(f"Duplicate parameter names found: {counts}")
+
+        # Ensure unique port names across all original ports
         port_names = [p.name for p in self.ports]
         if len(port_names) != len(set(port_names)):
-            raise ValueError("Duplicate port names found")
+            counts = {name: port_names.count(name) for name in set(port_names) if port_names.count(name) > 1}
+            raise ValueError(f"Duplicate port names found in input list: {counts}")
+
+        # Optional: Validate that interface ports + unassigned ports == original ports
+        # This requires careful handling as ports within interfaces are references
+        # all_interface_ports = {p.name for iface in self.interfaces.values() for p in iface.ports.values()}
+        # all_unassigned_ports = {p.name for p in self.unassigned_ports}
+        # if (all_interface_ports | all_unassigned_ports) != set(port_names):
+        #     logger.warning("Discrepancy between original ports and interface/unassigned ports.")
 
     def add_parameter(self, parameter: Parameter) -> None:
         """Add a parameter to the kernel.
