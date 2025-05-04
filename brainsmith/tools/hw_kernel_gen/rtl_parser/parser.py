@@ -398,43 +398,62 @@ class RTLParser:
         # --- Extract Width --- (Refined)
         width = "1" # Default width
         width_text_representation = None # Store the full text like "[WIDTH-1:0]"
+        # Find the node representing the dimension/range, e.g., packed_dimension `[7:0]`
         range_node = self._find_child(node, ["packed_dimension", "vector_dimension", "range_expression"])
         if range_node:
-            # Get the raw text between brackets, more robustly
-            start_bracket = self._find_child(range_node, "[")
-            end_bracket = self._find_child(range_node, "]")
-            if start_bracket and end_bracket:
-                # Extract text between the brackets
-                start = start_bracket.end_byte
-                end = end_bracket.start_byte
-                if start < end:
-                    width = node.text[start:end].decode('utf8').strip()
-                    width_text_representation = f"[{width}]"
+            # Extract the text content of the range node itself
+            range_text = range_node.text.decode('utf8').strip()
+            # Remove the outer brackets if present
+            if range_text.startswith('[') and range_text.endswith(']'):
+                width = range_text[1:-1].strip()
+                width_text_representation = range_text # Store with brackets
+            else:
+                # Fallback or warning if brackets aren't found as expected
+                logger.warning(f"Could not parse width from range node text: '{range_text}'")
+                width = range_text # Use the text as is, might be incorrect
+                width_text_representation = f"[{width}]" # Assume brackets were intended
 
-        # --- Extract Name --- (Simplified Logic for ANSI)
+        # --- Extract Name --- (Revised Logic)
         name = None
-        last_identifier_node = None
-        # Iterate through direct children to find the last identifier
-        for child in node.children:
-            if child.type in ["port_identifier", "simple_identifier", "identifier"]:
-                last_identifier_node = child # Keep updating to get the last one
+        port_identifier_node = self._find_child(node, ["port_identifier"])
 
-        if last_identifier_node:
-            potential_name = last_identifier_node.text.decode('utf8')
-            # Check it's not a keyword we already identified
-            # Add more checks if needed (e.g., against width string)
-            if potential_name != direction.value and potential_name != data_type:
-                name = potential_name
-            # Handle edge case: Sometimes the type node itself is the last identifier
-            elif type_node and last_identifier_node.id == type_node.id:
-                 # If the last identifier was the type node, it's definitely not the name.
-                 # We need to look harder, maybe search recursively?
-                 # For now, let's log a warning and return None, as the simple approach failed.
-                 logger.warning(f"Could not reliably determine port name for node: {node.text.decode()}")
-                 return None
+        if port_identifier_node:
+            name = port_identifier_node.text.decode('utf8').strip()
+            # Basic validation: ensure it's not a direction keyword if found as identifier
+            if name in [d.value for d in Direction]:
+                 logger.warning(f"Port identifier node text '{name}' matches a direction keyword. Discarding.")
+                 name = None # Avoid using direction keywords as names
+
+        # Fallback: If no specific port_identifier found, try the previous logic
+        # (useful for potentially different non-ANSI structures if they reach here)
+        if name is None:
+            logger.debug(f"No 'port_identifier' child found for node: {node.text.decode()}. Trying fallback.")
+            last_identifier_node = None
+            # Iterate through direct children to find the last identifier
+            for child in node.children:
+                # Check for general identifier types, excluding type/direction keywords explicitly
+                if child.type in ["simple_identifier", "identifier"] and \
+                   child.text.decode('utf8') not in [d.value for d in Direction] and \
+                   child.text.decode('utf8') != data_type: # Check against extracted data_type
+                    last_identifier_node = child # Keep updating to get the last one
+
+            if last_identifier_node:
+                potential_name = last_identifier_node.text.decode('utf8')
+                # Double-check it's not a keyword we already identified
+                if potential_name != direction.value and potential_name != data_type:
+                     name = potential_name
+                # Handle edge case: Sometimes the type node itself is the last identifier
+                elif type_node and last_identifier_node.id == type_node.id:
+                     logger.warning(f"Fallback failed: Last identifier was the type node for: {node.text.decode()}")
+                     name = None # Explicitly set to None
+                else:
+                     logger.warning(f"Fallback check failed for potential name '{potential_name}' from node: {node.text.decode()}")
+                     name = None # Explicitly set to None
+
 
         if name is None:
              logger.debug(f"Failed to extract port name from node: {node.text.decode()}")
+             # self._debug_node(node, prefix="Failed Node: ") # Uncomment for deep debug
              return None # Cannot determine name
 
         logger.debug(f"Parsed port: Name='{name}', Direction='{direction.value}', Width='{width}', Type='{data_type}'")
