@@ -12,7 +12,7 @@ in SystemVerilog comments. Pragmas provide additional information to guide
 the Hardware Kernel Generator.
 
 Example pragma:
-    // @brainsmith top <module_name>
+    // @brainsmith top module_name
     // @brainsmith supported_dtype in0 INT 4 8
 """
 

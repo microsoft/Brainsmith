@@ -10,7 +10,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 # Use TYPE_CHECKING to avoid runtime import cycle, but keep type hints for checkers
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
+from typing import Dict, Any, Optional, TYPE_CHECKING
 
 # Use forward reference string hint for Port to break cycle
 if TYPE_CHECKING:

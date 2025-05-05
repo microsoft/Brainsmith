@@ -168,30 +168,36 @@ class RTLParser:
             kernel.interfaces = validated_interfaces
             logger.info(f"Interface analysis complete. Found {len(kernel.interfaces)} valid interfaces.")
 
-            # --- Modify Post-Analysis Validation ---
-            # 1. Check interface counts
-            has_axi_stream = any(iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values())
+            # --- Post-Analysis Validation ---
+            # Check for Global Control interface
+            has_global_control = any(
+                iface.type == InterfaceType.GLOBAL_CONTROL for iface in kernel.interfaces.values()
+            )
+            if not has_global_control:
+                # Note: This error triggers if no *valid* global interface is found.
+                # It could be because ap_clk/ap_rst_n were missing entirely, or they
+                # were found but failed validation (e.g., wrong direction).
+                error_msg = f"Module '{kernel.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
+                logger.error(error_msg)
+                raise ParserError(error_msg)
+
+            # Check for at least one AXI-Stream interface
+            has_axi_stream = any(
+                iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values()
+            )
             if not has_axi_stream:
                 error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
                 logger.error(error_msg)
                 raise ParserError(error_msg)
             
-            # 2. Check for unassigned ports
+            # Check for unassigned ports
             if unassigned_ports:
-                unassigned_names = [p.name for p in unassigned_ports]
-                error_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
-                logger.error(error_msg)
-                raise ParserError(error_msg)
-            # --- END RESTORED ---
+                 unassigned_names = [p.name for p in unassigned_ports]
+                 error_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
+                 logger.error(error_msg)
+                 raise ParserError(error_msg)
 
-            # --- Add Placeholders for Future Data Processing ---
-            # TODO: Implement Kernel Parameter formatting (using kernel.parameters)
-            #       Result should be stored in kernel.kernel_parameters
-
-            # TODO: Implement Compiler Flag inference (using kernel.pragmas)
-            #       Result should be stored in kernel.compiler_flags
-
-            logger.info(f"Successfully parsed and validated module '{kernel.name}' from {file_path}")
+            logger.info(f"Successfully parsed module '{kernel.name}' from {file_path}")
             return kernel
         except SyntaxError as e:
             # Already logged, just re-raise

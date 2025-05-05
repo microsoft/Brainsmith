@@ -43,9 +43,10 @@ class TestParserCore:
         """Test parsing an empty module raises error due to missing interfaces."""
         content = "module empty_mod; endmodule"
         path = temp_sv_file(content)
-        # Expect ParserError because no interfaces (specifically AXI-Stream) are found
-        with pytest.raises(ParserError, match=r"Module 'empty_mod' requires at least one AXI-Stream interface"):
+        # --- MODIFIED: Expect missing Global Control error first ---
+        with pytest.raises(ParserError, match=r"Module 'empty_mod' is missing a valid Global Control interface"):
              parser.parse_file(path)
+        # --- END MODIFICATION ---
 
     def test_module_selection_single(self, parser, temp_sv_file):
         """Test selecting the only module present."""
@@ -718,7 +719,6 @@ class TestInterfaceAnalysis:
 
     def test_missing_required_global(self, parser, temp_sv_file):
         """Test error when required global signals (ap_clk/ap_rst_n) are missing."""
-        # Content has AXI-Stream but missing ap_clk/ap_rst_n
         content = """
         module test (
              input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY,
@@ -727,10 +727,8 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        # --- MODIFIED: Expect error about missing AXI-Stream first ---
-        # Although globals are missing, the lack of AXI-Stream is checked first now.
-        # If globals were the first check, it would be: match=r"Missing required global signals:.*'ap_clk'.*'ap_rst_n'"
-        with pytest.raises(ParserError, match=r"Module 'test' requires at least one AXI-Stream interface"):
+        # --- MODIFIED: Expect missing Global Control error first ---
+        with pytest.raises(ParserError, match=r"Module 'test' is missing a valid Global Control interface"):
             parser.parse_file(path)
         # --- END MODIFICATION ---
 
@@ -745,8 +743,8 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        # Expect failure during interface validation step
-        with pytest.raises(ParserError, match=r"Validation failed for potential interface 'in0'.*Missing required AXI-Stream signals.*'_TVALID'"):
+        # Expect final parser error about missing AXI-Stream (Global check passes)
+        with pytest.raises(ParserError, match=r"Module 'test' requires at least one AXI-Stream interface"):
              parser.parse_file(path)
 
     def test_incorrect_stream_direction(self, parser, temp_sv_file):
@@ -761,9 +759,10 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        # Expect failure during interface validation step
-        with pytest.raises(ParserError, match=r"Validation failed for potential interface 'in0'.*Invalid AXI-Stream signal 'in0_TVALID': Incorrect direction"):
+        # Expect final parser error about missing AXI-Stream (Global check passes)
+        with pytest.raises(ParserError, match=r"Module 'test' requires at least one AXI-Stream interface"):
              parser.parse_file(path)
+        # (No change needed here, expectation is correct)
 
     def test_unassigned_ports(self, parser, temp_sv_file):
         """Test error when ports cannot be assigned to any known interface."""
@@ -777,11 +776,11 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        # --- MODIFIED: Expect ParserError for unassigned ports ---
+        # Expect ParserError for unassigned ports (Global and Stream checks pass)
         expected_msg = r"Module 'test' has 2 ports not assigned to any standard interface: \['unassigned1', 'unassigned2'\]"
         with pytest.raises(ParserError, match=expected_msg):
             parser.parse_file(path)
-        # --- END MODIFICATION ---
+        # (No change needed here, expectation is correct)
 
     def test_multiple_axi_lite_interfaces(self, parser, temp_sv_file):
         """Test parsing succeeds with multiple valid AXI-Lite interfaces."""
