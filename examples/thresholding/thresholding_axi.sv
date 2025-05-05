@@ -71,38 +71,38 @@ module thresholding_axi #(
 
 	//- AXI Lite ------------------------
 	// Writing
-	input	logic                  config_AWVALID,
-	output	logic                  config_AWREADY,
-	input	logic [ADDR_BITS-1:0]  config_AWADDR,	// lowest 2 bits (byte selectors) are ignored
+	input	logic                  s_axilite_AWVALID,
+	output	logic                  s_axilite_AWREADY,
+	input	logic [ADDR_BITS-1:0]  s_axilite_AWADDR,	// lowest 2 bits (byte selectors) are ignored
 
-	input	logic         config_WVALID,
-	output	logic         config_WREADY,
-	input	logic [31:0]  config_WDATA,
-	input	logic [ 3:0]  config_WSTRB,
+	input	logic         s_axilite_WVALID,
+	output	logic         s_axilite_WREADY,
+	input	logic [31:0]  s_axilite_WDATA,
+	input	logic [ 3:0]  s_axilite_WSTRB,
 
-	output	logic        config_BVALID,
-	input	logic        config_BREADY,
-	output	logic [1:0]  config_BRESP,
+	output	logic        s_axilite_BVALID,
+	input	logic        s_axilite_BREADY,
+	output	logic [1:0]  s_axilite_BRESP,
 
 	// Reading
-	input	logic                  config_ARVALID,
-	output	logic                  config_ARREADY,
-	input	logic [ADDR_BITS-1:0]  config_ARADDR,
+	input	logic                  s_axilite_ARVALID,
+	output	logic                  s_axilite_ARREADY,
+	input	logic [ADDR_BITS-1:0]  s_axilite_ARADDR,
 
-	output	logic         config_RVALID,
-	input	logic         config_RREADY,
-	output	logic [31:0]  config_RDATA,
-	output	logic [ 1:0]  config_RRESP,
+	output	logic         s_axilite_RVALID,
+	input	logic         s_axilite_RREADY,
+	output	logic [31:0]  s_axilite_RDATA,
+	output	logic [ 1:0]  s_axilite_RRESP,
 
 	//- AXI Stream - Input --------------
-	output	logic  in0_TREADY,
-	input	logic  in0_TVALID,
-	input	logic [((PE*WI+7)/8)*8-1:0]  in0_TDATA,
+	output	logic  s_axis_tready,
+	input	logic  s_axis_tvalid,
+	input	logic [((PE*WI+7)/8)*8-1:0]  s_axis_tdata,
 
 	//- AXI Stream - Output -------------
-	input	logic  out0_TREADY,
-	output	logic  out0_TVALID,
-	output	logic [((PE*O_BITS+7)/8)*8-1:0]  out0_TDATA
+	input	logic  m_axis_tready,
+	output	logic  m_axis_tvalid,
+	output	logic [((PE*O_BITS+7)/8)*8-1:0]  m_axis_tdata
 );
 
 	//-----------------------------------------------------------------------
@@ -119,12 +119,12 @@ module thresholding_axi #(
 		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(WT)) axi (
 			.aclk(ap_clk), .aresetn(ap_rst_n),
 
-			.awready(config_AWREADY), .awvalid(config_AWVALID), .awaddr(config_AWADDR), .awprot('x),
-			.wready(config_WREADY),   .wvalid(config_WVALID),   .wdata(config_WDATA),   .wstrb(config_WSTRB),
-			.bready(config_BREADY),   .bvalid(config_BVALID),   .bresp(config_BRESP),
+			.awready(s_axilite_AWREADY), .awvalid(s_axilite_AWVALID), .awaddr(s_axilite_AWADDR), .awprot('x),
+			.wready(s_axilite_WREADY),   .wvalid(s_axilite_WVALID),   .wdata(s_axilite_WDATA),   .wstrb(s_axilite_WSTRB),
+			.bready(s_axilite_BREADY),   .bvalid(s_axilite_BVALID),   .bresp(s_axilite_BRESP),
 
-			.arready(config_ARREADY), .arvalid(config_ARVALID), .araddr(config_ARADDR), .arprot('x),
-			.rready(config_RREADY),   .rvalid(config_RVALID),   .rresp(config_RRESP),   .rdata(config_RDATA),
+			.arready(s_axilite_ARREADY), .arvalid(s_axilite_ARVALID), .araddr(s_axilite_ARADDR), .arprot('x),
+			.rready(s_axilite_RREADY),   .rvalid(s_axilite_RVALID),   .rresp(s_axilite_RRESP),   .rdata(s_axilite_RDATA),
 
 			.ip_en(cfg_en), .ip_wen(cfg_we), .ip_addr(cfg_a0), .ip_wdata(cfg_d),
 			.ip_rack(cfg_rack), .ip_rdata(cfg_q)
@@ -148,7 +148,7 @@ module thresholding_axi #(
 	uwire [PE-1:0][WT-1:0]  idat;
 	for(genvar  pe = 0; pe < PE; pe++) begin
 		if(WT == WI) begin : genCopy
-			assign	idat[pe] = in0_TDATA[pe*WI+:WI];
+			assign	idat[pe] = s_axis_tdata[pe*WI+:WI];
 		end : genCopy
 		else begin
 			initial begin
@@ -159,17 +159,17 @@ module thresholding_axi #(
 			end
 
 			if(WT > WI) begin : genWiden
-				assign	idat[pe] = { {(WT-WI){SIGNED? in0_TDATA[(pe+1)*WI-1] : 1'b0}}, in0_TDATA[pe*WI+:WI] };
+				assign	idat[pe] = { {(WT-WI){SIGNED? s_axis_tdata[(pe+1)*WI-1] : 1'b0}}, s_axis_tdata[pe*WI+:WI] };
 			end : genWiden
 			else begin : genNarrow
 				// Saturate for clipping inputs
 				if(!SIGNED) begin
-					assign	idat[pe] = |in0_TDATA[pe*WI+WT+:WI-WT]? '1 : in0_TDATA[pe*WI+:WT];
+					assign	idat[pe] = |s_axis_tdata[pe*WI+WT+:WI-WT]? '1 : s_axis_tdata[pe*WI+:WT];
 				end
 				else begin
 					assign	idat[pe] =
-						(in0_TDATA[pe*WI+WT+:WI-WT] == '1) || (in0_TDATA[pe*WI+WT+:WI-WT] == '0)? in0_TDATA[pe*WI+:WT] :
-						{in0_TDATA[(pe+1)*WI-1], {(WT-1){!in0_TDATA[(pe+1)*WI-1]}}};
+						(s_axis_tdata[pe*WI+WT+:WI-WT] == '1) || (s_axis_tdata[pe*WI+WT+:WI-WT] == '0)? s_axis_tdata[pe*WI+:WT] :
+						{s_axis_tdata[(pe+1)*WI-1], {(WT-1){!s_axis_tdata[(pe+1)*WI-1]}}};
 				end
 			end : genNarrow
 		end
@@ -189,11 +189,11 @@ module thresholding_axi #(
 		.cfg_en, .cfg_we, .cfg_a, .cfg_d,
 		.cfg_rack, .cfg_q,
 
-		.irdy(in0_TREADY), .ivld(in0_TVALID), .idat,
-		.ordy(out0_TREADY), .ovld(out0_TVALID), .odat(out0_TDATA[PE*O_BITS-1:0])
+		.irdy(s_axis_tready), .ivld(s_axis_tvalid), .idat,
+		.ordy(m_axis_tready), .ovld(m_axis_tvalid), .odat(m_axis_tdata[PE*O_BITS-1:0])
 	);
-	if($bits(out0_TDATA) > PE*O_BITS) begin : genPadOut
-		assign	out0_TDATA[$left(out0_TDATA):PE*O_BITS] = '0;
+	if($bits(m_axis_tdata) > PE*O_BITS) begin : genPadOut
+		assign	m_axis_tdata[$left(m_axis_tdata):PE*O_BITS] = '0;
 	end : genPadOut
 
 endmodule : thresholding_axi

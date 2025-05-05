@@ -63,17 +63,20 @@ class Parameter:
         param_type: Parameter datatype (e.g., "int", "logic")
         default_value: Default value if specified
         description: Optional documentation from RTL comments
+        template_param_name: Name used in the wrapper template (e.g., $NAME$).
     """
     name: str
     param_type: str
     default_value: Optional[str] = None
     description: Optional[str] = None
+    template_param_name: str = field(init=False) # Added field
 
     def __post_init__(self):
         """Validate parameter attributes after initialization."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid parameter name: {self.name}")
         # Parameter type can be None for typeless parameters
+        self.template_param_name = f"${self.name.upper()}$" # Initialize template name
 
 @dataclass
 class Port:

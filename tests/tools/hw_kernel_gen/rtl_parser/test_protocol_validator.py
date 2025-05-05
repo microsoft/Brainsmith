@@ -73,46 +73,75 @@ def axilite_ports_full(axilite_write_ports, axilite_read_ports) -> List[Port]:
     """Fixture combining full AXI-Lite write and read ports."""
     return axilite_write_ports + axilite_read_ports
 
+@pytest.fixture
+def axis_in_ports_with_widths() -> List[Port]:
+    """AXI-Stream input ports with specific width expressions."""
+    return [
+        Port(name="in_data_TDATA", direction=Direction.INPUT, width="[AXIS_WIDTH-1:0]"),
+        Port(name="in_data_TVALID", direction=Direction.INPUT, width="1"),
+        Port(name="in_data_TREADY", direction=Direction.OUTPUT, width="1"),
+        Port(name="in_data_TKEEP", direction=Direction.INPUT, width="[(AXIS_WIDTH/8)-1:0]"), # Optional keep
+    ]
+
+@pytest.fixture
+def axilite_ports_with_widths() -> List[Port]:
+    """AXI-Lite ports with specific width expressions."""
+    return [
+        # Write Address Channel
+        Port(name="config_AWADDR", direction=Direction.INPUT, width="[AXIL_ADDR_WIDTH-1:0]"),
+        Port(name="config_AWPROT", direction=Direction.INPUT, width="[2:0]"), # Example fixed width
+        Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
+        Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
+        # Write Data Channel
+        Port(name="config_WDATA", direction=Direction.INPUT, width="[AXIL_DATA_WIDTH-1:0]"),
+        Port(name="config_WSTRB", direction=Direction.INPUT, width="[(AXIL_DATA_WIDTH/8)-1:0]"),
+        Port(name="config_WVALID", direction=Direction.INPUT, width="1"),
+        Port(name="config_WREADY", direction=Direction.OUTPUT, width="1"),
+        # Write Response Channel
+        Port(name="config_BRESP", direction=Direction.OUTPUT, width="[1:0]"),
+        Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
+        Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
+        # Read Address Channel
+        Port(name="config_ARADDR", direction=Direction.INPUT, width="[AXIL_ADDR_WIDTH-1:0]"),
+        Port(name="config_ARPROT", direction=Direction.INPUT, width="[2:0]"),
+        Port(name="config_ARVALID", direction=Direction.INPUT, width="1"),
+        Port(name="config_ARREADY", direction=Direction.OUTPUT, width="1"),
+        # Read Data Channel
+        Port(name="config_RDATA", direction=Direction.OUTPUT, width="[AXIL_DATA_WIDTH-1:0]"),
+        Port(name="config_RRESP", direction=Direction.OUTPUT, width="[1:0]"),
+        Port(name="config_RVALID", direction=Direction.OUTPUT, width="1"),
+        Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
+    ]
+
 # --- Helper Function ---
 
 def create_port_group(interface_type: InterfaceType, name: str, ports_list: list) -> PortGroup:
+    """Helper to create PortGroup with generic keys based on assumed scanner logic."""
     group = PortGroup(interface_type=interface_type, name=name)
+    prefix = name + "_"
     for port in ports_list:
-        # Determine key based on type
-        key = port.name # Default key
-        if interface_type == InterfaceType.GLOBAL_CONTROL:
-             # Global signals use full name as key
-             key = port.name
-        elif interface_type == InterfaceType.AXI_STREAM:
-            # Find the last underscore and take the part after it
-            parts = port.name.split('_')
-            potential_suffix = parts[-1]
-            # Check if it's a known suffix (handle _V_ case implicitly)
-            from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import AXI_STREAM_SUFFIXES
-            if potential_suffix in AXI_STREAM_SUFFIXES:
-                 key = potential_suffix
-            else:
-                 key = port.name # Fallback if suffix extraction fails
+        key = None
+        if interface_type == InterfaceType.AXI_STREAM:
+            # Assumes scanner extracts suffix like TDATA, TVALID etc.
+            suffix = port.name.split('_')[-1]
+            if suffix in ["TDATA", "TVALID", "TREADY", "TLAST", "TKEEP"]: # Add other known suffixes
+                 key = suffix
         elif interface_type == InterfaceType.AXI_LITE:
-             parts = port.name.split('_')
-             potential_signal = parts[-1]
-             from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import AXI_LITE_SUFFIXES
-             if potential_signal in AXI_LITE_SUFFIXES:
-                  key = potential_signal
-             else:
-                  key = port.name # Fallback
-        # Add port with determined key
-        group.add_port(port, key=key)
-    return group
+             # Assumes scanner extracts generic signal name like AWADDR, WDATA etc.
+             suffix = port.name.split('_')[-1]
+             if suffix in ["AWADDR", "AWPROT", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY", "ARADDR", "ARPROT", "ARVALID", "ARREADY", "RDATA", "RRESP", "RVALID", "RREADY"]:
+                 key = suffix
+        elif interface_type == InterfaceType.GLOBAL_CONTROL:
+            key = port.name # Global uses full name
 
-def create_generic_axilite_group(ports: list, name: str = "config") -> PortGroup:
-    """Helper to create PortGroup with generic keys for AXI-Lite."""
-    generic_ports_dict = {}
-    prefix = name + "_" # Assuming prefix matches group name
-    for port in ports:
-        base_name = port.name.replace(prefix, "")
-        generic_ports_dict[base_name] = port
-    return PortGroup(interface_type=InterfaceType.AXI_LITE, name=name, ports=generic_ports_dict)
+        if key:
+            group.ports[key] = port
+        else:
+             # Fallback or handle error if key extraction fails
+             logger.warning(f"Could not determine key for port {port.name} in helper.")
+             group.ports[port.name] = port # Fallback to full name
+
+    return group
 
 # --- Global Signal Tests ---
 
@@ -195,22 +224,35 @@ def test_validate_axi_stream(validator, prefix, ports_list, expected_valid):
     if not expected_valid:
         assert result.message is not None
 
+def test_validate_axis_metadata(validator, axis_in_ports_with_widths):
+    """Test that AXI-Stream validation extracts width metadata."""
+    group = create_port_group(InterfaceType.AXI_STREAM, "in_data", axis_in_ports_with_widths)
+    result = validator.validate_axi_stream(group)
+    assert result.valid
+    assert "data_width_expr" in group.metadata
+    assert group.metadata["data_width_expr"] == "[AXIS_WIDTH-1:0]"
+    assert "keep_width_expr" in group.metadata # Check optional keep width
+    assert group.metadata["keep_width_expr"] == "[(AXIS_WIDTH/8)-1:0]"
+
 # --- AXI-Lite Tests ---
 
 def test_validate_axilite_full(validator, axilite_ports_full):
-    group = create_generic_axilite_group(axilite_ports_full, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_full)
     result = validator.validate_axi_lite(group)
     assert result.valid
     assert result.message is None
 
 def test_validate_axilite_write_only(validator, axilite_write_ports):
-    group = create_generic_axilite_group(axilite_write_ports, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_write_ports)
     result = validator.validate_axi_lite(group)
     assert result.valid
     assert result.message is None
 
 def test_validate_axilite_read_only(validator, axilite_read_ports):
-    group = create_generic_axilite_group(axilite_read_ports, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_read_ports)
     result = validator.validate_axi_lite(group)
     assert result.valid
     assert result.message is None
@@ -232,7 +274,8 @@ def test_validate_axilite_missing_write_required(validator, axilite_read_ports):
     ]
     ports = write_ports_missing + axilite_read_ports
 
-    group = create_generic_axilite_group(ports, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", ports)
 
     result = validator.validate_axi_lite(group)
     assert not result.valid
@@ -248,7 +291,8 @@ def test_validate_axilite_missing_read_required(validator, axilite_write_ports):
     ]
     ports = read_ports_missing + axilite_write_ports
 
-    group = create_generic_axilite_group(ports, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", ports)
 
     result = validator.validate_axi_lite(group)
     assert not result.valid
@@ -265,12 +309,26 @@ def test_validate_axilite_wrong_direction(validator, axilite_ports_full):
         else:
             modified_ports.append(p)
 
-    group = create_generic_axilite_group(modified_ports, "config")
+    # Use create_port_group instead
+    group = create_port_group(InterfaceType.AXI_LITE, "config", modified_ports)
 
     result = validator.validate_axi_lite(group)
     assert not result.valid
     assert "Invalid AXI-Lite signal 'config_AWREADY'" in result.message
     assert "Incorrect direction" in result.message
+
+def test_validate_axilite_metadata(validator, axilite_ports_with_widths):
+    """Test that AXI-Lite validation extracts width metadata."""
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_with_widths)
+    result = validator.validate_axi_lite(group)
+    assert result.valid
+    assert "addr_width_expr" in group.metadata
+    assert group.metadata["addr_width_expr"] == "[AXIL_ADDR_WIDTH-1:0]"
+    assert "data_width_expr" in group.metadata
+    assert group.metadata["data_width_expr"] == "[AXIL_DATA_WIDTH-1:0]"
+    assert "strb_width_expr" in group.metadata
+    assert group.metadata["strb_width_expr"] == "[(AXIL_DATA_WIDTH/8)-1:0]"
+
 
 # --- General Validate Dispatch Test ---
 
@@ -286,7 +344,8 @@ def test_validate_dispatch(validator, global_ports, axis_in_ports, axilite_ports
     assert result_axis.valid
 
     # AXI-Lite group
-    axilite_group = create_generic_axilite_group(axilite_ports_full, "config")
+    # Use create_port_group instead
+    axilite_group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_full)
     result_axilite = validator.validate(axilite_group)
     assert result_axilite.valid
 

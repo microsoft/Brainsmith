@@ -154,6 +154,13 @@ class ProtocolValidator:
         if not tdata_port:
             # Should have been caught by missing check, but defensive coding
             return ValidationResult(False, f"AXI-Stream '{group.name}' missing TDATA.")
+        # Store data width expression
+        group.metadata['data_width_expr'] = tdata_port.width
+
+        # Store keep width expression if TKeep exists
+        tkeep_port = group.ports.get("TKEEP") # Assuming TKEEP is the key used by scanner
+        if tkeep_port:
+            group.metadata['keep_width_expr'] = tkeep_port.width
 
         # Validate signal directions based on inferred stream direction
         for suffix, port in group.ports.items():
@@ -200,7 +207,41 @@ class ProtocolValidator:
         # group.ports now uses generic keys (e.g., "AWADDR", "WDATA")
         present_signals = set(group.ports.keys())
 
-        # Check which channels are potentially present based on generic signal names
+        # --- Extract and store width information ---
+        addr_width_expr = None
+        data_width_expr = None
+        strb_width_expr = None
+
+        # Address Width (Check AWADDR first, then ARADDR)
+        awaddr_port = group.ports.get("AWADDR")
+        if awaddr_port:
+            addr_width_expr = awaddr_port.width
+        else:
+            araddr_port = group.ports.get("ARADDR")
+            if araddr_port:
+                addr_width_expr = araddr_port.width
+        if addr_width_expr:
+            group.metadata['addr_width_expr'] = addr_width_expr
+
+        # Data Width (Check WDATA first, then RDATA)
+        wdata_port = group.ports.get("WDATA")
+        if wdata_port:
+            data_width_expr = wdata_port.width
+        else:
+            rdata_port = group.ports.get("RDATA")
+            if rdata_port:
+                data_width_expr = rdata_port.width
+        if data_width_expr:
+            group.metadata['data_width_expr'] = data_width_expr
+
+        # Strobe Width
+        wstrb_port = group.ports.get("WSTRB")
+        if wstrb_port:
+            group.metadata['strb_width_expr'] = wstrb_port.width
+        # --- End Width Extraction ---
+
+
+        # Determine if read/write channels are present based on generic signal names
         has_write_channel = any(sig in present_signals for sig in AXI_LITE_WRITE_SUFFIXES)
         has_read_channel = any(sig in present_signals for sig in AXI_LITE_READ_SUFFIXES)
 

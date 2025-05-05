@@ -18,24 +18,34 @@ Key Components:
 
 Example Usage:
     from brainsmith.tools.hw_kernel_gen.rtl_parser import RTLParser
-    
-    parser = RTLParser()
-    kernel = parser.parse_file("my_kernel.sv")
-    
-    # Access parsed information
-    print(f"Module name: {kernel.name}")
-    print(f"Parameters: {kernel.parameters}")
-    print(f"Ports: {kernel.ports}")
-    print(f"Pragmas: {kernel.pragmas}")
 """
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
-    HWKernel,
+# Expose key classes and functions for easier import
+from .data import (
+    Direction,
+    InterfaceType,
     Parameter,
     Port,
-    Pragma
+    PortGroup,
+    Interface,
+    HWKernel,
+    Pragma,
+    ValidationResult,
 )
+from .parser import RTLParser, ParserError
+from .protocol_validator import ProtocolValidator
 
-__version__ = "0.1.0"
-__all__ = ["RTLParser", "HWKernel", "Parameter", "Port", "Pragma"]
+__all__ = [
+    "RTLParser",
+    "ParserError",
+    "ProtocolValidator",
+    "HWKernel",
+    "Parameter",
+    "Port",
+    "PortGroup",
+    "Interface",
+    "InterfaceType",
+    "Direction",
+    "Pragma",
+    "ValidationResult",
+]
