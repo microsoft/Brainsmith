@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 """Core data structures for interface analysis."""
 
 from dataclasses import dataclass, field

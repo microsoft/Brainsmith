@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 # interface_scanner.py
 """Identifies potential interfaces from port lists."""
 

@@ -1,58 +1,60 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 """SystemVerilog RTL parser implementation.
 
 This module implements the main RTL parser using tree-sitter to parse
 SystemVerilog files and extract module interfaces, parameters, and pragmas.
 """
-# Standard Library
+
 import os
 import logging
-import re
-from typing import Optional, List, Tuple, Union, Dict # Keep Dict if used
-import collections # Keep if OrderedDict is used, otherwise remove
+from typing import Optional, List, Tuple
+import collections
 
-# Third-Party
-from tree_sitter import Language, Parser, Tree, Node # Keep Language if needed elsewhere, Parser, Tree, Node
+from tree_sitter import Parser, Node
 
-# First-Party (Internal)
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction, ModuleSummary
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
-# --- ADDED IMPORT ---
-from . import grammar # Import the new grammar module
-# --- END ADDED IMPORT ---
+from . import grammar
 
-# Configure root logger level based on environment or config if needed
-# logging.basicConfig(level=logging.INFO) # Example: Default to INFO
 logger = logging.getLogger(__name__) # Get logger for this module
+
 
 class ParserError(Exception):
     """Base class for parser errors."""
     pass
 
+
 class SyntaxError(ParserError):
     """Raised when SystemVerilog syntax is invalid."""
     pass
 
+
 class RTLParser:
     """Parser for SystemVerilog RTL files.
-    
+
     This class uses tree-sitter to parse SystemVerilog files and extract
     the information needed by the Hardware Kernel Generator.
-    
+
     Attributes:
         parser: tree-sitter Parser instance
         debug: Enable debug output
     """
-    
+
     def __init__(self, grammar_path: Optional[str] = None, debug: bool = False):
         """Initialize the RTL parser.
-        
+
         Args:
             grammar_path: Path to SystemVerilog grammar .so file
                         If None, tries to find sv.so in the rtl_parser directory
             debug: Enable debug output
-        
+ 
         Raises:
             FileNotFoundError: If SystemVerilog grammar file not found
             RuntimeError: If parser initialization fails
@@ -60,28 +62,23 @@ class RTLParser:
         self.debug = debug
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # Find grammar file path (remains the same)
+        # Find grammar file path
         if grammar_path is None:
-            # Assuming grammar.py is in the same directory as parser.py
             grammar_dir = os.path.dirname(__file__)
-            grammar_path = os.path.join(grammar_dir, "sv.so") # Default name
+            grammar_path = os.path.join(grammar_dir, "sv.so")
 
-        # --- MODIFIED: Use load_language function ---
+        # Load language and instantiate parser
         try:
-            # Load language using the dedicated function
             language = grammar.load_language(grammar_path)
             self.parser = Parser(language)
             self.interface_builder = InterfaceBuilder(debug=debug)
             logger.info("RTLParser initialized successfully.")
         except (FileNotFoundError, AttributeError, RuntimeError) as e:
-             # Let load_language handle specific logging
-             # Re-raise or wrap in ParserError if desired
              raise ParserError(f"Failed to initialize parser: {e}")
         except Exception as e:
              # Catch any other unexpected errors during init
              logger.exception(f"Unexpected error during RTLParser initialization: {e}")
              raise RuntimeError(f"Unexpected error during RTLParser initialization: {e}")
-        # --- END MODIFICATION ---
 
     def parse_file(self, file_path: str) -> HWKernel:
         """Parses a SystemVerilog file and extracts HWKernel information."""
@@ -101,10 +98,6 @@ class RTLParser:
             # Catch potential errors during the parse call itself
             logger.exception(f"Tree-sitter parsing failed for {file_path}: {e}")
             raise ParserError(f"Core parsing failed for {file_path}: {e}")
-
-        if self.debug:
-            logger.debug(f"Raw parse tree for {file_path}:")
-            # _debug_node(tree.root_node) # Keep this commented unless deep debugging needed
 
         # Check for syntax errors more specifically
         if tree.root_node.has_error:
@@ -138,27 +131,20 @@ class RTLParser:
             logger.error(e) # Log the specific error from selection logic
             raise
 
-        # Corrected line 170
-        # logger.info(f"Target module identified: '{module_node.child_by_field_name("name").text.decode()}'")
-
         # --- Start processing the selected module ---
         try:
             # Extract module components
             logger.debug("Extracting module header...")
-            # Use the new private method
             name, param_nodes, port_nodes = self._extract_module_header(module_node)
             logger.debug(f"Extracted header for module '{name}'")
 
             # Create kernel instance
             kernel = HWKernel(name=name)
-            # kernel.metadata['source_file'] = file_path # Consider adding metadata if needed
-
             kernel.pragmas = pragmas # Assign extracted pragmas
 
             # Extract parameters
             logger.debug("Extracting parameters...")
             for node in param_nodes:
-                # Use the modified private method (returns Parameter | None)
                 param = self._parse_parameter_declaration(node)
                 if param is not None: # Skips local params implicitly
                     kernel.parameters.append(param)
@@ -183,23 +169,19 @@ class RTLParser:
             logger.info(f"Interface analysis complete. Found {len(kernel.interfaces)} valid interfaces.")
 
             # --- Modify Post-Analysis Validation ---
-            # 1. Check for unassigned ports - Log as warning instead of error
-            if unassigned_ports:
-                 unassigned_names = [p.name for p in unassigned_ports]
-                 # Changed from error to warning
-                 warning_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
-                 logger.warning(warning_msg)
-                 # Store unassigned ports for potential later use (optional, requires adding to HWKernel)
-                 # kernel.unassigned_ports = unassigned_ports
-                 # Temporarily disabled: raise ParserError(error_msg)
-
-            # 2. Check interface counts (Keep existing logic if needed)
-            # --- RESTORED CHECK: Ensure at least one AXI-Stream is valid ---
+            # 1. Check interface counts
             has_axi_stream = any(iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values())
             if not has_axi_stream:
-                 error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
-                 logger.error(error_msg)
-                 raise ParserError(error_msg)
+                error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
+                logger.error(error_msg)
+                raise ParserError(error_msg)
+            
+            # 2. Check for unassigned ports
+            if unassigned_ports:
+                unassigned_names = [p.name for p in unassigned_ports]
+                error_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
+                logger.error(error_msg)
+                raise ParserError(error_msg)
             # --- END RESTORED ---
 
             # --- Add Placeholders for Future Data Processing ---
@@ -211,12 +193,6 @@ class RTLParser:
 
             logger.info(f"Successfully parsed and validated module '{kernel.name}' from {file_path}")
             return kernel
-
-        # Consolidate exception handling for different stages
-        except FileNotFoundError as e:
-            # This specific error is already handled before the main try block
-            logger.error(f"File not found error during parsing: {e}") # Should not happen here ideally
-            raise ParserError(f"File not found: {file_path}")
         except SyntaxError as e:
             # Already logged, just re-raise
             raise
@@ -253,17 +229,16 @@ class RTLParser:
         queue = collections.deque([root])
         while queue:
             node = queue.popleft()
-            if node.type == grammar.MODULE_DECLARATION: # Use constant
+            if node.type == "module_declaration":
                 module_nodes.append(node)
             # Avoid descending into nested modules if grammar supports them
-            if node != root and node.type == grammar.MODULE_DECLARATION: # Use constant
+            if node != root and node.type == "module_declaration":
                 continue
             queue.extend(node.children)
         return module_nodes
 
     def _select_target_module(self, module_nodes: List[Node], pragmas: List["Pragma"], file_path: str) -> Node:
         """Select the target module based on count and TOP_MODULE pragma."""
-        # Corrected: Compare enum object directly
         top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE]
 
         # Extract module names using the helper function
@@ -311,11 +286,10 @@ class RTLParser:
              # Should not happen if _find_module_nodes works correctly
              raise ParserError("Internal error: Inconsistent module node state.")
 
-    # --- Re-introduced Helper Function ---
     def _extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
         """
         Extracts module name, parameter nodes, and port nodes from a module_declaration node.
-        Handles both ANSI and potentially non-ANSI header structures recognized by tree-sitter.
+        Partial support for non-ANSI headers, but only ANSI-style ports are officially supported.
 
         Returns:
             Tuple: (module_name, parameter_nodes, port_nodes)
@@ -370,7 +344,6 @@ class RTLParser:
 
         return module_name, param_nodes, port_nodes
 
-    # --- Existing Helper Functions ---
     def _debug_node(self, node: Node, prefix: str = "", max_depth: int = 3, current_depth: int = 0) -> None:
         """Debug helper to print node structure with depth limit."""
         if node is None or current_depth > max_depth:
@@ -431,7 +404,6 @@ class RTLParser:
              if not (node.parent and node.parent.type in ["module_declaration", "module_identifier", "interface_identifier"]):
                  identifiers.append(node_text)
 
-
         # Recursive step: Traverse children
         for child in node.children:
             # Avoid recursing into the data type definition itself if it looks like an identifier
@@ -450,7 +422,6 @@ class RTLParser:
         Refined based on detailed AST analysis.
         """
         logger.debug(f"Parsing port declaration node: {node.text.decode()}")
-        # self._debug_node(node, "PortDecl", max_depth=5) # Uncomment for deep debug
 
         final_width = "1" # Default
         data_type = "logic" # Default
@@ -520,7 +491,6 @@ class RTLParser:
             else:
                  logger.warning("No net_port_type or direction found within net_port_header")
 
-
         elif interface_port_header:
              logger.debug("Parsing as Interface Port Header")
              # Extract interface type name (e.g., 'axi_if')
@@ -576,7 +546,6 @@ class RTLParser:
                        logger.debug("Adjusting name search due to ERROR node (interface port).")
                        break
 
-
              if last_identifier:
                   potential_names = [last_identifier.text.decode('utf8').strip()]
              else: # Absolute fallback: recursive search on the whole node
@@ -587,10 +556,7 @@ class RTLParser:
         # --- Filter and Deduplicate Names ---
         filtered_names = []
         seen_names = set()
-        # --- MODIFIED: Only exclude direction keywords --- 
         keywords_to_exclude_set = set([d.value for d in Direction])
-        # REMOVED: + [t.strip() for t in data_type.split('.')])
-        # --- END MODIFICATION ---
 
         for name in potential_names:
             if name and name not in keywords_to_exclude_set and name not in seen_names:
@@ -621,7 +587,6 @@ class RTLParser:
         expr_node = self._find_child(width_node, ["constant_range", "range_expression", "constant_expression", "expression", "primary_literal", "number"])
 
         if expr_node:
-            # ADDED LOG
             logger.debug(f"Found expression node: Type={expr_node.type}, Text='{expr_node.text.decode()}'")
             width_text = expr_node.text.decode('utf8').strip()
             logger.debug(f"Width expression text found: '{width_text}'")
@@ -629,10 +594,8 @@ class RTLParser:
             full_node_text = width_node.text.decode('utf8').strip()
             if full_node_text.startswith('[') and full_node_text.endswith(']'):
                 expected_inner_text = full_node_text[1:-1].strip()
-                 # ADDED LOG
                 logger.debug(f"Full node inner text: '{expected_inner_text}'")
                 if width_text == expected_inner_text:
-                     # ADDED LOG
                     logger.debug("Expression node text matches full inner text.")
                     return width_text # Perfect match
                 else:
@@ -640,22 +603,18 @@ class RTLParser:
                     logger.debug(f"Expression node text ('{width_text}') differs from node inner text ('{expected_inner_text}'), using inner text.")
                     return expected_inner_text if expected_inner_text else "1"
             else:
-                 # If original node wasn't bracketed (less common), use expr_node text
-                  # ADDED LOG
-                 logger.debug("Original width node not bracketed, using expression node text.")
-                 return width_text
+                # If original node wasn't bracketed (less common), use expr_node text
+                logger.debug("Original width node not bracketed, using expression node text.")
+                return width_text
         else:
-             # ADDED LOG
             logger.debug("No specific expression node found within width_node.")
             # Fallback: Use cleaned text of the dimension node itself, removing brackets
             cleaned_width_text = width_node.text.decode('utf8').strip()
             if cleaned_width_text.startswith('[') and cleaned_width_text.endswith(']'):
                 cleaned_width_text = cleaned_width_text[1:-1].strip()
-             # ADDED LOG
             logger.debug(f"Using fallback cleaned text: '{cleaned_width_text}'")
             return cleaned_width_text if cleaned_width_text else "1" # Return cleaned text or default
 
-    # Ensure _find_child, _extract_direction, _find_identifiers_recursive are present and correct
     def _find_child(self, node: Node, types: List[str]) -> Optional[Node]:
         """Find the first direct child node matching any of the given types."""
         if not node: return None
@@ -673,7 +632,6 @@ class RTLParser:
                 found_nodes.append(child)
         return found_nodes
 
-    # --- Add Parameter Parsing Method ---
     def _parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
         """Parses a parameter_port_declaration or local_parameter_declaration node.
 
@@ -684,10 +642,9 @@ class RTLParser:
         param_name: Optional[str] = None
         param_type: str = "parameter" # Default type if not specified
         default_value: Optional[str] = None
-
-        # --- ADDED: Skip local parameters explicitly --- 
+ 
         # Check if the node itself is local_parameter_declaration or contains it
-        param_decl_node = self._find_child(node, [grammar.PARAMETER_DECLARATION, grammar.LOCAL_PARAMETER_DECLARATION])
+        param_decl_node = self._find_child(node, ["parameter_declaration", "local_parameter_declaration"])
         if not param_decl_node:
              # If node is directly local_parameter_declaration (passed from body scan)
              if node.type == "local_parameter_declaration":
@@ -698,11 +655,10 @@ class RTLParser:
                  param_decl_node = node # Use the original node if specific decl not found
 
         # Determine if localparam and skip if true
-        is_local = param_decl_node.type == grammar.LOCAL_PARAMETER_DECLARATION # Use constant
+        is_local = param_decl_node.type == "local_parameter_declaration"
         if is_local:
             logger.debug(f"Skipping local parameter: {param_decl_node.text.decode()[:50]}...")
             return None
-        # --- END ADDED --- 
 
         logger.debug(f"--- Entering _parse_parameter_declaration for node: {param_decl_node.type} | Text: '{param_decl_node.text.decode()[:60]}...'")
 
@@ -710,7 +666,7 @@ class RTLParser:
         param_type = None
         logger.debug("--- Starting type extraction ---")
         # Look for explicit type declaration first
-        type_node = self._find_child(param_decl_node, [grammar.DATA_TYPE_OR_IMPLICIT, grammar.DATA_TYPE])
+        type_node = self._find_child(param_decl_node, ["data_type_or_implicit", "data_type"])
         logger.debug(f"Found type_node: {type_node.type if type_node else 'None'}")
         if type_node:
             # --- MODIFIED: Capture full type text ---
@@ -726,7 +682,7 @@ class RTLParser:
         else:
              # No explicit type node found, check for 'parameter type T' structure
              logger.debug("No explicit type_node found. Checking for type_parameter_declaration...")
-             type_param_decl = self._find_child(param_decl_node, [grammar.TYPE_PARAMETER_DECLARATION])
+             type_param_decl = self._find_child(param_decl_node, ["type_parameter_declaration"])
              logger.debug(f"Found type_param_decl: {type_param_decl.type if type_param_decl else 'None'}")
              if type_param_decl:
                   param_type = "type"
@@ -739,12 +695,12 @@ class RTLParser:
 
         # --- Extract Name and Default Value ---
         # Find the assignment part (list_of_param_assignments -> param_assignment)
-        assignment_list_node = self._find_child(param_decl_node, [grammar.LIST_OF_PARAM_ASSIGNMENTS])
+        assignment_list_node = self._find_child(param_decl_node, ["list_of_param_assignments"])
         if assignment_list_node:
-            assignment_node = self._find_child(assignment_list_node, [grammar.PARAM_ASSIGNMENT])
+            assignment_node = self._find_child(assignment_list_node, ["param_assignment"])
             if assignment_node:
                 # Extract name (simple_identifier)
-                name_node = self._find_child(assignment_node, [grammar.SIMPLE_IDENTIFIER, grammar.IDENTIFIER])
+                name_node = self._find_child(assignment_node, ["simple_identifier", "identifier"])
                 if name_node:
                     param_name = name_node.text.decode('utf8').strip()
                 else:
@@ -752,10 +708,10 @@ class RTLParser:
                     return None # Name is essential
 
                 # Extract default value (constant_param_expression -> constant_expression)
-                value_expr_node = self._find_child(assignment_node, [grammar.CONSTANT_PARAM_EXPRESSION, grammar.CONSTANT_EXPRESSION, grammar.EXPRESSION])
+                value_expr_node = self._find_child(assignment_node, ["constant_param_expression", "constant_expression", "expression"])
                 if value_expr_node:
                     # Further drill down for cleaner expression text if possible
-                    inner_expr = self._find_child(value_expr_node, [grammar.CONSTANT_MINTYPMAX_EXPRESSION, grammar.CONSTANT_EXPRESSION, grammar.PRIMARY_LITERAL, grammar.BINARY_EXPRESSION])
+                    inner_expr = self._find_child(value_expr_node, ["constant_min_type_max_expression", "constant_expression", "primary_literal", "binary_expression"])
                     if inner_expr:
                          default_value = inner_expr.text.decode('utf8').strip()
                     else:
@@ -765,27 +721,25 @@ class RTLParser:
                  logger.warning(f"Could not find param_assignment within list: {assignment_list_node.text.decode()}")
                  return None # Cannot get name/value without assignment
         else:
-            # --- MODIFIED: Handle missing list_of_param_assignments ---
             logger.debug(f"No list_of_param_assignments found in: {param_decl_node.text.decode()[:50]}...")
             # Check if this is a 'parameter type' declaration
             if param_type == "type":
-                # --- REVISED: Handle 'parameter type' specific structure --- 
                 logger.debug(f"Handling 'parameter type' specific structure: {param_decl_node.text.decode()[:50]}...")
-                type_param_decl_node = self._find_child(param_decl_node, [grammar.TYPE_PARAMETER_DECLARATION])
+                type_param_decl_node = self._find_child(param_decl_node, ["type_parameter_declaration"])
                 if type_param_decl_node:
-                    list_of_assignments = self._find_child(type_param_decl_node, [grammar.LIST_OF_TYPE_ASSIGNMENTS])
+                    list_of_assignments = self._find_child(type_param_decl_node, ["list_of_type_assignments"])
                     if list_of_assignments:
-                        assignment_node = self._find_child(list_of_assignments, [grammar.TYPE_ASSIGNMENT])
+                        assignment_node = self._find_child(list_of_assignments, ["type_assignment"])
                         if assignment_node:
                             # Extract name
-                            name_node = self._find_child(assignment_node, [grammar.SIMPLE_IDENTIFIER, grammar.IDENTIFIER])
+                            name_node = self._find_child(assignment_node, ["simple_identifier", "identifier"])
                             if name_node:
                                 param_name = name_node.text.decode('utf8').strip()
                             else:
                                 logger.warning(f"Could not find parameter name in type_assignment: {assignment_node.text.decode()}")
                                 return None
                             # Extract default value (assigned type)
-                            value_node = self._find_child(assignment_node, [grammar.DATA_TYPE])
+                            value_node = self._find_child(assignment_node, ["data_type"])
                             if value_node:
                                 default_value = value_node.text.decode('utf8').strip()
                                 logger.debug(f"Type Parameter '{param_name}' default type found: {default_value}")
@@ -801,11 +755,10 @@ class RTLParser:
                 else:
                     logger.warning(f"param_type is 'type' but could not find type_parameter_declaration node within: {param_decl_node.text.decode()}")
                     return None
-                # --- END REVISED --- 
             else:
                 # Original fallback: Declaration without assignment? Try finding name directly
                 # This case might be hit for implicit types if type extraction failed earlier
-                name_node = self._find_child(param_decl_node, [grammar.SIMPLE_IDENTIFIER, grammar.IDENTIFIER])
+                name_node = self._find_child(param_decl_node, ["simple_identifier", "identifier"])
                 if name_node:
                     param_name = name_node.text.decode('utf8').strip()
                     logger.debug(f"Found parameter '{param_name}' without assignment list (or type extraction failed).")
@@ -815,7 +768,6 @@ class RTLParser:
                 else:
                     logger.warning(f"Could not determine parameter name: {param_decl_node.text.decode()}")
                     return None
-            # --- END MODIFICATION ---
 
         # --- Create and Return Parameter --- 
         if param_name:
@@ -827,7 +779,3 @@ class RTLParser:
             # This path should ideally not be reached if logic above is correct
             logger.error(f"Failed to extract parameter details from node: {param_decl_node.text.decode()}")
             return None
-
-    # --- Apply similar constant replacements to ALL methods using node types ---
-    # _extract_module_header, _extract_direction, _find_identifiers_recursive,
-    # _parse_port_declaration, _extract_width_from_dimension, _find_child, _find_children

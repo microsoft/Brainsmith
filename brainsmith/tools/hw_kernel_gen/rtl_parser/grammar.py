@@ -1,3 +1,9 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 """Handles SystemVerilog grammar loading and node type constants for tree-sitter.
 
 This module centralizes the tree-sitter grammar loading logic using ctypes
@@ -7,7 +13,10 @@ Grammar Source: Assumes a pre-compiled tree-sitter grammar library (e.g., sv.so)
 based on a grammar like tree-sitter-verilog. The exact version compatibility
 might depend on the tree-sitter library version used during compilation.
 
-Why ctypes?: Tree-sitter's Python binding typically loads grammars via language
+Since version 0.23.0 tree-sitter removed the ability directly initialize a 
+Language from
+Why ctypes?
+: Tree-sitter's Python binding typically loads grammars via language
 files (.so, .dll, .dylib) containing a specific C function (e.g., tree_sitter_verilog).
 Using ctypes allows direct loading of this shared library and accessing the
 language function pointer, which is then wrapped into a Python capsule that the
@@ -24,73 +33,6 @@ from tree_sitter import Language
 
 logger = logging.getLogger(__name__)
 
-# --- Node Type Constants ---
-# Based on common tree-sitter-verilog grammar node names.
-# Adjust these if your specific grammar version uses different names.
-
-# Declarations
-MODULE_DECLARATION = "module_declaration"
-PARAMETER_PORT_DECLARATION = "parameter_port_declaration"
-LOCAL_PARAMETER_DECLARATION = "local_parameter_declaration"
-PARAMETER_DECLARATION = "parameter_declaration"
-TYPE_PARAMETER_DECLARATION = "type_parameter_declaration"
-PORT_DECLARATION = "port_declaration"
-ANSI_PORT_DECLARATION = "ansi_port_declaration"
-NON_ANSI_PORT_DECLARATION = "non_ansi_port_declaration" # May vary by grammar
-LIST_OF_PORT_DECLARATIONS = "list_of_port_declarations" # May vary by grammar
-LIST_OF_PORTS = "list_of_ports" # May vary by grammar
-PORT = "port" # May vary by grammar
-
-# Parameters
-PARAMETER_PORT_LIST = "parameter_port_list"
-LIST_OF_PARAM_ASSIGNMENTS = "list_of_param_assignments"
-PARAM_ASSIGNMENT = "param_assignment"
-LIST_OF_TYPE_ASSIGNMENTS = "list_of_type_assignments"
-TYPE_ASSIGNMENT = "type_assignment"
-
-# Ports
-PORT_DIRECTION = "port_direction"
-INPUT_DECLARATION = "input_declaration" # Non-ANSI style
-OUTPUT_DECLARATION = "output_declaration" # Non-ANSI style
-INOUT_DECLARATION = "inout_declaration" # Non-ANSI style
-NET_DECLARATION = "net_declaration" # Often contains Non-ANSI port types/widths
-DATA_DECLARATION = "data_declaration" # Often contains Non-ANSI port types/widths
-
-# Types and Expressions
-DATA_TYPE = "data_type"
-DATA_TYPE_OR_IMPLICIT = "data_type_or_implicit"
-PACKED_DIMENSION = "packed_dimension"
-UNPACKED_DIMENSION = "unpacked_dimension" # Less common in ports/params, but possible
-CONSTANT_EXPRESSION = "constant_expression"
-CONSTANT_PARAM_EXPRESSION = "constant_param_expression"
-CONSTANT_MINTYPMAX_EXPRESSION = "constant_mintypmax_expression"
-EXPRESSION = "expression"
-PRIMARY_LITERAL = "primary_literal"
-BINARY_EXPRESSION = "binary_expression"
-INTEGER_VECTOR_TYPE = "integer_vector_type" # e.g., logic, bit, reg
-INTEGER_ATOM_TYPE = "integer_atom_type" # e.g., int, byte, integer
-NON_INTEGER_TYPE = "non_integer_type" # e.g., real, shortreal
-STRING_LITERAL = "string_literal"
-NUMBER = "number"
-
-# Identifiers
-SIMPLE_IDENTIFIER = "simple_identifier"
-IDENTIFIER = "identifier" # General identifier, often used as fallback
-
-# Keywords (used for specific checks)
-TYPE_KEYWORD = "type"
-INPUT_KEYWORD = "input"
-OUTPUT_KEYWORD = "output"
-INOUT_KEYWORD = "inout"
-
-# Comments / Pragmas
-COMMENT = "comment"
-
-# Errors
-ERROR = "ERROR"
-
-
-# --- Language Loading ---
 
 def load_language(grammar_path: str) -> Language:
     """Loads the tree-sitter grammar from the specified path using ctypes.

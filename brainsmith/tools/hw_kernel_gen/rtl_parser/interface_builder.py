@@ -1,5 +1,12 @@
 """Builds validated interface models from a list of ports."""
 
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 import logging
 from typing import List, Dict, Tuple
 

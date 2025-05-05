@@ -1,109 +1,87 @@
-# RTL Parser for Hardware Kernel Generator
-
-This package implements the RTL parsing functionality for the Hardware Kernel Generator, extracting information from SystemVerilog modules to enable FINN integration.
+# Brainsmith SystemVerilog RTL Parser
 
 ## Overview
 
-The RTL Parser examines the top-level interface of SystemVerilog modules to extract:
-- Module parameters
-- Port definitions 
-- @brainsmith pragmas
+This directory contains the SystemVerilog RTL parser used within the Brainsmith framework. Its primary purpose is to analyze SystemVerilog hardware kernel files (`.sv`) and extract crucial information about the module's interface, parameters, and specific Brainsmith pragmas. This extracted information, structured into an `HWKernel` object, is essential for downstream tools, particularly the hardware kernel generator, to understand how to interact with and integrate the kernel.
 
-This information is used by the Hardware Kernel Generator to create parameterized wrappers and integration files for FINN.
+The parser focuses on identifying standard interface protocols like AXI-Stream and AXI-Lite, along with global control signals, based on common naming conventions.
+
+## How it Works
+
+The parsing process involves several steps:
+
+1.  **Grammar Loading:** It loads a pre-compiled `tree-sitter` SystemVerilog grammar library (`sv.so`) using the `grammar.py` module.
+2.  **AST Generation:** The `RTLParser` class in `parser.py` uses the loaded grammar to parse the input SystemVerilog file into an Abstract Syntax Tree (AST).
+3.  **Syntax Check:** It performs a basic check for syntax errors reported by `tree-sitter`.
+4.  **Pragma Extraction:** It scans the source code comments for `//@brainsmith` pragmas using `pragma.py`.
+5.  **Module Selection:** It identifies all `module` declarations in the AST. If multiple modules exist, it uses the `//@brainsmith TOP_MODULE <name>` pragma to select the target module. If no pragma is present and multiple modules exist, or if no modules are found, it raises an error.
+6.  **Header Extraction:** For the target module, it extracts the module name, parameters (name, type, default value), and ports (name, direction, width) by traversing the relevant AST nodes. This logic resides primarily within `parser.py`.
+7.  **Interface Building:**
+    *   The `InterfaceBuilder` (`interface_builder.py`) is invoked with the list of extracted ports.
+    *   It uses the `InterfaceScanner` (`interface_scanner.py`) to group ports based on naming conventions (e.g., `in0_TDATA`, `config_AWADDR`, `ap_clk`) into potential `PortGroup` objects representing Global, AXI-Stream, or AXI-Lite interfaces.
+    *   Each potential `PortGroup` is then validated by the `ProtocolValidator` (`protocol_validator.py`) to ensure it meets the minimum requirements for its identified type (e.g., required signals, correct directions).
+    *   Only valid `PortGroup` objects are kept.
+8.  **Result Aggregation:** The parser aggregates the module name, parameters, valid interfaces, and pragmas into an `HWKernel` data object (`data.py`).
+9.  **Post-Validation:** The parser performs final checks, ensuring at least one AXI-Stream interface was found and raising an error if any ports remain unassigned to a valid interface.
+10. **Return Value:** The `HWKernel` object is returned.
+
+## Key Components
+
+*   `parser.py`: Main class `RTLParser` orchestrating the parsing flow.
+*   `grammar.py`: Handles loading the `tree-sitter` grammar (`.so` file) and defines node type constants.
+*   `data.py`: Defines core data structures (`HWKernel`, `Port`, `Parameter`, `ModuleSummary`, `Direction`).
+*   `interface_types.py`: Defines interface-related structures (`PortGroup`, `InterfaceType`, `ValidationResult`).
+*   `pragma.py`: Logic for extracting `//@brainsmith` pragmas from comments.
+*   `interface_scanner.py`: Identifies potential interface groups based on port naming conventions. Defines expected signal patterns.
+*   `protocol_validator.py`: Validates that identified `PortGroup` objects adhere to protocol rules (required signals, directions).
+*   `interface_builder.py`: Coordinates the `InterfaceScanner` and `ProtocolValidator` to produce a dictionary of validated interfaces.
+*   `sv.so` (Assumed): The pre-compiled `tree-sitter` SystemVerilog grammar library.
 
 ## Usage
 
 ```python
-from brainsmith.tools.hw_kernel_gen.rtl_parser import RTLParser
+import logging
+from brainsmith.tools.hw_kernel_gen.rtl_parser import RTLParser, ParserError, SyntaxError
 
-# Create parser instance
-parser = RTLParser()
+# Configure logging if desired (optional, application should configure)
+# logging.basicConfig(level=logging.INFO)
+# logging.getLogger('brainsmith.tools.hw_kernel_gen.rtl_parser').setLevel(logging.DEBUG)
 
-# Parse RTL file
-kernel = parser.parse_file("path/to/module.sv")
+sv_file_path = "path/to/your/kernel.sv"
+grammar_so_path = None # Optional: Path to sv.so if not in default location
 
-# Access extracted information
-print(f"Module name: {kernel.name}")
-print(f"Parameters: {kernel.parameters}")
-print(f"Ports: {kernel.ports}")
-print(f"Pragmas: {kernel.pragmas}")
-```
+try:
+    # Instantiate the parser
+    # Set debug=True for verbose logging during parsing
+    parser = RTLParser(grammar_path=grammar_so_path, debug=False)
 
-## Components
+    # Parse the file
+    hw_kernel_info = parser.parse_file(sv_file_path)
 
-### Data Structures (data.py)
-- `HWKernel`: Top-level representation of parsed module
-- `Parameter`: Module parameter information
-- `Port`: Port definition with direction and width
-- `Pragma`: @brainsmith pragma data
+    # Access the extracted information
+    print(f"Successfully parsed kernel: {hw_kernel_info.name}")
 
-### Parser (parser.py)
-Main parser implementation using tree-sitter to parse SystemVerilog and extract relevant information.
+    print("\nParameters:")
+    for param in hw_kernel_info.parameters:
+        print(f"- {param.name} (Type: {param.param_type}, Default: {param.default_value})")
 
-### Interface Analysis (interface.py)
-Specialized parsing functions for module interface components:
-- Parameter declarations
-- Port declarations
-- Module headers
+    print("\nInterfaces:")
+    for iface_name, interface in hw_kernel_info.interfaces.items():
+        print(f"- {iface_name} (Type: {interface.type.name})")
+        # Access ports within the interface: interface.ports (dict mapping base name to Port object)
+        # Example: print(interface.ports.keys())
 
-### Pragma Processing (pragma.py)
-Handling of @brainsmith pragmas for:
-- Interface specifications
-- Parameter configurations
-- Resource utilization hints
-- Timing constraints
-- Feature flags
+    print("\nPragmas:")
+    for pragma in hw_kernel_info.pragmas:
+        print(f"- Type: {pragma.type.name}, Args: {pragma.args}")
 
-## Pragma Syntax
-
-Pragmas use the following format:
-```systemverilog
-// @brainsmith <type> <inputs...>
-```
-
-Supported pragma types:
-- `interface`: Specify interface protocol
-  ```systemverilog
-  // @brainsmith interface AXI_STREAM
-  ```
-- `parameter`: Parameter configuration
-  ```systemverilog
-  // @brainsmith parameter STATIC WIDTH
-  ```
-- `resource`: Resource utilization hints
-  ```systemverilog
-  // @brainsmith resource DSP 4
-  ```
-- `timing`: Timing constraints
-  ```systemverilog
-  // @brainsmith timing LATENCY 2
-  ```
-- `feature`: Optional features
-  ```systemverilog
-  // @brainsmith feature PIPELINE enabled
-  ```
-
-## Testing
-
-Run tests with pytest:
-```bash
-pytest brainsmith/tools/hw_kernel_gen/rtl_parser/tests/
-```
-
-Test coverage includes:
-- Basic module parsing
-- Parameter extraction
-- Port analysis
-- Pragma processing
-- Error handling
-
-## Dependencies
-
-- py-tree-sitter: For SystemVerilog parsing
-- SystemVerilog grammar (sv.so)
-
-## Assumptions
-
-- Only parses top-level module interface
-- Assumes valid SystemVerilog syntax
-- Ignores module implementation details
+except SyntaxError as e:
+    print(f"Syntax Error: {e}")
+except ParserError as e:
+    print(f"Parsing Error: {e}")
+except FileNotFoundError as e:
+    print(f"Error: {e}")
+except Exception as e:
+    # Catch other potential errors during parsing
+    print(f"An unexpected error occurred: {e}")
+    logging.exception("Unexpected parsing error") # Log stack trace

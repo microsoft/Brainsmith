@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 """Data structures for RTL Parser.
 
 This module defines the core data structures used by the RTL Parser to represent

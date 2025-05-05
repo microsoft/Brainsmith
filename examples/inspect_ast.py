@@ -91,6 +91,7 @@ def print_ast(node, indent="", level=0, max_depth=10):
 
 # --- Main Execution ---
 if __name__ == "__main__":
+    GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
     if not os.path.exists(GRAMMAR_PATH):
         print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
         print("Please ensure the tree-sitter Verilog grammar is built.")

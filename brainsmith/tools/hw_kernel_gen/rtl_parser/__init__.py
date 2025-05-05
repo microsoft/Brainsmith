@@ -1,3 +1,9 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 """RTL Parser for Hardware Kernel Generator.
 
 This package provides functionality to parse SystemVerilog RTL files and extract

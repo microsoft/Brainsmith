@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 """Pragma processing for Hardware Kernel Generator.
 
 This module handles the parsing and validation of @brainsmith pragmas found
@@ -5,8 +12,8 @@ in SystemVerilog comments. Pragmas provide additional information to guide
 the Hardware Kernel Generator.
 
 Example pragma:
-    // @brainsmith interface AXI_STREAM
-    // @brainsmith parameter STATIC WIDTH
+    // @brainsmith top <module_name>
+    // @brainsmith supported_dtype in0 INT 4 8
 """
 
 import logging
@@ -21,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class PragmaType(Enum):
     """Valid pragma types based on RTL_Parser-Data-Analysis.md."""
-    TOP_MODULE = "top_module"          # Specify the top module if multiple exist
+    TOP_MODULE = "top"          # Specify the top module if multiple exist
     DATATYPE = "datatype"              # Restrict datatype for an interface
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
 

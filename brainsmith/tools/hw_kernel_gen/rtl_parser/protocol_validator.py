@@ -1,3 +1,10 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 """Validates interface protocol requirements for identified PortGroups."""
 
 import logging
