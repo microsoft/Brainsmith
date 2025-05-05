@@ -13,11 +13,11 @@ Grammar Source: Assumes a pre-compiled tree-sitter grammar library (e.g., sv.so)
 based on a grammar like tree-sitter-verilog. The exact version compatibility
 might depend on the tree-sitter library version used during compilation.
 
-Since version 0.23.0 tree-sitter removed the ability directly initialize a 
-Language from
-Why ctypes?
-: Tree-sitter's Python binding typically loads grammars via language
+
+Why ctypes?: Tree-sitter's Python binding typically loads grammars via language
 files (.so, .dll, .dylib) containing a specific C function (e.g., tree_sitter_verilog).
+Since version 0.23.0 tree-sitter removed the ability directly initialize a 
+Language from .so files: https://github.com/tree-sitter/py-tree-sitter/discussions/251
 Using ctypes allows direct loading of this shared library and accessing the
 language function pointer, which is then wrapped into a Python capsule that the
 tree-sitter Python library understands. This avoids needing the grammar source
