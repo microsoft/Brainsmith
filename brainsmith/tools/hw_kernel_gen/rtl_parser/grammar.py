@@ -34,33 +34,31 @@ from tree_sitter import Language
 
 logger = logging.getLogger(__name__)
 
-# --- ADDED: Default grammar filename ---
+# Default grammar filename, assumed to be in the same directory as this script
 DEFAULT_GRAMMAR_FILENAME = "sv.so"
-# --- END ADDED ---
 
-def load_language(grammar_path: Optional[str]) -> Language: # Changed type hint to Optional[str]
+def load_language(grammar_path: Optional[str]) -> Language:
     """Loads the tree-sitter grammar from the specified path using ctypes.
        If grammar_path is None, attempts to load 'sv.so' from the same directory as this file.
 
     Args:
         grammar_path: Absolute path to the compiled grammar library (.so, .dll, .dylib),
-                      or None to use the default path.
+                      or None to use the default path relative to this file.
 
     Returns:
         A tree-sitter Language object.
 
     Raises:
-        FileNotFoundError: If the grammar file does not exist.
+        FileNotFoundError: If the grammar file does not exist at the determined path.
         AttributeError: If the expected language function (tree_sitter_verilog) is not found.
         RuntimeError: For other ctypes or tree-sitter initialization errors.
     """
-    # --- MODIFIED: Determine default path if None ---
+    # Determine default path if None
     if grammar_path is None:
         # Get the directory containing this grammar.py file
         current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
         grammar_path = os.path.join(current_dir, DEFAULT_GRAMMAR_FILENAME)
         logger.info(f"Grammar path not provided, defaulting to: {grammar_path}")
-    # --- END MODIFICATION ---
 
     if not os.path.exists(grammar_path):
         raise FileNotFoundError(f"Grammar library not found at: {grammar_path}")

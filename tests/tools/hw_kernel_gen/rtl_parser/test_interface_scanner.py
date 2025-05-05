@@ -9,8 +9,7 @@ import pytest
 import re # Add import for regex
 import logging # Add import for logging
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 
 logger = logging.getLogger(__name__)

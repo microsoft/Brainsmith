@@ -10,17 +10,16 @@ This module implements the main RTL parser using tree-sitter to parse
 SystemVerilog files and extract module interfaces, parameters, and pragmas.
 """
 
-import os
+import collections
 import logging
-from typing import Optional, List, Tuple, Dict, Any # Ensure these are present
-import collections # Ensure this is present
+from typing import Optional, List, Tuple, Dict
 
 from tree_sitter import Parser, Node
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import InterfaceType, Interface
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, Interface
 from . import grammar
 
 # Configure logger

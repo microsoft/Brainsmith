@@ -5,15 +5,20 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Validates interface protocol requirements for identified PortGroups."""
+"""Validates interface protocol requirements for identified PortGroups.
+
+Checks if groups of ports identified by the InterfaceScanner adhere to the
+rules defined for specific protocols (Global, AXI-Stream, AXI-Lite), such as
+presence of required signals and correct port directions. Protocol definitions
+(signal names, requirements) are defined as constants in this module.
+"""
 
 import logging
 from typing import Dict, Set, Optional
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction # Ensure Direction is imported
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import PortGroup, ValidationResult, InterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, PortGroup, ValidationResult, InterfaceType
 
-# --- MOVED Protocol Definitions ---
+# --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
 GLOBAL_SIGNALS = {
     "ap_clk": {"direction": Direction.INPUT, "required": True},
@@ -58,32 +63,43 @@ AXI_LITE_READ_SUFFIXES = {
 
 # Combined AXI-Lite for easier checking
 AXI_LITE_SUFFIXES = {**AXI_LITE_WRITE_SUFFIXES, **AXI_LITE_READ_SUFFIXES}
-# --- END MOVED Protocol Definitions ---
+# --- END Protocol Definitions ---
 
 logger = logging.getLogger(__name__)
 
 class ProtocolValidator:
-    """Validates interface protocol requirements for PortGroups."""
+    """Validates PortGroups against defined interface protocol rules."""
 
     def __init__(self, debug: bool = False):
-        self.debug = debug # Placeholder for potential future debugging logs
+        """Initializes the ProtocolValidator."""
+        self.debug = debug
 
     def _check_required_signals(self, group_ports: Dict[str, Port], required_spec: Dict[str, Dict]) -> Set[str]:
-        """Checks if all required signals are present in the group."""
+        """Checks if all required signals (keys) are present in the group's ports."""
         present_keys = set(group_ports.keys())
         required_keys = {key for key, spec in required_spec.items() if spec.get("required", False)}
         missing = required_keys - present_keys
         return missing
 
     def _validate_port_properties(self, port: Port, expected_direction: Direction) -> Optional[str]:
-        """Validates direction and potentially other properties of a port."""
+        """Validates the direction of a port against the expected direction."""
         if port.direction != expected_direction:
             return f"Incorrect direction: expected {expected_direction.value}, got {port.direction.value}"
         # Add other property checks here if needed (e.g., width for specific signals)
         return None
 
     def validate_global_signals(self, group: PortGroup) -> ValidationResult:
-        """Validate global control signals based on GLOBAL_SIGNALS definition."""
+        """Validates a PortGroup identified as potential Global Control signals.
+
+        Checks for presence of required signals (e.g., ap_clk, ap_rst_n) and
+        verifies the direction of present signals against GLOBAL_SIGNALS definition.
+
+        Args:
+            group: The PortGroup to validate (must have type GLOBAL_CONTROL).
+
+        Returns:
+            ValidationResult indicating success or failure with a message.
+        """
         if group.interface_type != InterfaceType.GLOBAL_CONTROL:
             return ValidationResult(False, "Invalid group type for global signal validation.")
 
@@ -103,17 +119,27 @@ class ProtocolValidator:
         return ValidationResult(True)
 
     def validate_axi_stream(self, group: PortGroup) -> ValidationResult:
-        """Validate AXI-Stream interface based on AXI_STREAM_SUFFIXES and naming conventions."""
+        """Validates a PortGroup identified as a potential AXI-Stream interface.
+
+        Checks for required signal suffixes (TDATA, TVALID, TREADY) and validates
+        port directions based on inferred stream direction (input/output) from the
+        group's name prefix (e.g., "in0", "out_data").
+
+        Args:
+            group: The PortGroup to validate (must have type AXI_STREAM and a name).
+
+        Returns:
+            ValidationResult indicating success or failure with a message.
+        """
         if group.interface_type != InterfaceType.AXI_STREAM:
             return ValidationResult(False, "Invalid group type for AXI-Stream validation.")
         if not group.name:
              return ValidationResult(False, "AXI-Stream group missing name (prefix).")
 
-        # --- MODIFIED: Use keys without underscore ---
+        # Check for required signals using keys without underscore
         missing = self._check_required_signals(group.ports, AXI_STREAM_SUFFIXES)
         if missing:
             return ValidationResult(False, f"Missing required AXI-Stream signals for '{group.name}': {missing}")
-        # --- END MODIFICATION ---
 
         # Determine expected direction based on prefix/suffix
         lname = group.name.lower()
@@ -124,17 +150,15 @@ class ProtocolValidator:
              logger.warning(f"Could not determine direction (input/output) for AXI-Stream '{group.name}' based on naming convention.")
              # Proceed, but direction checks will be skipped
 
-        # --- MODIFIED: Use key without underscore ---
         tdata_port = group.ports.get("TDATA")
         if not tdata_port:
             # Should have been caught by missing check, but defensive coding
             return ValidationResult(False, f"AXI-Stream '{group.name}' missing TDATA.")
-        # --- END MODIFICATION ---
 
         # Validate signal directions based on inferred stream direction
         for suffix, port in group.ports.items():
             expected_direction = None
-            # --- MODIFIED: Use keys without underscore ---
+            # Use keys without underscore for checks
             if suffix == "TDATA" or suffix == "TVALID" or suffix == "TLAST":
                 # Corrected logic: Input stream means these signals are INPUT
                 if is_input_stream: expected_direction = Direction.INPUT
@@ -143,18 +167,12 @@ class ProtocolValidator:
                  # Corrected logic: Input stream means TREADY is OUTPUT
                 if is_input_stream: expected_direction = Direction.OUTPUT
                 elif is_output_stream: expected_direction = Direction.INPUT
-            # --- END MODIFICATION ---
 
             if expected_direction: # Only validate if direction is clear
                 error = self._validate_port_properties(port, expected_direction)
                 if error:
-                    # Construct the full port name for the error message
-                    full_port_name = f"{group.name}{suffix}"
-                    # Handle the '_V_' case if necessary based on actual port name
-                    if '_V' in port.name and '_V' not in full_port_name:
-                         # Attempt to reconstruct name more accurately if needed, simple version for now
-                         pass # Or adjust full_port_name based on port.name if prefix logic is complex
-                    return ValidationResult(False, f"Invalid AXI-Stream signal '{port.name}': {error}") # Use actual port name
+                    # Report the error using the original port name for clarity
+                    return ValidationResult(False, f"Invalid AXI-Stream signal '{port.name}': {error}")
             elif not is_input_stream and not is_output_stream:
                  logger.debug(f"Skipping direction validation for '{port.name}' due to ambiguous stream direction.")
             # else: # Should not happen if suffix is known
@@ -162,11 +180,22 @@ class ProtocolValidator:
         return ValidationResult(True)
 
     def validate_axi_lite(self, group: PortGroup) -> ValidationResult:
-        """Validate AXI-Lite interface based on AXI_LITE signal definitions."""
+        """Validates a PortGroup identified as a potential AXI-Lite interface.
+
+        Checks for the presence of required signals for read and/or write channels
+        based on which signals are present. Validates the direction of present
+        signals against AXI_LITE_SUFFIXES definitions.
+
+        Args:
+            group: The PortGroup to validate (must have type AXI_LITE and a name).
+
+        Returns:
+            ValidationResult indicating success or failure with a message.
+        """
         if group.interface_type != InterfaceType.AXI_LITE:
             return ValidationResult(False, "Invalid group type for AXI-Lite validation.")
         if not group.name:
-             return ValidationResult(False, "AXI-Lite group missing name (prefix).") # Added check
+             return ValidationResult(False, "AXI-Lite group missing name (prefix).")
 
         # group.ports now uses generic keys (e.g., "AWADDR", "WDATA")
         present_signals = set(group.ports.keys())
@@ -211,7 +240,14 @@ class ProtocolValidator:
         return ValidationResult(True)
 
     def validate(self, group: PortGroup) -> ValidationResult:
-        """Validates a PortGroup based on its type."""
+        """Validates a PortGroup by dispatching to the appropriate type-specific validator.
+
+        Args:
+            group: The PortGroup to validate.
+
+        Returns:
+            ValidationResult indicating success or failure with a message.
+        """
         if group.interface_type == InterfaceType.GLOBAL_CONTROL:
             return self.validate_global_signals(group)
         elif group.interface_type == InterfaceType.AXI_STREAM:
@@ -220,6 +256,7 @@ class ProtocolValidator:
             return self.validate_axi_lite(group)
         elif group.interface_type == InterfaceType.UNKNOWN:
             logger.debug(f"Skipping validation for UNKNOWN group '{group.name}'")
+            # Return True as UNKNOWN groups are not invalid, just unclassified
             return ValidationResult(True, f"Skipping validation for UNKNOWN group '{group.name}'")
         else:
             logger.warning(f"Unknown interface type encountered during validation: {group.interface_type}")

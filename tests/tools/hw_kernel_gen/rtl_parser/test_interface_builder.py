@@ -8,8 +8,7 @@
 import pytest
 import logging
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, Interface
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 
 # --- Fixtures (can reuse or adapt from other test files if needed) ---

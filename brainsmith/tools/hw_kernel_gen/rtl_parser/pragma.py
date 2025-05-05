@@ -7,114 +7,92 @@
 
 """Pragma processing for Hardware Kernel Generator.
 
-This module handles the parsing and validation of @brainsmith pragmas found
-in SystemVerilog comments. Pragmas provide additional information to guide
-the Hardware Kernel Generator.
-
-Example pragma:
-    // @brainsmith top module_name
-    // @brainsmith supported_dtype in0 INT 4 8
+Handles the extraction, parsing, and validation of @brainsmith pragmas
+found within SystemVerilog comments (e.g., // @brainsmith top my_module).
 """
 
 import logging
-from enum import Enum
 from typing import List, Optional, Dict, Callable
+
 from tree_sitter import Node
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Pragma
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Pragma, PragmaType
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-class PragmaType(Enum):
-    """Valid pragma types based on RTL_Parser-Data-Analysis.md."""
-    TOP_MODULE = "top_module"          # Specify the top module if multiple exist
-    DATATYPE = "datatype"              # Restrict datatype for an interface
-    DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
-
 class PragmaError(Exception):
-    """Base class for pragma-related errors."""
+    """Custom exception for errors during pragma parsing or validation."""
     pass
 
 class PragmaParser:
-    """Parser for @brainsmith pragmas.
-    
-    This class handles the extraction and validation of pragmas from
-    SystemVerilog comments.
-    
-    Attributes:
-        debug: Enable debug output
-        handlers: Dict of pragma type to handler functions
-    """
-    
+    """Extracts and validates @brainsmith pragmas from comment nodes."""
+
     def __init__(self, debug: bool = False):
-        """Initialize pragma parser.
-        
-        Args:
-            debug: Enable debug output
-        """
+        """Initializes the PragmaParser and registers pragma handlers."""
         self.debug = debug
-        # Update handlers to match the required PragmaTypes
-        self.handlers: Dict[str, Callable[[List[str], int], Dict]] = {
-            PragmaType.TOP_MODULE.value: self._handle_top_module,
-            PragmaType.DATATYPE.value: self._handle_datatype,
-            PragmaType.DERIVED_PARAMETER.value: self._handle_derived_parameter,
+        # Use PragmaType enum members as keys
+        self.handlers: Dict[PragmaType, Callable[[List[str], int], Dict]] = {
+            PragmaType.TOP_MODULE: self._handle_top_module,
+            PragmaType.DATATYPE: self._handle_datatype,
+            PragmaType.DERIVED_PARAMETER: self._handle_derived_parameter,
         }
-    
+
     def parse_comment(self, node: Node, line_number: int) -> Optional[Pragma]:
-        """Parse a comment node for @brainsmith pragmas.
-        
+        """Parses a comment AST node to find and validate a @brainsmith pragma.
+
+        Checks for the '@brainsmith' prefix, extracts the type and inputs,
+        validates the type, and calls the appropriate handler function.
+
         Args:
-            node: Comment AST node
-            line_number: Source line number
-            
+            node: The tree-sitter comment node.
+            line_number: The 1-based line number where the comment starts.
+
         Returns:
-            Pragma instance if valid pragma found, None otherwise
+            A validated Pragma object if a valid pragma is found, otherwise None.
         """
         text = node.text.decode('utf8').strip('/ ')
-        
+
         # Check for pragma prefix
         if not text.startswith('@brainsmith'):
             return None
-        
+
         # Split into components
         parts = text.split()
         if len(parts) < 2:
             logger.warning(f"Invalid pragma format at line {line_number}: {text}")
             return None
-        
+
         # Extract type and inputs
         pragma_type_str = parts[1]
         inputs = parts[2:] if len(parts) > 2 else []
 
-        # Normalize pragma type to lowercase for case-insensitive matching
+        # --- Find matching PragmaType enum member ---
+        pragma_enum_type: Optional[PragmaType] = None
         pragma_type_lower = pragma_type_str.lower()
-
-        # Validate type against the *new* set of handlers (using lowercase)
-        if pragma_type_lower not in self.handlers:
-            logger.debug(f"Ignoring comment at line {line_number}: Unknown pragma type '{pragma_type_str}'")
+        for member in PragmaType:
+            if member.value == pragma_type_lower:
+                pragma_enum_type = member
+                break
+        
+        # Validate type against the *enum members* in the handlers dict keys
+        if pragma_enum_type is None or pragma_enum_type not in self.handlers:
+            # Log as debug, as many comments might not be intended pragmas
+            logger.debug(f"Ignoring comment at line {line_number}: Unknown or unsupported pragma type '@brainsmith {pragma_type_str}'")
             return None
-
-        # Convert lowercase string back to uppercase enum member name
-        try:
-            enum_member_name = pragma_type_lower.upper()
-            pragma_enum_type = getattr(PragmaType, enum_member_name)
-        except AttributeError:
-            # This case should ideally be caught by the handler check earlier
-            logger.error(f"Internal error: Pragma type '{pragma_type_lower}' has a handler but no matching PragmaType enum member.")
-            return None
+        
+        # --- PragmaType is now validated and exists in handlers ---
 
         # Create pragma instance using the enum member
         pragma = Pragma(
-            type=pragma_enum_type, # Assign the enum member
+            type=pragma_enum_type,
             inputs=inputs,
             line_number=line_number
         )
 
-        # Process with appropriate handler (using lowercase key)
+        # Process with appropriate handler using the enum member as the key
         try:
-            # Pass line number for better error context
-            pragma.processed_data = self.handlers[pragma_type_lower](inputs, line_number)
+            pragma.processed_data = self.handlers[pragma_enum_type](inputs, line_number)
         except PragmaError as e:
             logger.warning(f"Pragma Error: {e} (Line: {line_number})")
             return None # Ignore pragmas that fail validation in their handler
@@ -123,25 +101,18 @@ class PragmaParser:
             return None # Ignore unexpected errors
 
         return pragma
-    
-    # --- Pragma Handlers (Updated for required types) ---
+
+    # --- Pragma Handlers ---
 
     def _handle_top_module(self, inputs: List[str], line_number: int) -> Dict:
-        """Handle TOP_MODULE pragma. Expected: <module_name>."""
+        """Handles TOP_MODULE pragma: @brainsmith top_module <module_name>"""
         logger.debug(f"Processing TOP_MODULE pragma: {inputs} at line {line_number}")
         if len(inputs) != 1:
             raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
         return {"module_name": inputs[0]}
 
     def _handle_datatype(self, inputs: List[str], line_number: int) -> Dict:
-        """Handle DATATYPE pragma.
-        Expected: <interface_name> <size>
-        OR
-        Expected: <interface_name> <min_size> <max_size>
-
-        If only <size> is provided, the interface supports *only* that specific size.
-        If <min_size> and <max_size> are provided, the interface supports sizes within that inclusive range.
-        """
+        """Handles DATATYPE pragma: @brainsmith datatype <if_name> <size> OR <if_name> <min> <max>"""
         logger.debug(f"Processing DATATYPE pragma: {inputs} at line {line_number}")
 
         if len(inputs) == 2:
@@ -174,7 +145,7 @@ class PragmaParser:
         return processed
 
     def _handle_derived_parameter(self, inputs: List[str], line_number: int) -> Dict:
-        """Handle DERIVED_PARAMETER pragma. Expected: <python_function_name> <module_param_name1> [<module_param_name2> ...]."""
+        """Handles DERIVED_PARAMETER pragma: @brainsmith derived_parameter <func> <param1> [<param2>...]"""
         logger.debug(f"Processing DERIVED_PARAMETER pragma: {inputs} at line {line_number}")
         # Expect at least one function name and one parameter name
         if len(inputs) < 2:
@@ -193,7 +164,16 @@ class PragmaParser:
 # --- Extraction Function ---
 
 def extract_pragmas(root_node: Node) -> List[Pragma]:
-    """Extracts all Brainsmith pragmas from the AST."""
+    """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
+
+    Uses PragmaParser to parse and validate comments found during the AST traversal.
+
+    Args:
+        root_node: The root node of the tree-sitter AST.
+
+    Returns:
+        A list of validated Pragma objects found in the AST.
+    """
     pragmas = []
     parser = PragmaParser()
     comments_found_count = 0 # Add counter
@@ -203,21 +183,21 @@ def extract_pragmas(root_node: Node) -> List[Pragma]:
         nonlocal comments_found_count # Allow modification
         if node.type == 'comment':
             comments_found_count += 1 # Increment counter
-            # Use INFO level for visibility during testing
-            logger.info(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
+            # Log comment finding at DEBUG level
+            logger.debug(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
             # Get line number (0-based)
             line_number = node.start_point[0]
             pragma = parser.parse_comment(node, line_number + 1) # Pass 1-based line number
             if pragma:
+                # Log valid pragma finding at INFO level
                 logger.info(f"Found valid pragma: {pragma}")
                 pragmas.append(pragma)
-            else: # Add logging if parse_comment returns None
-                 logger.info(f"Node at line {line_number+1} was a comment but not a valid pragma.")
+            # No need for else log here, parse_comment logs failures/ignores
 
         for child in node.children:
             find_comments(child)
 
-    # Use INFO level for visibility during testing
+    # Log start/end at INFO level
     logger.info(">>> Starting pragma extraction from AST root.")
     find_comments(root_node)
     logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")

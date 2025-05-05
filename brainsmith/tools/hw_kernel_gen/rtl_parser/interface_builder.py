@@ -1,5 +1,3 @@
-"""Builds validated interface models from a list of ports."""
-
 ############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
@@ -7,20 +5,29 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
+"""Coordinates interface identification and validation.
+
+Uses InterfaceScanner to group ports based on naming conventions and
+ProtocolValidator to check if the groups adhere to specific interface rules
+(e.g., AXI-Stream, AXI-Lite). Returns validated Interface objects and
+any ports that couldn't be assigned to a valid interface.
+"""
+
 import logging
 from typing import List, Dict, Tuple
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import Interface, PortGroup, InterfaceType, ValidationResult
+# Updated import: Interface, PortGroup, InterfaceType, ValidationResult now come from data.py
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Interface
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
 
 logger = logging.getLogger(__name__)
 
 class InterfaceBuilder:
-    """Builds validated interface models from a list of ports."""
+    """Builds validated interface models by coordinating scanning and validation."""
 
     def __init__(self, debug: bool = False):
+        """Initializes the InterfaceBuilder with scanner and validator instances."""
         self.debug = debug
         self.scanner = InterfaceScanner(debug=debug)
         self.validator = ProtocolValidator(debug=debug)
@@ -28,6 +35,10 @@ class InterfaceBuilder:
     def build_interfaces(self, ports: List[Port]) -> Tuple[Dict[str, Interface], List[Port]]:
         """
         Builds all valid interfaces from a port list.
+
+        First, scans the ports to create potential PortGroups. Then, validates
+        each group against protocol rules. Valid groups are converted to
+        Interface objects.
 
         Args:
             ports: List of Port objects from the parsed module.

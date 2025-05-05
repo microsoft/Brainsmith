@@ -5,36 +5,34 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-# interface_scanner.py
-"""Identifies potential interfaces from port lists."""
+"""Scans a list of SystemVerilog ports to identify potential interface groups.
+
+Uses naming conventions (regex patterns based on protocol definitions) to group
+ports belonging to Global Control, AXI-Stream, or AXI-Lite interfaces.
+Ports that don't match known patterns are returned as unassigned.
+"""
 
 import re
 from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
-import logging # Added
+import logging
 
-# Assuming data structures are in these paths based on context
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, PortGroup
-
-# --- ADD Import from protocol_validator ---
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, InterfaceType, PortGroup
+# Import protocol definitions for regex generation and global signal check
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import (
     GLOBAL_SIGNALS,
     AXI_STREAM_SUFFIXES,
-    AXI_LITE_SUFFIXES # Only need combined AXI_LITE for regex generation
+    AXI_LITE_SUFFIXES
 )
-# --- END Import ---
 
 logger = logging.getLogger(__name__)
 
 # Regex definitions remain here as they are specific to scanning logic
-# --- MODIFIED: Adjusted regex to capture suffix *after* the underscore ---
 # Dynamically build the regex from AXI_STREAM_SUFFIXES keys (imported, now without underscore)
 AXI_STREAM_SPLIT_REGEX = re.compile(
     # Match prefix, optional _V_, then underscore, then capture one of the suffixes
     r"^(?P<prefix>.*?)(?:_V)?_(?P<suffix>(" + "|".join(re.escape(k) for k in AXI_STREAM_SUFFIXES.keys()) + r"))$"
 )
-# --- END MODIFICATION ---
 
 # Dynamically build the regex from AXI_LITE_SUFFIXES keys (imported)
 AXI_LITE_SPLIT_REGEX = re.compile(
@@ -43,17 +41,22 @@ AXI_LITE_SPLIT_REGEX = re.compile(
 
 
 class InterfaceScanner:
-    """Identifies potential interfaces from port lists."""
+    """Scans and groups ports into potential interfaces based on naming conventions."""
 
     def __init__(self, debug: bool = False):
-        self.debug = debug # Placeholder for potential future debugging logs
+        """Initializes the InterfaceScanner."""
+        self.debug = debug
 
     def _is_global_signal(self, port_name: str) -> bool:
-        """Check if a port name matches a known global signal."""
+        """Checks if a port name matches a known global signal name."""
         return port_name in GLOBAL_SIGNALS
 
     def _get_axi_stream_parts(self, port_name: str) -> Optional[Tuple[str, str]]:
-        """Extract prefix and suffix (without underscore) from potential AXI-Stream port name."""
+        """Extracts prefix and suffix from a potential AXI-Stream port name using regex.
+
+        Returns:
+            Tuple (prefix, suffix) if matched and prefix is non-empty, else None.
+        """
         match = AXI_STREAM_SPLIT_REGEX.match(port_name)
         if match:
             prefix = match.group("prefix")
@@ -68,7 +71,11 @@ class InterfaceScanner:
         return None
 
     def _get_axi_lite_parts(self, port_name: str) -> Optional[Tuple[str, str]]:
-        """Extract prefix and generic signal name from potential AXI-Lite port name."""
+        """Extracts prefix and signal name from a potential AXI-Lite port name using regex.
+
+        Returns:
+            Tuple (prefix, signal) if matched and prefix is non-empty, else None.
+        """
         match = AXI_LITE_SPLIT_REGEX.match(port_name)
         if match:
             prefix = match.group("prefix")
@@ -84,13 +91,16 @@ class InterfaceScanner:
         """
         Scans a list of ports and groups them into potential interfaces.
 
+        Iterates through ports, attempting to classify them as Global, AXI-Stream,
+        or AXI-Lite based on naming patterns defined by regexes and known signal names.
+
         Args:
-            ports: A list of Port objects.
+            ports: A list of Port objects extracted from the RTL.
 
         Returns:
             A tuple containing:
-                - A list of identified PortGroup objects.
-                - A list of Port objects that were not assigned to any group.
+                - A list of identified PortGroup objects, ready for validation.
+                - A list of Port objects that did not match any known pattern.
         """
         identified_groups: Dict[Tuple[InterfaceType, str], PortGroup] = {}
         assigned_port_names: set[str] = set()
@@ -125,7 +135,7 @@ class InterfaceScanner:
             if stream_parts:
                 prefix, suffix = stream_parts # suffix is now without underscore
                 # Use suffix (without underscore) as the key within the group's port dictionary
-                axi_stream_groups[prefix][suffix] = port # This should now work correctly
+                axi_stream_groups[prefix][suffix] = port
                 assigned_port_names.add(port.name)
                 logger.debug(f"Assigned '{port.name}' to potential AXI-Stream group '{prefix}' (suffix: {suffix})")
                 continue # Move to next port

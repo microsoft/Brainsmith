@@ -10,8 +10,7 @@ import dataclasses
 import logging
 from typing import List
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, PortGroup
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType, PortGroup
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
 
 logger = logging.getLogger(__name__)
