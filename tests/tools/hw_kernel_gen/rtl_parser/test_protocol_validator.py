@@ -205,28 +205,67 @@ def test_validate_axilite_empty(validator):
 
 # --- General Validate Dispatch Test ---
 
-def test_validate_dispatch(validator, mocker):
-    # Mock the specific validation methods
-    mock_global = mocker.patch.object(validator, 'validate_global_signals', return_value="global_result")
-    mock_axis = mocker.patch.object(validator, 'validate_axi_stream', return_value="axis_result")
-    mock_axilite = mocker.patch.object(validator, 'validate_axi_lite', return_value="axilite_result")
+def test_validate_dispatch(validator):
+    """Tests that the main validate method dispatches correctly."""
 
-    # Create dummy groups
-    global_group = PortGroup(InterfaceType.GLOBAL_CONTROL, name="global")
-    axis_group = PortGroup(InterfaceType.AXI_STREAM, name="in0")
-    axilite_group = PortGroup(InterfaceType.AXI_LITE, name="config")
-    unknown_group = PortGroup(InterfaceType.UNKNOWN, name="other") # Assuming UNKNOWN type exists
+    # 1. Test Global Dispatch (using a valid case)
+    global_ports = [
+        Port(name="ap_clk", direction=Direction.INPUT, width="1"),
+        Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
+    ]
+    global_group = create_port_group(InterfaceType.GLOBAL_CONTROL, "global", global_ports)
+    result_global = validator.validate(global_group)
+    # Check if it looks like a valid global result (indirectly checks dispatch)
+    assert result_global.valid
+    assert result_global.message is None
 
-    assert validator.validate(global_group) == "global_result"
-    mock_global.assert_called_once_with(global_group)
+    # 2. Test AXI-Stream Dispatch (using a valid case)
+    axis_ports = [
+        Port(name="in0_TDATA", direction=Direction.INPUT, width="32"),
+        Port(name="in0_TVALID", direction=Direction.INPUT, width="1"),
+        Port(name="in0_TREADY", direction=Direction.OUTPUT, width="1"),
+    ]
+    axis_group = create_port_group(InterfaceType.AXI_STREAM, "in0", axis_ports)
+    result_axis = validator.validate(axis_group)
+    # Check if it looks like a valid AXI-Stream result
+    assert result_axis.valid
+    assert result_axis.message is None
 
-    assert validator.validate(axis_group) == "axis_result"
-    mock_axis.assert_called_once_with(axis_group)
+    # 3. Test AXI-Lite Dispatch (using a valid read-only case)
+    axilite_ports = [
+        Port(name="config_ARADDR", direction=Direction.INPUT, width="6"),
+        Port(name="config_ARVALID", direction=Direction.INPUT, width="1"),
+        Port(name="config_ARREADY", direction=Direction.OUTPUT, width="1"),
+        Port(name="config_RDATA", direction=Direction.OUTPUT, width="32"),
+        Port(name="config_RVALID", direction=Direction.OUTPUT, width="1"),
+        Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
+        Port(name="config_ARPROT", direction=Direction.INPUT, width="3"), # Added
+        Port(name="config_RRESP", direction=Direction.OUTPUT, width="2"), # Added
+    ]
+    axilite_group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports)
+    result_axilite = validator.validate(axilite_group)
+    # Check if it looks like a valid AXI-Lite result
+    assert result_axilite.valid
+    assert result_axilite.message is None
 
-    assert validator.validate(axilite_group) == "axilite_result"
-    mock_axilite.assert_called_once_with(axilite_group)
+    # 4. Test UNKNOWN type handling
+    # Assuming UNKNOWN type exists in InterfaceType enum
+    try:
+        unknown_type = InterfaceType.UNKNOWN
+        unknown_group = PortGroup(unknown_type, name="other")
+        result_unknown = validator.validate(unknown_group)
+        assert result_unknown.valid
+        assert "Skipping validation for UNKNOWN group" in result_unknown.message
+    except AttributeError:
+        # Handle case where InterfaceType.UNKNOWN might not exist
+        print("Skipping UNKNOWN type test as InterfaceType.UNKNOWN not found.")
 
-    # Test UNKNOWN type handling (assuming it returns valid with a message)
-    result_unknown = validator.validate(unknown_group)
-    assert result_unknown.valid
-    assert "Skipping validation for UNKNOWN group" in result_unknown.message
+    # 5. Test an invalid case to ensure dispatch happens and returns invalid
+    invalid_axis_ports = [
+        Port(name="in1_TDATA", direction=Direction.INPUT, width="32"),
+        # Missing TVALID, TREADY
+    ]
+    invalid_axis_group = create_port_group(InterfaceType.AXI_STREAM, "in1", invalid_axis_ports)
+    result_invalid_axis = validator.validate(invalid_axis_group)
+    assert not result_invalid_axis.valid
+    assert "Missing required AXI-Stream signals" in result_invalid_axis.message

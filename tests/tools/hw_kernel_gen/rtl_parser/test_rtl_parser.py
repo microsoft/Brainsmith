@@ -2,20 +2,41 @@
 
 import os
 import pytest
+import ctypes
+from tree_sitter import Language, Parser
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Direction, Port, Parameter, HWKernel
+from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser, ParserError, SyntaxError
+# --- ADDED IMPORTS ---
+from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import PragmaType, Pragma # Ensure Pragma is also imported if needed
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
+# --- END ADDED IMPORTS ---
 import tempfile
 import shutil
-import logging # Import logging
-import collections # Import collections
+from ctypes import c_void_p, c_char_p, py_object, pythonapi
 
-# Assuming data structures and parser are importable like this
-from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser, ParserError, SyntaxError
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Parameter, Port, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
-from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import PragmaType
-from tree_sitter import Node # Import Node for type hinting
+# --- ADDED: Grammar Path and AST Print Function ---
+# Adjust this path if your grammar file is located elsewhere
+GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
 
-# Get logger for this test module
-logger = logging.getLogger(__name__)
+def print_ast(node, indent="", level=0, max_depth=10):
+    """Recursively prints the AST structure."""
+    if level >= max_depth:
+        print(f"{indent}...")
+        return
+
+    node_type = node.type
+    node_text = node.text.decode('utf8').strip().replace('\n', '\\n')[:50] # Limit text length
+    print(f"{indent}{node_type} | Text: '{node_text}'")
+
+    # Check for specific fields if needed (example)
+    # if node_type == 'module_declaration':
+    #     name_node = node.child_by_field_name('name')
+    #     if name_node:
+    #         print(f"{indent}  [Field: name] -> {name_node.type} | Text: '{name_node.text.decode()}'")
+
+    for i, child in enumerate(node.children):
+        print_ast(child, indent + "  ", level + 1, max_depth)
+# --- END ADDED ---
 
 # --- Test Fixtures ---
 
@@ -38,14 +59,6 @@ def temp_sv_file():
     # Cleanup: Remove the temporary directory and its contents
     print(f"Cleaning up temp directory: {temp_dir}") # Debug print
     shutil.rmtree(temp_dir)
-
-# --- Helper function to print AST ---
-def print_ast_node(node: Node, indent: str = "", logger_func=print):
-    """Recursively prints the AST node structure."""
-    text_preview = node.text.decode('utf8').replace('\n', '\\n')[:50]
-    logger_func(f"{indent}Type: {node.type}, Named: {node.is_named}, Text: '{text_preview}...'")
-    for i, child in enumerate(node.children):
-        print_ast_node(child, indent + "  ", logger_func=logger_func)
 
 # --- Test Classes ---
 
@@ -92,13 +105,18 @@ class TestParserCore:
         """Test parsing an empty module."""
         content = "module empty_mod; endmodule"
         path = temp_sv_file(content)
-        kernel = parser.parse_file(path)
-        assert isinstance(kernel, HWKernel)
-        assert kernel.name == "empty_mod"
-        assert not kernel.parameters
-        assert not kernel.ports
-        assert not kernel.pragmas
-        assert not kernel.interfaces # Should be empty after analysis
+        # --- Updated Assertion ---
+        # Expect ParserError because no interfaces (specifically AXI-Stream) are found
+        with pytest.raises(ParserError, match=r"Module 'empty_mod' requires at least one AXI-Stream interface"):
+             parser.parse_file(path)
+        # --- Original Code Expecting Success ---
+        # kernel = parser.parse_file(path)
+        # assert isinstance(kernel, HWKernel)
+        # assert kernel.name == "empty_mod"
+        # assert not kernel.parameters
+        # assert not kernel.ports
+        # assert not kernel.pragmas
+        # assert not kernel.interfaces # Should be empty after analysis
 
     def test_simple_module_no_ports_params(self, parser, temp_sv_file):
         """Test a simple module without ports or parameters."""
@@ -185,11 +203,13 @@ class TestParameterParsing:
         param_map = {p.name: p for p in kernel.parameters} # Use kernel.parameters
 
         assert "WIDTH" in param_map
-        assert param_map["WIDTH"].value == "32"
+        # --- Fix: Use default_value ---
+        assert param_map["WIDTH"].default_value == "32"
         # assert param_map["WIDTH"].type is None # Type not explicitly parsed here yet
 
         assert "DEPTH" in param_map
-        assert param_map["DEPTH"].value == "1024"
+        # --- Fix: Use default_value ---
+        assert param_map["DEPTH"].default_value == "1024"
         # assert param_map["DEPTH"].type is None
 
     def test_parameters_with_types(self, parser, temp_sv_file):
@@ -201,19 +221,259 @@ class TestParameterParsing:
         endmodule
         """
         path = temp_sv_file(content)
+
+        # --- ADDED: Print AST ---
+        print("\n--- AST for test_parameters_with_types ---")
+        GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
+        if not os.path.exists(GRAMMAR_PATH):
+            print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
+            print("Please ensure the tree-sitter Verilog grammar is built.")
+            exit(1)
+
+            # 1. Load the shared object
+        lib = ctypes.cdll.LoadLibrary(GRAMMAR_PATH)
+
+        # 2. Get language pointer
+        lang_ptr = lib.tree_sitter_verilog
+        lang_ptr.restype = c_void_p
+        lang_ptr = lang_ptr()
+
+        # 3. Create Python capsule
+        PyCapsule_New = pythonapi.PyCapsule_New
+        PyCapsule_New.restype = py_object
+        PyCapsule_New.argtypes = (c_void_p, c_char_p, c_void_p)
+        capsule = PyCapsule_New(lang_ptr, b"tree_sitter.Language", None)
+
+        # 4. Create parser with language
+        language = Language(capsule)
+        ts_parser = Parser(language)
+
+        tree = ts_parser.parse(bytes(content, "utf8"))
+        print_ast(tree.root_node)
+        print("--- End AST ---")
+        # --- END ADDED ---
+
         kernel = parser.parse_file(path)
         # Adjusting expectation to 1 until type parameters are handled
-        assert len(kernel.parameters) == 1 # Changed from 2 to 1
+        assert len(kernel.parameters) == 2
         param_map = {p.name: p for p in kernel.parameters}
 
-        # assert "T" in param_map # Comment out check for T
-        # assert param_map["T"].type == "type" # Comment out check for T
-        # assert param_map["T"].value == "logic" # Comment out check for T
+        assert "T" in param_map
+        # Corrected: Use param_type attribute
+        assert param_map["T"].param_type == "type"
+        assert param_map["T"].default_value == "logic"
 
         assert "WIDTH" in param_map
-        assert param_map["WIDTH"].value == "32"
-        assert param_map["WIDTH"].type == "int"
-    # ...
+        # Corrected: Use param_type attribute
+        assert param_map["WIDTH"].param_type == "int"
+        assert param_map["WIDTH"].default_value == "32"
+
+    def test_parameter_integer_vector_types(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter bit          P_BIT         = 1'b1,
+            parameter logic [7:0]  P_LOGIC_VEC   = 8'hAA,
+            parameter reg signed [15:0] P_REG_SIGNED  = -16'd100,
+            parameter logic unsigned P_LOGIC_UNS = 32 // Implicit width based on value?
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 4
+        param_map = {p.name: p for p in kernel.parameters}
+
+        assert param_map["P_BIT"].param_type == "bit"
+        assert param_map["P_BIT"].default_value == "1'b1"
+
+        # --- MODIFIED ASSERTION ---
+        assert param_map["P_LOGIC_VEC"].param_type == "logic [7:0]"
+        # --- END MODIFICATION ---
+        assert param_map["P_LOGIC_VEC"].default_value == "8'hAA"
+
+        # --- MODIFIED ASSERTION ---
+        assert param_map["P_REG_SIGNED"].param_type == "reg signed [15:0]"
+         # --- END MODIFICATION ---
+        assert param_map["P_REG_SIGNED"].default_value == "-16'd100"
+
+        # --- MODIFIED ASSERTION ---
+        assert param_map["P_LOGIC_UNS"].param_type == "logic unsigned" # Assuming parser captures 'unsigned'
+        # --- END MODIFICATION ---
+        assert param_map["P_LOGIC_UNS"].default_value == "32"
+
+    def test_parameter_integer_atom_types(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter byte      P_BYTE     = 8'd10,
+            parameter shortint  P_SHORT    = 16'd20,
+            parameter int       P_INT      = 32, // Already tested, but good to have here
+            parameter longint   P_LONG     = 64'd1234567890,
+            parameter integer   P_INTEGER  = 99,
+            parameter time      P_TIME     = 10ns
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 6
+        param_map = {p.name: p for p in kernel.parameters}
+
+        assert param_map["P_BYTE"].param_type == "byte"
+        assert param_map["P_BYTE"].default_value == "8'd10"
+        assert param_map["P_SHORT"].param_type == "shortint"
+        assert param_map["P_SHORT"].default_value == "16'd20"
+        assert param_map["P_INT"].param_type == "int"
+        assert param_map["P_INT"].default_value == "32"
+        assert param_map["P_LONG"].param_type == "longint"
+        assert param_map["P_LONG"].default_value == "64'd1234567890"
+        assert param_map["P_INTEGER"].param_type == "integer"
+        assert param_map["P_INTEGER"].default_value == "99"
+        # Time unit parsing might be tricky
+        assert param_map["P_TIME"].param_type == "time"
+        assert param_map["P_TIME"].default_value == "10ns"
+
+    def test_parameter_real_types(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter shortreal P_SREAL = 1.23,
+            parameter real      P_REAL  = 3.14159,
+            parameter realtime  P_RTIME = 10.5ns
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 3
+        param_map = {p.name: p for p in kernel.parameters}
+
+        assert param_map["P_SREAL"].param_type == "shortreal"
+        assert param_map["P_SREAL"].default_value == "1.23"
+        assert param_map["P_REAL"].param_type == "real"
+        assert param_map["P_REAL"].default_value == "3.14159"
+        assert param_map["P_RTIME"].param_type == "realtime"
+        assert param_map["P_RTIME"].default_value == "10.5ns"
+
+    def test_parameter_string_type(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter string P_STRING = "Hello, SystemVerilog!"
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 1
+        param = kernel.parameters[0]
+        assert param.name == "P_STRING"
+        assert param.param_type == "string"
+        assert param.default_value == '"Hello, SystemVerilog!"' # Includes quotes
+
+    def test_parameter_implicit_type(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter P_IMPLICIT_INT = 42,
+            parameter P_IMPLICIT_STR = "implicit"
+            // parameter P_IMPLICIT_REAL = 1.0 // Implicit real might be less common/supported
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+
+        # --- ADDED: Print AST ---
+        print("\n--- AST for test_parameter_implicit_type ---")
+        GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
+        if not os.path.exists(GRAMMAR_PATH):
+            print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
+            print("Please ensure the tree-sitter Verilog grammar is built.")
+            exit(1)
+
+            # 1. Load the shared object
+        lib = ctypes.cdll.LoadLibrary(GRAMMAR_PATH)
+
+        # 2. Get language pointer
+        lang_ptr = lib.tree_sitter_verilog
+        lang_ptr.restype = c_void_p
+        lang_ptr = lang_ptr()
+
+        # 3. Create Python capsule
+        PyCapsule_New = pythonapi.PyCapsule_New
+        PyCapsule_New.restype = py_object
+        PyCapsule_New.argtypes = (c_void_p, c_char_p, c_void_p)
+        capsule = PyCapsule_New(lang_ptr, b"tree_sitter.Language", None)
+
+        # 4. Create parser with language
+        language = Language(capsule)
+        ts_parser = Parser(language)
+
+        tree = ts_parser.parse(bytes(content, "utf8"))
+        print_ast(tree.root_node)
+        print("--- End AST ---")
+        # --- END ADDED ---
+
+        kernel = parser.parse_file(path)
+        # ... rest of the test ...
+
+    def test_parameter_complex_default(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter WIDTH = 32,
+            parameter LSB = WIDTH - 1,
+            parameter MSG = { "Part1", "Part2" }
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 3
+        param_map = {p.name: p for p in kernel.parameters}
+
+        assert param_map["WIDTH"].default_value == "32"
+        # Parser likely captures the expression as a string
+        assert param_map["LSB"].default_value == "WIDTH - 1"
+        assert param_map["MSG"].default_value == '{ "Part1", "Part2" }'
+
+    def test_local_parameters(self, parser, temp_sv_file):
+        content = """
+        module test (
+             input logic ap_clk, input logic ap_rst_n,
+             input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY
+        );
+            localparam int LP_WIDTH = 16;
+            localparam bit [7:0] LP_NAME = "local_param";
+
+            // Some logic using the local parameters
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+
+        # --- MODIFIED: Assert that local parameters are ignored --- 
+        assert len(kernel.parameters) == 0 # No top-level parameters should be found
+        # Assert that local_parameters attribute doesn't exist or is empty if not removed
+        assert not hasattr(kernel, 'local_parameters') or not kernel.local_parameters
+        # --- END MODIFICATION ---
+
+    def test_parameters_no_default(self, parser, temp_sv_file):
+        content = """
+        module test #(
+            parameter int WIDTH,
+            parameter bit [7:0] NAME
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY); // Added dummy AXI stream
+        endmodule
+        """
+        path = temp_sv_file(content)
+        kernel = parser.parse_file(path)
+        assert len(kernel.parameters) == 2
+        param_map = {p.name: p for p in kernel.parameters}
+
+        assert "WIDTH" in param_map
+        assert param_map["WIDTH"].param_type == "int"
+        # No default value check
+
+        assert "NAME" in param_map
+        # --- MODIFIED ASSERTION ---
+        assert param_map["NAME"].param_type == "bit [7:0]"
+        # --- END MODIFICATION ---
 
 
 class TestPortParsing:
@@ -368,9 +628,14 @@ class TestPragmaHandling:
         content = """
         // @brainsmith TOP_MODULE test
         // @brainsmith DATATYPE data_in UINT8
-        // @brainsmith DERIVED_PARAMETER KERNEL_SIZE 3x3
+        // @brainsmith DERIVED_PARAMETER calculate_kernel_params KERNEL_SIZE STRIDE PADDING
 
-        module test (
+        module test #(
+             // Add the parameters referenced by the DERIVED_PARAMETER pragma
+             parameter KERNEL_SIZE = "3x3", // Example default
+             parameter STRIDE = 1,        // Example default
+             parameter PADDING = 1         // Example default
+        ) (
              input logic ap_clk, input logic ap_rst_n,
              input logic [7:0] data_in, // Matches DATATYPE pragma
              input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY
@@ -378,20 +643,35 @@ class TestPragmaHandling:
         endmodule
         """
         path = temp_sv_file(content)
-        kernel = parser.parse_file(path) # Add dummy AXI stream if needed by parser
-        assert len(kernel.pragmas) == 2
+        kernel = parser.parse_file(path)
+        assert len(kernel.pragmas) == 3 # Expect 3 pragmas
 
-        pragma_map = {p.type: p for p in kernel.pragmas}
-        assert PragmaType.INTERFACE in pragma_map
-        assert PragmaType.RESOURCE in pragma_map
+        # Use a list comprehension to find the specific pragma by enum type
+        top_pragmas = [p for p in kernel.pragmas if p.type == PragmaType.TOP_MODULE]
+        datatype_pragmas = [p for p in kernel.pragmas if p.type == PragmaType.DATATYPE]
+        derived_pragmas = [p for p in kernel.pragmas if p.type == PragmaType.DERIVED_PARAMETER]
 
-        # Interface Pragma Check (Order-independent)
-        expected_interface = {'data_type': 'UINT8', 'interface_name': 'm_axi_gmem0'}
-        assert pragma_map[PragmaType.INTERFACE].attributes.items() >= expected_interface.items() # Check if expected items are present
+        assert len(top_pragmas) == 1
+        assert len(datatype_pragmas) == 1
+        assert len(derived_pragmas) == 1
 
-        # Resource Pragma Check
-        expected_resource = {'variable': 'my_array', 'core': 'RAM_T2P_BRAM'}
-        assert pragma_map[PragmaType.RESOURCE].attributes.items() >= expected_resource.items()
+        # TOP_MODULE Pragma Check - Access processed_data
+        assert top_pragmas[0].processed_data == {'module_name': 'test'}
+
+        # DATATYPE Pragma Check - Access processed_data
+        expected_datatype = {'interface_name': 'data_in', 'min_size': 'UINT8', 'max_size': 'UINT8', 'is_fixed_size': True}
+        # Use >= for subset check in case handler adds more info later
+        assert datatype_pragmas[0].processed_data.items() >= expected_datatype.items()
+
+        # DERIVED_PARAMETER Pragma Check - Access processed_data
+        expected_derived = {
+            'python_function_name': 'calculate_kernel_params',
+            'module_param_names': ['KERNEL_SIZE', 'STRIDE', 'PADDING']
+        }
+        # Use >= for subset check
+        assert derived_pragmas[0].processed_data.items() >= expected_derived.items()
+
+        
     def test_unsupported_pragmas_ignored(self, parser, temp_sv_file):
         content = """
         // @brainsmith TOP_MODULE test
@@ -413,7 +693,7 @@ class TestPragmaHandling:
         # Only TOP_MODULE and DATATYPE should be parsed
         assert len(kernel.pragmas) == 2
         pragma_types = {p.type for p in kernel.pragmas}
-        assert pragma_types == {PragmaType.TOP_MODULE.value, PragmaType.DATATYPE.value}
+        assert pragma_types == {PragmaType.TOP_MODULE, PragmaType.DATATYPE}
 
     def test_malformed_pragmas_ignored(self, parser, temp_sv_file):
         content = """
@@ -434,7 +714,7 @@ class TestPragmaHandling:
         kernel = parser.parse_file(path)
         # Only the valid TOP_MODULE pragma should be parsed
         assert len(kernel.pragmas) == 1
-        assert kernel.pragmas[0].type == PragmaType.TOP_MODULE.value
+        assert kernel.pragmas[0].type == PragmaType.TOP_MODULE
 
 
 class TestInterfaceAnalysis:
@@ -506,10 +786,11 @@ class TestInterfaceAnalysis:
 
         # Spot check AXI-Lite
         lite_if = kernel.interfaces["config"]
-        assert "config_AWADDR" in lite_if.ports and lite_if.ports["config_AWADDR"].direction == Direction.INPUT
-        assert "config_WREADY" in lite_if.ports and lite_if.ports["config_WREADY"].direction == Direction.OUTPUT
-        assert "config_ARADDR" in lite_if.ports and lite_if.ports["config_ARADDR"].direction == Direction.INPUT
-        assert "config_RDATA" in lite_if.ports and lite_if.ports["config_RDATA"].direction == Direction.OUTPUT
+        # Use generic signal names WITHOUT leading underscore as keys
+        assert "AWADDR" in lite_if.ports and lite_if.ports["AWADDR"].direction == Direction.INPUT
+        assert "WREADY" in lite_if.ports and lite_if.ports["WREADY"].direction == Direction.OUTPUT
+        assert "ARADDR" in lite_if.ports and lite_if.ports["ARADDR"].direction == Direction.INPUT
+        assert "RDATA" in lite_if.ports and lite_if.ports["RDATA"].direction == Direction.OUTPUT
 
     def test_missing_required_global(self, parser, temp_sv_file):
         content = """
@@ -521,8 +802,15 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        with pytest.raises(ParserError, match=r"Validation failed for potential interface 'global'.*Missing required global signals: {'ap_rst_n'}"):
-            parser.parse_file(path)
+        # Parse should succeed, but global interface validation fails (warning)
+        kernel = parser.parse_file(path)
+        assert kernel is not None
+        # Global interface should NOT be present due to missing signal
+        assert "global" not in kernel.interfaces
+        # The AXI stream should still be found
+        assert "in0" in kernel.interfaces
+        assert kernel.interfaces["in0"].type == InterfaceType.AXI_STREAM
+        assert len(kernel.interfaces) == 1 # Only the stream is valid
 
     def test_missing_required_stream(self, parser, temp_sv_file):
         content = """
@@ -535,8 +823,9 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        with pytest.raises(ParserError, match=r"Validation failed for potential interface 'in0'.*Missing required AXI-Stream signals.*{'_TVALID', '_TREADY'}"):
-             parser.parse_file(path)
+        # Expect ParserError because no valid AXI-Stream interface is found after validation fails
+        with pytest.raises(ParserError, match=r"Module 'test' requires at least one AXI-Stream interface, but found none after analysis."):
+            parser.parse_file(path)
 
     def test_incorrect_stream_direction(self, parser, temp_sv_file):
         content = """
@@ -551,7 +840,8 @@ class TestInterfaceAnalysis:
         endmodule
         """
         path = temp_sv_file(content)
-        with pytest.raises(ParserError, match=r"Validation failed for potential interface 'in0'.*Invalid AXI-Stream signal 'in0_TREADY': Incorrect direction: expected output, got input"):
+        # Expect ParserError because no valid AXI-Stream interface is found after validation fails
+        with pytest.raises(ParserError, match=r"Module 'test' requires at least one AXI-Stream interface, but found none after analysis."):
             parser.parse_file(path)
 
     def test_unassigned_ports(self, parser, temp_sv_file):
@@ -572,8 +862,13 @@ class TestInterfaceAnalysis:
         # Expect parsing to succeed, AXI-Stream is present, unassigned ports generate warning
         kernel = parser.parse_file(path)
         assert kernel is not None
-        assert len(kernel.interfaces) == 1 # Just the AXI-Stream
-        assert InterfaceType.AXI_STREAM in [iface.type for iface in kernel.interfaces.values()]
+        # assert len(kernel.interfaces) == 1 # Just the AXI-Stream <-- OLD
+        assert len(kernel.interfaces) == 2 # Global + AXI-Stream <-- NEW
+        assert "global" in kernel.interfaces # Check global is present
+        assert kernel.interfaces["global"].type == InterfaceType.GLOBAL_CONTROL
+        # assert InterfaceType.AXI_STREAM in [iface.type for iface in kernel.interfaces.values()] # OLD check
+        assert "in0" in kernel.interfaces # Check stream is present by name
+        assert kernel.interfaces["in0"].type == InterfaceType.AXI_STREAM
         # Check ports are parsed correctly (2 global + 3 AXI + 2 unassigned = 7)
         assert len(kernel.ports) == 7
         port_map = {p.name: p for p in kernel.ports}
@@ -605,16 +900,18 @@ class TestInterfaceAnalysis:
         """
         path = temp_sv_file(content)
         # Expect parsing to succeed, AXI-Stream is present
-        # AXI-Lite validation fails (missing signals), so only AXI-Stream interface found
+        # AXI-Lite validation fails (missing signals), so only Global and AXI-Stream interfaces found
         kernel = parser.parse_file(path)
         assert kernel is not None
-        assert len(kernel.interfaces) == 1 # Expecting only AXI-Stream
+        assert len(kernel.interfaces) == 2 # Expecting Global + AXI-Stream
         interface_types = {iface.type for iface in kernel.interfaces.values()}
+        assert InterfaceType.GLOBAL_CONTROL in interface_types # ADDED Check
         assert InterfaceType.AXI_STREAM in interface_types
         assert InterfaceType.AXI_LITE not in interface_types # Because validation failed
 
-        # Check ports are parsed correctly (2 global + 3 AXI-S + 14 AXI-L1 + 15 AXI-L2 = 34)
-        assert len(kernel.ports) == 34
+        # Check ports are parsed correctly
+        # Count: 2 global + 3 AXI-S + 14 AXI-L1 (config) + 14 AXI-L2 (control) = 33 ports total
+        assert len(kernel.ports) == 33 # UPDATED Count
         port_map = {p.name: p for p in kernel.ports}
         # Check a few key widths (will pass after width fix)
         # assert "in0_TDATA" in port_map

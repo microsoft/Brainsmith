@@ -99,23 +99,7 @@ class RTLParser:
             raise RuntimeError(f"Failed to initialize parser: {e}")
 
     def parse_file(self, file_path: str) -> HWKernel:
-        """Parse a SystemVerilog file.
-        
-        Args:
-            file_path: Path to SystemVerilog file
-            
-        Returns:
-            HWKernel instance containing parsed information
-            
-        Raises:
-            FileNotFoundError: If file not found
-            SyntaxError: If SystemVerilog syntax is invalid
-            ParserError: If parsing fails for other reasons
-        """
-        if not os.path.exists(file_path):
-            logger.error(f"Input file not found: {file_path}")
-            raise FileNotFoundError(f"File not found: {file_path}")
-
+        """Parses a SystemVerilog file and extracts HWKernel information."""
         logger.info(f"Starting parsing for: {file_path}")
         # Read file
         try:
@@ -152,7 +136,7 @@ class RTLParser:
         if not module_nodes:
             logger.error(f"No module definitions found in {file_path}")
             raise ParserError(f"No module definition found in {file_path}")
-
+        
         # Extract pragmas first to check for TOP_MODULE
         logger.debug("Extracting pragmas...")
         try:
@@ -189,11 +173,9 @@ class RTLParser:
             # Extract parameters
             logger.debug("Extracting parameters...")
             for node in param_nodes:
-                # logger.debug(f"Processing parameter node:")
-                # self._debug_node(node) # Use the new private method if debugging
-                # Use the new private method
+                # Use the modified private method (returns Parameter | None)
                 param = self._parse_parameter_declaration(node)
-                if param is not None:
+                if param is not None: # Skips local params implicitly
                     kernel.parameters.append(param)
             logger.debug(f"Extracted {len(kernel.parameters)} parameters.")
 
@@ -201,8 +183,6 @@ class RTLParser:
             logger.debug("Extracting ports...")
             extracted_ports: List[Port] = []
             for node in port_nodes:
-                # logger.debug(f"Processing port node:")
-                # self._debug_node(node) # Use the new private method if debugging
                 # Use the new private method
                 parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
                 if parsed_port_list: # Check if the list is not empty
@@ -211,7 +191,7 @@ class RTLParser:
             # Correctly log the total number of Port objects extracted
             logger.debug(f"Extracted {len(kernel.ports)} individual port objects.")
 
-            # --- Integrate Interface Analysis ---
+            # --- Interface Analysis ---
             logger.info(f"Starting interface analysis for module {kernel.name}...")
             validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(kernel.ports)
             kernel.interfaces = validated_interfaces
@@ -229,8 +209,8 @@ class RTLParser:
                  # Temporarily disabled: raise ParserError(error_msg)
 
             # 2. Check interface counts (Keep existing logic if needed)
+            # --- RESTORED CHECK: Ensure at least one AXI-Stream is valid ---
             has_axi_stream = any(iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values())
-            # --- RESTORED CHECK ---
             if not has_axi_stream:
                  error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
                  logger.error(error_msg)
@@ -296,7 +276,8 @@ class RTLParser:
 
     def _select_target_module(self, module_nodes: List[Node], pragmas: List["Pragma"], file_path: str) -> Node:
         """Select the target module based on count and TOP_MODULE pragma."""
-        top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE.value]
+        # Corrected: Compare enum object directly
+        top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE]
 
         # Extract module names using the helper function
         module_names_map = {}
@@ -619,7 +600,10 @@ class RTLParser:
         # --- Filter and Deduplicate Names ---
         filtered_names = []
         seen_names = set()
-        keywords_to_exclude_set = set([d.value for d in Direction] + [t.strip() for t in data_type.split('.')]) # Exclude base type and modport if present
+        # --- MODIFIED: Only exclude direction keywords --- 
+        keywords_to_exclude_set = set([d.value for d in Direction])
+        # REMOVED: + [t.strip() for t in data_type.split('.')])
+        # --- END MODIFICATION ---
 
         for name in potential_names:
             if name and name not in keywords_to_exclude_set and name not in seen_names:
@@ -704,40 +688,69 @@ class RTLParser:
 
     # --- Add Parameter Parsing Method ---
     def _parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
-        """
-        Parses a parameter_port_declaration node and returns a Parameter object.
-        """
-        if not node or node.type != "parameter_port_declaration":
-            logger.warning(f"Invalid node type passed to _parse_parameter_declaration: {node.type}")
-            return None
+        """Parses a parameter_port_declaration or local_parameter_declaration node.
 
+        Returns:
+            A Parameter object if parsing is successful, otherwise None.
+            Local parameters are explicitly skipped and return None.
+        """
         param_name: Optional[str] = None
         param_type: str = "parameter" # Default type if not specified
         default_value: Optional[str] = None
 
-        # Find the core parameter_declaration or local_parameter_declaration
+        # --- ADDED: Skip local parameters explicitly --- 
+        # Check if the node itself is local_parameter_declaration or contains it
         param_decl_node = self._find_child(node, ["parameter_declaration", "local_parameter_declaration"])
         if not param_decl_node:
-            logger.warning(f"Could not find parameter_declaration or local_parameter_declaration within: {node.text.decode()}")
-            # Try finding assignment directly under parameter_port_declaration as fallback
-            param_decl_node = node
+             # If node is directly local_parameter_declaration (passed from body scan)
+             if node.type == "local_parameter_declaration":
+                 param_decl_node = node
+             else:
+                 logger.warning(f"Could not find parameter_declaration or local_parameter_declaration within: {node.text.decode()}")
+                 # Try finding assignment directly under parameter_port_declaration as fallback
+                 param_decl_node = node # Use the original node if specific decl not found
 
-        # Determine if localparam
+        # Determine if localparam and skip if true
         is_local = param_decl_node.type == "local_parameter_declaration" or "localparam" in param_decl_node.text.decode().split()
+        if is_local:
+            logger.debug(f"Skipping local parameter: {param_decl_node.text.decode()[:50]}...")
+            return None
+        # --- END ADDED --- 
 
-        # Extract type if present (often within data_type_or_implicit)
-        dtoi_node = self._find_child(param_decl_node, ["data_type_or_implicit"])
-        if dtoi_node:
-            dt_node = self._find_child(dtoi_node, ["data_type"])
-            if dt_node:
-                # Extract specific type like 'int', 'integer', etc.
-                core_type_node = self._find_child(dt_node, ["integer_atom_type", "integer_vector_type", "non_integer_type", "signing", "simple_identifier"])
-                if core_type_node:
-                    param_type = core_type_node.text.decode('utf8').strip()
-                else:
-                    param_type = dt_node.text.decode('utf8').strip() # Fallback to full data_type text
-                logger.debug(f"Parameter type found: {param_type}")
+        logger.debug(f"--- Entering _parse_parameter_declaration for node: {param_decl_node.type} | Text: '{param_decl_node.text.decode()[:60]}...'")
 
+        # --- Extract Type ---
+        param_type = None
+        logger.debug("--- Starting type extraction ---")
+        # Look for explicit type declaration first
+        type_node = self._find_child(param_decl_node, ["data_type_or_implicit", "data_type"])
+        logger.debug(f"Found type_node: {type_node.type if type_node else 'None'}")
+        if type_node:
+            # --- MODIFIED: Capture full type text ---
+            # Previously might have only taken a sub-node's text
+            param_type = type_node.text.decode('utf8').strip()
+            # Special case: if the node is data_type_or_implicit and contains 'type', it's a type parameter
+            if type_node.type == "data_type_or_implicit":
+                 type_keyword_node = self._find_child(type_node, ["type"])
+                 if type_keyword_node:
+                      param_type = "type" # Override if 'type' keyword is present
+            logger.debug(f"Explicit type found: '{param_type}'")
+            # --- END MODIFICATION ---
+        else:
+             # No explicit type node found, check for 'parameter type T' structure
+             logger.debug("No explicit type_node found. Checking for type_parameter_declaration...")
+             type_param_decl = self._find_child(param_decl_node, ["type_parameter_declaration"])
+             logger.debug(f"Found type_param_decl: {type_param_decl.type if type_param_decl else 'None'}")
+             if type_param_decl:
+                  param_type = "type"
+                  logger.debug("Found type_parameter_declaration, setting param_type='type'")
+             else:
+                  logger.debug("No type_parameter_declaration found, assuming implicit type.")
+                  param_type = None # Default for implicit
+
+        logger.debug(f"--- Type extraction complete. Final param_type: {param_type}")
+
+        # --- Extract Name and Default Value ---
         # Find the assignment part (list_of_param_assignments -> param_assignment)
         assignment_list_node = self._find_child(param_decl_node, ["list_of_param_assignments"])
         if assignment_list_node:
@@ -765,20 +778,67 @@ class RTLParser:
                  logger.warning(f"Could not find param_assignment within list: {assignment_list_node.text.decode()}")
                  return None # Cannot get name/value without assignment
         else:
-             logger.warning(f"Could not find list_of_param_assignments in: {param_decl_node.text.decode()}")
-             # Maybe a declaration without assignment? Try finding name directly
-             name_node = self._find_child(param_decl_node, ["simple_identifier", "identifier"])
-             if name_node:
-                  param_name = name_node.text.decode('utf8').strip()
-             else:
-                  return None # Still need a name
+            # --- MODIFIED: Handle missing list_of_param_assignments ---
+            logger.debug(f"No list_of_param_assignments found in: {param_decl_node.text.decode()[:50]}...")
+            # Check if this is a 'parameter type' declaration
+            if param_type == "type":
+                # --- REVISED: Handle 'parameter type' specific structure --- 
+                logger.debug(f"Handling 'parameter type' specific structure: {param_decl_node.text.decode()[:50]}...")
+                type_param_decl_node = self._find_child(param_decl_node, ["type_parameter_declaration"])
+                if type_param_decl_node:
+                    list_of_assignments = self._find_child(type_param_decl_node, ["list_of_type_assignments"])
+                    if list_of_assignments:
+                        assignment_node = self._find_child(list_of_assignments, ["type_assignment"])
+                        if assignment_node:
+                            # Extract name
+                            name_node = self._find_child(assignment_node, ["simple_identifier", "identifier"])
+                            if name_node:
+                                param_name = name_node.text.decode('utf8').strip()
+                            else:
+                                logger.warning(f"Could not find parameter name in type_assignment: {assignment_node.text.decode()}")
+                                return None
+                            # Extract default value (assigned type)
+                            value_node = self._find_child(assignment_node, ["data_type"])
+                            if value_node:
+                                default_value = value_node.text.decode('utf8').strip()
+                                logger.debug(f"Type Parameter '{param_name}' default type found: {default_value}")
+                            else:
+                                logger.warning(f"Could not find default type (data_type) for type parameter '{param_name}'")
+                                # Keep param_name, default_value remains None (or handle as error?)
+                        else:
+                            logger.warning(f"Could not find type_assignment within list: {list_of_assignments.text.decode()}")
+                            return None
+                    else:
+                        logger.warning(f"Could not find list_of_type_assignments within type_parameter_declaration: {type_param_decl_node.text.decode()}")
+                        return None
+                else:
+                    logger.warning(f"param_type is 'type' but could not find type_parameter_declaration node within: {param_decl_node.text.decode()}")
+                    return None
+                # --- END REVISED --- 
+            else:
+                # Original fallback: Declaration without assignment? Try finding name directly
+                # This case might be hit for implicit types if type extraction failed earlier
+                name_node = self._find_child(param_decl_node, ["simple_identifier", "identifier"])
+                if name_node:
+                    param_name = name_node.text.decode('utf8').strip()
+                    logger.debug(f"Found parameter '{param_name}' without assignment list (or type extraction failed).")
+                    # For implicit types, param_type should be None here
+                    if param_type is not None:
+                         logger.warning(f"Parameter '{param_name}' has type '{param_type}' but no assignment list found?")
+                else:
+                    logger.warning(f"Could not determine parameter name: {param_decl_node.text.decode()}")
+                    return None
+            # --- END MODIFICATION ---
 
-
+        # --- Create and Return Parameter --- 
         if param_name:
-            logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{param_type}', Default='{default_value}', Local={is_local}")
-            # Corrected: Use 'default_value' and include 'param_type'
-            return Parameter(name=param_name, param_type=param_type, default_value=default_value)
+            # Ensure param_type is set correctly (might be None for implicit)
+            final_param_type = param_type if param_type else None # Explicitly use None if not found
+            logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{final_param_type}', Default='{default_value}'")
+            return Parameter(name=param_name, param_type=final_param_type, default_value=default_value)
         else:
+            # This path should ideally not be reached if logic above is correct
+            logger.error(f"Failed to extract parameter details from node: {param_decl_node.text.decode()}")
             return None
 
     # ... (rest of the class) ...

@@ -85,17 +85,21 @@ class PragmaParser:
 
         # Validate type against the *new* set of handlers (using lowercase)
         if pragma_type_lower not in self.handlers:
-            # Check if it's one of the *old* types to provide a better warning
-            old_types = {"interface", "parameter", "resource", "timing", "feature"}
-            if pragma_type_lower in old_types: # Check lowercase against old types too
-                 logger.warning(f"Obsolete pragma type '{pragma_type_str}' used at line {line_number}. This type is no longer supported.")
-            else:
-                 logger.warning(f"Unknown pragma type '{pragma_type_str}' at line {line_number}: {text}")
-            return None # Ignore unknown or obsolete pragmas
-        
-        # Create pragma instance
+            logger.debug(f"Ignoring comment at line {line_number}: Unknown pragma type '{pragma_type_str}'")
+            return None
+
+        # Convert lowercase string back to uppercase enum member name
+        try:
+            enum_member_name = pragma_type_lower.upper()
+            pragma_enum_type = getattr(PragmaType, enum_member_name)
+        except AttributeError:
+            # This case should ideally be caught by the handler check earlier
+            logger.error(f"Internal error: Pragma type '{pragma_type_lower}' has a handler but no matching PragmaType enum member.")
+            return None
+
+        # Create pragma instance using the enum member
         pragma = Pragma(
-            type=pragma_type_lower, # Store the lowercase string value
+            type=pragma_enum_type, # Assign the enum member
             inputs=inputs,
             line_number=line_number
         )
@@ -163,46 +167,51 @@ class PragmaParser:
         return processed
 
     def _handle_derived_parameter(self, inputs: List[str], line_number: int) -> Dict:
-        """Handle DERIVED_PARAMETER pragma. Expected: <module_param_name> <python_function_name>."""
+        """Handle DERIVED_PARAMETER pragma. Expected: <python_function_name> <module_param_name1> [<module_param_name2> ...]."""
         logger.debug(f"Processing DERIVED_PARAMETER pragma: {inputs} at line {line_number}")
-        if len(inputs) != 2:
-            raise PragmaError("DERIVED_PARAMETER pragma requires <module_param_name> <python_function_name>")
+        # Expect at least one function name and one parameter name
+        if len(inputs) < 2:
+            raise PragmaError("DERIVED_PARAMETER pragma requires at least <python_function_name> <module_param_name>")
+
+        function_name = inputs[0]
+        module_param_names = inputs[1:] # Get all elements after the first one
+
+        logger.debug(f"Derived Parameter: Function='{function_name}', Params={module_param_names}")
+
         return {
-            "module_param_name": inputs[0],
-            "python_function_name": inputs[1]
+            "python_function_name": function_name,
+            "module_param_names": module_param_names # Return list of names
         }
 
 # --- Extraction Function ---
 
 def extract_pragmas(root_node: Node) -> List[Pragma]:
-    """Extracts all valid @brainsmith pragmas from comments in the AST."""
+    """Extracts all Brainsmith pragmas from the AST."""
     pragmas = []
-    parser = PragmaParser() # Can add debug=True here if needed
+    parser = PragmaParser()
+    comments_found_count = 0 # Add counter
 
-    # Simple BFS traversal to find all comment nodes
-    queue = [root_node]
-    visited = {root_node.id}
-    comment_nodes = []
-
-    while queue:
-        node = queue.pop(0)
+    # Simple recursive walk for comments - might need optimization for large files
+    def find_comments(node: Node):
+        nonlocal comments_found_count # Allow modification
         if node.type == 'comment':
-            comment_nodes.append(node)
+            comments_found_count += 1 # Increment counter
+            # Use INFO level for visibility during testing
+            logger.info(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
+            # Get line number (0-based)
+            line_number = node.start_point[0]
+            pragma = parser.parse_comment(node, line_number + 1) # Pass 1-based line number
+            if pragma:
+                logger.info(f"Found valid pragma: {pragma}")
+                pragmas.append(pragma)
+            else: # Add logging if parse_comment returns None
+                 logger.info(f"Node at line {line_number+1} was a comment but not a valid pragma.")
 
         for child in node.children:
-            if child.id not in visited:
-                visited.add(child.id)
-                queue.append(child)
+            find_comments(child)
 
-    # Sort comments by line number
-    comment_nodes.sort(key=lambda n: n.start_point[0])
-
-    # Parse each comment
-    for node in comment_nodes:
-        line_number = node.start_point[0] + 1 # tree-sitter is 0-based, humans 1-based
-        pragma = parser.parse_comment(node, line_number)
-        if pragma:
-            pragmas.append(pragma)
-            logger.debug(f"Found valid pragma: {pragma}")
-
+    # Use INFO level for visibility during testing
+    logger.info(">>> Starting pragma extraction from AST root.")
+    find_comments(root_node)
+    logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
     return pragmas

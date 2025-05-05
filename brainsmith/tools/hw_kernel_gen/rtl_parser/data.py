@@ -40,8 +40,10 @@ class Parameter:
         """Validate parameter attributes."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid parameter name: {self.name}")
-        if not self.param_type:
-            raise ValueError("Parameter type cannot be empty")
+        # --- MODIFIED: Allow param_type to be None ---
+        # if not self.param_type:
+        #     raise ValueError("Parameter type cannot be empty")
+        # --- END MODIFICATION ---
 
 @dataclass
 class Port:

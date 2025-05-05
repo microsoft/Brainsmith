@@ -29,40 +29,50 @@ AXI_STREAM_SUFFIXES = {
 }
 
 # AXI-Lite signals. The key used in PortGroup will be the full signal name.
-AXI_LITE_WRITE_SIGNALS = {
-    "config_AWADDR": {"direction": Direction.INPUT, "required": True},
-    "config_AWPROT": {"direction": Direction.INPUT, "required": True},
-    "config_AWVALID": {"direction": Direction.INPUT, "required": True},
-    "config_AWREADY": {"direction": Direction.OUTPUT, "required": True},
-    "config_WDATA": {"direction": Direction.INPUT, "required": True},
-    "config_WSTRB": {"direction": Direction.INPUT, "required": True},
-    "config_WVALID": {"direction": Direction.INPUT, "required": True},
-    "config_WREADY": {"direction": Direction.OUTPUT, "required": True},
-    "config_BRESP": {"direction": Direction.OUTPUT, "required": True},
-    "config_BVALID": {"direction": Direction.OUTPUT, "required": True},
-    "config_BREADY": {"direction": Direction.INPUT, "required": True},
+AXI_LITE_WRITE_SUFFIXES = {
+    "AWADDR": {"direction": Direction.INPUT, "required": True},
+    "AWPROT": {"direction": Direction.INPUT, "required": True},
+    "AWVALID": {"direction": Direction.INPUT, "required": True},
+    "AWREADY": {"direction": Direction.OUTPUT, "required": True},
+    "WDATA": {"direction": Direction.INPUT, "required": True},
+    "WSTRB": {"direction": Direction.INPUT, "required": True},
+    "WVALID": {"direction": Direction.INPUT, "required": True},
+    "WREADY": {"direction": Direction.OUTPUT, "required": True},
+    "BRESP": {"direction": Direction.OUTPUT, "required": True},
+    "BVALID": {"direction": Direction.OUTPUT, "required": True},
+    "BREADY": {"direction": Direction.INPUT, "required": True},
 }
 
-AXI_LITE_READ_SIGNALS = {
-    "config_ARADDR": {"direction": Direction.INPUT, "required": True},
-    "config_ARPROT": {"direction": Direction.INPUT, "required": True},
-    "config_ARVALID": {"direction": Direction.INPUT, "required": True},
-    "config_ARREADY": {"direction": Direction.OUTPUT, "required": True},
-    "config_RDATA": {"direction": Direction.OUTPUT, "required": True},
-    "config_RRESP": {"direction": Direction.OUTPUT, "required": True},
-    "config_RVALID": {"direction": Direction.OUTPUT, "required": True},
-    "config_RREADY": {"direction": Direction.INPUT, "required": True},
+AXI_LITE_READ_SUFFIXES = {
+    "ARADDR": {"direction": Direction.INPUT, "required": True},
+    "ARPROT": {"direction": Direction.INPUT, "required": True},
+    "ARVALID": {"direction": Direction.INPUT, "required": True},
+    "ARREADY": {"direction": Direction.OUTPUT, "required": True},
+    "RDATA": {"direction": Direction.OUTPUT, "required": True},
+    "RRESP": {"direction": Direction.OUTPUT, "required": True},
+    "RVALID": {"direction": Direction.OUTPUT, "required": True},
+    "RREADY": {"direction": Direction.INPUT, "required": True},
 }
+
 
 # Combined AXI-Lite for easier checking
-AXI_LITE_SIGNALS = {**AXI_LITE_WRITE_SIGNALS, **AXI_LITE_READ_SIGNALS}
+AXI_LITE_SUFFIXES = {**AXI_LITE_WRITE_SUFFIXES, **AXI_LITE_READ_SUFFIXES}
 
 # Regex to capture AXI-Stream prefix and suffix, handling optional "_V_"
 # Example: in0_V_TDATA -> prefix=in0, suffix=_TDATA
 # Example: out1_TDATA -> prefix=out1, suffix=_TDATA
 # Corrected Regex: Make the _V_ part truly optional and non-capturing
-AXI_STREAM_SPLIT_REGEX = re.compile(r"^(?P<prefix>.*?)(?:_V)?(?P<suffix>_(?:TDATA|TVALID|TREADY|TLAST))$")
+# Dynamically build the regex from AXI_STREAM_SUFFIXES keys
+AXI_STREAM_SPLIT_REGEX = re.compile(
+    r"^(?P<prefix>.*?)(?:_V)?(?P<suffix>(" + "|".join(AXI_STREAM_SUFFIXES.keys()) + r"))$"
+)
 
+# Regex to capture AXI-Lite prefix and signal name, handling optional "_V_"
+# Example: config_V_AWADDR -> prefix=config, signal=AWADDR
+# Example: control_ARVALID -> prefix=control, signal=ARVALID
+AXI_LITE_SPLIT_REGEX = re.compile(
+    r"^(?P<prefix>.*?)(?:_V)?_(?P<signal>(" + "|".join(re.escape(k) for k in AXI_LITE_SUFFIXES.keys()) + r"))$"
+)
 
 class InterfaceScanner:
     """Identifies potential interfaces from port lists."""
@@ -89,96 +99,103 @@ class InterfaceScanner:
                     logger.debug(f"Port '{port_name}' matched AXI stream suffix but has empty prefix. Ignoring.")
         return None
 
-    def _is_axi_lite_signal(self, port_name: str) -> bool:
-        """Check if a port name matches a known AXI-Lite signal."""
-        # Primarily check prefix, but also ensure it's a known full signal name
-        return port_name.startswith("config_") and port_name in AXI_LITE_SIGNALS
+    def _get_axi_lite_parts(self, port_name: str) -> Optional[Tuple[str, str]]:
+        """Extract prefix and generic signal name from potential AXI-Lite port name."""
+        match = AXI_LITE_SPLIT_REGEX.match(port_name)
+        if match:
+            prefix = match.group("prefix")
+            signal = match.group("signal")
+            # Ensure prefix is not empty
+            if prefix:
+                return prefix, signal
+            else:
+                logger.debug(f"Port '{port_name}' matched AXI lite signal but has empty prefix. Ignoring.")
+        return None
 
     def scan(self, ports: List[Port]) -> Tuple[List[PortGroup], List[Port]]:
         """
         Scans a list of ports and groups them into potential interfaces.
 
         Args:
-            ports: List of Port objects from the parsed module.
+            ports: A list of Port objects.
 
         Returns:
             A tuple containing:
-            - List of identified PortGroup objects (potential interfaces).
-            - List of remaining ports that didn't fit into any known interface type.
+                - A list of identified PortGroup objects.
+                - A list of Port objects that were not assigned to any group.
         """
-        identified_groups: List[PortGroup] = []
-        remaining_ports: List[Port] = []
-        processed_ports = set() # Keep track of ports already assigned to a group
+        identified_groups: Dict[Tuple[InterfaceType, str], PortGroup] = {}
+        assigned_port_names: set[str] = set()
+        unassigned_ports: List[Port] = []
 
-        # 1. Scan for Global Signals
-        global_group = PortGroup(InterfaceType.GLOBAL_CONTROL, name="global")
+        # 1. Identify Global Signals
+        global_ports: Dict[str, Port] = {}
         for port in ports:
             if self._is_global_signal(port.name):
-                # Use the full signal name as the key within the group
-                global_group.add_port(port, key=port.name)
-                processed_ports.add(port.name)
-        # Add group only if it contains any ports
-        if global_group.ports:
-            identified_groups.append(global_group)
+                global_ports[port.name] = port
+                assigned_port_names.add(port.name)
+        if global_ports:
+            # Global signals form a single group named "global"
+            group_key = (InterfaceType.GLOBAL_CONTROL, "global")
+            identified_groups[group_key] = PortGroup(
+                interface_type=InterfaceType.GLOBAL_CONTROL,
+                name="global",
+                ports=global_ports
+            )
+            logger.debug(f"Identified Global Control group with ports: {list(global_ports.keys())}")
 
-        # 2. Scan for AXI-Lite Signals
-        lite_group = PortGroup(InterfaceType.AXI_LITE, name="config")
-        for port in ports:
-            # Check if not already processed and is an AXI-Lite signal
-            if port.name not in processed_ports and self._is_axi_lite_signal(port.name):
-                 # Use the full signal name as the key within the group
-                lite_group.add_port(port, key=port.name)
-                processed_ports.add(port.name)
-        # Add group only if it contains any ports
-        if lite_group.ports:
-            identified_groups.append(lite_group)
-
-        # 3. Scan for AXI-Stream Signals
-        # Group ports by potential AXI-Stream prefix
-        stream_candidates = defaultdict(list)
-        temp_processed_stream_ports = set() # Track ports matched by regex initially
+        # 2. Identify AXI-Stream and AXI-Lite Interfaces
+        axi_stream_groups: Dict[str, Dict[str, Port]] = defaultdict(dict)
+        axi_lite_groups: Dict[str, Dict[str, Port]] = defaultdict(dict)
 
         for port in ports:
-            if port.name not in processed_ports:
-                parts = self._get_axi_stream_parts(port.name)
-                if parts:
-                    prefix, _ = parts # We only need the prefix for grouping here
-                    stream_candidates[prefix].append(port)
-                    # Mark as potentially processed now
-                    temp_processed_stream_ports.add(port.name)
+            if port.name in assigned_port_names:
+                continue # Skip already assigned global ports
 
-        # Create PortGroup for each identified prefix
-        for prefix, stream_ports in stream_candidates.items():
-            stream_group = PortGroup(InterfaceType.AXI_STREAM, name=prefix)
-            valid_group = False # Flag to check if any port was actually added
-            for port in stream_ports:
-                # Extract suffix again to use as the key within the group
-                # Use the same reliable method _get_axi_stream_parts
-                port_parts = self._get_axi_stream_parts(port.name)
-                if port_parts:
-                    _, suffix = port_parts
-                    stream_group.add_port(port, key=suffix)
-                    processed_ports.add(port.name) # Mark as fully processed ONLY if added to a group
-                    valid_group = True
-                # else: # This should ideally not happen if it was added to stream_candidates
-                    # logger.warning(f"Internal inconsistency: Port '{port.name}' in candidate group '{prefix}' failed suffix extraction.")
+            # Check AXI-Stream
+            stream_parts = self._get_axi_stream_parts(port.name)
+            if stream_parts:
+                prefix, suffix = stream_parts
+                # Use suffix as the key within the group's port dictionary
+                axi_stream_groups[prefix][suffix] = port
+                assigned_port_names.add(port.name)
+                logger.debug(f"Assigned '{port.name}' to potential AXI-Stream group '{prefix}' (suffix: {suffix})")
+                continue # Move to next port
 
-            # Add group only if it contains any ports
-            if valid_group:
-                identified_groups.append(stream_group)
-            # else: # Log if a candidate group ended up empty (shouldn't happen with current logic)
-                # logger.warning(f"AXI-Stream candidate group '{prefix}' resulted in an empty final group.")
+            # Check AXI-Lite
+            lite_parts = self._get_axi_lite_parts(port.name)
+            if lite_parts:
+                prefix, signal = lite_parts
+                # Use generic signal name as the key within the group's port dictionary
+                axi_lite_groups[prefix][signal] = port
+                assigned_port_names.add(port.name)
+                logger.debug(f"Assigned '{port.name}' to potential AXI-Lite group '{prefix}' (signal: {signal})")
+                continue # Move to next port
 
+        # Create PortGroup objects for identified AXI streams
+        for prefix, ports_dict in axi_stream_groups.items():
+            group_key = (InterfaceType.AXI_STREAM, prefix)
+            identified_groups[group_key] = PortGroup(
+                interface_type=InterfaceType.AXI_STREAM,
+                name=prefix,
+                ports=ports_dict
+            )
+            logger.debug(f"Created AXI-Stream PortGroup '{prefix}' with signals: {list(ports_dict.keys())}")
 
-        # 4. Collect Remaining/Unknown Ports
-        # Any port not processed belongs to an unknown interface or is standalone
+        # Create PortGroup objects for identified AXI-Lite interfaces
+        for prefix, ports_dict in axi_lite_groups.items():
+            group_key = (InterfaceType.AXI_LITE, prefix)
+            identified_groups[group_key] = PortGroup(
+                interface_type=InterfaceType.AXI_LITE,
+                name=prefix,
+                ports=ports_dict
+            )
+            logger.debug(f"Created AXI-Lite PortGroup '{prefix}' with signals: {list(ports_dict.keys())}")
+
+        # 3. Collect Unassigned Ports
         for port in ports:
-            if port.name not in processed_ports:
-                remaining_ports.append(port)
-                # Optionally, create an 'UNKNOWN' PortGroup for these
-                # unknown_group = PortGroup(InterfaceType.UNKNOWN, name=f"unknown_{port.name}")
-                # unknown_group.add_port(port, key=port.name)
-                # identified_groups.append(unknown_group)
+            if port.name not in assigned_port_names:
+                unassigned_ports.append(port)
+                logger.debug(f"Port '{port.name}' remains unassigned.")
 
-
-        return identified_groups, remaining_ports
+        return list(identified_groups.values()), unassigned_ports

@@ -6,12 +6,13 @@ from typing import Dict, Set, Optional
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import PortGroup, ValidationResult, InterfaceType
 # Import signal definitions for validation checks
+# These imports now bring in the dictionaries with GENERIC keys
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import (
     GLOBAL_SIGNALS,
     AXI_STREAM_SUFFIXES,
-    AXI_LITE_WRITE_SIGNALS,
-    AXI_LITE_READ_SIGNALS,
-    AXI_LITE_SIGNALS
+    AXI_LITE_WRITE_SUFFIXES, # Uses generic keys like "AWADDR"
+    AXI_LITE_READ_SUFFIXES,  # Uses generic keys like "ARADDR"
+    AXI_LITE_SUFFIXES        # Uses generic keys
 )
 
 logger = logging.getLogger(__name__)
@@ -114,32 +115,46 @@ class ProtocolValidator:
         """Validate AXI-Lite interface based on AXI_LITE signal definitions."""
         if group.interface_type != InterfaceType.AXI_LITE:
             return ValidationResult(False, "Invalid group type for AXI-Lite validation.")
+        if not group.name:
+             return ValidationResult(False, "AXI-Lite group missing name (prefix).") # Added check
 
-        has_write_channel = any(sig in group.ports for sig in AXI_LITE_WRITE_SIGNALS)
-        has_read_channel = any(sig in group.ports for sig in AXI_LITE_READ_SIGNALS)
+        # group.ports now uses generic keys (e.g., "AWADDR", "WDATA")
+        present_signals = set(group.ports.keys())
+
+        # Check which channels are potentially present based on generic signal names
+        has_write_channel = any(sig in present_signals for sig in AXI_LITE_WRITE_SUFFIXES)
+        has_read_channel = any(sig in present_signals for sig in AXI_LITE_READ_SUFFIXES)
 
         if not has_write_channel and not has_read_channel:
-            return ValidationResult(False, "AXI-Lite group 'config' has no recognized read or write signals.")
+            # Use group.name (prefix) in the error message
+            return ValidationResult(False, f"AXI-Lite group '{group.name}' has no recognized read or write signals.")
 
-        # Check required signals for present channels
+        # Check required signals for present channels using generic keys
         if has_write_channel:
-            missing_write = self._check_required_signals(group.ports, AXI_LITE_WRITE_SIGNALS)
+            # AXI_LITE_WRITE_SUFFIXES uses generic keys
+            missing_write = self._check_required_signals(group.ports, AXI_LITE_WRITE_SUFFIXES)
             if missing_write:
-                return ValidationResult(False, f"Missing required AXI-Lite write signals: {missing_write}")
+                # Use group.name (prefix) in the error message
+                return ValidationResult(False, f"Missing required AXI-Lite write signals for '{group.name}': {missing_write}")
 
         if has_read_channel:
-            missing_read = self._check_required_signals(group.ports, AXI_LITE_READ_SIGNALS)
+            # AXI_LITE_READ_SUFFIXES uses generic keys
+            missing_read = self._check_required_signals(group.ports, AXI_LITE_READ_SUFFIXES)
             if missing_read:
-                return ValidationResult(False, f"Missing required AXI-Lite read signals: {missing_read}")
+                # Use group.name (prefix) in the error message
+                return ValidationResult(False, f"Missing required AXI-Lite read signals for '{group.name}': {missing_read}")
 
         # Validate properties of all present AXI-Lite signals
+        # Iterate through the generic signal names found in the group
         for signal_name, port in group.ports.items():
-            if signal_name in AXI_LITE_SIGNALS:
-                expected_direction = AXI_LITE_SIGNALS[signal_name]["direction"]
+            # AXI_LITE_SUFFIXES uses generic keys
+            if signal_name in AXI_LITE_SUFFIXES:
+                expected_direction = AXI_LITE_SUFFIXES[signal_name]["direction"]
                 error = self._validate_port_properties(port, expected_direction)
                 if error:
-                    return ValidationResult(False, f"Invalid AXI-Lite signal '{signal_name}': {error}")
-            # else: Signal not in our known list, might be an error or extension
+                    # Report the error using the original port name for clarity
+                    return ValidationResult(False, f"Invalid AXI-Lite signal '{port.name}': {error}")
+            # else: Signal not in our known list, might be an error or extension (ignore for now)
 
         # TODO: Add check for address width consistency if needed
 
@@ -154,7 +169,9 @@ class ProtocolValidator:
         elif group.interface_type == InterfaceType.AXI_LITE:
             return self.validate_axi_lite(group)
         elif group.interface_type == InterfaceType.UNKNOWN:
-            return ValidationResult(True, "Skipping validation for UNKNOWN group.") # Or ValidationResult(False, ...) if unknown ports are errors
+            logger.debug(f"Skipping validation for UNKNOWN group '{group.name}'")
+            return ValidationResult(True, f"Skipping validation for UNKNOWN group '{group.name}'")
         else:
-            return ValidationResult(False, f"Unsupported interface type for validation: {group.interface_type}")
+            logger.warning(f"Unknown interface type encountered during validation: {group.interface_type}")
+            return ValidationResult(False, f"Unknown interface type: {group.interface_type}")
 
