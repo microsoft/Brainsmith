@@ -1,4 +1,10 @@
-# /home/tafk/dev/brainsmith/tests/tools/hw_kernel_gen/rtl_parser/conftest.py
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
+
 import pytest
 import logging
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
