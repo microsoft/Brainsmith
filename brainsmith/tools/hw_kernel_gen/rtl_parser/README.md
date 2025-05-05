@@ -67,9 +67,8 @@ sequenceDiagram
 
 *   `parser.py`: Main class `RTLParser` orchestrating the parsing flow. Handles AST traversal for module, parameter, and port extraction. Performs final validation checks.
 *   `grammar.py`: Handles loading the `tree-sitter` grammar (`.so` file) and defines node type constants.
-*   `data.py`: Defines core data structures (`HWKernel`, `Port`, `Parameter`, `Direction`).
-*   `interface_types.py`: Defines interface-related structures (`Interface`, `PortGroup`, `InterfaceType`, `ValidationResult`).
-*   `pragma.py`: Logic for extracting `//@brainsmith` pragmas from comments.
+*   `data.py`: Defines all core data structures: Enums (`Direction`, `InterfaceType`, `PragmaType`) and Dataclasses (`HWKernel`, `Port`, `Parameter`, `Pragma`, `Interface`, `PortGroup`, `ValidationResult`). This is the central definition of the parser's data model.
+*   `pragma.py`: Logic for extracting `//@brainsmith` pragmas from comments. Defines `PragmaParser` which uses the `PragmaType` enum for validation and handler dispatch.
 *   `interface_scanner.py`: Class `InterfaceScanner` identifies potential interface groups (`PortGroup`) based on port naming conventions using regex.
 *   `protocol_validator.py`: Class `ProtocolValidator` validates that identified `PortGroup` objects adhere to protocol rules (required signals, directions). **Defines the expected signal patterns and rules for each interface type.**
 *   `interface_builder.py`: Class `InterfaceBuilder` coordinates the `InterfaceScanner` and `ProtocolValidator` to produce a dictionary of validated `Interface` objects and a list of unassigned ports.
