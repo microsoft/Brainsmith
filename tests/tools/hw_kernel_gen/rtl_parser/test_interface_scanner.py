@@ -104,7 +104,9 @@ def test_scan_only_axilite(scanner, axilite_ports_full):
     assert groups[0].interface_type == InterfaceType.AXI_LITE
     assert groups[0].name == "config"
     assert len(groups[0].ports) == len(axilite_ports_full)
-    assert set(groups[0].ports.keys()) == {p.name for p in axilite_ports_full}
+    # Extract expected base names by removing the 'config_' prefix
+    expected_base_names = {p.name.replace("config_", "") for p in axilite_ports_full}
+    assert set(groups[0].ports.keys()) == expected_base_names
 
 def test_scan_only_unassigned(scanner, unassigned_ports_list):
     groups, remaining = scanner.scan(unassigned_ports_list)
@@ -159,4 +161,6 @@ def test_scan_axilite_partial(scanner):
     assert not remaining # Scanner groups potential interfaces, validator checks completeness
     assert groups[0].interface_type == InterfaceType.AXI_LITE
     assert groups[0].name == "config"
-    assert set(groups[0].ports.keys()) == {"config_AWADDR", "config_AWVALID", "config_AWREADY"}
+    # --- MODIFIED: Assert against generic base names ---
+    assert set(groups[0].ports.keys()) == {"AWADDR", "AWVALID", "AWREADY"}
+    # --- END MODIFICATION ---

@@ -2,7 +2,6 @@
 
 import os
 import pytest
-import ctypes
 from tree_sitter import Language, Parser
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Direction, Port, Parameter, HWKernel
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser, ParserError, SyntaxError
@@ -12,31 +11,6 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceT
 # --- END ADDED IMPORTS ---
 import tempfile
 import shutil
-from ctypes import c_void_p, c_char_p, py_object, pythonapi
-
-# --- ADDED: Grammar Path and AST Print Function ---
-# Adjust this path if your grammar file is located elsewhere
-GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
-
-def print_ast(node, indent="", level=0, max_depth=10):
-    """Recursively prints the AST structure."""
-    if level >= max_depth:
-        print(f"{indent}...")
-        return
-
-    node_type = node.type
-    node_text = node.text.decode('utf8').strip().replace('\n', '\\n')[:50] # Limit text length
-    print(f"{indent}{node_type} | Text: '{node_text}'")
-
-    # Check for specific fields if needed (example)
-    # if node_type == 'module_declaration':
-    #     name_node = node.child_by_field_name('name')
-    #     if name_node:
-    #         print(f"{indent}  [Field: name] -> {name_node.type} | Text: '{name_node.text.decode()}'")
-
-    for i, child in enumerate(node.children):
-        print_ast(child, indent + "  ", level + 1, max_depth)
-# --- END ADDED ---
 
 # --- Test Fixtures ---
 
@@ -62,74 +36,16 @@ def temp_sv_file():
 
 # --- Test Classes ---
 
-class TestDebuggingHelpers: # New class for debug tests
-    """Tests specifically for debugging and inspecting parser behavior."""
-
-    @pytest.mark.skip(reason="AST output is too verbose for regular runs")
-    def test_print_ast_structure(self, parser, temp_sv_file):
-        """Parses a simple module and prints its AST structure for inspection."""
-        content = """
-        module test_module #(
-            parameter WIDTH = 32
-        ) (
-            input logic clk,
-            input logic rst,
-            output logic [WIDTH-1:0] data_out
-        );
-            // Some internal logic
-            assign data_out = {WIDTH{1'b0}};
-        endmodule
-        """
-        path = temp_sv_file(content, "ast_test.sv")
-        # Use print instead of logger.info for direct output with pytest -s
-        print(f"\n--- AST Structure for {path} ---")
-
-        # Read content again (parser needs bytes)
-        with open(path, 'rb') as f:
-            source_bytes = f.read()
-
-        # Parse directly using the tree-sitter parser instance
-        tree = parser.parser.parse(source_bytes)
-        root_node = tree.root_node
-
-        # Print the AST structure using the helper, directing output to print
-        print_ast_node(root_node, logger_func=print)
-
-        print("--- End AST Structure ---")
-        assert True # This test is for printing, always pass if it runs
-
 class TestParserCore:
     """Tests for basic parsing and module structure."""
 
     def test_empty_module(self, parser, temp_sv_file):
-        """Test parsing an empty module."""
+        """Test parsing an empty module raises error due to missing interfaces."""
         content = "module empty_mod; endmodule"
         path = temp_sv_file(content)
-        # --- Updated Assertion ---
         # Expect ParserError because no interfaces (specifically AXI-Stream) are found
         with pytest.raises(ParserError, match=r"Module 'empty_mod' requires at least one AXI-Stream interface"):
              parser.parse_file(path)
-        # --- Original Code Expecting Success ---
-        # kernel = parser.parse_file(path)
-        # assert isinstance(kernel, HWKernel)
-        # assert kernel.name == "empty_mod"
-        # assert not kernel.parameters
-        # assert not kernel.ports
-        # assert not kernel.pragmas
-        # assert not kernel.interfaces # Should be empty after analysis
-
-    def test_simple_module_no_ports_params(self, parser, temp_sv_file):
-        """Test a simple module without ports or parameters."""
-        content = "module simple_mod; initial begin $display(\"Hello\"); end endmodule"
-        path = temp_sv_file(content)
-        # Expect ParserError because no interfaces (specifically AXI-Stream) are found
-        with pytest.raises(ParserError, match=r"requires at least one AXI-Stream interface"):
-             parser.parse_file(path)
-        # If we didn't have the interface requirement, we'd check:
-        # kernel = parser.parse_file(path)
-        # assert kernel.name == "simple_mod"
-        # assert not kernel.parameters
-        # assert not kernel.ports
 
     def test_module_selection_single(self, parser, temp_sv_file):
         """Test selecting the only module present."""
@@ -173,6 +89,41 @@ class TestParserCore:
         kernel = parser.parse_file(path)
         assert kernel.name == "target_module"
 
+    def test_module_selection_multiple_no_pragma(self, parser, temp_sv_file):
+        """Test parsing when multiple modules exist without TOP_MODULE pragma."""
+        content = """
+        module first_module (); endmodule
+        module second_module (); endmodule
+        """
+        path = temp_sv_file(content)
+        # --- MODIFIED: Remove quotes around filename in regex ---
+        expected_error_msg = (
+            r"Multiple modules \(\['first_module', 'second_module'\]\) found in " # Match module list
+            r".*test\.sv, " # Match filename WITHOUT quotes
+            r"but no TOP_MODULE pragma specified\." # Match trailing text
+        )
+        with pytest.raises(ParserError, match=expected_error_msg):
+            parser.parse_file(path)
+        # --- END MODIFICATION ---
+
+    def test_file_not_found(self, parser):
+        """Test parsing a non-existent file raises an error."""
+        # --- MODIFIED: Expect ParserError --- 
+        with pytest.raises(ParserError, match=r"Failed to read file non_existent_file\.sv"):
+            parser.parse_file("non_existent_file.sv")
+        # --- END MODIFICATION ---
+
+    def test_syntax_error(self, parser, temp_sv_file):
+        """Test parsing a file with syntax errors raises an error."""
+        content = "module syntax_err; wire x = ; endmodule" # Invalid syntax
+        path = temp_sv_file(content)
+        # --- MODIFIED: Update expected error message pattern --- 
+        # Match the new format which includes line/column
+        expected_error_msg = r"Invalid SystemVerilog syntax near line \d+, column \d+"
+        with pytest.raises(SyntaxError, match=expected_error_msg):
+            parser.parse_file(path)
+        # --- END MODIFICATION ---
+
 
 class TestParameterParsing:
     """Tests for parameter extraction."""
@@ -190,27 +141,31 @@ class TestParameterParsing:
         assert not kernel.parameters
 
     def test_simple_parameters(self, parser, temp_sv_file):
+        """Tests implicitly typed parameters.""" # <-- Updated docstring
         content = """
         module test #(
             parameter WIDTH = 32,
-            parameter DEPTH = 1024
-        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY); // Added dummy AXI stream
+            parameter DEPTH = 1024,
+            parameter NAME = "default_name"
+        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
         endmodule
         """
         path = temp_sv_file(content)
         kernel = parser.parse_file(path)
-        assert len(kernel.parameters) == 2
-        param_map = {p.name: p for p in kernel.parameters} # Use kernel.parameters
+        assert len(kernel.parameters) == 3
+        param_map = {p.name: p for p in kernel.parameters}
 
         assert "WIDTH" in param_map
-        # --- Fix: Use default_value ---
         assert param_map["WIDTH"].default_value == "32"
-        # assert param_map["WIDTH"].type is None # Type not explicitly parsed here yet
+        assert param_map["WIDTH"].param_type is None
 
         assert "DEPTH" in param_map
-        # --- Fix: Use default_value ---
         assert param_map["DEPTH"].default_value == "1024"
-        # assert param_map["DEPTH"].type is None
+        assert param_map["DEPTH"].param_type is None
+
+        assert "NAME" in param_map #
+        assert param_map["NAME"].default_value == '"default_name"' # Includes quotes
+        assert param_map["NAME"].param_type is None 
 
     def test_parameters_with_types(self, parser, temp_sv_file):
         content = """
@@ -221,37 +176,6 @@ class TestParameterParsing:
         endmodule
         """
         path = temp_sv_file(content)
-
-        # --- ADDED: Print AST ---
-        print("\n--- AST for test_parameters_with_types ---")
-        GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
-        if not os.path.exists(GRAMMAR_PATH):
-            print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
-            print("Please ensure the tree-sitter Verilog grammar is built.")
-            exit(1)
-
-            # 1. Load the shared object
-        lib = ctypes.cdll.LoadLibrary(GRAMMAR_PATH)
-
-        # 2. Get language pointer
-        lang_ptr = lib.tree_sitter_verilog
-        lang_ptr.restype = c_void_p
-        lang_ptr = lang_ptr()
-
-        # 3. Create Python capsule
-        PyCapsule_New = pythonapi.PyCapsule_New
-        PyCapsule_New.restype = py_object
-        PyCapsule_New.argtypes = (c_void_p, c_char_p, c_void_p)
-        capsule = PyCapsule_New(lang_ptr, b"tree_sitter.Language", None)
-
-        # 4. Create parser with language
-        language = Language(capsule)
-        ts_parser = Parser(language)
-
-        tree = ts_parser.parse(bytes(content, "utf8"))
-        print_ast(tree.root_node)
-        print("--- End AST ---")
-        # --- END ADDED ---
 
         kernel = parser.parse_file(path)
         # Adjusting expectation to 1 until type parameters are handled
@@ -367,51 +291,6 @@ class TestParameterParsing:
         assert param.name == "P_STRING"
         assert param.param_type == "string"
         assert param.default_value == '"Hello, SystemVerilog!"' # Includes quotes
-
-    def test_parameter_implicit_type(self, parser, temp_sv_file):
-        content = """
-        module test #(
-            parameter P_IMPLICIT_INT = 42,
-            parameter P_IMPLICIT_STR = "implicit"
-            // parameter P_IMPLICIT_REAL = 1.0 // Implicit real might be less common/supported
-        ) ( input logic ap_clk, input logic ap_rst_n, input logic [31:0] in0_TDATA, input logic in0_TVALID, output logic in0_TREADY);
-        endmodule
-        """
-        path = temp_sv_file(content)
-
-        # --- ADDED: Print AST ---
-        print("\n--- AST for test_parameter_implicit_type ---")
-        GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
-        if not os.path.exists(GRAMMAR_PATH):
-            print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
-            print("Please ensure the tree-sitter Verilog grammar is built.")
-            exit(1)
-
-            # 1. Load the shared object
-        lib = ctypes.cdll.LoadLibrary(GRAMMAR_PATH)
-
-        # 2. Get language pointer
-        lang_ptr = lib.tree_sitter_verilog
-        lang_ptr.restype = c_void_p
-        lang_ptr = lang_ptr()
-
-        # 3. Create Python capsule
-        PyCapsule_New = pythonapi.PyCapsule_New
-        PyCapsule_New.restype = py_object
-        PyCapsule_New.argtypes = (c_void_p, c_char_p, c_void_p)
-        capsule = PyCapsule_New(lang_ptr, b"tree_sitter.Language", None)
-
-        # 4. Create parser with language
-        language = Language(capsule)
-        ts_parser = Parser(language)
-
-        tree = ts_parser.parse(bytes(content, "utf8"))
-        print_ast(tree.root_node)
-        print("--- End AST ---")
-        # --- END ADDED ---
-
-        kernel = parser.parse_file(path)
-        # ... rest of the test ...
 
     def test_parameter_complex_default(self, parser, temp_sv_file):
         content = """
@@ -606,7 +485,6 @@ class TestPortParsing:
         assert "data_out" in port_map and port_map["data_out"].direction == Direction.OUTPUT and port_map["data_out"].width == "WIDTH-1:0"
         assert "data_in" in port_map and port_map["data_in"].direction == Direction.INPUT and port_map["data_in"].width == "WIDTH-1:0"
         assert "ap_clk" in port_map # Check interface ports are also found
-
 
 class TestPragmaHandling:
     """Tests for pragma extraction and handling."""
