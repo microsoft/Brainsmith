@@ -107,21 +107,6 @@ class Pragma:
             raise ValueError("Pragma inputs must be a list")
 
 @dataclass
-class ModuleSummary:
-    """Represents the parsed information for a single SystemVerilog module.
-
-    Attributes:
-        name: The name of the module.
-        ports: A list of Port objects representing the module's ports.
-        parameters: A dictionary of parameters found in the module.
-        interfaces: A dictionary mapping interface names to Interface objects.
-    """
-    name: str
-    ports: List[Port] = field(default_factory=list)
-    parameters: Dict[str, Parameter] = field(default_factory=dict) # Changed to Dict[str, Parameter]
-    interfaces: Dict[str, Interface] = field(default_factory=dict)
-
-@dataclass
 class HWKernel:
     """Top-level representation of a parsed hardware kernel.
     

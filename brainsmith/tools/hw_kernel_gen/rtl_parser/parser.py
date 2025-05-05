@@ -12,32 +12,35 @@ SystemVerilog files and extract module interfaces, parameters, and pragmas.
 
 import os
 import logging
-from typing import Optional, List, Tuple
-import collections
+from typing import Optional, List, Tuple, Dict, Any # Ensure these are present
+import collections # Ensure this is present
 
 from tree_sitter import Parser, Node
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction, ModuleSummary
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, Interface
+
 from . import grammar
+from .refactored.parser_stages import RTLParserRefactored
 
-logger = logging.getLogger(__name__) # Get logger for this module
+# Configure logger
+logger = logging.getLogger(__name__)
 
-
+# --- Error Classes (Keep them here for now) ---
 class ParserError(Exception):
     """Base class for parser errors."""
     pass
 
-
 class SyntaxError(ParserError):
     """Raised when SystemVerilog syntax is invalid."""
     pass
+# --- End Error Classes ---
 
-
+# --- Main RTLParser Class ---
 class RTLParser:
-    """Parser for SystemVerilog RTL files.
+    """Parser for SystemVerilog RTL files. (Original Implementation)
 
     This class uses tree-sitter to parse SystemVerilog files and extract
     the information needed by the Hardware Kernel Generator.
@@ -46,173 +49,317 @@ class RTLParser:
         parser: tree-sitter Parser instance
         debug: Enable debug output
     """
-
     def __init__(self, grammar_path: Optional[str] = None, debug: bool = False):
-        """Initialize the RTL parser.
+        """Initializes the RTLParser.
+
+        Loads the tree-sitter SystemVerilog grammar and initializes the parser
+        and the InterfaceBuilder.
 
         Args:
-            grammar_path: Path to SystemVerilog grammar .so file
-                        If None, tries to find sv.so in the rtl_parser directory
-            debug: Enable debug output
- 
+            grammar_path: Optional path to the compiled tree-sitter grammar library.
+                          If None, uses the default path configured in grammar.py.
+            debug: If True, enables detailed debug logging.
+
         Raises:
-            FileNotFoundError: If SystemVerilog grammar file not found
-            RuntimeError: If parser initialization fails
+            FileNotFoundError: If the grammar library cannot be found or loaded.
+            RuntimeError: For other unexpected errors during grammar loading.
         """
         self.debug = debug
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # Find grammar file path
-        if grammar_path is None:
-            grammar_dir = os.path.dirname(__file__)
-            grammar_path = os.path.join(grammar_dir, "sv.so")
-
-        # Load language and instantiate parser
         try:
             language = grammar.load_language(grammar_path)
             self.parser = Parser(language)
-            self.interface_builder = InterfaceBuilder(debug=debug)
-            logger.info("RTLParser initialized successfully.")
+            logger.info("SystemVerilog grammar loaded successfully.")
         except (FileNotFoundError, AttributeError, RuntimeError) as e:
-             raise ParserError(f"Failed to initialize parser: {e}")
+            logger.error(f"Failed to load SystemVerilog grammar: {e}")
+            raise FileNotFoundError(f"Failed to load SystemVerilog grammar: {e}")
         except Exception as e:
-             # Catch any other unexpected errors during init
-             logger.exception(f"Unexpected error during RTLParser initialization: {e}")
-             raise RuntimeError(f"Unexpected error during RTLParser initialization: {e}")
+            logger.exception(f"An unexpected error occurred during grammar loading: {e}")
+            raise RuntimeError(f"Unexpected error loading grammar: {e}")
 
-    def parse_file(self, file_path: str) -> HWKernel:
-        """Parses a SystemVerilog file and extracts HWKernel information."""
-        logger.info(f"Starting parsing for: {file_path}")
-        # Read file
+        self.interface_builder = InterfaceBuilder(debug=self.debug)
+
+        # Initialize state variables
+        self.tree: Optional[Node] = None
+        self.pragmas: List[Pragma] = []
+        self.module_node: Optional[Node] = None
+
+    def _initial_parse(self, file_path: str) -> None:
+        """Performs Stage 1 of parsing: Initial AST generation and module selection.
+
+        Reads the source file, parses it into an Abstract Syntax Tree (AST) using
+        tree-sitter, checks for basic syntax errors, finds all module definitions,
+        extracts `@brainsmith` pragmas, and selects the target module node based on
+        the number of modules found and the presence of a `TOP_MODULE` pragma.
+
+        Args:
+            file_path: The absolute path to the SystemVerilog file to parse.
+
+        Returns:
+            None. Results are stored in instance variables:
+            - `self.tree`: The root node of the parsed AST.
+            - `self.pragmas`: A list of extracted Pragma objects.
+            - `self.module_node`: The tree-sitter Node representing the selected target module.
+
+        Raises:
+            ParserError: If the file cannot be read, core parsing fails, no modules are found,
+                         pragma extraction fails, or module selection logic fails (e.g., ambiguity).
+            SyntaxError: If the input file contains SystemVerilog syntax errors detected by tree-sitter.
+            FileNotFoundError: (Propagated) If the input file does not exist.
+        """
+        logger.info(f"Stage 1: Initial parsing for {file_path}")
+        self.tree = None # Reset state
+        self.pragmas = []
+        self.module_node = None
+
+        # 1. Read file
         try:
             with open(file_path, 'r') as f:
                 source = f.read()
         except Exception as e:
             logger.exception(f"Failed to read file {file_path}: {e}")
             raise ParserError(f"Failed to read file {file_path}: {e}")
-
-        # Parse file
+        
+        # 2. Parse using self.parser
         try:
-            tree = self.parser.parse(bytes(source, 'utf8'))
+            self.tree = self.parser.parse(bytes(source, 'utf8'))
         except Exception as e:
-            # Catch potential errors during the parse call itself
             logger.exception(f"Tree-sitter parsing failed for {file_path}: {e}")
             raise ParserError(f"Core parsing failed for {file_path}: {e}")
 
-        # Check for syntax errors more specifically
-        if tree.root_node.has_error:
-            # Find first error node if possible (simple approach)
-            error_node = self._find_first_error_node(tree.root_node)
+        # 3. Check syntax
+        if self.tree.root_node.has_error:
+            error_node = self._find_first_error_node(self.tree.root_node)
             line = error_node.start_point[0] + 1 if error_node else 'unknown'
             col = error_node.start_point[1] + 1 if error_node else 'unknown'
             error_msg = f"Invalid SystemVerilog syntax near line {line}, column {col}."
             logger.error(f"Syntax error in {file_path} near line {line}:{col}")
             raise SyntaxError(error_msg)
 
-        # Find module definition(s)
-        module_nodes = self._find_module_nodes(tree.root_node)
+        # 4. Find module nodes
+        module_nodes = self._find_module_nodes(self.tree.root_node)
         if not module_nodes:
             logger.error(f"No module definitions found in {file_path}")
-            raise ParserError(f"No module definition found in {file_path}")
-        
-        # Extract pragmas first to check for TOP_MODULE
+            raise ParserError(f"No module definition found in {file_path}")        
+
+        # 5. Extract pragmas
         logger.debug("Extracting pragmas...")
         try:
-            pragmas = extract_pragmas(tree.root_node)
+            self.pragmas = extract_pragmas(self.tree.root_node)
         except Exception as e:
             logger.exception(f"Error during pragma extraction in {file_path}: {e}")
             raise ParserError(f"Failed during pragma extraction: {e}")
-        logger.debug(f"Found {len(pragmas)} potential pragmas.")
+        logger.debug(f"Found {len(self.pragmas)} potential pragmas.")
 
-        # Select the target module node
+        # 6. Select target module
         try:
-            module_node = self._select_target_module(module_nodes, pragmas, file_path)
+            self.module_node = self._select_target_module(module_nodes, self.pragmas, file_path)
+            logger.info(f"Selected target module node: {self.module_node.type}") # Log basic info
         except ParserError as e:
             logger.error(e) # Log the specific error from selection logic
-            raise
+            raise # Re-raise the selection error
 
-        # --- Start processing the selected module ---
+    def _extract_kernel_components(self) -> Tuple[str, List[Parameter], List[Port]]:
+        """Performs Stage 2 of parsing: Extraction of name, parameters, and ports.
+
+        Processes the `self.module_node` (selected in Stage 1) to extract the
+        module's name, its parameters (excluding localparams), and its ports
+        (currently supporting ANSI-style declarations).
+
+        Requires `_initial_parse` to have been run successfully first.
+
+        Args:
+            None. Operates on `self.module_node`.
+
+        Returns:
+            A tuple containing:
+            - `name` (str): The name of the parsed hardware kernel module.
+            - `parameters` (List[Parameter]): A list of extracted Parameter objects.
+            - `ports` (List[Port]): A list of extracted Port objects.
+
+        Raises:
+            ParserError: If `self.module_node` is not set (Stage 1 was not run or failed),
+                         or if extraction of the header, parameters, or ports fails.
+        """
+        if not self.module_node:
+            raise ParserError("Cannot extract components: _initial_parse must be run first.")
+        logger.info("Stage 2: Extracting kernel components (name, parameters, ports)")
+
+        # 1. Extract header (name, param_nodes, port_nodes)
         try:
-            # Extract module components
-            logger.debug("Extracting module header...")
-            name, param_nodes, port_nodes = self._extract_module_header(module_node)
+            name, param_nodes, port_nodes = self._extract_module_header(self.module_node)
+            if name is None:
+                raise ParserError("Failed to extract module name from header.")
             logger.debug(f"Extracted header for module '{name}'")
+        except Exception as e:
+            logger.exception(f"Error during module header extraction: {e}")
+            raise ParserError(f"Failed during module header extraction: {e}")
 
-            # Create kernel instance
-            kernel = HWKernel(name=name)
-            kernel.pragmas = pragmas # Assign extracted pragmas
-
-            # Extract parameters
-            logger.debug("Extracting parameters...")
+        # 2. Parse parameters
+        parameters: List[Parameter] = []
+        logger.debug("Extracting parameters...")
+        try:
             for node in param_nodes:
                 param = self._parse_parameter_declaration(node)
                 if param is not None: # Skips local params implicitly
-                    kernel.parameters.append(param)
-            logger.debug(f"Extracted {len(kernel.parameters)} parameters.")
+                    parameters.append(param)
+            logger.debug(f"Extracted {len(parameters)} parameters.")
+        except Exception as e:
+            logger.exception(f"Error during parameter parsing: {e}")
+            raise ParserError(f"Failed during parameter parsing: {e}")
 
-            # Extract ports
-            logger.debug("Extracting ports...")
-            extracted_ports: List[Port] = []
+        # 3. Parse ports
+        ports: List[Port] = []
+        logger.debug("Extracting ports...")
+        try:
             for node in port_nodes:
-                # Use the new private method
                 parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
                 if parsed_port_list: # Check if the list is not empty
-                    extracted_ports.extend(parsed_port_list) # Use extend to add elements
-            kernel.ports = extracted_ports
-            # Correctly log the total number of Port objects extracted
-            logger.debug(f"Extracted {len(kernel.ports)} individual port objects.")
+                    ports.extend(parsed_port_list) # Use extend to add elements
+            logger.debug(f"Extracted {len(ports)} individual port objects.")
+        except Exception as e:
+            logger.exception(f"Error during port parsing: {e}")
+            raise ParserError(f"Failed during port parsing: {e}")
 
-            # --- Interface Analysis ---
-            logger.info(f"Starting interface analysis for module {kernel.name}...")
-            validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(kernel.ports)
-            kernel.interfaces = validated_interfaces
-            logger.info(f"Interface analysis complete. Found {len(kernel.interfaces)} valid interfaces.")
+        # 4. Return name, parameters, ports
+        logger.info("Stage 2: Component extraction complete.")
+        return name, parameters, ports
 
-            # --- Post-Analysis Validation ---
-            # Check for Global Control interface
-            has_global_control = any(
-                iface.type == InterfaceType.GLOBAL_CONTROL for iface in kernel.interfaces.values()
+    def _analyze_and_validate_interfaces(self, ports: List[Port], kernel_name: str) -> Dict[str, Interface]:
+        """Performs Stage 3 of parsing: Interface building and validation.
+
+        Takes the list of raw ports extracted in Stage 2 and uses the `InterfaceBuilder`
+        to group them into logical interfaces (AXI-Stream, AXI-Lite, Global Control).
+        It then performs critical validation checks:
+        1. Ensures a Global Control interface (`ap_clk`, `ap_rst_n`) exists.
+        2. Ensures at least one AXI-Stream interface exists.
+        3. Ensures no ports were left unassigned to a standard interface.
+
+        Args:
+            ports: The list of Port objects extracted in Stage 2.
+            kernel_name: The name of the kernel module (used for error messages).
+
+        Returns:
+            A dictionary mapping interface names (str) to validated Interface objects.
+
+        Raises:
+            ParserError: If the interface building process fails, or if any of the
+                         post-analysis validation checks (Global Control, AXI-Stream,
+                         Unassigned Ports) fail.
+        """
+        logger.info(f"Stage 3: Analyzing and validating interfaces for module {kernel_name}")
+
+        # 1. Call self.interface_builder.build_interfaces(ports)
+        try:
+            validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(ports)
+            logger.info(f"Interface analysis complete. Found {len(validated_interfaces)} valid interfaces.")
+        except Exception as e:
+            logger.exception(f"Error during interface building for module {kernel_name}: {e}")
+            # Re-raise as ParserError to be consistent? Or let specific error propagate?
+            # Let's wrap it for now. # TAFK TODO
+            raise ParserError(f"Failed during interface building: {e}")
+
+        # --- Post-Analysis Validation ---
+
+        # 2. Perform Global Control check
+        has_global_control = any(
+            iface.type == InterfaceType.GLOBAL_CONTROL for iface in validated_interfaces.values()
+        )
+        if not has_global_control:
+            error_msg = f"Module '{kernel_name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
+            logger.error(error_msg)
+            raise ParserError(error_msg)
+
+        # 3. Perform AXI-Stream check
+        has_axi_stream = any(
+            iface.type == InterfaceType.AXI_STREAM for iface in validated_interfaces.values()
+        )
+        if not has_axi_stream:
+            error_msg = f"Module '{kernel_name}' requires at least one AXI-Stream interface, but found none after analysis."
+            logger.error(error_msg)
+            raise ParserError(error_msg)
+
+        # 4. Perform Unassigned Ports check
+        if unassigned_ports:
+             unassigned_names = [p.name for p in unassigned_ports]
+             error_msg = f"Module '{kernel_name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
+             logger.error(error_msg)
+             raise ParserError(error_msg)
+
+        # 5. Return validated_interfaces
+        logger.info("Stage 3: Interface analysis and validation complete.")
+        return validated_interfaces
+
+    def parse_file(self, file_path: str) -> HWKernel:
+        """Orchestrates the multi-stage parsing process for a SystemVerilog file.
+
+        This is the main public method to parse an RTL file. It calls the
+        internal stage methods in sequence:
+        1. `_initial_parse`: Reads file, parses AST, selects module.
+        2. `_extract_kernel_components`: Extracts name, parameters, ports.
+        3. `_analyze_and_validate_interfaces`: Builds and validates interfaces.
+        Finally, it constructs and returns the `HWKernel` data object.
+
+        Args:
+            file_path: The absolute path to the SystemVerilog file to parse.
+
+        Returns:
+            An `HWKernel` object containing the parsed information (name, parameters,
+            interfaces, pragmas).
+
+        Raises:
+            ParserError: If any stage of the parsing process fails due to logical errors,
+                         ambiguity, or validation failures.
+            SyntaxError: If the input file has SystemVerilog syntax errors.
+            FileNotFoundError: If the input file cannot be found.
+            Exception: Catches and wraps any other unexpected errors during orchestration
+                       as a `ParserError`.
+        """
+        logger.info(f"Starting full parsing orchestration for: {file_path}")
+        try:
+            # 1. Call Stage 1: Initial Parse
+            self._initial_parse(file_path)
+
+            # 2. Call Stage 2: Extract Components
+            name, parameters, ports = self._extract_kernel_components()
+
+            # 3. Call Stage 3: Analyze and Validate Interfaces
+            validated_interfaces = self._analyze_and_validate_interfaces(ports, name)
+
+            # 4. Create HWKernel object
+            # Ensure pragmas are available from self.pragmas (set in _initial_parse)
+            kernel = HWKernel(
+                name=name,
+                parameters=parameters,
+                interfaces=validated_interfaces,
+                pragmas=self.pragmas
+                # Decide if raw ports should still be stored on HWKernel.
+                # If yes, add 'ports=ports' here. Currently, HWKernel doesn't store raw ports.
             )
-            if not has_global_control:
-                # Note: This error triggers if no *valid* global interface is found.
-                # It could be because ap_clk/ap_rst_n were missing entirely, or they
-                # were found but failed validation (e.g., wrong direction).
-                error_msg = f"Module '{kernel.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
-                logger.error(error_msg)
-                raise ParserError(error_msg)
 
-            # Check for at least one AXI-Stream interface
-            has_axi_stream = any(
-                iface.type == InterfaceType.AXI_STREAM for iface in kernel.interfaces.values()
-            )
-            if not has_axi_stream:
-                error_msg = f"Module '{kernel.name}' requires at least one AXI-Stream interface, but found none after analysis."
-                logger.error(error_msg)
-                raise ParserError(error_msg)
-            
-            # Check for unassigned ports
-            if unassigned_ports:
-                 unassigned_names = [p.name for p in unassigned_ports]
-                 error_msg = f"Module '{kernel.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
-                 logger.error(error_msg)
-                 raise ParserError(error_msg)
-
+            # 5. Return HWKernel
             logger.info(f"Successfully parsed module '{kernel.name}' from {file_path}")
             return kernel
-        except SyntaxError as e:
-            # Already logged, just re-raise
-            raise
-        except ParserError as e:
-            # Catch specific errors raised during processing (module selection, validation etc.)
-            logger.error(f"Parser processing error for {file_path}: {e}")
-            raise # Re-raise the specific parser error
-        except Exception as e:
-            # Catch unexpected errors during module processing
-            logger.exception(f"An unexpected error occurred during module processing of {file_path}: {e}")
-            raise ParserError(f"An unexpected error occurred during module processing: {e}")
 
+        except (SyntaxError, ParserError) as e:
+            # Log specific parser/syntax errors raised by stages
+            # Error should already be logged by the stage method that raised it.
+            logger.error(f"Parsing failed for {file_path}: {e}")
+            raise # Re-raise the specific error
+        except FileNotFoundError as e:
+            # Handle file not found specifically if not caught earlier
+            logger.error(f"File not found during parsing: {e}")
+            raise
+        except Exception as e:
+            # Catch any other unexpected errors during orchestration
+            logger.exception(f"An unexpected error occurred during parsing orchestration for {file_path}: {e}")
+            # Wrap in ParserError for consistent error type from this function
+            raise ParserError(f"An unexpected error occurred during parsing orchestration: {e}")
+
+    # --- Helper Functions ---
     def _find_first_error_node(self, node: Node) -> Optional[Node]:
-        """Simple BFS to find the first node marked with an error."""
+        """Finds the first AST node marked with an error using BFS."""
         queue = [node]
         visited = {node.id}
         while queue:
@@ -231,6 +378,7 @@ class RTLParser:
         return None # No error node found
 
     def _find_module_nodes(self, root: Node) -> List[Node]:
+        """Finds all top-level 'module_declaration' nodes in the AST."""
         module_nodes = []
         queue = collections.deque([root])
         while queue:
@@ -244,7 +392,7 @@ class RTLParser:
         return module_nodes
 
     def _select_target_module(self, module_nodes: List[Node], pragmas: List["Pragma"], file_path: str) -> Node:
-        """Select the target module based on count and TOP_MODULE pragma."""
+        """Selects the target module node based on count and TOP_MODULE pragma."""
         top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE]
 
         # Extract module names using the helper function
@@ -293,14 +441,7 @@ class RTLParser:
              raise ParserError("Internal error: Inconsistent module node state.")
 
     def _extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
-        """
-        Extracts module name, parameter nodes, and port nodes from a module_declaration node.
-        Partial support for non-ANSI headers, but only ANSI-style ports are officially supported.
-
-        Returns:
-            Tuple: (module_name, parameter_nodes, port_nodes)
-                   Returns (None, None, None) if essential parts are missing.
-        """
+        """Extracts name, parameter nodes, and port nodes from a module_declaration node."""
         if not module_node or module_node.type != "module_declaration":
             logger.error("Invalid node passed to _extract_module_header. Expected 'module_declaration'.")
             return None, None, None
@@ -351,7 +492,7 @@ class RTLParser:
         return module_name, param_nodes, port_nodes
 
     def _debug_node(self, node: Node, prefix: str = "", max_depth: int = 3, current_depth: int = 0) -> None:
-        """Debug helper to print node structure with depth limit."""
+        """Debug helper to print AST node structure recursively with a depth limit."""
         if node is None or current_depth > max_depth:
             return
         indent = "  " * current_depth
@@ -367,7 +508,7 @@ class RTLParser:
             self._debug_node(child, prefix=f"{prefix}Child {i}: ", max_depth=max_depth, current_depth=current_depth + 1)
 
     def _extract_direction(self, node: Node) -> Optional[Direction]:
-        """Extract the direction (input, output, inout) from a port declaration node."""
+        """Extracts the port direction (input, output, inout) from relevant AST nodes."""
         if node is None:
             return None
 
@@ -394,7 +535,7 @@ class RTLParser:
         return direction
 
     def _find_identifiers_recursive(self, node: Node) -> List[str]:
-        """Recursively find all simple_identifier or port_identifier texts under a node."""
+        """Recursively finds all 'simple_identifier' or 'port_identifier' texts under a node, excluding keywords."""
         identifiers = []
         node_type = node.type
         node_text = node.text.decode('utf8').strip()
@@ -423,10 +564,7 @@ class RTLParser:
         return list(dict.fromkeys(identifiers))
 
     def _parse_port_declaration(self, node: Node) -> List[Port]:
-        """
-        Parses a port declaration node (ANSI or non-ANSI) and returns a list of Port objects.
-        Refined based on detailed AST analysis.
-        """
+        """Parses an 'ansi_port_declaration' node into a list of Port objects (one per identifier)."""
         logger.debug(f"Parsing port declaration node: {node.text.decode()}")
 
         final_width = "1" # Default
@@ -585,7 +723,7 @@ class RTLParser:
         return parsed_ports
 
     def _extract_width_from_dimension(self, width_node: Node) -> str:
-        """Helper to extract text content from dimension nodes."""
+        """Extracts the width string (e.g., '31:0', 'WIDTH-1:0') from a dimension node."""
         if not width_node: return "1"
         logger.debug(f"Extracting width from node: Type={width_node.type}, Text='{width_node.text.decode()}'")
 
@@ -622,7 +760,7 @@ class RTLParser:
             return cleaned_width_text if cleaned_width_text else "1" # Return cleaned text or default
 
     def _find_child(self, node: Node, types: List[str]) -> Optional[Node]:
-        """Find the first direct child node matching any of the given types."""
+        """Finds the first direct child node matching any of the given types."""
         if not node: return None
         for child in node.children:
             if child.type in types:
@@ -630,7 +768,7 @@ class RTLParser:
         return None
 
     def _find_children(self, node: Node, types: List[str]) -> List[Node]:
-        """Find all direct children nodes matching any of the given types."""
+        """Finds all direct child nodes matching any of the given types."""
         found_nodes = []
         if not node: return found_nodes
         for child in node.children:
@@ -639,12 +777,7 @@ class RTLParser:
         return found_nodes
 
     def _parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
-        """Parses a parameter_port_declaration or local_parameter_declaration node.
-
-        Returns:
-            A Parameter object if parsing is successful, otherwise None.
-            Local parameters are explicitly skipped and return None.
-        """
+        """Parses a parameter declaration node into a Parameter object, skipping localparams."""
         param_name: Optional[str] = None
         param_type: str = "parameter" # Default type if not specified
         default_value: Optional[str] = None
@@ -675,7 +808,6 @@ class RTLParser:
         type_node = self._find_child(param_decl_node, ["data_type_or_implicit", "data_type"])
         logger.debug(f"Found type_node: {type_node.type if type_node else 'None'}")
         if type_node:
-            # --- MODIFIED: Capture full type text ---
             # Previously might have only taken a sub-node's text
             param_type = type_node.text.decode('utf8').strip()
             # Special case: if the node is data_type_or_implicit and contains 'type', it's a type parameter
@@ -684,7 +816,6 @@ class RTLParser:
                  if type_keyword_node:
                       param_type = "type" # Override if 'type' keyword is present
             logger.debug(f"Explicit type found: '{param_type}'")
-            # --- END MODIFICATION ---
         else:
              # No explicit type node found, check for 'parameter type T' structure
              logger.debug("No explicit type_node found. Checking for type_parameter_declaration...")

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class PragmaType(Enum):
     """Valid pragma types based on RTL_Parser-Data-Analysis.md."""
-    TOP_MODULE = "top"          # Specify the top module if multiple exist
+    TOP_MODULE = "top_module"          # Specify the top module if multiple exist
     DATATYPE = "datatype"              # Restrict datatype for an interface
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
 
