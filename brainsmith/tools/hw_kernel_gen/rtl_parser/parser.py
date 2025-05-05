@@ -17,7 +17,7 @@ import collections # Ensure this is present
 
 from tree_sitter import Parser, Node
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction, ModuleSummary
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, Interface
