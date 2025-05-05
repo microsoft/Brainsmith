@@ -10,17 +10,55 @@
 import logging
 from typing import Dict, Set, Optional
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction # Ensure Direction is imported
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import PortGroup, ValidationResult, InterfaceType
-# Import signal definitions for validation checks
-# These imports now bring in the dictionaries with GENERIC keys
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import (
-    GLOBAL_SIGNALS,
-    AXI_STREAM_SUFFIXES,
-    AXI_LITE_WRITE_SUFFIXES, # Uses generic keys like "AWADDR"
-    AXI_LITE_READ_SUFFIXES,  # Uses generic keys like "ARADDR"
-    AXI_LITE_SUFFIXES        # Uses generic keys
-)
+
+# --- MOVED Protocol Definitions ---
+# Define known signal patterns based on RTL_Parser-Data-Analysis.md
+GLOBAL_SIGNALS = {
+    "ap_clk": {"direction": Direction.INPUT, "required": True},
+    "ap_rst_n": {"direction": Direction.INPUT, "required": True},
+    "ap_clk2x": {"direction": Direction.INPUT, "required": False},
+}
+
+# Suffixes for AXI-Stream. Direction depends on prefix (in/out) and will be validated later.
+# The key used in PortGroup will be the suffix (e.g., TDATA)
+AXI_STREAM_SUFFIXES = {
+    "TDATA": {"required": True},
+    "TVALID": {"required": True},
+    "TREADY": {"required": True},
+    "TLAST": {"required": False},
+}
+
+# AXI-Lite signals. The key used in PortGroup will be the full signal name.
+AXI_LITE_WRITE_SUFFIXES = {
+    "AWADDR": {"direction": Direction.INPUT, "required": True},
+    "AWPROT": {"direction": Direction.INPUT, "required": True},
+    "AWVALID": {"direction": Direction.INPUT, "required": True},
+    "AWREADY": {"direction": Direction.OUTPUT, "required": True},
+    "WDATA": {"direction": Direction.INPUT, "required": True},
+    "WSTRB": {"direction": Direction.INPUT, "required": True},
+    "WVALID": {"direction": Direction.INPUT, "required": True},
+    "WREADY": {"direction": Direction.OUTPUT, "required": True},
+    "BRESP": {"direction": Direction.OUTPUT, "required": True},
+    "BVALID": {"direction": Direction.OUTPUT, "required": True},
+    "BREADY": {"direction": Direction.INPUT, "required": True},
+}
+
+AXI_LITE_READ_SUFFIXES = {
+    "ARADDR": {"direction": Direction.INPUT, "required": True},
+    "ARPROT": {"direction": Direction.INPUT, "required": True},
+    "ARVALID": {"direction": Direction.INPUT, "required": True},
+    "ARREADY": {"direction": Direction.OUTPUT, "required": True},
+    "RDATA": {"direction": Direction.OUTPUT, "required": True},
+    "RRESP": {"direction": Direction.OUTPUT, "required": True},
+    "RVALID": {"direction": Direction.OUTPUT, "required": True},
+    "RREADY": {"direction": Direction.INPUT, "required": True},
+}
+
+# Combined AXI-Lite for easier checking
+AXI_LITE_SUFFIXES = {**AXI_LITE_WRITE_SUFFIXES, **AXI_LITE_READ_SUFFIXES}
+# --- END MOVED Protocol Definitions ---
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +109,11 @@ class ProtocolValidator:
         if not group.name:
              return ValidationResult(False, "AXI-Stream group missing name (prefix).")
 
+        # --- MODIFIED: Use keys without underscore ---
         missing = self._check_required_signals(group.ports, AXI_STREAM_SUFFIXES)
         if missing:
             return ValidationResult(False, f"Missing required AXI-Stream signals for '{group.name}': {missing}")
+        # --- END MODIFICATION ---
 
         # Determine expected direction based on prefix/suffix
         lname = group.name.lower()
@@ -84,23 +124,26 @@ class ProtocolValidator:
              logger.warning(f"Could not determine direction (input/output) for AXI-Stream '{group.name}' based on naming convention.")
              # Proceed, but direction checks will be skipped
 
-        tdata_port = group.ports.get("_TDATA")
+        # --- MODIFIED: Use key without underscore ---
+        tdata_port = group.ports.get("TDATA")
         if not tdata_port:
             # Should have been caught by missing check, but defensive coding
-            return ValidationResult(False, f"AXI-Stream '{group.name}' missing _TDATA.")
+            return ValidationResult(False, f"AXI-Stream '{group.name}' missing TDATA.")
+        # --- END MODIFICATION ---
 
         # Validate signal directions based on inferred stream direction
         for suffix, port in group.ports.items():
             expected_direction = None
-            # Corrected Direction Logic:
-            if suffix == "_TDATA" or suffix == "_TVALID" or suffix == "_TLAST":
+            # --- MODIFIED: Use keys without underscore ---
+            if suffix == "TDATA" or suffix == "TVALID" or suffix == "TLAST":
                 # Corrected logic: Input stream means these signals are INPUT
                 if is_input_stream: expected_direction = Direction.INPUT
                 elif is_output_stream: expected_direction = Direction.OUTPUT
-            elif suffix == "_TREADY":
+            elif suffix == "TREADY":
                  # Corrected logic: Input stream means TREADY is OUTPUT
                 if is_input_stream: expected_direction = Direction.OUTPUT
                 elif is_output_stream: expected_direction = Direction.INPUT
+            # --- END MODIFICATION ---
 
             if expected_direction: # Only validate if direction is clear
                 error = self._validate_port_properties(port, expected_direction)

@@ -21,9 +21,7 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Param
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType, Interface
-
 from . import grammar
-from .refactored.parser_stages import RTLParserRefactored
 
 # Configure logger
 logger = logging.getLogger(__name__)

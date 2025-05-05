@@ -9,12 +9,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-# Use TYPE_CHECKING to avoid runtime import cycle, but keep type hints for checkers
-from typing import Dict, Any, Optional, TYPE_CHECKING
-
-# Use forward reference string hint for Port to break cycle
-if TYPE_CHECKING:
-    from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port
+from typing import Dict, Any, Optional
 
 class InterfaceType(Enum):
     """Enumeration of supported interface types."""

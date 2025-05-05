@@ -1,10 +1,13 @@
 # filepath: /home/tafk/dev/brainsmith/tests/tools/hw_kernel_gen/rtl_parser/test_interface_scanner.py
 import pytest
+import re # Add import for regex
+import logging # Add import for logging
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_types import InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 
+logger = logging.getLogger(__name__)
 # --- Fixtures ---
 
 @pytest.fixture
@@ -91,11 +94,11 @@ def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports_v):
 
     assert groups[0].interface_type == InterfaceType.AXI_STREAM
     assert groups[0].name == "in0"
-    assert set(groups[0].ports.keys()) == {"_TDATA", "_TVALID", "_TREADY", "_TLAST"}
+    assert set(groups[0].ports.keys()) == {"TDATA", "TVALID", "TREADY", "TLAST"}
 
     assert groups[1].interface_type == InterfaceType.AXI_STREAM
     assert groups[1].name == "out1"
-    assert set(groups[1].ports.keys()) == {"_TDATA", "_TVALID", "_TREADY"}
+    assert set(groups[1].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
 
 def test_scan_only_axilite(scanner, axilite_ports_full):
     groups, remaining = scanner.scan(axilite_ports_full)
@@ -147,7 +150,7 @@ def test_scan_axis_partial(scanner):
     assert not remaining # Scanner groups potential interfaces, validator checks completeness
     assert groups[0].interface_type == InterfaceType.AXI_STREAM
     assert groups[0].name == "in0"
-    assert set(groups[0].ports.keys()) == {"_TDATA", "_TVALID"}
+    assert set(groups[0].ports.keys()) == {"TDATA", "TVALID"}
 
 def test_scan_axilite_partial(scanner):
     ports = [
@@ -161,6 +164,4 @@ def test_scan_axilite_partial(scanner):
     assert not remaining # Scanner groups potential interfaces, validator checks completeness
     assert groups[0].interface_type == InterfaceType.AXI_LITE
     assert groups[0].name == "config"
-    # --- MODIFIED: Assert against generic base names ---
     assert set(groups[0].ports.keys()) == {"AWADDR", "AWVALID", "AWREADY"}
-    # --- END MODIFICATION ---
