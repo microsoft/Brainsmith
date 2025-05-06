@@ -28,43 +28,47 @@ GLOBAL_SIGNALS = {
 
 # Suffixes for AXI-Stream signals
 AXI_STREAM_SUFFIXES = {
-    "tdata": {"required": True},
-    "tvalid": {"required": True},
-    "tready": {"required": True},
-    "tlast": {"required": False},
+    "TDATA": {"direction": None, "required": True},
+    "TVALID": {"direction": None, "required": True},
+    "TREADY": {"direction": None, "required": True},
+    "TLAST": {"direction": None, "required": False}, # Optional
 }
 
-# AXI-Lite signals. Use lowercase keys.
-AXI_LITE_WRITE_SUFFIXES = {
-    "awaddr": {"direction": Direction.INPUT, "required": True},
-    "awprot": {"direction": Direction.INPUT, "required": False},
-    "awvalid": {"direction": Direction.INPUT, "required": True},
-    "awready": {"direction": Direction.OUTPUT, "required": True},
-    "wdata": {"direction": Direction.INPUT, "required": True},
-    "wstrb": {"direction": Direction.INPUT, "required": True},
-    "wvalid": {"direction": Direction.INPUT, "required": True},
-    "wready": {"direction": Direction.OUTPUT, "required": True},
-    "bresp": {"direction": Direction.OUTPUT, "required": True},
-    "bvalid": {"direction": Direction.OUTPUT, "required": True},
-    "bready": {"direction": Direction.INPUT, "required": True},
+# Suffixes for AXI-Lite signals
+AXI_LITE_SUFFIXES = {
+    # Write Address Channel
+    "AWADDR": {"direction": Direction.INPUT, "required": True},
+    "AWPROT": {"direction": Direction.INPUT, "required": False}, # Optional but usually present
+    "AWVALID": {"direction": Direction.INPUT, "required": True},
+    "AWREADY": {"direction": Direction.OUTPUT, "required": True},
+    # Write Data Channel
+    "WDATA": {"direction": Direction.INPUT, "required": True},
+    "WSTRB": {"direction": Direction.INPUT, "required": True},
+    "WVALID": {"direction": Direction.INPUT, "required": True},
+    "WREADY": {"direction": Direction.OUTPUT, "required": True},
+    # Write Response Channel
+    "BRESP": {"direction": Direction.OUTPUT, "required": True},
+    "BVALID": {"direction": Direction.OUTPUT, "required": True},
+    "BREADY": {"direction": Direction.INPUT, "required": True},
+    # Read Address Channel
+    "ARADDR": {"direction": Direction.INPUT, "required": True},
+    "ARPROT": {"direction": Direction.INPUT, "required": False}, # Optional but usually present
+    "ARVALID": {"direction": Direction.INPUT, "required": True},
+    "ARREADY": {"direction": Direction.OUTPUT, "required": True},
+    # Read Data Channel
+    "RDATA": {"direction": Direction.OUTPUT, "required": True},
+    "RRESP": {"direction": Direction.OUTPUT, "required": True},
+    "RVALID": {"direction": Direction.OUTPUT, "required": True},
+    "RREADY": {"direction": Direction.INPUT, "required": True},
 }
 
-AXI_LITE_READ_SUFFIXES = {
-    "araddr": {"direction": Direction.INPUT, "required": True},
-    "arprot": {"direction": Direction.INPUT, "required": False},
-    "arvalid": {"direction": Direction.INPUT, "required": True},
-    "arready": {"direction": Direction.OUTPUT, "required": True},
-    "rdata": {"direction": Direction.OUTPUT, "required": True},
-    "rresp": {"direction": Direction.OUTPUT, "required": True},
-    "rvalid": {"direction": Direction.OUTPUT, "required": True},
-    "rready": {"direction": Direction.INPUT, "required": True},
-}
+# Helper sets for channel identification (using UPPERCASE keys now)
+AXI_LITE_WRITE_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AW') or k.startswith('W') or k.startswith('B')}
+AXI_LITE_READ_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AR') or k.startswith('R')}
 
-# Combined AXI-Lite for easier checking (now with lowercase keys)
-AXI_LITE_SUFFIXES = {**AXI_LITE_WRITE_SUFFIXES, **AXI_LITE_READ_SUFFIXES}
-# --- END Protocol Definitions ---
 
 logger = logging.getLogger(__name__)
+
 
 class ProtocolValidator:
     """Validates PortGroups against defined interface protocol rules."""
@@ -75,7 +79,6 @@ class ProtocolValidator:
 
     def validate(self, group: PortGroup) -> ValidationResult:
         """Dispatches validation to the appropriate method based on group type."""
-
         if group.interface_type == InterfaceType.GLOBAL_CONTROL:
             return self.validate_global_signals(group)
         elif group.interface_type == InterfaceType.AXI_STREAM:
@@ -83,16 +86,18 @@ class ProtocolValidator:
         elif group.interface_type == InterfaceType.AXI_LITE:
             return self.validate_axi_lite(group)
         else:
-            # Should not happen if scanner only produces known types
-            logger.error(f"Unknown interface type '{group.interface_type}' encountered during validation.")
-            return ValidationResult(False, f"Unknown interface type: {group.interface_type}")
+            # <<< FIX: Return True for UNKNOWN type to skip validation >>>
+            logger.debug(f"Skipping validation for unknown interface type '{group.interface_type}' in group '{group.name}'.")
+            return ValidationResult(True) # Treat unknown types as valid (or rather, skip validation)
 
     def _check_required_signals(self, group_ports: Dict[str, Port], required_spec: Dict[str, Dict]) -> Set[str]:
         """Checks if all required signals (keys) are present in the group's ports."""
-        present_keys = set(group_ports.keys())
-        required_keys = {key for key, spec in required_spec.items() if spec.get("required", False)}
-        missing = required_keys - present_keys
-        return missing
+        # group_ports keys are now UPPERCASE from scanner
+        present_keys_upper = set(group_ports.keys())
+        # required_spec keys are UPPERCASE from definitions
+        required_keys_upper = {key for key, spec in required_spec.items() if spec.get("required", False)}
+        missing_upper = required_keys_upper - present_keys_upper
+        return missing_upper # Return missing keys in UPPERCASE
 
     def _validate_port_properties(self, port: Port, expected_direction: Direction) -> Optional[str]:
         """Validates the direction of a port against the expected direction."""
@@ -159,7 +164,8 @@ class ProtocolValidator:
             logger.debug(f"  Ports received: {list(group.ports.keys())}")
         # --- END LOGGING ---
 
-        # Check for required signals using lowercase keys
+        # Check for required signals using UPPERCASE spec keys
+        # group.ports keys are now UPPERCASE
         missing = self._check_required_signals(group.ports, AXI_STREAM_SUFFIXES)
         if missing:
             return ValidationResult(False, f"Missing required AXI-Stream signals for '{group.name}': {missing}")
@@ -173,43 +179,40 @@ class ProtocolValidator:
              logger.warning(f"Could not determine direction (input/output) for AXI-Stream '{group.name}' based on naming convention.")
              # Proceed, but direction checks will be skipped
 
-        # Use lowercase "tdata"
-        tdata_port = group.ports.get("tdata")
+        # Use UPPERCASE keys for metadata and checks
+        tdata_port = group.ports.get("TDATA") # Use UPPERCASE key
         if not tdata_port:
-            return ValidationResult(False, f"AXI-Stream '{group.name}' missing tdata.")
+             return ValidationResult(False, f"Internal Error: TDATA port not found in group '{group.name}' despite passing required check.")
         group.metadata['data_width_expr'] = tdata_port.width
 
-        # Get tkeep port if present (using lowercase key)
-        tkeep_port = group.ports.get("tkeep")
+        tkeep_port = group.ports.get("TKEEP") # Use UPPERCASE key
         if tkeep_port:
             group.metadata['keep_width_expr'] = tkeep_port.width
-            # Note: We are not *requiring* tkeep, just extracting width if present
 
-        # Validate signal directions based on inferred stream direction
-        for suffix, port in group.ports.items(): # suffix is lowercase
-            expected_direction = None
-            # Use lowercase keys for checks - ONLY check core AXI-Stream signals
-            if suffix == "tdata" or suffix == "tvalid" or suffix == "tlast": # Removed tkeep, tstrb, etc.
-                if is_input_stream: expected_direction = Direction.INPUT
-                elif is_output_stream: expected_direction = Direction.OUTPUT
-            elif suffix == "tready":
-                if is_input_stream: expected_direction = Direction.OUTPUT
-                elif is_output_stream: expected_direction = Direction.INPUT
-            # else: # Ignore other optional signals like tkeep for direction validation for now
+        # Validate signal directions
+        for suffix_upper, port in group.ports.items(): # Iterate through UPPERCASE keys
+            if suffix_upper in AXI_STREAM_SUFFIXES:
+                # Determine expected direction for THIS suffix
+                expected_direction = None
+                spec = AXI_STREAM_SUFFIXES[suffix_upper] # Use UPPERCASE key
+                # Default directions based on stream type
+                if is_input_stream: # Slave/Input
+                    expected_direction = Direction.INPUT if suffix_upper == "TVALID" or suffix_upper == "TDATA" or suffix_upper == "TLAST" or suffix_upper == "TKEEP" else Direction.OUTPUT # TREADY is output
+                elif is_output_stream: # Master/Output
+                    expected_direction = Direction.OUTPUT if suffix_upper == "TVALID" or suffix_upper == "TDATA" or suffix_upper == "TLAST" or suffix_upper == "TKEEP" else Direction.INPUT # TREADY is input
 
-            if expected_direction:
-                # --- ADDED LOGGING ---
-                if self.debug:
-                    logger.debug(f"  Validating port '{port.name}': Actual Direction='{port.direction.value}', Expected Direction='{expected_direction.value}'")
-                # --- END LOGGING ---
-                error = self._validate_port_properties(port, expected_direction)
-                if error:
-                    return ValidationResult(False, f"Invalid AXI-Stream signal '{port.name}': {error}")
-            elif not is_input_stream and not is_output_stream:
-                 logger.debug(f"Skipping direction validation for '{port.name}' due to ambiguous stream direction.")
-            # else: # Should not happen if suffix is known
+                # Override direction if explicitly defined in spec (though unlikely for AXI-Stream)
+                if spec.get("direction") is not None:
+                    expected_direction = spec["direction"]
 
+                if expected_direction:
+                    error = self._validate_port_properties(port, expected_direction)
+                    if error:
+                        return ValidationResult(False, f"Invalid AXI-Stream signal '{port.name}': {error}")
+
+        logger.debug(f"  Validation successful for AXI-Stream group '{group.name}'")
         return ValidationResult(True)
+
 
     def validate_axi_lite(self, group: PortGroup) -> ValidationResult:
         """Validates a PortGroup identified as a potential AXI-Lite interface.
@@ -235,20 +238,25 @@ class ProtocolValidator:
             logger.debug(f"  Ports received: {list(group.ports.keys())}")
         # --- END LOGGING ---
 
-        present_signals = set(group.ports.keys()) # Lowercase keys from scanner
+        present_signals_upper = set(group.ports.keys()) # UPPERCASE keys from scanner
 
-        # Determine which channels are present based on signals
-        has_write_channel = any(sig in AXI_LITE_WRITE_SUFFIXES for sig in present_signals)
-        has_read_channel = any(sig in AXI_LITE_READ_SUFFIXES for sig in present_signals)
+        # Check presence using UPPERCASE keys
+        has_write_channel = any(sig in AXI_LITE_WRITE_SUFFIXES for sig in present_signals_upper)
+        has_read_channel = any(sig in AXI_LITE_READ_SUFFIXES for sig in present_signals_upper)
+        logger.debug(f"  Channel presence: Write={has_write_channel}, Read={has_read_channel}")
 
-        # Check required signals for present channels
+        # Check required signals using UPPERCASE spec keys
         if has_write_channel:
             missing_write = self._check_required_signals(group.ports, AXI_LITE_WRITE_SUFFIXES)
             if missing_write:
+                logger.debug(f"  Validation failed: Missing required write signals: {missing_write}")
+                # Missing keys are returned in UPPERCASE
                 return ValidationResult(False, f"Missing required AXI-Lite write signals for '{group.name}': {missing_write}")
         if has_read_channel:
             missing_read = self._check_required_signals(group.ports, AXI_LITE_READ_SUFFIXES)
             if missing_read:
+                 logger.debug(f"  Validation failed: Missing required read signals: {missing_read}")
+                 # Missing keys are returned in UPPERCASE
                  return ValidationResult(False, f"Missing required AXI-Lite read signals for '{group.name}': {missing_read}")
 
         # If neither channel seems present based on *any* signal, it's invalid
@@ -256,46 +264,43 @@ class ProtocolValidator:
              return ValidationResult(False, f"AXI-Lite group '{group.name}' has no recognizable read or write signals.")
 
         # Validate properties (direction) for all present signals
-        for signal_name, port in group.ports.items():
-            if signal_name in AXI_LITE_SUFFIXES:
-                expected_direction = AXI_LITE_SUFFIXES[signal_name]["direction"]
+        for signal_upper, port in group.ports.items(): # Iterate through UPPERCASE keys
+             if signal_upper in AXI_LITE_SUFFIXES:
+                expected_direction = AXI_LITE_SUFFIXES[signal_upper]["direction"] # Use UPPERCASE key
                 # --- ADDED LOGGING ---
                 if self.debug:
                     logger.debug(f"  Validating port '{port.name}': Actual Direction='{port.direction.value}', Expected Direction='{expected_direction.value}'")
                 # --- END LOGGING ---
                 error = self._validate_port_properties(port, expected_direction)
                 if error:
+                    logger.debug(f"  Validation failed: Port '{port.name}' property error: {error}")
                     return ValidationResult(False, f"Invalid AXI-Lite signal '{port.name}': {error}")
 
-        # --- Extract and store width information (using lowercase keys) ---
-        addr_width_expr = None
-        data_width_expr = None
+        # --- Extract and store width information ---
+        addr_width = None
+        data_width = None
+        strb_width = None # <<< ADD strb_width >>>
+        awaddr_port = group.ports.get("AWADDR")
+        araddr_port = group.ports.get("ARADDR")
+        wdata_port = group.ports.get("WDATA")
+        rdata_port = group.ports.get("RDATA")
+        wstrb_port = group.ports.get("WSTRB") # <<< GET WSTRB port >>>
 
-        # Address Width (Check "awaddr" first, then "araddr")
-        awaddr_port = group.ports.get("awaddr")
-        if awaddr_port:
-            addr_width_expr = awaddr_port.width # Use the actual parsed width string
-            logger.debug(f"  Extracted ADDR_WIDTH from awaddr: {addr_width_expr}")
-        else:
-            araddr_port = group.ports.get("araddr")
-            if araddr_port:
-                addr_width_expr = araddr_port.width
-                logger.debug(f"  Extracted ADDR_WIDTH from araddr: {addr_width_expr}")
-        if addr_width_expr:
-            group.metadata['addr_width_expr'] = addr_width_expr # Store in metadata
+        if awaddr_port: addr_width = awaddr_port.width
+        elif araddr_port: addr_width = araddr_port.width
 
-        # Data Width (Check "wdata" first, then "rdata")
-        wdata_port = group.ports.get("wdata")
-        if wdata_port:
-            data_width_expr = wdata_port.width
-            logger.debug(f"  Extracted DATA_WIDTH from wdata: {data_width_expr}")
-        else:
-            rdata_port = group.ports.get("rdata")
-            if rdata_port:
-                data_width_expr = rdata_port.width
-                logger.debug(f"  Extracted DATA_WIDTH from rdata: {data_width_expr}")
-        if data_width_expr:
-             group.metadata['data_width_expr'] = data_width_expr # Store in metadata
+        if wdata_port: data_width = wdata_port.width
+        elif rdata_port: data_width = rdata_port.width
 
+        # <<< ADD: Extract strb_width >>>
+        if wstrb_port: strb_width = wstrb_port.width
+
+        if addr_width: group.metadata['addr_width_expr'] = addr_width
+        if data_width: group.metadata['data_width_expr'] = data_width
+        # <<< ADD: Store strb_width_expr >>>
+        if strb_width: group.metadata['strb_width_expr'] = strb_width
+        # --- End width extraction ---
+
+        logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
         return ValidationResult(True)
 

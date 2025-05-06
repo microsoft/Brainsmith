@@ -51,38 +51,52 @@ class InterfaceBuilder:
         """
         identified_groups, remaining_ports_after_scan = self.scanner.scan(ports)
         validated_interfaces: Dict[str, Interface] = {}
-        unassigned_ports: List[Port] = list(remaining_ports_after_scan)
+        unassigned_ports: List[Port] = list(remaining_ports_after_scan) # Keep initialization
 
-        # --- REMOVED DEBUG LOG ---
+        # Keep original debug logging
+        if self.debug:
+            logger.debug(f"--- Groups received by InterfaceBuilder from Scanner ---")
+            for group in identified_groups:
+                logger.debug(f"  Scanner Group: Name='{group.name}', Type='{group.interface_type.value}', Ports={list(group.ports.keys())}")
+            logger.debug(f"--- End Scanner Groups ---")
 
-        # Validate each potential interface
         for group in identified_groups:
-            # --- REMOVED DEBUG LOG ---
+            if self.debug:
+                 logger.debug(f"Validating group '{group.name}' with type '{group.interface_type.value}' using ProtocolValidator.")
 
             validation_result = self.validator.validate(group)
 
-            # --- REMOVED DEBUG LOG ---
+            if self.debug:
+                logger.debug(f"  Validation result for '{group.name}': Is Valid={validation_result.valid}, Reason='{validation_result.message}'")
 
             if validation_result.valid:
-                # Create the final Interface object
+                # Create Interface object
                 interface = Interface(
                     name=group.name,
                     type=group.interface_type,
                     ports=group.ports,
-                    validation_result=validation_result,
-                    metadata=group.metadata # Pass along any metadata gathered during scanning/validation
+                    metadata=group.metadata,
+                    validation_result=validation_result # Store the result
                 )
                 validated_interfaces[interface.name] = interface
                 if self.debug:
                     logger.debug(f"Successfully validated and built interface: {interface.name} ({interface.type.value})")
             else:
-                # Validation failed, add these ports to the unassigned list
+                # Add ports from the failed group back to the unassigned list
                 unassigned_ports.extend(group.ports.values())
                 logger.warning(f"Validation failed for potential interface '{group.name}' ({group.interface_type.value}): {validation_result.message}")
                 if self.debug:
                     logger.debug(f"Ports from failed group '{group.name}': {[p.name for p in group.ports.values()]}")
 
-        # Sort unassigned ports by name for consistency
+        # Sort unassigned ports alphabetically by name for consistent output
         unassigned_ports.sort(key=lambda p: p.name)
+
+        # Final debug log for unassigned ports
+        if self.debug:
+            logger.debug(f"--- Final Unassigned Ports ({len(unassigned_ports)}) ---")
+            for port in unassigned_ports:
+                logger.debug(f"  - {port.name}")
+            logger.debug(f"--- End Unassigned Ports ---")
+
 
         return validated_interfaces, unassigned_ports
