@@ -45,7 +45,8 @@ class OpTest(ABC):
         reducing boilerplate when implementing this fixture."""
 
         raise NotImplementedError("This OpTest's model() fixture is unimplemented.")
-
+    
+    @pytest.fixture(autouse=True)
     def model_hw(
         self, model: ModelWrapper, infer_hw_transform: Transformation
     ) -> ModelWrapper:
