@@ -418,3 +418,10 @@ class TestLayerNorm(OpTest):
             ]
         )
         return model
+    
+    # Overriding the default save_intermediate_models fixture
+    # (which evaluates to false), so that each model step can
+    # have its output saved.
+    @pytest.fixture
+    def save_intermediate_models(self):
+        return True
