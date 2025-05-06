@@ -46,10 +46,24 @@ class OpTest(ABC):
 
         raise NotImplementedError("This OpTest's model() fixture is unimplemented.")
 
+    def model_hw(
+        self, model: ModelWrapper, infer_hw_transform: Transformation
+    ) -> ModelWrapper:
+        """Converts all ONNX layers of a specific type to hardware layers,
+        using a given inference function. If that function does not exist
+        (i.e. infer_hw_transform == 'None'), then the model is directly
+        passed through. All fixtures reliant on hardware inference should
+        check if infer_hw_transform == 'None' before using this fixture."""
+
+        if infer_hw_transform is not None:
+            return self.apply_transforms(model, [infer_hw_transform])
+        else:
+            return model
+
     @pytest.fixture(autouse=True)
     def model_specialised(
         self,
-        model: ModelWrapper,
+        model_hw: ModelWrapper,
         target_fpga: str,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then
@@ -57,10 +71,17 @@ class OpTest(ABC):
         mode is used (cppsim or rtlsim)."""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
-            model, step_specialize_layers, dict(fpga_part=target_fpga)
+            model_hw, step_specialize_layers, dict(fpga_part=target_fpga)
         )
 
         return specialised_model
+
+    @pytest.fixture
+    def infer_hw_transform(self) -> Transformation:
+        """The transformation to infer a hardware layer from a standard ONNX layer.
+        If this fixture returns 'None', OpTest assumes to skip hardware inference."""
+
+        return None
 
     @pytest.fixture
     def target_fpga(self) -> str:
