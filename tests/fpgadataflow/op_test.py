@@ -25,8 +25,6 @@ from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.builder.build_dataflow_steps import step_specialize_layers
 from finn.builder.build_dataflow_config import DataflowBuildConfig
 
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_output")
-
 
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
 class OpTest(ABC):
@@ -59,9 +57,7 @@ class OpTest(ABC):
         mode is used (cppsim or rtlsim)."""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
-            model,
-            step_specialize_layers,
-            dict(fpga_part=target_fpga)
+            model, step_specialize_layers, dict(fpga_part=target_fpga)
         )
 
         return specialised_model
@@ -106,10 +102,11 @@ class OpTest(ABC):
     def auto_saver(
         self,
         request: pytest.FixtureRequest,
-        save_intermediate_models: bool
-    ):
+        save_intermediate_models: bool,
+        output_dir: str,
+    ) -> None:
         """Saves the output of each intermediate model step to a .onnx file.
-        
+
         If the 'save_intermediate_models' fixture evaluates to true, this fixture
         automatically scrapes all fixtures with names that start with 'model'
         (i.e. 'model', 'model_specialised') and saves their output to a .onnx file
@@ -118,15 +115,19 @@ class OpTest(ABC):
         if save_intermediate_models:
 
             # Attempt to make the directory we'll store our intermediate models in.
-            models_directory = os.path.join(OUTPUT_DIR, request.module.__name__)
+            models_directory = os.path.join(output_dir, request.module.__name__)
             try:
                 os.mkdir(models_directory)
             except FileExistsError:
-                warn(f"Overwriting intermediate models in existing directory {models_directory}.")
+                warn(
+                    f"Overwriting intermediate models in existing directory {models_directory}."
+                )
 
             # Save the output of each ModelWrapper fixture that starts with "model"
             # (i.e. model, model_specialised). Assumes these fixtures return ModelWrappers.
-            for fixture in filter(lambda x: x.startswith("model"), request.fixturenames):
+            for fixture in filter(
+                lambda x: x.startswith("model"), request.fixturenames
+            ):
 
                 filename = os.path.join(models_directory, fixture) + ".onnx"
                 output = request.getfixturevalue(fixture)
@@ -134,18 +135,28 @@ class OpTest(ABC):
                 if isinstance(output, ModelWrapper):
                     output.save(filename)
                 else:
-                    raise TypeError(f"Model fixture {fixture} has return type {type(output)}. Expected ModelWrapper.")
+                    raise TypeError(
+                        f"Model fixture {fixture} has return type {type(output)}. Expected ModelWrapper."
+                    )
 
         return
 
+    @pytest.fixture
+    def output_dir(self) -> str:
+        """The directory we'll save the output of our tests to. By default,
+        OpTest saves to a directory called "test_output", which is created
+        in the same directory as the python file containing the test."""
+
+        return os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_output")
+
     @pytest.fixture(autouse=True)
-    def create_output_dir(self):
+    def create_output_dir(self, output_dir: str) -> None:
         """Automatically makes a test output directory if none exists. This
         fixture auto-runs before all test functions. If the directory exists,
         this fixture does nothing."""
 
         try:
-            os.mkdir(OUTPUT_DIR)
+            os.mkdir(output_dir)
         except FileExistsError:
             pass
 
@@ -252,23 +263,22 @@ class OpTest(ABC):
         return model
 
     def apply_builder_step(
-        self,
-        model: ModelWrapper,
-        step: callable, 
-        cfg_settings: dict = {}
+        self, model: ModelWrapper, step: callable, cfg_settings: dict = {}
     ) -> ModelWrapper:
         """Apply a FINN Builder step to a QONNX ModelWrapper. Takes in the Model,
         the step function to be executed, and any named parameters of that need to be
         used in the step's DataflowBuildConfig. These named parameters are passed via a
         dictionary, with the name of each parameter as its key."""
-        
+
         # Default non-optional parameters for the DataflowBuildConfig class
-        if 'output_dir' not in cfg_settings:
-            cfg_settings['output_dir'] = os.path.join(OUTPUT_DIR, model.model.graph.name)
-        if 'synth_clk_period_ns' not in cfg_settings:
-            cfg_settings['synth_clk_period_ns'] = 4.0
-        if 'generate_outputs' not in cfg_settings:
-            cfg_settings['generate_outputs'] = []
+        if "output_dir" not in cfg_settings:
+            cfg_settings["output_dir"] = os.path.join(
+                self.output_dir(), model.model.graph.name
+            )
+        if "synth_clk_period_ns" not in cfg_settings:
+            cfg_settings["synth_clk_period_ns"] = 4.0
+        if "generate_outputs" not in cfg_settings:
+            cfg_settings["generate_outputs"] = []
 
         # Create a dummy config so we can call the step correctly.
         config: DataflowBuildConfig = DataflowBuildConfig(**cfg_settings)
