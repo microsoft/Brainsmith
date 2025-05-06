@@ -1,1 +1,1 @@
-# Placeholder for HardwareKernelGenerator class
+# Placeholder for Generator class
