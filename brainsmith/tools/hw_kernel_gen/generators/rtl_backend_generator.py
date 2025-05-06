@@ -18,14 +18,17 @@ def generate_rtl_backend(hw_kernel_data: 'HWKernel', compiler_data: Any, output_
     Returns:
         Path to the generated RTLBackend file.
     """
-    print(f"Placeholder: Generating RTLBackend for {hw_kernel_data.module_name}")
+    print(f"Placeholder: Generating RTLBackend for {hw_kernel_data.name}")
     # In the real implementation:
     # 1. Load the Jinja2 template (templates/rtl_backend.py.j2)
-    # 2. Prepare context data from hw_kernel_data and compiler_data (cost functions, etc.)
+    # 2. Prepare context data from hw_kernel_data and compiler_data
     # 3. Render the template
     # 4. Save the rendered content to a file in output_dir
-    output_filename = f"{hw_kernel_data.module_name}_rtlbackend.py"
+
+    # <<< FIX: Use hw_kernel_data.name instead of hw_kernel_data.module_name >>>
+    output_filename = f"{hw_kernel_data.name}_rtlbackend.py"
     output_path = output_dir / output_filename
+
     # Dummy file creation
     output_path.touch()
     print(f"Placeholder: Created dummy RTLBackend file at {output_path}")

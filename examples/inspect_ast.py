@@ -8,96 +8,46 @@ from tree_sitter import Language, Parser
 # Adjust this path if your grammar file is located elsewhere
 # Assumes sv.so is built within the rtl_parser directory
 GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
-
-# --- Complex SystemVerilog Example ---
-VERILOG_CODE = """
-/*
- * Multi-line comment
- * describing the module.
- */
-module ComplexModule #(
-    parameter int DATA_WIDTH = 32, // Parameter with type and default
-    parameter CLK_FREQ_MHZ = 100,
-    localparam ADDR_WIDTH = clog2(DATA_WIDTH) // Local parameter
-) (
-    // ANSI Ports
-    input  logic clk, // Single bit input
-    input  logic rst_n,
-    output logic [DATA_WIDTH-1:0] data_out, // Parametric width output
-    input  logic [DATA_WIDTH-1:0] data_in,
-    inout  wire  [7:0]          tristate_bus, // Inout port
-    output logic                valid_out,
-    input                       enable_in, // Implicit type (wire)
-
-    // Interface-like ports (example)
-    input  axi_if.master        axi_master_port, // Interface port
-    output logic                irq // Another single bit output
-);
-
-// Non-ANSI style declarations (less common with ANSI header, but possible)
-// These should ideally not be picked up as *new* ports if already in ANSI list
-// input logic clk; // Redundant declaration
-// output logic valid_out;
-
-// Internal signals
-logic [ADDR_WIDTH-1:0] internal_addr;
-reg   [DATA_WIDTH-1:0] data_reg;
-wire                   internal_enable;
-
-// Assignments and logic (simplified)
-assign internal_enable = enable_in && !rst_n;
-assign data_out = data_reg;
-
-always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        data_reg <= '0;
-    end else if (internal_enable) begin
-        data_reg <= data_in;
-    end
-end
-
-// Function for clog2 (simplified, assumes available)
-function integer clog2;
-    input integer value;
-    integer i = 0;
-    begin
-        while (2**i < value) begin
-            i = i + 1;
-        end
-        return i;
-    end
-endfunction
-
-endmodule // ComplexModule
-"""
+# Path to the SystemVerilog file to parse
+TARGET_SV_FILE = '/home/tafk/dev/brainsmith/examples/thresholding/thresholding_axi.sv'
 
 # --- AST Traversal Function ---
-def print_ast(node, indent="", level=0, max_depth=10):
+def print_ast(node, indent="", level=0): # Removed max_depth limit
     """Recursively prints the AST structure."""
-    if level > max_depth:
-        print(f"{indent}...")
-        return
+    # Removed depth check
 
     node_type = node.type
     node_text = node.text.decode('utf8').strip().replace('\n', '\\n')
     # Limit text length for readability
-    if len(node_text) > 60:
-        node_text = node_text[:57] + "..."
+    if len(node_text) > 80: # Increased limit slightly
+        node_text = node_text[:77] + "..."
 
     print(f"{indent}Type: {node_type:<25} Text: '{node_text}'")
 
     for i, child in enumerate(node.children):
-        print_ast(child, indent + "|  ", level + 1, max_depth)
+        print_ast(child, indent + "|  ", level + 1) # Removed max_depth argument
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    GRAMMAR_PATH = '/home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/rtl_parser/sv.so'
     if not os.path.exists(GRAMMAR_PATH):
         print(f"Error: Grammar file not found at {GRAMMAR_PATH}")
         print("Please ensure the tree-sitter Verilog grammar is built.")
         exit(1)
 
-        # 1. Load the shared object
+    if not os.path.exists(TARGET_SV_FILE):
+        print(f"Error: Target SystemVerilog file not found at {TARGET_SV_FILE}")
+        exit(1)
+
+    # Read the target SystemVerilog file
+    try:
+        with open(TARGET_SV_FILE, 'r', encoding='utf8') as f:
+            source_code = f.read()
+        print(f"Successfully read {TARGET_SV_FILE}")
+    except Exception as e:
+        print(f"Error reading {TARGET_SV_FILE}: {e}")
+        exit(1)
+
+    # 1. Load the shared object
     lib = ctypes.cdll.LoadLibrary(GRAMMAR_PATH)
 
     # 2. Get language pointer
@@ -115,11 +65,12 @@ if __name__ == "__main__":
     language = Language(capsule)
     parser = Parser(language)
 
-    tree = parser.parse(bytes(VERILOG_CODE, "utf8"))
+    # Parse the source code read from the file
+    tree = parser.parse(bytes(source_code, "utf8"))
     root_node = tree.root_node
 
-    print("--- Abstract Syntax Tree (AST) ---")
-    print_ast(root_node)
+    print("\n--- Abstract Syntax Tree (AST) ---")
+    print_ast(root_node) # Removed max_depth argument
 
     # Check for syntax errors
     if root_node.has_error:
@@ -129,8 +80,10 @@ if __name__ == "__main__":
         found_error = False
         while queue and not found_error:
             current_node = queue.pop(0)
-            if current_node.type == 'ERROR':
-                print(f"Error Node found at line {current_node.start_point[0]+1}: Text='{current_node.text.decode()}'")
+            # Check for ERROR node type or if the node itself has an error flag
+            if current_node.type == 'ERROR' or (current_node.has_error and not current_node.children):
+                print(f"Error Node found near line {current_node.start_point[0]+1}: Type='{current_node.type}', Text='{current_node.text.decode()}'")
                 found_error = True
             elif current_node.has_error: # Check if children might contain error
-                 queue.extend(current_node.children) # Add children in reverse for DFS-like error finding
+                 # Add children in standard order for BFS
+                 queue.extend(current_node.children)

@@ -17,7 +17,7 @@ import logging
 from typing import List, Dict, Tuple
 
 # Updated import: Interface, PortGroup, InterfaceType, ValidationResult now come from data.py
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Interface
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Interface, InterfaceType # <<< Added InterfaceType here
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
 
@@ -50,17 +50,18 @@ class InterfaceBuilder:
             - List of ports that were not assigned to any valid interface.
         """
         identified_groups, remaining_ports_after_scan = self.scanner.scan(ports)
-
         validated_interfaces: Dict[str, Interface] = {}
-        unassigned_ports: List[Port] = list(remaining_ports_after_scan) # Start with ports scanner couldn't group
+        unassigned_ports: List[Port] = list(remaining_ports_after_scan)
 
+        # --- REMOVED DEBUG LOG ---
+
+        # Validate each potential interface
         for group in identified_groups:
-            if not group.name:
-                logger.warning(f"Skipping group of type {group.interface_type} because it lacks a name.")
-                unassigned_ports.extend(group.ports.values())
-                continue
+            # --- REMOVED DEBUG LOG ---
 
             validation_result = self.validator.validate(group)
+
+            # --- REMOVED DEBUG LOG ---
 
             if validation_result.valid:
                 # Create the final Interface object

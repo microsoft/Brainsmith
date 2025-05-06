@@ -13,30 +13,32 @@ Ports that don't match known patterns are returned as unassigned.
 """
 
 import re
+import logging
 from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
-import logging
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, InterfaceType, PortGroup
 # Import protocol definitions for regex generation and global signal check
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import (
     GLOBAL_SIGNALS,
-    AXI_STREAM_SUFFIXES,
-    AXI_LITE_SUFFIXES
+    AXI_STREAM_SUFFIXES, # Now contains lowercase keys
+    AXI_LITE_SUFFIXES    # Now contains lowercase keys
 )
 
 logger = logging.getLogger(__name__)
 
-# Regex definitions remain here as they are specific to scanning logic
-# Dynamically build the regex from AXI_STREAM_SUFFIXES keys (imported, now without underscore)
+# Regex definitions updated for lowercase matching
+# Build regex from lowercase AXI_STREAM_SUFFIXES keys
 AXI_STREAM_SPLIT_REGEX = re.compile(
-    # Match prefix, optional _V_, then underscore, then capture one of the suffixes
-    r"^(?P<prefix>.*?)(?:_V)?_(?P<suffix>(" + "|".join(re.escape(k) for k in AXI_STREAM_SUFFIXES.keys()) + r"))$"
+    # Match prefix, optional _V_, then underscore, then capture one of the lowercase suffixes
+    r"^(?P<prefix>.*?)(?:_V)?_(?P<suffix>(" + "|".join(re.escape(k) for k in AXI_STREAM_SUFFIXES.keys()) + r"))$",
+    re.IGNORECASE
 )
 
-# Dynamically build the regex from AXI_LITE_SUFFIXES keys (imported)
+# Build regex from lowercase AXI_LITE_SUFFIXES keys
 AXI_LITE_SPLIT_REGEX = re.compile(
-    r"^(?P<prefix>.*?)(?:_V)?_(?P<signal>(" + "|".join(re.escape(k) for k in AXI_LITE_SUFFIXES.keys()) + r"))$"
+    r"^(?P<prefix>.*?)(?:_V)?_(?P<signal>(" + "|".join(re.escape(k) for k in AXI_LITE_SUFFIXES.keys()) + r"))$",
+    re.IGNORECASE
 )
 
 
@@ -52,39 +54,40 @@ class InterfaceScanner:
         return port_name in GLOBAL_SIGNALS
 
     def _get_axi_stream_parts(self, port_name: str) -> Optional[Tuple[str, str]]:
-        """Extracts prefix and suffix from a potential AXI-Stream port name using regex.
-
-        Returns:
-            Tuple (prefix, suffix) if matched and prefix is non-empty, else None.
-        """
+        """Extracts prefix and lowercase suffix from a potential AXI-Stream port name."""
         match = AXI_STREAM_SPLIT_REGEX.match(port_name)
         if match:
             prefix = match.group("prefix")
-            suffix = match.group("suffix") # This suffix is now captured *without* the underscore
-            # Ensure the extracted suffix is one we care about (redundant check, but safe)
-            if suffix in AXI_STREAM_SUFFIXES: # Check against keys without underscore
-                # Added check: Ensure prefix is not empty
+            suffix = match.group("suffix") # Already lowercase due to regex
+            # Redundant check, but safe: ensure suffix is expected
+            if suffix in AXI_STREAM_SUFFIXES:
                 if prefix:
-                    return prefix, suffix
+                    return prefix, suffix # Return lowercase suffix
                 else:
                     logger.debug(f"Port '{port_name}' matched AXI stream suffix but has empty prefix. Ignoring.")
         return None
 
     def _get_axi_lite_parts(self, port_name: str) -> Optional[Tuple[str, str]]:
-        """Extracts prefix and signal name from a potential AXI-Lite port name using regex.
-
-        Returns:
-            Tuple (prefix, signal) if matched and prefix is non-empty, else None.
-        """
+        """Extracts prefix and lowercase signal name from a potential AXI-Lite port name."""
+        logger.error(f"--- DEBUG LOG (_get_axi_lite_parts): Checking port '{port_name}'") # <<< ADDED LOG
         match = AXI_LITE_SPLIT_REGEX.match(port_name)
         if match:
             prefix = match.group("prefix")
-            signal = match.group("signal")
-            # Ensure prefix is not empty
-            if prefix:
-                return prefix, signal
+            signal = match.group("signal") # Already lowercase due to regex capture group? Check this.
+            logger.error(f"  REGEX MATCHED: Original Port='{port_name}', Prefix='{prefix}', Signal='{signal}'") # <<< ADDED LOG
+            # Ensure signal is lowercase for the check
+            signal_lower = signal.lower()
+            if signal_lower in AXI_LITE_SUFFIXES:
+                if prefix:
+                    logger.error(f"  MATCH SUCCESS: Returning prefix='{prefix}', signal='{signal_lower}'") # <<< ADDED LOG
+                    return prefix, signal_lower # Return lowercase signal
+                else:
+                    logger.error(f"  MATCH FAILED (Empty Prefix): Port '{port_name}' matched signal '{signal}' but has empty prefix.") # <<< ADDED LOG
             else:
-                logger.debug(f"Port '{port_name}' matched AXI lite signal but has empty prefix. Ignoring.")
+                 logger.error(f"  MATCH FAILED (Signal Not in Dict): Captured signal '{signal}' (lower: '{signal_lower}') not in AXI_LITE_SUFFIXES keys.") # <<< ADDED LOG
+                 logger.error(f"  AXI_LITE_SUFFIXES keys: {list(AXI_LITE_SUFFIXES.keys())}") # <<< ADDED LOG
+        else:
+            logger.error(f"  REGEX FAILED to match port '{port_name}'") # <<< ADDED LOG
         return None
 
     def scan(self, ports: List[Port]) -> Tuple[List[PortGroup], List[Port]]:
@@ -113,6 +116,9 @@ class InterfaceScanner:
                 global_ports[port.name] = port
                 assigned_port_names.add(port.name)
         if global_ports:
+            # --- ADDED LOGGING ---
+            logger.debug(f"Creating Global Control group with ports: {global_ports}")
+            # --- END LOGGING ---
             # Global signals form a single group named "global"
             group_key = (InterfaceType.GLOBAL_CONTROL, "global")
             identified_groups[group_key] = PortGroup(
@@ -120,7 +126,6 @@ class InterfaceScanner:
                 name="global",
                 ports=global_ports
             )
-            logger.debug(f"Identified Global Control group with ports: {list(global_ports.keys())}")
 
         # 2. Identify AXI-Stream and AXI-Lite Interfaces
         axi_stream_groups: Dict[str, Dict[str, Port]] = defaultdict(dict)
@@ -133,8 +138,8 @@ class InterfaceScanner:
             # Check AXI-Stream
             stream_parts = self._get_axi_stream_parts(port.name)
             if stream_parts:
-                prefix, suffix = stream_parts # suffix is now without underscore
-                # Use suffix (without underscore) as the key within the group's port dictionary
+                prefix, suffix = stream_parts # suffix is now lowercase
+                # Use lowercase suffix as the key within the group's port dictionary
                 axi_stream_groups[prefix][suffix] = port
                 assigned_port_names.add(port.name)
                 logger.debug(f"Assigned '{port.name}' to potential AXI-Stream group '{prefix}' (suffix: {suffix})")
@@ -143,8 +148,8 @@ class InterfaceScanner:
             # Check AXI-Lite
             lite_parts = self._get_axi_lite_parts(port.name)
             if lite_parts:
-                prefix, signal = lite_parts
-                # Use generic signal name as the key within the group's port dictionary
+                prefix, signal = lite_parts # signal is now lowercase
+                # Use lowercase signal name as the key within the group's port dictionary
                 axi_lite_groups[prefix][signal] = port
                 assigned_port_names.add(port.name)
                 logger.debug(f"Assigned '{port.name}' to potential AXI-Lite group '{prefix}' (signal: {signal})")
@@ -156,7 +161,7 @@ class InterfaceScanner:
             identified_groups[group_key] = PortGroup(
                 interface_type=InterfaceType.AXI_STREAM,
                 name=prefix,
-                ports=ports_dict # ports_dict keys are now without underscore
+                ports=ports_dict # ports_dict keys are now lowercase
             )
             logger.debug(f"Created AXI-Stream PortGroup '{prefix}' with signals: {list(ports_dict.keys())}")
 
@@ -166,7 +171,7 @@ class InterfaceScanner:
             identified_groups[group_key] = PortGroup(
                 interface_type=InterfaceType.AXI_LITE,
                 name=prefix,
-                ports=ports_dict
+                ports=ports_dict # ports_dict keys are now lowercase
             )
             logger.debug(f"Created AXI-Lite PortGroup '{prefix}' with signals: {list(ports_dict.keys())}")
 
@@ -176,4 +181,21 @@ class InterfaceScanner:
                 unassigned_ports.append(port)
                 logger.debug(f"Port '{port.name}' remains unassigned.")
 
+        # --- ADDED LOGGING ---
+        if self.debug:
+            logger.debug(f"--- Final Identified Groups Before Validation ---")
+            for group in identified_groups.values():
+                logger.debug(f"  Group Name: {group.name}, Type: {group.interface_type.value}, Ports: {list(group.ports.keys())}")
+            logger.debug(f"--- End Final Identified Groups ---")
+        # --- END LOGGING ---
+
+        # --- ADDED LOGGING ---
+        if self.debug:
+            logger.debug("--- Final Port Groups Identified by Scanner ---")
+            for name, group in identified_groups.items():
+                logger.debug(f"  Group Name: {name}")
+                logger.debug(f"  Interface Type: {group.interface_type}")
+                logger.debug(f"  Ports: {list(group.ports.keys())}")
+            logger.debug("--- End Final Port Groups ---")
+        # --- END LOGGING ---
         return list(identified_groups.values()), unassigned_ports

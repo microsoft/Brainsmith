@@ -84,11 +84,13 @@ class HardwareKernelGenerator:
                 raise HardwareKernelGeneratorError(f"Could not create output directory {self.output_dir}: {e}")
 
 
-        self.rtl_parser = RTLParser()
         self.hw_kernel_data: Optional[HWKernel] = None
         self.compiler_data_module: Optional[Any] = None
         self.compiler_data_ast: Optional[ast.Module] = None
         self.custom_doc_content: Optional[str] = None
+
+        # Instantiate the parser with debug enabled
+        self.rtl_parser = RTLParser(debug=True) # Pass debug=True
 
         # Dictionary to store paths of generated files
         self.generated_files: Dict[str, Path] = {}

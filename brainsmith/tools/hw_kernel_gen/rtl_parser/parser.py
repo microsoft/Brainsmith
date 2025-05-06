@@ -189,6 +189,8 @@ class RTLParser:
             if name is None:
                 raise ParserError("Failed to extract module name from header.")
             logger.debug(f"Extracted header for module '{name}'")
+            logger.debug(f"Found {len(param_nodes) if param_nodes else 0} parameter declaration nodes.")
+            logger.debug(f"Found {len(port_nodes) if port_nodes else 0} port declaration nodes.")
         except Exception as e:
             logger.exception(f"Error during module header extraction: {e}")
             raise ParserError(f"Failed during module header extraction: {e}")
@@ -210,11 +212,12 @@ class RTLParser:
         ports: List[Port] = []
         logger.debug("Extracting ports...")
         try:
-            for node in port_nodes:
-                parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
-                if parsed_port_list: # Check if the list is not empty
-                    ports.extend(parsed_port_list) # Use extend to add elements
-            logger.debug(f"Extracted {len(ports)} individual port objects.")
+            if port_nodes: # Check if port_nodes list is not None or empty
+                for node in port_nodes:
+                    parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
+                    if parsed_port_list: # Check if the list is not empty
+                        ports.extend(parsed_port_list) # Use extend to add elements
+            logger.debug(f"Successfully parsed {len(ports)} individual port objects.")
         except Exception as e:
             logger.exception(f"Error during port parsing: {e}")
             raise ParserError(f"Failed during port parsing: {e}")
@@ -446,14 +449,21 @@ class RTLParser:
         module_name: Optional[str] = None
         param_nodes: Optional[List[Node]] = []
         port_nodes: Optional[List[Node]] = []
-        header_node: Optional[Node] = None # Keep track of the header node
+        name_node: Optional[Node] = None
 
-        # Find module identifier (name)
-        name_node = self._find_child(module_node, ["simple_identifier", "identifier"]) # Direct child?
-        if not name_node:
-             header_node = self._find_child(module_node, ["module_ansi_header", "module_nonansi_header"]) # Look in headers
-             if header_node:
-                  name_node = self._find_child(header_node, ["simple_identifier", "identifier"])
+        # --- Refactored Logic --- 
+        # 1. Find the header node first
+        header_node = self._find_child(module_node, ["module_ansi_header", "module_nonansi_header"])
+
+        # 2. Determine the node to search for name, parameters, and ports
+        search_parent_node = header_node if header_node else module_node
+        logger.debug(f"Determined search parent node type: {search_parent_node.type}")
+
+        # 3. Find module identifier (name)
+        if header_node:
+            name_node = self._find_child(header_node, ["simple_identifier", "identifier"])
+        else: # If no header, look directly under module_node (less common for ANSI)
+            name_node = self._find_child(module_node, ["simple_identifier", "identifier"])
 
         if name_node:
             module_name = name_node.text.decode('utf8')
@@ -461,10 +471,20 @@ class RTLParser:
         else:
             logger.warning(f"Could not find module name identifier within node: {module_node.text.decode()[:50]}...")
 
-        # --- Search for lists within the appropriate node ---
-        # If header_node was found during name search, use it. Otherwise, search module_node directly.
-        search_parent_node = header_node if header_node else module_node
+        # --- Search for lists within the determined search_parent_node ---
+        # (Remove the old debug logging for header_node status here)
         logger.debug(f"Searching for parameter/port lists within node type: {search_parent_node.type}")
+        # --- BEGIN REFINED DEBUG LOGGING --- 
+        # (Keep this logging to see children of the actual search_parent_node)
+        if self.debug:
+            logger.debug(f"--- Children of '{search_parent_node.type}' node (runtime) ---")
+            for i, child in enumerate(search_parent_node.children):
+                child_text = child.text.decode('utf8').strip().replace('\\n', '\\\\n')
+                if len(child_text) > 60:
+                    child_text = child_text[:57] + "..."
+                logger.debug(f"  Child {i}: Type='{child.type}', Text='{child_text}'")
+            logger.debug(f"--- End Children of '{search_parent_node.type}' ---")
+        # --- END REFINED DEBUG LOGGING ---
 
         # Find parameter list node within the search_parent_node
         param_list_node = self._find_child(search_parent_node, ["parameter_port_list"])
