@@ -53,7 +53,6 @@ class OpTest(ABC):
         self,
         model: ModelWrapper,
         target_fpga: str,
-        save_intermediate_models: bool,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then
         returns it. The model is specialised differently depending on which execution
@@ -98,9 +97,10 @@ class OpTest(ABC):
 
     @pytest.fixture
     def save_intermediate_models(self) -> dict:
-        """TODO: Comment"""
+        """If this fixture is overridden to return True, the 'auto_saver' fixture
+        will automatically save the outputs of all 'model' fixtures to .onnx files."""
 
-        return True
+        return False
 
     @pytest.fixture(autouse=True)
     def auto_saver(
