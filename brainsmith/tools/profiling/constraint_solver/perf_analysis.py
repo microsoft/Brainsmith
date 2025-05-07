@@ -1,12 +1,3 @@
-############################################################################
-# Copyright (c) Advanced Micro Devices, Inc.
-# Licensed under the MIT License.
-#
-# SPDX-License-Identifier: MIT
-#
-# @author       Shane T. Fleming <shane.fleming@amd.com>
-############################################################################
-
 import onnx
 from collections import defaultdict, deque
 import networkx as nx
@@ -21,80 +12,67 @@ class PerfAnalysis():
         self.model = onnx.load(model_path)
         self.matmul_nodes = [node for  node in self.model.graph.node if node.op_type == "MatMul"]
 
-    def balance(self, max_total_resources=7594, balance_weight=1000):
-        """
-        Balance paths using single variable P per node, where P = PE * SIMD. i.e. parallelism
-        """
-        nodes_info = self.mmnode_info
-        node_names = list(nodes_info.keys())
+    def balance(self, balance_weight=1.5, max_total_resources=8643):    
+        """    
+        Optimize paths using single variable P per node, where P = PE * SIMD, prioritizing minimal cycle values with adjustable balance emphasis.    
+        """          
+        nodes_info = self.mmnode_info    
+        node_names = list(nodes_info.keys())    
+    
+        # Single Variables    
+        P = {n: cp.Variable(pos=True) for n in node_names}    
+        resource = {n: cp.Variable(pos=True) for n in node_names}    
+        cycle = {n: cp.Variable(pos=True) for n in node_names}    
+        cycle_target = cp.Variable(pos=True)    
+    
+        constraints = []    
+    
+        for n in node_names:    
+            constraints.append(P[n] >= 1)    
+            constraints.append(P[n] <= 8192)  # Example upper bound    
+            constraints.append(resource[n] >= 1)    
+            constraints.append(cycle[n] >= 1)    
+    
+            # Cycle modeling    
+            a_n, i_n, j_n = nodes_info[n]    
+            constraints.append(P[n]*cycle[n] >= (a_n * i_n * j_n))    
+    
+            # Resource modeling (relax ceil)    
+            constraints.append(resource[n] >= P[n]/3)    
+    
+        # Prioritize minimizing cycle times  
+        cycle_minimization = cp.sum(list(cycle.values()))  
+  
+        mean_cycle = cp.sum(list(cycle.values())) / len(cycle)    
+        cycle_penalty = cp.sum([    
+            cp.abs(cycle[n] - mean_cycle)    
+            for n in node_names    
+        ]) * balance_weight  
+    
+        # Total resources  
+         
+        total_resources = cp.sum(list(resource.values()))    
+        resource_penalty = max_total_resources - total_resources    
+    
+        constraints.append(total_resources <= max_total_resources)    
+    
+        # Objective: Prioritize cycle minimization
+        objective = cp.Minimize(cycle_minimization + cycle_penalty)        
+        problem = cp.Problem(objective, constraints)    
+        problem.solve(solver=cp.SCIP, verbose=True, qcp=True)    
+       
+        results = {}    
+        for n in node_names:    
+            r = {}    
+            r['DSPs'] = None    
+            if P[n].value is not None:    
+                r['DSPs'] = int(round(P[n].value/3))    
+            r['cycles'] = None    
+            if cycle[n].value is not None:    
+                r['cycles'] = int(round(cycle[n].value))    
+            results[n] = r    
+        return results  
 
-        # Single Variables
-        P = {n: cp.Variable(pos=True) for n in node_names}
-        resource = {n: cp.Variable(pos=True) for n in node_names}
-        cycle = {n: cp.Variable(pos=True) for n in node_names}
-        cycle_target = cp.Variable(pos=True)
-
-        constraints = []
-
-        for n in node_names:
-            constraints.append(P[n] >= 1)
-            constraints.append(P[n] <= 8192)  # Example upper bound
-            constraints.append(resource[n] >= 1)
-            constraints.append(cycle[n] >= 1)
-        
-            # Cycle modeling
-            a_n, i_n, j_n = nodes_info[n]
-            #constraints.append(cycle[n] >= (a_n * i_n * j_n) / P[n])
-            constraints.append(P[n]*cycle[n] >= (a_n * i_n * j_n))
-
-            # Resource modeling (relax ceil)
-            constraints.append(resource[n] >= P[n]/3)
-
-        # Path cycle totals
-        path_cycle_exprs = []
-        for path in self.paths:
-            path_cycles = []
-            for node in path:
-                if node not in nodes_info:
-                    continue
-                path_cycles.append(cycle[node])
-            path_cycle_exprs.append(cp.sum(path_cycles))
-
-        # Cycle soft balancing
-        cycle_penalty = cp.sum([
-            cp.abs(path_total - cycle_target)
-            for path_total in path_cycle_exprs
-        ])
-
-        # Total resources
-        total_resources = cp.sum(list(resource.values()))
-        constraints.append(total_resources <= max_total_resources)
-
-        # Objective
-        objective = cp.Minimize(total_resources + balance_weight * cycle_penalty)
-
-        # Solve
-        problem = cp.Problem(objective, constraints)
-        problem.solve(solver=cp.SCIP, verbose=True, qcp=True)
-
-        ## Extract results
-        #results = {}
-        #for n in node_names:
-        #    if P[n].value is not None:
-        #        results[n] = int(round(P[n].value))
-        #    else:
-        #        results[n] = None
-        results = {}
-        for n in node_names:
-            r = {}
-            r['DSPs'] = None
-            if P[n].value is not None:
-                r['DSPs'] = int(round(P[n].value/3))
-            r['cycles'] = None
-            if cycle[n].value is not None:
-                r['cycles'] = int(round(cycle[n].value))
-            results[n] = r
-        return results
 
     def get_tensor_shape(self, tensor_name):
         for tensor in self.model.graph.initializer:
