@@ -68,9 +68,8 @@ class OpTest(ABC):
         target_fpga: str,
         output_dir: str,
     ) -> ModelWrapper:
-        """A fixture that applys layer specialisation to the 'model' fixture, then
-        returns it. The model is specialised differently depending on which execution
-        mode is used (cppsim or rtlsim)."""
+        """A fixture that applies layer specialisation to the 'model_hw'
+        fixture, then returns the resulting ModelWrapper."""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
             model_hw, step_specialize_layers, output_dir, dict(fpga_part=target_fpga)
