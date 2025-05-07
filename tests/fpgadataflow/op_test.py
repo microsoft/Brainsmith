@@ -259,28 +259,43 @@ class OpTest(ABC):
     def apply_transforms(
         self,
         model: ModelWrapper,
-        transform_list: List[Transformation],
+        transform_list: List[Transformation] | List[List[Transformation]],
         validate: bool = False,
         input_tensors: dict = None,
         tolerance: float = 1e-5,
     ) -> ModelWrapper:
-        """Applies a list of QONNX transformations to a given model. If 'validate' is enabled,
-        the function compares the output from model before and after the transforms were
-        applied, to ensure the functionality of the model hasn't changed."""
+        """Applies a list of QONNX transformations to a given model.
+        
+        If 'validate' is enabled, the function compares the model's output pre and
+        post-transformation. 'transform_list' can accept either a list of transforms,
+        or a nested list of transforms. This affects how model validation is performed.
+        Regular transform-lists are validated after every transform. Nested transform-
+        lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
+        be validated between 3-4, and after 5."""
 
         if validate:
+            # Generate reference model output to compare our transformed output to.
             out_name = model.graph.output[0].name
             ref_output = oxe.execute_onnx(model, input_tensors)[out_name]
 
-        for transformation in transform_list:
-            model = model.transform(transformation)
+        for transform in transform_list:
+            
+            if isinstance(transform, list):
+                # If 'transform' is a list, we apply each sub-transform in the list, then validate.
+                for i in transform:
+                    model = model.transform(i)
+            else:
+                # If 'transform' is an single transform, we validate between each transform.
+                model = model.transform(transform)
 
-        if validate:
-            t_output = oxe.execute_onnx(model, input_tensors)[out_name]
-            if not np.allclose(ref_output, t_output, atol=tolerance):
-                raise RuntimeError(
-                    f"Transformation {transformation} failed expected {ref_output=} but got {t_output=}"
-                )
+            if validate:
+                # Compare the transformed model's output to the reference output.
+                t_output = oxe.execute_onnx(model, input_tensors)[out_name]
+                if not np.allclose(ref_output, t_output, atol=tolerance):
+                    raise RuntimeError(
+                        f"Transformation step {transform} failed:\n" +
+                        f"expected {ref_output=} but got {t_output=}"
+                    )
 
         return model
 
