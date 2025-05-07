@@ -45,7 +45,7 @@ class OpTest(ABC):
         reducing boilerplate when implementing this fixture."""
 
         raise NotImplementedError("This OpTest's model() fixture is unimplemented.")
-    
+
     @pytest.fixture(autouse=True)
     def model_hw(
         self, model: ModelWrapper, infer_hw_transform: Transformation
@@ -66,13 +66,14 @@ class OpTest(ABC):
         self,
         model_hw: ModelWrapper,
         target_fpga: str,
+        output_dir: str,
     ) -> ModelWrapper:
         """A fixture that applys layer specialisation to the 'model' fixture, then
         returns it. The model is specialised differently depending on which execution
         mode is used (cppsim or rtlsim)."""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
-            model_hw, step_specialize_layers, dict(fpga_part=target_fpga)
+            model_hw, step_specialize_layers, output_dir, dict(fpga_part=target_fpga)
         )
 
         return specialised_model
@@ -285,7 +286,11 @@ class OpTest(ABC):
         return model
 
     def apply_builder_step(
-        self, model: ModelWrapper, step: callable, cfg_settings: dict = {}
+        self,
+        model: ModelWrapper,
+        step: callable,
+        output_dir: str,
+        cfg_settings: dict = {},
     ) -> ModelWrapper:
         """Apply a FINN Builder step to a QONNX ModelWrapper. Takes in the Model,
         the step function to be executed, and any named parameters of that need to be
@@ -295,7 +300,7 @@ class OpTest(ABC):
         # Default non-optional parameters for the DataflowBuildConfig class
         if "output_dir" not in cfg_settings:
             cfg_settings["output_dir"] = os.path.join(
-                self.output_dir(), model.model.graph.name
+                output_dir, model.model.graph.name
             )
         if "synth_clk_period_ns" not in cfg_settings:
             cfg_settings["synth_clk_period_ns"] = 4.0
