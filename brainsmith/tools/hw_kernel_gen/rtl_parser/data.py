@@ -23,7 +23,7 @@ validation.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Callable
 
 # --- Enums ---
 
@@ -36,7 +36,7 @@ class Direction(Enum):
 class InterfaceType(Enum):
     """Enumeration of supported interface types."""
     GLOBAL_CONTROL = "global"
-    AXI_STREAM = "axis"
+    AXI_STREAM = "axistream"
     AXI_LITE = "axilite"
     UNKNOWN = "unknown" # For ports not part of a recognized interface
 
@@ -45,6 +45,7 @@ class PragmaType(Enum):
     TOP_MODULE = "top_module"          # Specify the top module if multiple exist
     DATATYPE = "datatype"              # Restrict datatype for an interface
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
+    WEIGHT = "weight"                  # Specify interface as a weight
 
 # --- Simple Data Structures ---
 
@@ -129,8 +130,8 @@ class PortGroup:
         """
         if key is None:
             key = port.name
-        # if key in self.ports:
-            # logger.warning(f"Overwriting port key '{key}' in PortGroup '{self.name}'")
+    # if key in self.ports:
+        # logger.warning(f"Overwriting port key '{key}' in PortGroup '{self.name}'")
         self.ports[key] = port
 
 # --- Validated/Complex Structures ---
@@ -147,6 +148,7 @@ class Interface:
     ports: Dict[str, Port] # Maps signal suffix/name to Port object
     validation_result: ValidationResult
     metadata: Dict[str, Any] = field(default_factory=dict) # e.g., data width, address width
+    wrapper_name: Optional[str] = None  # New attribute to store wrapper name
 
 # --- Pragma Structure ---
 
@@ -162,19 +164,116 @@ class Pragma:
         type: Pragma type identifier (using PragmaType enum)
         inputs: List of space-separated inputs
         line_number: Source line number for error reporting
-        processed_data: Optional processed data from pragma handler
+        parsed_data: Optional processed data from pragma handler
     """
     type: PragmaType
     inputs: List[str]
     line_number: int
-    processed_data: Dict = field(default_factory=dict)
+    parsed_data: Dict = field(init=False) # Stores the result of _parse_inputs
 
     def __post_init__(self):
-        """Validate pragma attributes after initialization."""
-        if not self.type:
-            raise ValueError("Pragma type cannot be empty")
-        if not isinstance(self.inputs, list):
-            raise ValueError("Pragma inputs must be a list")
+        try:
+            self.parsed_data = self._parse_inputs()
+        except PragmaError as e:
+            logger.error(f"Error processing pragma {self.type.name} at line {self.line_number} with inputs {self.inputs}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error processing pragma {self.type.name} at line {self.line_number} with inputs {self.inputs}: {e}")
+            # Wrap unexpected errors in PragmaError to ensure consistent error handling upstream
+            raise PragmaError(f"Unexpected error during pragma {self.type.name} processing: {e}")
+
+
+    def _parse_inputs(self) -> Dict:
+        """
+        Abstract method to parse pragma inputs.
+        Subclasses must implement this method.
+        """
+        raise NotImplementedError(f"Pragma type {self.type.name} must implement _parse_inputs.")
+
+    def __str__(self):
+        return f"@brainsmith {self.type.value} " + " ".join(map(str, self.inputs))
+
+# --- Pragma Subclasses ---
+
+@dataclass
+class TopModulePragma(Pragma):
+    def __post_init__(self): # Ensure base class __post_init__ is called if overridden
+        super().__post_init__()
+
+    def _parse_inputs(self) -> Dict:
+        """Handles TOP_MODULE pragma: @brainsmith top_module <module_name>"""
+        logger.debug(f"Processing TOP_MODULE pragma: {self.inputs} at line {self.line_number}")
+        if len(self.inputs) != 1:
+            raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
+        return {"module_name": self.inputs[0]}
+
+@dataclass
+class DatatypePragma(Pragma):
+    def __post_init__(self):
+        super().__post_init__()
+
+    def _parse_inputs(self) -> Dict:
+        """Handles DATATYPE pragma: @brainsmith datatype <if_name> <size> OR <if_name> <min> <max>"""
+        logger.debug(f"Processing DATATYPE pragma: {self.inputs} at line {self.line_number}")
+
+        if len(self.inputs) == 2:
+            interface_name = self.inputs[0]
+            size = self.inputs[1]
+            # TODO: Validate size format (e.g., ensure it's numeric or a valid type string)
+            return {
+                "interface_name": interface_name,
+                "min_size": size,
+                "max_size": size,
+                "is_fixed_size": True
+            }
+        elif len(self.inputs) == 3:
+            interface_name = self.inputs[0]
+            min_size = self.inputs[1]
+            max_size = self.inputs[2]
+            # TODO: Validate size formats
+            # TODO: Validate min_size <= max_size (if numeric)
+            return {
+                "interface_name": interface_name,
+                "min_size": min_size,
+                "max_size": max_size,
+                "is_fixed_size": False
+            }
+        else:
+            raise PragmaError("DATATYPE pragma requires <interface_name> <size> OR <interface_name> <min_size> <max_size>")
+
+@dataclass
+class DerivedParameterPragma(Pragma):
+    def __post_init__(self):
+        super().__post_init__()
+
+    def _parse_inputs(self) -> Dict:
+        """Handles DERIVED_PARAMETER pragma: @brainsmith derived_parameter <func> <param1> [<param2>...]"""
+        logger.debug(f"Processing DERIVED_PARAMETER pragma: {self.inputs} at line {self.line_number}")
+        if len(self.inputs) < 2:
+            raise PragmaError("DERIVED_PARAMETER pragma requires at least <python_function_name> <module_param_name>")
+
+        function_name = self.inputs[0]
+        module_param_names = self.inputs[1:]
+        logger.debug(f"Derived Parameter: Function='{function_name}', Params={module_param_names}")
+        return {
+            "python_function_name": function_name,
+            "module_param_names": module_param_names
+        }
+
+@dataclass
+class WeightPragma(Pragma):
+    def __post_init__(self):
+        super().__post_init__()
+
+    def _parse_inputs(self) -> Dict:
+        """Handles WEIGHT pragma: @brainsmith weight <interface_name> <weight_value>"""
+        logger.debug(f"Processing WEIGHT pragma: {self.inputs} at line {self.line_number}")
+        if len(self.inputs) != 2:
+            raise PragmaError("WEIGHT pragma requires exactly two arguments: <interface_name> <weight_value>")
+        interface_name = self.inputs[0]
+        weight_value = self.inputs[1]
+        # TODO: Validate weight_value format (e.g., ensure it's numeric)
+        return {"interface_name": interface_name, "weight_value": weight_value}
 
 # --- Top-Level Structure ---
 

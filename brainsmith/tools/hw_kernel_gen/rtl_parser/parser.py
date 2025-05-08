@@ -18,7 +18,7 @@ from tree_sitter import Parser, Node
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import InterfaceType, Interface
-from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import extract_pragmas, PragmaType, Pragma
+from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import PragmaHandler, PragmaType, Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
 from . import grammar
 
@@ -76,6 +76,7 @@ class RTLParser:
             raise RuntimeError(f"Unexpected error loading grammar: {e}")
 
         self.interface_builder = InterfaceBuilder(debug=self.debug)
+        self.pragma_handler = PragmaHandler(debug=self.debug)
 
         # Initialize state variables
         self.tree: Optional[Node] = None
@@ -107,7 +108,6 @@ class RTLParser:
         """
         logger.info(f"Stage 1: Initial parsing for {file_path}")
         self.tree = None # Reset state
-        self.pragmas = []
         self.module_node = None
 
         # 1. Read file
@@ -143,7 +143,7 @@ class RTLParser:
         # 5. Extract pragmas
         logger.debug("Extracting pragmas...")
         try:
-            self.pragmas = extract_pragmas(self.tree.root_node)
+            self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
         except Exception as e:
             logger.exception(f"Error during pragma extraction in {file_path}: {e}")
             raise ParserError(f"Failed during pragma extraction: {e}")
@@ -261,6 +261,8 @@ class RTLParser:
             raise ParserError(f"Failed during interface building: {e}")
 
         # --- Post-Analysis Validation ---
+        for interface in validated_interfaces.values():
+            logger.debug(f"Interface '{interface.name}' of type '{interface.type.value}' has ports: {list(interface.ports.keys())}")
 
         # 2. Perform Global Control check
         has_global_control = any(
@@ -271,23 +273,28 @@ class RTLParser:
             logger.error(error_msg)
             raise ParserError(error_msg)
 
-        # 3. Perform AXI-Stream check
-        has_axi_stream = any(
-            iface.type == InterfaceType.AXI_STREAM for iface in validated_interfaces.values()
-        )
-        if not has_axi_stream:
-            error_msg = f"Module '{kernel_name}' requires at least one AXI-Stream interface, but found none after analysis."
+        # 3. Validate AXI-Stream interfaces directly here
+        input_streams = [iface for iface in validated_interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("in")]
+        output_streams = [iface for iface in validated_interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("out")]
+
+        if not input_streams:
+            raise ParserError("No input AXI-Stream interface found. At least one is required.")
+        if not output_streams:
+            raise ParserError("No output AXI-Stream interface found. At least one is required.")
+
+        logger.info(f"Validated AXI-Stream interfaces: {len(input_streams)} inputs, {len(output_streams)} outputs.")
+
+        # 4. Apply pragmas to interfaces
+        self._apply_pragmas(validated_interfaces)
+
+        # 5. Perform Unassigned Ports check
+        if unassigned_ports:
+            unassigned_names = [p.name for p in unassigned_ports]
+            error_msg = f"Module '{kernel_name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
             logger.error(error_msg)
             raise ParserError(error_msg)
 
-        # 4. Perform Unassigned Ports check
-        if unassigned_ports:
-             unassigned_names = [p.name for p in unassigned_ports]
-             error_msg = f"Module '{kernel_name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
-             logger.error(error_msg)
-             raise ParserError(error_msg)
-
-        # 5. Return validated_interfaces
+        # 6. Return validated_interfaces
         logger.info("Stage 3: Interface analysis and validation complete.")
         return validated_interfaces
 

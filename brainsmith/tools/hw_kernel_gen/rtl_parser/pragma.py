@@ -25,20 +25,22 @@ class PragmaError(Exception):
     """Custom exception for errors during pragma parsing or validation."""
     pass
 
-class PragmaParser:
-    """Extracts and validates @brainsmith pragmas from comment nodes."""
+class PragmaHandler:
+    """Extracts, validates, and applies @brainsmith pragmas from comment nodes."""
 
     def __init__(self, debug: bool = False):
-        """Initializes the PragmaParser and registers pragma handlers."""
+        """Initializes the PragmaHandler and registers pragma handlers."""
         self.debug = debug
+        self.pragmas = []  # List to store found pragmas
         # Use PragmaType enum members as keys
         self.handlers: Dict[PragmaType, Callable[[List[str], int], Dict]] = {
             PragmaType.TOP_MODULE: self._handle_top_module,
             PragmaType.DATATYPE: self._handle_datatype,
             PragmaType.DERIVED_PARAMETER: self._handle_derived_parameter,
+            PragmaType.WEIGHT: self._handle_weight,  # New handler for WEIGHT pragma
         }
 
-    def parse_comment(self, node: Node, line_number: int) -> Optional[Pragma]:
+    def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:
         """Parses a comment AST node to find and validate a @brainsmith pragma.
 
         Checks for the '@brainsmith' prefix, extracts the type and inputs,
@@ -80,28 +82,52 @@ class PragmaParser:
             # Log as debug, as many comments might not be intended pragmas
             logger.debug(f"Ignoring comment at line {line_number}: Unknown or unsupported pragma type '@brainsmith {pragma_type_str}'")
             return None
-        
-        # --- PragmaType is now validated and exists in handlers ---
 
         # Create pragma instance using the enum member
-        pragma = Pragma(
+        return Pragma(
             type=pragma_enum_type,
             inputs=inputs,
-            line_number=line_number
+            line_number=line_number,
+            apply=self.handlers[pragma_enum_type]
         )
 
-        # Process with appropriate handler using the enum member as the key
-        try:
-            pragma.processed_data = self.handlers[pragma_enum_type](inputs, line_number)
-        except PragmaError as e:
-            logger.warning(f"Pragma Error: {e} (Line: {line_number})")
-            return None # Ignore pragmas that fail validation in their handler
-        except Exception as e:
-            logger.error(f"Unexpected error processing pragma at line {line_number}: {e}")
-            return None # Ignore unexpected errors
+    def extract_pragmas(self, root_node: Node) -> List[Pragma]:
+        """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
 
-        return pragma
+        Uses PragmaParser to parse and validate comments found during the AST traversal.
 
+        Args:
+            root_node: The root node of the tree-sitter AST.
+
+        Returns:
+            A list of validated Pragma objects found in the AST.
+        """
+        pragmas = []
+        comments_found_count = 0 # Add counter
+
+        # Simple recursive walk for comments - might need optimization for large files
+        def find_comments(node: Node):
+            nonlocal comments_found_count # Access outer scope variable
+            if node.type == 'comment':
+                comments_found_count += 1 # Increment counter
+                logger.debug(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
+                # Get line number (0-based)
+                line_number = node.start_point[0]
+                pragma = self._validate_pragma(node, line_number + 1) # Pass 1-based line number
+                if pragma:
+                    logger.info(f"Found valid pragma: {pragma}")
+                    pragmas.append(pragma)
+
+            for child in node.children:
+                find_comments(child)
+
+        # Log start/end at INFO level
+        logger.info(">>> Starting pragma extraction from AST root.")
+        find_comments(root_node)
+        logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
+        return pragmas
+    
+    
     # --- Pragma Handlers ---
 
     def _handle_top_module(self, inputs: List[str], line_number: int) -> Dict:
@@ -161,44 +187,27 @@ class PragmaParser:
             "module_param_names": module_param_names # Return list of names
         }
 
-# --- Extraction Function ---
+    def _handle_weight(self, inputs: List[str], line_number: int) -> Dict:
+        """Handles WEIGHT pragma: @brainsmith weight <interface_name> <weight_value>"""
+        logger.debug(f"Processing WEIGHT pragma: {inputs} at line {line_number}")
+        if len(inputs) != 2:
+            raise PragmaError("WEIGHT pragma requires exactly two arguments: <interface_name> <weight_value>")
+        interface_name = inputs[0]
+        weight_value = inputs[1]
+        # TODO: Validate weight_value format (e.g., ensure it's numeric)
+        return {"interface_name": interface_name, "weight_value": weight_value}
 
-def extract_pragmas(root_node: Node) -> List[Pragma]:
-    """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
-
-    Uses PragmaParser to parse and validate comments found during the AST traversal.
-
-    Args:
-        root_node: The root node of the tree-sitter AST.
-
-    Returns:
-        A list of validated Pragma objects found in the AST.
-    """
-    pragmas = []
-    parser = PragmaParser()
-    comments_found_count = 0 # Add counter
-
-    # Simple recursive walk for comments - might need optimization for large files
-    def find_comments(node: Node):
-        nonlocal comments_found_count # Allow modification
-        if node.type == 'comment':
-            comments_found_count += 1 # Increment counter
-            # Log comment finding at DEBUG level
-            logger.debug(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
-            # Get line number (0-based)
-            line_number = node.start_point[0]
-            pragma = parser.parse_comment(node, line_number + 1) # Pass 1-based line number
-            if pragma:
-                # Log valid pragma finding at INFO level
-                logger.info(f"Found valid pragma: {pragma}")
-                pragmas.append(pragma)
-            # No need for else log here, parse_comment logs failures/ignores
-
-        for child in node.children:
-            find_comments(child)
-
-    # Log start/end at INFO level
-    logger.info(">>> Starting pragma extraction from AST root.")
-    find_comments(root_node)
-    logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
-    return pragmas
+# --- Apply Function from parser ---
+    def _apply_pragmas(self, interfaces: Dict[str, Interface]) -> None:
+        """Apply all relevant pragmas to interfaces, excluding TOP_MODULE."""
+        for pragma in self.pragmas:
+            if pragma.type == PragmaType.WEIGHT:
+                for iface in interfaces.values():
+                    if iface.name == pragma.inputs[0] or iface.name.startswith(pragma.inputs[0]):
+                        iface.metadata["is_weight"] = True
+                        logger.info(f"Applied WEIGHT pragma to interface {iface.name}.")
+            elif pragma.type == PragmaType.DATATYPE:
+                for iface in interfaces.values():
+                    if iface.name == pragma.inputs[0] or iface.name.startswith(pragma.inputs[0]):
+                        iface.metadata["datatype"] = pragma.inputs[1]
+                        logger.info(f"Applied DATATYPE pragma to interface {iface.name} with datatype {pragma.inputs[1]}.")
