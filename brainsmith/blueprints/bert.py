@@ -62,6 +62,55 @@ from finn.builder.build_dataflow_steps import (
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
 
+import onnxscript
+from onnxscript.utils import graph_view_utils as gvu
+
+def custom_step_extract_loop_body(model, cfg):
+    """
+    BERT custom step for extracting the loop body
+
+    This is a custom step to extract the loop body from the
+    BERT model. It is not a standard step in the FINN pipeline,
+    but it is useful for this model.
+    """
+    print("INFO: Loop body extraction is not needed for this model")
+    # Loop body extraction is not needed for this model
+    #model = model.transform(LoopBodyExtraction())
+
+    model_ir    = onnxscript.ir.serde.deserialize_model(model.model)
+    graph       = model_ir.graph
+
+    P = gvu.PytorchHierarchyNode()
+    unadded_nodes = []
+    for node in graph._nodes:
+        added = P.add_node(node)
+        if not added:
+            unadded_nodes.append(node)
+    P.print_hierarchy()
+    print(f"Total nodes: {len(graph._nodes)}")
+    print(f"Unadded nodes: {len(unadded_nodes)}")
+
+    # Handle the unadded Transpose nodes as a special case for BERT
+    # Todo: Make this more robust in the future
+    for node in unadded_nodes:
+        print(f"added metadata for node {node.name}")
+        pred_node = node.predecessors()[0]
+        node.metadata_props['pkg.torch.onnx.name_scopes'] = pred_node.metadata_props['pkg.torch.onnx.name_scopes']
+        node.metadata_props['pkg.torch.onnx.class_hierarchy'] = pred_node.metadata_props['pkg.torch.onnx.class_hierarchy']
+        assert(P.add_node(node))
+    layer_0_graph_view = gvu.bGraphView('bert-large-layer0', P.get_nodes(['encoder','encoder.layer.0']))
+    print(f"Layer 0 graph view: {len(layer_0_graph_view._nodes)}")
+    single_layer_0_model = onnxscript.ir.Model(layer_0_graph_view, ir_version=10)
+    proto = onnxscript.ir.serde.serialize_model(single_layer_0_model)
+    onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
+
+    return model
+
+
+from onnxscript.rewriter import pattern
+from onnxscript.rewriter import pattern_builder_jsm as pb
+from onnxscript.rewriter import rewrite
+
 def custom_step_loop_rolling(model, cfg):
     """
     BERT custom step for loop rolling
@@ -70,7 +119,28 @@ def custom_step_loop_rolling(model, cfg):
     to make it easier to work with. It is not a standard step
     in the FINN pipeline, but it is useful for this model.
     """
-    print("INFO: Loop rolling is not needed for this model")
+
+    print("Loading loop body template")
+    LoopBody = pb.LoopBodyTemplate(cfg.output_dir+'/loop-body-template.onnx')
+
+    # Replace instances of the loop body with a function call to the loop body
+    change_layers_to_function_calls = pattern.RewriteRule(
+      LoopBody.pattern,
+      LoopBody.function_replace
+    )
+    print("Replacing layers with function calls")
+
+    model_proto = model.model
+    model_ir = onnxscript.ir.serde.deserialize_model(model_proto)
+
+    model_layers_replaced = rewrite(
+        model_ir,
+        pattern_rewrite_rules = [change_layers_to_function_calls]
+    )
+    model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
+    print(f"Writing updated graph to {cfg.output_dir+'/loop-body-replaced.onnx'}")
+    onnx.save(model_proto, cfg.output_dir+'/loop-body-replaced.onnx')
+
     # Loop rolling is not needed for this model
     #model = model.transform(LoopRolling())
     return model
@@ -114,7 +184,7 @@ def custom_step_qonnx2finn(model, cfg):
 
     """
     model = model.transform(ExpandNorms())
-    #model = model.transform(ExtractQuantScaleZeroPt())
+    model = model.transform(ExtractQuantScaleZeroPt())
     model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
@@ -140,7 +210,7 @@ def custom_step_generate_reference_io(model, cfg):
     np.savez(cfg.output_dir+"/expected_context.npz", **y_ref)
     return model
 
-
+from qonnx.transformation.general import SortGraph
 def custom_streamlining_step(model, cfg):
     """
     BERT custom step for streamlining
@@ -171,6 +241,7 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(SortGraph())
     return model
 
 
@@ -389,6 +460,11 @@ def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
     model = model.transform(SetPumpedCompute())
     return model
 
+def custom_step_roll_loops(model, cfg):
+    """ Custom step to roll the loops in the BERT model """
+    print("INFO: custom_step_roll_loops")
+    #model = model.transform(LoopRolling())
+    return model
 
 BUILD_STEPS = [
         # Cleanup and custom graph surgery
@@ -397,19 +473,21 @@ BUILD_STEPS = [
         custom_step_remove_tail,
         custom_step_qonnx2finn,
 
-        custom_step_generate_reference_io,
+        #custom_step_generate_reference_io,
         custom_streamlining_step,
-        custom_step_infer_hardware,
-        step_create_dataflow_partition,
-        step_specialize_layers,
-        step_target_fps_parallelization,
-        step_apply_folding_config,
-        step_minimize_bit_width,
-        step_generate_estimate_reports,
-        step_hw_codegen,
-        step_hw_ipgen,
-        step_measure_rtlsim_performance,
-        step_set_fifo_depths,
-        step_create_stitched_ip,
-        custom_step_shell_metadata_handover,
+        custom_step_extract_loop_body,
+        custom_step_loop_rolling,
+        #custom_step_infer_hardware,
+        #step_create_dataflow_partition,
+        #step_specialize_layers,
+        #step_target_fps_parallelization,
+        #step_apply_folding_config,
+        #step_minimize_bit_width,
+        #step_generate_estimate_reports,
+        #step_hw_codegen,
+        #step_hw_ipgen,
+        #step_measure_rtlsim_performance,
+        #step_set_fifo_depths,
+        #step_create_stitched_ip,
+        #custom_step_shell_metadata_handover,
     ]
