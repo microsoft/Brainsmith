@@ -15,7 +15,7 @@ from qonnx.core.datatype import DataType
 
 
 class ExpandNorms(Transformation):
-    """Expand any standard LayerNorms/RMSNorms into the functional 
+    """Expand any standard LayerNorms/RMSNorms into the functional
     norm and Mul/Add nodes for affine scale and bias."""
 
     def __init__(self):
@@ -49,7 +49,7 @@ class ExpandNorms(Transformation):
                 # out_dtype = model.get_tensor_datatype(act_out)
                 # act_dtype = oh.np_dtype_to_tensor_dtype(np.dtype(in_dtype.to_numpy_dt()))
                 act_shape = model.get_tensor_shape(ln_act_in)
-                
+
                 # Create functional layernorm node
                 func_ln_node = oh.make_node(
                     "FuncLayerNorm",
@@ -64,18 +64,23 @@ class ExpandNorms(Transformation):
                     name=f"FuncLayerNorm_{node.name}",
                 )
 
+                if hasattr(node, "metadata_props"):
+                    func_ln_node.metadata_props.extend(node.metadata_props)
+
                 # Get scale, eliminate if all ones
                 elementwise_affine = not np.all(scale==1)
                 if elementwise_affine:
                     # Create new input tensor
                     scale_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(scale_act_in)
-                    
+
                     # Update previous output tensor
                     func_ln_node.output[0] = scale_act_in.name
                     # Create Mul node to replace scale
                     mul_node = oh.make_node("Mul", [scale_act_in.name, scale], [act_out])
-                    
+                    if hasattr(node, "metadata_props"):
+                       mul_node.metadata_props.extend(node.metadata_props)
+
                     model.set_tensor_datatype(scale_act_in.name, idt)
 
                 # Check if optional bias exists
@@ -91,7 +96,8 @@ class ExpandNorms(Transformation):
                         func_ln_node.output[0] = scale_act_in.name
                     # Create Add node to replace bias
                     add_node = oh.make_node("Add", [bias_act_in.name, bias], [act_out])
-                    
+                    if hasattr(node, "metadata_props"):
+                       add_node.metadata_props.extend(node.metadata_props)
                     model.set_tensor_datatype(bias_act_in.name, wdt)
                 # else:
                 #     model.set_tensor_datatype(bias_act_in.name, wdt)

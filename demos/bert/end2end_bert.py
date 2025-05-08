@@ -27,6 +27,7 @@ from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_wi
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
 from brainsmith.core.hw_compiler import forge
+from brevitas.export.onnx.qonnx.function import QuantWrapper
 
 
 def gen_initial_bert_model(
@@ -122,8 +123,8 @@ def gen_initial_bert_model(
     with torch.no_grad(), calibration_mode(quant_model):
         quant_model(**inp)
 
-    custom_translation_table = dict()
-    custom_translation_table[torch.ops.mylibrary.int_quant.default] = bexport.onnx.qonnx.function.QuantWrapper
+    #custom_translation_table = dict()
+    #custom_translation_table[torch.ops.mylibrary.int_quant.default] = bexport.onnx.qonnx.function.QuantWrapper
 
     import time
     start_time = time.time()
@@ -136,13 +137,12 @@ def gen_initial_bert_model(
             input_names=['input_ids'],
             opset_version=17,
             dynamo=True,
-            custom_translation_table=custom_translation_table
+            custom_translation_table={torch.ops.mylibrary.int_quant.default: QuantWrapper,}
         )
     end_time = time.time()
     print(f"elapsed qonnx export time {(end_time-start_time)/60} mins")
     print(f"QOnnx export done.")
     print(f"Exported model to {outfile}")
-
 
 def main(args):
     # TODO: Replace this "save and delete" with proper optional saving
