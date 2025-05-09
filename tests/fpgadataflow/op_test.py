@@ -101,8 +101,8 @@ class OpTest(ABC):
     @pytest.fixture
     def input_tensors(self, model: ModelWrapper) -> dict:
         """Creates the tensor(s) passed to the model, to be used by the simulation during
-        testing. This fixture creates a tensor with random values, but can be overriden
-        by subclasses to pass specific values."""
+        testing. By default, this fixture creates a tensor with random values, but can be
+        overridden by tests to pass specific values."""
 
         input_t = {}
         for input in model.graph.input:
@@ -114,7 +114,7 @@ class OpTest(ABC):
         return input_t
 
     @pytest.fixture
-    def save_intermediate_models(self) -> dict:
+    def save_intermediate_models(self) -> bool:
         """If this fixture is overridden to return True, the 'auto_saver' fixture
         will automatically save the outputs of all 'model' fixtures to .onnx files."""
 
