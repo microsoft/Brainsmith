@@ -78,13 +78,19 @@ class RTLParser:
         self.interface_builder = InterfaceBuilder(debug=self.debug)
         self.pragma_handler = PragmaHandler(debug=self.debug)
 
-        # Initialize state variables
+        # Initialize state variables for the parsing flow
         self.tree: Optional[Node] = None
         self.pragmas: List[Pragma] = []
         self.module_node: Optional[Node] = None
+        self.name: Optional[str] = None
+        self.parameters: List[Parameter] = []
+        self.ports: List[Port] = [] # Intermediate list of raw ports
+        self.interfaces: Dict[str, Interface] = {}
 
     def _initial_parse(self, file_path: str) -> None:
         """Performs Stage 1 of parsing: Initial AST generation and module selection.
+
+        Sets self.tree, self.pragmas, and self.module_node.
 
         Reads the source file, parses it into an Abstract Syntax Tree (AST) using
         tree-sitter, checks for basic syntax errors, finds all module definitions,
@@ -95,10 +101,10 @@ class RTLParser:
             file_path: The absolute path to the SystemVerilog file to parse.
 
         Returns:
-            None. Results are stored in instance variables:
-            - `self.tree`: The root node of the parsed AST.
-            - `self.pragmas`: A list of extracted Pragma objects.
-            - `self.module_node`: The tree-sitter Node representing the selected target module.
+            Tuple[List[Pragma], Node]: A tuple containing:
+                - pragmas (List[Pragma]): A list of extracted Pragma objects.
+                - module_node (Node): The tree-sitter Node representing the selected target module.
+            `self.tree` is also set as an instance variable.
 
         Raises:
             ParserError: If the file cannot be read, core parsing fails, no modules are found,
@@ -108,6 +114,7 @@ class RTLParser:
         """
         logger.info(f"Stage 1: Initial parsing for {file_path}")
         self.tree = None # Reset state
+        self.pragmas = []
         self.module_node = None
 
         # 1. Read file
@@ -142,6 +149,7 @@ class RTLParser:
 
         # 5. Extract pragmas
         logger.debug("Extracting pragmas...")
+        # extracted_pragmas: List[Pragma] # No longer a local variable
         try:
             self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
         except Exception as e:
@@ -150,6 +158,7 @@ class RTLParser:
         logger.debug(f"Found {len(self.pragmas)} potential pragmas.")
 
         # 6. Select target module
+        selected_module_node: Node
         try:
             self.module_node = self._select_target_module(module_nodes, self.pragmas, file_path)
             logger.info(f"Selected target module node: {self.module_node.type}") # Log basic info
@@ -157,17 +166,19 @@ class RTLParser:
             logger.error(e) # Log the specific error from selection logic
             raise # Re-raise the selection error
 
-    def _extract_kernel_components(self) -> Tuple[str, List[Parameter], List[Port]]:
+    def _extract_kernel_components(self) -> None:
         """Performs Stage 2 of parsing: Extraction of name, parameters, and ports.
 
-        Processes the `self.module_node` (selected in Stage 1) to extract the
+        Uses self.module_node. Sets self.name, self.parameters, and self.ports.
+
+        Processes the `module_node` (selected in Stage 1) to extract the
         module's name, its parameters (excluding localparams), and its ports
         (currently supporting ANSI-style declarations).
 
         Requires `_initial_parse` to have been run successfully first.
 
         Args:
-            None. Operates on `self.module_node`.
+            module_node: The module node to process.
 
         Returns:
             A tuple containing:
@@ -176,19 +187,23 @@ class RTLParser:
             - `ports` (List[Port]): A list of extracted Port objects.
 
         Raises:
-            ParserError: If `self.module_node` is not set (Stage 1 was not run or failed),
-                         or if extraction of the header, parameters, or ports fails.
+            Parser error: If self.module_node is not set, or if any of the extraction
+                          or parsing steps fail.
         """
         if not self.module_node:
-            raise ParserError("Cannot extract components: _initial_parse must be run first.")
+            raise ParserError("Cannot extract components: _initial_parse must be run first to set module_node.")
         logger.info("Stage 2: Extracting kernel components (name, parameters, ports)")
+        self.name = None
+        self.parameters = []
+        self.ports = []
 
         # 1. Extract header (name, param_nodes, port_nodes)
         try:
-            name, param_nodes, port_nodes = self._extract_module_header(self.module_node)
-            if name is None:
+            extracted_name, param_nodes, port_nodes = self._extract_module_header(self.module_node)
+            if extracted_name is None:
                 raise ParserError("Failed to extract module name from header.")
-            logger.debug(f"Extracted header for module '{name}'")
+            self.name = extracted_name
+            logger.debug(f"Extracted header for module '{self.name}'")
             logger.debug(f"Found {len(param_nodes) if param_nodes else 0} parameter declaration nodes.")
             logger.debug(f"Found {len(port_nodes) if port_nodes else 0} port declaration nodes.")
         except Exception as e:
@@ -196,38 +211,35 @@ class RTLParser:
             raise ParserError(f"Failed during module header extraction: {e}")
 
         # 2. Parse parameters
-        parameters: List[Parameter] = []
         logger.debug("Extracting parameters...")
         try:
             for node in param_nodes:
                 param = self._parse_parameter_declaration(node)
                 if param is not None: # Skips local params implicitly
-                    parameters.append(param)
-            logger.debug(f"Extracted {len(parameters)} parameters.")
+                    self.parameters.append(param)
+            logger.debug(f"Extracted {len(self.parameters)} parameters.")
         except Exception as e:
             logger.exception(f"Error during parameter parsing: {e}")
             raise ParserError(f"Failed during parameter parsing: {e}")
 
         # 3. Parse ports
-        ports: List[Port] = []
         logger.debug("Extracting ports...")
         try:
             if port_nodes: # Check if port_nodes list is not None or empty
                 for node in port_nodes:
                     parsed_port_list = self._parse_port_declaration(node) # Returns List[Port]
                     if parsed_port_list: # Check if the list is not empty
-                        ports.extend(parsed_port_list) # Use extend to add elements
-            logger.debug(f"Successfully parsed {len(ports)} individual port objects.")
+                        self.ports.extend(parsed_port_list) # Use extend to add elements
+            logger.debug(f"Successfully parsed {len(self.ports)} individual port objects.")
         except Exception as e:
             logger.exception(f"Error during port parsing: {e}")
             raise ParserError(f"Failed during port parsing: {e}")
-
-        # 4. Return name, parameters, ports
         logger.info("Stage 2: Component extraction complete.")
-        return name, parameters, ports
 
-    def _analyze_and_validate_interfaces(self, ports: List[Port], kernel_name: str) -> Dict[str, Interface]:
+    def _analyze_and_validate_interfaces(self) -> None:
         """Performs Stage 3 of parsing: Interface building and validation.
+
+        Uses self.ports and self.name. Sets self.interfaces.
 
         Takes the list of raw ports extracted in Stage 2 and uses the `InterfaceBuilder`
         to group them into logical interfaces (AXI-Stream, AXI-Lite, Global Control).
@@ -244,38 +256,41 @@ class RTLParser:
             A dictionary mapping interface names (str) to validated Interface objects.
 
         Raises:
-            ParserError: If the interface building process fails, or if any of the
-                         post-analysis validation checks (Global Control, AXI-Stream,
-                         Unassigned Ports) fail.
+            ParserError: If self.name or self.ports are not set, if the interface building 
+                         process fails, or if any of the post-analysis validation checks fail.
         """
-        logger.info(f"Stage 3: Analyzing and validating interfaces for module {kernel_name}")
+        if self.name is None or self.ports is None: # self.ports can be empty, but not None
+             raise ParserError("Cannot analyze interfaces: _extract_kernel_components must be run first.")
+        logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
+        self.interfaces = {}
 
         # 1. Call self.interface_builder.build_interfaces(ports)
         try:
-            validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(ports)
-            logger.info(f"Interface analysis complete. Found {len(validated_interfaces)} valid interfaces.")
+            # validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(self.ports)
+            self.interfaces, unassigned_ports = self.interface_builder.build_interfaces(self.ports)
+            logger.info(f"Interface analysis complete. Found {len(self.interfaces)} valid interfaces.")
         except Exception as e:
-            logger.exception(f"Error during interface building for module {kernel_name}: {e}")
+            logger.exception(f"Error during interface building for module {self.name}: {e}")
             # Re-raise as ParserError to be consistent? Or let specific error propagate?
             # Let's wrap it for now. # TAFK TODO
             raise ParserError(f"Failed during interface building: {e}")
 
         # --- Post-Analysis Validation ---
-        for interface in validated_interfaces.values():
+        for interface in self.interfaces.values():
             logger.debug(f"Interface '{interface.name}' of type '{interface.type.value}' has ports: {list(interface.ports.keys())}")
 
         # 2. Perform Global Control check
         has_global_control = any(
-            iface.type == InterfaceType.GLOBAL_CONTROL for iface in validated_interfaces.values()
+            iface.type == InterfaceType.GLOBAL_CONTROL for iface in self.interfaces.values()
         )
         if not has_global_control:
-            error_msg = f"Module '{kernel_name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
+            error_msg = f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
             logger.error(error_msg)
             raise ParserError(error_msg)
 
         # 3. Validate AXI-Stream interfaces directly here
-        input_streams = [iface for iface in validated_interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("in")]
-        output_streams = [iface for iface in validated_interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("out")]
+        input_streams = [iface for iface in self.interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("in")]
+        output_streams = [iface for iface in self.interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("out")]
 
         if not input_streams:
             raise ParserError("No input AXI-Stream interface found. At least one is required.")
@@ -284,19 +299,39 @@ class RTLParser:
 
         logger.info(f"Validated AXI-Stream interfaces: {len(input_streams)} inputs, {len(output_streams)} outputs.")
 
-        # 4. Apply pragmas to interfaces
-        self._apply_pragmas(validated_interfaces)
-
-        # 5. Perform Unassigned Ports check
+        # 4. Perform Unassigned Ports check
         if unassigned_ports:
             unassigned_names = [p.name for p in unassigned_ports]
-            error_msg = f"Module '{kernel_name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
+            error_msg = f"Module '{self.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
             logger.error(error_msg)
             raise ParserError(error_msg)
-
-        # 6. Return validated_interfaces
         logger.info("Stage 3: Interface analysis and validation complete.")
-        return validated_interfaces
+
+    def _apply_pragmas(self) -> None:
+        """Apply all relevant pragmas by calling their respective apply methods.
+
+        Args:
+            interfaces: A dictionary of discovered interfaces.
+            hw_kernel: An optional HWKernel object that pragmas might modify or use.
+        """
+        if not self.pragmas:
+            logger.info("No pragmas found or extracted. Nothing to apply.")
+            return
+
+        logger.info(f"Applying {len(self.pragmas)} extracted pragmas.")
+        for pragma in self.pragmas:
+            if pragma.type == PragmaType.TOP_MODULE:
+                # Skip TOP_MODULE pragmas here; they are handled during module selection.
+                logger.debug(f"Skipping TOP_MODULE pragma: {pragma.type.name} at line {pragma.line_number}")
+                continue
+            elif pragma.type == PragmaType.DATATYPE or pragma.type == PragmaType.WEIGHT:
+                pragma.apply(interfaces=self.interfaces)
+            elif pragma.type == PragmaType.DERIVED_PARAMETER:
+                pragma.apply(parameters=self.parameters)
+            else:
+                logger.warning(f"Unknown pragma type '{pragma.type.name}' encountered. Skipping.")
+                continue
+        logger.info("Stage 4: Pragmas applied.")
 
     def parse_file(self, file_path: str) -> HWKernel:
         """Orchestrates the multi-stage parsing process for a SystemVerilog file.
@@ -306,6 +341,7 @@ class RTLParser:
         1. `_initial_parse`: Reads file, parses AST, selects module.
         2. `_extract_kernel_components`: Extracts name, parameters, ports.
         3. `_analyze_and_validate_interfaces`: Builds and validates interfaces.
+        4. `_apply_pragmas`: Applies pragmas to interfaces and parameters.
         Finally, it constructs and returns the `HWKernel` data object.
 
         Args:
@@ -326,27 +362,28 @@ class RTLParser:
         logger.info(f"Starting full parsing orchestration for: {file_path}")
         try:
             # 1. Call Stage 1: Initial Parse
-            self._initial_parse(file_path)
+            self._initial_parse(file_path) # Sets self.pragmas, self.module_node
 
             # 2. Call Stage 2: Extract Components
-            name, parameters, ports = self._extract_kernel_components()
+            self._extract_kernel_components() # Uses self.module_node; sets self.name, self.parameters, self.ports
 
             # 3. Call Stage 3: Analyze and Validate Interfaces
-            validated_interfaces = self._analyze_and_validate_interfaces(ports, name)
+            self._analyze_and_validate_interfaces() # Uses self.ports, self.name; sets self.interfaces
 
-            # 4. Create HWKernel object
-            # Ensure pragmas are available from self.pragmas (set in _initial_parse)
+            # 4. Apply pragmas using PragmaHandler
+            self._apply_pragmas()
+
+            # 5. Create HWKernel object
             kernel = HWKernel(
-                name=name,
-                parameters=parameters,
-                interfaces=validated_interfaces,
+                name=self.name,
+                parameters=self.parameters,
+                interfaces=self.interfaces,
                 pragmas=self.pragmas
-                # Decide if raw ports should still be stored on HWKernel.
-                # If yes, add 'ports=ports' here. Currently, HWKernel doesn't store raw ports.
             )
+            logger.info(f"HWKernel object created for '{kernel.name}' with {len(kernel.parameters)} params, {len(kernel.interfaces)} interfaces.")
 
-            # 5. Return HWKernel
-            logger.info(f"Successfully parsed module '{kernel.name}' from {file_path}")
+            # 6. Return HWKernel
+            logger.info(f"Successfully parsed and processed module '{kernel.name}' from {file_path}")
             return kernel
 
         except (SyntaxError, ParserError) as e:
@@ -398,7 +435,7 @@ class RTLParser:
             queue.extend(node.children)
         return module_nodes
 
-    def _select_target_module(self, module_nodes: List[Node], pragmas: List["Pragma"], file_path: str) -> Node:
+    def _select_target_module(self, module_nodes: List[Node], pragmas: List[Pragma], file_path: str) -> Node:
         """Selects the target module node based on count and TOP_MODULE pragma."""
         top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE]
 
@@ -417,7 +454,8 @@ class RTLParser:
             return module_nodes[0]
         elif len(module_nodes) > 1:
             if len(top_module_pragmas) == 1:
-                target_name = top_module_pragmas[0].processed_data.get("module_name")
+                # Use parsed_data from the Pragma subclass instance
+                target_name = top_module_pragmas[0].parsed_data.get("module_name")
                 logger.info(f"Found TOP_MODULE pragma, searching for module '{target_name}'.")
                 if target_name in module_names_map:
                      logger.debug(f"Found matching module '{target_name}'.")
@@ -430,7 +468,8 @@ class RTLParser:
                 raise ParserError(f"Multiple modules ({list(module_names_map.keys())}) found in {file_path}, but no TOP_MODULE pragma specified.")
         elif len(module_nodes) == 1 and top_module_pragmas:
              # Single module, but pragma exists - check if it matches
-             target_name = top_module_pragmas[0].processed_data.get("module_name")
+             # Use parsed_data from the Pragma subclass instance
+             target_name = top_module_pragmas[0].parsed_data.get("module_name")
              # Get the actual name from the single node using the helper
              actual_name, _, _ = self._extract_module_header(module_nodes[0])
              if not actual_name:

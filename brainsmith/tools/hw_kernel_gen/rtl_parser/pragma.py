@@ -16,14 +16,14 @@ from typing import List, Optional, Dict, Callable
 
 from tree_sitter import Node
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Pragma, PragmaType
+# Updated imports: Pragma (base), PragmaType, and specific subclasses, PragmaError, Interface, HWKernel
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
+    Pragma, PragmaType, TopModulePragma, DatatypePragma,
+    DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel  # Added HWKernel
+)
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
-
-class PragmaError(Exception):
-    """Custom exception for errors during pragma parsing or validation."""
-    pass
 
 class PragmaHandler:
     """Extracts, validates, and applies @brainsmith pragmas from comment nodes."""
@@ -31,45 +31,41 @@ class PragmaHandler:
     def __init__(self, debug: bool = False):
         """Initializes the PragmaHandler and registers pragma handlers."""
         self.debug = debug
-        self.pragmas = []  # List to store found pragmas
-        # Use PragmaType enum members as keys
-        self.handlers: Dict[PragmaType, Callable[[List[str], int], Dict]] = {
-            PragmaType.TOP_MODULE: self._handle_top_module,
-            PragmaType.DATATYPE: self._handle_datatype,
-            PragmaType.DERIVED_PARAMETER: self._handle_derived_parameter,
-            PragmaType.WEIGHT: self._handle_weight,  # New handler for WEIGHT pragma
+        self.pragmas: List[Pragma] = []  # List to store found pragmas
+        # Map PragmaType to the corresponding Pragma subclass constructor
+        self.pragma_constructors: Dict[PragmaType, Callable[..., Pragma]] = {
+            PragmaType.TOP_MODULE: TopModulePragma,
+            PragmaType.DATATYPE: DatatypePragma,
+            PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
+            PragmaType.WEIGHT: WeightPragma,
         }
 
     def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:
         """Parses a comment AST node to find and validate a @brainsmith pragma.
 
         Checks for the '@brainsmith' prefix, extracts the type and inputs,
-        validates the type, and calls the appropriate handler function.
+        validates the type, and instantiates the appropriate Pragma subclass.
 
         Args:
             node: The tree-sitter comment node.
             line_number: The 1-based line number where the comment starts.
 
         Returns:
-            A validated Pragma object if a valid pragma is found, otherwise None.
+            A validated Pragma subclass object if a valid pragma is found, otherwise None.
         """
         text = node.text.decode('utf8').strip('/ ')
 
-        # Check for pragma prefix
         if not text.startswith('@brainsmith'):
             return None
 
-        # Split into components
         parts = text.split()
         if len(parts) < 2:
             logger.warning(f"Invalid pragma format at line {line_number}: {text}")
             return None
 
-        # Extract type and inputs
         pragma_type_str = parts[1]
         inputs = parts[2:] if len(parts) > 2 else []
 
-        # --- Find matching PragmaType enum member ---
         pragma_enum_type: Optional[PragmaType] = None
         pragma_type_lower = pragma_type_str.lower()
         for member in PragmaType:
@@ -77,19 +73,29 @@ class PragmaHandler:
                 pragma_enum_type = member
                 break
         
-        # Validate type against the *enum members* in the handlers dict keys
-        if pragma_enum_type is None or pragma_enum_type not in self.handlers:
-            # Log as debug, as many comments might not be intended pragmas
+        if pragma_enum_type is None or pragma_enum_type not in self.pragma_constructors:
             logger.debug(f"Ignoring comment at line {line_number}: Unknown or unsupported pragma type '@brainsmith {pragma_type_str}'")
             return None
 
-        # Create pragma instance using the enum member
-        return Pragma(
-            type=pragma_enum_type,
-            inputs=inputs,
-            line_number=line_number,
-            apply=self.handlers[pragma_enum_type]
-        )
+        # Get the correct Pragma subclass constructor
+        pragma_class = self.pragma_constructors[pragma_enum_type]
+        
+        try:
+            # Instantiate the specific Pragma subclass
+            # The _parse_inputs logic is now handled in the Pragma subclass __post_init__
+            return pragma_class(
+                type=pragma_enum_type,
+                inputs=inputs,
+                line_number=line_number
+            )
+        except PragmaError as e:
+            # Errors during _parse_inputs (called in __post_init__) will be caught here.
+            # The Pragma subclasses already log these errors.
+            logger.warning(f"Error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
+            return None
 
     def extract_pragmas(self, root_node: Node) -> List[Pragma]:
         """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
@@ -125,89 +131,6 @@ class PragmaHandler:
         logger.info(">>> Starting pragma extraction from AST root.")
         find_comments(root_node)
         logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
+        self.pragmas = pragmas # Store the extracted pragmas in the instance
         return pragmas
     
-    
-    # --- Pragma Handlers ---
-
-    def _handle_top_module(self, inputs: List[str], line_number: int) -> Dict:
-        """Handles TOP_MODULE pragma: @brainsmith top_module <module_name>"""
-        logger.debug(f"Processing TOP_MODULE pragma: {inputs} at line {line_number}")
-        if len(inputs) != 1:
-            raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
-        return {"module_name": inputs[0]}
-
-    def _handle_datatype(self, inputs: List[str], line_number: int) -> Dict:
-        """Handles DATATYPE pragma: @brainsmith datatype <if_name> <size> OR <if_name> <min> <max>"""
-        logger.debug(f"Processing DATATYPE pragma: {inputs} at line {line_number}")
-
-        if len(inputs) == 2:
-            # Case: Fixed size
-            interface_name = inputs[0]
-            size = inputs[1]
-            # TODO: Validate size format (e.g., ensure it's numeric or a valid type string)
-            processed = {
-                "interface_name": interface_name,
-                "min_size": size,
-                "max_size": size, # Explicitly set max == min for fixed size
-                "is_fixed_size": True
-            }
-        elif len(inputs) == 3:
-            # Case: Size range
-            interface_name = inputs[0]
-            min_size = inputs[1]
-            max_size = inputs[2]
-            # TODO: Validate size formats
-            # TODO: Validate min_size <= max_size (if numeric)
-            processed = {
-                "interface_name": interface_name,
-                "min_size": min_size,
-                "max_size": max_size,
-                "is_fixed_size": False
-            }
-        else:
-            raise PragmaError("DATATYPE pragma requires <interface_name> <size> OR <interface_name> <min_size> <max_size>")
-
-        return processed
-
-    def _handle_derived_parameter(self, inputs: List[str], line_number: int) -> Dict:
-        """Handles DERIVED_PARAMETER pragma: @brainsmith derived_parameter <func> <param1> [<param2>...]"""
-        logger.debug(f"Processing DERIVED_PARAMETER pragma: {inputs} at line {line_number}")
-        # Expect at least one function name and one parameter name
-        if len(inputs) < 2:
-            raise PragmaError("DERIVED_PARAMETER pragma requires at least <python_function_name> <module_param_name>")
-
-        function_name = inputs[0]
-        module_param_names = inputs[1:] # Get all elements after the first one
-
-        logger.debug(f"Derived Parameter: Function='{function_name}', Params={module_param_names}")
-
-        return {
-            "python_function_name": function_name,
-            "module_param_names": module_param_names # Return list of names
-        }
-
-    def _handle_weight(self, inputs: List[str], line_number: int) -> Dict:
-        """Handles WEIGHT pragma: @brainsmith weight <interface_name> <weight_value>"""
-        logger.debug(f"Processing WEIGHT pragma: {inputs} at line {line_number}")
-        if len(inputs) != 2:
-            raise PragmaError("WEIGHT pragma requires exactly two arguments: <interface_name> <weight_value>")
-        interface_name = inputs[0]
-        weight_value = inputs[1]
-        # TODO: Validate weight_value format (e.g., ensure it's numeric)
-        return {"interface_name": interface_name, "weight_value": weight_value}
-
-# --- Apply Function from parser ---
-    def _apply_pragmas(self, interfaces: Dict[str, Interface]) -> None:
-        """Apply all relevant pragmas to interfaces, excluding TOP_MODULE."""
-        for pragma in self.pragmas:
-            if pragma.type == PragmaType.WEIGHT:
-                for iface in interfaces.values():
-                    if iface.name == pragma.inputs[0] or iface.name.startswith(pragma.inputs[0]):
-                        iface.metadata["is_weight"] = True
-                        logger.info(f"Applied WEIGHT pragma to interface {iface.name}.")
-            elif pragma.type == PragmaType.DATATYPE:
-                for iface in interfaces.values():
-                    if iface.name == pragma.inputs[0] or iface.name.startswith(pragma.inputs[0]):
-                        iface.metadata["datatype"] = pragma.inputs[1]
-                        logger.info(f"Applied DATATYPE pragma to interface {iface.name} with datatype {pragma.inputs[1]}.")

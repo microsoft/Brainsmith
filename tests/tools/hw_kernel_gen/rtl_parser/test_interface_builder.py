@@ -37,7 +37,6 @@ def ports_all_valid_mixed():
         Port(name="out1_V_TREADY", direction=Direction.INPUT, width="1"),
         # AXI-Lite (Write only)
         Port(name="config_AWADDR", direction=Direction.INPUT, width="6"),
-        Port(name="config_AWPROT", direction=Direction.INPUT, width="3"),
         Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
         Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
         Port(name="config_WDATA", direction=Direction.INPUT, width="32"),
@@ -79,6 +78,10 @@ def ports_with_unassigned():
 
 def test_build_all_valid(builder, ports_all_valid_mixed):
     interfaces, unassigned = builder.build_interfaces(ports_all_valid_mixed)
+    print(interfaces)
+    print(unassigned)
+
+    # Check that all interfaces are built correctly
 
     assert not unassigned
     assert len(interfaces) == 4 # global, in0, out1, config

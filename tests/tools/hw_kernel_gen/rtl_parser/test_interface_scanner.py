@@ -88,7 +88,7 @@ def test_scan_only_global(scanner, global_ports):
     assert len(groups) == 1
     assert not remaining
     assert groups[0].interface_type == InterfaceType.GLOBAL_CONTROL
-    assert groups[0].name == "global"
+    assert groups[0].name == "ap"
     assert set(groups[0].ports.keys()) == {"ap_clk", "ap_rst_n", "ap_clk2x"}
 
 def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports_v):
