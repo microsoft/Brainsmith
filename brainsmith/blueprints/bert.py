@@ -137,12 +137,30 @@ def custom_step_loop_rolling(model, cfg):
         model_ir,
         pattern_rewrite_rules = [change_layers_to_function_calls]
     )
-    model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
-    print(f"Writing updated graph to {cfg.output_dir+'/loop-body-replaced.onnx'}")
-    onnx.save(model_proto, cfg.output_dir+'/loop-body-replaced.onnx')
 
-    # Loop rolling is not needed for this model
-    #model = model.transform(LoopRolling())
+    model_layers_replaced.functions[LoopBody.function.identifier()] = LoopBody.function
+    model_layers_replaced.graph.opset_imports['loop']=0
+
+    model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
+
+    model.model = model_proto
+
+    normalized_graph = pb.normalize_io_for_loop_rolling(model_layers_replaced.graph, LoopBody)
+
+    print(f"normalized graphs is layer {normalized_graph is model_layers_replaced.graph}")
+    onnxscript.ir.save(model_layers_replaced, "normalized.onnx")
+    LoopMatchPattern,nodes = LoopBody.build_function_match_pattern(normalized_graph)
+
+    loop_replace_pattern = pb.build_loop_replace_pattern(normalized_graph, LoopBody)
+
+    change_function_calls_to_loop = pattern.RewriteRule(
+        LoopMatchPattern,
+        loop_replace_pattern
+    )
+    rewrite_set = pattern.RewriteRuleSet([change_function_calls_to_loop])
+    count = rewrite_set.apply_to_model(model_layers_replaced, verbose=None)
+    print(f"Rolled {count} function calls into a loop operator")
+
     return model
 
 
