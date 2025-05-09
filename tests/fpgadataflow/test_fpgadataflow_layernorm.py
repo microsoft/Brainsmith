@@ -30,6 +30,7 @@ from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from brainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.convert_to_hw_layers import InferLayerNorm
 
 # Debugging dependencies, to remove
 import os
@@ -403,11 +404,9 @@ class TestLayerNorm(OpTest):
                 (dict(name='Y', elem_type=TensorProto.FLOAT, shape=ifm_dim), odt),
             ],
             nodes= [
-                dict(op_type="LayerNorm",
+                dict(op_type="LayerNormalization",
                     inputs=['X', 'Scale', 'Bias'],
                     outputs=['Y'],
-                    domain="brainsmith.custom_op.fpgadataflow",
-                    backend="fpgadataflow",
                     SIMD=simd,
                     preferred_impl_style="hls",
                     ifm_dim=ifm_dim,
@@ -417,7 +416,15 @@ class TestLayerNorm(OpTest):
                     outputDataType=odt,),
             ]
         )
-        return model
+        return self.apply_transforms(model, [ExpandNorms()])
+    
+        
+    # Overriding this provides OpTest with the transformation
+    # it needs to convert the above model to using a hardware
+    # version of layernorm.
+    @pytest.fixture
+    def infer_hw_transform(self):
+        return InferLayerNorm()
     
     # Overriding the default save_intermediate_models fixture
     # (which evaluates to false), so that each model step can
