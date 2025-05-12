@@ -15,11 +15,11 @@ import json
 from onnxsim import simplify
 import qonnx.custom_op.registry as registry
 from qonnx.transformation.general import (
-        SortCommutativeInputsInitializerLast, 
-        RemoveUnusedTensors, 
+        SortCommutativeInputsInitializerLast,
+        RemoveUnusedTensors,
         GiveReadableTensorNames,
         GiveUniqueNodeNames,
-        ConvertDivToMul 
+        ConvertDivToMul
 )
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
@@ -32,7 +32,7 @@ import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from brainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.expand_norms import ExpandNormsOnnxScript
 
 # Included for getting reference IO from model with head/tail removed
 import finn.core.onnx_exec as oxe
@@ -87,31 +87,31 @@ def custom_step_qonnx2finn(model, cfg):
 
     Then we convert the Div node to a Mul node with
     ConvertDivToMul :
-        
+
         SoftMax -> Mul(255) -> Quant (scale=1) -> Mul(1/255)
 
     Then we call ConvertQONNXtoFINN to get:
-        
+
         SoftMax -> Mul(255) -> MultiThreshold -> Mul(1/255)
 
     By having these steps we can have a scale factor of 1
-    in the Quant node, then we can deal with the leftover 
+    in the Quant node, then we can deal with the leftover
     mul nodes later in the streamlining_step streamlining it into
-    a MultiThreshold node. (see custom_streamlining_step below) 
+    a MultiThreshold node. (see custom_streamlining_step below)
 
     """
-    model = model.transform(ExpandNorms())
+    model = model.transform(ExpandNormsOnnxScript())
     #model = model.transform(ExtractQuantScaleZeroPt())
     model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
-    model = model.transform(ConvertQONNXtoFINN())
+    #model = model.transform(ConvertQONNXtoFINN())
     return model
 
 
 def custom_step_generate_reference_io(model, cfg):
     """
-    This step is to generate a reference IO pair for the 
-    onnx model where the head and the tail have been 
+    This step is to generate a reference IO pair for the
+    onnx model where the head and the tail have been
     chopped off.
     """
     input_m = model.graph.input[0]
@@ -124,7 +124,7 @@ def custom_step_generate_reference_io(model, cfg):
 
     y_ref = oxe.execute_onnx(model, input_t, True)
     np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
-    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref) 
+    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref)
     return model
 
 
@@ -138,7 +138,7 @@ def custom_streamlining_step(model, cfg):
 
     In particular, we need to move the Mul operation
     at the output of the QuantSoftMax lower in the graph
-    so that it has the option to be merged into a MultiThreshold 
+    so that it has the option to be merged into a MultiThreshold
     node. In particular:
 
         * MoveScalarMulPastMatMul : moves the Mul past the DynMatMul
@@ -162,8 +162,8 @@ def custom_streamlining_step(model, cfg):
 
 
 def custom_step_infer_hardware(model, cfg):
-    """ 
-    BERT custom step for infer hardware 
+    """
+    BERT custom step for infer hardware
 
     Because we have some custom operations in this plugin module we
     need a custom step for infering the hardware for those operations.
@@ -174,9 +174,9 @@ def custom_step_infer_hardware(model, cfg):
 
     However, we can also see some extra infer steps that
     are not part of the plugin. Some of these are currently
-    not handled by the default steps in FINN and need to be 
+    not handled by the default steps in FINN and need to be
     added here, for instace:
-        
+
         InferDuplicateStreamsLayer - is needed because we have
         need to have explicit fork nodes, the hardware gen
         cannot connect to the same stream twice, it needs to be
@@ -211,9 +211,9 @@ class ExtractShellIntegrationMetadata(Transformation):
             consumer = model.find_consumer(input_tensor.name)
             inst = registry.getCustomOp(consumer)
             instream = {}
-            instream['width'] = inst.get_instream_width() 
+            instream['width'] = inst.get_instream_width()
             instreams[input_tensor.name] = instream
-            instream['shape'] = inst.get_normal_input_shape() 
+            instream['shape'] = inst.get_normal_input_shape()
         self.md['insteams'] = instreams
 
         # Extract outstream widths
@@ -222,11 +222,11 @@ class ExtractShellIntegrationMetadata(Transformation):
             producer = model.find_producer(output_tensor.name)
             inst = registry.getCustomOp(producer)
             outstream = {}
-            outstream['width'] = inst.get_outstream_width() 
+            outstream['width'] = inst.get_outstream_width()
             outstreams[output_tensor.name] = outstream
             outstream['shape'] = inst.get_normal_output_shape()
         self.md['outsteams'] = outstreams
-    
+
         static_matmuls = {}
         for node in graph.node:
             if (node.op_type == "MVAU_rtl"):

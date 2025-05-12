@@ -109,7 +109,7 @@ class InferShuffle(Transformation):
                             loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
                             inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
                             SIMD=simd,
-                            
+
                             NumChannels=in_reshaped[-1]
                         )
                 new_node.attribute.extend([perm])

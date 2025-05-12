@@ -14,8 +14,67 @@ from qonnx.util.basic import get_by_name
 from qonnx.core.datatype import DataType
 
 
+
+import onnxscript
+from onnxscript.rewriter import pattern
+from onnxscript import ir
+import numpy as np
+
+def allones(value):
+    return np.all(value.const_value.numpy()==1)
+
+def ExpandNormsMatch(op, X, Scale, B):
+    return op.LayerNormalization(X, Scale, B)
+
+def ExpandNormsNoBiasMatch(op, X, Scale):
+    return op.LayerNormalization(X, Scale)
+
+def FuncLayerNorm(op, X):
+    node    = X.consumers()[0]
+    axis    = node.attributes["axis"]
+    epsilon = node.attributes["epsilon"]
+
+    return op.FuncLayerNorm(X, _domain="brainsmith.custom_op.general",
+                            backend="general",
+                            axis=axis,
+                            epsilon=epsilon)
+
+def ExpandNormsNoBiasRewrite(op, X, Scale):
+    if allones(Scale):
+        return FuncLayerNorm(op, X)
+    else:
+        return op.Mul(FuncLayerNorm(op, X), Scale)
+
+def ExpandNormsRewrite(op, X, Scale, B):
+    return op.Add(ExpandNormsNoBiasRewrite(op, X, Scale), B)
+
+
+
+class ExpandNormsOnnxScript(Transformation):
+
+    def apply(self, model):
+        self.model = model
+
+        rule0 = pattern.RewriteRule(
+            ExpandNormsMatch,
+            ExpandNormsRewrite
+        )
+        rule1 = pattern.RewriteRule(
+            ExpandNormsNoBiasMatch,
+            ExpandNormsNoBiasRewrite
+        )
+        ruleset = pattern.RewriteRuleSet([rule0, rule1])
+
+        rewritten_model = onnxscript.rewriter.rewrite(
+            model.model,
+            ruleset,
+        )
+
+        model.model = rewritten_model
+        return model, False
+
 class ExpandNorms(Transformation):
-    """Expand any standard LayerNorms/RMSNorms into the functional 
+    """Expand any standard LayerNorms/RMSNorms into the functional
     norm and Mul/Add nodes for affine scale and bias."""
 
     def __init__(self):
@@ -49,7 +108,7 @@ class ExpandNorms(Transformation):
                 # out_dtype = model.get_tensor_datatype(act_out)
                 # act_dtype = oh.np_dtype_to_tensor_dtype(np.dtype(in_dtype.to_numpy_dt()))
                 act_shape = model.get_tensor_shape(ln_act_in)
-                
+
                 # Create functional layernorm node
                 func_ln_node = oh.make_node(
                     "FuncLayerNorm",
@@ -70,12 +129,12 @@ class ExpandNorms(Transformation):
                     # Create new input tensor
                     scale_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(scale_act_in)
-                    
+
                     # Update previous output tensor
                     func_ln_node.output[0] = scale_act_in.name
                     # Create Mul node to replace scale
                     mul_node = oh.make_node("Mul", [scale_act_in.name, scale], [act_out])
-                    
+
                     model.set_tensor_datatype(scale_act_in.name, idt)
 
                 # Check if optional bias exists
@@ -91,7 +150,7 @@ class ExpandNorms(Transformation):
                         func_ln_node.output[0] = scale_act_in.name
                     # Create Add node to replace bias
                     add_node = oh.make_node("Add", [bias_act_in.name, bias], [act_out])
-                    
+
                     model.set_tensor_datatype(bias_act_in.name, wdt)
                 # else:
                 #     model.set_tensor_datatype(bias_act_in.name, wdt)
