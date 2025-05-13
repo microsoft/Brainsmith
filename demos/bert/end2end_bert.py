@@ -199,5 +199,6 @@ if __name__ == "__main__":
     args.board = "V80"
     args.verification_atol = 1e-1
     args.split_large_fifos = True
+    args.loop_body_hierarchy = ['encoder','encoder.layer.0']
 
     main(args)

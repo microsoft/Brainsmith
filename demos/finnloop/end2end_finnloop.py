@@ -89,12 +89,11 @@ class Args:
         self.save_intermediate = True
         self.num_hidden_layers = 5
         self.standalone_thresholds = True
-
-
+        self.loop_body_hierarchy = ['','layers.0']
 args = Args()
 
 m = onnx.load("onnx_model.onnx")
 
-forge('bert', m, args)
+forge('finnloop', m, args)
 
 print(output_tensor)
