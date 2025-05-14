@@ -73,9 +73,7 @@ def custom_step_extract_loop_body(model, cfg):
     BERT model. It is not a standard step in the FINN pipeline,
     but it is useful for this model.
     """
-    print("INFO: Loop body extraction is not needed for this model")
-    # Loop body extraction is not needed for this model
-    #model = model.transform(LoopBodyExtraction())
+    model = model.transform(FoldConstants())
 
     model_ir    = onnxscript.ir.serde.deserialize_model(model.model)
     graph       = model_ir.graph
@@ -98,12 +96,11 @@ def custom_step_extract_loop_body(model, cfg):
         node.metadata_props['pkg.torch.onnx.name_scopes'] = pred_node.metadata_props['pkg.torch.onnx.name_scopes']
         node.metadata_props['pkg.torch.onnx.class_hierarchy'] = pred_node.metadata_props['pkg.torch.onnx.class_hierarchy']
         assert(P.add_node(node))
-    layer_0_graph_view = gvu.bGraphView('bert-large-layer0', P.get_nodes(['encoder','encoder.layer.0']))
-    print(f"Layer 0 graph view: {len(layer_0_graph_view._nodes)}")
-    single_layer_0_model = onnxscript.ir.Model(layer_0_graph_view, ir_version=10)
-    proto = onnxscript.ir.serde.serialize_model(single_layer_0_model)
+    loop_body_graph_view = gvu.bGraphView(f'loop-body', P.get_nodes(cfg.loop_body_hierarchy))
+    print(f"Layer 0 graph view: {len(loop_body_graph_view._nodes)}")
+    loop_body_model = onnxscript.ir.Model(loop_body_graph_view, ir_version=10)
+    proto = onnxscript.ir.serde.serialize_model(loop_body_model)
     onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
-
     return model
 
 
@@ -160,7 +157,9 @@ def custom_step_loop_rolling(model, cfg):
     rewrite_set = pattern.RewriteRuleSet([change_function_calls_to_loop])
     count = rewrite_set.apply_to_model(model_layers_replaced, verbose=None)
     print(f"Rolled {count} function calls into a loop operator")
+    model.model = onnxscript.ir.serde.serialize_model(model_layers_replaced)
 
+    model = model.transform(FoldConstants())
     return model
 
 
@@ -285,6 +284,7 @@ def custom_step_infer_hardware(model, cfg):
         explictly duplicated.
 
     """
+    model = model.transform(to_hw.InferFinnLoopOp())
     model = model.transform(to_bs_hw.InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
@@ -478,13 +478,7 @@ def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
     model = model.transform(SetPumpedCompute())
     return model
 
-def custom_step_roll_loops(model, cfg):
-    """ Custom step to roll the loops in the BERT model """
-    print("INFO: custom_step_roll_loops")
-    #model = model.transform(LoopRolling())
-    return model
-
-BUILD_STEPS = [
+BUILD_BERT_STEPS = [
         # Cleanup and custom graph surgery
         custom_step_cleanup,
         custom_step_remove_head,
@@ -495,7 +489,7 @@ BUILD_STEPS = [
         custom_streamlining_step,
         custom_step_extract_loop_body,
         custom_step_loop_rolling,
-        #custom_step_infer_hardware,
+        custom_step_infer_hardware,
         #step_create_dataflow_partition,
         #step_specialize_layers,
         #step_target_fps_parallelization,
