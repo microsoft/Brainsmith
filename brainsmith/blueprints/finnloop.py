@@ -7,40 +7,6 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 
-import onnx
-import argparse
-import os
-import shutil
-import json
-from onnxsim import simplify
-import qonnx.custom_op.registry as registry
-from qonnx.transformation.general import (
-        SortCommutativeInputsInitializerLast,
-        RemoveUnusedTensors,
-        GiveReadableTensorNames,
-        GiveUniqueNodeNames,
-        ConvertDivToMul
-)
-from qonnx.transformation.remove import RemoveIdentityOps
-from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
-from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-from qonnx.transformation.fold_constants import FoldConstants
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from finn.builder.build_dataflow_config import DataflowOutputType
-import finn.transformation.streamline as absorb
-import finn.transformation.streamline.reorder as reorder
-from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from brainsmith.transformation.expand_norms import ExpandNorms
-
-# Included for getting reference IO from model with head/tail removed
-import finn.core.onnx_exec as oxe
-from qonnx.util.basic import gen_finn_dt_tensor
-from qonnx.core.datatype import DataType
-import numpy as np
-
-
 from brainsmith.blueprints.bert import (
     custom_step_cleanup,
     custom_step_qonnx2finn,
