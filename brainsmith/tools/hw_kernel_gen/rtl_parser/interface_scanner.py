@@ -90,7 +90,7 @@ class InterfaceScanner:
                 match = regex.match(port.name)
                 if match:
                     prefix = match.group("prefix")
-                    suffix = match.group("suffix").upper()
+                    suffix = match.group("suffix")
                     logger.warning(f"Matched '{port.name}' with prefix '{prefix}' and suffix '{suffix}'")
                     if not prefix:
                         prefix = "<NO_PREFIX>"

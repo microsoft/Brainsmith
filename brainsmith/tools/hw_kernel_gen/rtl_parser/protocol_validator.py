@@ -96,9 +96,10 @@ class ProtocolValidator:
     def _check_required_signals(self, group_ports: Dict[str, Port], required_spec: Dict[str, Dict]) -> Set[str]:
         """Checks if all required signals (keys) are present in the group's ports, and filters for any unexpected signals."""
         present_keys = {key.upper() for key in group_ports.keys()}
-        required_keys = {key.upper() for key, spec in required_spec.items() if spec.get("required", False)}
+        required_keys = {key.upper() for key, spec in required_spec.items() if spec["required"] is True}
+        optional_keys = {key.upper() for key, spec in required_spec.items() if spec["required"] is False}
         missing = required_keys - present_keys
-        unexpected = present_keys - required_keys
+        unexpected = present_keys - required_keys - optional_keys
         return missing, unexpected
 
     def validate_global_control(self, group: PortGroup) -> ValidationResult:
@@ -159,12 +160,18 @@ class ProtocolValidator:
         
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, AXI_LITE_SUFFIXES)
-        if unexpected:
-            return ValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
-        has_write_channel = not any(sig in AXI_LITE_WRITE_SUFFIXES for sig in missing)
-        has_read_channel = not any(sig in AXI_LITE_READ_SUFFIXES for sig in missing)
+        has_write_channel = any(sig not in missing for sig in AXI_LITE_WRITE_SUFFIXES)
+        has_read_channel = any(sig not in missing for sig in AXI_LITE_READ_SUFFIXES)
+        logger.error(f"Missing signals: {missing}, unexpected signals: {unexpected}")
+        logger.error(f"Has write channel: {has_write_channel}, has read channel: {has_read_channel}")
+        if has_write_channel and any(sig in AXI_LITE_WRITE_SUFFIXES for sig in missing):
+            return ValidationResult(False, f"AXI-Lite: Partial write, missing required signal(s) in '{group.name}': {missing}")
+        if has_read_channel and any(sig in AXI_LITE_READ_SUFFIXES for sig in missing):
+            return ValidationResult(False, f"AXI-Lite: Partial read, missing required signal(s) in '{group.name}': {missing}")
         if not has_write_channel and not has_read_channel:
             return ValidationResult(False, f"AXI-Lite: Not enough valid signals in '{group.name}' for read or write.")
+        if unexpected:
+            return ValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
         direction = all(

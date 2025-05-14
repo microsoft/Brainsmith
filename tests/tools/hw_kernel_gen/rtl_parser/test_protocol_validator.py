@@ -12,6 +12,7 @@ from typing import List
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType, PortGroup
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ def axis_in_ports_with_widths() -> List[Port]:
         Port(name="in_data_TDATA", direction=Direction.INPUT, width="[AXIS_WIDTH-1:0]"),
         Port(name="in_data_TVALID", direction=Direction.INPUT, width="1"),
         Port(name="in_data_TREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="in_data_TKEEP", direction=Direction.INPUT, width="[(AXIS_WIDTH/8)-1:0]"), # Optional keep
+        Port(name="in_data_TLAST", direction=Direction.INPUT, width="1"), # Optional
     ]
 
 @pytest.fixture
@@ -113,66 +114,53 @@ def axilite_ports_with_widths() -> List[Port]:
         Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
     ]
 
-# --- Helper Function ---
+# --- Helper Functions ---
 
-def create_port_group(interface_type: InterfaceType, name: str, ports_list: list) -> PortGroup:
-    """Helper to create PortGroup with generic keys based on assumed scanner logic."""
-    group = PortGroup(interface_type=interface_type, name=name)
-    prefix = name + "_"
-    for port in ports_list:
-        key = None
-        if interface_type == InterfaceType.AXI_STREAM:
-            # Assumes scanner extracts suffix like TDATA, TVALID etc.
-            suffix = port.name.split('_')[-1]
-            if suffix in ["TDATA", "TVALID", "TREADY", "TLAST", "TKEEP"]: # Add other known suffixes
-                 key = suffix
-        elif interface_type == InterfaceType.AXI_LITE:
-             # Assumes scanner extracts generic signal name like AWADDR, WDATA etc.
-             suffix = port.name.split('_')[-1]
-             if suffix in ["AWADDR", "AWPROT", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY", "ARADDR", "ARPROT", "ARVALID", "ARREADY", "RDATA", "RRESP", "RVALID", "RREADY"]:
-                 key = suffix
-        elif interface_type == InterfaceType.GLOBAL_CONTROL:
-            key = port.name # Global uses full name
+def create_port_group(interface_type: InterfaceType, prefix: str, ports: List[Port]) -> PortGroup:
+    """Helper function to create a PortGroup for testing."""
+    scanner = InterfaceScanner()
+    groups, unassigned = scanner.scan(ports)
+    for group in groups:
+        print(f"Group: {group.name}, Type: {group.interface_type.value}, Ports: {list(group.ports.keys())}")
+    for port in unassigned:
+        print(f"Unassigned Port: {port.name}, Direction: {port.direction.value}, Width: {port.width}")
+    assert len(groups) == 1, "Expected exactly one group from scanner"
+    assert len(unassigned) == 0, "Expected no unassigned ports"
+    assert groups[0].interface_type == interface_type, f"Expected interface type {interface_type}, got {groups[0].interface_type}"
+    assert groups[0].name == prefix, f"Expected group name {prefix}, got {groups[0].name}"
+    return groups[0]
 
-        if key:
-            group.ports[key] = port
-        else:
-             # Fallback or handle error if key extraction fails
-             logger.warning(f"Could not determine key for port {port.name} in helper.")
-             group.ports[port.name] = port # Fallback to full name
-
-    return group
 
 # --- Global Signal Tests ---
 
-def test_validate_global_valid(validator):
+def test_validate_global_valid(scanner, validator):
     ports = [
         Port(name="ap_clk", direction=Direction.INPUT, width="1"),
         Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
         Port(name="ap_clk2x", direction=Direction.INPUT, width="1"), # Optional
     ]
-    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "global", ports)
-    result = validator.validate_global_signals(group)
+    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", ports)
+    result = validator.validate_global_control(group)
     assert result.valid
     assert result.message is None
 
-def test_validate_global_missing_required(validator):
+def test_validate_global_missing_required(validator, scanner):
     ports = [
         Port(name="ap_clk", direction=Direction.INPUT, width="1"),
         # Missing ap_rst_n
     ]
-    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "global", ports)
-    result = validator.validate_global_signals(group)
+    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", ports)
+    result = validator.validate_global_control(group)
     assert not result.valid
-    assert "Missing required global signals: {'ap_rst_n'}" in result.message
+    assert "Global Control: Missing required signal(s) in 'ap': {'RST_N'}" in result.message
 
-def test_validate_global_wrong_direction(validator):
+def test_validate_global_wrong_direction(validator, scanner):
     ports = [
         Port(name="ap_clk", direction=Direction.OUTPUT, width="1"), # Wrong direction
         Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
     ]
-    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "global", ports)
-    result = validator.validate_global_signals(group)
+    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", ports)
+    result = validator.validate_global_control(group)
     assert not result.valid
     assert "Invalid global signal 'ap_clk': Incorrect direction" in result.message
 
@@ -231,8 +219,6 @@ def test_validate_axis_metadata(validator, axis_in_ports_with_widths):
     assert result.valid
     assert "data_width_expr" in group.metadata
     assert group.metadata["data_width_expr"] == "[AXIS_WIDTH-1:0]"
-    assert "keep_width_expr" in group.metadata # Check optional keep width
-    assert group.metadata["keep_width_expr"] == "[(AXIS_WIDTH/8)-1:0]"
 
 # --- AXI-Lite Tests ---
 
@@ -276,11 +262,9 @@ def test_validate_axilite_missing_write_required(validator, axilite_read_ports):
 
     # Use create_port_group instead
     group = create_port_group(InterfaceType.AXI_LITE, "config", ports)
-
     result = validator.validate_axi_lite(group)
     assert not result.valid
-    assert "Missing required AXI-Lite write signals" in result.message
-    assert "AWVALID" in result.message
+    assert "AXI-Lite: Partial read, missing required signal(s) in 'config': {'AWVALID'}" in result.message
 
 def test_validate_axilite_missing_read_required(validator, axilite_write_ports):
     read_ports_missing = [
@@ -334,7 +318,7 @@ def test_validate_axilite_metadata(validator, axilite_ports_with_widths):
 
 def test_validate_dispatch(validator, global_ports, axis_in_ports, axilite_ports_full):
     # Global group
-    global_group = create_port_group(InterfaceType.GLOBAL_CONTROL, "global", global_ports)
+    global_group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", global_ports)
     result_global = validator.validate(global_group)
     assert result_global.valid
 

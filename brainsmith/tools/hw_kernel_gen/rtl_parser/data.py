@@ -138,8 +138,8 @@ class PortGroup:
         """
         if key is None:
             key = port.name
-    # if key in self.ports:
-        # logger.warning(f"Overwriting port key '{key}' in PortGroup '{self.name}'")
+        if key in self.ports:
+            logger.warning(f"Overwriting port key '{key}' in PortGroup '{self.name}'")
         self.ports[key] = port
 
 # --- Validated/Complex Structures ---

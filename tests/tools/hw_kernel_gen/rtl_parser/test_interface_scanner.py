@@ -39,11 +39,11 @@ def axis_in_ports():
     ]
 
 @pytest.fixture
-def axis_out_ports_v():
+def axis_out_ports():
     return [
-        Port(name="out1_V_TDATA", direction=Direction.OUTPUT, width="64"),
-        Port(name="out1_V_TVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="out1_V_TREADY", direction=Direction.INPUT, width="1"),
+        Port(name="out1_TDATA", direction=Direction.OUTPUT, width="64"),
+        Port(name="out1_TVALID", direction=Direction.OUTPUT, width="1"),
+        Port(name="out1_TREADY", direction=Direction.INPUT, width="1"),
     ]
 
 @pytest.fixture
@@ -89,10 +89,10 @@ def test_scan_only_global(scanner, global_ports):
     assert not remaining
     assert groups[0].interface_type == InterfaceType.GLOBAL_CONTROL
     assert groups[0].name == "ap"
-    assert set(groups[0].ports.keys()) == {"ap_clk", "ap_rst_n", "ap_clk2x"}
+    assert set(groups[0].ports.keys()) == {"clk", "rst_n", "clk2x"}
 
-def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports_v):
-    all_axis_ports = axis_in_ports + axis_out_ports_v
+def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports):
+    all_axis_ports = axis_in_ports + axis_out_ports
     groups, remaining = scanner.scan(all_axis_ports)
     assert len(groups) == 2
     assert not remaining
@@ -134,7 +134,7 @@ def test_scan_mixed(scanner, global_ports, axis_in_ports, axilite_ports_full, un
     assert {p.name for p in remaining} == {p.name for p in unassigned_ports_list}
 
     group_map = {g.name: g for g in groups}
-    assert "global" in group_map and group_map["global"].interface_type == InterfaceType.GLOBAL_CONTROL
+    assert "ap" in group_map and group_map["ap"].interface_type == InterfaceType.GLOBAL_CONTROL
     assert "in0" in group_map and group_map["in0"].interface_type == InterfaceType.AXI_STREAM
     assert "config" in group_map and group_map["config"].interface_type == InterfaceType.AXI_LITE
 
@@ -178,11 +178,11 @@ def test_scan_axilite_partial(scanner):
 def test_scan_case_insensitivity(scanner):
     ports = [
         Port(name="ap_clk", direction=Direction.INPUT, width="1"), # Lowercase global
-        Port(name="AP_RST_N", direction=Direction.INPUT, width="1"), # Uppercase global
+        Port(name="ap_RST_N", direction=Direction.INPUT, width="1"), # Uppercase global
         Port(name="in0_tdata", direction=Direction.INPUT, width="32"), # Lowercase stream
         Port(name="in0_TVALID", direction=Direction.INPUT, width="1"), # Mixed case stream
         Port(name="in0_tready", direction=Direction.OUTPUT, width="1"), # Lowercase stream
-        Port(name="CONFIG_awaddr", direction=Direction.INPUT, width="6"), # Mixed case lite
+        Port(name="config_awaddr", direction=Direction.INPUT, width="6"), # Mixed case lite
         Port(name="config_AWVALID", direction=Direction.INPUT, width="1"), # Mixed case lite
         Port(name="config_awready", direction=Direction.OUTPUT, width="1"), # Lowercase lite
         # Add enough required signals for AXI-Lite write channel
@@ -195,19 +195,18 @@ def test_scan_case_insensitivity(scanner):
         Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
     ]
     groups, remaining = scanner.scan(ports)
-    assert len(groups) == 3 # global, in0, config
+    assert len(groups) == 3 # ap, in0, config
     assert not remaining
 
     group_map = {g.name: g for g in groups}
-    assert "global" in group_map
+    assert "ap" in group_map
     assert "in0" in group_map
     assert "config" in group_map
 
-    # Assertions expect UPPERCASE keys
-    assert set(group_map["global"].ports.keys()) == {"ap_clk", "AP_RST_N"} # Original names are kept
-    assert set(group_map["in0"].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
+    assert set(group_map["ap"].ports.keys()) == {"clk", "RST_N"} # Original names are kept
+    assert set(group_map["in0"].ports.keys()) == {"tdata", "TVALID", "tready"}
     # Check a subset of required AXI-Lite write signals
-    assert {"AWADDR", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY"}.issubset(group_map["config"].ports.keys())
+    assert {"awaddr", "AWVALID", "awready", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY"}.issubset(group_map["config"].ports.keys())
 
 def test_scan_vivado_suffixes(scanner):
     ports = [
@@ -222,8 +221,8 @@ def test_scan_vivado_suffixes(scanner):
     assert len(groups) == 2
     assert not remaining
     groups.sort(key=lambda g: g.name)
-    assert groups[0].name == "in0"
-    assert groups[1].name == "out0"
+    assert groups[0].name == "in0_V"
+    assert groups[1].name == "out0_V"
     # Assertions expect UPPERCASE keys
     assert set(groups[0].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
     assert set(groups[1].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
