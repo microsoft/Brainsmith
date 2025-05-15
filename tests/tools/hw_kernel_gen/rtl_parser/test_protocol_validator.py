@@ -162,7 +162,7 @@ def test_validate_global_wrong_direction(validator, scanner):
     group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", ports)
     result = validator.validate_global_control(group)
     assert not result.valid
-    assert "Invalid global signal 'ap_clk': Incorrect direction" in result.message
+    assert "Global Control: Incorrect direction in 'ap'" in result.message
 
 # --- AXI-Stream Tests ---
 
@@ -264,7 +264,7 @@ def test_validate_axilite_missing_write_required(validator, axilite_read_ports):
     group = create_port_group(InterfaceType.AXI_LITE, "config", ports)
     result = validator.validate_axi_lite(group)
     assert not result.valid
-    assert "AXI-Lite: Partial read, missing required signal(s) in 'config': {'AWVALID'}" in result.message
+    assert "AXI-Lite: Partial write, missing required signal(s) in 'config': {'AWVALID'}" in result.message
 
 def test_validate_axilite_missing_read_required(validator, axilite_write_ports):
     read_ports_missing = [
@@ -280,8 +280,8 @@ def test_validate_axilite_missing_read_required(validator, axilite_write_ports):
 
     result = validator.validate_axi_lite(group)
     assert not result.valid
-    assert "Missing required AXI-Lite read signals" in result.message
-    assert "ARVALID" in result.message # Assuming ARVALID is the missing one
+    assert "AXI-Lite: Partial read, missing required signal(s) in 'config':" in result.message
+    assert "ARVALID" in result.message
 
 def test_validate_axilite_wrong_direction(validator, axilite_ports_full):
     # Modify one port's direction
@@ -298,21 +298,25 @@ def test_validate_axilite_wrong_direction(validator, axilite_ports_full):
 
     result = validator.validate_axi_lite(group)
     assert not result.valid
-    assert "Invalid AXI-Lite signal 'config_AWREADY'" in result.message
-    assert "Incorrect direction" in result.message
+    assert "AXI-Lite: Incorrect direction in 'config': ['AWREADY (expected: Direction.OUTPUT, got: Direction.INPUT)']" in result.message
 
 def test_validate_axilite_metadata(validator, axilite_ports_with_widths):
     """Test that AXI-Lite validation extracts width metadata."""
     group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_with_widths)
     result = validator.validate_axi_lite(group)
+    print(group.metadata.keys())
+    for g in group.metadata:
+        print(f"Metadata: {g}")
+        for m in group.metadata[g]:
+            print(f"  {m}: {group.metadata[g][m]}")
     assert result.valid
-    assert "addr_width_expr" in group.metadata
-    assert group.metadata["addr_width_expr"] == "[AXIL_ADDR_WIDTH-1:0]"
-    assert "data_width_expr" in group.metadata
-    assert group.metadata["data_width_expr"] == "[AXIL_DATA_WIDTH-1:0]"
-    assert "strb_width_expr" in group.metadata
-    assert group.metadata["strb_width_expr"] == "[(AXIL_DATA_WIDTH/8)-1:0]"
-
+    assert "write_width_expr" in group.metadata
+    assert group.metadata["write_width_expr"]['addr'] == "[AXIL_ADDR_WIDTH-1:0]"
+    assert group.metadata["write_width_expr"]['data'] == "[AXIL_DATA_WIDTH-1:0]"
+    assert group.metadata["write_width_expr"]['strobe'] == "[(AXIL_DATA_WIDTH/8)-1:0]"
+    assert "read_width_expr" in group.metadata
+    assert group.metadata["read_width_expr"]['addr'] == "[AXIL_ADDR_WIDTH-1:0]"
+    assert group.metadata["read_width_expr"]['data'] == "[AXIL_DATA_WIDTH-1:0]"
 
 # --- General Validate Dispatch Test ---
 
@@ -336,4 +340,4 @@ def test_validate_dispatch(validator, global_ports, axis_in_ports, axilite_ports
     # Unknown group
     unknown_group = PortGroup(interface_type=InterfaceType.UNKNOWN, name="unknown", ports={"foo": Port("foo", Direction.INPUT)})
     result_unknown = validator.validate(unknown_group)
-    assert result_unknown.valid # Should skip validation
+    assert not result_unknown.valid # Should be invalid

@@ -114,13 +114,15 @@ class ProtocolValidator:
             return ValidationResult(False, f"Global Control: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
-        direction = all(
-            port.direction == GLOBAL_SIGNAL_SUFFIXES[port_name]["direction"]
+        incorrect_ports = [
+            f"{port_name} (expected: {GLOBAL_SIGNAL_SUFFIXES[port_name]['direction']}, got: {port.direction})"
             for port_name, port in group.ports.items()
-            if port_name in GLOBAL_SIGNAL_SUFFIXES
-        )
+            if port_name in GLOBAL_SIGNAL_SUFFIXES and port.direction != GLOBAL_SIGNAL_SUFFIXES[port_name]["direction"]
+        ]
+        
+        direction = len(incorrect_ports) == 0
         if not direction:
-            return ValidationResult(False, f"Global Control: Incorrect direction in '{group.name}'")
+            return ValidationResult(False, f"Global Control: Incorrect direction in '{group.name}': {incorrect_ports}")
 
         logger.debug(f"  Validation successful for Global Control group '{group.name}'")
         return ValidationResult(True)
@@ -137,6 +139,13 @@ class ProtocolValidator:
             return ValidationResult(False, f"AXI-Stream: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
+        incorrect_ports = []
+        for port_name, port in group.ports.items():
+            if port_name in AXI_STREAM_SUFFIXES:
+                expected_dir = AXI_STREAM_SUFFIXES[port_name]["direction"]
+                if port.direction != expected_dir:
+                    incorrect_ports.append(f"{port_name} (expected: {expected_dir}, got: {port.direction})")
+        
         direction = [
             port.direction == AXI_STREAM_SUFFIXES[port_name]["direction"]
             for port_name, port in group.ports.items()
@@ -145,7 +154,7 @@ class ProtocolValidator:
         forward = all(direction)
         backward = not any(direction)
         if not (forward or backward):
-            return ValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}'")
+            return ValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
         group.metadata['direction'] = Direction.INPUT if forward else Direction.OUTPUT
 
         # Extract metadata
@@ -160,10 +169,8 @@ class ProtocolValidator:
         
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, AXI_LITE_SUFFIXES)
-        has_write_channel = any(sig not in missing for sig in AXI_LITE_WRITE_SUFFIXES)
-        has_read_channel = any(sig not in missing for sig in AXI_LITE_READ_SUFFIXES)
-        logger.error(f"Missing signals: {missing}, unexpected signals: {unexpected}")
-        logger.error(f"Has write channel: {has_write_channel}, has read channel: {has_read_channel}")
+        has_write_channel = any(AXI_LITE_WRITE_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_WRITE_SUFFIXES)
+        has_read_channel = any(AXI_LITE_READ_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_READ_SUFFIXES)
         if has_write_channel and any(sig in AXI_LITE_WRITE_SUFFIXES for sig in missing):
             return ValidationResult(False, f"AXI-Lite: Partial write, missing required signal(s) in '{group.name}': {missing}")
         if has_read_channel and any(sig in AXI_LITE_READ_SUFFIXES for sig in missing):
@@ -174,28 +181,32 @@ class ProtocolValidator:
             return ValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
-        direction = all(
-            port.direction == AXI_LITE_SUFFIXES[port_name]["direction"]
+        incorrect_ports = [
+            f"{port_name} (expected: {AXI_LITE_SUFFIXES[port_name]['direction']}, got: {port.direction})"
             for port_name, port in group.ports.items()
-            if port_name in AXI_LITE_SUFFIXES
-        )
+            if port_name in AXI_LITE_SUFFIXES and port.direction != AXI_LITE_SUFFIXES[port_name]["direction"]
+        ]
+        
+        direction = len(incorrect_ports) == 0
         if not direction:
-            return ValidationResult(False, f"AXI-Lite: Incorrect direction in '{group.name}'")
+            return ValidationResult(False, f"AXI-Lite: Incorrect direction in '{group.name}': {incorrect_ports}")
+
+        # TODO: Add checks for response signal widths
 
         # Extract metadata
         if has_write_channel:
-            group.metadata['write_channel'] = {
-                "AWADDR": group.ports.get("AWADDR"),
-                "WDATA": group.ports.get("WDATA"),
-                "WSTRB": group.ports.get("WSTRB"),
-                "BRESP": group.ports.get("BRESP"),
-
+            # Validate static channel sizes
+            group.metadata['write_width_expr'] = {
+                "addr": group.ports.get("AWADDR").width,
+                "data": group.ports.get("WDATA").width,
+                "strobe": group.ports.get("WSTRB").width,
             }
+            # TODO: Add robust WSTRB width support, allowing it to be better defined by a local param or standard
         if has_read_channel:
-            group.metadata['read_channel'] = {
-                "ARADDR": group.ports.get("ARADDR"),
-                "RDATA": group.ports.get("RDATA"),
-                "RRESP": group.ports.get("RRESP"),
+            # Validate static channel sizes
+            group.metadata['read_width_expr'] = {
+                "addr": group.ports.get("ARADDR").width,
+                "data": group.ports.get("RDATA").width
             }
 
         logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")

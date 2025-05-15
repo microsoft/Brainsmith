@@ -266,7 +266,6 @@ class RTLParser:
 
         # 1. Call self.interface_builder.build_interfaces(ports)
         try:
-            # validated_interfaces, unassigned_ports = self.interface_builder.build_interfaces(self.ports)
             self.interfaces, unassigned_ports = self.interface_builder.build_interfaces(self.ports)
             logger.info(f"Interface analysis complete. Found {len(self.interfaces)} valid interfaces.")
         except Exception as e:

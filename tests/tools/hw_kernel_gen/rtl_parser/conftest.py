@@ -10,6 +10,7 @@
 import pytest
 import logging
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 
 # Import all fixtures from test_fixtures.py
 from .test_fixtures import (  # noqa: F401 (imported but unused)
@@ -20,7 +21,8 @@ from .test_fixtures import (  # noqa: F401 (imported but unused)
     axi_stream_out_ports,
     axilite_config_ports,
     valid_module_content,
-    valid_module_placeholder_params
+    valid_module_placeholder_params,
+    scanner
 )
 
 logger = logging.getLogger(__name__)

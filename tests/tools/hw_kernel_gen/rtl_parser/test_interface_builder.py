@@ -78,29 +78,31 @@ def ports_with_unassigned():
 
 def test_build_all_valid(builder, ports_all_valid_mixed):
     interfaces, unassigned = builder.build_interfaces(ports_all_valid_mixed)
-    print(interfaces)
-    print(unassigned)
+    for interface in interfaces.values():
+        print(f"Interface: {interface.name}, Type: {interface.type}, Ports: {[p for p in interface.ports]}")
+    for port in unassigned:
+        print(f"Unassigned Port: {port.name}")
 
     # Check that all interfaces are built correctly
 
     assert not unassigned
-    assert len(interfaces) == 4 # global, in0, out1, config
+    assert len(interfaces) == 4 # ap, in0, out1_V, config
 
-    assert "global" in interfaces
-    assert interfaces["global"].type == InterfaceType.GLOBAL_CONTROL
-    assert len(interfaces["global"].ports) == 2
+    assert "ap" in interfaces
+    assert interfaces["ap"].type == InterfaceType.GLOBAL_CONTROL
+    assert len(interfaces["ap"].ports) == 2
 
     assert "in0" in interfaces
     assert interfaces["in0"].type == InterfaceType.AXI_STREAM
     assert len(interfaces["in0"].ports) == 3 # TDATA, TVALID, TREADY
 
-    assert "out1" in interfaces # Note: scanner extracts prefix as 'out1_V', builder uses it
-    assert interfaces["out1"].type == InterfaceType.AXI_STREAM
-    assert len(interfaces["out1"].ports) == 3 # TDATA, TVALID, TREADY
+    assert "out1_V" in interfaces
+    assert interfaces["out1_V"].type == InterfaceType.AXI_STREAM
+    assert len(interfaces["out1_V"].ports) == 3 # TDATA, TVALID, TREADY
 
     assert "config" in interfaces
     assert interfaces["config"].type == InterfaceType.AXI_LITE
-    assert len(interfaces["config"].ports) == 11 # Write channel only
+    assert len(interfaces["config"].ports) == 10 # Write channel only
 
     # Check validation status
     for iface in interfaces.values():
@@ -110,8 +112,8 @@ def test_build_with_invalid_group(builder, ports_with_invalid_axis, caplog):
     caplog.set_level(logging.WARNING)
     interfaces, unassigned = builder.build_interfaces(ports_with_invalid_axis)
 
-    assert len(interfaces) == 2 # global, out1
-    assert "global" in interfaces
+    assert len(interfaces) == 2 # ap, out1
+    assert "ap" in interfaces
     assert "out1" in interfaces
     assert "in0" not in interfaces # Should fail validation
 
@@ -120,15 +122,15 @@ def test_build_with_invalid_group(builder, ports_with_invalid_axis, caplog):
     assert unassigned_names == {"in0_TDATA", "in0_TVALID"}
 
     # Check logs for warning
-    assert "Validation failed for potential interface 'in0' (axis)" in caplog.text
-    assert "Missing required AXI-Stream signals" in caplog.text
+    assert "Validation failed for potential interface 'in0' (axistream)" in caplog.text
+    assert "Missing required signal(s) in 'in0': {'TREADY'}" in caplog.text
 
 def test_build_with_unassigned(builder, ports_with_unassigned, caplog):
     caplog.set_level(logging.WARNING) # Ensure warnings are captured if any
     interfaces, unassigned = builder.build_interfaces(ports_with_unassigned)
 
-    assert len(interfaces) == 2 # global, in0
-    assert "global" in interfaces
+    assert len(interfaces) == 2 # ap, in0
+    assert "ap" in interfaces
     assert "in0" in interfaces
 
     assert len(unassigned) == 2
@@ -158,7 +160,7 @@ def test_build_debug_logging(builder_debug, ports_with_invalid_axis, caplog):
     builder_debug.build_interfaces(ports_with_invalid_axis)
 
     # Check for specific debug messages
-    assert "Successfully validated and built interface: global (global)" in caplog.text
-    assert "Successfully validated and built interface: out1 (axis)" in caplog.text
-    assert "Validation failed for potential interface 'in0' (axis)" in caplog.text
+    assert "Successfully validated and built interface: ap (global)" in caplog.text
+    assert "Successfully validated and built interface: out1 (axistream)" in caplog.text
+    assert "Validation failed for potential interface 'in0' (axistream)" in caplog.text
     assert "Ports from failed group 'in0': ['in0_TDATA', 'in0_TVALID']" in caplog.text

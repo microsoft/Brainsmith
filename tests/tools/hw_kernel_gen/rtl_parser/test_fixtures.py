@@ -15,6 +15,7 @@ import logging
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType, PortGroup
+from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,6 @@ def valid_module_placeholder_params():
 {VALID_MODULE_BODY}
     """
 
-
 # Common port fixtures that can be reused across tests
 @pytest.fixture
 def global_ports():
@@ -197,3 +197,16 @@ def axilite_config_ports():
         Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
         Port(name="config_BREADY", direction=Direction.INPUT, width="1")
     ]
+
+@pytest.fixture
+def scanner():
+    """Provides an InterfaceScanner instance for tests in this directory."""
+    logger.info("Setting up InterfaceScanner fixture")
+    try:
+        scanner_instance = InterfaceScanner()
+        logger.info("InterfaceScanner fixture created successfully.")
+    except Exception as e:
+        logger.error(f"Failed to create InterfaceScanner fixture: {e}", exc_info=True)
+        pytest.fail(f"Failed to create InterfaceScanner fixture: {e}")
+
+    return scanner_instance
