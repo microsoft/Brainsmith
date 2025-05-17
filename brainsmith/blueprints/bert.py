@@ -201,7 +201,7 @@ def custom_step_qonnx2finn(model, cfg):
 
     """
     model = model.transform(ExpandNorms())
-    model = model.transform(ExtractQuantScaleZeroPt())
+    #model = model.transform(ExtractQuantScaleZeroPt())
     model = model.transform(FoldConstants())
     model = model.transform(ConvertDivToMul())
     model = model.transform(ConvertQONNXtoFINN())
@@ -284,15 +284,51 @@ def custom_step_infer_hardware(model, cfg):
         explictly duplicated.
 
     """
+
     model = model.transform(to_hw.InferFinnLoopOp())
-    model = model.transform(to_bs_hw.InferLayerNorm())
-    model = model.transform(to_hw.InferDuplicateStreamsLayer())
-    model = model.transform(to_hw.InferElementwiseBinaryOperation())
-    model = model.transform(to_bs_hw.InferShuffle())
+    custom_opset = onnx.OperatorSetIdProto()
+    custom_opset.version = 0
+    custom_opset.domain = "qonnx.custom_op.general"
+    model.model.opset_import.append(custom_opset)
+    custom_opset = onnx.OperatorSetIdProto()
+    custom_opset.version = 1
+    custom_opset.domain = "brainsmith.custom_op.general"
+
+    model.model.opset_import.pop(1)
+    model.model.functions.pop(0)
+
+
+    model.model.opset_import.append(custom_opset)
+    onnx.checker.check_model(model.model)
+    print("model passes checker")
+
+    inst = registry.getCustomOp(model.graph.node[0])
+    body = inst.get_nodeattr("body")
+    custom_opset = onnx.OperatorSetIdProto()
+    custom_opset.version = 0
+    custom_opset.domain = "qonnx.custom_op.general"
+    body.model.opset_import.append(custom_opset)
+    custom_opset = onnx.OperatorSetIdProto()
+    custom_opset.version = 1
+    custom_opset.domain = "brainsmith.custom_op.general"
+    body.model.opset_import.append(custom_opset)
+    body.model.opset_import[0].version = 18
+    print("checking body")
+    onnx.checker.check_model(body.model)
+    print("body passes checker")
+
+    body = body.transform(to_bs_hw.InferLayerNorm())
+    body = body.transform(to_hw.InferDuplicateStreamsLayer())
+    body = body.transform(to_hw.InferElementwiseBinaryOperation())
+    body = body.transform(to_bs_hw.InferShuffle())
     #model = model.transform(to_bs_hw.InferQuantSoftmax())
-    model = model.transform(to_bs_hw.InferHWSoftmax())
-    model = model.transform(to_hw.InferThresholdingLayer())
-    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
+    body = body.transform(to_bs_hw.InferHWSoftmax())
+    body = body.transform(to_hw.InferThresholdingLayer())
+    body = body.transform(to_hw.InferQuantizedMatrixVectorActivation())
+
+    inst.set_nodeattr("body", body.model.graph)
+
+    model.save("new_body_graph.onnx")
     return model
 
 
@@ -432,6 +468,7 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
+    onnx.checker.check_model(model.model)
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
@@ -485,7 +522,7 @@ BUILD_BERT_STEPS = [
         custom_step_remove_tail,
         custom_step_qonnx2finn,
 
-        custom_step_generate_reference_io,
+        #custom_step_generate_reference_io,
         custom_streamlining_step,
         custom_step_extract_loop_body,
         custom_step_loop_rolling,
