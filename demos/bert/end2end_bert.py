@@ -143,6 +143,13 @@ def gen_initial_bert_model(
     print(f"elapsed qonnx export time {(end_time-start_time)/60} mins")
     print(f"QOnnx export done.")
     print(f"Exported model to {outfile}")
+    model = onnx.load(outfile)
+    custom_opset = onnx.OperatorSetIdProto()
+    custom_opset.version = 0
+    custom_opset.domain = "qonnx.custom_op.general"
+    model.opset_import.append(custom_opset)
+    onnx.save_model(model, outfile)
+
 
 def main(args):
     # TODO: Replace this "save and delete" with proper optional saving
