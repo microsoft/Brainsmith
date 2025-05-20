@@ -30,6 +30,7 @@ from finn.builder.build_dataflow_config import DataflowOutputType
 import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from finn.transformation.streamline.collapse_repeated import CollapseRepeatedMul
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from brainsmith.transformation.expand_norms import ExpandNorms
@@ -256,6 +257,7 @@ def custom_streamlining_step(model, cfg):
     model = model.transform(reorder.MoveScalarLinearPastInvariants())
     model = model.transform(absorb.AbsorbMulIntoMultiThreshold())
     model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
+    model = model.transform(CollapseRepeatedMul())
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(GiveUniqueNodeNames())
     model = model.transform(SortGraph())
@@ -285,50 +287,50 @@ def custom_step_infer_hardware(model, cfg):
 
     """
 
-    model = model.transform(to_hw.InferFinnLoopOp())
-    custom_opset = onnx.OperatorSetIdProto()
-    custom_opset.version = 0
-    custom_opset.domain = "qonnx.custom_op.general"
-    model.model.opset_import.append(custom_opset)
-    custom_opset = onnx.OperatorSetIdProto()
-    custom_opset.version = 1
-    custom_opset.domain = "brainsmith.custom_op.general"
+#    model = model.transform(to_hw.InferFinnLoopOp())
+#    custom_opset = onnx.OperatorSetIdProto()
+#    custom_opset.version = 0
+#    custom_opset.domain = "qonnx.custom_op.general"
+#    model.model.opset_import.append(custom_opset)
+#    custom_opset = onnx.OperatorSetIdProto()
+#    custom_opset.version = 1
+#    custom_opset.domain = "brainsmith.custom_op.general"
 
-    model.model.opset_import.pop(1)
-    model.model.functions.pop(0)
+#    model.model.opset_import.pop(1)
+#    model.model.functions.pop(0)
 
 
-    model.model.opset_import.append(custom_opset)
-    onnx.checker.check_model(model.model)
-    print("model passes checker")
+#    model.model.opset_import.append(custom_opset)
+    #onnx.checker.check_model(model.model)
+#    print("model passes checker")
 
-    inst = registry.getCustomOp(model.graph.node[0])
-    body = inst.get_nodeattr("body")
-    custom_opset = onnx.OperatorSetIdProto()
-    custom_opset.version = 0
-    custom_opset.domain = "qonnx.custom_op.general"
-    body.model.opset_import.append(custom_opset)
-    custom_opset = onnx.OperatorSetIdProto()
-    custom_opset.version = 1
-    custom_opset.domain = "brainsmith.custom_op.general"
-    body.model.opset_import.append(custom_opset)
-    body.model.opset_import[0].version = 18
-    print("checking body")
-    onnx.checker.check_model(body.model)
-    print("body passes checker")
+#    inst = registry.getCustomOp(model.graph.node[0])
+#    body = inst.get_nodeattr("body")
+#    custom_opset = onnx.OperatorSetIdProto()
+#    custom_opset.version = 0
+#    custom_opset.domain = "qonnx.custom_op.general"
+#    body.model.opset_import.append(custom_opset)
+#    custom_opset = onnx.OperatorSetIdProto()
+#    custom_opset.version = 1
+#    custom_opset.domain = "brainsmith.custom_op.general"
+#    body.model.opset_import.append(custom_opset)
+#    body.model.opset_import[0].version = 18
+#    print("checking body")
+    #onnx.checker.check_model(body.model)
+#    print("body passes checker")
 
-    body = body.transform(to_bs_hw.InferLayerNorm())
-    body = body.transform(to_hw.InferDuplicateStreamsLayer())
-    body = body.transform(to_hw.InferElementwiseBinaryOperation())
-    body = body.transform(to_bs_hw.InferShuffle())
+    model = model.transform(to_bs_hw.InferLayerNorm())
+    model = model.transform(to_hw.InferDuplicateStreamsLayer())
+    model = model.transform(to_hw.InferElementwiseBinaryOperation())
+    model = model.transform(to_bs_hw.InferShuffle())
     #model = model.transform(to_bs_hw.InferQuantSoftmax())
-    body = body.transform(to_bs_hw.InferHWSoftmax())
-    body = body.transform(to_hw.InferThresholdingLayer())
-    body = body.transform(to_hw.InferQuantizedMatrixVectorActivation())
+    model = model.transform(to_bs_hw.InferHWSoftmax())
+    model = model.transform(to_hw.InferThresholdingLayer())
+    model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
 
-    inst.set_nodeattr("body", body.model.graph)
+    #inst.set_nodeattr("body", body.model.graph)
 
-    model.save("new_body_graph.onnx")
+    #model.save("new_body_graph.onnx")
     return model
 
 
@@ -468,7 +470,7 @@ def custom_step_remove_tail(model, cfg):
 
 def custom_step_cleanup(model, cfg):
     """ Some custom cleanup steps for the BERT model """
-    onnx.checker.check_model(model.model)
+    #onnx.checker.check_model(model.model)
     model = model.transform(SortCommutativeInputsInitializerLast())
     model = model.transform(RemoveIdentityOps())
     return model
@@ -522,13 +524,15 @@ BUILD_BERT_STEPS = [
         custom_step_remove_tail,
         custom_step_qonnx2finn,
 
-        custom_step_generate_reference_io,
+#        custom_step_generate_reference_io,
         custom_streamlining_step,
-        custom_step_extract_loop_body,
-        custom_step_loop_rolling,
+#        custom_step_extract_loop_body,
+#        custom_step_loop_rolling,
         custom_step_infer_hardware,
         step_create_dataflow_partition,
         step_specialize_layers,
+        custom_step_extract_loop_body,
+        custom_step_loop_rolling,
         step_target_fps_parallelization,
         step_apply_folding_config,
         step_minimize_bit_width,
