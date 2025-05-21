@@ -159,6 +159,7 @@ class ProtocolValidator:
 
         # Extract metadata
         group.metadata['data_width_expr'] = group.ports.get("TDATA").width
+        # TAFK TODO: Fix caps sensitivity
 
         logger.debug(f"  Validation successful for AXI-Stream group '{group.name}'")
         return ValidationResult(True)
@@ -215,17 +216,6 @@ class ProtocolValidator:
     def _assign_wrapper_names(self, interfaces: List[PortGroup]) -> None:
         """Assign wrapper names to interfaces based on their type."""
         input_count, output_count = 0, 0
-
-        group.metadata['direction'] = "forward" if forward else "backward"
-
-        # Assign wrapper names based on direction
-        if forward:
-            group.metadata['wrapper_name'] = f"out{self.num_stream_out}"
-            self.num_stream_out += 1
-        else:
-            group.metadata['wrapper_name'] = f"in{self.input_count}"
-            self.input_count += 1
-
 
         for group in interfaces:
             if group.interface_type == InterfaceType.GLOBAL_CONTROL:

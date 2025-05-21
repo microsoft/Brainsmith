@@ -32,7 +32,13 @@ class InterfaceScanner:
 
     def __init__(self, debug: bool = False):
         """Initializes the InterfaceScanner."""
-        self.regex = {
+        self.suffixes = {
+            InterfaceType.GLOBAL_CONTROL: GLOBAL_SIGNAL_SUFFIXES,
+            InterfaceType.AXI_STREAM: AXI_STREAM_SUFFIXES,
+            InterfaceType.AXI_LITE: AXI_LITE_SUFFIXES
+        }
+        # Create regex maps for each interface type
+        self.regex_maps = {
             InterfaceType.GLOBAL_CONTROL: self._generate_interface_regex(GLOBAL_SIGNAL_SUFFIXES),
             InterfaceType.AXI_STREAM: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
             InterfaceType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES)
@@ -40,24 +46,29 @@ class InterfaceScanner:
         self.debug = debug
 
     @staticmethod
-    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> re.Pattern:
+    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
         """
-        Generates a regex pattern for matching interface signals.
+        Generates regex patterns for matching interface signals and maps them to canonical suffixes.
 
-        This regex matches signals with an optional prefix and a required suffix.
-        For example, it matches both "ap_clk" and "clk" if "clk" is a valid suffix.
+        This creates a mapping from regex pattern to canonical suffix, allowing direct retrieval
+        of the correct case when a match is found.
 
         Args:
             suffixes (Dict[str, Dict]): Dictionary of signal suffixes and their properties.
 
         Returns:
-            re.Pattern: A compiled regex pattern that matches signals with an optional prefix
-            and a suffix from the provided suffixes.
+            Dict[str, re.Pattern]: A dictionary mapping canonical suffix to a compiled regex pattern.
+                                  The regex matches both case-insensitive suffixes and other variations.
         """
-        return re.compile(
-            rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>({ '|'.join(re.escape(k) for k in suffixes.keys()) }))$",
-            re.IGNORECASE
-        )
+        regex_map = {}
+        for canonical_suffix in suffixes.keys():
+            # Create a case-insensitive pattern for this specific suffix
+            pattern = re.compile(
+                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", 
+                re.IGNORECASE
+            )
+            regex_map[canonical_suffix] = pattern
+        return regex_map
 
     def scan(self, ports: List[Port]) -> Tuple[List[PortGroup], List[Port]]:
         """
@@ -84,22 +95,28 @@ class InterfaceScanner:
 
         for port in ports:
             port_assigned = False  # Flag to track if the port has been assigned
-            # Check port name against each interface type regex
-            for interface_type, regex in self.regex.items():
-                logger.debug(f"Checking port '{port.name}' against {interface_type} regex---------------")
-                match = regex.match(port.name)
-                if match:
-                    prefix = match.group("prefix")
-                    suffix = match.group("suffix")
-                    logger.warning(f"Matched '{port.name}' with prefix '{prefix}' and suffix '{suffix}'")
-                    if not prefix:
-                        prefix = "<NO_PREFIX>"
-                        logger.debug(f"Port '{port.name}' has no prefix, using '<NO_PREFIX>'")
-                    # Group valid ports by their interface type and prefix
-                    temp_port_groups[interface_type][prefix][suffix] = port
-                    logger.warning(f"Assigned '{port.name}' to potential {interface_type} group")
-                    port_assigned = True  # Mark port as assigned
-                    break  # Port assigned, no need to check other interface types
+            # Check port name against each interface type regex map
+            for interface_type, regex_map in self.regex_maps.items():
+                # Try each canonical suffix regex until a match is found
+                for canonical_suffix, regex in regex_map.items():
+                    logger.debug(f"Checking port '{port.name}' against {interface_type} regex for '{canonical_suffix}'")
+                    match = regex.match(port.name)
+                    if match:
+                        prefix = match.group("prefix")
+                        logger.warning(f"Matched '{port.name}' with prefix '{prefix}' and canonical suffix '{canonical_suffix}'")
+                        if not prefix:
+                            prefix = "<NO_PREFIX>"
+                            logger.debug(f"Port '{port.name}' has no prefix, using '<NO_PREFIX>'")
+                        
+                        # No need to find canonical suffix - we already have it from the regex_map key
+                        # Group valid ports by their interface type and prefix, using canonical suffix as key
+                        temp_port_groups[interface_type][prefix][canonical_suffix] = port
+                        logger.warning(f"Assigned '{port.name}' to potential {interface_type} group with canonical suffix '{canonical_suffix}'")
+                        port_assigned = True  # Mark port as assigned
+                        break  # Skip checking other suffixes for this interface type
+                
+                if port_assigned:
+                    break  # Skip checking other interface types if port is already assigned
             
             # If the port was not assigned to any interface type, add to unassigned
             if not port_assigned:

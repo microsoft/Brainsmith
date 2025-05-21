@@ -134,15 +134,10 @@ fi
 
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
 export PATH=$PATH:$HOME/.local/bin
-export VS_FLAG="--init-file /vscode-shell.sh"
 # execute the provided command(s) as root
 if [ $# -gt 0 ]; then
-    exec bash --init-file /vscode-shell.sh -c "$*"
+    exec bash -c "$*"
 else
-    exec bash --init-file /vscode-shell.sh
+    exec bash 
 fi
-
-
-
-
 

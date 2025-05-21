@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 try:
     from .rtl_parser import RTLParser, HWKernel, ParserError
     from .generators.rtl_template_generator import generate_rtl_template
-    from .generators.hw_custom_op_generator import generate_hw_custom_op
+    # from .generators.hw_custom_op_generator import generate_hw_custom_op
     from .generators.rtl_backend_generator import generate_rtl_backend
     from .generators.doc_generator import generate_documentation
 except ImportError:
@@ -21,7 +21,7 @@ except ImportError:
     sys.path.append(str(Path(__file__).parent.parent)) # Add tools dir to path
     from hw_kernel_gen.rtl_parser import RTLParser, HWKernel, ParserError
     from hw_kernel_gen.generators.rtl_template_generator import generate_rtl_template
-    from hw_kernel_gen.generators.hw_custom_op_generator import generate_hw_custom_op
+    # from hw_kernel_gen.generators.hw_custom_op_generator import generate_hw_custom_op
     from hw_kernel_gen.generators.rtl_backend_generator import generate_rtl_backend
     from hw_kernel_gen.generators.doc_generator import generate_documentation
 
@@ -160,36 +160,52 @@ class HardwareKernelGenerator:
 
 
     def _generate_hw_custom_op(self):
-        """Generates the HWCustomOp instance file."""
-        if not self.hw_kernel_data or not self.compiler_data_module:
-             raise HardwareKernelGeneratorError("Cannot generate HWCustomOp: Required data not parsed.")
-        print("--- Generating HWCustomOp Instance ---")
-        # Placeholder: Call the actual generator function
-        output_path = generate_hw_custom_op(self.hw_kernel_data, self.compiler_data_module, self.output_dir)
-        self.generated_files["hw_custom_op"] = output_path
-        print(f"HWCustomOp generation placeholder complete. Output: {output_path}")
+        pass # Commented out while verifying rtl template generation
+        # """Generates the HWCustomOp instance file."""
+        # if not self.hw_kernel_data or not self.compiler_data_module:
+        #      raise HardwareKernelGeneratorError("Cannot generate HWCustomOp: Required data not parsed.")
+        # print("--- Generating HWCustomOp Instance ---")
+        # # Placeholder: Call the actual generator function
+        # output_path = generate_hw_custom_op(self.hw_kernel_data, self.compiler_data_module, self.output_dir)
+        # self.generated_files["hw_custom_op"] = output_path
+        # print(f"HWCustomOp generation placeholder complete. Output: {output_path}")
 
 
     def _generate_rtl_backend(self):
-        """Generates the RTLBackend instance file."""
-        if not self.hw_kernel_data or not self.compiler_data_module:
-             raise HardwareKernelGeneratorError("Cannot generate RTLBackend: Required data not parsed.")
-        print("--- Generating RTLBackend Instance ---")
-        # Placeholder: Call the actual generator function
-        output_path = generate_rtl_backend(self.hw_kernel_data, self.compiler_data_module, self.output_dir)
-        self.generated_files["rtl_backend"] = output_path
-        print(f"RTLBackend generation placeholder complete. Output: {output_path}")
+        pass # Commented out until implemented
+        # """Generates the RTLBackend instance file."""
+        # if not self.hw_kernel_data or not self.compiler_data_module:
+        #      raise HardwareKernelGeneratorError("Cannot generate RTLBackend: Required data not parsed.")
+        # print("--- Generating RTLBackend Instance ---")
+        # # Placeholder: Call the actual generator function
+        # output_path = generate_rtl_backend(self.hw_kernel_data, self.compiler_data_module, self.output_dir)
+        # self.generated_files["rtl_backend"] = output_path
+        # print(f"RTLBackend generation placeholder complete. Output: {output_path}")
 
 
     def _generate_documentation(self):
-        """Generates the documentation file."""
+        pass # Commented out until implemented
+        # """Generates the documentation file."""
+        # if not self.hw_kernel_data:
+        #     raise HardwareKernelGeneratorError("Cannot generate documentation: RTL data not parsed.")
+        # print("--- Generating Documentation ---")
+        # # Placeholder: Call the actual generator function
+        # output_path = generate_documentation(self.hw_kernel_data, self.custom_doc_content, self.output_dir)
+        # self.generated_files["documentation"] = output_path
+        # print(f"Documentation generation placeholder complete. Output: {output_path}")
+
+
+    def get_parsed_rtl_data(self):
+        """
+        Returns the parsed RTL data for testing purposes.
+        This is useful for testing components in isolation without running the full pipeline.
+        
+        Returns:
+            The parsed HWKernel data, or None if it hasn't been parsed yet.
+        """
         if not self.hw_kernel_data:
-            raise HardwareKernelGeneratorError("Cannot generate documentation: RTL data not parsed.")
-        print("--- Generating Documentation ---")
-        # Placeholder: Call the actual generator function
-        output_path = generate_documentation(self.hw_kernel_data, self.custom_doc_content, self.output_dir)
-        self.generated_files["documentation"] = output_path
-        print(f"Documentation generation placeholder complete. Output: {output_path}")
+            self._parse_rtl()
+        return self.hw_kernel_data
 
 
     def run(self, stop_after: Optional[str] = None):

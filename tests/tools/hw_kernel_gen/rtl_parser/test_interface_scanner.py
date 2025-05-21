@@ -203,10 +203,13 @@ def test_scan_case_insensitivity(scanner):
     assert "in0" in group_map
     assert "config" in group_map
 
-    assert set(group_map["ap"].ports.keys()) == {"clk", "RST_N"} # Original names are kept
-    assert set(group_map["in0"].ports.keys()) == {"tdata", "TVALID", "tready"}
-    # Check a subset of required AXI-Lite write signals
-    assert {"awaddr", "AWVALID", "awready", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY"}.issubset(group_map["config"].ports.keys())
+    # Updated to expect canonical suffix keys (as defined in the suffix dictionaries)
+    # Global signals should use lowercase (based on GLOBAL_SIGNAL_SUFFIXES keys)
+    assert set(group_map["ap"].ports.keys()) == {"clk", "rst_n"} 
+    # AXI Stream signals should use uppercase (based on AXI_STREAM_SUFFIXES keys)
+    assert set(group_map["in0"].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
+    # AXI Lite signals should use uppercase (based on AXI_LITE_SUFFIXES keys)
+    assert {"AWADDR", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY"}.issubset(group_map["config"].ports.keys())
 
 def test_scan_vivado_suffixes(scanner):
     ports = [

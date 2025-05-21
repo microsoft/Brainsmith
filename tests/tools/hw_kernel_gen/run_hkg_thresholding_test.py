@@ -44,19 +44,19 @@ def main():
         logger.error(f"Error during RTL parsing: {e}", exc_info=True)
         return
 
-    # 2. Parse Compiler Data Python File
-    logger.info(f"Parsing compiler data file: {compiler_data_file_path}")
-    try:
-        compiler_data_parser = CompilerDataParser(compiler_data_file_path)
-        # The parser stores data in its `parsed_data` attribute
-        parsed_compiler_data = compiler_data_parser.parsed_data
-        logger.info(f"Successfully parsed compiler data. Found imports: {parsed_compiler_data.get('imports_str') is not None}")
-        logger.info(f"User functions: {list(parsed_compiler_data.get('functions', {}).keys())}")
-        logger.info(f"User class methods: { {k: list(v.keys()) for k,v in parsed_compiler_data.get('class_methods', {}).items()} }")
-    except Exception as e:
-        logger.error(f"Error during compiler data parsing: {e}", exc_info=True)
-        # We can still proceed with generation, it will just lack user overrides
-        parsed_compiler_data = {"functions": {}, "class_methods": {}, "imports_str": ""}
+    # 2. Parse Compiler Data Python File <Commented out
+    # logger.info(f"Parsing compiler data file: {compiler_data_file_path}")
+    # try:
+    #     compiler_data_parser = CompilerDataParser(compiler_data_file_path)
+    #     # The parser stores data in its `parsed_data` attribute
+    #     parsed_compiler_data = compiler_data_parser.parsed_data
+    #     logger.info(f"Successfully parsed compiler data. Found imports: {parsed_compiler_data.get('imports_str') is not None}")
+    #     logger.info(f"User functions: {list(parsed_compiler_data.get('functions', {}).keys())}")
+    #     logger.info(f"User class methods: { {k: list(v.keys()) for k,v in parsed_compiler_data.get('class_methods', {}).items()} }")
+    # except Exception as e:
+    #     logger.error(f"Error during compiler data parsing: {e}", exc_info=True)
+    #     # We can still proceed with generation, it will just lack user overrides
+    #     parsed_compiler_data = {"functions": {}, "class_methods": {}, "imports_str": ""}
 
 
     # 3. Generate HWCustomOp Code

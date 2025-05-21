@@ -19,12 +19,12 @@ module $THRESHOLDING_AXI_WRAPPER_NAME$ #(
     input ap_clk,
     input ap_rst_n,
 
-    // --- Axis (m_axis) ---
+    // --- Axistream (m_axis) ---
     output[((PE*O_BITS+7)/8)*8-1:0] m_axis_tdata,
     input m_axis_tready,
     output m_axis_tvalid,
 
-    // --- Axis (s_axis) ---
+    // --- Axistream (s_axis) ---
     input[((PE*WI+7)/8)*8-1:0] s_axis_tdata,
     output s_axis_tready,
     input s_axis_tvalid,
@@ -71,12 +71,12 @@ module $THRESHOLDING_AXI_WRAPPER_NAME$ #(
         .ap_clk(ap_clk),
         .ap_rst_n(ap_rst_n),
  
-        // --- Axis (m_axis) ---
+        // --- Axistream (m_axis) ---
         .m_axis_tdata(m_axis_tdata),
         .m_axis_tready(m_axis_tready),
         .m_axis_tvalid(m_axis_tvalid),
  
-        // --- Axis (s_axis) ---
+        // --- Axistream (s_axis) ---
         .s_axis_tdata(s_axis_tdata),
         .s_axis_tready(s_axis_tready),
         .s_axis_tvalid(s_axis_tvalid),

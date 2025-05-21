@@ -32,13 +32,5 @@ def generate_rtl_backend(hw_kernel_data: 'HWKernel', compiler_data: Any, output_
     # Use hw_kernel_data.name
     output_filename = f"{hw_kernel_data.name}_rtlbackend.py"
     output_path = output_dir / output_filename
-
-    # Dummy file creation
-    try:
-        output_path.touch()
-        logger.info(f"Created dummy RTLBackend file at {output_path}")
-    except OSError as e:
-        logger.error(f"Failed to create dummy file {output_path}: {e}")
-        raise # Re-raise the error after logging
-
+    # TODO: Implement file writing logic
     return output_path

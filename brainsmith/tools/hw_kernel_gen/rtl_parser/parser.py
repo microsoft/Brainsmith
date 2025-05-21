@@ -287,16 +287,21 @@ class RTLParser:
             logger.error(error_msg)
             raise ParserError(error_msg)
 
+
         # 3. Validate AXI-Stream interfaces directly here
-        input_streams = [iface for iface in self.interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("in")]
-        output_streams = [iface for iface in self.interfaces.values() if iface.type == InterfaceType.AXI_STREAM and iface.name.startswith("out")]
-
-        if not input_streams:
+        num_input_stream = len([
+            iface for iface in self.interfaces.values()
+            if iface.type == InterfaceType.AXI_STREAM and iface.metadata['direction'] == Direction.INPUT
+        ])
+        num_output_stream = len([
+            iface for iface in self.interfaces.values()
+            if iface.type == InterfaceType.AXI_STREAM and iface.metadata['direction'] == Direction.OUTPUT
+        ])
+        if num_input_stream == 0:
             raise ParserError("No input AXI-Stream interface found. At least one is required.")
-        if not output_streams:
+        if num_output_stream == 0:
             raise ParserError("No output AXI-Stream interface found. At least one is required.")
-
-        logger.info(f"Validated AXI-Stream interfaces: {len(input_streams)} inputs, {len(output_streams)} outputs.")
+        logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs.")
 
         # 4. Perform Unassigned Ports check
         if unassigned_ports:

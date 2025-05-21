@@ -25,14 +25,12 @@ GOLDEN_WRAPPER_FILE = GOLDEN_DIR / "golden_thresholding_axi_wrapper.v"
 # GOLDEN_HWCUSTOMOP_FUNC = get_golden_hwcustomop
 # GOLDEN_RTLBACKEND_FUNC = get_golden_rtlbackend
 
-
 @pytest.fixture
 def golden_hwkernel():
     """Fixture to load the golden HWKernel object."""
     return GOLDEN_HWKERNEL_FUNC()
 
 # --- HKG Pipeline Test ---
-
 def test_hkg_pipeline_thresholding():
     """Tests the full HardwareKernelGenerator pipeline for thresholding_axi."""
     assert RTL_INPUT_FILE.exists(), f"Input RTL file not found: {RTL_INPUT_FILE}"

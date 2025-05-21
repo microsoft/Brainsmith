@@ -2,6 +2,8 @@ import pytest
 from pathlib import Path
 import jinja2
 import shutil
+import os
+import difflib
 
 # Assuming the test execution is from the root directory
 # Adjust the path if necessary based on your test runner configuration
@@ -193,4 +195,115 @@ def test_generate_rtl_template_render_error(mock_hw_kernel, tmp_path, monkeypatc
         elif original_template_path.exists() and original_template_path.read_text() == faulty_content:
              # Clean up the faulty file if backup didn't exist or restore failed
              original_template_path.unlink()
+
+# Test to verify the output matches the golden file
+def test_compare_with_golden_file():
+    """Test that the generated RTL template matches the golden file."""
+    # Paths setup
+    test_dir = Path(__file__).parent
+    golden_file = test_dir.parent.parent / "golden" / "thresholding" / "golden_thresholding_axi_wrapper.v"
+    output_dir = test_dir.parent.parent / "generated"
+    output_dir.mkdir(exist_ok=True)
+    
+    # Create a mock HWKernel for thresholding_axi based on the golden file
+    params = [
+        Parameter(name="N", param_type="int", default_value=None),
+        Parameter(name="WI", param_type="int", default_value=None),
+        Parameter(name="WT", param_type="int", default_value=None),
+        Parameter(name="C", param_type="int", default_value="1"),
+        Parameter(name="PE", param_type="int", default_value="1"),
+        Parameter(name="SIGNED", param_type="bit", default_value="1"),
+        Parameter(name="FPARG", param_type="bit", default_value="0"),
+        Parameter(name="BIAS", param_type="int", default_value="0"),
+        Parameter(name="THRESHOLDS_PATH", param_type=None, default_value='""'),
+        Parameter(name="USE_AXILITE", param_type="bit", default_value=None),
+        Parameter(name="DEPTH_TRIGGER_URAM", param_type="int unsigned", default_value="0"),
+        Parameter(name="DEPTH_TRIGGER_BRAM", param_type="int unsigned", default_value="0"),
+        Parameter(name="DEEP_PIPELINE", param_type="bit", default_value="0"),
+    ]
+    
+    # Create the interfaces similar to the expected output
+    # Global interface
+    global_ports = {
+        "clk": Port(name="ap_clk", direction=Direction.INPUT, width="1"),
+        "rst_n": Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
+    }
+    
+    # Output stream interface
+    m_axis_ports = {
+        "TDATA": Port(name="m_axis_tdata", direction=Direction.OUTPUT, width="((PE*O_BITS+7)/8)*8-1:0"),
+        "TREADY": Port(name="m_axis_tready", direction=Direction.INPUT, width="1"),
+        "TVALID": Port(name="m_axis_tvalid", direction=Direction.OUTPUT, width="1"),
+    }
+    
+    # Input stream interface
+    s_axis_ports = {
+        "TDATA": Port(name="s_axis_tdata", direction=Direction.INPUT, width="((PE*WI+7)/8)*8-1:0"),
+        "TREADY": Port(name="s_axis_tready", direction=Direction.OUTPUT, width="1"),
+        "TVALID": Port(name="s_axis_tvalid", direction=Direction.INPUT, width="1"),
+    }
+    
+    # AXI-Lite interface
+    axilite_ports = {
+        "ARADDR": Port(name="s_axilite_ARADDR", direction=Direction.INPUT, width="ADDR_BITS-1:0"),
+        "ARREADY": Port(name="s_axilite_ARREADY", direction=Direction.OUTPUT, width="1"),
+        "ARVALID": Port(name="s_axilite_ARVALID", direction=Direction.INPUT, width="1"),
+        "AWADDR": Port(name="s_axilite_AWADDR", direction=Direction.INPUT, width="ADDR_BITS-1:0"),
+        "AWREADY": Port(name="s_axilite_AWREADY", direction=Direction.OUTPUT, width="1"),
+        "AWVALID": Port(name="s_axilite_AWVALID", direction=Direction.INPUT, width="1"),
+        "BREADY": Port(name="s_axilite_BREADY", direction=Direction.INPUT, width="1"),
+        "BRESP": Port(name="s_axilite_BRESP", direction=Direction.OUTPUT, width="1:0"),
+        "BVALID": Port(name="s_axilite_BVALID", direction=Direction.OUTPUT, width="1"),
+        "RDATA": Port(name="s_axilite_RDATA", direction=Direction.OUTPUT, width="31:0"),
+        "RREADY": Port(name="s_axilite_RREADY", direction=Direction.INPUT, width="1"),
+        "RRESP": Port(name="s_axilite_RRESP", direction=Direction.OUTPUT, width="1:0"),
+        "RVALID": Port(name="s_axilite_RVALID", direction=Direction.OUTPUT, width="1"),
+        "WDATA": Port(name="s_axilite_WDATA", direction=Direction.INPUT, width="31:0"),
+        "WREADY": Port(name="s_axilite_WREADY", direction=Direction.OUTPUT, width="1"),
+        "WSTRB": Port(name="s_axilite_WSTRB", direction=Direction.INPUT, width="3:0"),
+        "WVALID": Port(name="s_axilite_WVALID", direction=Direction.INPUT, width="1"),
+    }
+    
+    # Create validation results
+    valid_result = ValidationResult(valid=True)
+    
+    # Create interfaces dictionary
+    interfaces = {
+        "global": Interface(name="global", type=InterfaceType.GLOBAL_CONTROL, ports=global_ports, validation_result=valid_result, metadata={}),
+        "m_axis": Interface(name="m_axis", type=InterfaceType.AXI_STREAM, ports=m_axis_ports, validation_result=valid_result, metadata={"direction": Direction.OUTPUT}),
+        "s_axis": Interface(name="s_axis", type=InterfaceType.AXI_STREAM, ports=s_axis_ports, validation_result=valid_result, metadata={"direction": Direction.INPUT}),
+        "s_axilite": Interface(name="s_axilite", type=InterfaceType.AXI_LITE, ports=axilite_ports, validation_result=valid_result, metadata={}),
+    }
+    
+    # Create the HWKernel
+    hw_kernel = HWKernel(
+        name="thresholding_axi",
+        parameters=params,
+        interfaces=interfaces,
+        pragmas=[],
+        metadata={}
+    )
+    
+    # Generate the RTL template
+    generated_file = generate_rtl_template(hw_kernel, output_dir)
+    
+    # Read both the golden and generated files
+    golden_content = golden_file.read_text()
+    generated_content = generated_file.read_text()
+    
+    # Compare the files line by line, ignoring whitespace
+    golden_lines = [line.strip() for line in golden_content.splitlines() if line.strip()]
+    generated_lines = [line.strip() for line in generated_content.splitlines() if line.strip()]
+    
+    # Create a diff of the files for better error reporting
+    diff = list(difflib.unified_diff(
+        golden_lines, 
+        generated_lines,
+        fromfile=str(golden_file),
+        tofile=str(generated_file),
+        lineterm=''
+    ))
+    
+    # Assert files match with helpful diff output
+    assert golden_lines == generated_lines, f"Generated file differs from golden file:\n" + "\n".join(diff)
 

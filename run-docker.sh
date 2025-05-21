@@ -64,22 +64,6 @@ else
   DOCKER_INTERACTIVE=""
 fi
 
-# Enable VS Code shell‑integration if available
-VS_INTG=$(
-    find ~/.vscode-server{,-insiders} \
-         -type f -name 'shellIntegration-bash.sh' 2>/dev/null \
-         | sort -r | head -n 1             # pick the newest build
-)
-if [[ -n "$VS_INTG" && -f "$VS_INTG" ]]; then
-    BSMITH_DOCKER_FLAGS+="-v $VS_INTG:/vscode-shell.sh "
-    BSMITH_DOCKER_FLAGS+="-e TERM_PROGRAM=vscode "
-    VS_FLAG="--init-file /vscode-shell.sh"
-    yecho "${VS_INTG}"
-else
-    yecho "No VS Code shell integration found"
-    VS_FLAG=""
-fi
-
 # Enable GPU support if available
 if [ "$BSMITH_DOCKER_GPU" != 0 ]; then
   gecho "nvidia-docker detected, enabling GPUs"
@@ -165,19 +149,6 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
       fi
   fi
 fi
-
-# ── VS Code shell‑integration ──────────────────────────────────────────
-SHELL_INTG=$(code --locate-shell-integration-path bash 2>/dev/null || true)
-
-if [[ -n "$SHELL_INTG" && -f "$SHELL_INTG" ]]; then
-    # Tell the integration that we’re running inside VS Code
-    DOCKER_EXEC+="-e TERM_PROGRAM=vscode "
-    # Provide the script path to the entrypoint
-    DOCKER_EXEC+="-e VSCODE_SHELL_INTG=/vscode-shell.sh "
-    # Bind‑mount the script read‑only
-    DOCKER_EXEC+="-v $SHELL_INTG:/vscode-shell.sh:ro "
-fi
-# ───────────────────────────────────────────────────────────────────────
 
 # Compose and execute Docker command
 DOCKER_EXEC+=" $BSMITH_DOCKER_FLAGS"
