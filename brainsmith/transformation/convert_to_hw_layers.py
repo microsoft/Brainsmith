@@ -112,7 +112,10 @@ class InferShuffle(Transformation):
                             
                             NumChannels=in_reshaped[-1]
                         )
-                new_node.attribute.extend([perm])
+                new_node.attribute.extend([perm]) 
+                if hasattr(n, "metadata_props"):
+                    new_node.metadata_props.extend(n.metadata_props)
+
                 graph.node.insert(node_ind, new_node)
 
                 for i in to_remove:
@@ -156,6 +159,8 @@ class InferHWSoftmax(Transformation):
                     SIMD=1,
                     NumChannels=input_shape[-1],
                 )
+                if hasattr(n, "metadata_props"):
+                    new_node.metadata_props.extend(n.metadata_props)
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
                 graph_modified = True
@@ -221,6 +226,8 @@ class InferLayerNorm(Transformation):
                     outputDataType=odt.name,
                     name="LayerNorm_" + node.name,
                 )
+                if hasattr(node, "metadata_props"):
+                    new_node.metadata_props.extend(node.metadata_props)
                 graph.node.insert(insert_point, new_node)
                 # remove old node
                 graph.node.remove(node)
@@ -315,6 +322,8 @@ class InferCropFromGather(Transformation):
                     input_shape=input_shape,
                     output_shape=output_shape,
                 )
+                if hasattr(n, "metadata_props"):
+                    new_node.metadata_props.extend(n.metadata_props)
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
                 # remove multithreshold too
