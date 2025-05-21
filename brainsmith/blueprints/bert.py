@@ -527,8 +527,6 @@ BUILD_BERT_STEPS = [
 
 #        custom_step_generate_reference_io,
         custom_streamlining_step,
-#        custom_step_extract_loop_body,
-#        custom_step_loop_rolling,
         custom_step_infer_hardware,
         step_create_dataflow_partition,
         step_specialize_layers,
