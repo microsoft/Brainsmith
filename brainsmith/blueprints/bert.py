@@ -161,6 +161,7 @@ def custom_step_loop_rolling(model, cfg):
     model.model = onnxscript.ir.serde.serialize_model(model_layers_replaced)
 
     model = model.transform(FoldConstants())
+    model = model.transform(to_hw.InferFinnLoopOp())
     return model
 
 
