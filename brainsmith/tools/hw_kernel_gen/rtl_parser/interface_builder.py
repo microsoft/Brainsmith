@@ -16,8 +16,7 @@ any ports that couldn't be assigned to a valid interface.
 import logging
 from typing import List, Dict, Tuple
 
-# Updated import: Interface, PortGroup, InterfaceType, ValidationResult now come from data.py
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Interface, InterfaceType # <<< Added InterfaceType here
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Interface, InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
 

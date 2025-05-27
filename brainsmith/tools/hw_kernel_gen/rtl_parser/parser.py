@@ -25,19 +25,19 @@ from . import grammar
 # Configure logger
 logger = logging.getLogger(__name__)
 
-# --- Error Classes (Keep them here for now) ---
+
 class ParserError(Exception):
     """Base class for parser errors."""
     pass
 
+
 class SyntaxError(ParserError):
     """Raised when SystemVerilog syntax is invalid."""
     pass
-# --- End Error Classes ---
 
-# --- Main RTLParser Class ---
+
 class RTLParser:
-    """Parser for SystemVerilog RTL files. (Original Implementation)
+    """Parser for SystemVerilog RTL files.
 
     This class uses tree-sitter to parse SystemVerilog files and extract
     the information needed by the Hardware Kernel Generator.

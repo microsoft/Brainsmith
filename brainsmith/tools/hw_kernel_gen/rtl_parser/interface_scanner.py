@@ -103,15 +103,14 @@ class InterfaceScanner:
                     match = regex.match(port.name)
                     if match:
                         prefix = match.group("prefix")
-                        logger.warning(f"Matched '{port.name}' with prefix '{prefix}' and canonical suffix '{canonical_suffix}'")
+                        logger.debug(f"Matched '{port.name}' with prefix '{prefix}' and canonical suffix '{canonical_suffix}'")
                         if not prefix:
                             prefix = "<NO_PREFIX>"
                             logger.debug(f"Port '{port.name}' has no prefix, using '<NO_PREFIX>'")
                         
-                        # No need to find canonical suffix - we already have it from the regex_map key
                         # Group valid ports by their interface type and prefix, using canonical suffix as key
                         temp_port_groups[interface_type][prefix][canonical_suffix] = port
-                        logger.warning(f"Assigned '{port.name}' to potential {interface_type} group with canonical suffix '{canonical_suffix}'")
+                        logger.debug(f"Assigned '{port.name}' to potential {interface_type} group with canonical suffix '{canonical_suffix}'")
                         port_assigned = True  # Mark port as assigned
                         break  # Skip checking other suffixes for this interface type
                 
@@ -121,7 +120,7 @@ class InterfaceScanner:
             # If the port was not assigned to any interface type, add to unassigned
             if not port_assigned:
                 unassigned_ports.append(port)
-                logger.warning(f"Port '{port.name}' did not match any known interface type regex and is unassigned")
+                logger.debug(f"Port '{port.name}' did not match any known interface type regex and is unassigned")
 
         # Create PortGroup objects from potential groups
         for interface_type, groups_dict in temp_port_groups.items():

@@ -1,165 +1,425 @@
-# Brainsmith SystemVerilog RTL Parser
+# RTL Parser
+
+A SystemVerilog parser component for the Brainsmith Hardware Kernel Generator (HKG) that extracts, validates, and processes hardware interface information from RTL source code.
 
 ## Overview
 
-This directory contains the SystemVerilog RTL parser used within the Brainsmith framework. Its primary purpose is to analyze SystemVerilog hardware kernel files (`.sv`) and extract crucial information about the module's interface, parameters, and specific Brainsmith pragmas. This extracted information, structured into an `HWKernel` object, is essential for downstream tools, particularly the hardware kernel generator, to understand how to interact with and integrate the kernel.
+The RTL Parser analyzes SystemVerilog files to identify and validate hardware interfaces, module parameters, and special compiler directives (pragmas) needed by the Hardware Kernel Generator. It serves as the critical bridge between custom RTL implementations and the FINN compiler toolchain, enabling hardware engineers to integrate their designs into the Brainsmith ecosystem.
 
-The parser focuses on identifying standard interface protocols like AXI-Stream and AXI-Lite, along with global control signals (like clocks and resets), based on common naming conventions.
+The RTL Parser operates as the first stage in the Hardware Kernel Generator pipeline, taking SystemVerilog RTL files with embedded pragmas as input, processing and validating hardware interface information, and producing a structured `HWKernel` object containing all relevant data for subsequent wrapper template generation and compiler integration.
 
-## How it Works
+### Key Capabilities
 
-The parsing process involves several steps orchestrated by the `RTLParser`:
+- **Interface Recognition**: Automatically identifies and validates AXI-Stream, AXI-Lite, and Global Control interfaces using case-insensitive suffix detection (uppercase preferred)
+- **Parameter Extraction**: Extracts module parameters while preserving bit-width expressions
+- **Pragma Processing**: Parses `@brainsmith` compiler directives for additional metadata
+- **Protocol Validation**: Ensures interfaces conform to expected signal naming and direction requirements
+- **Extensible Design**: Modular architecture supports future interface types and pragma extensions
 
-1.  **Grammar Loading:** It loads a pre-compiled `tree-sitter` SystemVerilog grammar library (`sv.so`) using `grammar.py`.
-2.  **AST Generation:** The `RTLParser` (`parser.py`) uses the loaded grammar to parse the input SystemVerilog file into an Abstract Syntax Tree (AST).
-3.  **Syntax Check:** It performs a basic check for syntax errors reported by `tree-sitter`.
-4.  **Pragma Extraction:** It scans the source code comments for `//@brainsmith` pragmas using `pragma.py`.
-5.  **Module Selection:** It identifies all `module` declarations in the AST. If multiple modules exist, it uses the `//@brainsmith TOP_MODULE <name>` pragma to select the target module. If no pragma is present and multiple modules exist, or if no modules are found, it raises an error.
-6.  **Header Extraction:** For the target module, it extracts the module name, parameters (name, type, default value), and ports (name, direction, width) by traversing the relevant AST nodes (`parser.py`).
-7.  **Interface Building:**
-    *   The `InterfaceBuilder` (`interface_builder.py`) is invoked with the list of extracted ports.
-    *   It uses the `InterfaceScanner` (`interface_scanner.py`) to group ports based on naming conventions (e.g., `in0_TDATA`, `config_AWADDR`, `ap_clk`) into potential `PortGroup` objects representing Global, AXI-Stream, or AXI-Lite interfaces.
-    *   Each potential `PortGroup` is then validated by the `ProtocolValidator` (`protocol_validator.py`) to ensure it meets the minimum requirements for its identified type (e.g., required signals, correct directions). Protocol definitions (signal names, requirements, directions) are defined within `protocol_validator.py`.
-    *   Only valid `PortGroup` objects are converted into `Interface` objects. Ports from invalid groups are collected.
-8.  **Result Aggregation:** The `RTLParser` aggregates the module name, parameters, the dictionary of validated `Interface` objects, and any extracted pragmas into an `HWKernel` data object (`data.py`).
-9.  **Post-Validation:** The `RTLParser` performs final checks, ensuring at least one AXI-Stream interface was found and raising an error if any ports remain unassigned after the interface building process.
-10. **Return Value:** The validated `HWKernel` object is returned.
+### Integration with Hardware Kernel Generator
 
-## Workflow Diagram
+The extracted information enables the HKG to:
+- Generate parameterized wrapper templates
+- Create FINN compiler integration files (HWCustomOp instances)
+- Perform design space exploration
+- Validate interface compatibility
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant RTLParser
-    participant TreeSitter
-    participant PragmaExtractor
-    participant InterfaceBuilder
-    participant InterfaceScanner
-    participant ProtocolValidator
+## Architecture
 
-    User->>RTLParser: parse_file(filepath)
-    RTLParser->>TreeSitter: Parse SV file
-    TreeSitter-->>RTLParser: AST
-    RTLParser->>RTLParser: Check Syntax Errors
-    RTLParser->>PragmaExtractor: extract_pragmas(source_code)
-    PragmaExtractor-->>RTLParser: Pragmas
-    RTLParser->>RTLParser: Find target module (using pragmas if needed)
-    RTLParser->>RTLParser: Extract Ports & Parameters from AST
-    RTLParser->>InterfaceBuilder: build_interfaces(ports)
-    InterfaceBuilder->>InterfaceScanner: scan(ports)
-    InterfaceScanner-->>InterfaceBuilder: PortGroups, UnassignedPorts1
-    loop For each PortGroup
-        InterfaceBuilder->>ProtocolValidator: validate(group)
-        ProtocolValidator-->>InterfaceBuilder: ValidationResult
-        alt Validation OK
-            InterfaceBuilder->>InterfaceBuilder: Create Interface object
-        else Validation Failed
-            InterfaceBuilder->>InterfaceBuilder: Add group ports to UnassignedPorts2
-        end
-    end
-    InterfaceBuilder-->>RTLParser: ValidatedInterfaces, AllUnassignedPorts
-    RTLParser->>RTLParser: Post-validation (AXI-S check, unassigned check)
-    RTLParser->>RTLParser: Create HWKernel object
-    RTLParser-->>User: HWKernel
+The RTL Parser follows a multi-stage pipeline architecture:
+
+```
+SystemVerilog File → Tree-sitter AST → Interface Scanning → Protocol Validation → HWKernel Object
 ```
 
-## Key Components
+### Core Components
 
-*   `parser.py`: Main class `RTLParser` orchestrating the parsing flow. Handles AST traversal for module, parameter, and port extraction. Performs final validation checks.
-*   `grammar.py`: Handles loading the `tree-sitter` grammar (`.so` file) and defines node type constants.
-*   `data.py`: Defines all core data structures: Enums (`Direction`, `InterfaceType`, `PragmaType`) and Dataclasses (`HWKernel`, `Port`, `Parameter`, `Pragma`, `Interface`, `PortGroup`, `ValidationResult`). This is the central definition of the parser's data model.
-*   `pragma.py`: Logic for extracting `//@brainsmith` pragmas from comments. Defines `PragmaParser` which uses the `PragmaType` enum for validation and handler dispatch.
-*   `interface_scanner.py`: Class `InterfaceScanner` identifies potential interface groups (`PortGroup`) based on port naming conventions using regex.
-*   `protocol_validator.py`: Class `ProtocolValidator` validates that identified `PortGroup` objects adhere to protocol rules (required signals, directions). **Defines the expected signal patterns and rules for each interface type.**
-*   `interface_builder.py`: Class `InterfaceBuilder` coordinates the `InterfaceScanner` and `ProtocolValidator` to produce a dictionary of validated `Interface` objects and a list of unassigned ports.
+| Component | Purpose |
+|-----------|---------|
+| **`parser.py`** | Main orchestrator and tree-sitter integration |
+| **`data.py`** | Core data structures and type definitions |
+| **`grammar.py`** | SystemVerilog grammar loading via tree-sitter |
+| **`interface_scanner.py`** | Port grouping based on naming conventions |
+| **`protocol_validator.py`** | Interface protocol compliance validation |
+| **`interface_builder.py`** | Coordination between scanning and validation |
+| **`pragma.py`** | Pragma extraction and processing |
 
-## Usage Example
+### Processing Pipeline
 
-Here's a simple example demonstrating how to use the `RTLParser`:
+1. **Initial Parse**: Load and parse SystemVerilog using tree-sitter, extract pragmas, select target module
+2. **Component Extraction**: Extract module parameters and ports from the AST
+3. **Interface Analysis**: Group ports into potential interfaces and validate against protocol specifications
+4. **Pragma Application**: Apply compiler directives to modify interface and parameter metadata
+
+## Quick Start
+
+### Basic Usage
 
 ```python
-import os
-from brainsmith.tools.hw_kernel_gen.rtl_parser import RTLParser, ParserError
+from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
 
-# Define some example SystemVerilog code
-sv_code = """
-module my_simple_kernel #(
-    parameter DATA_WIDTH = 32
-) (
-    input logic clk,
-    input logic rst_n,
+# Initialize parser
+parser = RTLParser(debug=False)
 
-    // AXI-Stream Input
-    input logic [DATA_WIDTH-1:0] in0_TDATA,
-    input logic                  in0_TVALID,
-    output logic                 in0_TREADY,
+# Parse SystemVerilog file
+hw_kernel = parser.parse_file("path/to/module.sv")
 
-    // AXI-Stream Output
-    output logic [DATA_WIDTH-1:0] out0_TDATA,
-    output logic                  out0_TVALID,
-    input logic                   out0_TREADY
-);
-
-    // Simple passthrough logic (example)
-    assign out0_TDATA = in0_TDATA;
-    assign out0_TVALID = in0_TVALID;
-    assign in0_TREADY = out0_TREADY;
-
-endmodule
-"""
-
-# Create a dummy file for the example
-file_path = "my_simple_kernel.sv"
-with open(file_path, "w") as f:
-    f.write(sv_code)
-
-# --- Parser Usage ---
-try:
-    # 1. Instantiate the parser
-    parser = RTLParser(debug=False) # Set debug=True for verbose logging
-
-    # 2. Parse the SystemVerilog file
-    print(f"Parsing file: {file_path}")
-    hw_kernel_info = parser.parse_file(file_path)
-
-    # 3. Access the extracted information
-    print(f"\nSuccessfully parsed module: {hw_kernel_info.module_name}")
-
-    print("\nParameters:")
-    if hw_kernel_info.parameters:
-        for name, param in hw_kernel_info.parameters.items():
-            print(f"- {name}: Type={param.type}, Default={param.default_value}")
-    else:
-        print("- None")
-
-    print("\nInterfaces:")
-    if hw_kernel_info.interfaces:
-        for name, interface in hw_kernel_info.interfaces.items():
-            print(f"- Name: {name}")
-            print(f"  Type: {interface.type.value}")
-            # Ports dict keys depend on interface type (full name for global, suffix for AXI-S, signal for AXI-L)
-            print(f"  Port Keys: {list(interface.ports.keys())}")
-            print(f"  Port Names: {[p.name for p in interface.ports.values()]}")
-            if interface.metadata:
-                print(f"  Metadata: {interface.metadata}")
-    else:
-        print("- None")
-
-    print("\nPragmas:")
-    if hw_kernel_info.pragmas:
-        for pragma in hw_kernel_info.pragmas:
-            print(f"- Type: {pragma.type.name}, Args: {pragma.args}")
-    else:
-        print("- None")
-
-except ParserError as e:
-    print(f"Error parsing file: {e}")
-except FileNotFoundError:
-    print(f"Error: File not found at {file_path}")
-finally:
-    # Clean up the dummy file
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        print(f"\nCleaned up {file_path}")
-# --- End Parser Usage ---
+# Access extracted information
+print(f"Module: {hw_kernel.name}")
+print(f"Parameters: {[p.name for p in hw_kernel.parameters]}")
+print(f"Interfaces: {list(hw_kernel.interfaces.keys())}")
 ```
+
+### Debug Mode
+
+```python
+# Enable detailed logging for troubleshooting
+parser = RTLParser(debug=True)
+hw_kernel = parser.parse_file("module.sv")
+```
+
+## Supported Interfaces
+
+The RTL Parser recognizes three categories of hardware interfaces based on signal naming conventions:
+
+### 1. Global Control Signals
+
+Required timing and control signals for all modules:
+
+| Signal | Direction | Required | Description |
+|--------|-----------|----------|-------------|
+| `*_clk` | Input | Yes | Primary clock |
+| `*_rst_n` | Input | Yes | Active-low reset |
+| `*_clk2x` | Input | No | Double-rate clock |
+
+**Example:**
+```systemverilog
+input wire ap_clk,
+input wire ap_rst_n,
+input wire ap_clk2x  // Optional
+```
+
+### 2. AXI-Stream Interfaces
+
+Primary data flow interfaces supporting both input and output directions:
+
+| Signal | Direction (Slave) | Required | Description |
+|--------|-------------------|----------|-------------|
+| `*_TDATA` | Input | Yes | Data payload |
+| `*_TVALID` | Input | Yes | Valid signal |
+| `*_TREADY` | Output | Yes | Ready signal |
+| `*_TLAST` | Input | No | Last transfer |
+
+**Example:**
+```systemverilog
+// Input stream (slave interface)
+input wire [31:0] in0_V_TDATA,
+input wire in0_V_TVALID,
+output wire in0_V_TREADY,
+input wire in0_V_TLAST,
+
+// Output stream (master interface)
+output wire [31:0] out0_V_TDATA,
+output wire out0_V_TVALID,
+input wire out0_V_TREADY
+```
+
+### 3. AXI-Lite Interfaces
+
+Configuration and control interfaces (read and/or write channels):
+
+| Signal | Direction | Required | Description |
+|--------|-----------|----------|-------------|
+| `*_AWADDR` | Input | Yes* | Write address |
+| `*_AWVALID` | Input | Yes* | Write address valid |
+| `*_AWREADY` | Output | Yes* | Write address ready |
+| `*_WDATA` | Input | Yes* | Write data |
+| `*_WSTRB` | Input | Yes* | Write strobe |
+| `*_WVALID` | Input | Yes* | Write data valid |
+| `*_WREADY` | Output | Yes* | Write data ready |
+| `*_BRESP` | Output | Yes* | Write response |
+| `*_BVALID` | Output | Yes* | Write response valid |
+| `*_BREADY` | Input | Yes* | Write response ready |
+| `*_ARADDR` | Input | Yes** | Read address |
+| `*_ARVALID` | Input | Yes** | Read address valid |
+| `*_ARREADY` | Output | Yes** | Read address ready |
+| `*_RDATA` | Output | Yes** | Read data |
+| `*_RRESP` | Output | Yes** | Read response |
+| `*_RVALID` | Output | Yes** | Read data valid |
+| `*_RREADY` | Input | Yes** | Read data ready |
+
+*Required if write channel is present  
+**Required if read channel is present
+
+**Example:**
+```systemverilog
+// AXI-Lite interface (both read and write)
+input wire [4:0] s_axi_control_AWADDR,
+input wire s_axi_control_AWVALID,
+output wire s_axi_control_AWREADY,
+input wire [31:0] s_axi_control_WDATA,
+input wire [3:0] s_axi_control_WSTRB,
+input wire s_axi_control_WVALID,
+output wire s_axi_control_WREADY,
+output wire [1:0] s_axi_control_BRESP,
+output wire s_axi_control_BVALID,
+input wire s_axi_control_BREADY,
+input wire [4:0] s_axi_control_ARADDR,
+input wire s_axi_control_ARVALID,
+output wire s_axi_control_ARREADY,
+output wire [31:0] s_axi_control_RDATA,
+output wire [1:0] s_axi_control_RRESP,
+output wire s_axi_control_RVALID,
+input wire s_axi_control_RREADY
+```
+
+## Pragma System
+
+Pragmas are special comments that provide additional metadata to the Hardware Kernel Generator. They follow the format:
+
+```
+// @brainsmith <pragma_type> <arguments...>
+```
+
+### Supported Pragmas
+
+#### 1. Top Module Selection
+```systemverilog
+// @brainsmith top_module my_target_module
+```
+Specifies which module to use when multiple modules exist in the file.
+
+#### 2. Interface Datatype Constraints
+```systemverilog
+// @brainsmith datatype in0 8
+// @brainsmith datatype config 1 32
+```
+Restricts supported datatypes for interfaces. First form specifies fixed size, second form specifies range. *Note: This pragma handler is currently a placeholder that needs to be defined based on future HWCustomOp improvements and expansions.*
+
+#### 3. Derived Parameters
+```systemverilog
+// @brainsmith derived_parameter my_function param1 param2
+```
+Links module parameters to Python functions for complex parameter derivation. *Note: This pragma handler is currently a placeholder that needs to be defined based on future HWCustomOp improvements and expansions.*
+
+#### 4. Weight Interfaces
+```systemverilog
+// @brainsmith weight in1
+```
+Marks an interface as carrying weight data to inform HWCustomOp generation.
+
+### Pragma Extensibility
+
+The pragma system is designed for extensibility. New pragma types can be added by:
+
+1. Adding the pragma type to `PragmaType` enum in `data.py`
+2. Creating a new pragma subclass inheriting from `Pragma`
+3. Implementing `_parse_inputs()` and `apply()` methods
+4. Registering the pragma constructor in `PragmaHandler`
+
+## Data Structures
+
+### Core Types
+
+- **`HWKernel`**: Top-level representation of a parsed hardware module
+- **`Interface`**: Validated interface with associated ports and metadata
+- **`Port`**: Individual SystemVerilog port with direction and width information
+- **`Parameter`**: Module parameter with type and default value
+- **`Pragma`**: Compiler directive with parsed arguments
+
+### Interface Types
+
+```python
+class InterfaceType(Enum):
+    GLOBAL_CONTROL = "global"
+    AXI_STREAM = "axistream" 
+    AXI_LITE = "axilite"
+    UNKNOWN = "unknown"
+```
+
+### Direction Types
+
+```python
+class Direction(Enum):
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
+```
+
+## API Reference
+
+### RTLParser Class
+
+The main parser interface:
+
+```python
+class RTLParser:
+    def __init__(self, grammar_path: Optional[str] = None, debug: bool = False)
+    def parse_file(self, file_path: str) -> HWKernel
+```
+
+**Parameters:**
+- `grammar_path`: Path to tree-sitter grammar library (uses default if None)
+- `debug`: Enable detailed logging
+- `file_path`: Path to SystemVerilog file to parse
+
+**Returns:** `HWKernel` object containing all extracted information
+
+### HWKernel Object
+
+```python
+@dataclass
+class HWKernel:
+    name: str                                    # Module name
+    parameters: List[Parameter]                  # Module parameters
+    interfaces: Dict[str, Interface]             # Validated interfaces
+    pragmas: List[Pragma]                        # Found pragmas
+    metadata: Dict[str, Any]                     # Additional metadata
+```
+
+### Interface Object
+
+```python
+@dataclass
+class Interface:
+    name: str                                    # Interface name (e.g., "in0", "config")
+    type: InterfaceType                          # Interface type
+    ports: Dict[str, Port]                       # Signal name to Port mapping
+    validation_result: ValidationResult          # Validation status
+    metadata: Dict[str, Any]                     # Protocol-specific metadata
+```
+
+## Dependencies
+
+### Runtime Dependencies
+
+- **Python 3.7+**
+- **tree-sitter**: Python bindings for tree-sitter parser
+- **SystemVerilog Grammar**: Pre-compiled grammar library (`sv.so`)
+
+### Grammar Library
+
+The parser currently uses a pre-compiled SystemVerilog grammar (`sv.so`) for tree-sitter. This is a temporary solution that will be replaced with a more robust system to build the grammar from the open-source tree-sitter-verilog repository during Docker generation.
+
+## Error Handling
+
+The parser provides comprehensive error reporting with specific guidance for common issues:
+
+### Syntax Errors
+- Invalid SystemVerilog syntax
+- Malformed module definitions
+
+### Interface Validation Errors
+- Missing required signals
+- Incorrect signal directions
+- Invalid interface configurations
+
+### Pragma Errors
+- Invalid pragma syntax
+- Missing required arguments
+- Conflicting pragma specifications
+
+All errors include line numbers and specific guidance for resolution.
+
+## Development Guide
+
+### Extending Interface Support
+
+To add support for new interface types:
+
+1. **Define Protocol Specification**
+   ```python
+   NEW_INTERFACE_SUFFIXES = {
+       "SIGNAL1": {"direction": Direction.INPUT, "required": True},
+       "SIGNAL2": {"direction": Direction.OUTPUT, "required": False},
+   }
+   ```
+
+2. **Add Interface Type**
+   ```python
+   class InterfaceType(Enum):
+       # ... existing types ...
+       NEW_INTERFACE = "new_interface"
+   ```
+
+3. **Implement Validation Logic**
+   ```python
+   def validate_new_interface(self, group: PortGroup) -> ValidationResult:
+       # Validation implementation
+   ```
+
+4. **Update Scanner Configuration**
+   ```python
+   self.suffixes[InterfaceType.NEW_INTERFACE] = NEW_INTERFACE_SUFFIXES
+   ```
+
+### Adding Custom Pragmas
+
+1. **Define Pragma Type**
+   ```python
+   class PragmaType(Enum):
+       # ... existing types ...
+       CUSTOM_PRAGMA = "custom_pragma"
+   ```
+
+2. **Create Pragma Subclass**
+   ```python
+   @dataclass
+   class CustomPragma(Pragma):
+       def _parse_inputs(self) -> Dict:
+           # Input parsing logic
+           
+       def apply(self, **kwargs) -> Any:
+           # Application logic
+   ```
+
+3. **Register in Handler**
+   ```python
+   self.pragma_constructors[PragmaType.CUSTOM_PRAGMA] = CustomPragma
+   ```
+
+### Testing Guidelines
+
+When developing extensions, ensure comprehensive validation and error checking:
+
+- Add appropriate validation for new signal patterns
+- Include comprehensive error messages with line numbers
+- Test with both valid and invalid input cases
+- Verify proper metadata extraction
+
+## Naming Conventions
+
+### Signal Naming Requirements
+
+For proper interface recognition, signals must follow these conventions. The parser performs case-insensitive suffix detection, but uppercase is the preferred style:
+
+- **Global Control**: `<prefix>_clk`, `<prefix>_rst_n`, `<prefix>_clk2x`
+- **AXI-Stream**: `<prefix>_TDATA`, `<prefix>_TVALID`, `<prefix>_TREADY`, `<prefix>_TLAST`
+- **AXI-Lite**: `<prefix>_AWADDR`, `<prefix>_WDATA`, etc. (see full list above)
+
+### Interface Naming
+
+The parser automatically assigns interface names:
+- Global Control: Uses signal names directly
+- AXI-Stream: `in0`, `in1`, ... for inputs; `out0`, `out1`, ... for outputs  
+- AXI-Lite: `config` for configuration interfaces
+
+## Limitations and Future Work
+
+### Current Limitations
+
+- **Grammar Dependency**: Relies on pre-compiled SystemVerilog grammar
+- **Interface Coverage**: Limited to Global Control, AXI-Stream, and AXI-Lite
+- **Parameter Expressions**: Preserves but doesn't evaluate complex expressions
+
+### Planned Enhancements
+
+- **Dynamic Grammar Building**: Replace static grammar with build-time compilation from the open-source tree-sitter-verilog repository
+
+## License
+
+Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+
+---
+
+*This documentation corresponds to the RTL Parser implementation as part of the Brainsmith Hardware Kernel Generator project.*

@@ -16,7 +16,7 @@ might depend on the tree-sitter library version used during compilation.
 
 Why ctypes?: Tree-sitter's Python binding typically loads grammars via language
 files (.so, .dll, .dylib) containing a specific C function (e.g., tree_sitter_verilog).
-Since version 0.23.0 tree-sitter removed the ability directly initialize a 
+Since version 0.23.0 tree-sitter removed the ability to directly initialize a 
 Language from .so files: https://github.com/tree-sitter/py-tree-sitter/discussions/251
 Using ctypes allows direct loading of this shared library and accessing the
 language function pointer, which is then wrapped into a Python capsule that the
@@ -27,7 +27,7 @@ code at runtime, only the compiled library.
 import os
 import ctypes
 import logging
-import inspect # Add inspect import
+import inspect
 from ctypes import c_void_p, c_char_p, py_object, pythonapi
 from typing import Optional
 from tree_sitter import Language

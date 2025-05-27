@@ -92,4 +92,13 @@ Compiler data that can't be easily surmised from the code must be specified by t
     // @brainsmith derived_param my_python_fn PE SIMD TILE
     ```
 
+3. *Weight*: Marks interface as a weight interface, informing HWCustomOp generation:
+    ```
+    // @brainsmith weight <signal_prefix>
+    ```
+    Multiple interfaces can be linked with one pragma like so:
+    ```
+    // @brainsmith weight in1 in2
+    ```
+
 4. *Custom Pragmas*: Give a clear way to add new pragmas, facilitating future extensions of Brainsmith and the HKG.

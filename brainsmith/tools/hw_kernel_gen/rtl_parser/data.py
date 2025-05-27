@@ -24,12 +24,13 @@ validation.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Optional, Any, Callable
-import logging # Added import
+import logging
 
-# Set up logger for this module - typically at the module level
+# Set up logger for this module
 logger = logging.getLogger(__name__)
 
-class PragmaError(Exception): # Added PragmaError definition
+
+class PragmaError(Exception):
     """Custom exception for errors during pragma parsing or validation."""
     pass
 
@@ -75,17 +76,16 @@ class Parameter:
         template_param_name: Name used in the wrapper template (e.g., $NAME$).
     """
     name: str
-    param_type: Optional[str] = None # Changed from str to Optional[str]
+    param_type: Optional[str] = None  # Parameter datatype (can be None for typeless parameters)
     default_value: Optional[str] = None
     description: Optional[str] = None
-    template_param_name: str = field(init=False) # Added field
+    template_param_name: str = field(init=False)  # Computed template parameter name
 
     def __post_init__(self):
         """Validate parameter attributes after initialization."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid parameter name: {self.name}")
-        # Parameter type can be None for typeless parameters
-        self.template_param_name = f"${self.name.upper()}$" # Initialize template name
+        self.template_param_name = f"${self.name.upper()}$"
 
 @dataclass
 class Port:
@@ -134,7 +134,7 @@ class PortGroup:
 
         If a key (e.g., signal suffix like 'TDATA') is provided, it's used.
         Otherwise, the full port name is used as the key.
-        Currently overrides existing keys without warning.
+        Warns when overriding existing keys.
         """
         if key is None:
             key = port.name
@@ -197,7 +197,7 @@ class Pragma:
         """
         raise NotImplementedError(f"Pragma type {self.type.name} must implement _parse_inputs.")
 
-    def apply(self, **kwargs) -> Any: # Changed return type to Any
+    def apply(self, **kwargs) -> Any:
         """
         Abstract method to apply the pragma's effects.
         Subclasses must implement this method and can return any relevant data.
@@ -226,7 +226,7 @@ class TopModulePragma(Pragma):
             raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
         return {"module_name": self.inputs[0]}
 
-    def apply(self, **kwargs) -> Any: # Changed return type to Any
+    def apply(self, **kwargs) -> Any:
         """Applies the TOP_MODULE pragma."""
         hw_kernel: Optional[HWKernel] = kwargs.get('hw_kernel')
         # The primary effect of TOP_MODULE (identifying the main module) is typically
@@ -283,7 +283,7 @@ class DatatypePragma(Pragma):
         else:
             raise PragmaError("DATATYPE pragma requires <interface_name> <size> OR <interface_name> <min_size> <max_size>")
 
-    def apply(self, **kwargs) -> Any: # Changed return type to Any
+    def apply(self, **kwargs) -> Any:
         """Applies the DATATYPE pragma to the specified interface."""
         interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
 
@@ -396,7 +396,7 @@ class WeightPragma(Pragma):
         return {"interface_names": interface_names}
     
 
-    def apply(self, **kwargs) -> Any: # Changed return type to Any
+    def apply(self, **kwargs) -> Any:
         """Applies the WEIGHT pragma to the specified interface."""
         interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
 

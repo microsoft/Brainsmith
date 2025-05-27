@@ -16,10 +16,9 @@ from typing import List, Optional, Dict, Callable
 
 from tree_sitter import Node
 
-# Updated imports: Pragma (base), PragmaType, and specific subclasses, PragmaError, Interface, HWKernel
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
     Pragma, PragmaType, TopModulePragma, DatatypePragma,
-    DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel  # Added HWKernel
+    DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel
 )
 
 # Set up logger for this module
