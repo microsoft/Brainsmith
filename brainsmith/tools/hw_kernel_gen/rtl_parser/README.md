@@ -70,6 +70,8 @@ print(f"Parameters: {[p.name for p in hw_kernel.parameters]}")
 print(f"Interfaces: {list(hw_kernel.interfaces.keys())}")
 ```
 
+**Note**: The RTL Parser currently supports only ANSI-style port declarations (ports declared in the module header). Non-ANSI style declarations are not supported.
+
 ### Debug Mode
 
 ```python
@@ -411,6 +413,7 @@ The parser automatically assigns interface names:
 - **Grammar Dependency**: Relies on pre-compiled SystemVerilog grammar
 - **Interface Coverage**: Limited to Global Control, AXI-Stream, and AXI-Lite
 - **Parameter Expressions**: Preserves but doesn't evaluate complex expressions
+- **Port Declaration Style**: Only ANSI-style port declarations are supported (ports declared in module header)
 
 ### Planned Enhancements
 
