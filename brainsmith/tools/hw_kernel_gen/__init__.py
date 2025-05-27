@@ -3,8 +3,6 @@
 from .rtl_parser import HWKernel, Port, Parameter, Interface, Pragma # Expose data structures
 
 __all__ = [
-    # "HardwareKernelGenerator",
-    # "HardwareKernelGeneratorError",
     "HWKernel",
     "Port",
     "Parameter",
