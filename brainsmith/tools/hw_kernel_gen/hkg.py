@@ -13,8 +13,8 @@ try:
     from .rtl_parser import RTLParser, HWKernel, ParserError
     from .generators.rtl_template_generator import generate_rtl_template
     # from .generators.hw_custom_op_generator import generate_hw_custom_op
-    from .generators.rtl_backend_generator import generate_rtl_backend
-    from .generators.doc_generator import generate_documentation
+    # from .generators.rtl_backend_generator import generate_rtl_backend
+    # from .generators.doc_generator import generate_documentation
 except ImportError:
     # Fallback for running script directly (adjust as needed)
     print("Warning: Running script directly, attempting relative imports from parent.")
@@ -22,8 +22,8 @@ except ImportError:
     from hw_kernel_gen.rtl_parser import RTLParser, HWKernel, ParserError
     from hw_kernel_gen.generators.rtl_template_generator import generate_rtl_template
     # from hw_kernel_gen.generators.hw_custom_op_generator import generate_hw_custom_op
-    from hw_kernel_gen.generators.rtl_backend_generator import generate_rtl_backend
-    from hw_kernel_gen.generators.doc_generator import generate_documentation
+    # from hw_kernel_gen.generators.rtl_backend_generator import generate_rtl_backend
+    # from hw_kernel_gen.generators.doc_generator import generate_documentation
 
 
 class HardwareKernelGeneratorError(Exception):
