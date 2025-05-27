@@ -86,7 +86,7 @@ def forge(blueprint, model, args):
         synth_clk_period_ns=args.clk,
         folding_config_file=args.param,
         stop_step=args.stop_step,
-        auto_fifo_depths=args.fifodepth,
+        auto_fifo_depths=args.run_fifo_sizing,
         fifosim_n_inferences=args.fifosim_n_inferences,
         verification_atol=args.verification_atol,
         split_large_fifos=args.split_large_fifos,
