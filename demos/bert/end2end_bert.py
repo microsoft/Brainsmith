@@ -194,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--clk', type=float, default=3.33, help='The target clock rate for the hardware')
     parser.add_argument('-s', '--stop_step', type=str, default=None, help='Step to stop at in the build flow')
     parser.add_argument('-p', '--param', type=str, default=None, help='Use a preconfigured file for the folding parameters')
-    parser.add_argument('-x', '--fifodepth', type=bool, default=True, help='Skip the FIFO depth stage')
+    parser.add_argument('-x', '--run_fifo_sizing', action='store_true', help='Run the fifo-sizing step')
     parser.add_argument('-q', '--seqlen', type=int, default=128, help='Sets the sequence length parameter')
     parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
     args = parser.parse_args()
