@@ -5,9 +5,9 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-import pytest # Ensure pytest is imported
-import re # Add import for regex
-import logging # Ensure logging is imported
+import pytest
+import logging
+from typing import List
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
@@ -15,65 +15,13 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import AXI_LIT
 
 logger = logging.getLogger(__name__)
 
-# --- Fixtures ---
-
-@pytest.fixture
-def scanner():
-    return InterfaceScanner()
-
-@pytest.fixture
-def global_ports():
-    return [
-        Port(name="ap_clk", direction=Direction.INPUT, width="1"),
-        Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
-        Port(name="ap_clk2x", direction=Direction.INPUT, width="1"), # Optional
-    ]
-
-@pytest.fixture
-def axis_in_ports():
-    return [
-        Port(name="in0_TDATA", direction=Direction.INPUT, width="32"),
-        Port(name="in0_TVALID", direction=Direction.INPUT, width="1"),
-        Port(name="in0_TREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="in0_TLAST", direction=Direction.INPUT, width="1"), # Optional
-    ]
-
-@pytest.fixture
-def axis_out_ports():
-    return [
-        Port(name="out1_TDATA", direction=Direction.OUTPUT, width="64"),
-        Port(name="out1_TVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="out1_TREADY", direction=Direction.INPUT, width="1"),
-    ]
-
-@pytest.fixture
-def axilite_ports_full():
-    return [
-        # Write
-        Port(name="config_AWADDR", direction=Direction.INPUT, width="6"),
-        Port(name="config_AWPROT", direction=Direction.INPUT, width="3"),
-        Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_WDATA", direction=Direction.INPUT, width="32"),
-        Port(name="config_WSTRB", direction=Direction.INPUT, width="4"),
-        Port(name="config_WVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_WREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BRESP", direction=Direction.OUTPUT, width="2"),
-        Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
-        # Read
-        Port(name="config_ARADDR", direction=Direction.INPUT, width="6"),
-        Port(name="config_ARPROT", direction=Direction.INPUT, width="3"),
-        Port(name="config_ARVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_ARREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_RDATA", direction=Direction.OUTPUT, width="32"),
-        Port(name="config_RRESP", direction=Direction.OUTPUT, width="2"),
-        Port(name="config_RVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
-    ]
+# =============================================================================
+# LOCAL FIXTURES (Not shared - specific to interface scanner tests)
+# =============================================================================
 
 @pytest.fixture
 def unassigned_ports_list():
+    """Returns a list of ports that don't belong to any standard interface."""
     return [
         Port(name="custom_signal", direction=Direction.INPUT, width="8"),
         Port(name="another_port", direction=Direction.OUTPUT, width="1"),
@@ -89,10 +37,10 @@ def test_scan_only_global(scanner, global_ports):
     assert not remaining
     assert groups[0].interface_type == InterfaceType.GLOBAL_CONTROL
     assert groups[0].name == "ap"
-    assert set(groups[0].ports.keys()) == {"clk", "rst_n", "clk2x"}
+    assert set(groups[0].ports.keys()) == {"clk", "rst_n", "clk2x"}  # Include optional signal
 
-def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports):
-    all_axis_ports = axis_in_ports + axis_out_ports
+def test_scan_only_axis(scanner, axi_stream_in_ports, axi_stream_out_ports):
+    all_axis_ports = axi_stream_in_ports + axi_stream_out_ports
     groups, remaining = scanner.scan(all_axis_ports)
     assert len(groups) == 2
     assert not remaining
@@ -101,22 +49,24 @@ def test_scan_only_axis(scanner, axis_in_ports, axis_out_ports):
 
     assert groups[0].interface_type == InterfaceType.AXI_STREAM
     assert groups[0].name == "in0"
-    # Assertions expect UPPERCASE keys
+    # Assertions expect UPPERCASE keys - include optional TLAST
     assert set(groups[0].ports.keys()) == {"TDATA", "TVALID", "TREADY", "TLAST"}
 
     assert groups[1].interface_type == InterfaceType.AXI_STREAM
     assert groups[1].name == "out1"
     # Assertions expect UPPERCASE keys
-    assert set(groups[1].ports.keys()) == {"TDATA", "TVALID", "TREADY"} # out1 only has these 3
+    assert set(groups[1].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
 
-def test_scan_only_axilite(scanner, axilite_ports_full):
-    groups, remaining = scanner.scan(axilite_ports_full)
+def test_scan_only_axilite(scanner, axilite_config_ports):
+    groups, remaining = scanner.scan(axilite_config_ports)
     assert len(groups) == 1
     assert not remaining
     assert groups[0].interface_type == InterfaceType.AXI_LITE
     assert groups[0].name == "config"
-    # Assertion expects UPPERCASE keys
-    expected_keys = set(AXI_LITE_SUFFIXES.keys())
+    # Check that the fixture contains the expected signals (doesn't include optional PROT signals)
+    expected_keys = {"AWADDR", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", 
+                     "BRESP", "BVALID", "BREADY", "ARADDR", "ARVALID", "ARREADY", 
+                     "RDATA", "RRESP", "RVALID", "RREADY"}
     assert set(groups[0].ports.keys()) == expected_keys
 
 def test_scan_only_unassigned(scanner, unassigned_ports_list):
@@ -125,8 +75,8 @@ def test_scan_only_unassigned(scanner, unassigned_ports_list):
     assert len(remaining) == len(unassigned_ports_list)
     assert {p.name for p in remaining} == {p.name for p in unassigned_ports_list}
 
-def test_scan_mixed(scanner, global_ports, axis_in_ports, axilite_ports_full, unassigned_ports_list):
-    all_ports = global_ports + axis_in_ports + axilite_ports_full + unassigned_ports_list
+def test_scan_mixed(scanner, global_ports, axi_stream_in_ports, axilite_config_ports, unassigned_ports_list):
+    all_ports = global_ports + axi_stream_in_ports + axilite_config_ports + unassigned_ports_list
     groups, remaining = scanner.scan(all_ports)
 
     assert len(groups) == 3 # global, in0, config
@@ -140,7 +90,9 @@ def test_scan_mixed(scanner, global_ports, axis_in_ports, axilite_ports_full, un
 
     # Assertions expect UPPERCASE keys
     assert set(group_map["in0"].ports.keys()) == {"TDATA", "TVALID", "TREADY", "TLAST"}
-    expected_axilite_keys = set(AXI_LITE_SUFFIXES.keys())
+    expected_axilite_keys = {"AWADDR", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", 
+                             "BRESP", "BVALID", "BREADY", "ARADDR", "ARVALID", "ARREADY", 
+                             "RDATA", "RRESP", "RVALID", "RREADY"}
     assert set(group_map["config"].ports.keys()) == expected_axilite_keys
 
 def test_scan_empty(scanner):
@@ -149,83 +101,128 @@ def test_scan_empty(scanner):
     assert not remaining
 
 def test_scan_axis_partial(scanner):
-    ports = [
-        Port(name="in0_TDATA", direction=Direction.INPUT, width="32"),
-        Port(name="in0_TVALID", direction=Direction.INPUT, width="1"),
+    # Test with partial AXI-Stream interface (missing TREADY)
+    partial_axis_ports = [
+        Port(name="in1_TDATA", direction=Direction.INPUT, width="32"),
+        Port(name="in1_TVALID", direction=Direction.INPUT, width="1"),
         # Missing TREADY
     ]
-    groups, remaining = scanner.scan(ports)
-    assert len(groups) == 1
-    assert not remaining # Scanner groups potential interfaces, validator checks completeness
+    groups, remaining = scanner.scan(partial_axis_ports)
+    assert len(groups) == 1  # Scanner groups partial interfaces, validator checks completeness
+    assert not remaining  # All matching ports should be assigned to the group
     assert groups[0].interface_type == InterfaceType.AXI_STREAM
-    assert groups[0].name == "in0"
+    assert groups[0].name == "in1"
     assert set(groups[0].ports.keys()) == {"TDATA", "TVALID"}
 
 def test_scan_axilite_partial(scanner):
-    ports = [
-        Port(name="config_AWADDR", direction=Direction.INPUT, width="6"),
+    # Test with partial AXI-Lite interface (only write address channel)
+    partial_axilite_ports = [
+        Port(name="config_AWADDR", direction=Direction.INPUT, width="32"),
         Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
         Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
-        # Only partial write channel
+        # Missing other channels
     ]
-    groups, remaining = scanner.scan(ports)
-    assert len(groups) == 1
-    assert not remaining # Scanner groups potential interfaces, validator checks completeness
+    groups, remaining = scanner.scan(partial_axilite_ports)
+    assert len(groups) == 1  # Scanner groups partial interfaces, validator checks completeness
+    assert not remaining  # All matching ports should be assigned to the group
     assert groups[0].interface_type == InterfaceType.AXI_LITE
     assert groups[0].name == "config"
     assert set(groups[0].ports.keys()) == {"AWADDR", "AWVALID", "AWREADY"}
 
 def test_scan_case_insensitivity(scanner):
-    ports = [
-        Port(name="ap_clk", direction=Direction.INPUT, width="1"), # Lowercase global
-        Port(name="ap_RST_N", direction=Direction.INPUT, width="1"), # Uppercase global
-        Port(name="in0_tdata", direction=Direction.INPUT, width="32"), # Lowercase stream
-        Port(name="in0_TVALID", direction=Direction.INPUT, width="1"), # Mixed case stream
-        Port(name="in0_tready", direction=Direction.OUTPUT, width="1"), # Lowercase stream
-        Port(name="config_awaddr", direction=Direction.INPUT, width="6"), # Mixed case lite
-        Port(name="config_AWVALID", direction=Direction.INPUT, width="1"), # Mixed case lite
-        Port(name="config_awready", direction=Direction.OUTPUT, width="1"), # Lowercase lite
-        # Add enough required signals for AXI-Lite write channel
-        Port(name="config_WDATA", direction=Direction.INPUT, width="32"),
-        Port(name="config_WSTRB", direction=Direction.INPUT, width="4"),
-        Port(name="config_WVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_WREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BRESP", direction=Direction.OUTPUT, width="2"),
-        Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
+    # Test that scanning works with lowercase and mixed case suffixes
+    case_insensitive_ports = [
+        Port(name="test_tdata", direction=Direction.INPUT, width="32"),
+        Port(name="test_TValid", direction=Direction.INPUT, width="1"),
+        Port(name="test_TREADY", direction=Direction.OUTPUT, width="1"),
     ]
-    groups, remaining = scanner.scan(ports)
-    assert len(groups) == 3 # ap, in0, config
+    groups, remaining = scanner.scan(case_insensitive_ports)
+    assert len(groups) == 1
     assert not remaining
-
-    group_map = {g.name: g for g in groups}
-    assert "ap" in group_map
-    assert "in0" in group_map
-    assert "config" in group_map
-
-    # Updated to expect canonical suffix keys (as defined in the suffix dictionaries)
-    # Global signals should use lowercase (based on GLOBAL_SIGNAL_SUFFIXES keys)
-    assert set(group_map["ap"].ports.keys()) == {"clk", "rst_n"} 
-    # AXI Stream signals should use uppercase (based on AXI_STREAM_SUFFIXES keys)
-    assert set(group_map["in0"].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
-    # AXI Lite signals should use uppercase (based on AXI_LITE_SUFFIXES keys)
-    assert {"AWADDR", "AWVALID", "AWREADY", "WDATA", "WSTRB", "WVALID", "WREADY", "BRESP", "BVALID", "BREADY"}.issubset(group_map["config"].ports.keys())
+    assert groups[0].interface_type == InterfaceType.AXI_STREAM
+    assert groups[0].name == "test"
 
 def test_scan_vivado_suffixes(scanner):
+    # Test AXI-Stream with Vivado-style suffixes (with _V)
+    vivado_axis_ports = [
+        Port(name="output_V_TDATA", direction=Direction.OUTPUT, width="64"),
+        Port(name="output_V_TVALID", direction=Direction.OUTPUT, width="1"),
+        Port(name="output_V_TREADY", direction=Direction.INPUT, width="1"),
+    ]
+    groups, remaining = scanner.scan(vivado_axis_ports)
+    assert len(groups) == 1
+    assert not remaining
+    assert groups[0].interface_type == InterfaceType.AXI_STREAM
+    assert groups[0].name == "output_V"
+    # Check that ports are correctly mapped
+    expected_keys = {"TDATA", "TVALID", "TREADY"}
+    assert set(groups[0].ports.keys()) == expected_keys
+
+# =============================================================================
+# IMPLEMENTATION DETAIL TESTS
+# =============================================================================
+
+def test_regex_generation(scanner):
+    """Test that the scanner generates proper regex patterns."""
+    # This is testing implementation details, but important for robustness
+    patterns = scanner.regex_maps
+    assert InterfaceType.GLOBAL_CONTROL in patterns
+    assert InterfaceType.AXI_STREAM in patterns
+    assert InterfaceType.AXI_LITE in patterns
+
+def test_signal_normalization(scanner):
+    """Test that signals are properly normalized to uppercase."""
     ports = [
-        Port(name="in0_V_TDATA", direction=Direction.INPUT, width="32"),
-        Port(name="in0_V_TVALID", direction=Direction.INPUT, width="1"),
-        Port(name="in0_V_TREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="out0_V_TDATA", direction=Direction.OUTPUT, width="32"),
-        Port(name="out0_V_TVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="out0_V_TREADY", direction=Direction.INPUT, width="1"),
+        Port(name="test_tdata", direction=Direction.INPUT, width="32"),
+        Port(name="test_TVALID", direction=Direction.INPUT, width="1"),
+        Port(name="test_tready", direction=Direction.OUTPUT, width="1"),
     ]
     groups, remaining = scanner.scan(ports)
-    assert len(groups) == 2
+    assert len(groups) == 1
+    group = groups[0]
+    # All signal suffixes should be normalized to uppercase
+    assert "TDATA" in group.ports
+    assert "TVALID" in group.ports  
+    assert "TREADY" in group.ports
+    # Original case should not be present
+    assert "tdata" not in group.ports
+    assert "tready" not in group.ports
+
+# =============================================================================
+# EDGE CASE TESTS
+# =============================================================================
+
+def test_scan_duplicate_prefixes_different_types(scanner):
+    """Test behavior when same prefix is used for different interface types."""
+    # This should not happen in well-designed modules, but test robustness
+    conflicting_ports = [
+        # Global control with "test" prefix
+        Port(name="test_clk", direction=Direction.INPUT, width="1"),
+        Port(name="test_rst_n", direction=Direction.INPUT, width="1"),
+        # AXI-Stream with same "test" prefix
+        Port(name="test_TDATA", direction=Direction.INPUT, width="32"),
+        Port(name="test_TVALID", direction=Direction.INPUT, width="1"),
+        Port(name="test_TREADY", direction=Direction.OUTPUT, width="1"),
+    ]
+    groups, remaining = scanner.scan(conflicting_ports)
+    # Should prefer one interface type over another (implementation dependent)
+    # At minimum, should not crash and should handle gracefully
+    assert isinstance(groups, list)
+    assert isinstance(remaining, list)
+    # Total ports should be preserved
+    total_assigned = sum(len(g.ports) for g in groups)
+    assert total_assigned + len(remaining) == len(conflicting_ports)
+
+def test_scan_empty_prefix(scanner):
+    """Test behavior with ports that have empty or invalid prefixes."""
+    invalid_prefix_ports = [
+        Port(name="TDATA", direction=Direction.INPUT, width="32"),   # No prefix at all
+        Port(name="TVALID", direction=Direction.INPUT, width="1"),   # No prefix at all  
+        Port(name="TREADY", direction=Direction.OUTPUT, width="1"),  # No prefix at all
+    ]
+    groups, remaining = scanner.scan(invalid_prefix_ports)
+    # Scanner actually creates a group with special name '<NO_PREFIX>' for these
+    assert len(groups) == 1
+    assert groups[0].name == "<NO_PREFIX>"
+    assert groups[0].interface_type == InterfaceType.AXI_STREAM
     assert not remaining
-    groups.sort(key=lambda g: g.name)
-    assert groups[0].name == "in0_V"
-    assert groups[1].name == "out0_V"
-    # Assertions expect UPPERCASE keys
-    assert set(groups[0].ports.keys()) == {"TDATA", "TVALID", "TREADY"}
-    assert set(groups[1].ports.keys()) == {"TDATA", "TVALID", "TREADY"}

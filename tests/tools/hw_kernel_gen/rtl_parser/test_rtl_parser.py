@@ -15,23 +15,9 @@ import logging
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import ParserError, SyntaxError
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Direction, InterfaceType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import PragmaType
-from .test_fixtures import (
-    VALID_HEADER_PARAMS_PORTSOPEN,
-    VALID_GLOBAL_SIGNALS,
-    VALID_AXI_STREAM_IN_INTERFACE,
-    # VALID_AXI_STREAM_OUT_INTERFACE, # Let's omit this for a custom example
-    VALID_PORTS_CLOSE,
-    VALID_MODULE_BODY_CONTENT,
-    VALID_ENDMODULE_STATEMENT,
-    HEADER_PARAMS_PLACEHOLDER,
-    VALID_MIN_INTERFACES, # For comparison or alternative construction
-    VALID_MODULE_BODY
-)
-# No need to import fixtures as they're imported in conftest.py
 
 logger = logging.getLogger(__name__)
 
-# --- Test Classes ---
 
 class TestParserCore:
     """Tests for basic parsing and module structure."""
@@ -248,16 +234,18 @@ class TestParameterParsing:
         assert param_map["MSG"].default_value == '{ "Part1", "Part2" }'
 
     def test_local_parameters(self, parser, temp_sv_file, valid_module_placeholder_params):
-        content =  f"""\
-        {VALID_HEADER_PARAMS_PORTSOPEN}
-        {VALID_MIN_INTERFACES}
-        );
+        # Create content with local parameters - using base module structure
+        content = valid_module_placeholder_params.replace("<PLACEHOLDER>", """
+            parameter WIDTH = 32,
+            parameter DEPTH = 1024
+        """).replace(
+            "// Module body content",
+            """\
             localparam int LP_WIDTH = 16;
             localparam bit [7:0] LP_NAME = "local_param";
 
-            // Some logic using the local parameters
-        endmodule
-        """
+            // Some logic using the local parameters"""
+        )
         path = temp_sv_file(content)
         kernel = parser.parse_file(path)
         assert kernel.name == "valid_module" # Basic check
@@ -282,9 +270,10 @@ class TestParameterParsing:
 
 
 class TestPortParsing:
-    """Tests for port extraction."""
+    """Tests for port extraction and parsing."""
 
     def test_simple_ports(self, parser, temp_sv_file):
+        """Test parsing basic input/output ports without explicit types."""
         content = """
         module test (
             input clk,
@@ -306,6 +295,7 @@ class TestPortParsing:
         assert port_map["valid"].direction == Direction.OUTPUT
 
     def test_ports_with_width(self, parser, temp_sv_file):
+        """Test parsing ports with explicit widths and types."""
         content = """
         module test (
             input logic [31:0] data_in,
@@ -325,14 +315,12 @@ class TestPortParsing:
         assert not parser.parameters
         assert len(parser.ports) == 3
         port_map = {p.name: p for p in parser.ports}
-        # --- MODIFIED: Removed brackets from expected width ---
         assert "data_in" in port_map and port_map["data_in"].width == "31:0" and port_map["data_in"].direction == Direction.INPUT
         assert "data_out" in port_map and port_map["data_out"].width == "7:0" and port_map["data_out"].direction == Direction.OUTPUT
         assert "bidir" in port_map and port_map["bidir"].width == "1:0" and port_map["bidir"].direction == Direction.INOUT
-        # --- END MODIFICATION ---
 
     def test_ports_parametric_width(self, parser, temp_sv_file):
-        """Tests ports with widths defined by parameters."""
+        """Test parsing ports with widths defined by parameters."""
         content = """
         module test #(parameter WIDTH = 8) (
             input logic [WIDTH-1:0] data_div_width,
@@ -354,14 +342,12 @@ class TestPortParsing:
 
         assert len(parser.ports) == 3
         port_map = {p.name: p for p in parser.ports}
-        # --- MODIFIED: Removed brackets and fixed 'valid' width ---
         assert "data_div_width" in port_map and port_map["data_div_width"].width == "WIDTH-1:0"
         assert "addr" in port_map and port_map["addr"].width == "$clog2(WIDTH):0"
         assert "valid" in port_map and port_map["valid"].width == '1'
-        # --- END MODIFICATION ---
 
     def test_ansi_ports(self, parser, temp_sv_file):
-        """Tests ANSI-style port declarations."""
+        """Test parsing ANSI-style port declarations."""
         content = """
         module test_ansi (
             input logic clk,
@@ -379,18 +365,210 @@ class TestPortParsing:
             pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
 
         assert parser.name == "test_ansi"
-        assert not parser.parameters
         assert len(parser.ports) == 4
         port_map = {p.name: p for p in parser.ports}
-        assert "clk" in port_map and port_map["clk"].direction == Direction.INPUT and port_map["clk"].width == '1'
-        assert "data_in" in port_map and port_map["data_in"].direction == Direction.INPUT and port_map["data_in"].width == "31:0"
-        assert "data_valid" in port_map and port_map["data_valid"].direction == Direction.OUTPUT and port_map["data_valid"].width == '1'
-        assert "data_out" in port_map and port_map["data_out"].direction == Direction.OUTPUT and port_map["data_out"].width == "7:0"
+        assert port_map["clk"].direction == Direction.INPUT and port_map["clk"].width == "1"
+        assert port_map["data_in"].direction == Direction.INPUT and port_map["data_in"].width == "31:0"
+        assert port_map["data_valid"].direction == Direction.OUTPUT and port_map["data_valid"].width == "1"
+        assert port_map["data_out"].direction == Direction.OUTPUT and port_map["data_out"].width == "7:0"
 
-    # test_non_ansi_ports - Keep as is, should pass full parse
-    # test_mixed_ansi_non_ansi - Already modified
-    # test_unassigned_ports - Already modified
-    # test_interface_ports - Already modified
+    def test_inout_ports(self, parser, temp_sv_file):
+        """Test parsing inout (bidirectional) ports."""
+        content = """
+        module test_inout (
+            input logic clk,
+            inout wire [7:0] data_bus,
+            inout logic control_line
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 3
+        port_map = {p.name: p for p in parser.ports}
+        assert port_map["clk"].direction == Direction.INPUT
+        assert port_map["data_bus"].direction == Direction.INOUT
+        assert port_map["data_bus"].width == "7:0"
+        assert port_map["control_line"].direction == Direction.INOUT
+        assert port_map["control_line"].width == "1"
+
+    def test_wire_vs_logic_types(self, parser, temp_sv_file):
+        """Test parsing ports with different data types (wire vs logic)."""
+        content = """
+        module test_types (
+            input wire clk_wire,
+            input logic clk_logic,
+            output wire [15:0] data_wire,
+            output logic [15:0] data_logic
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 4
+        port_map = {p.name: p for p in parser.ports}
+        # Note: Current parser may not distinguish between wire and logic types
+        # but should correctly parse direction and width
+        assert port_map["clk_wire"].direction == Direction.INPUT
+        assert port_map["clk_logic"].direction == Direction.INPUT
+        assert port_map["data_wire"].direction == Direction.OUTPUT
+        assert port_map["data_wire"].width == "15:0"
+        assert port_map["data_logic"].direction == Direction.OUTPUT
+        assert port_map["data_logic"].width == "15:0"
+
+    def test_implicit_type_ports(self, parser, temp_sv_file):
+        """Test parsing ports with implicit types (no explicit wire/logic)."""
+        content = """
+        module test_implicit (
+            input [3:0] flags,
+            output result,
+            inout bidir_signal
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 3
+        port_map = {p.name: p for p in parser.ports}
+        assert port_map["flags"].direction == Direction.INPUT
+        assert port_map["flags"].width == "3:0"
+        assert port_map["result"].direction == Direction.OUTPUT
+        assert port_map["result"].width == "1"
+        assert port_map["bidir_signal"].direction == Direction.INOUT
+        assert port_map["bidir_signal"].width == "1"
+
+    def test_inout_port_parsing(self, parser, temp_sv_file):
+        """Test parsing INOUT port direction."""
+        content = """
+        module test_module (
+            input logic clk,
+            input logic [31:0] data_in,
+            output logic [7:0] data_out,
+            inout wire data_bus,
+            inout logic [15:0] bidir_data
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 5
+        port_map = {p.name: p for p in parser.ports}
+        
+        # Test INOUT ports specifically
+        assert "data_bus" in port_map
+        assert port_map["data_bus"].direction == Direction.INOUT
+        assert port_map["data_bus"].width == "1"
+        
+        assert "bidir_data" in port_map  
+        assert port_map["bidir_data"].direction == Direction.INOUT
+        assert port_map["bidir_data"].width == "15:0"
+
+    def test_wire_vs_logic_types(self, parser, temp_sv_file):
+        """Test differentiation between wire and logic types."""
+        content = """
+        module test_module (
+            input wire clk_wire,
+            input logic clk_logic,
+            output wire [7:0] data_wire,
+            output logic [7:0] data_logic,
+            inout wire bidir_wire,
+            inout logic bidir_logic
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 6
+        port_map = {p.name: p for p in parser.ports}
+        
+        # Verify all ports parsed correctly regardless of wire/logic type
+        assert "clk_wire" in port_map and port_map["clk_wire"].direction == Direction.INPUT
+        assert "clk_logic" in port_map and port_map["clk_logic"].direction == Direction.INPUT
+        assert "data_wire" in port_map and port_map["data_wire"].direction == Direction.OUTPUT
+        assert "data_logic" in port_map and port_map["data_logic"].direction == Direction.OUTPUT
+        assert "bidir_wire" in port_map and port_map["bidir_wire"].direction == Direction.INOUT
+        assert "bidir_logic" in port_map and port_map["bidir_logic"].direction == Direction.INOUT
+
+    def test_implicit_port_types(self, parser, temp_sv_file):
+        """Test ports with implicit types (no explicit wire/logic declaration)."""
+        content = """
+        module test_module (
+            input clk,
+            input [31:0] data_in,
+            output [7:0] data_out,
+            inout [3:0] flags
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 4
+        port_map = {p.name: p for p in parser.ports}
+        
+        # Verify implicit types are handled properly
+        assert "clk" in port_map and port_map["clk"].direction == Direction.INPUT and port_map["clk"].width == "1"
+        assert "data_in" in port_map and port_map["data_in"].direction == Direction.INPUT and port_map["data_in"].width == "31:0"
+        assert "data_out" in port_map and port_map["data_out"].direction == Direction.OUTPUT and port_map["data_out"].width == "7:0"
+        assert "flags" in port_map and port_map["flags"].direction == Direction.INOUT and port_map["flags"].width == "3:0"
+
+    def test_parameterized_port_widths(self, parser, temp_sv_file):
+        """Test ports with parameterized width expressions."""
+        content = """
+        module test_module #(
+            parameter WIDTH = 32,
+            parameter ADDR_WIDTH = 8
+        ) (
+            input logic clk,
+            input logic [WIDTH-1:0] data_in,
+            output logic [ADDR_WIDTH-1:0] addr_out,
+            inout logic [WIDTH+ADDR_WIDTH-1:0] combined_bus
+        );
+        endmodule
+        """
+        path = temp_sv_file(content)
+        try:
+            parser._initial_parse(path)
+            parser._extract_kernel_components()
+        except (ParserError, SyntaxError) as e:
+            pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
+
+        assert len(parser.ports) == 4
+        port_map = {p.name: p for p in parser.ports}
+        
+        # Verify parameterized widths are captured as expressions
+        assert "data_in" in port_map and port_map["data_in"].width == "WIDTH-1:0"
+        assert "addr_out" in port_map and port_map["addr_out"].width == "ADDR_WIDTH-1:0"
+        assert "combined_bus" in port_map and port_map["combined_bus"].width == "WIDTH+ADDR_WIDTH-1:0"
 
 class TestPragmaHandling:
     """Tests for pragma extraction and handling."""
@@ -490,21 +668,15 @@ class TestPragmaHandling:
         endmodule
         """
         path = temp_sv_file(content)
-        # --- MODIFIED: Call stages 1 & 2 ---
         try:
             parser._initial_parse(path)
-            # Check pragmas after Stage 1
             assert len(parser.pragmas) == 1 # Only TOP_MODULE is valid
             assert parser.pragmas[0].type == PragmaType.TOP_MODULE
 
             parser._extract_kernel_components()
         except (ParserError, SyntaxError) as e:
             pytest.fail(f"Parsing stages 1 or 2 failed unexpectedly: {e}")
-        # --- END MODIFICATION ---
 
         assert parser.name == "test_module"
         assert not parser.parameters
         assert len(parser.ports) == 6
-
-# TestInterfaceAnalysis tests remain unchanged as they test Stage 3 behavior
-

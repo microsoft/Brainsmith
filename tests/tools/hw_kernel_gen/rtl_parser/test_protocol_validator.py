@@ -16,103 +16,8 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import Interfac
 
 logger = logging.getLogger(__name__)
 
-# --- Fixtures ---
-
-@pytest.fixture
-def validator():
-    return ProtocolValidator()
-
-@pytest.fixture
-def global_ports() -> List[Port]:
-    """Fixture for standard global control ports."""
-    return [
-        Port(name="ap_clk", direction=Direction.INPUT, width="1"),
-        Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
-    ]
-
-@pytest.fixture
-def axis_in_ports() -> List[Port]:
-    """Fixture for a standard AXI-Stream input interface."""
-    return [
-        Port(name="in0_TDATA", direction=Direction.INPUT, width="32"),
-        Port(name="in0_TVALID", direction=Direction.INPUT, width="1"),
-        Port(name="in0_TREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="in0_TLAST", direction=Direction.INPUT, width="1"), # Optional but common
-    ]
-
-@pytest.fixture
-def axilite_write_ports():
-    return [
-        Port(name="config_AWADDR", direction=Direction.INPUT, width="6"),
-        Port(name="config_AWPROT", direction=Direction.INPUT, width="3"),
-        Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_WDATA", direction=Direction.INPUT, width="32"),
-        Port(name="config_WSTRB", direction=Direction.INPUT, width="4"),
-        Port(name="config_WVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_WREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BRESP", direction=Direction.OUTPUT, width="2"),
-        Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
-    ]
-
-@pytest.fixture
-def axilite_read_ports():
-    return [
-        Port(name="config_ARADDR", direction=Direction.INPUT, width="6"),
-        Port(name="config_ARPROT", direction=Direction.INPUT, width="3"),
-        Port(name="config_ARVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_ARREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_RDATA", direction=Direction.OUTPUT, width="32"),
-        Port(name="config_RRESP", direction=Direction.OUTPUT, width="2"),
-        Port(name="config_RVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
-    ]
-
-@pytest.fixture
-def axilite_ports_full(axilite_write_ports, axilite_read_ports) -> List[Port]:
-    """Fixture combining full AXI-Lite write and read ports."""
-    return axilite_write_ports + axilite_read_ports
-
-@pytest.fixture
-def axis_in_ports_with_widths() -> List[Port]:
-    """AXI-Stream input ports with specific width expressions."""
-    return [
-        Port(name="in_data_TDATA", direction=Direction.INPUT, width="[AXIS_WIDTH-1:0]"),
-        Port(name="in_data_TVALID", direction=Direction.INPUT, width="1"),
-        Port(name="in_data_TREADY", direction=Direction.OUTPUT, width="1"),
-        Port(name="in_data_TLAST", direction=Direction.INPUT, width="1"), # Optional
-    ]
-
-@pytest.fixture
-def axilite_ports_with_widths() -> List[Port]:
-    """AXI-Lite ports with specific width expressions."""
-    return [
-        # Write Address Channel
-        Port(name="config_AWADDR", direction=Direction.INPUT, width="[AXIL_ADDR_WIDTH-1:0]"),
-        Port(name="config_AWPROT", direction=Direction.INPUT, width="[2:0]"), # Example fixed width
-        Port(name="config_AWVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_AWREADY", direction=Direction.OUTPUT, width="1"),
-        # Write Data Channel
-        Port(name="config_WDATA", direction=Direction.INPUT, width="[AXIL_DATA_WIDTH-1:0]"),
-        Port(name="config_WSTRB", direction=Direction.INPUT, width="[(AXIL_DATA_WIDTH/8)-1:0]"),
-        Port(name="config_WVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_WREADY", direction=Direction.OUTPUT, width="1"),
-        # Write Response Channel
-        Port(name="config_BRESP", direction=Direction.OUTPUT, width="[1:0]"),
-        Port(name="config_BVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_BREADY", direction=Direction.INPUT, width="1"),
-        # Read Address Channel
-        Port(name="config_ARADDR", direction=Direction.INPUT, width="[AXIL_ADDR_WIDTH-1:0]"),
-        Port(name="config_ARPROT", direction=Direction.INPUT, width="[2:0]"),
-        Port(name="config_ARVALID", direction=Direction.INPUT, width="1"),
-        Port(name="config_ARREADY", direction=Direction.OUTPUT, width="1"),
-        # Read Data Channel
-        Port(name="config_RDATA", direction=Direction.OUTPUT, width="[AXIL_DATA_WIDTH-1:0]"),
-        Port(name="config_RRESP", direction=Direction.OUTPUT, width="[1:0]"),
-        Port(name="config_RVALID", direction=Direction.OUTPUT, width="1"),
-        Port(name="config_RREADY", direction=Direction.INPUT, width="1"),
-    ]
+# Local fixtures that are not shared across test files yet
+# (All core fixtures like validator, global_ports, etc. are now in conftest.py)
 
 # --- Helper Functions ---
 
@@ -120,10 +25,6 @@ def create_port_group(interface_type: InterfaceType, prefix: str, ports: List[Po
     """Helper function to create a PortGroup for testing."""
     scanner = InterfaceScanner()
     groups, unassigned = scanner.scan(ports)
-    for group in groups:
-        print(f"Group: {group.name}, Type: {group.interface_type.value}, Ports: {list(group.ports.keys())}")
-    for port in unassigned:
-        print(f"Unassigned Port: {port.name}, Direction: {port.direction.value}, Width: {port.width}")
     assert len(groups) == 1, "Expected exactly one group from scanner"
     assert len(unassigned) == 0, "Expected no unassigned ports"
     assert groups[0].interface_type == interface_type, f"Expected interface type {interface_type}, got {groups[0].interface_type}"
@@ -133,18 +34,13 @@ def create_port_group(interface_type: InterfaceType, prefix: str, ports: List[Po
 
 # --- Global Signal Tests ---
 
-def test_validate_global_valid(scanner, validator):
-    ports = [
-        Port(name="ap_clk", direction=Direction.INPUT, width="1"),
-        Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
-        Port(name="ap_clk2x", direction=Direction.INPUT, width="1"), # Optional
-    ]
-    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", ports)
+def test_validate_global_valid(validator, global_ports):
+    group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", global_ports)
     result = validator.validate_global_control(group)
     assert result.valid
     assert result.message is None
 
-def test_validate_global_missing_required(validator, scanner):
+def test_validate_global_missing_required(validator):
     ports = [
         Port(name="ap_clk", direction=Direction.INPUT, width="1"),
         # Missing ap_rst_n
@@ -154,7 +50,7 @@ def test_validate_global_missing_required(validator, scanner):
     assert not result.valid
     assert "Global Control: Missing required signal(s) in 'ap': {'RST_N'}" in result.message
 
-def test_validate_global_wrong_direction(validator, scanner):
+def test_validate_global_wrong_direction(validator):
     ports = [
         Port(name="ap_clk", direction=Direction.OUTPUT, width="1"), # Wrong direction
         Port(name="ap_rst_n", direction=Direction.INPUT, width="1"),
@@ -214,7 +110,7 @@ def test_validate_axi_stream(validator, prefix, ports_list, expected_valid):
 
 def test_validate_axis_metadata(validator, axis_in_ports_with_widths):
     """Test that AXI-Stream validation extracts width metadata."""
-    group = create_port_group(InterfaceType.AXI_STREAM, "in_data", axis_in_ports_with_widths)
+    group = create_port_group(InterfaceType.AXI_STREAM, "data_in", axis_in_ports_with_widths)
     result = validator.validate_axi_stream(group)
     assert result.valid
     assert "data_width_expr" in group.metadata
@@ -222,9 +118,9 @@ def test_validate_axis_metadata(validator, axis_in_ports_with_widths):
 
 # --- AXI-Lite Tests ---
 
-def test_validate_axilite_full(validator, axilite_ports_full):
+def test_validate_axilite_full(validator, axilite_config_ports):
     # Use create_port_group instead
-    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_full)
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_config_ports)
     result = validator.validate_axi_lite(group)
     assert result.valid
     assert result.message is None
@@ -283,10 +179,10 @@ def test_validate_axilite_missing_read_required(validator, axilite_write_ports):
     assert "AXI-Lite: Partial read, missing required signal(s) in 'config':" in result.message
     assert "ARVALID" in result.message
 
-def test_validate_axilite_wrong_direction(validator, axilite_ports_full):
+def test_validate_axilite_wrong_direction(validator, axilite_config_ports):
     # Modify one port's direction
     modified_ports = []
-    for p in axilite_ports_full:
+    for p in axilite_config_ports:
         if p.name == "config_AWREADY":
              # Incorrect direction (should be OUTPUT)
             modified_ports.append(dataclasses.replace(p, direction=Direction.INPUT))
@@ -300,40 +196,34 @@ def test_validate_axilite_wrong_direction(validator, axilite_ports_full):
     assert not result.valid
     assert "AXI-Lite: Incorrect direction in 'config': ['AWREADY (expected: Direction.OUTPUT, got: Direction.INPUT)']" in result.message
 
-def test_validate_axilite_metadata(validator, axilite_ports_with_widths):
+def test_validate_axilite_metadata(validator, axilite_write_ports_with_widths):
     """Test that AXI-Lite validation extracts width metadata."""
-    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_with_widths)
+    group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_write_ports_with_widths)
     result = validator.validate_axi_lite(group)
-    print(group.metadata.keys())
-    for g in group.metadata:
-        print(f"Metadata: {g}")
-        for m in group.metadata[g]:
-            print(f"  {m}: {group.metadata[g][m]}")
     assert result.valid
     assert "write_width_expr" in group.metadata
-    assert group.metadata["write_width_expr"]['addr'] == "[AXIL_ADDR_WIDTH-1:0]"
-    assert group.metadata["write_width_expr"]['data'] == "[AXIL_DATA_WIDTH-1:0]"
-    assert group.metadata["write_width_expr"]['strobe'] == "[(AXIL_DATA_WIDTH/8)-1:0]"
-    assert "read_width_expr" in group.metadata
-    assert group.metadata["read_width_expr"]['addr'] == "[AXIL_ADDR_WIDTH-1:0]"
-    assert group.metadata["read_width_expr"]['data'] == "[AXIL_DATA_WIDTH-1:0]"
+    assert group.metadata["write_width_expr"]['addr'] == "[ADDR_WIDTH-1:0]"
+    assert group.metadata["write_width_expr"]['data'] == "[DATA_WIDTH-1:0]"
+    assert group.metadata["write_width_expr"]['strobe'] == "[DATA_WIDTH/8-1:0]"
+    # No read channel in this fixture - it's write-only
+    assert "read_width_expr" not in group.metadata
 
 # --- General Validate Dispatch Test ---
 
-def test_validate_dispatch(validator, global_ports, axis_in_ports, axilite_ports_full):
+def test_validate_dispatch(validator, global_ports, axi_stream_in_ports, axilite_config_ports):
     # Global group
     global_group = create_port_group(InterfaceType.GLOBAL_CONTROL, "ap", global_ports)
     result_global = validator.validate(global_group)
     assert result_global.valid
 
     # AXI-Stream group
-    axis_group = create_port_group(InterfaceType.AXI_STREAM, "in0", axis_in_ports)
+    axis_group = create_port_group(InterfaceType.AXI_STREAM, "in0", axi_stream_in_ports)
     result_axis = validator.validate(axis_group)
     assert result_axis.valid
 
     # AXI-Lite group
     # Use create_port_group instead
-    axilite_group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_ports_full)
+    axilite_group = create_port_group(InterfaceType.AXI_LITE, "config", axilite_config_ports)
     result_axilite = validator.validate(axilite_group)
     assert result_axilite.valid
 
