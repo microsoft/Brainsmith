@@ -389,7 +389,7 @@ Below is an example of a test constructed using the OpTest class.
 class TestLayerNorm(OpTest):
 
     @pytest.fixture
-    def model(self, simd, idt, ifm_dim)->ModelWrapper:
+    def f_model(self, simd, idt, ifm_dim)->ModelWrapper:
 
         odt = "FLOAT32"
         model:ModelWrapper = self.create_model(
@@ -423,12 +423,12 @@ class TestLayerNorm(OpTest):
     # it needs to convert the above model to using a hardware
     # version of layernorm.
     @pytest.fixture
-    def infer_hw_transform(self):
+    def f_infer_hw_transform(self):
         return InferLayerNorm()
     
     # Overriding the default save_intermediate_models fixture
     # (which evaluates to false), so that each model step can
     # have its output saved.
     @pytest.fixture
-    def save_intermediate_models(self):
+    def f_save_intermediate_models(self):
         return True
