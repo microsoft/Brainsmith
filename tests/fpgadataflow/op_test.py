@@ -28,7 +28,12 @@ from finn.builder.build_dataflow_config import DataflowBuildConfig
 
 @pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
 class OpTest(ABC):
-    """A class used to test FINN custom operators."""
+    """An abstract class which uses PyTest's functionality to make writing tests for Brainsmith operators easier.
+    \ \ 
+        This class contains tests and fixtures, which are features of PyTest.
+        - All methods beginning with ``f_`` are fixtures, i.e. :func:`OpTest.f_model`. See `PyTest's fixture documentation <https://docs.pytest.org/en/7.1.x/how-to/fixtures.html>`_ for more info.
+        - All methods beginning with ``test_`` are tests, i.e. :func:`OpTest.test_cycles`. See `PyTest's getting started page <https://docs.pytest.org/en/stable/>`_ for more info.
+        - All methods that do not have these prefixes are helper functions, to be used to aid in writing your own tests."""
 
     ##########################################
     #                Fixtures                #
@@ -36,119 +41,174 @@ class OpTest(ABC):
 
     @pytest.fixture(autouse=True)
     @abstractmethod
-    def model(self) -> ModelWrapper:
+    def f_model(self) -> ModelWrapper:
         """An abstract fixture that generates the QONNX ModelWrapper to be tested (when
         implemented). Each test MUST override this fixture, otherwise any PyTests
-        will result in a NotImplementedError.
+        will result in a NotImplementedError. Helper functions such as create_model()
+        and run_transforms() may be useful in reducing boilerplate when implementing this
+        fixture.
 
-        Helper functions such as create_model() and run_transforms() may be useful in
-        reducing boilerplate when implementing this fixture."""
+        :return: A :class:`ModelWrapper` containing the ONNX graph we'll use for testing
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
-        raise NotImplementedError("This OpTest's model() fixture is unimplemented.")
+        raise NotImplementedError("This OpTest's f_model() fixture is unimplemented.")
 
     @pytest.fixture(autouse=True)
-    def model_hw(
-        self, model: ModelWrapper, infer_hw_transform: Transformation
+    def f_model_hw(
+        self, f_model: ModelWrapper, f_infer_hw_transform: Transformation
     ) -> ModelWrapper:
         """Converts all ONNX layers of a specific type to hardware layers,
         using a given inference function. If that function does not exist
-        (i.e. infer_hw_transform == 'None'), then the model is directly
+        (i.e. f_infer_hw_transform == 'None'), then the model is directly
         passed through. All fixtures reliant on hardware inference should
-        check if infer_hw_transform == 'None' before using this fixture."""
+        check if f_infer_hw_transform == 'None' before using this fixture.
+        
+        :param f_model: Auto-populated by the :func:`OpTest.f_model` fixture's return value
+        :type f_model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+        
+        :param f_infer_hw_transform: Auto-populated by the :func:`OpTest.f_infer_hw_transform` fixture's return value
+        :type minfer_hw_transformodel: :class:`qonnx.transformation.base.Transformation`
+        
+        :return: A :class:`ModelWrapper` containing the converted model
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
-        if infer_hw_transform is not None:
-            return self.apply_transforms(model, [infer_hw_transform])
+        if f_infer_hw_transform is not None:
+            return self.apply_transforms(f_model, [f_infer_hw_transform])
         else:
-            return model
+            return f_model
 
     @pytest.fixture(autouse=True)
-    def model_specialised(
+    def f_model_specialised(
         self,
-        model_hw: ModelWrapper,
-        target_fpga: str,
-        output_dir: str,
+        f_model_hw: ModelWrapper,
+        f_target_fpga: str,
+        f_output_dir: str,
     ) -> ModelWrapper:
-        """A fixture that applies layer specialisation to the 'model_hw'
-        fixture, then returns the resulting ModelWrapper."""
+        """A fixture that applies layer specialisation to the 'f_model_hw'
+        fixture, then returns the resulting ModelWrapper.;
+
+        :param f_model_hw: Auto-populated by the :func:`OpTest.f_model_hw` fixture's return value
+        :type f_model_hw: :class:`qonnx.core.modelwrapper.ModelWrapper`
+        
+        :param f_target_fpga: Auto-populated by the :func:`OpTest.f_target_fpga` fixture's return value
+        :type f_target_fpga: str
+
+        :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
+        :type f_output_dir: str
+        
+        :return: A :class:`ModelWrapper` containing the specialised model
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
-            model_hw, step_specialize_layers, output_dir, dict(fpga_part=target_fpga)
+            f_model_hw, step_specialize_layers, f_output_dir, dict(fpga_part=f_target_fpga)
         )
 
         return specialised_model
 
     @pytest.fixture
-    def infer_hw_transform(self) -> Transformation:
+    def f_infer_hw_transform(self) -> Transformation:
         """The transformation to infer a hardware layer from a standard ONNX layer.
-        If this fixture returns 'None', OpTest assumes to skip hardware inference."""
+        If this fixture returns 'None', OpTest assumes to skip hardware inference.
+        
+        :return: The :class:`Transformation` we'll apply when inferring hardware layers
+                 (Default: ``None``)
+        :rtype: :class:`qonnx.transformation.base.Transformation`"""
 
         return None
 
     @pytest.fixture
-    def target_fpga(self) -> str:
-        """The fpga we're targeting for testing. Can be overridden by test classes."""
+    def f_target_fpga(self) -> str:
+        """The fpga we're targeting for testing. Can be overridden by test classes.
+        
+        :return: The name of the fpga we're targeting for testing
+                 (Default: ``"xcv80-lsva4737-2MHP-e-S"``)
+        :rtype: str"""
 
         return "xcv80-lsva4737-2MHP-e-S"
 
     @pytest.fixture
-    def target_node(self) -> int:
+    def f_target_node(self) -> int:
         """The index of the node in the model we're focusing on. Allows for multiple
         nodes to be present, with tests that only target a specific node. Defaults to
-        the first node. Can be overridden."""
+        the first node. Can be overridden.
+        
+        :return: The index of the node we wish to focus our tests on.
+                 (Default: ``0``)
+        :rtype: int"""
 
         return 0
 
     @pytest.fixture
-    def input_tensors(self, model: ModelWrapper) -> dict:
+    def f_input_tensors(self, f_model: ModelWrapper) -> dict[str,any]:
         """Creates the tensor(s) passed to the model, to be used by the simulation during
         testing. By default, this fixture creates a tensor with random values, but can be
-        overridden by tests to pass specific values."""
+        overridden by tests to pass specific values.
+        
+        :param f_model: Auto-populated by the :func:`OpTest.f_model` fixture's return value
+        :type f_model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+        
+        :return: A dictionary. Each entry in the dictionary contains an input tensor's name as its key, and the data we wish to pass to it as its value.
+        :rtype: :class:`qonnx.transformation.base.Transformation`"""
 
         input_t = {}
-        for input in model.graph.input:
+        for input in f_model.graph.input:
             input_value = gen_finn_dt_tensor(
-                model.get_tensor_datatype(input.name),
-                model.get_tensor_shape(input.name),
+                f_model.get_tensor_datatype(input.name),
+                f_model.get_tensor_shape(input.name),
             )
             input_t[input.name] = input_value
         return input_t
 
     @pytest.fixture
-    def save_intermediate_models(self) -> bool:
-        """If this fixture is overridden to return True, the 'auto_saver' fixture
-        will automatically save the outputs of all 'model' fixtures to .onnx files."""
+    def f_save_models(self) -> bool:
+        """If this fixture is overridden to return True, the 'f_auto_saver' fixture
+        will automatically save the outputs of all 'f_model' fixtures to .onnx files.
+
+        
+        :return: Whether or not the auto-saver should save intermediate models.
+                 (Default: ``False``)
+        :rtype: bool"""
 
         return False
 
     @pytest.fixture(autouse=True)
-    def auto_saver(
+    def f_auto_saver(
         self,
         request: pytest.FixtureRequest,
-        save_intermediate_models: bool,
-        output_dir: str,
+        f_save_models: bool,
+        f_output_dir: str,
     ) -> None:
         """Saves the output of each intermediate model step to a .onnx file.
 
-        If the 'save_intermediate_models' fixture evaluates to true, this fixture
-        automatically scrapes all fixtures with names that start with 'model'
-        (i.e. 'model', 'model_specialised') and saves their output to a .onnx file
-        (if the fixtures return a ModelWrapper)."""
+        If the 'f_save_models' fixture evaluates to true, this fixture
+        automatically scrapes all fixtures with names that start with 'f_model'
+        (i.e. 'f_model', 'f_model_specialised') and saves their output to a .onnx file
+        (if the fixtures return a ModelWrapper).
+            
+        :param request: Auto-populated by the :func:`pytest.fixtures.FixtureRequest()` fixture's return value
+        :type request: :class:`pytest.fixtures.FixtureRequest`
 
-        if save_intermediate_models:
+        :param f_save_models: Auto-populated by the :func:`OpTest.f_save_models` fixture's return value
+        :type f_save_models: bool
+        
+        :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
+        :type f_output_dir: str"""
+
+        if f_save_models:
 
             # Attempt to make the directory we'll store our intermediate models in.
-            models_directory = os.path.join(output_dir, request.module.__name__)
+            models_directory = os.path.join(f_output_dir, request.module.__name__)
             try:
                 os.mkdir(models_directory)
             except FileExistsError:
                 warn(
-                    f"Overwriting intermediate models in existing directory {models_directory}."
+                    f"Overwriting saved models in existing directory {models_directory}."
                 )
 
-            # Save the output of each ModelWrapper fixture that starts with "model"
-            # (i.e. model, model_specialised). Assumes these fixtures return ModelWrappers.
+            # Save the output of each ModelWrapper fixture that starts with "f_model"
+            # (i.e. f_model, f_model_specialised). Assumes these fixtures return ModelWrappers.
             for fixture in filter(
-                lambda x: x.startswith("model"), request.fixturenames
+                lambda x: x.startswith("f_model"), request.fixturenames
             ):
 
                 filename = os.path.join(models_directory, fixture) + ".onnx"
@@ -164,21 +224,29 @@ class OpTest(ABC):
         return
 
     @pytest.fixture
-    def output_dir(self) -> str:
+    def f_output_dir(self) -> str:
         """The directory we'll save the output of our tests to. By default,
         OpTest saves to a directory called "test_output", which is created
-        in the same directory as the python file containing the test."""
+        in the same directory as the python file containing the test.
+        
+        :return: The output directory that all test output will be saved to.
+                 (Default: ``"__file__/test_output"``)
+        :rtype: str"""
 
         return os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_output")
 
     @pytest.fixture(autouse=True)
-    def create_output_dir(self, output_dir: str) -> None:
+    def f_create_output_dir(self, f_output_dir: str) -> None:
         """Automatically makes a test output directory if none exists. This
         fixture auto-runs before all test functions. If the directory exists,
-        this fixture does nothing."""
+        this fixture does nothing.
+
+        
+        :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
+        :type f_output_dir: str"""
 
         try:
-            os.mkdir(output_dir)
+            os.mkdir(f_output_dir)
         except FileExistsError:
             pass
 
@@ -189,15 +257,27 @@ class OpTest(ABC):
     # Ensure the number of cycles the layer takes to run in rtlsim
     # aligns with the expected number of cycles.
     def test_cycles(
-        self, model_specialised: ModelWrapper, target_node: int, exec_mode: str
+        self, f_model_specialised: ModelWrapper, f_target_node: int, exec_mode: str
     ) -> None:
+        """Ensure the number of cycles the layer takes to run in rtlsim aligns
+        with the expected number of cycles.
+        
+        :param f_model_specialised: Auto-populated by the :func:`OpTest.f_model_specialised` fixture's return value
+        :type f_model_specialised: :class:`qonnx.core.modelwrapper.ModelWrapper`
+        
+        :param f_target_node: Auto-populated by the :func:`OpTest.f_target_node` fixture's return value
+        :type f_target_node: int
+
+        :param exec_mode: Auto-populated by OpTest's exec_mode PyTest parameter.
+            These are defined at the top of OpTest's class definition.
+        :type exec_mode: str"""
 
         if exec_mode == "rtlsim":
-            op_type = model_specialised.graph.node[target_node].op_type
-            node = model_specialised.get_nodes_by_op_type(op_type)[0]
+            op_type = f_model_specialised.graph.node[f_target_node].op_type
+            node = f_model_specialised.get_nodes_by_op_type(op_type)[0]
             inst = getCustomOp(node)
             cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
-            exp_cycles_dict = model_specialised.analysis(exp_cycles_per_layer)
+            exp_cycles_dict = f_model_specialised.analysis(exp_cycles_per_layer)
             exp_cycles = exp_cycles_dict[node.name]
             assert np.isclose(exp_cycles, cycles_rtlsim, atol=10)
             assert exp_cycles != 0
@@ -215,7 +295,37 @@ class OpTest(ABC):
         opset: int = 17,
         name: str = "OpTest_Graph",
     ) -> ModelWrapper:
-        """Creates a model using standard ONNX helper functions."""
+        """Creates a model using ONNX.helper and QONNX.ModelWrapper. Removes the need for
+        additional boilerplate code.
+
+        :param inputs: A list of tuples, with each tuple representing an input of the
+            model. These tuples have two elements: the first element in each tuple is a dictionary
+            containing the named parameters you're passing to ``onnx.helper.make_tensor_value_info()``.
+            The second element is the ``QONNX.core.datatype`` string that that input will be set to.
+        :type inputs: List(tuple(dict, str))
+
+        :param outputs: A list of tuples, with each tuple representing an output of the
+            model. These tuples have two elements: the first element in each tuple is a dictionary
+            containing  any named parameters you're passing to ``onnx.helper.make_tensor_value_info()``.
+            The second element is the ``QONNX.core.datatype`` string that that input will be set to.
+        :type outputs: List(tuple(dict, str))
+
+        :param inits: A list of dictionaries, each dictionary representing an initialiser of the model. These should named parameters of ```onnx.numpy_helper.from_array`` <https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array>`_.
+        :type inits: List(dict)
+
+        :param nodes: A list of dictionaries, each dictionary representing a node of the model. These should named parameters of ```onnx.numpy_helper.from_array`` <https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node>`_.
+        :type nodes: List(dict)
+
+        :param opset: The opset of the generated model. Defaults to 17.
+                      (Default: ``17``)
+        :type opset: int, optional
+        
+        :param name: The name of the generated model.
+                     (Default: ``"OpTest_Graph"``)
+        :type name: str, optional
+        
+        :return: A :class:`ModelWrapper` containing the generated model
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         # Inputs
         input_protos: List[onnx.ValueInfoProto] = []
@@ -271,7 +381,30 @@ class OpTest(ABC):
         or a nested list of transforms. This affects how model validation is performed.
         Regular transform-lists are validated after every transform. Nested transform-
         lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
-        be validated between 3-4, and after 5."""
+        be validated between 3-4, and after 5.
+
+        :param model: The :class:`ModelWrapper` we'll apply our transform list to
+        :type model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param transform_list: A list (or nested list) containing each :class:`Transformation`
+            we'll apply to the model
+        :type transform_list: List(Transformation) or List(List(Transformation))
+
+        :param validate: Whether or not we validate between certain transforms.
+            (Default: ``False``)
+        :type validate: bool
+
+        :param input_tensors: The dictionary containing the names of tensors (key)
+            and their inputs as numpy arrays (value) which we'd use to validate our model
+            (Default: ``None``)
+        :type input_tensors: dict
+        
+        :param tolerance: The acceptable tolerance that model outputs can differ during validation.
+            (Default: ``1e-5``)
+        :type tolerance: float
+        
+        :return: A :class:`ModelWrapper` containing the transformed model
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         if validate:
             # Generate reference model output to compare our transformed output to.
@@ -309,7 +442,25 @@ class OpTest(ABC):
         """Apply a FINN Builder step to a QONNX ModelWrapper. Takes in the Model,
         the step function to be executed, and any named parameters of that need to be
         used in the step's DataflowBuildConfig. These named parameters are passed via a
-        dictionary, with the name of each parameter as its key."""
+        dictionary, with the name of each parameter as its key.
+
+        :param model: The :class:`ModelWrapper` we'll apply our builder step to
+        :type model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param step: A list (or nested list) containing each :class:`Transformation` we'll
+            apply to the model
+        :type step: callable
+        
+        :param output_dir: The directory that the builder step will use, if the step
+            involves saving intermediate models
+        :type output_dir: str
+        
+        :param cfg_settings: A dictionary containing named parameters to pass to the step's
+            :class:`finn.builder.build_dataflow_config.DataFlowBuildConfig`
+        :type cfg_settings: dict, optional
+
+        :return: A :class:`ModelWrapper` containing the transformed model
+        :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         # Default non-optional parameters for the DataflowBuildConfig class
         if "output_dir" not in cfg_settings:
