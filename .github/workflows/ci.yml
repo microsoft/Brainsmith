@@ -30,11 +30,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Run Docker container
+      - name: Build Docker image
         run: |
           chmod +x brainsmith-container
-          ./brainsmith-container start
-          ./brainsmith-container stop
+          ./brainsmith-container build
 
       - name: Cleanup containers
         if: always()
@@ -61,7 +60,7 @@ jobs:
           chmod +x brainsmith-container
           export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
           ./brainsmith-container start daemon
-          ./brainsmith-container exec "cd tests/end2end && make"
+          ./brainsmith-container exec "cd demos/bert && make"
           ./brainsmith-container stop
 
       - name: Cleanup containers

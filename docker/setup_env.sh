@@ -61,14 +61,18 @@ if [ -z "${XILINX_VIVADO}" ]; then
 else
   if [ -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
     gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
-  else
+  elif [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
     yecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
     OLDPWD=$(pwd)
     cd ${BSMITH_DIR}/deps/pyxsi
     make
     cd $OLDPWD
+  else
+    yecho "pyxsi directory not found, skipping build"
   fi
-  export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
+  if [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+    export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
+  fi
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 
