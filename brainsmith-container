@@ -25,11 +25,24 @@ DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Set defaults (same as run-docker.sh)
 : ${BSMITH_HW_COMPILER="finn"}
-: ${BSMITH_DOCKER_TAG="microsoft/brainsmith:$(cd $BSMITH_DIR; git describe --always --tags --dirty)"}
+
+# Handle Docker tag with CI fallback
+if [ -z "$BSMITH_DOCKER_TAG" ]; then
+    # Try git describe first, fallback to commit hash for CI
+    GIT_TAG=$(cd $BSMITH_DIR; git describe --always --tags --dirty 2>/dev/null)
+    if [ -n "$GIT_TAG" ] && [ "$GIT_TAG" != "$(cd $BSMITH_DIR; git rev-parse --short HEAD 2>/dev/null)" ]; then
+        BSMITH_DOCKER_TAG="microsoft/brainsmith:$GIT_TAG"
+    else
+        # Fallback for CI or when no tags
+        COMMIT_HASH=$(cd $BSMITH_DIR; git rev-parse --short HEAD 2>/dev/null || echo "latest")
+        BSMITH_DOCKER_TAG="microsoft/brainsmith:ci-$COMMIT_HASH"
+    fi
+fi
 : ${LOCALHOST_URL="localhost"}
 : ${NETRON_PORT=8080}
 : ${NUM_DEFAULT_WORKERS=4}
 : ${NVIDIA_VISIBLE_DEVICES=""}
+
 : ${BSMITH_BUILD_DIR="/tmp/$DOCKER_INST_NAME"}
 : ${BSMITH_SSH_KEY_DIR="$BSMITH_DIR/ssh_keys"}
 : ${PLATFORM_REPO_PATHS="/opt/xilinx/platforms"}

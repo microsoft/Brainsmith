@@ -67,6 +67,6 @@ COPY docker/entrypoint_ci.sh /usr/local/bin/entrypoint_ci.sh
 COPY docker/setup_env.sh /usr/local/bin/setup_env.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_exec.sh /usr/local/bin/entrypoint_ci.sh /usr/local/bin/setup_env.sh
 
-# Set default entrypoint (can be overridden by ENTRYPOINT build arg for backward compatibility)
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# Set CI-optimized entrypoint as default
+ENTRYPOINT ["/usr/local/bin/entrypoint_ci.sh"]
 CMD ["bash"]

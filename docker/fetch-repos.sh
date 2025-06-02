@@ -4,6 +4,16 @@
 # Modifications copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 
+# Color functions for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+gecho() { echo -e "${GREEN}$1${NC}"; }
+recho() { echo -e "${RED}$1${NC}"; }
+yecho() { echo -e "${YELLOW}$1${NC}"; }
+
 # Dependency Git URLs, hashes/branches, and directory names
 FINN_URL="https://github.com/Xilinx/finn.git"
 QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
@@ -73,23 +83,67 @@ fetch_repo() {
     # absolute path for the repo local copy
     CLONE_TO=$BSMITH_DIR/deps/$REPO_DIR
 
+    echo "Fetching $REPO_DIR from $REPO_URL..."
+    
     # clone repo if dir not found
     if [ ! -d "$CLONE_TO" ]; then
-        git clone $REPO_URL $CLONE_TO
+        echo "Cloning $REPO_DIR..."
+        # Use retry logic for git clone in CI
+        local attempt=1
+        local max_attempts=3
+        
+        while [ $attempt -le $max_attempts ]; do
+            if git clone --depth 1 --single-branch $REPO_URL $CLONE_TO; then
+                echo "Successfully cloned $REPO_DIR on attempt $attempt"
+                break
+            else
+                echo "Clone attempt $attempt failed for $REPO_DIR"
+                if [ $attempt -lt $max_attempts ]; then
+                    echo "Retrying in 10 seconds..."
+                    sleep 10
+                    rm -rf "$CLONE_TO" 2>/dev/null || true
+                fi
+                attempt=$((attempt + 1))
+            fi
+        done
+        
+        if [ $attempt -gt $max_attempts ]; then
+            echo "ERROR: Failed to clone $REPO_DIR after $max_attempts attempts"
+            return 1
+        fi
+        
+        # Fetch all refs to get the specific commit
+        echo "Fetching all refs for $REPO_DIR..."
+        git -C $CLONE_TO fetch --unshallow || git -C $CLONE_TO fetch --all
     fi
+    
     # verify and try to pull repo if not at correct commit
-    CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD)
-    if [ $CURRENT_COMMIT != $REPO_COMMIT ]; then
-        git -C $CLONE_TO pull
+    CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD 2>/dev/null || echo "unknown")
+    if [ "$CURRENT_COMMIT" != "$REPO_COMMIT" ]; then
+        echo "Current commit $CURRENT_COMMIT != expected $REPO_COMMIT for $REPO_DIR"
+        
+        # Try to fetch the specific commit if it doesn't exist
+        if ! git -C $CLONE_TO cat-file -e $REPO_COMMIT 2>/dev/null; then
+            echo "Fetching specific commit $REPO_COMMIT for $REPO_DIR..."
+            git -C $CLONE_TO fetch origin || git -C $CLONE_TO pull || true
+        fi
+        
         # checkout the expected commit
-        git -C $CLONE_TO checkout $REPO_COMMIT
+        echo "Checking out commit $REPO_COMMIT for $REPO_DIR..."
+        if ! git -C $CLONE_TO checkout $REPO_COMMIT; then
+            echo "ERROR: Could not checkout commit $REPO_COMMIT for $REPO_DIR"
+            return 1
+        fi
     fi
+    
     # verify one last time
-    CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD)
-    if [ $CURRENT_COMMIT == $REPO_COMMIT ]; then
+    CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD 2>/dev/null || echo "unknown")
+    if [ "$CURRENT_COMMIT" = "$REPO_COMMIT" ]; then
         echo "Successfully checked out $REPO_DIR at commit $CURRENT_COMMIT"
+        return 0
     else
-        echo "Could not check out $REPO_DIR. Check your internet connection and try again."
+        echo "ERROR: Final verification failed for $REPO_DIR. Expected: $REPO_COMMIT, Got: $CURRENT_COMMIT"
+        return 1
     fi
 }
 

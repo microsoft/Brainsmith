@@ -7,9 +7,29 @@
 # Main entrypoint for Brainsmith development environment
 # Handles full setup including dependency fetching and installation
 
+# Enhanced logging for debugging
+log_debug() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] DEBUG: $1" >&2
+}
+
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+}
+
+log_info "Starting BrainSmith entrypoint"
+log_debug "Environment: BSMITH_DIR=$BSMITH_DIR, BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
+log_debug "Skip deps: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
+log_debug "Working directory before cd: $(pwd)"
+
 cd $BSMITH_DIR
+log_debug "Changed to directory: $(pwd)"
 
 # Load environment setup
+log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
 
 # Smart package management with persistent state
@@ -40,6 +60,7 @@ except ImportError as e:
 
 # Function to install packages with proper error handling and progress
 install_packages_with_progress() {
+    log_info "Starting package installation process"
     # Prevent concurrent installations
     if [ -f "$LOCK_FILE" ]; then
         gecho "Another installation is in progress, waiting..."

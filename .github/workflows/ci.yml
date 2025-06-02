@@ -10,122 +10,290 @@ on:
 
 env:
   DOCKER_BUILDKIT: 1
-  BSMITH_ROOT: ${{ github.workspace }}
-  BSMITH_BUILD_DIR: ${{ github.workspace }}/build
   BSMITH_DOCKER_PREBUILT: "0"
   BSMITH_DOCKER_NO_CACHE: "1"
   BSMITH_SKIP_DEP_REPOS: "0"
-  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
-  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
-  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION || '2024.2' }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH || '/opt/Xilinx' }}
+  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS || '4' }}
+  # Use predictable Docker tag to avoid git describe issues
+  BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
 
 jobs:
+  # Simple diagnostic job to understand the environment
+  diagnostics:
+    runs-on: pre-release
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Environment diagnostics
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          echo
+          echo "=== Disk Space ==="
+          df -h
+          echo
+          echo "=== Memory ==="
+          free -h
+          echo
+          echo "=== Docker Version ==="
+          docker --version
+          docker info | head -20
+          echo
+          echo "=== Git Information ==="
+          pwd
+          git status
+          git log --oneline -5
+          echo
+          echo "=== Git Describe Test ==="
+          git describe --always --tags --dirty 2>&1 || echo "git describe failed"
+          git rev-parse --short HEAD 2>&1 || echo "git rev-parse failed"
+          echo
+          echo "=== Environment Variables ==="
+          env | grep BSMITH || true
+          env | grep GITHUB || true
+          echo
+          echo "=== brainsmith-container script test ==="
+          chmod +x brainsmith-container
+          echo "Testing Docker tag generation..."
+          export BSMITH_DOCKER_TAG=""  # Clear to test auto-generation
+          ./brainsmith-container help
+
   docker-build:
     if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
-    timeout-minutes: 30
+    timeout-minutes: 60  # Increased from 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Build Docker image
+      - name: Setup and debug environment
+        run: |
+          echo "=== Pre-build Environment ==="
+          echo "BSMITH_DOCKER_TAG: $BSMITH_DOCKER_TAG"
+          echo "Working directory: $(pwd)"
+          echo "Available space:"
+          df -h
+          
+          # Cleanup to free space
+          sudo docker system prune -af
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          
+          echo "Space after cleanup:"
+          df -h
+
+      - name: Build Docker image with debug
         run: |
           chmod +x brainsmith-container
+          echo "=== Starting Docker build ==="
+          echo "Using Docker tag: $BSMITH_DOCKER_TAG"
+          
+          # Export the tag so brainsmith-container uses it
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          
+          # Run with debug output
           ./brainsmith-container build
 
-      - name: Cleanup containers
-        if: always()
+      - name: Test basic container functionality
         run: |
-          ./brainsmith-container cleanup || true
-
-  e2e-build:
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
-    runs-on: pre-release
-    timeout-minutes: 480 # 8-hour timeout
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up environment
-        run: |
-          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
-
-      - name: Run Docker and tests
-        run: |
-          chmod +x brainsmith-container
-          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          
+          echo "=== Testing container startup ==="
           ./brainsmith-container start daemon
-          ./brainsmith-container exec "cd demos/bert && make"
+          
+          echo "=== Testing container status ==="
+          ./brainsmith-container status
+          
+          echo "=== Testing basic commands ==="
+          ./brainsmith-container exec "echo 'Container is working'"
+          ./brainsmith-container exec "python --version"
+          ./brainsmith-container exec "pwd"
+          ./brainsmith-container exec "ls -la"
+          
+          echo "=== Testing dependency directory ==="
+          ./brainsmith-container exec "ls -la deps/ || echo 'Dependencies directory not found'"
+          
+          echo "=== Stopping container ==="
           ./brainsmith-container stop
 
-      - name: Cleanup containers
-        if: always()
-        run: |
-          ./brainsmith-container cleanup || true
-
-  pytest-fpgadataflow:
-    if: github.event_name == 'schedule'
-    runs-on: pre-release
-    timeout-minutes: 240 # 4-hour timeout for weekly tests
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up environment
-        run: |
-          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
-
-      - name: Run Docker and tests
-        run: |
-          chmod +x brainsmith-container
-          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
-          ./brainsmith-container start daemon
-          ./brainsmith-container exec "cd tests && pytest ./"
-          ./brainsmith-container stop
-
-      - name: Cleanup containers
-        if: always()
-        run: |
-          ./brainsmith-container cleanup || true
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: brainsmith/tests/
-          retention-days: 7
-
-      - name: Upload test logs
+      - name: Upload Docker build logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: docker-build-logs
           path: |
-            brainsmith/tests/**/*.log
-            ${{ env.BSMITH_BUILD_DIR }}/**/*.log
+            /tmp/brainsmith*
           retention-days: 7
 
-  # Final cleanup job - runs regardless of other job success/failure
-  cleanup:
-    if: always()
-    needs: [docker-build, e2e-build, pytest-fpgadataflow]
-    runs-on: pre-release
-    steps:
-      - name: Final system cleanup
+      - name: Cleanup containers
+        if: always()
         run: |
-          # Aggressive cleanup of all Docker resources
-          docker system prune -a -f --volumes
-          # Clean up any remaining workspace files
-          rm -rf ${{ github.workspace }}/* 2>/dev/null || true
-          rm -rf ${{ github.workspace }}/.* 2>/dev/null || true
-          # Clean up temporary files
-          sudo rm -rf /tmp/docker-* 2>/dev/null || true
+          ./brainsmith-container cleanup || true
+
+  # Simplified end-to-end test focused on finding where it fails
+  e2e-test:
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+    runs-on: pre-release
+    timeout-minutes: 120  # Reduced to 2 hours for faster feedback
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup environment
+        run: |
+          echo "=== Environment Setup ==="
+          sudo docker system prune -af
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          df -h
+
+      - name: Build and start container
+        run: |
+          chmod +x brainsmith-container
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          
+          echo "=== Building container ==="
+          ./brainsmith-container build
+          
+          echo "=== Starting container ==="
+          ./brainsmith-container start daemon
+          
+          echo "=== Verifying container ==="
+          ./brainsmith-container status
+
+      - name: Test dependency fetching
+        run: |
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          
+          echo "=== Testing dependency fetch ==="
+          echo "Current directory: $(pwd)"
+          echo "BSMITH_DIR should be: $(pwd)"
+          
+          # Test the fetch script directly first
+          ./brainsmith-container exec "echo 'Testing environment variables:'"
+          ./brainsmith-container exec "echo BSMITH_DIR=\$BSMITH_DIR"
+          ./brainsmith-container exec "echo BSMITH_BUILD_DIR=\$BSMITH_BUILD_DIR"
+          ./brainsmith-container exec "echo BSMITH_SKIP_DEP_REPOS=\$BSMITH_SKIP_DEP_REPOS"
+          
+          echo "=== Testing basic fetch ==="
+          ./brainsmith-container exec "cd \$BSMITH_DIR && pwd && ls -la"
+          
+          echo "=== Running dependency fetch ==="
+          ./brainsmith-container exec "cd \$BSMITH_DIR && timeout 30m source docker/fetch-repos.sh" || {
+            echo "Dependency fetch failed or timed out"
+            echo "=== Container logs ==="
+            ./brainsmith-container logs --tail 50
+            exit 1
+          }
+
+      - name: Verify dependencies
+        run: |
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          
+          echo "=== Checking fetched dependencies ==="
+          ./brainsmith-container exec "ls -la \$BSMITH_DIR/deps/ || echo 'No deps directory'"
+          ./brainsmith-container exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | head -20 || true"
+
+      - name: Test simple BERT compilation
+        run: |
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          
+          echo "=== Testing BERT demo directory ==="
+          ./brainsmith-container exec "ls -la demos/bert/"
+          
+          echo "=== Testing BERT compilation (limited time) ==="
+          timeout 30m ./brainsmith-container exec "cd demos/bert && make clean && make" || {
+            echo "BERT compilation failed or timed out after 30 minutes"
+            echo "=== Checking what was generated ==="
+            ./brainsmith-container exec "find demos/bert -newer demos/bert/Makefile | head -20 || true"
+            echo "=== Container logs ==="
+            ./brainsmith-container logs --tail 100
+            exit 1
+          }
+
+      - name: Collect detailed artifacts
+        if: always()
+        run: |
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          mkdir -p artifacts
+          
+          echo "=== Collecting artifacts ==="
+          
+          # System information
+          df -h > artifacts/disk_usage.txt
+          free -h > artifacts/memory_usage.txt
+          
+          # Container logs
+          ./brainsmith-container logs > artifacts/container.log 2>&1 || true
+          
+          # Container state
+          ./brainsmith-container status > artifacts/container_status.txt 2>&1 || true
+          
+          # Directory contents
+          ./brainsmith-container exec "find \$BSMITH_DIR/deps -type d | head -50" > artifacts/deps_dirs.txt 2>&1 || true
+          ./brainsmith-container exec "find demos/bert -type f | head -50" > artifacts/bert_files.txt 2>&1 || true
+          
+          # Python environment
+          ./brainsmith-container exec "python -c 'import sys; print(sys.path)'" > artifacts/python_path.txt 2>&1 || true
+          ./brainsmith-container exec "pip list" > artifacts/pip_list.txt 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-artifacts
+          path: artifacts/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./brainsmith-container stop || true
+          ./brainsmith-container cleanup || true
+
+  # Only run full tests on schedule
+  pytest-fpgadataflow:
+    if: github.event_name == 'schedule'
+    runs-on: pre-release
+    timeout-minutes: 240
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Run full test suite
+        run: |
+          chmod +x brainsmith-container
+          export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          
+          ./brainsmith-container build
+          ./brainsmith-container start daemon
+          
+          ./brainsmith-container exec "cd tests && timeout 180m pytest ./" || {
+            echo "Tests failed or timed out"
+            ./brainsmith-container logs --tail 50
+            exit 1
+          }
+          
+          ./brainsmith-container stop
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./brainsmith-container cleanup || true
