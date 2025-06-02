@@ -77,22 +77,11 @@ else
     else
       recho "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
       recho "This suggests dependencies were not fetched properly"
-      # In daemon mode, don't exit - just warn and continue
-      # Dependencies will be fetched when needed via exec commands
-      if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
-        yecho "Running in daemon mode - dependencies will be fetched when needed"
-        yecho "Skipping pyxsi setup for now"
-        PYXSI_AVAILABLE=false
-      else
-        exit 1
-      fi
+      exit 1
     fi
   fi
   
-  # Only set up pyxsi paths if it's available
-  if [ "${PYXSI_AVAILABLE:-true}" = "true" ]; then
-    export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
-  fi
+  export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 

@@ -30,19 +30,19 @@ log_debug "Working directory before cd: $(pwd)"
 cd $BSMITH_DIR
 log_debug "Changed to directory: $(pwd)"
 
-# Load environment setup
+# First: Fetch dependencies if they don't exist (before environment setup)
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
+    log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
+    source docker/fetch-repos.sh
+fi
+
+# Second: Load environment setup (now that dependencies exist)
 log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
 
 # Smart package management with persistent state
 CACHE_FILE="/tmp/.brainsmith_packages_installed"
 LOCK_FILE="/tmp/.brainsmith_install_lock"
-
-# Fetch dependencies if they don't exist (first time setup)
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
-    gecho "Fetching dependencies to $BSMITH_DIR/deps/..."
-    source docker/fetch-repos.sh
-fi
 
 # Function to check if packages are already installed and working
 packages_already_installed() {
