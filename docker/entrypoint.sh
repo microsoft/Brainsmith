@@ -23,6 +23,8 @@ log_error() {
 log_info "Starting BrainSmith entrypoint"
 log_debug "Environment: BSMITH_DIR=$BSMITH_DIR, BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
 log_debug "Skip deps: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
+log_debug "Container mode: BSMITH_CONTAINER_MODE=$BSMITH_CONTAINER_MODE"
+log_debug "Arguments: $# args: $*"
 log_debug "Working directory before cd: $(pwd)"
 
 cd $BSMITH_DIR
@@ -166,8 +168,19 @@ else
 fi
 
 # execute the provided command(s)
-if [ $# -gt 0 ]; then
+log_debug "Command execution logic: args=$#, first_arg='$1', daemon_mode='$BSMITH_CONTAINER_MODE'"
+if [ $# -gt 0 ] && [ "$1" != "" ]; then
+    log_debug "Taking command execution path: $*"
     exec bash -c "$*"
 else
-    exec bash
+    log_debug "No command provided, checking daemon mode"
+    # Check if we're in daemon mode (environment variable set)
+    if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
+        log_info "Starting in daemon mode - container will stay alive for exec commands"
+        # Industry standard: use tail -f /dev/null to keep container alive
+        exec tail -f /dev/null
+    else
+        log_debug "Not in daemon mode, starting bash"
+        exec bash
+    fi
 fi

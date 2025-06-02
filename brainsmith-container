@@ -218,8 +218,9 @@ start_container() {
     
     # Image and command
     if [ "$MODE" = "daemon" ]; then
-        # Use sleep infinity for proper signal handling and daemon mode
-        DOCKER_CMD+=" $BSMITH_DOCKER_TAG sleep infinity"
+        # Use proper entrypoint with daemon mode - industry standard approach
+        DOCKER_CMD+=" -e BSMITH_CONTAINER_MODE=daemon"
+        DOCKER_CMD+=" $BSMITH_DOCKER_TAG ''"
         gecho "Starting daemon container..."
         $DOCKER_CMD
     else
