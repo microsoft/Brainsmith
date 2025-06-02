@@ -5,8 +5,8 @@
 # SPDX-License-Identifier: MIT
 
 # Dependency Git URLs, hashes/branches, and directory names
-FINN_URL="https://github.com/Xilinx/finn.git"
-# FINN_URL="https://github.com/jsmonson/finn.git"
+# FINN_URL="https://github.com/Xilinx/finn.git"
+FINN_URL="https://github.com/jsmonson/finn.git"
 QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 #BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
@@ -21,8 +21,9 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
-FINN_COMMIT="custom/transformer_loop"
+#FINN_COMMIT="custom/transformer_loop"
 #FINN_COMMIT="feature/forward_metadat"
+FINN_COMMIT="custom/transformer-fetch-weights-draft"
 QONNX_COMMIT="feature/forward-metadata"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 #BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
