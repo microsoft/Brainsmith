@@ -218,7 +218,8 @@ start_container() {
     
     # Image and command
     if [ "$MODE" = "daemon" ]; then
-        DOCKER_CMD+=" $BSMITH_DOCKER_TAG tail -f /dev/null"
+        # Use --entrypoint to override and run tail directly, avoiding setup issues
+        DOCKER_CMD+=" --entrypoint='' $BSMITH_DOCKER_TAG tail -f /dev/null"
         gecho "Starting daemon container..."
         $DOCKER_CMD
     else
@@ -283,8 +284,8 @@ exec_in_container() {
         fi
     done
     
-    # Use fast execution entrypoint
-    docker exec "$DOCKER_INST_NAME" entrypoint_exec.sh bash -c "$CMD"
+    # Use the main entrypoint for exec since daemon bypassed it
+    docker exec "$DOCKER_INST_NAME" /usr/local/bin/entrypoint.sh bash -c "$CMD"
 }
 
 open_shell() {

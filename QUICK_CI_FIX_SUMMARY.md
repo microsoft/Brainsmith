@@ -1,6 +1,6 @@
 # Quick CI Fix Summary
 
-## ✅ Issues Found and Fixed
+## ✅ Issues Found and Fixed from CI Logs
 
 ### 1. **Missing Color Functions in fetch-repos.sh**
 - **Problem**: `recho` and `gecho` commands not found during dependency fetching
@@ -10,9 +10,17 @@
 - **Problem**: Git describe failing in CI environment  
 - **Fix**: Enhanced `brainsmith-container` with fallback logic using commit hash for CI
 
-### 3. **Excessive CI Complexity**
-- **Problem**: Original approach created separate CI components
-- **Fix**: Simplified to use enhanced existing framework with better debugging
+### 3. **Dockerfile References Deleted Files**
+- **Problem**: Dockerfile tries to copy `docker/entrypoint_ci.sh` which was deleted
+- **Fix**: Removed references to deleted CI files from Dockerfile
+
+### 4. **Container Starting But Immediately Stopping**
+- **Problem**: Containers created but immediately exit, can't exec commands
+- **Fix**: Modified daemon mode to bypass entrypoint and run `tail -f /dev/null` directly
+
+### 5. **Exec Commands Failing**
+- **Problem**: Can't execute commands in daemon containers
+- **Fix**: Updated exec function to use main entrypoint for proper environment setup
 
 ## 🔧 **What Was Done**
 

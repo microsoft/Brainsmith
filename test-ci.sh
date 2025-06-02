@@ -83,6 +83,17 @@ log_info "=== Test 5: Container Startup ==="
 log_info "Starting container in daemon mode..."
 if ./brainsmith-container start daemon; then
     log_info "Container started successfully"
+    sleep 3  # Give container time to fully start
+    
+    # Verify container is actually running
+    if ./brainsmith-container status | grep -q "is running"; then
+        log_info "Container confirmed running"
+    else
+        log_error "Container started but not running properly"
+        log_info "Container logs:"
+        ./brainsmith-container logs --tail 20
+        exit 1
+    fi
 else
     log_error "Container startup failed"
     exit 1

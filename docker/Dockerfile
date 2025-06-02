@@ -63,9 +63,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Copy all entrypoint scripts
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint_exec.sh /usr/local/bin/entrypoint_exec.sh
-COPY docker/entrypoint_ci.sh /usr/local/bin/entrypoint_ci.sh
 COPY docker/setup_env.sh /usr/local/bin/setup_env.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_exec.sh /usr/local/bin/entrypoint_ci.sh /usr/local/bin/setup_env.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_exec.sh /usr/local/bin/setup_env.sh
 
 # Set default entrypoint (can be overridden by ENTRYPOINT build arg for backward compatibility)
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
