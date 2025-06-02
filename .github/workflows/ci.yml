@@ -106,6 +106,7 @@ jobs:
       - name: Test basic container functionality
         run: |
           export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
+          export BSMITH_DOCKER_RUN_AS_ROOT="1"
           
           echo "=== Testing container startup ==="
           ./brainsmith-container start daemon
@@ -158,29 +159,89 @@ jobs:
           sudo docker system prune -af
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           df -h
+          
+          echo "=== DEBUG: Initial environment state ==="
+          echo "Working directory: $(pwd)"
+          echo "User: $(whoami)"
+          echo "Groups: $(groups)"
+          echo "Home: $HOME"
+          echo "Current directory contents:"
+          ls -la
+          echo "Docker info:"
+          docker info | head -20
+          echo "Available containers:"
+          docker ps -a --format "table {{.Names}}\t{{.Status}}" | head -10
 
       - name: Build and start container
         run: |
           chmod +x brainsmith-container
           export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
           export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          export BSMITH_DOCKER_RUN_AS_ROOT="1"
+          
+          echo "=== DEBUG: Environment variables ==="
+          echo "BSMITH_DOCKER_TAG: $BSMITH_DOCKER_TAG"
+          echo "BSMITH_DIR: $(pwd)"
+          echo "USER: $(whoami)"
+          echo "Working directory: $(pwd)"
+          echo "Directory hash: $(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
+          echo "Expected container name: brainsmith_dev_$(whoami)_$(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
           
           echo "=== Building container ==="
           ./brainsmith-container build
           
+          echo "=== DEBUG: Container name generation test ==="
+          ./brainsmith-container status || echo "Status command failed"
+          
           echo "=== Starting container ==="
           ./brainsmith-container start daemon
+          START_EXIT_CODE=$?
+          echo "Container start exit code: $START_EXIT_CODE"
+          
+          echo "=== DEBUG: All containers after start ==="
+          docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Command}}" | head -10
           
           echo "=== Verifying container ==="
           ./brainsmith-container status
+          STATUS_EXIT_CODE=$?
+          echo "Status check exit code: $STATUS_EXIT_CODE"
+          
+          echo "=== DEBUG: Container inspection ==="
+          CONTAINER_NAME="brainsmith_dev_$(whoami)_$(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
+          echo "Looking for container: $CONTAINER_NAME"
+          docker inspect "$CONTAINER_NAME" --format "{{.State.Status}}" 2>/dev/null || echo "Container not found by direct name"
+          
+          echo "=== Container name debugging ==="
+          echo "Expected container name should contain: brainsmith_dev_"
+          docker ps --format "table {{.Names}}\t{{.Status}}" | grep brainsmith || echo "No brainsmith containers found"
+          docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep brainsmith || echo "No brainsmith containers found (including stopped)"
 
       - name: Test dependency fetching
         run: |
           export BSMITH_DOCKER_TAG="$BSMITH_DOCKER_TAG"
           
+          echo "=== DEBUG: Pre-exec container verification ==="
+          ./brainsmith-container status
+          docker ps --filter "name=brainsmith" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          
+          echo "=== DEBUG: Container logs before exec ==="
+          ./brainsmith-container logs --tail 10 || echo "No logs available"
+          
           echo "=== Testing dependency fetch ==="
           echo "Current directory: $(pwd)"
           echo "BSMITH_DIR should be: $(pwd)"
+          
+          echo "=== DEBUG: Testing simple exec first ==="
+          ./brainsmith-container exec "echo 'Simple exec test successful'" || {
+            echo "ERROR: Simple exec failed!"
+            echo "=== Container status after failed exec ==="
+            ./brainsmith-container status
+            echo "=== All containers ==="
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Command}}"
+            echo "=== Container logs ==="
+            ./brainsmith-container logs --tail 20
+            exit 1
+          }
           
           # Test the fetch script directly first
           ./brainsmith-container exec "echo 'Testing environment variables:'"

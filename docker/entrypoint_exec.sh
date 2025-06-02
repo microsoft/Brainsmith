@@ -121,4 +121,7 @@ if [ ! -f "$CACHE_FILE" ]; then
 fi
 
 # Execute the command
+echo "DEBUG: entrypoint_exec.sh starting with args: $*" >&2
+echo "DEBUG: Current working directory: $(pwd)" >&2
+echo "DEBUG: Environment check - BSMITH_DIR: $BSMITH_DIR" >&2
 exec "$@"

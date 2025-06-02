@@ -177,6 +177,7 @@ else
     # Check if we're in daemon mode (environment variable set)
     if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
         log_info "Starting in daemon mode - container will stay alive for exec commands"
+        log_debug "About to start tail -f /dev/null"
         # Industry standard: use tail -f /dev/null to keep container alive
         exec tail -f /dev/null
     else
