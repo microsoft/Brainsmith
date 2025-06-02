@@ -32,17 +32,14 @@ jobs:
 
       - name: Run Docker container
         run: |
-          chmod +x run-docker.sh
-          ./run-docker.sh exit
+          chmod +x brainsmith-container
+          ./brainsmith-container start
+          ./brainsmith-container stop
 
-      - name: Cleanup Docker artifacts
+      - name: Cleanup containers
         if: always()
         run: |
-          # Clean up Docker artifacts immediately
-          docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
+          ./brainsmith-container cleanup || true
 
   e2e-build:
     if: github.event_name == 'schedule' || github.event_name == 'pull_request'
@@ -61,19 +58,16 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          chmod +x run-docker.sh
-          ./run-docker.sh e2e
-        env:
-          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
+          chmod +x brainsmith-container
+          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          ./brainsmith-container start daemon
+          ./brainsmith-container exec "cd tests/end2end && make"
+          ./brainsmith-container stop
 
-      - name: Cleanup Docker artifacts
+      - name: Cleanup containers
         if: always()
         run: |
-          # Clean up Docker artifacts immediately
-          docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
+          ./brainsmith-container cleanup || true
 
   pytest-fpgadataflow:
     if: github.event_name == 'schedule'
@@ -92,10 +86,16 @@ jobs:
 
       - name: Run Docker and tests
         run: |
-          chmod +x run-docker.sh
-          ./run-docker.sh pytest
-        env:
-          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
+          chmod +x brainsmith-container
+          export BSMITH_DOCKER_FLAGS="-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+          ./brainsmith-container start daemon
+          ./brainsmith-container exec "cd tests && pytest ./"
+          ./brainsmith-container stop
+
+      - name: Cleanup containers
+        if: always()
+        run: |
+          ./brainsmith-container cleanup || true
 
       - name: Upload test results
         if: always()
@@ -114,15 +114,6 @@ jobs:
             brainsmith/tests/**/*.log
             ${{ env.BSMITH_BUILD_DIR }}/**/*.log
           retention-days: 7
-
-      - name: Cleanup Docker artifacts
-        if: always()
-        run: |
-          # Clean up Docker artifacts immediately
-          docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:
