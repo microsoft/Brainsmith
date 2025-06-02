@@ -13,8 +13,8 @@ cd $BSMITH_DIR
 source /usr/local/bin/setup_env.sh
 
 # Smart package management with persistent state
-CACHE_FILE="$BSMITH_DIR/deps/.brainsmith_packages_installed"
-LOCK_FILE="$BSMITH_DIR/deps/.brainsmith_install_lock"
+CACHE_FILE="/tmp/.brainsmith_packages_installed"
+LOCK_FILE="/tmp/.brainsmith_install_lock"
 
 # Fetch dependencies if they don't exist (first time setup)
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then

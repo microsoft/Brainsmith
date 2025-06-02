@@ -8,25 +8,8 @@ cd $BSMITH_DIR
 source /usr/local/bin/setup_env.sh
 
 # Smart package management with persistent state
-CACHE_FILE="$BSMITH_DIR/deps/.brainsmith_packages_installed"
-LOCK_FILE="$BSMITH_DIR/deps/.brainsmith_install_lock"
-
-# Function to check if packages are properly installed and working
-packages_ready() {
-    # Quick file-based check first
-    [ -f "$CACHE_FILE" ] || return 1
-    
-    # Verify packages can actually be imported (fast check)
-    python -c "
-import sys
-try:
-    import qonnx, finnexperimental, brevitas, finn, brainsmith
-    sys.exit(0)
-except ImportError as e:
-    sys.exit(1)
-" 2>/dev/null
-    return $?
-}
+CACHE_FILE="/tmp/.brainsmith_packages_installed"
+LOCK_FILE="/tmp/.brainsmith_install_lock"
 
 # Function to wait for parallel installation to complete
 wait_for_installation() {
@@ -54,7 +37,7 @@ install_packages() {
     # Prevent concurrent installations
     if [ -f "$LOCK_FILE" ]; then
         wait_for_installation
-        packages_ready && return 0
+        [ -f "$CACHE_FILE" ] && return 0
     fi
     
     # Create lock file
@@ -125,7 +108,7 @@ install_packages() {
 }
 
 # Main logic: Check packages and install if necessary
-if ! packages_ready; then
+if [ ! -f "$CACHE_FILE" ]; then
     # Only show message if this is not a very quick command
     if [[ "$*" != *"echo"* ]] && [[ "$*" != *"ls"* ]] && [[ "$*" != *"pwd"* ]]; then
         echo "Setting up Python packages..."
