@@ -59,6 +59,7 @@ def forge(blueprint, model, args):
         split_large_fifos=args.split_large_fifos,
         stitched_ip_gen_dcp=args.dcp,
         board=args.board,
+        verbose=args.verbose,
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
             ],
