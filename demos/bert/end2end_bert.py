@@ -178,6 +178,7 @@ if __name__ == "__main__":
     parser.add_argument('-x', '--run_fifo_sizing', action='store_true', help='Run the fifo-sizing step')
     parser.add_argument('-q', '--seqlen', type=int, default=128, help='Sets the sequence length parameter')
     parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
+    parser.add_argument('-v', '--verbose', type=bool, default=False, help='Print all outputs to the console')
     args = parser.parse_args()
 
     # TODO: Properly parameterize these currently hardcoded values
