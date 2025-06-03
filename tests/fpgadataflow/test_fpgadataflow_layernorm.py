@@ -383,11 +383,27 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 Below is an example of a test constructed using the OpTest class.
 """
 
-@pytest.mark.parametrize("simd", [1, 2, 4], ids=["SIMD1", "SIMD2", "SIMD4"])
-@pytest.mark.parametrize("idt", ["INT8", "INT9"])
-@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
 class TestLayerNorm(OpTest):
 
+    # These fixtures are parametrised, meaning if a test uses them
+    # (or uses a fixture that uses them) multiple versions of that
+    # test will be available, one for every combination of parameter.
+    
+    @pytest.fixture(params=[1,2,4])
+    def simd(self, request):
+        return request.param
+
+    @pytest.fixture(params=["INT8", "INT9"])
+    def idt(self, request):
+        return request.param
+
+    @pytest.fixture(params=[(1, 128, 384), (1, 12, 12, 128)])
+    def ifm_dim(self, request):
+        return request.param
+
+    # The f_model fixture is used to describe the initial state of
+    # our test model, before other steps are applied (conversion to
+    # hardware, specialisation, etc.)
     @pytest.fixture
     def f_model(self, simd, idt, ifm_dim)->ModelWrapper:
 
@@ -417,15 +433,14 @@ class TestLayerNorm(OpTest):
             ]
         )
         return self.apply_transforms(model, [ExpandNorms()])
-    
-        
-    # Overriding this provides OpTest with the transformation
-    # it needs to convert the above model to using a hardware
-    # version of layernorm.
+
+    # Overriding this method provides OpTest with the
+    # transformation it needs to convert the above model
+    # to hardware layers.
     @pytest.fixture
     def f_infer_hw_transform(self):
         return InferLayerNorm()
-    
+
     # Overriding the default save_intermediate_models fixture
     # (which evaluates to false), so that each model step can
     # have its output saved.

@@ -26,7 +26,6 @@ from finn.builder.build_dataflow_steps import step_specialize_layers
 from finn.builder.build_dataflow_config import DataflowBuildConfig
 
 
-@pytest.mark.parametrize("exec_mode", ["cppsim", "rtlsim"])
 class OpTest(ABC):
     """An abstract class which uses PyTest's functionality to make writing tests for Brainsmith operators easier.
     \ \ 
@@ -39,7 +38,7 @@ class OpTest(ABC):
     #                Fixtures                #
     ##########################################
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture()
     @abstractmethod
     def f_model(self) -> ModelWrapper:
         """An abstract fixture that generates the QONNX ModelWrapper to be tested (when
@@ -53,7 +52,7 @@ class OpTest(ABC):
 
         raise NotImplementedError("This OpTest's f_model() fixture is unimplemented.")
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture()
     def f_model_hw(
         self, f_model: ModelWrapper, f_infer_hw_transform: Transformation
     ) -> ModelWrapper:
@@ -77,7 +76,7 @@ class OpTest(ABC):
         else:
             return f_model
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture()
     def f_model_specialised(
         self,
         f_model_hw: ModelWrapper,
@@ -250,6 +249,10 @@ class OpTest(ABC):
         except FileExistsError:
             pass
 
+    @pytest.fixture(params=["cppsim", "rtlsim"])
+    def f_exec_mode(self2, request) -> str:
+        return request.param
+
     ##########################################
     #                  Tests                 #
     ##########################################
@@ -257,7 +260,7 @@ class OpTest(ABC):
     # Ensure the number of cycles the layer takes to run in rtlsim
     # aligns with the expected number of cycles.
     def test_cycles(
-        self, f_model_specialised: ModelWrapper, f_target_node: int, exec_mode: str
+        self, f_model_specialised: ModelWrapper, f_target_node: int, f_exec_mode: str
     ) -> None:
         """Ensure the number of cycles the layer takes to run in rtlsim aligns
         with the expected number of cycles.
@@ -268,11 +271,11 @@ class OpTest(ABC):
         :param f_target_node: Auto-populated by the :func:`OpTest.f_target_node` fixture's return value
         :type f_target_node: int
 
-        :param exec_mode: Auto-populated by OpTest's exec_mode PyTest parameter.
+        :param f_exec_mode: Auto-populated by OpTest's f_exec_mode PyTest parameter.
             These are defined at the top of OpTest's class definition.
-        :type exec_mode: str"""
+        :type f_exec_mode: str"""
 
-        if exec_mode == "rtlsim":
+        if f_exec_mode == "rtlsim":
             op_type = f_model_specialised.graph.node[f_target_node].op_type
             node = f_model_specialised.get_nodes_by_op_type(op_type)[0]
             inst = getCustomOp(node)
