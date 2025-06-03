@@ -33,12 +33,51 @@ log_debug "Changed to directory: $(pwd)"
 # First: Fetch dependencies if they don't exist (before environment setup)
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
     log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
-    source docker/fetch-repos.sh
+    
+    # Create lock file to signal exec commands to wait
+    FETCH_LOCK_FILE="/tmp/.brainsmith_fetching_deps"
+    touch "$FETCH_LOCK_FILE"
+    
+    if source docker/fetch-repos.sh; then
+        log_info "Dependencies fetched successfully"
+    else
+        log_error "Failed to fetch dependencies"
+        rm -f "$FETCH_LOCK_FILE"
+        exit 1
+    fi
+    
+    # Remove lock file and create ready marker
+    rm -f "$FETCH_LOCK_FILE"
+    touch "/tmp/.brainsmith_deps_ready"
+    log_info "Dependencies ready marker created at $(date)"
+else
+    # Dependencies already exist, mark as ready
+    touch "/tmp/.brainsmith_deps_ready"
+    log_info "Dependencies already exist, ready marker created at $(date)"
 fi
 
 # Second: Load environment setup (now that dependencies exist)
 log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
+
+# Third: For daemon mode, ensure pyxsi is built during initialization
+if [ "$BSMITH_CONTAINER_MODE" = "daemon" ] && [ ! -z "${XILINX_VIVADO}" ]; then
+    if [ ! -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ] && [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+        log_info "Building pyxsi during daemon initialization"
+        OLDPWD=$(pwd)
+        cd ${BSMITH_DIR}/deps/pyxsi || {
+            log_error "Failed to enter pyxsi directory"
+            exit 1
+        }
+        if make; then
+            log_info "pyxsi built successfully"
+        else
+            log_error "Failed to build pyxsi during daemon initialization"
+            exit 1
+        fi
+        cd $OLDPWD
+    fi
+fi
 
 # Smart package management with persistent state
 CACHE_FILE="/tmp/.brainsmith_packages_installed"
@@ -167,21 +206,36 @@ else
     gecho "Development packages already installed - using cached setup"
 fi
 
+# For daemon mode, complete ALL setup before going into background
+# For direct command execution, only install packages if needed for that command
+if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
+    log_info "Daemon mode: ensuring all packages are installed before going into background"
+    # Force package installation/verification in daemon mode
+    if ! packages_already_installed; then
+        install_packages_with_progress
+    else
+        gecho "Development packages already installed - using cached setup"
+    fi
+    log_info "All setup complete - container is now fully ready for exec commands"
+    log_debug "Starting daemon mode with tail -f /dev/null"
+    # Industry standard: use tail -f /dev/null to keep container alive
+    exec tail -f /dev/null
+fi
+
 # execute the provided command(s)
-log_debug "Command execution logic: args=$#, first_arg='$1', daemon_mode='$BSMITH_CONTAINER_MODE'"
+log_debug "Command execution logic: args=$#, first_arg='$1'"
 if [ $# -gt 0 ] && [ "$1" != "" ]; then
     log_debug "Taking command execution path: $*"
+    # For direct commands, install packages only if needed
+    if ! packages_already_installed; then
+        install_packages_with_progress
+    fi
     exec bash -c "$*"
 else
-    log_debug "No command provided, checking daemon mode"
-    # Check if we're in daemon mode (environment variable set)
-    if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
-        log_info "Starting in daemon mode - container will stay alive for exec commands"
-        log_debug "About to start tail -f /dev/null"
-        # Industry standard: use tail -f /dev/null to keep container alive
-        exec tail -f /dev/null
-    else
-        log_debug "Not in daemon mode, starting bash"
-        exec bash
+    log_debug "No command provided and not daemon mode, starting bash"
+    # For interactive mode, install packages
+    if ! packages_already_installed; then
+        install_packages_with_progress
     fi
+    exec bash
 fi

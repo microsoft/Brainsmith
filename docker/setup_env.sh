@@ -63,17 +63,10 @@ else
     gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
   else
     if [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-      gecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
-      OLDPWD=$(pwd)
-      cd ${BSMITH_DIR}/deps/pyxsi || {
-        recho "Failed to enter pyxsi directory"
-        exit 1
-      }
-      make || {
-        recho "Failed to build pyxsi"
-        exit 1
-      }
-      cd $OLDPWD
+      # pyxsi should be built by entrypoint.sh in daemon mode
+      # In exec mode, it should already be built by the daemon
+      yecho "pyxsi.so not found at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
+      yecho "Some functionality may be limited. Check that Vivado is properly installed and accessible."
     else
       recho "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
       recho "This suggests dependencies were not fetched properly"
