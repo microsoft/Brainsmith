@@ -161,17 +161,17 @@ class DataflowInterface:
         self._set_default_constraints()
     
     def _validate_dimensions(self):
-        """Validate dimension consistency"""
+        """Validate dimension consistency with correct tensor chunking relationships"""
         if len(self.qDim) != len(self.tDim) or len(self.tDim) != len(self.sDim):
             raise ValueError(f"Interface {self.name}: qDim, tDim, and sDim must have same length")
         
         for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
             if q <= 0 or t <= 0 or s <= 0:
                 raise ValueError(f"Interface {self.name}: All dimensions must be positive")
-            if q < t:
-                raise ValueError(f"Interface {self.name}: qDim[{i}] ({q}) must be >= tDim[{i}] ({t})")
-            if t < s:
-                raise ValueError(f"Interface {self.name}: tDim[{i}] ({t}) must be >= sDim[{i}] ({s})")
+            
+            # Correct relationship: tDim must be divisible by sDim for streaming
+            if t % s != 0:
+                raise ValueError(f"Interface {self.name}: tDim[{i}] ({t}) must be divisible by sDim[{i}] ({s}) for valid streaming")
     
     def _set_default_constraints(self):
         """Set default datatype constraints if none provided"""
@@ -197,16 +197,9 @@ class DataflowInterface:
         """Validate interface constraints and configuration"""
         result = create_validation_result()
         
-        # Validate dimension relationships
+        # Validate dimension relationships (only streaming constraint)
         for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
-            # Check tDim divisibility into qDim
-            if q % t != 0:
-                error = create_divisibility_error(
-                    self.name, f"qDim[{i}]", q, t
-                )
-                result.add_error(error)
-            
-            # Check sDim divisibility into tDim  
+            # Check sDim divisibility into tDim for valid streaming
             if t % s != 0:
                 error = create_divisibility_error(
                     self.name, f"tDim[{i}]", t, s
@@ -220,7 +213,7 @@ class DataflowInterface:
             for constraint in self.allowed_datatypes:
                 allowed_types.extend(constraint.base_types)
             error = create_datatype_error(
-                self.name, 
+                self.name,
                 f"{self.dtype.base_type}{self.dtype.bitwidth}",
                 list(set(allowed_types))
             )
@@ -299,6 +292,191 @@ class DataflowInterface:
         total_elements = np.prod(self.tDim)
         elements_per_cycle = np.prod(self.sDim)
         return (total_elements + elements_per_cycle - 1) // elements_per_cycle
+    
+    def reconstruct_tensor_shape(self) -> List[int]:
+        """
+        Reconstruct original tensor shape from qDim and tDim using broadcasting
+        
+        Mathematical relationship: original_tensor_shape = qDim × tDim
+        
+        Returns:
+            List[int]: Original tensor shape before chunking
+        """
+        return self._broadcast_tensor_shape(self.qDim, self.tDim)
+    
+    def _broadcast_tensor_shape(self, qDim: List[int], tDim: List[int]) -> List[int]:
+        """
+        Broadcast qDim and tDim to reconstruct original tensor shape
+        
+        Args:
+            qDim: Query dimensions (post-chunking)
+            tDim: Tensor dimensions (post-chunking)
+            
+        Returns:
+            List[int]: Broadcasted tensor shape
+        """
+        if len(qDim) == 1 and len(tDim) == 1:
+            # Simple case: [qDim[0] * tDim[0]]
+            return [qDim[0] * tDim[0]]
+        elif len(qDim) == len(tDim):
+            # Element-wise multiplication
+            return [q * t for q, t in zip(qDim, tDim)]
+        else:
+            # More complex broadcasting - concatenate dimensions
+            return qDim + tDim
+    
+    def validate_tensor_chunking(self, original_shape: List[int]) -> ValidationResult:
+        """
+        Validate that qDim/tDim correctly chunk the original tensor shape
+        
+        Args:
+            original_shape: Original tensor shape to validate against
+            
+        Returns:
+            ValidationResult with any chunking errors
+        """
+        result = create_validation_result()
+        
+        try:
+            reconstructed = self.reconstruct_tensor_shape()
+            
+            # Check if reconstruction matches original (allowing for different representations)
+            total_elements_original = np.prod(original_shape)
+            total_elements_reconstructed = np.prod(reconstructed)
+            
+            if total_elements_original != total_elements_reconstructed:
+                error = ValidationError(
+                    component=f"interface.{self.name}",
+                    error_type="tensor_chunking_mismatch",
+                    message=f"Tensor chunking mismatch: original shape {original_shape} "
+                           f"has {total_elements_original} elements, but qDim={self.qDim} × tDim={self.tDim} "
+                           f"gives {total_elements_reconstructed} elements",
+                    severity=ValidationSeverity.ERROR,
+                    context={
+                        "original_shape": original_shape,
+                        "qDim": self.qDim,
+                        "tDim": self.tDim,
+                        "reconstructed_shape": reconstructed
+                    }
+                )
+                result.add_error(error)
+        except Exception as e:
+            error = ValidationError(
+                component=f"interface.{self.name}",
+                error_type="tensor_reconstruction_error",
+                message=f"Failed to reconstruct tensor shape: {str(e)}",
+                severity=ValidationSeverity.ERROR,
+                context={"exception": str(e)}
+            )
+            result.add_error(error)
+        
+        return result
+    
+    @classmethod
+    def from_tensor_chunking(cls, name: str, interface_type: DataflowInterfaceType,
+                            original_shape: List[int], tDim: List[int],
+                            dtype: DataflowDataType, chunking_mode: str = "broadcast",
+                            **kwargs) -> 'DataflowInterface':
+        """
+        Factory method to create DataflowInterface from tensor chunking specification
+        
+        Args:
+            name: Interface name
+            interface_type: Type of interface
+            original_shape: Original tensor shape before chunking
+            tDim: Desired tensor dimensions per calculation
+            dtype: Data type specification
+            chunking_mode: How to compute qDim ("broadcast", "divide", "explicit")
+            **kwargs: Additional interface parameters
+            
+        Returns:
+            DataflowInterface with computed qDim
+        """
+        qDim = cls._compute_qDim_from_chunking(original_shape, tDim, chunking_mode)
+        
+        # Ensure all dimensions have the same length
+        if len(qDim) != len(tDim):
+            if len(qDim) == 1 and len(tDim) > 1:
+                # Expand qDim to match tDim length with 1s
+                qDim = qDim + [1] * (len(tDim) - 1)
+            elif len(tDim) == 1 and len(qDim) > 1:
+                # Keep qDim as is, expand tDim
+                tDim = tDim + [1] * (len(qDim) - 1)
+            else:
+                # For other mismatches, make them all the same length
+                max_len = max(len(qDim), len(tDim))
+                qDim = qDim + [1] * (max_len - len(qDim))
+                tDim = tDim + [1] * (max_len - len(tDim))
+        
+        # Initialize sDim to match tDim (will be updated by parallelism)
+        sDim = tDim.copy()
+        
+        return cls(
+            name=name,
+            interface_type=interface_type,
+            qDim=qDim,
+            tDim=tDim,
+            sDim=sDim,
+            dtype=dtype,
+            **kwargs
+        )
+    
+    @staticmethod
+    def _compute_qDim_from_chunking(original_shape: List[int], tDim: List[int],
+                                   chunking_mode: str = "broadcast") -> List[int]:
+        """
+        Compute qDim from original tensor shape and desired tDim
+        
+        Args:
+            original_shape: Original tensor shape
+            tDim: Desired tensor dimensions
+            chunking_mode: Computation method
+            
+        Returns:
+            List[int]: Computed qDim
+            
+        Examples:
+            original_shape=[30, 50], tDim=[50] → qDim=[30] (chunking along last dim)
+            original_shape=[10, 30, 50], tDim=[3, 5] → qDim=[1000] (where total=15000, tDim=15)
+        """
+        if chunking_mode == "broadcast":
+            total_elements = np.prod(original_shape)
+            tDim_elements = np.prod(tDim)
+            
+            if len(tDim) == 1:
+                # Single tDim: compute qDim such that qDim * tDim = total_elements
+                # For original_shape=[30, 50] with tDim=[50], qDim should be [30]
+                if len(original_shape) == 2 and tDim[0] == original_shape[-1]:
+                    return [original_shape[0]]  # Return first dimension
+                elif len(original_shape) == 1:
+                    qDim_val = total_elements // tDim[0]
+                    return [qDim_val]
+                else:
+                    # Find matching dimension and compute qDim from remaining
+                    for i, dim in enumerate(original_shape):
+                        if dim == tDim[0]:
+                            # Remove this dimension and compute product of others
+                            remaining_dims = original_shape[:i] + original_shape[i+1:]
+                            if remaining_dims:
+                                return [np.prod(remaining_dims)]
+                            else:
+                                return [1]
+                    # If no exact match, compute total division
+                    qDim_val = max(1, total_elements // tDim[0])
+                    return [qDim_val]
+            else:
+                # Multiple tDim: compute qDim such that qDim × tDim = original_shape elements
+                qDim_elements = max(1, total_elements // tDim_elements)
+                return [qDim_elements]
+        
+        elif chunking_mode == "divide":
+            # Direct division of original_shape by tDim
+            if len(original_shape) != len(tDim):
+                raise ValueError(f"For divide mode, original_shape and tDim must have same length")
+            return [max(1, orig // t) for orig, t in zip(original_shape, tDim)]
+        
+        else:
+            raise ValueError(f"Unknown chunking_mode: {chunking_mode}")
     
     def __str__(self) -> str:
         """String representation of interface"""

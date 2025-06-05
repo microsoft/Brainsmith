@@ -237,16 +237,20 @@ class TestDataflowModel:
         result = model.validate_mathematical_constraints()
         assert result.success == True
         
-        # Create interface with invalid constraints
+        # Create interface with invalid streaming constraint (tDim % sDim != 0)
         dtype = DataflowDataType("INT", 8, True, "")
+        # First create valid interface to pass construction
         invalid_interface = DataflowInterface(
             name="invalid",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[15],  # Not divisible by tDim
-            tDim=[16],
-            sDim=[4],
+            qDim=[15],  # qDim can be any value
+            tDim=[15],  # Valid for construction: 15 % 5 == 0
+            sDim=[5],
             dtype=dtype
         )
+        
+        # Now modify to create invalid streaming constraint for testing
+        invalid_interface.tDim = [16]  # 16 % 5 != 0, invalid streaming
         
         invalid_model = DataflowModel([invalid_interface], {})
         result = invalid_model.validate_mathematical_constraints()
