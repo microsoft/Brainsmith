@@ -42,12 +42,8 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
     fi
     
     log_info "Dependencies ready at $(date)"
-    # Create readiness marker for container management
-    touch /tmp/.brainsmith_deps_ready
 else
     log_info "Dependencies already exist, ready at $(date)"
-    # Create readiness marker for container management
-    touch /tmp/.brainsmith_deps_ready
 fi
 
 # Second: Load environment setup (now that dependencies exist)
@@ -184,6 +180,11 @@ if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
     else
         gecho "Development packages already installed - using cached setup"
     fi
+    
+    # Create readiness marker ONLY after everything is truly ready
+    log_info "Creating dependency readiness marker"
+    touch /tmp/.brainsmith_deps_ready
+    
     log_info "All setup complete - container is now fully ready for exec commands"
     log_debug "Starting daemon mode with tail -f /dev/null"
     # Industry standard: use tail -f /dev/null to keep container alive
@@ -207,4 +208,3 @@ else
     fi
     exec bash
 fi
-
