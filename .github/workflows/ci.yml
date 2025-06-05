@@ -91,13 +91,20 @@ jobs:
       - name: Build and test Docker image
         run: |
           chmod +x brainsmith-container
-          echo "=== Building Docker image ==="
+          echo "=== Testing build command ==="
           echo "Using Docker tag: $BSMITH_DOCKER_TAG"
           
+          # Test the build command explicitly
           ./brainsmith-container build
           
-          echo "=== Testing basic container functionality ==="
-          ./brainsmith-container start daemon
+          echo "=== Verifying image was built ==="
+          docker images | grep "microsoft/brainsmith" || {
+            echo "ERROR: Docker image not found after build"
+            exit 1
+          }
+          
+          echo "=== Testing daemon startup ==="
+          ./brainsmith-container daemon
           
           # Quick functionality tests
           ./brainsmith-container exec "echo 'Container exec test: SUCCESS'"
@@ -150,14 +157,7 @@ jobs:
         run: |
           chmod +x brainsmith-container
           
-          echo "=== Building container ==="
-          ./brainsmith-container build || {
-            echo "ERROR: Container build failed"
-            docker images | grep brainsmith || echo "No brainsmith images found"
-            exit 1
-          }
-          
-          echo "=== Starting daemon container ==="
+          echo "=== Starting daemon container (will build image automatically) ==="
           ./brainsmith-container start daemon || {
             echo "ERROR: Container start failed"
             echo "=== Container status ==="
@@ -264,10 +264,7 @@ jobs:
         run: |
           chmod +x brainsmith-container
           
-          echo "=== Building container for full test suite ==="
-          ./brainsmith-container build
-          
-          echo "=== Starting container for testing ==="
+          echo "=== Starting container for full test suite (will build image automatically) ==="
           ./brainsmith-container start daemon
           
           echo "=== Running full pytest suite ==="

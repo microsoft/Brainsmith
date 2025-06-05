@@ -90,24 +90,25 @@ Brainsmith Container Management
 Usage: $0 [COMMAND] [OPTIONS]
 
 Commands:
-    start [MODE]    Start a persistent Brainsmith container
-                   MODE: interactive (default), daemon
+    build          Build the Docker image
+    start          Build image if needed, create container if needed, open interactive shell
+    daemon         Build image if needed, create container if needed, start daemon in background
+    exec CMD       Execute command in running daemon container (fails if no daemon active)
+    shell          Open interactive shell in running daemon container (fails if no daemon active)
     stop           Stop the running container
     restart        Restart the container
     status         Show container status
-    exec CMD       Execute command in running container
-    shell          Open an interactive shell in running container
     logs           Show container logs
     cleanup        Remove stopped container and cleanup
-    build          Build the Docker image
     help           Show this help
 
 Examples:
-    $0 start              # Start interactive container
-    $0 start daemon       # Start container in background
-    $0 exec "python -c 'import brainsmith; print(brainsmith.__version__)'"
-    $0 shell              # Get interactive shell
-    $0 stop               # Stop container
+    $0 build                                    # Just build the Docker image
+    $0 start                                    # Interactive shell (builds image/container if needed)
+    $0 daemon                                   # Start daemon in background (builds if needed)
+    $0 exec "python -c 'import brainsmith'"     # Execute command in daemon
+    $0 shell                                    # Interactive shell in running daemon
+    $0 stop                                     # Stop container
 
 Environment Variables:
     BSMITH_DOCKER_TAG       Docker image tag to use
@@ -151,17 +152,12 @@ build_image() {
     cd $OLD_PWD
 }
 
-start_container() {
-    MODE=${1:-interactive}
-    
-    echo "DEBUG: Starting container with mode: $MODE" >&2
-    echo "DEBUG: Container name will be: $DOCKER_INST_NAME" >&2
-    echo "DEBUG: Docker tag: $BSMITH_DOCKER_TAG" >&2
-    
+# Common container setup logic
+setup_container_if_needed() {
     STATUS=$(get_container_status)
     
     if [ "$STATUS" = "running" ]; then
-        gecho "Container $DOCKER_INST_NAME is already running"
+        echo "DEBUG: Container $DOCKER_INST_NAME is already running" >&2
         return 0
     elif [ "$STATUS" = "exited" ]; then
         gecho "Starting existing container $DOCKER_INST_NAME"
@@ -173,6 +169,15 @@ start_container() {
     if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
         build_image
     fi
+    
+    # Create the container but don't start it yet
+    create_container "$1"
+    return $?
+}
+
+# Create container with the specified mode
+create_container() {
+    MODE="$1"
     
     gecho "Creating new container $DOCKER_INST_NAME"
     
@@ -319,6 +324,30 @@ start_container() {
     fi
 }
 
+# Build image if needed, create container if needed, open interactive shell
+start_interactive() {
+    echo "DEBUG: Starting interactive container" >&2
+    echo "DEBUG: Container name will be: $DOCKER_INST_NAME" >&2
+    echo "DEBUG: Docker tag: $BSMITH_DOCKER_TAG" >&2
+    
+    # Build image if it doesn't exist or if not using prebuilt
+    if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
+        build_image
+    fi
+    
+    # For interactive mode, always create new container with --rm
+    create_container "interactive"
+}
+
+# Build image if needed, create container if needed, start daemon in background
+start_daemon() {
+    echo "DEBUG: Starting daemon container" >&2
+    echo "DEBUG: Container name will be: $DOCKER_INST_NAME" >&2
+    echo "DEBUG: Docker tag: $BSMITH_DOCKER_TAG" >&2
+    
+    setup_container_if_needed "daemon"
+}
+
 stop_container() {
     if is_container_running; then
         gecho "Stopping container $DOCKER_INST_NAME"
@@ -331,7 +360,7 @@ stop_container() {
 restart_container() {
     stop_container
     sleep 2
-    start_container daemon
+    start_daemon
 }
 
 show_status() {
@@ -420,8 +449,21 @@ cleanup_container() {
 
 # Main command handling
 case "${1:-help}" in
+    "build")
+        build_image
+        ;;
     "start")
-        start_container "$2"
+        start_interactive
+        ;;
+    "daemon")
+        start_daemon
+        ;;
+    "exec")
+        shift
+        exec_in_container "$@"
+        ;;
+    "shell")
+        open_shell
         ;;
     "stop")
         stop_container
@@ -432,22 +474,12 @@ case "${1:-help}" in
     "status")
         show_status
         ;;
-    "exec")
-        shift
-        exec_in_container "$@"
-        ;;
-    "shell")
-        open_shell
-        ;;
     "logs")
         shift
         show_logs "$@"
         ;;
     "cleanup")
         cleanup_container
-        ;;
-    "build")
-        build_image
         ;;
     "help"|"-h"|"--help")
         show_help

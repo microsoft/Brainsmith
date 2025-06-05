@@ -34,26 +34,20 @@ log_debug "Changed to directory: $(pwd)"
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
     log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
     
-    # Create lock file to signal exec commands to wait
-    FETCH_LOCK_FILE="/tmp/.brainsmith_fetching_deps"
-    touch "$FETCH_LOCK_FILE"
-    
     if source docker/fetch-repos.sh; then
         log_info "Dependencies fetched successfully"
     else
         log_error "Failed to fetch dependencies"
-        rm -f "$FETCH_LOCK_FILE"
         exit 1
     fi
     
-    # Remove lock file and create ready marker
-    rm -f "$FETCH_LOCK_FILE"
-    touch "/tmp/.brainsmith_deps_ready"
-    log_info "Dependencies ready marker created at $(date)"
+    log_info "Dependencies ready at $(date)"
+    # Create readiness marker for container management
+    touch /tmp/.brainsmith_deps_ready
 else
-    # Dependencies already exist, mark as ready
-    touch "/tmp/.brainsmith_deps_ready"
-    log_info "Dependencies already exist, ready marker created at $(date)"
+    log_info "Dependencies already exist, ready at $(date)"
+    # Create readiness marker for container management
+    touch /tmp/.brainsmith_deps_ready
 fi
 
 # Second: Load environment setup (now that dependencies exist)
@@ -81,7 +75,6 @@ fi
 
 # Smart package management with persistent state
 CACHE_FILE="/tmp/.brainsmith_packages_installed"
-LOCK_FILE="/tmp/.brainsmith_install_lock"
 
 # Function to check if packages are already installed and working
 packages_already_installed() {
@@ -102,27 +95,6 @@ except ImportError as e:
 # Function to install packages with proper error handling and progress
 install_packages_with_progress() {
     log_info "Starting package installation process"
-    # Prevent concurrent installations
-    if [ -f "$LOCK_FILE" ]; then
-        gecho "Another installation is in progress, waiting..."
-        local timeout=300  # 5 minutes max wait
-        local elapsed=0
-        
-        while [ -f "$LOCK_FILE" ] && [ $elapsed -lt $timeout ]; do
-            sleep 2
-            elapsed=$((elapsed + 2))
-        done
-        
-        if [ -f "$LOCK_FILE" ]; then
-            recho "Installation appears stuck. Removing lock and proceeding..."
-            rm -f "$LOCK_FILE"
-        else
-            packages_already_installed && return 0
-        fi
-    fi
-    
-    # Create lock file
-    touch "$LOCK_FILE"
     
     gecho "Installing development packages (this may take a moment)..."
     
@@ -180,12 +152,8 @@ install_packages_with_progress() {
     else
         recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
         recho "Ensure you have passed -v <path-to-brainsmith-repo>:<path-to-brainsmith-repo> to the docker run command"
-        rm -f "$LOCK_FILE"
         exit 1
     fi
-    
-    # Remove lock file
-    rm -f "$LOCK_FILE"
     
     if [ "$install_success" = true ]; then
         # Mark packages as successfully installed
