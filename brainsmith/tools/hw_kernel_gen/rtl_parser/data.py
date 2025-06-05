@@ -55,6 +55,7 @@ class PragmaType(Enum):
     DATATYPE = "datatype"              # Restrict datatype for an interface
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
     WEIGHT = "weight"                  # Specify interface as a weight
+    TDIM = "tdim"                      # Override tensor dimensions for an interface
 
 # --- Simple Data Structures ---
 
@@ -255,36 +256,45 @@ class DatatypePragma(Pragma):
         super().__post_init__()
 
     def _parse_inputs(self) -> Dict:
-        """Handles DATATYPE pragma: @brainsmith datatype <if_name> <size> OR <if_name> <min> <max>"""
-        logger.debug(f"Parsing DATATYPE pragma: {self.inputs} at line {self.line_number}")
-
-        if len(self.inputs) == 2:
-            interface_name = self.inputs[0]
-            size = self.inputs[1]
-            # TODO: Validate size format (e.g., ensure it's numeric or a valid type string)
-            return {
-                "interface_name": interface_name,
-                "min_size": size,
-                "max_size": size,
-                "is_fixed_size": True
-            }
-        elif len(self.inputs) == 3:
-            interface_name = self.inputs[0]
-            min_size = self.inputs[1]
-            max_size = self.inputs[2]
-            # TODO: Validate size formats
-            # TODO: Validate min_size <= max_size (if numeric)
-            return {
-                "interface_name": interface_name,
-                "min_size": min_size,
-                "max_size": max_size,
-                "is_fixed_size": False
-            }
-        else:
-            raise PragmaError("DATATYPE pragma requires <interface_name> <size> OR <interface_name> <min_size> <max_size>")
+        """
+        Handles enhanced DATATYPE pragma:
+        @brainsmith DATATYPE <interface_name> <base_types> <min_bits> <max_bits>
+        
+        Example: @brainsmith DATATYPE in0 INT,UINT 1 16
+        Example: @brainsmith DATATYPE weights FIXED 8 8
+        """
+        logger.debug(f"Parsing enhanced DATATYPE pragma: {self.inputs} at line {self.line_number}")
+        
+        if len(self.inputs) != 4:
+            raise PragmaError("DATATYPE pragma requires interface_name, base_types, min_bits, max_bits")
+        
+        interface_name = self.inputs[0]
+        base_types = [t.strip() for t in self.inputs[1].split(',')]
+        
+        try:
+            min_bits = int(self.inputs[2])
+            max_bits = int(self.inputs[3])
+        except ValueError:
+            raise PragmaError(f"DATATYPE pragma min_bits and max_bits must be integers, got: {self.inputs[2]}, {self.inputs[3]}")
+        
+        if min_bits > max_bits:
+            raise PragmaError(f"DATATYPE pragma min_bits ({min_bits}) cannot be greater than max_bits ({max_bits})")
+        
+        # Validate base types
+        valid_base_types = {'INT', 'UINT', 'FLOAT', 'FIXED'}
+        for base_type in base_types:
+            if base_type not in valid_base_types:
+                raise PragmaError(f"DATATYPE pragma invalid base type '{base_type}'. Valid types: {valid_base_types}")
+        
+        return {
+            "interface_name": interface_name,
+            "base_types": base_types,
+            "min_bitwidth": min_bits,
+            "max_bitwidth": max_bits
+        }
 
     def apply(self, **kwargs) -> Any:
-        """Applies the DATATYPE pragma to the specified interface."""
+        """Applies the enhanced DATATYPE pragma to the specified interface."""
         interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
 
         if not self.parsed_data:
@@ -296,10 +306,6 @@ class DatatypePragma(Pragma):
             return
 
         interface_name = self.parsed_data.get("interface_name")
-        min_size = self.parsed_data.get("min_size")
-        max_size = self.parsed_data.get("max_size")
-        is_fixed_size = self.parsed_data.get("is_fixed_size")
-
         if not interface_name:
             logger.warning(f"DATATYPE pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
             return
@@ -307,18 +313,162 @@ class DatatypePragma(Pragma):
         applied_to_interface = False
         for iface_key, iface in interfaces.items():
             if iface.name == interface_name or iface.name.startswith(interface_name):
-                iface.metadata["datatype_min_size"] = min_size
-                iface.metadata["datatype_max_size"] = max_size
-                iface.metadata["datatype_is_fixed"] = is_fixed_size
+                # Store enhanced datatype constraint information
+                iface.metadata["datatype_constraints"] = {
+                    "base_types": self.parsed_data["base_types"],
+                    "min_bitwidth": self.parsed_data["min_bitwidth"],
+                    "max_bitwidth": self.parsed_data["max_bitwidth"]
+                }
                 
-                datatype_str = f"{min_size}" if is_fixed_size else f"{min_size}..{max_size}"
-                iface.metadata["datatype_raw_str"] = datatype_str
+                constraint_str = (f"types={self.parsed_data['base_types']}, "
+                                f"bits={self.parsed_data['min_bitwidth']}-{self.parsed_data['max_bitwidth']}")
                 
-                logger.info(f"Applied DATATYPE pragma from line {self.line_number} to interface '{iface.name}'. Datatype set to: {datatype_str}")
+                logger.info(f"Applied enhanced DATATYPE pragma from line {self.line_number} to interface '{iface.name}'. Constraints: {constraint_str}")
                 applied_to_interface = True
         
         if not applied_to_interface:
             logger.warning(f"DATATYPE pragma from line {self.line_number} for interface '{interface_name}' did not match any existing interfaces.")
+
+
+@dataclass
+class TDimPragma(Pragma):
+    """
+    TDIM pragma for custom tensor dimension specification.
+    
+    Format: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
+    Example: @brainsmith TDIM in0 PE*CHANNELS 1
+    Example: @brainsmith TDIM weights BATCH_SIZE*FEATURES HIDDEN_DIM
+    """
+    
+    def __post_init__(self):
+        super().__post_init__()
+
+    def _parse_inputs(self) -> Dict:
+        """
+        Handles TDIM pragma: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
+        
+        Args from self.inputs:
+            [0]: interface_name - Name of the interface to apply dimension override
+            [1:]: dimension_expressions - List of expressions for each tensor dimension
+            
+        Returns:
+            Dict with parsed interface name and dimension expressions
+        """
+        logger.debug(f"Parsing TDIM pragma: {self.inputs} at line {self.line_number}")
+        
+        if len(self.inputs) < 2:
+            raise PragmaError("TDIM pragma requires interface name and at least one dimension expression")
+        
+        interface_name = self.inputs[0]
+        dimension_expressions = self.inputs[1:]
+        
+        # Validate interface name
+        if not interface_name.isidentifier():
+            raise PragmaError(f"TDIM pragma interface name '{interface_name}' is not a valid identifier")
+        
+        # Basic validation of dimension expressions (more detailed validation happens during evaluation)
+        for i, expr in enumerate(dimension_expressions):
+            if not expr.strip():
+                raise PragmaError(f"TDIM pragma dimension expression {i+1} is empty")
+        
+        return {
+            "interface_name": interface_name,
+            "dimension_expressions": dimension_expressions
+        }
+    
+    def _evaluate_expression(self, expression: str, parameters: Dict[str, Any]) -> int:
+        """
+        Safely evaluate a dimension expression using module parameters.
+        
+        Args:
+            expression: Mathematical expression string (e.g., "PE*CHANNELS", "BATCH_SIZE+1")
+            parameters: Dictionary of parameter names to values
+            
+        Returns:
+            Evaluated integer result
+            
+        Raises:
+            PragmaError: If expression cannot be evaluated or result is invalid
+        """
+        try:
+            # Create a safe evaluation context with only parameters and basic operations
+            safe_dict = {"__builtins__": {}}
+            safe_dict.update(parameters)
+            
+            # Add common mathematical functions if needed
+            import math
+            safe_dict.update({
+                'abs': abs, 'min': min, 'max': max,
+                'pow': pow, 'round': round,
+                'ceil': math.ceil, 'floor': math.floor
+            })
+            
+            result = eval(expression, safe_dict)
+            
+            # Validate result
+            if not isinstance(result, (int, float)):
+                raise PragmaError(f"TDIM expression '{expression}' must evaluate to a number, got {type(result)}")
+            
+            result = int(result)
+            if result <= 0:
+                raise PragmaError(f"TDIM expression '{expression}' must evaluate to a positive integer, got {result}")
+                
+            return result
+            
+        except NameError as e:
+            raise PragmaError(f"TDIM expression '{expression}' references undefined parameter: {e}")
+        except (SyntaxError, ValueError) as e:
+            raise PragmaError(f"TDIM expression '{expression}' has invalid syntax: {e}")
+        except Exception as e:
+            raise PragmaError(f"TDIM expression '{expression}' evaluation failed: {e}")
+
+    def apply(self, **kwargs) -> Any:
+        """Apply TDIM pragma to override default tensor chunking for an interface."""
+        interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
+        parameters: Optional[Dict[str, Any]] = kwargs.get('parameters', {})
+        
+        if not self.parsed_data:
+            logger.warning(f"TDIM pragma at line {self.line_number} has no parsed_data. Skipping application.")
+            return
+            
+        if interfaces is None:
+            logger.warning(f"TDIM pragma at line {self.line_number} requires 'interfaces' keyword argument to apply. Skipping.")
+            return
+            
+        interface_name = self.parsed_data.get("interface_name")
+        dimension_exprs = self.parsed_data.get("dimension_expressions", [])
+        
+        if not interface_name:
+            logger.warning(f"TDIM pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
+            return
+            
+        # Find matching interface
+        target_interface = None
+        for iface in interfaces.values():
+            if iface.name == interface_name:
+                target_interface = iface
+                break
+                
+        if not target_interface:
+            logger.warning(f"TDIM pragma at line {self.line_number}: interface '{interface_name}' not found")
+            return
+            
+        # Evaluate dimension expressions
+        try:
+            evaluated_dims = []
+            for expr in dimension_exprs:
+                evaluated_dims.append(self._evaluate_expression(expr, parameters))
+            
+            # Store in metadata for later processing by TensorChunking
+            target_interface.metadata["tdim_override"] = evaluated_dims
+            target_interface.metadata["tdim_expressions"] = dimension_exprs  # Keep original expressions for debugging
+            
+            logger.info(f"Applied TDIM pragma from line {self.line_number}: {interface_name} tDim set to {evaluated_dims} (from expressions: {dimension_exprs})")
+            
+        except PragmaError as e:
+            logger.error(f"TDIM pragma at line {self.line_number} evaluation failed: {e}")
+        except Exception as e:
+            logger.error(f"TDIM pragma at line {self.line_number} unexpected error: {e}")
 
 
 @dataclass

@@ -73,8 +73,6 @@ class DataTypeConstraint:
     base_types: List[str]        # Allowed base types (INT, UINT, FLOAT, FIXED)
     min_bitwidth: int            # Minimum allowed bitwidth
     max_bitwidth: int            # Maximum allowed bitwidth
-    signed_allowed: bool         # Whether signed types are allowed
-    unsigned_allowed: bool       # Whether unsigned types are allowed
     
     def __post_init__(self):
         """Validate constraint specification"""
@@ -82,8 +80,6 @@ class DataTypeConstraint:
             raise ValueError("min_bitwidth must be positive")
         if self.max_bitwidth < self.min_bitwidth:
             raise ValueError("max_bitwidth must be >= min_bitwidth")
-        if not self.signed_allowed and not self.unsigned_allowed:
-            raise ValueError("At least one of signed_allowed or unsigned_allowed must be True")
     
     def is_valid_datatype(self, dtype: DataflowDataType) -> bool:
         """Check if a datatype satisfies this constraint"""
@@ -93,12 +89,6 @@ class DataTypeConstraint:
         
         # Check bitwidth range
         if not (self.min_bitwidth <= dtype.bitwidth <= self.max_bitwidth):
-            return False
-        
-        # Check sign compatibility
-        if dtype.signed and not self.signed_allowed:
-            return False
-        if not dtype.signed and not self.unsigned_allowed:
             return False
         
         return True
@@ -176,13 +166,11 @@ class DataflowInterface:
     def _set_default_constraints(self):
         """Set default datatype constraints if none provided"""
         if not self.allowed_datatypes:
-            # Default: allow common integer types from 1 to 32 bits, both signed and unsigned
+            # Default: allow common integer types from 1 to 32 bits
             default_constraint = DataTypeConstraint(
                 base_types=["INT", "UINT"],
                 min_bitwidth=1,
-                max_bitwidth=32,
-                signed_allowed=True,
-                unsigned_allowed=True
+                max_bitwidth=32
             )
             self.allowed_datatypes = [default_constraint]
     

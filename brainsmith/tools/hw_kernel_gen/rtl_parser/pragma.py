@@ -17,7 +17,7 @@ from typing import List, Optional, Dict, Callable
 from tree_sitter import Node
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
-    Pragma, PragmaType, TopModulePragma, DatatypePragma,
+    Pragma, PragmaType, TopModulePragma, DatatypePragma, TDimPragma,
     DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel
 )
 
@@ -35,6 +35,7 @@ class PragmaHandler:
         self.pragma_constructors: Dict[PragmaType, Callable[..., Pragma]] = {
             PragmaType.TOP_MODULE: TopModulePragma,
             PragmaType.DATATYPE: DatatypePragma,
+            PragmaType.TDIM: TDimPragma,
             PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
             PragmaType.WEIGHT: WeightPragma,
         }

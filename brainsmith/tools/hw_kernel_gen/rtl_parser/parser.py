@@ -330,6 +330,8 @@ class RTLParser:
                 continue
             elif pragma.type == PragmaType.DATATYPE or pragma.type == PragmaType.WEIGHT:
                 pragma.apply(interfaces=self.interfaces)
+            elif pragma.type == PragmaType.TDIM:
+                pragma.apply(interfaces=self.interfaces)
             elif pragma.type == PragmaType.DERIVED_PARAMETER:
                 pragma.apply(parameters=self.parameters)
             else:

@@ -581,7 +581,7 @@ class TestPragmaHandling:
     def test_supported_pragmas(self, parser, temp_sv_file):
         content = """
         // @brainsmith TOP_MODULE test_module
-        // @brainsmith DATATYPE data_in_if T_UINT8
+        // @brainsmith DATATYPE data_in_if UINT 8 8
         // @brainsmith DERIVED_PARAMETER hello_world STRIDE
         // @brainsmith WEIGHT in0
 
@@ -627,7 +627,7 @@ class TestPragmaHandling:
         content = """
         // @brainsmith TOP_MODULE test_module
         // @brainsmith RESOURCE DSP 4
-        // @brainsmith DATATYPE data_in UINT8
+        // @brainsmith DATATYPE data_in UINT 8 8
 
         module test_module (
              input logic ap_clk, input logic ap_rst_n, // Need these
