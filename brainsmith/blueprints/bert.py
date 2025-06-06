@@ -377,7 +377,19 @@ def custom_step_constrain_folding_and_set_pumped_compute(model, cfg):
     return model
 
 
-BUILD_STEPS = [
+# Import the new blueprint system for backward compatibility
+from brainsmith.blueprints.manager import get_build_steps
+
+# Legacy function definitions preserved for reference but no longer used directly
+# All step logic has been moved to the step library
+
+# For backward compatibility, provide BUILD_STEPS using the new YAML blueprint
+try:
+    BUILD_STEPS = get_build_steps("bert")
+except Exception as e:
+    # Fallback to legacy implementation if YAML blueprint fails
+    print(f"Warning: Could not load YAML blueprint, falling back to legacy: {e}")
+    BUILD_STEPS = [
         # Cleanup and custom graph surgery
         custom_step_cleanup,
         custom_step_remove_head,

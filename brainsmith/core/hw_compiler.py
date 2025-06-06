@@ -17,21 +17,21 @@ from onnxsim import simplify
 from qonnx.util.cleanup import cleanup
 import finn.builder.build_dataflow as build
 import finn.builder.build_dataflow_config as build_cfg
-from brainsmith.blueprints import REGISTRY
+from brainsmith.blueprints import get_blueprint_steps
 
 
 def forge(blueprint, model, args):
-    # Get FINN builder steps
-    if blueprint in REGISTRY.keys():
-        steps = REGISTRY[blueprint]
-    else:
+    # Get FINN builder steps using the new blueprint system
+    try:
+        steps = get_blueprint_steps(blueprint)
+    except Exception as e:
         # TODO: Add functionality to handle custom jobs
-        raise RuntimeError(f"Blueprint {blueprint} not found in registry")
+        raise RuntimeError(f"Blueprint {blueprint} not found in registry: {e}")
 
     # Create readable, unique build directory
     build_dir = os.path.join(os.environ.get("BSMITH_BUILD_DIR"), args.output)
     model_dir = os.path.join(build_dir, "intermediate_models")
-    os.makedirs(model_dir)
+    os.makedirs(model_dir, exist_ok=True)
 
     # Perform model preprocessing
     model, check = simplify(model)
