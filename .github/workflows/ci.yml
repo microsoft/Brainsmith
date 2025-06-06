@@ -58,7 +58,7 @@ jobs:
           env | grep -E '^(BSMITH_|GITHUB_|NUM_DEFAULT)' | sort
           
           echo "=== Container Name Generation ==="
-          chmod +x brainsmith-container
+          chmod +x smithy
           CONTAINER_NAME="brainsmith_dev_$(whoami)_$(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
           echo "Expected container name: $CONTAINER_NAME"
           
@@ -90,12 +90,12 @@ jobs:
 
       - name: Build and test Docker image
         run: |
-          chmod +x brainsmith-container
+          chmod +x smithy
           echo "=== Testing build command ==="
           echo "Using Docker tag: $BSMITH_DOCKER_TAG"
           
           # Test the build command explicitly
-          ./brainsmith-container build
+          ./smithy build
           
           echo "=== Verifying image was built ==="
           docker images | grep "microsoft/brainsmith" || {
@@ -104,18 +104,18 @@ jobs:
           }
           
           echo "=== Testing daemon startup ==="
-          ./brainsmith-container daemon
+          ./smithy daemon
           
           # Wait for container to be fully ready before exec commands
           echo "=== Waiting for container readiness ==="
           sleep 10
           
           # Quick functionality tests
-          ./brainsmith-container exec "echo 'Container exec test: SUCCESS'"
-          ./brainsmith-container exec "python --version"
-          ./brainsmith-container exec "ls -la \$BSMITH_DIR | head -10"
+          ./smithy exec "echo 'Container exec test: SUCCESS'"
+          ./smithy exec "python --version"
+          ./smithy exec "ls -la \$BSMITH_DIR | head -10"
           
-          ./brainsmith-container stop
+          ./smithy stop
 
       - name: Upload build artifacts on failure
         if: failure()
@@ -129,7 +129,7 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: ./brainsmith-container cleanup || true
+        run: ./smithy cleanup || true
 
   # End-to-end test with dependency fetching and compilation
   e2e-test:
@@ -159,73 +159,73 @@ jobs:
 
       - name: Build and start container with comprehensive logging
         run: |
-          chmod +x brainsmith-container
+          chmod +x smithy
           
           echo "=== Starting daemon container (will build image automatically) ==="
-          ./brainsmith-container daemon || {
+          ./smithy daemon || {
             echo "ERROR: Container start failed"
             echo "=== Container status ==="
-            ./brainsmith-container status
+            ./smithy status
             echo "=== Docker containers ==="
             docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Command}}" | head -10
             exit 1
           }
           
           echo "=== Verifying container readiness ==="
-          ./brainsmith-container status
+          ./smithy status
           docker ps --filter "name=brainsmith" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
       - name: Test core functionality
         run: |
           echo "=== Testing basic exec functionality ==="
-          ./brainsmith-container exec "echo 'Exec test: SUCCESS'" || {
+          ./smithy exec "echo 'Exec test: SUCCESS'" || {
             echo "ERROR: Basic exec failed"
-            ./brainsmith-container status
-            ./brainsmith-container logs --tail 20
+            ./smithy status
+            ./smithy logs --tail 20
             exit 1
           }
           
           echo "=== Environment verification ==="
-          ./brainsmith-container exec "echo \"BSMITH_DIR=\$BSMITH_DIR\""
-          ./brainsmith-container exec "echo \"BSMITH_BUILD_DIR=\$BSMITH_BUILD_DIR\""
-          ./brainsmith-container exec "echo \"BSMITH_SKIP_DEP_REPOS=\$BSMITH_SKIP_DEP_REPOS\""
+          ./smithy exec "echo \"BSMITH_DIR=\$BSMITH_DIR\""
+          ./smithy exec "echo \"BSMITH_BUILD_DIR=\$BSMITH_BUILD_DIR\""
+          ./smithy exec "echo \"BSMITH_SKIP_DEP_REPOS=\$BSMITH_SKIP_DEP_REPOS\""
           
           echo "=== Python environment check ==="
-          ./brainsmith-container exec "python --version && which python"
+          ./smithy exec "python --version && which python"
 
       - name: Test dependency verification
         run: |
           echo "=== Verifying dependencies are already available ==="
-          ./brainsmith-container exec "ls -la \$BSMITH_DIR/deps/ | head -20" || {
+          ./smithy exec "ls -la \$BSMITH_DIR/deps/ | head -20" || {
             echo "ERROR: Dependencies directory not found"
             echo "=== Container status ==="
-            ./brainsmith-container status
+            ./smithy status
             echo "=== Container logs (last 50 lines) ==="
-            ./brainsmith-container logs --tail 50
+            ./smithy logs --tail 50
             exit 1
           }
           
           echo "=== Counting dependency directories ==="
-          ./brainsmith-container exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | wc -l"
+          ./smithy exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | wc -l"
           
           echo "=== Testing Python imports ==="
-          ./brainsmith-container exec "python -c 'import brainsmith; print(\"Brainsmith import: SUCCESS\")'" || {
+          ./smithy exec "python -c 'import brainsmith; print(\"Brainsmith import: SUCCESS\")'" || {
             echo "WARNING: Brainsmith import failed, but this may be expected during setup"
           }
           
-          ./brainsmith-container exec "python -c 'import finn; print(\"FINN import: SUCCESS\")'" || {
+          ./smithy exec "python -c 'import finn; print(\"FINN import: SUCCESS\")'" || {
             echo "WARNING: FINN import failed, but dependencies appear to be present"
           }
 
       - name: Test compilation workflow
         run: |
           echo "=== Testing BERT compilation ==="
-          ./brainsmith-container exec "ls -la demos/bert/"
+          ./smithy exec "ls -la demos/bert/"
           
-          timeout 30m ./brainsmith-container exec "cd demos/bert && make clean && make" || {
+          timeout 30m ./smithy exec "cd demos/bert && make clean && make" || {
             echo "WARNING: BERT compilation failed or timed out (this may be expected in CI)"
             echo "=== Checking generated files ==="
-            ./brainsmith-container exec "find demos/bert -newer demos/bert/Makefile | head -20 || true"
+            ./smithy exec "find demos/bert -newer demos/bert/Makefile | head -20 || true"
           }
 
       - name: Collect artifacts and debug info
@@ -238,12 +238,12 @@ jobs:
           free -h > artifacts/memory_usage.txt
           
           echo "=== Collecting container info ==="
-          ./brainsmith-container status > artifacts/container_status.txt 2>&1 || echo "Status failed" > artifacts/container_status.txt
-          ./brainsmith-container logs > artifacts/container.log 2>&1 || echo "No logs" > artifacts/container.log
+          ./smithy status > artifacts/container_status.txt 2>&1 || echo "Status failed" > artifacts/container_status.txt
+          ./smithy logs > artifacts/container.log 2>&1 || echo "No logs" > artifacts/container.log
           
           echo "=== Collecting environment info ==="
-          ./brainsmith-container exec "find \$BSMITH_DIR/deps -type d | head -50" > artifacts/deps_dirs.txt 2>&1 || true
-          ./brainsmith-container exec "pip list" > artifacts/pip_list.txt 2>&1 || true
+          ./smithy exec "find \$BSMITH_DIR/deps -type d | head -50" > artifacts/deps_dirs.txt 2>&1 || true
+          ./smithy exec "pip list" > artifacts/pip_list.txt 2>&1 || true
 
       - name: Upload artifacts
         if: always()
@@ -256,8 +256,8 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          ./brainsmith-container stop || true
-          ./brainsmith-container cleanup || true
+          ./smithy stop || true
+          ./smithy cleanup || true
 
   # Full pytest suite (only on schedule to save resources)
   full-test-suite:
@@ -274,16 +274,16 @@ jobs:
 
       - name: Build container and run comprehensive tests
         run: |
-          chmod +x brainsmith-container
+          chmod +x smithy
           
           echo "=== Starting container for full test suite (will build image automatically) ==="
-          ./brainsmith-container daemon
+          ./smithy daemon
           
           echo "=== Running full pytest suite ==="
-          ./brainsmith-container exec "cd tests && timeout 180m pytest -v --tb=short ./" || {
+          ./smithy exec "cd tests && timeout 180m pytest -v --tb=short ./" || {
             echo "ERROR: Full test suite failed or timed out"
             echo "=== Container logs ==="
-            ./brainsmith-container logs --tail 100
+            ./smithy logs --tail 100
             exit 1
           }
 
@@ -299,5 +299,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          ./brainsmith-container stop || true
-          ./brainsmith-container cleanup || true
+          ./smithy stop || true
+          ./smithy cleanup || true

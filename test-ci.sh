@@ -65,13 +65,13 @@ docker info | head -10
 
 # Test 3: Container script functionality
 log_info "=== Test 3: Container Script Check ==="
-chmod +x brainsmith-container
-./brainsmith-container help
+chmod +x smithy
+./smithy help
 
 # Test 4: Docker build
 log_info "=== Test 4: Docker Build ==="
 log_info "Building Docker image..."
-if ./brainsmith-container build; then
+if ./smithy build; then
     log_info "Docker build successful"
 else
     log_error "Docker build failed"
@@ -81,17 +81,17 @@ fi
 # Test 5: Container startup
 log_info "=== Test 5: Container Startup ==="
 log_info "Starting container in daemon mode..."
-if ./brainsmith-container start daemon; then
+if ./smithy daemon; then
     log_info "Container started successfully"
     sleep 3  # Give container time to fully start
     
     # Verify container is actually running
-    if ./brainsmith-container status | grep -q "is running"; then
+    if ./smithy status | grep -q "is running"; then
         log_info "Container confirmed running"
     else
         log_error "Container started but not running properly"
         log_info "Container logs:"
-        ./brainsmith-container logs --tail 20
+        ./smithy logs --tail 20
         exit 1
     fi
 else
@@ -102,63 +102,63 @@ fi
 # Test 6: Basic container functionality
 log_info "=== Test 6: Basic Container Tests ==="
 log_info "Testing container status..."
-./brainsmith-container status
+./smithy status
 
 log_info "Testing basic commands..."
-./brainsmith-container exec "echo 'Hello from container'"
-./brainsmith-container exec "python --version"
-./brainsmith-container exec "pwd"
+./smithy exec "echo 'Hello from container'"
+./smithy exec "python --version"
+./smithy exec "pwd"
 
 # Test 7: Environment variables in container
 log_info "=== Test 7: Container Environment ==="
-./brainsmith-container exec "echo 'BSMITH_DIR='\$BSMITH_DIR"
-./brainsmith-container exec "echo 'BSMITH_BUILD_DIR='\$BSMITH_BUILD_DIR"
-./brainsmith-container exec "echo 'BSMITH_SKIP_DEP_REPOS='\$BSMITH_SKIP_DEP_REPOS"
-./brainsmith-container exec "ls -la \$BSMITH_DIR | head -10"
+./smithy exec "echo 'BSMITH_DIR='\$BSMITH_DIR"
+./smithy exec "echo 'BSMITH_BUILD_DIR='\$BSMITH_BUILD_DIR"
+./smithy exec "echo 'BSMITH_SKIP_DEP_REPOS='\$BSMITH_SKIP_DEP_REPOS"
+./smithy exec "ls -la \$BSMITH_DIR | head -10"
 
 # Test 8: Dependency directory check
 log_info "=== Test 8: Dependency Check ==="
-./brainsmith-container exec "ls -la \$BSMITH_DIR/deps/ 2>/dev/null || echo 'Dependencies not yet fetched'"
+./smithy exec "ls -la \$BSMITH_DIR/deps/ 2>/dev/null || echo 'Dependencies not yet fetched'"
 
 if [ "$TEST_MODE" = "full" ]; then
     # Test 9: Dependency fetching (full test only)
     log_info "=== Test 9: Dependency Fetching ==="
     log_info "Testing dependency fetch (this may take several minutes)..."
-    if timeout 600 ./brainsmith-container exec "cd \$BSMITH_DIR && source docker/fetch-repos.sh"; then
+    if timeout 600 ./smithy exec "cd \$BSMITH_DIR && source docker/fetch-repos.sh"; then
         log_info "Dependency fetching completed"
-        ./brainsmith-container exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | head -20"
+        ./smithy exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | head -20"
     else
         log_warn "Dependency fetching failed or timed out (10 minutes)"
     fi
 
     # Test 10: Python package installation
     log_info "=== Test 10: Python Package Check ==="
-    ./brainsmith-container exec "python -c 'import sys; print(\"Python path:\", sys.path[:3])'"
-    ./brainsmith-container exec "pip list | grep -E '(qonnx|finn|brevitas|brainsmith)' || echo 'Packages not yet installed'"
+    ./smithy exec "python -c 'import sys; print(\"Python path:\", sys.path[:3])'"
+    ./smithy exec "pip list | grep -E '(qonnx|finn|brevitas|brainsmith)' || echo 'Packages not yet installed'"
 
     # Test 11: Simple BERT test
     log_info "=== Test 11: BERT Demo Check ==="
-    ./brainsmith-container exec "ls -la demos/bert/ || echo 'BERT demo not found'"
-    if ./brainsmith-container exec "cd demos/bert && ls -la Makefile"; then
+    ./smithy exec "ls -la demos/bert/ || echo 'BERT demo not found'"
+    if ./smithy exec "cd demos/bert && ls -la Makefile"; then
         log_info "BERT demo found, testing basic make..."
-        timeout 120 ./brainsmith-container exec "cd demos/bert && make clean || true" || log_warn "Make clean timed out"
+        timeout 120 ./smithy exec "cd demos/bert && make clean || true" || log_warn "Make clean timed out"
     fi
 fi
 
 # Test 12: Container logs
 log_info "=== Test 12: Container Logs ==="
 log_info "Recent container logs:"
-./brainsmith-container logs --tail 20
+./smithy logs --tail 20
 
 # Test 13: Resource usage
 log_info "=== Test 13: Resource Usage ==="
-./brainsmith-container exec "df -h | head -10"
-./brainsmith-container exec "free -h"
+./smithy exec "df -h | head -10"
+./smithy exec "free -h"
 
 # Cleanup
 log_info "=== Cleanup ==="
-./brainsmith-container stop
-./brainsmith-container cleanup
+./smithy stop
+./smithy cleanup
 
 if [ "$CI_MODE" = true ]; then
     log_info "Cleaning up Docker images..."

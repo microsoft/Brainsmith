@@ -25,19 +25,19 @@ git clone git@github.com:microsoft/Brainsmith.git
 
 ```bash
 # Start persistent container (one-time setup)
-./brainsmith-container start daemon
+./smithy daemon
 
 # Get instant shell access anytime
-./brainsmith-container shell
+./smithy shell
 
 # Or execute commands quickly
-./brainsmith-container exec "python script.py"
+./smithy exec "python script.py"
 
 # Check status
-./brainsmith-container status
+./smithy status
 
 # Stop when done
-./brainsmith-container stop
+./smithy stop
 ```
 
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
