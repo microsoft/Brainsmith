@@ -14,12 +14,29 @@ export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-2. Clone this repo (SSH cloning is currently required):
+2. Clone this repo with submodules (SSH cloning is currently required):
 ```bash
-git clone git@github.com:microsoft/Brainsmith.git
+git clone --recurse-submodules git@github.com:microsoft/Brainsmith.git
 ```
 
-3. (Optional) Dependencies are specified in `docker/fetch-repos.sh` which lists specific hashes/branches to pull during docker build. Feel free to adjust these if you work off a different feature fork/branch of key dependencies like FINN or QONNX.
+   If you already cloned without submodules, initialize them:
+```bash
+git submodule update --init --recursive
+```
+
+3. **Dependencies**: This repository uses Git submodules for major dependencies:
+   - **FINN** (at repository root): Submodule pointing to the `custom/transformer` branch
+   - **Other dependencies**: Specified in `docker/fetch-repos.sh` for additional components pulled during docker build
+   
+   To update FINN to a newer commit:
+```bash
+cd finn
+git fetch origin
+git checkout origin/custom/transformer  # or specific commit hash
+cd ..
+git add finn
+git commit -m "Update FINN submodule"
+```
 
 4. Launch the docker container. Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc. and run the changes in docker without rebuilding the container.
 

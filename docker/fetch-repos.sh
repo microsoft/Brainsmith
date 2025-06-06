@@ -15,7 +15,6 @@ recho() { echo -e "${RED}$1${NC}"; }
 yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Dependency Git URLs, hashes/branches, and directory names
-FINN_URL="https://github.com/Xilinx/finn.git"
 QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
@@ -29,7 +28,6 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
-FINN_COMMIT="custom/transformer"
 QONNX_COMMIT="custom/brainsmith"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="95edaa0bdc8e639e39b1164466278c59df4877be"
@@ -44,7 +42,6 @@ EXP_BOARD_FILES_MD5="226ca927a16ea4ce579f1332675e9e9a"
 PYXSI_COMMIT="941bb62a4a3cc2c8cf2a9b89187c60bb0b776658"
 ONNXSCRIPT_COMMIT="62c7110aba46554432ce8e82ba2d8a086bd6227c"
 
-FINN_DIR="finn"
 QONNX_DIR="qonnx"
 FINN_EXP_DIR="finn-experimental"
 BREVITAS_DIR="brevitas"
@@ -73,6 +70,24 @@ if [ -z "$PLATFORM_REPO_PATHS" ];then
 fi
 
 # Define functions
+verify_finn_submodule() {
+    if [ ! -d "$BSMITH_DIR/finn/.git" ]; then
+        recho "FINN submodule not initialized!"
+        recho "Please run: git submodule update --init --recursive"
+        recho "Or clone with: git clone --recursive <repo-url>"
+        exit 1
+    fi
+    
+    # Check if submodule is on correct branch/commit
+    local current_branch=$(git -C "$BSMITH_DIR/finn" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")
+    if [ "$current_branch" != "custom/transformer" ]; then
+        yecho "FINN submodule is not on expected branch 'custom/transformer' (currently on: $current_branch)"
+        yecho "This may cause compatibility issues"
+    fi
+    
+    gecho "FINN submodule verified at $BSMITH_DIR/finn"
+}
+
 fetch_repo() {
     # URL for git repo to be cloned
     REPO_URL=$1
@@ -163,7 +178,7 @@ fetch_board_files() {
     cd $OLD_PWD
 }
 
-fetch_repo $FINN_URL $FINN_COMMIT $FINN_DIR
+verify_finn_submodule
 fetch_repo $QONNX_URL $QONNX_COMMIT $QONNX_DIR
 fetch_repo $FINN_EXP_URL $FINN_EXP_COMMIT $FINN_EXP_DIR
 fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR

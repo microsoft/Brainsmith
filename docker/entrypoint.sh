@@ -31,7 +31,7 @@ cd $BSMITH_DIR
 log_debug "Changed to directory: $(pwd)"
 
 # First: Fetch dependencies if they don't exist (before environment setup)
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/finn" ]; then
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/qonnx" ]; then
     log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
     
     if source docker/fetch-repos.sh; then
@@ -49,6 +49,13 @@ fi
 # Second: Load environment setup (now that dependencies exist)
 log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
+
+# Check FINN submodule after environment is loaded (so recho function is available)
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/finn/.git" ]; then
+    recho "FINN submodule not found or not initialized"
+    recho "Please run: git submodule update --init --recursive"
+    exit 1
+fi
 
 # Third: For daemon mode, ensure pyxsi is built during initialization
 if [ "$BSMITH_CONTAINER_MODE" = "daemon" ] && [ ! -z "${XILINX_VIVADO}" ]; then
@@ -130,9 +137,9 @@ install_packages_with_progress() {
     fi
 
     # finn
-    if [ -d "${BSMITH_DIR}/deps/finn" ]; then
+    if [ -d "${BSMITH_DIR}/finn" ]; then
         gecho "Installing finn..."
-        if ! pip install --user -e ${BSMITH_DIR}/deps/finn; then
+        if ! pip install --user -e ${BSMITH_DIR}/finn; then
             install_success=false
             failed_packages+="finn "
         fi
