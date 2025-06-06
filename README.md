@@ -40,6 +40,8 @@ git clone git@github.com:microsoft/Brainsmith.git
 ./smithy stop
 ```
 
+> **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
+
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
 ```bash
 cd tests/end2end/bert

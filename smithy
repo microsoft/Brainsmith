@@ -24,13 +24,15 @@ DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
 DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Debug output for container name generation (only if BSMITH_DEBUG is set)
-if [ "${BSMITH_DEBUG:-0}" = "1" ]; then
-    echo "DEBUG: Container name generation:" >&2
-    echo "DEBUG: BSMITH_DIR=$BSMITH_DIR" >&2
-    echo "DEBUG: BSMITH_DIR_HASH=$BSMITH_DIR_HASH" >&2
-    echo "DEBUG: DOCKER_UNAME=$DOCKER_UNAME" >&2
-    echo "DEBUG: DOCKER_INST_NAME=$DOCKER_INST_NAME" >&2
-fi
+debug() {
+    [ "${BSMITH_DEBUG:-0}" = "1" ] && echo "DEBUG: $1" >&2
+}
+
+debug "Container name generation:"
+debug "BSMITH_DIR=$BSMITH_DIR"
+debug "BSMITH_DIR_HASH=$BSMITH_DIR_HASH"
+debug "DOCKER_UNAME=$DOCKER_UNAME"
+debug "DOCKER_INST_NAME=$DOCKER_INST_NAME"
 
 # Set defaults (same as run-docker.sh)
 : ${BSMITH_HW_COMPILER="finn"}
@@ -118,14 +120,14 @@ EOF
 }
 
 get_container_status() {
-    echo "DEBUG: Checking container status for: $DOCKER_INST_NAME" >&2
+    debug "Checking container status for: $DOCKER_INST_NAME"
     docker inspect "$DOCKER_INST_NAME" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         STATUS=$(docker inspect --format='{{.State.Status}}' "$DOCKER_INST_NAME")
-        echo "DEBUG: Container $DOCKER_INST_NAME status: $STATUS" >&2
+        debug "Container $DOCKER_INST_NAME status: $STATUS"
         echo "$STATUS"
     else
-        echo "DEBUG: Container $DOCKER_INST_NAME not found" >&2
+        debug "Container $DOCKER_INST_NAME not found"
         echo "not_found"
     fi
 }
@@ -157,7 +159,7 @@ setup_container_if_needed() {
     STATUS=$(get_container_status)
     
     if [ "$STATUS" = "running" ]; then
-        echo "DEBUG: Container $DOCKER_INST_NAME is already running" >&2
+        debug "Container $DOCKER_INST_NAME is already running"
         return 0
     elif [ "$STATUS" = "exited" ]; then
         gecho "Starting existing container $DOCKER_INST_NAME"
@@ -184,8 +186,8 @@ create_container() {
     # Create necessary directories
     mkdir -p $BSMITH_BUILD_DIR
     mkdir -p $BSMITH_SSH_KEY_DIR
-    echo "DEBUG: Created build directory: $BSMITH_BUILD_DIR" >&2
-    echo "DEBUG: Created SSH key directory: $BSMITH_SSH_KEY_DIR" >&2
+    debug "Created build directory: $BSMITH_BUILD_DIR"
+    debug "Created SSH key directory: $BSMITH_SSH_KEY_DIR"
     
     # Build Docker command with all required options
     DOCKER_CMD="docker run"
@@ -274,20 +276,20 @@ create_container() {
         DOCKER_CMD+=" -e BSMITH_CONTAINER_MODE=daemon"
         DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
         gecho "Starting daemon container..."
-        echo "DEBUG: Full docker command: $DOCKER_CMD" >&2
+        debug "Full docker command: $DOCKER_CMD"
         # Execute with explicit empty command to trigger daemon mode
         RESULT=$($DOCKER_CMD "")
         DOCKER_EXIT_CODE=$?
-        echo "DEBUG: Docker run exit code: $DOCKER_EXIT_CODE" >&2
-        echo "DEBUG: Docker run output: $RESULT" >&2
+        debug "Docker run exit code: $DOCKER_EXIT_CODE"
+        debug "Docker run output: $RESULT"
         
         # Wait a moment and check if container actually started
         sleep 2
         FINAL_STATUS=$(get_container_status)
-        echo "DEBUG: Final container status after start: $FINAL_STATUS" >&2
+        debug "Final container status after start: $FINAL_STATUS"
         
         if [ "$FINAL_STATUS" != "running" ]; then
-            echo "ERROR: Container failed to start properly. Status: $FINAL_STATUS" >&2
+            recho "Container failed to start properly. Status: $FINAL_STATUS"
             echo "=== Container logs ===" >&2
             docker logs "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
             echo "=== Docker inspect ===" >&2
@@ -297,7 +299,7 @@ create_container() {
             gecho "Container started successfully in daemon mode"
             # Additional check: verify the container is actually ready for exec commands
             if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
-                echo "DEBUG: Verifying container readiness..." >&2
+                debug "Verifying container readiness..."
                 # Wait up to 30 seconds for dependency marker
                 local wait_count=0
                 while [ $wait_count -lt 15 ]; do
@@ -305,7 +307,7 @@ create_container() {
                         gecho "Container dependencies are ready"
                         break
                     fi
-                    echo "DEBUG: Waiting for dependencies... ($wait_count/15)" >&2
+                    debug "Waiting for dependencies... ($wait_count/15)"
                     sleep 2
                     wait_count=$((wait_count + 1))
                 done
@@ -326,9 +328,9 @@ create_container() {
 
 # Build image if needed, create container if needed, open interactive shell
 start_interactive() {
-    echo "DEBUG: Starting interactive container" >&2
-    echo "DEBUG: Container name will be: $DOCKER_INST_NAME" >&2
-    echo "DEBUG: Docker tag: $BSMITH_DOCKER_TAG" >&2
+    debug "Starting interactive container"
+    debug "Container name will be: $DOCKER_INST_NAME"
+    debug "Docker tag: $BSMITH_DOCKER_TAG"
     
     # Build image if it doesn't exist or if not using prebuilt
     if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
@@ -341,9 +343,9 @@ start_interactive() {
 
 # Build image if needed, create container if needed, start daemon in background
 start_daemon() {
-    echo "DEBUG: Starting daemon container" >&2
-    echo "DEBUG: Container name will be: $DOCKER_INST_NAME" >&2
-    echo "DEBUG: Docker tag: $BSMITH_DOCKER_TAG" >&2
+    debug "Starting daemon container"
+    debug "Container name will be: $DOCKER_INST_NAME"
+    debug "Docker tag: $BSMITH_DOCKER_TAG"
     
     setup_container_if_needed "daemon"
 }
@@ -383,14 +385,14 @@ show_status() {
 }
 
 exec_in_container() {
-    echo "DEBUG: Attempting to exec in container: $DOCKER_INST_NAME" >&2
+    debug "Attempting to exec in container: $DOCKER_INST_NAME"
     
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start daemon"
-        echo "DEBUG: Current container status:" >&2
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
+        debug "Current container status:"
         get_container_status >&2
-        echo "DEBUG: All containers:" >&2
-        docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep brainsmith >&2 || echo "No brainsmith containers found" >&2
+        debug "All containers:"
+        docker ps -a --format "table {{.Names}}\t{{.Status}}" | head -5 >&2 || echo "No containers found" >&2
         return 1
     fi
     
@@ -409,16 +411,16 @@ exec_in_container() {
         fi
     done
     
-    echo "DEBUG: About to execute command: $CMD" >&2
+    debug "About to execute command: $CMD"
     
     # Use the fast exec entrypoint for optimized performance
     docker exec "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_exec.sh bash -c "$CMD"
     EXEC_EXIT_CODE=$?
-    echo "DEBUG: Exec exit code: $EXEC_EXIT_CODE" >&2
+    debug "Exec exit code: $EXEC_EXIT_CODE"
     
     # Check container status after exec
     POST_EXEC_STATUS=$(get_container_status)
-    echo "DEBUG: Container status after exec: $POST_EXEC_STATUS" >&2
+    debug "Container status after exec: $POST_EXEC_STATUS"
     
     return $EXEC_EXIT_CODE
 }
