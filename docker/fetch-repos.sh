@@ -71,7 +71,7 @@ fi
 
 # Define functions
 verify_finn_submodule() {
-    if [ ! -d "$BSMITH_DIR/finn/.git" ]; then
+    if [ ! -e "$BSMITH_DIR/finn/.git" ] || [ ! -f "$BSMITH_DIR/finn/setup.py" ]; then
         recho "FINN submodule not initialized!"
         recho "Please run: git submodule update --init --recursive"
         recho "Or clone with: git clone --recursive <repo-url>"
