@@ -357,15 +357,15 @@ class AutoHWCustomOp(HWCustomOp):
                     for w in weights.flatten():
                         f.write(f"{w}\n")
 
-   def _get_current_parallelism_config(self) -> Dict[str, int]:
-       """Get current parallelism configuration for all interfaces."""
-       config = {}
-       for iface in self.dataflow_model.get_all_interfaces():
-           parallel_attr = f"{iface.name}_parallel"
-           config[iface.name] = self.get_nodeattr(parallel_attr) or 1
-       return config
+    def _get_current_parallelism_config(self) -> Dict[str, int]:
+        """Get current parallelism configuration for all interfaces."""
+        config = {}
+        for iface in self.dataflow_model.get_all_interfaces():
+            parallel_attr = f"{iface.name}_parallel"
+            config[iface.name] = self.get_nodeattr(parallel_attr) or 1
+        return config
                         
-   def estimate_bram_usage(self) -> int:
+    def estimate_bram_usage(self) -> int:
         """Estimate BRAM usage using DataflowModel resource requirements."""
         parallelism_config = self._get_current_parallelism_config()
         resources = self.dataflow_model.get_resource_requirements(parallelism_config)

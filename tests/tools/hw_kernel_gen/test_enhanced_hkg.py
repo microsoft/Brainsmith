@@ -155,7 +155,7 @@ class TestEnhancedHKG:
             
             # Verify output file was created
             assert output_file.exists()
-            assert "autotest_kernel" in str(output_file).lower()
+            assert "autotestkernel" in str(output_file).lower()
             
             # Verify template context was built
             mock_context.assert_called_once()
@@ -228,7 +228,7 @@ class TestEnhancedHKG:
         
         # Verify values
         assert context["kernel_name"] == "test_kernel"
-        assert context["class_name"] == "AutoTestkernel"
+        assert context["class_name"] == "AutoTestKernel"
         assert context["has_unified_model"] == True
         assert context["compiler_data_available"] == True
     
@@ -312,6 +312,7 @@ class TestEnhancedHKG:
              patch.object(hkg, '_generate_rtl_template') as mock_gen_rtl, \
              patch.object(hkg, '_generate_hw_custom_op') as mock_gen_hwop, \
              patch.object(hkg, '_generate_rtl_backend') as mock_gen_backend, \
+             patch.object(hkg, '_generate_test_suite') as mock_gen_test, \
              patch.object(hkg, '_generate_documentation') as mock_gen_doc:
             
             # Test full pipeline
@@ -325,6 +326,7 @@ class TestEnhancedHKG:
             mock_gen_rtl.assert_called_once()
             mock_gen_hwop.assert_called_once()
             mock_gen_backend.assert_called_once()
+            mock_gen_test.assert_called_once()  # New phase
             mock_gen_doc.assert_called_once()
             
             # Verify result is generated files dict

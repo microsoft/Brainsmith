@@ -1,16 +1,10 @@
-{#-
-HWCustomOp Template using AutoHWCustomOp Base Class
-
-This template generates HWCustomOp classes that inherit from AutoHWCustomOp,
-leveraging all standardized implementations from the dataflow framework.
--#}
 ############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 #
-# Auto-generated HWCustomOp for {{ kernel_name }}
-# Generated from: {{ source_file }}
-# Generation timestamp: {{ generation_timestamp }}
+# Auto-generated HWCustomOp for thresholding_axi
+# Generated from: /tmp/tmp3962npoo/thresholding_enhanced.sv
+# Generation timestamp: 2025-06-06T02:33:26.678819
 ############################################################################
 
 import numpy as np
@@ -31,9 +25,9 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 
 
-class {{ class_name }}(AutoHWCustomOp):
+class AutoThresholdingAxi(AutoHWCustomOp):
     """
-    Auto-generated HWCustomOp for {{ kernel_name }} kernel.
+    Auto-generated HWCustomOp for thresholding_axi kernel.
     
     This class inherits from AutoHWCustomOp which provides standardized
     implementations for all common HWCustomOp methods including:
@@ -45,17 +39,18 @@ class {{ class_name }}(AutoHWCustomOp):
     
     Only kernel-specific resource estimation methods need to be implemented.
     
-    Generated from RTL: {{ source_file }}
+    Generated from RTL: /tmp/tmp3962npoo/thresholding_enhanced.sv
     
     Interfaces:
-    {% for interface in dataflow_interfaces %}
-    - {{ interface.name }}: {{ interface.interface_type.value }} ({{ interface.dtype.finn_type }})
-    {% endfor %}
+    - ap: control (UINT32)
+    - s_axis: input (UINT8)
+    - m_axis: output (UINT1)
+    - s_axilite: config (UINT32)
     """
     
     def __init__(self, onnx_node, **kwargs):
         """
-        Initialize {{ class_name }} with dataflow model.
+        Initialize AutoThresholdingAxi with dataflow model.
         
         Args:
             onnx_node: ONNX node to wrap
@@ -66,8 +61,8 @@ class {{ class_name }}(AutoHWCustomOp):
         super().__init__(onnx_node, **kwargs)
         
         # Set kernel-specific attributes
-        self.kernel_name = "{{ kernel_name }}"
-        self.rtl_source = "{{ source_file }}"
+        self.kernel_name = "thresholding_axi"
+        self.rtl_source = "/tmp/tmp3962npoo/thresholding_enhanced.sv"
         
     def get_kernel_interface_specs(self) -> List[Dict[str, Any]]:
         """
@@ -78,37 +73,91 @@ class {{ class_name }}(AutoHWCustomOp):
         when creating the ONNX node instance based on the actual model data.
         
         Returns:
-            List of interface specifications for {{ kernel_name }}
+            List of interface specifications for thresholding_axi
         """
         return [
-            {% for interface in dataflow_interfaces %}
             {
-                "name": "{{ interface.name }}",
-                "interface_type": "{{ interface.interface_type.name }}",
-                "direction": "{{ 'input' if interface.interface_type.name in ['INPUT', 'WEIGHT'] else 'output' if interface.interface_type.name == 'OUTPUT' else 'control' }}",
+                "name": "ap",
+                "interface_type": "CONTROL",
+                "direction": "control",
                 "allowed_datatypes": [
-                    {% for constraint in interface.allowed_datatypes %}
                     {
-                        "base_types": {{ constraint.base_types }},
-                        "min_bitwidth": {{ constraint.min_bitwidth }},
-                        "max_bitwidth": {{ constraint.max_bitwidth }},
-                        "signed_allowed": {{ constraint.signed_allowed|lower|title }},
-                        "unsigned_allowed": {{ constraint.unsigned_allowed|lower|title }}
+                        "base_types": ['UINT'],
+                        "min_bitwidth": 8,
+                        "max_bitwidth": 32,
+                        "signed_allowed": False,
+                        "unsigned_allowed": True
                     },
-                    {% endfor %}
                 ],
-                "pragma_metadata": {{ interface.pragma_metadata }},
-                "axi_protocol": "{{ 'axi_stream' if 'axis' in interface.name else 'axi_lite' if 'axilite' in interface.name else 'global_control' }}"
+                "pragma_metadata": {},
+                "axi_protocol": "global_control"
             },
-            {% endfor %}
+            {
+                "name": "s_axis",
+                "interface_type": "INPUT",
+                "direction": "input",
+                "allowed_datatypes": [
+                    {
+                        "base_types": ['UINT'],
+                        "min_bitwidth": 8,
+                        "max_bitwidth": 8,
+                        "signed_allowed": True,
+                        "unsigned_allowed": True
+                    },
+                ],
+                "pragma_metadata": {'datatype_pragma_applied': True},
+                "axi_protocol": "axi_stream"
+            },
+            {
+                "name": "m_axis",
+                "interface_type": "OUTPUT",
+                "direction": "output",
+                "allowed_datatypes": [
+                    {
+                        "base_types": ['UINT'],
+                        "min_bitwidth": 1,
+                        "max_bitwidth": 1,
+                        "signed_allowed": True,
+                        "unsigned_allowed": True
+                    },
+                ],
+                "pragma_metadata": {'datatype_pragma_applied': True},
+                "axi_protocol": "axi_stream"
+            },
+            {
+                "name": "s_axilite",
+                "interface_type": "CONFIG",
+                "direction": "control",
+                "allowed_datatypes": [
+                    {
+                        "base_types": ['UINT'],
+                        "min_bitwidth": 8,
+                        "max_bitwidth": 32,
+                        "signed_allowed": False,
+                        "unsigned_allowed": True
+                    },
+                ],
+                "pragma_metadata": {},
+                "axi_protocol": "axi_lite"
+            },
         ]
     
     def _get_kernel_parameters(self) -> Dict[str, Any]:
         """Get kernel-specific parameters."""
         return {
-            {% for param in rtl_parameters %}
-            "{{ param.name }}": {{ param.default_value or 'None' }},
-            {% endfor %}
+            "N": 1,
+            "WI": 8,
+            "WT": 8,
+            "C": 32,
+            "PE": 1,
+            "SIGNED": 1,
+            "FPARG": 0,
+            "BIAS": 0,
+            "THRESHOLDS_PATH": "",
+            "USE_AXILITE": 1,
+            "DEPTH_TRIGGER_URAM": 0,
+            "DEPTH_TRIGGER_BRAM": 0,
+            "DEEP_PIPELINE": 0,
         }
     
     def get_nodeattr_types(self):
@@ -123,11 +172,18 @@ class {{ class_name }}(AutoHWCustomOp):
         
         # Add kernel-specific attributes
         kernel_attrs = {
-            {% for param in rtl_parameters %}
-            {% if param.name not in ['PE', 'SIMD'] %}  {# Skip if handled by base class #}
-            "{{ param.name }}": ("i", False, {{ param.default_value or 0 }}),
-            {% endif %}
-            {% endfor %}
+              "N": ("i", False, 1),
+              "WI": ("i", False, 8),
+              "WT": ("i", False, 8),
+              "C": ("i", False, 32),
+              "SIGNED": ("i", False, 1),
+              "FPARG": ("i", False, 0),
+              "BIAS": ("i", False, 0),
+              "THRESHOLDS_PATH": ("i", False, ""),
+              "USE_AXILITE": ("i", False, 1),
+              "DEPTH_TRIGGER_URAM": ("i", False, 0),
+              "DEPTH_TRIGGER_BRAM": ("i", False, 0),
+              "DEEP_PIPELINE": ("i", False, 0),
         }
         
         attrs.update(kernel_attrs)
@@ -137,10 +193,10 @@ class {{ class_name }}(AutoHWCustomOp):
     
     def bram_estimation(self) -> int:
         """
-        Estimate BRAM usage for {{ kernel_name }}.
+        Estimate BRAM usage for thresholding_axi.
         
         This method must be implemented based on the specific memory
-        requirements of the {{ kernel_name }} kernel architecture.
+        requirements of the thresholding_axi kernel architecture.
         
         Helper methods available from base class:
         - self._get_weight_memory_summary(): Weight storage requirements
@@ -152,83 +208,48 @@ class {{ class_name }}(AutoHWCustomOp):
         activation_summary = self._get_activation_buffer_summary()
         parallelism = self._get_current_parallelism()
         
-        # TODO: Implement based on {{ kernel_name }} architecture
+        # TODO: Implement based on thresholding_axi architecture
         # Example implementation:
-        {% if weight_interfaces %}
-        # Calculate weight storage requirements
-        total_weight_bits = 0
-        {% for interface in weight_interfaces %}
-        {{ interface.name }}_bits = (
-            np.prod({{ interface.qDim }}) *  # Total weights
-            np.prod({{ interface.tDim }}) *  # Per-calculation weights  
-            {{ interface.dtype.bitwidth }}   # Bits per weight
-        )
-        total_weight_bits += {{ interface.name }}_bits
-        {% endfor %}
-        
-        # Convert to BRAM blocks (36Kb each)
-        bram_per_36k = 36 * 1024
-        weight_brams = math.ceil(total_weight_bits / bram_per_36k)
-        
-        # Add activation buffer requirements
-        # This is kernel-specific - adjust based on {{ kernel_name }} architecture
-        buffer_brams = 1  # Placeholder
-        
-        return weight_brams + buffer_brams
-        {% else %}
         # No weight interfaces - minimal BRAM usage
         return 1  # Minimum for control/buffering
-        {% endif %}
     
     def lut_estimation(self) -> int:
         """
-        Estimate LUT usage for {{ kernel_name }}.
+        Estimate LUT usage for thresholding_axi.
         
         Must be implemented based on the specific logic requirements.
         """
         parallelism = self._get_current_parallelism()
         
-        # TODO: Implement based on {{ kernel_name }} architecture
+        # TODO: Implement based on thresholding_axi architecture
         # Placeholder estimation
         base_luts = 1000  # Base control logic
-        {% for interface in input_interfaces %}
-        luts_per_{{ interface.name }}_parallel = 50
-        base_luts += parallelism.iPar.get("{{ interface.name }}", 1) * luts_per_{{ interface.name }}_parallel
-        {% endfor %}
+        luts_per_s_axis_parallel = 50
+        base_luts += parallelism.iPar.get("s_axis", 1) * luts_per_s_axis_parallel
         
         return base_luts
     
     def dsp_estimation(self) -> int:
         """
-        Estimate DSP usage for {{ kernel_name }}.
+        Estimate DSP usage for thresholding_axi.
         
         Must be implemented based on arithmetic operations required.
         """
         parallelism = self._get_current_parallelism()
         
-        # TODO: Implement based on {{ kernel_name }} architecture
+        # TODO: Implement based on thresholding_axi architecture
         # Placeholder estimation
-        {% if kernel_name.lower() in ['matmul', 'conv', 'gemm'] %}
-        # Likely uses DSPs for multiplication
-        dsps_per_pe = 1
-        total_dsps = 0
-        {% for interface in weight_interfaces %}
-        total_dsps += parallelism.wPar.get("{{ interface.name }}", 1) * dsps_per_pe
-        {% endfor %}
-        return total_dsps
-        {% else %}
         # May not use DSPs
         return 0
-        {% endif %}
     
     def uram_estimation(self) -> int:
         """
-        Estimate UltraRAM usage for {{ kernel_name }}.
+        Estimate UltraRAM usage for thresholding_axi.
         
         Override if kernel uses UltraRAM for large storage.
         """
         # Most kernels don't use URAM
-        # Override this method if {{ kernel_name }} does
+        # Override this method if thresholding_axi does
         return 0
     
     # ===== Optional Overrides =====
@@ -244,13 +265,11 @@ class {{ class_name }}(AutoHWCustomOp):
         super().verify_node()
         
         # Add kernel-specific verification
-        {% if kernel_name == 'thresholding_axi' %}
         # Example: Verify thresholding-specific constraints
         c = self.get_nodeattr("C")
         pe = self.get_nodeattr("PE") 
         if c % pe != 0:
             raise ValueError(f"C ({c}) must be divisible by PE ({pe})")
-        {% endif %}
         
         # Add any other kernel-specific checks here
     
@@ -275,21 +294,41 @@ class {{ class_name }}(AutoHWCustomOp):
         params = super().generate_params(model, path)
         
         # Add any kernel-specific parameter processing
-        {% if rtl_parameters %}
         # Ensure all RTL parameters are included
-        {% for param in rtl_parameters %}
-        if "{{ param.name }}" not in params:
-            params["{{ param.name }}"] = self.get_nodeattr("{{ param.name }}")
-        {% endfor %}
-        {% endif %}
+        if "N" not in params:
+            params["N"] = self.get_nodeattr("N")
+        if "WI" not in params:
+            params["WI"] = self.get_nodeattr("WI")
+        if "WT" not in params:
+            params["WT"] = self.get_nodeattr("WT")
+        if "C" not in params:
+            params["C"] = self.get_nodeattr("C")
+        if "PE" not in params:
+            params["PE"] = self.get_nodeattr("PE")
+        if "SIGNED" not in params:
+            params["SIGNED"] = self.get_nodeattr("SIGNED")
+        if "FPARG" not in params:
+            params["FPARG"] = self.get_nodeattr("FPARG")
+        if "BIAS" not in params:
+            params["BIAS"] = self.get_nodeattr("BIAS")
+        if "THRESHOLDS_PATH" not in params:
+            params["THRESHOLDS_PATH"] = self.get_nodeattr("THRESHOLDS_PATH")
+        if "USE_AXILITE" not in params:
+            params["USE_AXILITE"] = self.get_nodeattr("USE_AXILITE")
+        if "DEPTH_TRIGGER_URAM" not in params:
+            params["DEPTH_TRIGGER_URAM"] = self.get_nodeattr("DEPTH_TRIGGER_URAM")
+        if "DEPTH_TRIGGER_BRAM" not in params:
+            params["DEPTH_TRIGGER_BRAM"] = self.get_nodeattr("DEPTH_TRIGGER_BRAM")
+        if "DEEP_PIPELINE" not in params:
+            params["DEEP_PIPELINE"] = self.get_nodeattr("DEEP_PIPELINE")
         
         return params
 
 
 # Optional: Create convenience function for FINN integration
-def make_{{ kernel_name }}_customop(W, pe=1, simd=1, **kwargs):
+def make_thresholding_axi_customop(W, pe=1, simd=1, **kwargs):
     """
-    Convenience function to create {{ class_name }} node.
+    Convenience function to create AutoThresholdingAxi node.
     
     This follows FINN conventions for creating custom operations.
     """
