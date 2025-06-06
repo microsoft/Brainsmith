@@ -37,10 +37,16 @@ try:
     from brainsmith.dataflow.integration.rtl_conversion import RTLInterfaceConverter, validate_conversion_result
     from brainsmith.dataflow.core.dataflow_model import DataflowModel
     from brainsmith.dataflow.core.validation import ValidationSeverity
+    from brainsmith.dataflow.core.class_naming import generate_class_name, generate_backend_class_name, generate_test_class_name
     DATAFLOW_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Dataflow framework not available: {e}")
     DATAFLOW_AVAILABLE = False
+    # Fallback class naming implementation
+    def generate_class_name(kernel_name: str, prefix: str = "Auto") -> str:
+        parts = kernel_name.split('_')
+        camel_case = ''.join(word.capitalize() for word in parts)
+        return f"{prefix}{camel_case}"
 
 
 class HardwareKernelGeneratorError(Exception):
@@ -210,6 +216,8 @@ class HardwareKernelGenerator:
                 onnx_metadata = self.compiler_data_module.onnx_metadata
                 
             # Initialize RTL converter with ONNX metadata
+            if not DATAFLOW_AVAILABLE:
+                raise HardwareKernelGeneratorError("Dataflow framework required but not available")
             self.rtl_converter = RTLInterfaceConverter(onnx_metadata)
             
             # Convert RTL interfaces to DataflowInterface objects
@@ -285,26 +293,38 @@ class HardwareKernelGenerator:
             Path to generated AutoHWCustomOp file
         """
         from jinja2 import Environment, FileSystemLoader
+        import os
         
         print("Generating enhanced AutoHWCustomOp with dataflow modeling")
         
         # Build template context with dataflow information
         template_context = self._build_enhanced_template_context()
         
-        # Generate class using template (placeholder for now)
-        class_name = f"Auto{self.hw_kernel_data.name.title()}"
+        # Set up Jinja2 environment
+        template_dir = Path(__file__).parent / "templates"
+        env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            trim_blocks=True,
+            lstrip_blocks=True
+        )
+        
+        # Add custom filters for template processing
+        env.filters['list'] = list
+        env.filters['number'] = lambda x: isinstance(x, (int, float))
+        
+        # Load and render the HWCustomOp template
+        template = env.get_template("hw_custom_op.py.j2")
+        generated_code = template.render(**template_context)
+        
+        # Generate output file with proper class naming
+        class_name = generate_class_name(self.hw_kernel_data.name)
         output_file = self.output_dir / f"{class_name.lower()}.py"
         
-        # For now, write a placeholder with dataflow metadata
+        # Write generated code
         with open(output_file, 'w') as f:
-            f.write(f'"""\nAuto-generated HWCustomOp for {self.hw_kernel_data.name}\n')
-            f.write(f'Generated with dataflow modeling support\n')
-            f.write(f'Interfaces: {len(self.dataflow_interfaces)}\n')
-            f.write(f'Dataflow model: {self.dataflow_model is not None}\n')
-            f.write('"""\n\n')
-            f.write(f'# TODO: Implement {class_name} using template system\n')
-            f.write(f'# Template context available: {list(template_context.keys())}\n')
+            f.write(generated_code)
         
+        print(f"AutoHWCustomOp generated: {output_file}")
         return output_file
         
     def _build_enhanced_template_context(self) -> Dict[str, Any]:
@@ -319,7 +339,7 @@ class HardwareKernelGenerator:
         context = {
             # Kernel metadata
             "kernel_name": self.hw_kernel_data.name,
-            "class_name": f"Auto{self.hw_kernel_data.name.replace('_', '').title()}",
+            "class_name": generate_class_name(self.hw_kernel_data.name),
             "source_file": str(self.rtl_file_path),
             "generation_timestamp": datetime.now().isoformat(),
             
@@ -411,27 +431,367 @@ class HardwareKernelGenerator:
 
 
     def _generate_rtl_backend(self):
-        pass # Commented out until implemented
-        # """Generates the RTLBackend instance file."""
-        # if not self.hw_kernel_data or not self.compiler_data_module:
-        #      raise HardwareKernelGeneratorError("Cannot generate RTLBackend: Required data not parsed.")
-        # print("--- Generating RTLBackend Instance ---")
-        # # Placeholder: Call the actual generator function
-        # output_path = generate_rtl_backend(self.hw_kernel_data, self.compiler_data_module, self.output_dir)
-        # self.generated_files["rtl_backend"] = output_path
-        # print(f"RTLBackend generation placeholder complete. Output: {output_path}")
+        """
+        Enhanced RTLBackend generation with dataflow modeling support.
+        
+        Generates RTLBackend classes with interface-wise code generation capabilities.
+        """
+        if not self.hw_kernel_data:
+            raise HardwareKernelGeneratorError("Cannot generate RTLBackend: RTL data not parsed.")
+            
+        if not self.dataflow_enabled:
+            print("Warning: RTLBackend generation without dataflow framework - limited functionality")
+            return
+            
+        if not self.dataflow_interfaces or not self.dataflow_model:
+            print("Warning: RTLBackend generation without dataflow model - basic generation only")
+            
+        print("--- Generating RTLBackend Instance ---")
+        
+        # Generate RTLBackend with dataflow modeling
+        output_path = self._generate_auto_rtlbackend_with_dataflow()
+            
+        self.generated_files["rtl_backend"] = output_path
+        print(f"RTLBackend generation complete. Output: {output_path}")
+        
+    def _generate_auto_rtlbackend_with_dataflow(self) -> Path:
+        """
+        Generate RTLBackend with full dataflow modeling support.
+        
+        Returns:
+            Path to generated RTLBackend file
+        """
+        from jinja2 import Environment, FileSystemLoader
+        
+        print("Generating enhanced RTLBackend with dataflow modeling")
+        
+        # Build template context with dataflow information
+        template_context = self._build_enhanced_template_context()
+        
+        # Set up Jinja2 environment
+        template_dir = Path(__file__).parent / "templates"
+        env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            trim_blocks=True,
+            lstrip_blocks=True
+        )
+        
+        # Add custom filters for template processing
+        env.filters['list'] = list
+        env.filters['number'] = lambda x: isinstance(x, (int, float))
+        
+        # Load and render the RTLBackend template
+        template = env.get_template("rtl_backend.py.j2")
+        generated_code = template.render(**template_context)
+        
+        # Generate output file with proper class naming
+        class_name = generate_class_name(self.hw_kernel_data.name)
+        output_file = self.output_dir / f"{class_name.lower()}_rtlbackend.py"
+        
+        # Write generated code
+        with open(output_file, 'w') as f:
+            f.write(generated_code)
+        
+        print(f"RTLBackend generated: {output_file}")
+        return output_file
 
+
+    def _generate_test_suite(self):
+        """
+        Generate comprehensive test suite with dataflow modeling support.
+        
+        Generates test suites for AutoHWCustomOp and RTLBackend validation.
+        """
+        if not self.hw_kernel_data:
+            raise HardwareKernelGeneratorError("Cannot generate test suite: RTL data not parsed.")
+            
+        print("--- Generating Test Suite ---")
+        
+        # Generate test suite with dataflow modeling
+        output_path = self._generate_auto_test_suite_with_dataflow()
+            
+        self.generated_files["test_suite"] = output_path
+        print(f"Test suite generation complete. Output: {output_path}")
+        
+    def _generate_auto_test_suite_with_dataflow(self) -> Path:
+        """
+        Generate test suite with full dataflow modeling support.
+        
+        Returns:
+            Path to generated test suite file
+        """
+        from jinja2 import Environment, FileSystemLoader
+        
+        print("Generating enhanced test suite with dataflow modeling")
+        
+        # Build template context with dataflow information
+        template_context = self._build_enhanced_template_context()
+        
+        # Set up Jinja2 environment
+        template_dir = Path(__file__).parent / "templates"
+        env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            trim_blocks=True,
+            lstrip_blocks=True
+        )
+        
+        # Add custom filters for template processing
+        env.filters['list'] = list
+        env.filters['number'] = lambda x: isinstance(x, (int, float))
+        
+        # Load and render the test suite template
+        template = env.get_template("test_suite.py.j2")
+        generated_code = template.render(**template_context)
+        
+        # Generate output file with proper class naming
+        class_name = generate_class_name(self.hw_kernel_data.name)
+        output_file = self.output_dir / f"test_{class_name.lower()}.py"
+        
+        # Write generated code
+        with open(output_file, 'w') as f:
+            f.write(generated_code)
+        
+        print(f"Test suite generated: {output_file}")
+        return output_file
 
     def _generate_documentation(self):
-        pass # Commented out until implemented
-        # """Generates the documentation file."""
-        # if not self.hw_kernel_data:
-        #     raise HardwareKernelGeneratorError("Cannot generate documentation: RTL data not parsed.")
-        # print("--- Generating Documentation ---")
-        # # Placeholder: Call the actual generator function
-        # output_path = generate_documentation(self.hw_kernel_data, self.custom_doc_content, self.output_dir)
-        # self.generated_files["documentation"] = output_path
-        # print(f"Documentation generation placeholder complete. Output: {output_path}")
+        """
+        Generate documentation with dataflow modeling information.
+        
+        Creates comprehensive documentation including interface specifications,
+        usage examples, and dataflow modeling details.
+        """
+        if not self.hw_kernel_data:
+            raise HardwareKernelGeneratorError("Cannot generate documentation: RTL data not parsed.")
+            
+        print("--- Generating Documentation ---")
+        
+        # Generate documentation file
+        output_path = self._generate_auto_documentation_with_dataflow()
+            
+        self.generated_files["documentation"] = output_path
+        print(f"Documentation generation complete. Output: {output_path}")
+        
+    def _generate_auto_documentation_with_dataflow(self) -> Path:
+        """
+        Generate documentation with dataflow modeling information.
+        
+        Returns:
+            Path to generated documentation file
+        """
+        class_name = generate_class_name(self.hw_kernel_data.name)
+        output_file = self.output_dir / f"{class_name.lower()}_README.md"
+        
+        # Build documentation content
+        doc_content = f"""# {class_name} - Auto-Generated HWCustomOp
+
+## Overview
+
+This document describes the auto-generated HWCustomOp implementation for `{self.hw_kernel_data.name}`.
+
+**Source RTL:** `{self.rtl_file_path}`
+**Generated Classes:**
+- `{class_name}` - Main HWCustomOp implementation
+- `{class_name}RTLBackend` - RTL backend for synthesis
+- `Test{class_name}` - Comprehensive test suite
+
+## Interface Specification
+
+"""
+        
+        if self.dataflow_interfaces:
+            doc_content += f"**Total Interfaces:** {len(self.dataflow_interfaces)}\n\n"
+            
+            # Group interfaces by type
+            input_interfaces = [iface for iface in self.dataflow_interfaces
+                              if hasattr(iface, 'interface_type') and
+                              str(iface.interface_type).endswith('INPUT')]
+            output_interfaces = [iface for iface in self.dataflow_interfaces
+                               if hasattr(iface, 'interface_type') and
+                               str(iface.interface_type).endswith('OUTPUT')]
+            weight_interfaces = [iface for iface in self.dataflow_interfaces
+                               if hasattr(iface, 'interface_type') and
+                               str(iface.interface_type).endswith('WEIGHT')]
+            config_interfaces = [iface for iface in self.dataflow_interfaces
+                               if hasattr(iface, 'interface_type') and
+                               str(iface.interface_type).endswith('CONFIG')]
+            
+            # Document each interface type
+            for interface_group, group_name in [
+                (input_interfaces, "Input Interfaces"),
+                (output_interfaces, "Output Interfaces"),
+                (weight_interfaces, "Weight Interfaces"),
+                (config_interfaces, "Configuration Interfaces")
+            ]:
+                if interface_group:
+                    doc_content += f"### {group_name}\n\n"
+                    for iface in interface_group:
+                        doc_content += f"- **{iface.name}**\n"
+                        doc_content += f"  - Type: {iface.interface_type}\n"
+                        doc_content += f"  - Dimensions: qDim={iface.qDim}, tDim={iface.tDim}, sDim={iface.sDim}\n"
+                        if hasattr(iface.dtype, 'finn_type'):
+                            doc_content += f"  - Data Type: {iface.dtype.finn_type}\n"
+                        if iface.constraints:
+                            doc_content += f"  - Constraints: {iface.constraints}\n"
+                        doc_content += "\n"
+        else:
+            doc_content += "No dataflow interfaces detected.\n\n"
+        
+        doc_content += f"""
+## Usage Example
+
+```python
+from {class_name.lower()} import {class_name}
+from finn.core.modelwrapper import ModelWrapper
+
+# Create ONNX model with {class_name} node
+# ... (model creation code)
+
+# Get the node and create HWCustomOp instance
+node = model.get_nodes_by_op_type("{class_name}")[0]
+hw_op = {class_name}(node)
+
+# Configure parallelism and datatypes
+"""
+
+        if self.dataflow_interfaces:
+            for iface in self.dataflow_interfaces:
+                if hasattr(iface, 'constraints') and iface.constraints and 'parallelism' in iface.constraints:
+                    doc_content += f'hw_op.set_nodeattr("{iface.name}_parallel", 4)\n'
+                if hasattr(iface.dtype, 'finn_type'):
+                    doc_content += f'hw_op.set_nodeattr("{iface.name}_dtype", "{iface.dtype.finn_type}")\n'
+
+        doc_content += f"""
+# Verify node configuration
+hw_op.verify_node()
+
+# Get resource estimates
+bram_usage = hw_op.bram_estimation()
+lut_usage = hw_op.lut_estimation()
+dsp_usage = hw_op.dsp_estimation("xcvu9p-flga2104-2-i")
+
+print(f"Resource estimates - BRAM: {{bram_usage}}, LUT: {{lut_usage}}, DSP: {{dsp_usage}}")
+```
+
+## Generated Files
+
+- `{class_name.lower()}.py` - Main HWCustomOp implementation
+- `{class_name.lower()}_rtlbackend.py` - RTL backend implementation
+- `test_{class_name.lower()}.py` - Comprehensive test suite
+- `{class_name.lower()}_README.md` - This documentation file
+
+## Resource Estimation
+
+The generated classes include automatic resource estimation based on interface configuration:
+
+- **BRAM Estimation:** Based on weight interface storage requirements and parallelism
+- **LUT Estimation:** Based on interface complexity and control logic requirements
+- **DSP Estimation:** Based on arithmetic operations and datatype bitwidths
+
+Estimation modes:
+- `automatic` - Balanced estimation (default)
+- `conservative` - Higher resource estimates for safety margin
+- `optimistic` - Lower resource estimates assuming optimal implementation
+
+## Testing
+
+Run the generated test suite:
+
+```bash
+pytest test_{class_name.lower()}.py -v
+```
+
+The test suite covers:
+- Basic functionality and node creation
+- Datatype constraint validation
+- Parallelism configuration testing
+- Resource estimation validation
+- RTL backend integration
+- End-to-end inference testing (when RTL simulation available)
+
+## Interface-Wise Dataflow Modeling
+
+This implementation uses the Interface-Wise Dataflow Modeling Framework which provides:
+
+- **Unified Computational Model:** Consistent interface abstraction across input, output, weight, and config interfaces
+- **Constraint Validation:** Automatic validation of datatype and parallelism constraints
+- **Resource Estimation:** Interface-aware resource estimation algorithms
+- **Template-Based Generation:** Production-quality code generation from RTL specifications
+
+For more information about the framework, see the main documentation.
+"""
+        
+        # Write documentation file
+        with open(output_file, 'w') as f:
+            f.write(doc_content)
+        
+        print(f"Documentation generated: {output_file}")
+        return output_file
+
+    def generate_complete_package(self, output_dir: Optional[str] = None) -> Dict[str, Path]:
+        """
+        Generate complete package of all files for the kernel.
+        
+        This is the main multi-file generation method that coordinates
+        generation of AutoHWCustomOp, RTLBackend, test suite, and documentation.
+        
+        Args:
+            output_dir: Optional override for output directory
+            
+        Returns:
+            Dictionary mapping file types to generated file paths
+        """
+        if output_dir:
+            self.output_dir = Path(output_dir)
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            
+        print("--- Generating Complete Package ---")
+        
+        # Ensure all prerequisite data is parsed
+        if not self.hw_kernel_data:
+            self._parse_rtl()
+        if not self.compiler_data_module:
+            self._parse_compiler_data()
+        if not self.dataflow_model and self.dataflow_enabled:
+            self._build_dataflow_model()
+            
+        # Generate all components
+        package_files = {}
+        
+        try:
+            # Generate AutoHWCustomOp
+            hwcustomop_path = self._generate_auto_hwcustomop_with_dataflow()
+            package_files["hwcustomop"] = hwcustomop_path
+            
+            # Generate RTLBackend
+            rtlbackend_path = self._generate_auto_rtlbackend_with_dataflow()
+            package_files["rtlbackend"] = rtlbackend_path
+            
+            # Generate test suite
+            test_path = self._generate_auto_test_suite_with_dataflow()
+            package_files["test_suite"] = test_path
+            
+            # Generate documentation
+            doc_path = self._generate_auto_documentation_with_dataflow()
+            package_files["documentation"] = doc_path
+            
+            # Generate RTL template if not already done
+            if "rtl_template" not in self.generated_files:
+                self._generate_rtl_template()
+                package_files["rtl_template"] = self.generated_files["rtl_template"]
+            
+            print(f"--- Complete Package Generated ---")
+            print(f"Package contents ({len(package_files)} files):")
+            for file_type, file_path in package_files.items():
+                print(f"  {file_type}: {file_path}")
+            
+            # Update generated files registry
+            self.generated_files.update(package_files)
+            
+            return package_files
+            
+        except Exception as e:
+            raise HardwareKernelGeneratorError(f"Complete package generation failed: {e}")
 
 
     def get_parsed_rtl_data(self):
@@ -470,6 +830,7 @@ class HardwareKernelGenerator:
             ("generate_rtl_template", self._generate_rtl_template),
             ("generate_hw_custom_op", self._generate_hw_custom_op),
             ("generate_rtl_backend", self._generate_rtl_backend),
+            ("generate_test_suite", self._generate_test_suite),
             ("generate_documentation", self._generate_documentation),
         ]
 

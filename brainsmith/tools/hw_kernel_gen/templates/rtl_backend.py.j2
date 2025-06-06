@@ -1,1 +1,123 @@
-{# Jinja2 template for RTLBackend #}
+"""
+Auto-generated RTLBackend for {{ kernel_name }}
+Generated using Interface-Wise Dataflow Modeling Framework
+Source: {{ source_file }}
+Generated at: {{ generation_timestamp }}
+"""
+
+import os
+import numpy as np
+from typing import Dict, Any, List
+
+# Import base class with all standard implementations
+from brainsmith.dataflow.core.auto_rtl_backend import AutoRTLBackend
+
+{% if dataflow_interfaces %}
+# Import dataflow framework components for enhanced functionality
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
+{% endif %}
+
+
+class {{ class_name }}RTLBackend(AutoRTLBackend):
+    """
+    Auto-generated RTLBackend class for {{ kernel_name }}.
+    
+    This class inherits from AutoRTLBackend which provides all standard
+    method implementations. Only kernel-specific dataflow metadata and
+    RTL-specific configuration is defined here.
+    
+    Supported interfaces: {{ dataflow_interfaces|length }} total
+    - Input interfaces: {{ input_interfaces|length }}
+    - Output interfaces: {{ output_interfaces|length }}
+    - Weight interfaces: {{ weight_interfaces|length }}
+    - Config interfaces: {{ config_interfaces|length }}
+    """
+
+    def __init__(self):
+        super().__init__()
+        
+        # Set dataflow interface metadata for this kernel
+        {% if dataflow_interfaces %}
+        self.dataflow_interfaces = {
+            {% for iface in dataflow_interfaces %}
+            "{{ iface.name }}": {
+                "interface_type": "{{ iface.interface_type }}",
+                "qDim": {{ iface.qDim|list }},
+                "tDim": {{ iface.tDim|list }},
+                "sDim": {{ iface.sDim|list }},
+                "dtype": {
+                    "base_types": {{ iface.dtype.base_types|list if iface.dtype.base_types else "[]" }},
+                    "min_bits": {{ iface.dtype.min_bits if iface.dtype.min_bits else "None" }},
+                    "max_bits": {{ iface.dtype.max_bits if iface.dtype.max_bits else "None" }},
+                    "finn_type": "{{ iface.dtype.finn_type if iface.dtype.finn_type else "UINT8" }}"
+                },
+                "constraints": {{ iface.constraints if iface.constraints else "{}" }}
+            },
+            {% endfor %}
+        }
+        {% else %}
+        self.dataflow_interfaces = {}
+        {% endif %}
+
+    def get_nodeattr_types(self):
+        """Get node attribute types including kernel-specific RTL configuration."""
+        # Get base attributes from parent class
+        base_attrs = self.get_enhanced_nodeattr_types()
+        
+        # Add kernel-specific RTL configuration
+        kernel_attrs = {
+            # RTL module configuration
+            "wrapper_name": ("s", False, "{{ kernel_name }}_wrapper"),
+            "top_module_name": ("s", False, "{{ kernel_name }}"),
+            
+            # Add any kernel-specific attributes here
+            # Example: "custom_rtl_param": ("i", False, 42),
+        }
+        
+        base_attrs.update(kernel_attrs)
+        return base_attrs
+
+    def code_generation_dict(self):
+        """
+        Generate code generation dictionary with kernel-specific metadata.
+        
+        Returns:
+            Dict: Enhanced code generation parameters for RTL templates
+        """
+        # Get base code generation dict from parent
+        codegen_dict = self.generate_enhanced_code_dict()
+        
+        # Add kernel-specific metadata
+        kernel_dict = {
+            "kernel_name": "{{ kernel_name }}",
+            "rtl_source_file": "{{ source_file }}",
+            # Add any kernel-specific template variables here
+        }
+        
+        codegen_dict.update(kernel_dict)
+        return codegen_dict
+
+    # All standard methods are inherited from AutoRTLBackend:
+    # - generate_interface_definitions()
+    # - generate_signal_assignments()
+    # - generate_parameter_overrides()
+    # - calculate_interface_width()
+    # - generate_params()
+    # - And more...
+
+    # Override only if kernel-specific behavior is needed
+    # Example:
+    # def generate_params(self, model, path):
+    #     """Override for kernel-specific parameter generation."""
+    #     super().generate_params(model, path)
+    #     # Add kernel-specific parameter files
+    
+    {% if weight_interfaces %}
+    # Weight interface-specific methods (if custom handling needed)
+    {% for iface in weight_interfaces %}
+    # def _generate_{{ iface.name }}_params(self, model, path):
+    #     """Custom parameter generation for {{ iface.name }} interface."""
+    #     # Only override if default behavior needs modification
+    #     pass
+    {% endfor %}
+    {% endif %}

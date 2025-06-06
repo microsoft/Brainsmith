@@ -527,7 +527,7 @@ test_configurations = [
             
             # Verify context values
             assert context["kernel_name"] == "thresholding_axi"
-            assert "AutoThresholdingaxi" in context["class_name"]
+            assert "AutoThresholdingAxi" in context["class_name"]
             assert context["has_unified_model"] == True
             assert len(context["dataflow_interfaces"]) >= 4
     
@@ -594,7 +594,7 @@ class {{ class_name }}:
             with open(output_path, 'r') as f:
                 content = f.read()
                 assert "thresholding_axi" in content
-                assert "AutoThresholdingaxi" in content
+                assert "AutoThresholdingAxi" in content
                 assert "interface_count" in content
                 
         except HardwareKernelGeneratorError as e:

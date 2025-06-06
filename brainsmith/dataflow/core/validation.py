@@ -1,150 +1,118 @@
 """
-Validation framework for dataflow modeling
+Validation utilities for dataflow modeling.
 
-This module provides standardized validation error handling and constraint
-violation tracking for the Interface-Wise Dataflow Modeling framework.
+This module provides validation framework for dataflow models and interfaces.
 """
 
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Any, Union
+
 
 class ValidationSeverity(Enum):
-    """Severity levels for validation errors"""
-    ERROR = "error"      # Blocks code generation
-    WARNING = "warning"  # Should be addressed but not blocking
-    INFO = "info"        # Informational only
+    """Severity levels for validation results"""
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
 
 @dataclass
 class ValidationError:
-    """Standardized validation error representation"""
-    component: str              # Component where error occurred
-    error_type: str            # Error classification
-    message: str               # Human-readable error description
-    severity: ValidationSeverity  # ERROR, WARNING, INFO
-    context: Dict[str, Any]    # Additional context for debugging
+    """Represents a validation error"""
+    component: str
+    error_type: str
+    message: str
+    severity: ValidationSeverity
+    context: Dict[str, Any] = field(default_factory=dict)
 
-    def __str__(self) -> str:
-        return f"{self.severity.value.upper()}: {self.component}: {self.message}"
 
 @dataclass
 class ValidationResult:
-    """Complete validation result set"""
-    success: bool
-    errors: List[ValidationError]
-    warnings: List[ValidationError]
-    info: List[ValidationError]
+    """Container for validation results"""
+    errors: List[ValidationError] = field(default_factory=list)
+    warnings: List[ValidationError] = field(default_factory=list)
     
-    def has_blocking_errors(self) -> bool:
-        """Check if there are any blocking errors"""
-        return any(err.severity == ValidationSeverity.ERROR for err in self.errors)
-    
-    def add_error(self, error: ValidationError) -> None:
-        """Add an error to the appropriate list based on severity"""
-        if error.severity == ValidationSeverity.ERROR:
+    def add_error(self, error: ValidationError):
+        """Add an error to the validation result"""
+        if error.severity in [ValidationSeverity.ERROR, ValidationSeverity.CRITICAL]:
             self.errors.append(error)
-        elif error.severity == ValidationSeverity.WARNING:
-            self.warnings.append(error)
         else:
-            self.info.append(error)
-        
-        # Update success status if we have blocking errors
-        if self.has_blocking_errors():
-            self.success = False
+            self.warnings.append(error)
     
-    def merge(self, other: 'ValidationResult') -> None:
+    def is_valid(self) -> bool:
+        """Check if validation passed (no errors)"""
+        return len(self.errors) == 0
+    
+    def has_warnings(self) -> bool:
+        """Check if there are any warnings"""
+        return len(self.warnings) > 0
+    
+    @property
+    def success(self) -> bool:
+        """Alias for is_valid() to match test expectations"""
+        return self.is_valid()
+    
+    def merge(self, other: 'ValidationResult'):
         """Merge another validation result into this one"""
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)
-        self.info.extend(other.info)
-        
-        # Update success status
-        if self.has_blocking_errors():
-            self.success = False
-    
-    def summary(self) -> str:
-        """Generate a summary string of validation results"""
-        total_errors = len(self.errors)
-        total_warnings = len(self.warnings)
-        total_info = len(self.info)
-        
-        status = "PASS" if self.success else "FAIL"
-        return f"Validation {status}: {total_errors} errors, {total_warnings} warnings, {total_info} info"
 
-@dataclass
-class ConstraintViolation:
-    """Specialized constraint violation representation"""
-    interface_name: str
-    constraint_type: str
-    constraint_details: Dict[str, Any]
-    violation_message: str
-    
-    def to_validation_error(self) -> ValidationError:
-        """Convert constraint violation to validation error"""
-        return ValidationError(
-            component=f"interface.{self.interface_name}",
-            error_type="constraint_violation",
-            message=f"Constraint violation ({self.constraint_type}): {self.violation_message}",
-            severity=ValidationSeverity.ERROR,
-            context={
-                "interface": self.interface_name,
-                "constraint_type": self.constraint_type,
-                "constraint_details": self.constraint_details
-            }
-        )
 
-# Standard validation error creators
-def create_divisibility_error(interface_name: str, dimension: str, dividend: int, divisor: int) -> ValidationError:
-    """Create a standardized divisibility constraint violation error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="divisibility_violation",
-        message=f"{dimension} ({dividend}) must be divisible by divisor ({divisor})",
-        severity=ValidationSeverity.ERROR,
-        context={
-            "interface": interface_name,
-            "dimension": dimension,
-            "dividend": dividend,
-            "divisor": divisor
-        }
-    )
-
-def create_range_error(interface_name: str, parameter: str, value: int, min_val: int, max_val: int) -> ValidationError:
-    """Create a standardized range constraint violation error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="range_violation",
-        message=f"{parameter} ({value}) must be in range [{min_val}, {max_val}]",
-        severity=ValidationSeverity.ERROR,
-        context={
-            "interface": interface_name,
-            "parameter": parameter,
-            "value": value,
-            "min_value": min_val,
-            "max_value": max_val
-        }
-    )
-
-def create_datatype_error(interface_name: str, target_type: str, allowed_types: List[str]) -> ValidationError:
-    """Create a standardized datatype constraint violation error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="datatype_violation",
-        message=f"Datatype '{target_type}' not allowed. Allowed types: {allowed_types}",
-        severity=ValidationSeverity.ERROR,
-        context={
-            "interface": interface_name,
-            "target_type": target_type,
-            "allowed_types": allowed_types
-        }
-    )
-
-# Factory for creating empty validation results
 def create_validation_result() -> ValidationResult:
-    """Create an empty validation result with success=True"""
-    return ValidationResult(
-        success=True,
-        errors=[],
-        warnings=[],
-        info=[]
+    """Create a new validation result"""
+    return ValidationResult()
+
+
+def create_divisibility_error(interface_name: str, param_name: str, 
+                             value: int, divisor: int) -> ValidationError:
+    """Create a divisibility constraint error"""
+    return ValidationError(
+        component=f"interface.{interface_name}",
+        error_type="divisibility_constraint",
+        message=f"{param_name} ({value}) must be divisible by {divisor}",
+        severity=ValidationSeverity.ERROR,
+        context={"value": value, "divisor": divisor}
     )
+
+
+def create_range_error(interface_name: str, param_name: str,
+                      value: int, min_val: int, max_val: int) -> ValidationError:
+    """Create a range constraint error"""
+    return ValidationError(
+        component=f"interface.{interface_name}",
+        error_type="range_constraint",
+        message=f"{param_name} ({value}) must be between {min_val} and {max_val}",
+        severity=ValidationSeverity.ERROR,
+        context={"value": value, "min": min_val, "max": max_val}
+    )
+
+
+def create_datatype_error(interface_name: str, datatype: str,
+                         allowed_types: List[str]) -> ValidationError:
+    """Create a datatype constraint error"""
+    return ValidationError(
+        component=f"interface.{interface_name}",
+        error_type="datatype_constraint",
+        message=f"Datatype {datatype} not allowed. Must be one of: {allowed_types}",
+        severity=ValidationSeverity.ERROR,
+        context={"datatype": datatype, "allowed": allowed_types}
+    )
+
+
+def validate_dataflow_model(model) -> ValidationResult:
+    """
+    Validate a complete dataflow model.
+    
+    Args:
+        model: DataflowModel to validate
+        
+    Returns:
+        ValidationResult with any errors or warnings
+    """
+    result = create_validation_result()
+    
+    # Placeholder - actual validation would go here
+    # This would validate all interfaces, constraints, etc.
+    
+    return result

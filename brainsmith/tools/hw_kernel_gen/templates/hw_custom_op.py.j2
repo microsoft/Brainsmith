@@ -1,1 +1,100 @@
-{# Jinja2 template for HWCustomOp #}
+"""
+Auto-generated HWCustomOp for {{ kernel_name }}
+Generated using Interface-Wise Dataflow Modeling Framework
+Source: {{ source_file }}
+Generated at: {{ generation_timestamp }}
+"""
+
+import numpy as np
+from typing import Dict, Any, List, Optional
+
+# Import base class with all standard implementations
+from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
+
+{% if dataflow_interfaces %}
+# Import dataflow framework components for enhanced functionality
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
+from brainsmith.dataflow.core.validation import ValidationResult, ValidationSeverity
+{% endif %}
+
+
+class {{ class_name }}(AutoHWCustomOp):
+    """
+    Auto-generated HWCustomOp class for {{ kernel_name }}.
+    
+    This class inherits from AutoHWCustomOp which provides all standard
+    method implementations. Only kernel-specific dataflow metadata is
+    defined here.
+    
+    Supported interfaces: {{ dataflow_interfaces|length }} total
+    - Input interfaces: {{ input_interfaces|length }}
+    - Output interfaces: {{ output_interfaces|length }}
+    - Weight interfaces: {{ weight_interfaces|length }}
+    - Config interfaces: {{ config_interfaces|length }}
+    """
+
+    def __init__(self, onnx_node, **kwargs):
+        super().__init__(onnx_node, **kwargs)
+        
+        # Set dataflow interface metadata for this kernel
+        {% if dataflow_interfaces %}
+        self.dataflow_interfaces = {
+            {% for iface in dataflow_interfaces %}
+            "{{ iface.name }}": {
+                "interface_type": "{{ iface.interface_type }}",
+                "qDim": {{ iface.qDim|list }},
+                "tDim": {{ iface.tDim|list }},
+                "sDim": {{ iface.sDim|list }},
+                "dtype": {
+                    "base_types": {{ iface.dtype.base_types|list if iface.dtype.base_types else "[]" }},
+                    "min_bits": {{ iface.dtype.min_bits if iface.dtype.min_bits else "None" }},
+                    "max_bits": {{ iface.dtype.max_bits if iface.dtype.max_bits else "None" }},
+                    "finn_type": "{{ iface.dtype.finn_type if iface.dtype.finn_type else "UINT8" }}"
+                },
+                "constraints": {{ iface.constraints if iface.constraints else "{}" }}
+            },
+            {% endfor %}
+        }
+        {% else %}
+        self.dataflow_interfaces = {}
+        {% endif %}
+
+    def get_nodeattr_types(self):
+        """Get node attribute types including kernel-specific attributes."""
+        # Get base attributes from parent class
+        base_attrs = self.get_enhanced_nodeattr_types()
+        
+        # Add any kernel-specific attributes here if needed
+        kernel_attrs = {
+            # Example: Add kernel-specific configuration
+            # "special_mode": ("s", False, "default"),
+        }
+        
+        base_attrs.update(kernel_attrs)
+        return base_attrs
+
+    # All standard methods are inherited from AutoHWCustomOp:
+    # - get_input_datatype()
+    # - get_output_datatype()
+    # - get_normal_input_shape()
+    # - get_normal_output_shape()
+    # - get_folded_input_shape()
+    # - get_folded_output_shape()
+    # - get_instream_width()
+    # - get_outstream_width()
+    # - get_number_output_values()
+    # - get_exp_cycles()
+    # - get_op_and_param_counts()
+    # - derive_characteristic_fxns()
+    # - generate_params()
+    # - estimate_bram_usage()
+    # - estimate_lut_usage()
+    # - estimate_dsp_usage()
+    # - And more...
+
+    # Override only if kernel-specific behavior is needed
+    # Example:
+    # def get_exp_cycles(self) -> int:
+    #     """Override for kernel-specific cycle calculation."""
+    #     # Custom implementation
+    #     return super().get_exp_cycles() * 2  # Example modification

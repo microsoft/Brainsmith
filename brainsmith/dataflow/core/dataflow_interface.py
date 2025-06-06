@@ -73,6 +73,8 @@ class DataTypeConstraint:
     base_types: List[str]        # Allowed base types (INT, UINT, FLOAT, FIXED)
     min_bitwidth: int            # Minimum allowed bitwidth
     max_bitwidth: int            # Maximum allowed bitwidth
+    signed_allowed: bool = True  # Allow signed types
+    unsigned_allowed: bool = True # Allow unsigned types
     
     def __post_init__(self):
         """Validate constraint specification"""
@@ -80,6 +82,8 @@ class DataTypeConstraint:
             raise ValueError("min_bitwidth must be positive")
         if self.max_bitwidth < self.min_bitwidth:
             raise ValueError("max_bitwidth must be >= min_bitwidth")
+        if not self.signed_allowed and not self.unsigned_allowed:
+            raise ValueError("At least one of signed_allowed or unsigned_allowed must be True")
     
     def is_valid_datatype(self, dtype: DataflowDataType) -> bool:
         """Check if a datatype satisfies this constraint"""
@@ -89,6 +93,12 @@ class DataTypeConstraint:
         
         # Check bitwidth range
         if not (self.min_bitwidth <= dtype.bitwidth <= self.max_bitwidth):
+            return False
+        
+        # Check sign constraints
+        if dtype.signed and not self.signed_allowed:
+            return False
+        if not dtype.signed and not self.unsigned_allowed:
             return False
         
         return True
@@ -170,7 +180,9 @@ class DataflowInterface:
             default_constraint = DataTypeConstraint(
                 base_types=["INT", "UINT"],
                 min_bitwidth=1,
-                max_bitwidth=32
+                max_bitwidth=32,
+                signed_allowed=True,
+                unsigned_allowed=True
             )
             self.allowed_datatypes = [default_constraint]
     
@@ -269,6 +281,43 @@ class DataflowInterface:
             if constraint.is_valid_datatype(target_dtype):
                 return True
         return False
+    
+    def validate_datatype_string(self, dtype_string: str) -> bool:
+        """
+        Validate if a datatype string is allowed for this interface.
+        
+        Args:
+            dtype_string: FINN datatype string (e.g., "UINT8", "INT16")
+            
+        Returns:
+            bool: True if datatype is valid for this interface
+        """
+        try:
+            # Parse the datatype string to extract components
+            import re
+            
+            # Extract base type and bitwidth from FINN datatype string
+            match = re.match(r'([A-Z]+)(\d+)', dtype_string)
+            if not match:
+                return False
+            
+            base_type = match.group(1)
+            bitwidth = int(match.group(2))
+            
+            # Determine if signed based on base type
+            signed = base_type.startswith('INT') and not base_type.startswith('UINT')
+            
+            # Create DataflowDataType for validation
+            target_dtype = DataflowDataType(
+                base_type=base_type,
+                bitwidth=bitwidth,
+                signed=signed,
+                finn_type=dtype_string
+            )
+            
+            return self.validate_datatype(target_dtype)
+        except Exception:
+            return False
     
     def get_memory_footprint(self) -> int:
         """Calculate total memory footprint in bits"""

@@ -342,7 +342,9 @@ class RTLInterfaceConverter:
             constraint = DataTypeConstraint(
                 base_types=constraint_info["base_types"],
                 min_bitwidth=constraint_info["min_bitwidth"],
-                max_bitwidth=constraint_info["max_bitwidth"]
+                max_bitwidth=constraint_info["max_bitwidth"],
+                signed_allowed=True,
+                unsigned_allowed=True
             )
             constraints.append(constraint)
             
@@ -370,14 +372,18 @@ class RTLInterfaceConverter:
             return DataTypeConstraint(
                 base_types=["INT", "UINT", "FIXED"],
                 min_bitwidth=1,
-                max_bitwidth=32
+                max_bitwidth=32,
+                signed_allowed=True,
+                unsigned_allowed=True
             )
         else:
             # More restrictive for config/control
             return DataTypeConstraint(
                 base_types=["UINT"],
                 min_bitwidth=8,
-                max_bitwidth=32
+                max_bitwidth=32,
+                signed_allowed=False,
+                unsigned_allowed=True
             )
     
     def _extract_axi_metadata(self, rtl_interface: RTLInterface) -> Dict[str, Any]:
@@ -488,7 +494,7 @@ def validate_conversion_result(dataflow_interfaces: List[DataflowInterface]) -> 
             # New ValidationResult object with separate error lists
             errors.extend(validation_result.errors)
             errors.extend(validation_result.warnings)
-            errors.extend(validation_result.info)
+            # Note: ValidationResult doesn't have 'info' attribute, only errors and warnings
         else:
             # Legacy behavior - plain list of errors
             errors.extend(validation_result)
