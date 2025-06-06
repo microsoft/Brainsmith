@@ -51,7 +51,7 @@ log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
 
 # Check FINN submodule after environment is loaded (so recho function is available)
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/finn/.git" ]; then
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && ([ ! -e "$BSMITH_DIR/finn/.git" ] || [ ! -f "$BSMITH_DIR/finn/setup.py" ]); then
     recho "FINN submodule not found or not initialized"
     recho "Please run: git submodule update --init --recursive"
     exit 1
