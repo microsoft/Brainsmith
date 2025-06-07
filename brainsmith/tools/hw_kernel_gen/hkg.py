@@ -19,18 +19,18 @@ from typing import Optional, Dict, Any
 try:
     from .rtl_parser import RTLParser, HWKernel, ParserError
     from .generators.rtl_template_generator import generate_rtl_template
-    # from .generators.hw_custom_op_generator import generate_hw_custom_op
-    # from .generators.rtl_backend_generator import generate_rtl_backend
-    # from .generators.doc_generator import generate_documentation
+    # NOTE: HWCustomOp generation now uses HWCustomOpGenerator class
+    # from .generators.rtl_backend_generator import RTLBackendGenerator  # Future
+    # from .generators.doc_generator import DocumentationGenerator  # Future
 except ImportError:
     # Fallback for running script directly (adjust as needed)
     print("Warning: Running script directly, attempting relative imports from parent.")
     sys.path.append(str(Path(__file__).parent.parent)) # Add tools dir to path
     from hw_kernel_gen.rtl_parser import RTLParser, HWKernel, ParserError
     from hw_kernel_gen.generators.rtl_template_generator import generate_rtl_template
-    # from hw_kernel_gen.generators.hw_custom_op_generator import generate_hw_custom_op
-    # from hw_kernel_gen.generators.rtl_backend_generator import generate_rtl_backend
-    # from hw_kernel_gen.generators.doc_generator import generate_documentation
+    # NOTE: HWCustomOp generation now uses HWCustomOpGenerator class
+    # from hw_kernel_gen.generators.rtl_backend_generator import RTLBackendGenerator  # Future
+    # from hw_kernel_gen.generators.doc_generator import DocumentationGenerator  # Future
 
 # Import dataflow framework components for enhanced HKG
 try:
@@ -123,6 +123,9 @@ class HardwareKernelGenerator:
         self.dataflow_interfaces: Optional[list] = None
         self.dataflow_model: Optional[DataflowModel] = None
         self.rtl_converter: Optional[RTLInterfaceConverter] = None
+        
+        # Generator instances (lazy initialization)
+        self._hw_custom_op_generator = None
         
         if self.dataflow_enabled:
             print("Dataflow framework available - enhanced generation enabled")
@@ -255,12 +258,21 @@ class HardwareKernelGenerator:
             self.dataflow_interfaces = None
             self.dataflow_model = None
 
+    def _get_hw_custom_op_generator(self):
+        """Get HWCustomOp generator instance with lazy initialization."""
+        if self._hw_custom_op_generator is None:
+            try:
+                from .generators.hw_custom_op_generator import HWCustomOpGenerator
+                self._hw_custom_op_generator = HWCustomOpGenerator()
+            except ImportError as e:
+                raise HardwareKernelGeneratorError(f"Could not import HWCustomOpGenerator: {e}")
+        return self._hw_custom_op_generator
+
     def _generate_hw_custom_op(self):
         """
-        Enhanced HWCustomOp generation with dataflow modeling support.
+        Generate HWCustomOp using Phase 3 enhanced generator.
         
-        Generates AutoHWCustomOp classes with unified computational model integration.
-        Requires dataflow framework to be available and successfully initialized.
+        Replaces inline generation with direct call to HWCustomOpGenerator.
         """
         if not self.hw_kernel_data:
             raise HardwareKernelGeneratorError("Cannot generate HWCustomOp: RTL data not parsed.")
@@ -271,117 +283,38 @@ class HardwareKernelGenerator:
                 "Please ensure brainsmith.dataflow is available."
             )
             
-        if not self.dataflow_interfaces or not self.dataflow_model:
-            raise HardwareKernelGeneratorError(
-                "HWCustomOp generation requires successful dataflow model initialization. "
-                "Please check RTL pragmas and interface definitions."
-            )
-            
         print("--- Generating HWCustomOp Instance ---")
         
-        # Generate AutoHWCustomOp with dataflow modeling
-        output_path = self._generate_auto_hwcustomop_with_dataflow()
-            
-        self.generated_files["hw_custom_op"] = output_path
-        print(f"HWCustomOp generation complete. Output: {output_path}")
+        # Get generator instance
+        generator = self._get_hw_custom_op_generator()
         
-    def _generate_auto_hwcustomop_with_dataflow(self) -> Path:
-        """
-        Generate AutoHWCustomOp with full dataflow modeling support.
-        
-        Returns:
-            Path to generated AutoHWCustomOp file
-        """
-        from jinja2 import Environment, FileSystemLoader
-        import os
-        
-        print("Generating enhanced AutoHWCustomOp with dataflow modeling")
-        
-        # Build template context with dataflow information
-        template_context = self._build_enhanced_template_context()
-        
-        # Set up Jinja2 environment
-        template_dir = Path(__file__).parent / "templates"
-        env = Environment(
-            loader=FileSystemLoader(str(template_dir)),
-            trim_blocks=True,
-            lstrip_blocks=True
-        )
-        
-        # Add custom filters for template processing
-        env.filters['list'] = list
-        env.filters['number'] = lambda x: isinstance(x, (int, float))
-        
-        # Load and render the HWCustomOp template
-        template = env.get_template("hw_custom_op.py.j2")
-        generated_code = template.render(**template_context)
-        
-        # Generate output file with proper class naming
+        # Prepare output path
         class_name = generate_class_name(self.hw_kernel_data.name)
         output_file = self.output_dir / f"{class_name.lower()}.py"
         
-        # Write generated code
-        with open(output_file, 'w') as f:
-            f.write(generated_code)
-        
-        print(f"AutoHWCustomOp generated: {output_file}")
-        return output_file
-        
-    def _build_enhanced_template_context(self) -> Dict[str, Any]:
-        """
-        Build comprehensive template context with dataflow modeling information.
-        
-        Returns:
-            Dictionary containing all template variables for enhanced code generation
-        """
-        from datetime import datetime
-        
-        context = {
-            # Kernel metadata
-            "kernel_name": self.hw_kernel_data.name,
-            "class_name": generate_class_name(self.hw_kernel_data.name),
-            "source_file": str(self.rtl_file_path),
-            "generation_timestamp": datetime.now().isoformat(),
+        # Generate using Phase 3 enhanced generator
+        try:
+            generated_code = generator.generate_hwcustomop(
+                hw_kernel=self.hw_kernel_data,
+                output_path=output_file,
+                class_name=class_name,
+                source_file=str(self.rtl_file_path.name)
+            )
             
-            # RTL Parser data
-            "rtl_parameters": self.hw_kernel_data.parameters,
-            "rtl_interfaces": self.hw_kernel_data.interfaces,
-            "rtl_pragmas": self.hw_kernel_data.pragmas,
+            self.generated_files["hw_custom_op"] = output_file
+            print(f"HWCustomOp generation complete. Output: {output_file}")
+            return output_file
             
-            # Dataflow framework data
-            "dataflow_interfaces": self.dataflow_interfaces or [],
-            "dataflow_model": self.dataflow_model,
-            
-            # Interface organization for templates
-            "input_interfaces": [iface for iface in (self.dataflow_interfaces or [])
-                               if hasattr(iface, 'interface_type') and
-                               str(iface.interface_type).endswith('INPUT')],
-            "output_interfaces": [iface for iface in (self.dataflow_interfaces or [])
-                                if hasattr(iface, 'interface_type') and
-                                str(iface.interface_type).endswith('OUTPUT')],
-            "weight_interfaces": [iface for iface in (self.dataflow_interfaces or [])
-                                if hasattr(iface, 'interface_type') and
-                                str(iface.interface_type).endswith('WEIGHT')],
-            "config_interfaces": [iface for iface in (self.dataflow_interfaces or [])
-                                if hasattr(iface, 'interface_type') and
-                                str(iface.interface_type).endswith('CONFIG')],
-            
-            # Computational model data
-            "has_unified_model": self.dataflow_model is not None,
-            "parallelism_bounds": self.dataflow_model.get_parallelism_bounds() if self.dataflow_model else {},
-            
-            # Compiler data
-            "compiler_data_available": self.compiler_data_module is not None,
-        }
+        except Exception as e:
+            raise HardwareKernelGeneratorError(f"HWCustomOp generation failed: {e}")
         
-        return context
     
     def generate_auto_hwcustomop(self, template_path: str, output_path: str) -> str:
         """
-        Public method for generating AutoHWCustomOp with dataflow modeling.
+        Public method for generating AutoHWCustomOp with Phase 3 enhancements.
         
         Args:
-            template_path: Path to Jinja2 template file
+            template_path: Path to Jinja2 template file (for compatibility)
             output_path: Output file path for generated class
             
         Returns:
@@ -399,30 +332,21 @@ class HardwareKernelGenerator:
         if not self.dataflow_model:
             self._build_dataflow_model()
             
-        if not self.dataflow_model:
-            raise HardwareKernelGeneratorError("Failed to build dataflow model for AutoHWCustomOp generation")
-            
         try:
-            from jinja2 import Environment, FileSystemLoader
-            import os
+            # Get generator and generate
+            generator = self._get_hw_custom_op_generator()
             
-            # Load template
-            template_dir = os.path.dirname(template_path)
-            template_name = os.path.basename(template_path)
+            # Extract class name from output path
+            output_file = Path(output_path)
+            class_name = output_file.stem.replace('_', '').title() + 'HWCustomOp'
             
-            env = Environment(loader=FileSystemLoader(template_dir))
-            template = env.get_template(template_name)
+            generated_code = generator.generate_hwcustomop(
+                hw_kernel=self.hw_kernel_data,
+                output_path=output_file,
+                class_name=class_name,
+                source_file=str(self.rtl_file_path.name)
+            )
             
-            # Build context
-            context = self._build_enhanced_template_context()
-            
-            # Render template
-            generated_code = template.render(**context)
-            
-            # Write output
-            with open(output_path, 'w') as f:
-                f.write(generated_code)
-                
             print(f"AutoHWCustomOp generated successfully: {output_path}")
             return output_path
             
@@ -466,7 +390,27 @@ class HardwareKernelGenerator:
         print("Generating enhanced RTLBackend with dataflow modeling")
         
         # Build template context with dataflow information
-        template_context = self._build_enhanced_template_context()
+        from datetime import datetime
+        
+        template_context = {
+            # Kernel metadata
+            "kernel_name": self.hw_kernel_data.name,
+            "class_name": generate_class_name(self.hw_kernel_data.name),
+            "source_file": str(self.rtl_file_path),
+            "generation_timestamp": datetime.now().isoformat(),
+            
+            # RTL Parser data
+            "rtl_parameters": self.hw_kernel_data.parameters,
+            "rtl_interfaces": self.hw_kernel_data.interfaces,
+            "rtl_pragmas": self.hw_kernel_data.pragmas,
+            
+            # Dataflow framework data
+            "dataflow_interfaces": self.dataflow_interfaces or [],
+            "dataflow_model": self.dataflow_model,
+            
+            # Compiler data
+            "compiler_data_available": self.compiler_data_module is not None,
+        }
         
         # Set up Jinja2 environment
         template_dir = Path(__file__).parent / "templates"
@@ -525,7 +469,27 @@ class HardwareKernelGenerator:
         print("Generating enhanced test suite with dataflow modeling")
         
         # Build template context with dataflow information
-        template_context = self._build_enhanced_template_context()
+        from datetime import datetime
+        
+        template_context = {
+            # Kernel metadata
+            "kernel_name": self.hw_kernel_data.name,
+            "class_name": generate_class_name(self.hw_kernel_data.name),
+            "source_file": str(self.rtl_file_path),
+            "generation_timestamp": datetime.now().isoformat(),
+            
+            # RTL Parser data
+            "rtl_parameters": self.hw_kernel_data.parameters,
+            "rtl_interfaces": self.hw_kernel_data.interfaces,
+            "rtl_pragmas": self.hw_kernel_data.pragmas,
+            
+            # Dataflow framework data
+            "dataflow_interfaces": self.dataflow_interfaces or [],
+            "dataflow_model": self.dataflow_model,
+            
+            # Compiler data
+            "compiler_data_available": self.compiler_data_module is not None,
+        }
         
         # Set up Jinja2 environment
         template_dir = Path(__file__).parent / "templates"
@@ -760,7 +724,7 @@ For more information about the framework, see the main documentation.
         
         try:
             # Generate AutoHWCustomOp
-            hwcustomop_path = self._generate_auto_hwcustomop_with_dataflow()
+            hwcustomop_path = self._generate_hw_custom_op()
             package_files["hwcustomop"] = hwcustomop_path
             
             # Generate RTLBackend

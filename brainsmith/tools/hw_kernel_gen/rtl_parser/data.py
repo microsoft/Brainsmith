@@ -333,11 +333,16 @@ class DatatypePragma(Pragma):
 @dataclass
 class TDimPragma(Pragma):
     """
-    TDIM pragma for custom tensor dimension specification.
+    Enhanced TDIM pragma for tensor chunking strategies.
     
-    Format: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
-    Example: @brainsmith TDIM in0 PE*CHANNELS 1
-    Example: @brainsmith TDIM weights BATCH_SIZE*FEATURES HIDDEN_DIM
+    Supports two formats:
+    1. Legacy: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
+    2. Enhanced: @brainsmith TDIM <interface_name> <chunk_index> [<chunk_sizes>]
+    
+    Examples:
+    - Legacy: @brainsmith TDIM in0 PE*CHANNELS 1
+    - Enhanced: @brainsmith TDIM in0_V_data_V -1 [16]
+    - Enhanced: @brainsmith TDIM out0_V_data_V 2 [4,8]
     """
     
     def __post_init__(self):
@@ -345,33 +350,91 @@ class TDimPragma(Pragma):
 
     def _parse_inputs(self) -> Dict:
         """
-        Handles TDIM pragma: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
+        Handles both legacy and enhanced TDIM pragma formats.
         
-        Args from self.inputs:
-            [0]: interface_name - Name of the interface to apply dimension override
-            [1:]: dimension_expressions - List of expressions for each tensor dimension
-            
+        Enhanced format: @brainsmith TDIM <interface_name> <chunk_index> [<chunk_sizes>]
+        Legacy format: @brainsmith TDIM <interface_name> <dim1_expr> <dim2_expr> ... <dimN_expr>
+        
         Returns:
-            Dict with parsed interface name and dimension expressions
+            Dict with parsed data including format type, interface name, and strategy/expressions
         """
         logger.debug(f"Parsing TDIM pragma: {self.inputs} at line {self.line_number}")
         
         if len(self.inputs) < 2:
-            raise PragmaError("TDIM pragma requires interface name and at least one dimension expression")
+            raise PragmaError("TDIM pragma requires interface name and at least one additional argument")
         
         interface_name = self.inputs[0]
-        dimension_expressions = self.inputs[1:]
         
         # Validate interface name
-        if not interface_name.isidentifier():
-            raise PragmaError(f"TDIM pragma interface name '{interface_name}' is not a valid identifier")
+        if not interface_name.replace('_', '').replace('V', '').isalnum():
+            raise PragmaError(f"TDIM pragma interface name '{interface_name}' contains invalid characters")
         
+        # Detect enhanced format vs legacy format
+        # Enhanced format: second argument is index AND third argument has brackets [...]
+        # Legacy format: multiple dimension expressions without brackets
+        
+        if len(self.inputs) >= 3:
+            try:
+                chunk_index = int(self.inputs[1])
+                # Check if third argument looks like enhanced format with brackets
+                if len(self.inputs) == 3 and self.inputs[2].startswith('[') and self.inputs[2].endswith(']'):
+                    # Enhanced format: @brainsmith TDIM interface_name -1 [16]
+                    return self._parse_enhanced_format(interface_name, chunk_index, self.inputs[2:])
+                else:
+                    # Legacy format: @brainsmith TDIM interface_name 8 1
+                    return self._parse_legacy_format(interface_name, self.inputs[1:])
+            except ValueError:
+                # Second argument is not an integer, must be legacy
+                return self._parse_legacy_format(interface_name, self.inputs[1:])
+        else:
+            # Only two arguments, legacy format
+            return self._parse_legacy_format(interface_name, self.inputs[1:])
+    
+    def _parse_enhanced_format(self, interface_name: str, chunk_index: int, remaining_inputs: List[str]) -> Dict:
+        """Parse enhanced TDIM format with chunking strategy."""
+        if len(remaining_inputs) != 1:
+            raise PragmaError("Enhanced TDIM pragma requires exactly one chunk_sizes argument in [size1,size2,...] format")
+        
+        chunk_sizes_str = remaining_inputs[0]
+        
+        # Parse chunk sizes from [size1,size2,...] format
+        if not (chunk_sizes_str.startswith('[') and chunk_sizes_str.endswith(']')):
+            raise PragmaError(f"Enhanced TDIM pragma chunk_sizes must be in [size1,size2,...] format, got: {chunk_sizes_str}")
+        
+        sizes_str = chunk_sizes_str[1:-1].strip()
+        if not sizes_str:
+            raise PragmaError("Enhanced TDIM pragma chunk_sizes cannot be empty")
+        
+        # Parse chunk sizes - only allow ':' (full dimension) or parameter names
+        chunk_sizes = []
+        for s in sizes_str.split(','):
+            s = s.strip()
+            if s == ':':
+                # Full dimension reference
+                chunk_sizes.append(':')
+            elif s.isidentifier():
+                # Module parameter reference (must be valid identifier)
+                chunk_sizes.append(s)
+            else:
+                raise PragmaError(f"Enhanced TDIM pragma chunk_sizes must be ':' (full dimension) or valid parameter names, got: '{s}'. Magic numbers are not allowed.")
+        
+        return {
+            "format": "enhanced",
+            "interface_name": interface_name,
+            "chunk_index": chunk_index,
+            "chunk_sizes": chunk_sizes,
+            "chunking_strategy_type": "index"  # Enhanced format always uses index-based chunking
+        }
+    
+    def _parse_legacy_format(self, interface_name: str, dimension_expressions: List[str]) -> Dict:
+        """Parse legacy TDIM format with dimension expressions."""
         # Basic validation of dimension expressions (more detailed validation happens during evaluation)
         for i, expr in enumerate(dimension_expressions):
             if not expr.strip():
                 raise PragmaError(f"TDIM pragma dimension expression {i+1} is empty")
         
         return {
+            "format": "legacy",
             "interface_name": interface_name,
             "dimension_expressions": dimension_expressions
         }
@@ -436,8 +499,6 @@ class TDimPragma(Pragma):
             return
             
         interface_name = self.parsed_data.get("interface_name")
-        dimension_exprs = self.parsed_data.get("dimension_expressions", [])
-        
         if not interface_name:
             logger.warning(f"TDIM pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
             return
@@ -452,8 +513,55 @@ class TDimPragma(Pragma):
         if not target_interface:
             logger.warning(f"TDIM pragma at line {self.line_number}: interface '{interface_name}' not found")
             return
+        
+        pragma_format = self.parsed_data.get("format", "legacy")
+        
+        if pragma_format == "enhanced":
+            # Enhanced format: convert to chunking strategy
+            self._apply_enhanced_format(target_interface)
+        else:
+            # Legacy format: evaluate dimension expressions
+            self._apply_legacy_format(target_interface, parameters)
+    
+    def _apply_enhanced_format(self, target_interface: Interface) -> None:
+        """Apply enhanced TDIM pragma by storing chunking strategy information."""
+        try:
+            from brainsmith.tools.hw_kernel_gen.pragma_to_strategy import PragmaToStrategyConverter
             
-        # Evaluate dimension expressions
+            chunk_index = self.parsed_data["chunk_index"]
+            chunk_sizes = self.parsed_data["chunk_sizes"]
+            
+            # Create chunking strategy using PragmaToStrategyConverter
+            converter = PragmaToStrategyConverter()
+            chunking_strategy = converter.create_index_chunking_strategy(chunk_index, chunk_sizes)
+            
+            # Store enhanced chunking strategy information in metadata
+            target_interface.metadata["enhanced_tdim"] = {
+                "chunk_index": chunk_index,
+                "chunk_sizes": chunk_sizes,
+                "chunking_strategy_type": "index"
+            }
+            target_interface.metadata["chunking_strategy"] = chunking_strategy
+            
+            logger.info(f"Applied enhanced TDIM pragma from line {self.line_number}: {target_interface.name} "
+                       f"index={chunk_index}, sizes={chunk_sizes}")
+            
+        except ImportError:
+            logger.warning(f"Enhanced TDIM pragma at line {self.line_number}: PragmaToStrategyConverter not available. "
+                          f"Storing raw metadata only.")
+            # Fallback: store raw metadata for later processing
+            target_interface.metadata["enhanced_tdim"] = {
+                "chunk_index": self.parsed_data["chunk_index"],
+                "chunk_sizes": self.parsed_data["chunk_sizes"],
+                "chunking_strategy_type": "index"
+            }
+        except Exception as e:
+            logger.error(f"Enhanced TDIM pragma at line {self.line_number} strategy creation failed: {e}")
+    
+    def _apply_legacy_format(self, target_interface: Interface, parameters: Dict[str, Any]) -> None:
+        """Apply legacy TDIM pragma by evaluating dimension expressions."""
+        dimension_exprs = self.parsed_data.get("dimension_expressions", [])
+        
         try:
             evaluated_dims = []
             for expr in dimension_exprs:
@@ -463,12 +571,13 @@ class TDimPragma(Pragma):
             target_interface.metadata["tdim_override"] = evaluated_dims
             target_interface.metadata["tdim_expressions"] = dimension_exprs  # Keep original expressions for debugging
             
-            logger.info(f"Applied TDIM pragma from line {self.line_number}: {interface_name} tDim set to {evaluated_dims} (from expressions: {dimension_exprs})")
+            logger.info(f"Applied legacy TDIM pragma from line {self.line_number}: {target_interface.name} "
+                       f"tDim set to {evaluated_dims} (from expressions: {dimension_exprs})")
             
         except PragmaError as e:
-            logger.error(f"TDIM pragma at line {self.line_number} evaluation failed: {e}")
+            logger.error(f"Legacy TDIM pragma at line {self.line_number} evaluation failed: {e}")
         except Exception as e:
-            logger.error(f"TDIM pragma at line {self.line_number} unexpected error: {e}")
+            logger.error(f"Legacy TDIM pragma at line {self.line_number} unexpected error: {e}")
 
 
 @dataclass

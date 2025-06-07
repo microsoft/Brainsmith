@@ -1,266 +1,139 @@
 """
-Tensor chunking utilities for dataflow modeling.
+Simplified tensor chunking system using per-interface strategies.
 
-This module provides utilities for managing tensor chunking in dataflow models.
+This module provides utilities for extracting tensor shapes and delegating
+chunking computation to individual interface strategies.
 """
 
-from typing import List, Optional
-from dataclasses import dataclass
-from enum import Enum
-
-
-class ChunkingStrategy(Enum):
-    """Strategies for chunking tensors"""
-    BROADCAST = "broadcast"
-    DIVIDE = "divide"
-    EXPLICIT = "explicit"
-
-
-@dataclass
-class TensorChunk:
-    """Represents a chunk of a tensor"""
-    original_shape: List[int]
-    chunk_shape: List[int]
-    chunk_index: List[int]
-    strategy: ChunkingStrategy
-    
-
-def calculate_tensor_chunks(original_shape: List[int], 
-                          chunk_size: List[int],
-                          strategy: ChunkingStrategy = ChunkingStrategy.DIVIDE) -> List[TensorChunk]:
-    """
-    Calculate tensor chunks based on original shape and chunk size.
-    
-    Args:
-        original_shape: Original tensor shape
-        chunk_size: Desired chunk size
-        strategy: Chunking strategy to use
-        
-    Returns:
-        List of TensorChunk objects
-    """
-    # Simple implementation for now
-    chunks = []
-    
-    if strategy == ChunkingStrategy.DIVIDE:
-        # Simple division-based chunking
-        chunk = TensorChunk(
-            original_shape=original_shape,
-            chunk_shape=chunk_size,
-            chunk_index=[0] * len(original_shape),
-            strategy=strategy
-        )
-        chunks.append(chunk)
-    
-    return chunks
+from typing import List, Tuple, Optional
 
 
 class TensorChunking:
-    """Utility class for tensor chunking operations in dataflow modeling."""
+    """
+    Simplified tensor chunking system.
+    
+    Extracts tensor shapes and delegates chunking to interface-specific strategies.
+    No override system needed - each interface has its own strategy.
+    """
     
     def __init__(self):
-        """Initialize tensor chunking utility."""
-        pass
+        """Initialize tensor chunking system."""
+        self._model_wrapper = None
     
-    def infer_dimensions(self, onnx_layout: str, onnx_shape: List[int]) -> tuple[List[int], List[int]]:
+    def compute_chunking_for_interface(self, interface_metadata, onnx_node) -> Tuple[List[int], List[int]]:
         """
-        Infer qDim and tDim from ONNX layout and shape.
+        Compute chunking for a specific interface using its strategy.
         
         Args:
-            onnx_layout: ONNX tensor layout (e.g., "NCHW", "NHWC")
-            onnx_shape: ONNX tensor shape
+            interface_metadata: InterfaceMetadata with chunking strategy
+            onnx_node: ONNX node for tensor shape extraction
             
         Returns:
             Tuple of (qDim, tDim) lists
         """
-        if not onnx_layout or not onnx_shape:
-            return [1], [1]
-            
-        # Simple default: treat all dimensions as tensor dimensions
-        # In a real implementation, this would be more sophisticated
-        tDim = list(onnx_shape)
-        qDim = [1] * len(onnx_shape)  # Default to single element per dimension
+        # Extract tensor shape for this interface
+        tensor_shape = self.extract_tensor_shape_from_input(interface_metadata.name, onnx_node)
         
-        return qDim, tDim
+        # Delegate to the interface's chunking strategy
+        return interface_metadata.chunking_strategy.compute_chunking(tensor_shape, interface_metadata.name)
     
-    def infer_dimensions_with_layout(self, tensor_layout: str, tensor_shape: List[int]) -> tuple[List[int], List[int]]:
+    def extract_tensor_shape_from_input(self, interface_name: str, onnx_node) -> List[int]:
         """
-        Infer qDim and tDim from tensor layout and shape with layout-aware chunking.
+        Extract tensor shape from ONNX node input tensors.
         
         Args:
-            tensor_layout: Tensor layout (e.g., "NCHW", "NHWC", "CHW", "HWC", "NC", "C")
-            tensor_shape: Tensor shape
+            interface_name: Interface name
+            onnx_node: ONNX node containing input tensor references
             
         Returns:
-            Tuple of (qDim, tDim) lists
+            List of tensor dimensions
         """
-        if not tensor_layout or not tensor_shape:
-            return [1], [1]
-            
-        # Layout-aware default chunking strategies
-        if tensor_layout == "NCHW" and len(tensor_shape) >= 4:
-            # For NCHW: typically process one sample at a time, full channels, spatial chunking
-            N, C, H, W = tensor_shape[:4]
-            qDim = [1, 1, 1, 1]  # Process one element at a time by default
-            tDim = [N, C, H, W]  # Full tensor dimensions
-            
-        elif tensor_layout == "NHWC" and len(tensor_shape) >= 4:
-            # For NHWC: typically process one sample at a time, spatial chunking, channel parallelism
-            N, H, W, C = tensor_shape[:4]
-            qDim = [1, 1, 1, 1]  # Process one element at a time by default
-            tDim = [N, H, W, C]  # Full tensor dimensions
-            
-        elif tensor_layout == "CHW" and len(tensor_shape) >= 3:
-            # For CHW: channel-wise processing with spatial chunking
-            C, H, W = tensor_shape[:3]
-            qDim = [1, 1, 1]  # Process one element at a time by default
-            tDim = [C, H, W]   # Full tensor dimensions
-            
-        elif tensor_layout == "HWC" and len(tensor_shape) >= 3:
-            # For HWC: spatial processing with channel parallelism
-            H, W, C = tensor_shape[:3]
-            qDim = [1, 1, 1]  # Process one element at a time by default
-            tDim = [H, W, C]   # Full tensor dimensions
-            
-        elif tensor_layout == "NC" and len(tensor_shape) >= 2:
-            # For NC: batch processing with channel parallelism
-            N, C = tensor_shape[:2]
-            qDim = [1, 1]    # Process one element at a time by default
-            tDim = [N, C]    # Full tensor dimensions
-            
-        elif tensor_layout == "C" and len(tensor_shape) >= 1:
-            # For C: channel-wise processing
-            C = tensor_shape[0]
-            qDim = [1]       # Process one element at a time by default
-            tDim = [C]       # Full tensor dimension
-            
-        else:
-            # Fallback: treat as generic tensor
-            qDim = [1] * len(tensor_shape)
-            tDim = list(tensor_shape)
-            
-        # Extend dimensions if tensor_shape is longer than expected layout
-        if len(tensor_shape) > len(tDim):
-            extra_dims = len(tensor_shape) - len(tDim)
-            qDim.extend([1] * extra_dims)
-            tDim.extend(tensor_shape[len(tDim):])
-            
-        return qDim, tDim
-    
-    def apply_chunking_strategy(self, tensor_layout: str, tensor_shape: List[int],
-                              strategy: str = "default") -> tuple[List[int], List[int]]:
-        """
-        Apply specific chunking strategy based on layout and use case.
+        # Map interface name to input tensor index
+        input_index = self._map_interface_to_input_index(interface_name)
         
-        Args:
-            tensor_layout: Tensor layout (e.g., "NCHW", "NHWC")
-            tensor_shape: Tensor shape
-            strategy: Chunking strategy ("default", "streaming", "block", "channel_parallel")
-            
-        Returns:
-            Tuple of (qDim, tDim) lists
-        """
-        if strategy == "streaming":
-            # Streaming strategy: process minimal chunks for low latency
-            return self._apply_streaming_chunking(tensor_layout, tensor_shape)
-        elif strategy == "block":
-            # Block strategy: process larger blocks for throughput
-            return self._apply_block_chunking(tensor_layout, tensor_shape)
-        elif strategy == "channel_parallel":
-            # Channel parallel strategy: exploit channel parallelism
-            return self._apply_channel_parallel_chunking(tensor_layout, tensor_shape)
-        else:
-            # Default strategy
-            return self.infer_dimensions_with_layout(tensor_layout, tensor_shape)
-    
-    def _apply_streaming_chunking(self, tensor_layout: str, tensor_shape: List[int]) -> tuple[List[int], List[int]]:
-        """Apply streaming-oriented chunking for minimal latency."""
-        if tensor_layout == "NCHW" and len(tensor_shape) >= 4:
-            N, C, H, W = tensor_shape[:4]
-            # Stream one pixel at a time across all channels
-            qDim = [1, 1, H, W]
-            tDim = [N, C, 1, 1]
-        elif tensor_layout == "CHW" and len(tensor_shape) >= 3:
-            C, H, W = tensor_shape[:3]
-            # Stream one pixel at a time across all channels
-            qDim = [1, H, W]
-            tDim = [C, 1, 1]
-        else:
-            # Fallback to default
-            return self.infer_dimensions_with_layout(tensor_layout, tensor_shape)
+        if input_index is None:
+            return self._get_default_shape_for_interface(interface_name)
         
-        return qDim, tDim
-    
-    def _apply_block_chunking(self, tensor_layout: str, tensor_shape: List[int]) -> tuple[List[int], List[int]]:
-        """Apply block-oriented chunking for maximum throughput."""
-        if tensor_layout == "NCHW" and len(tensor_shape) >= 4:
-            N, C, H, W = tensor_shape[:4]
-            # Process blocks of spatial data
-            block_h = min(8, H)  # 8x8 blocks or smaller
-            block_w = min(8, W)
-            qDim = [1, 1, H // block_h, W // block_w]
-            tDim = [N, C, block_h, block_w]
-        elif tensor_layout == "CHW" and len(tensor_shape) >= 3:
-            C, H, W = tensor_shape[:3]
-            # Process blocks of spatial data
-            block_h = min(8, H)
-            block_w = min(8, W)
-            qDim = [1, H // block_h, W // block_w]
-            tDim = [C, block_h, block_w]
-        else:
-            # Fallback to default
-            return self.infer_dimensions_with_layout(tensor_layout, tensor_shape)
-        
-        return qDim, tDim
-    
-    def _apply_channel_parallel_chunking(self, tensor_layout: str, tensor_shape: List[int]) -> tuple[List[int], List[int]]:
-        """Apply channel-parallel chunking for maximum parallelism."""
-        if tensor_layout == "NCHW" and len(tensor_shape) >= 4:
-            N, C, H, W = tensor_shape[:4]
-            # Parallelize across channels
-            qDim = [1, C, 1, 1]
-            tDim = [N, 1, H, W]
-        elif tensor_layout == "NHWC" and len(tensor_shape) >= 4:
-            N, H, W, C = tensor_shape[:4]
-            # Parallelize across channels
-            qDim = [1, 1, 1, C]
-            tDim = [N, H, W, 1]
-        elif tensor_layout == "CHW" and len(tensor_shape) >= 3:
-            C, H, W = tensor_shape[:3]
-            # Parallelize across channels
-            qDim = [C, 1, 1]
-            tDim = [1, H, W]
-        else:
-            # Fallback to default
-            return self.infer_dimensions_with_layout(tensor_layout, tensor_shape)
-        
-        return qDim, tDim
-    
-    @staticmethod
-    def _compute_qDim_from_chunking(original_shape: List[int], tDim: List[int]) -> List[int]:
-        """
-        Compute qDim from original shape and tDim.
-        
-        Args:
-            original_shape: Original tensor shape
-            tDim: Target tensor dimensions
-            
-        Returns:
-            Computed qDim
-        """
-        if not original_shape or not tDim:
-            return [1]
-            
-        # Simple computation: qDim = original_shape / tDim (with broadcasting)
-        qDim = []
-        for i in range(min(len(original_shape), len(tDim))):
-            if tDim[i] > 0:
-                qDim.append(max(1, original_shape[i] // tDim[i]))
+        try:
+            # Get input tensor name
+            if hasattr(onnx_node, 'input') and len(onnx_node.input) > input_index:
+                input_tensor_name = onnx_node.input[input_index]
             else:
-                qDim.append(1)
-                
-        # Pad with 1s if tDim is longer
-        while len(qDim) < len(tDim):
-            qDim.append(1)
+                return self._get_default_shape_for_interface(interface_name)
             
-        return qDim
+            # Try to extract shape from model wrapper
+            if self._model_wrapper:
+                try:
+                    tensor_shape = self._model_wrapper.get_tensor_shape(input_tensor_name)
+                    if tensor_shape and len(tensor_shape) > 0:
+                        return [int(dim) for dim in tensor_shape]
+                except Exception:
+                    # Gracefully handle ModelWrapper errors
+                    pass
+            
+            # Fallback to defaults
+            return self._get_default_shape_for_interface(interface_name)
+            
+        except (IndexError, AttributeError):
+            return self._get_default_shape_for_interface(interface_name)
+    
+    def _map_interface_to_input_index(self, interface_name: str) -> Optional[int]:
+        """Map interface name to input tensor index."""
+        if "in0" in interface_name or interface_name.startswith("input"):
+            return 0
+        elif "in1" in interface_name:
+            return 1
+        elif "in2" in interface_name:
+            return 2
+        elif "weights" in interface_name or "weight" in interface_name:
+            return 1
+        elif "bias" in interface_name:
+            return 2
+        else:
+            return 0
+    
+    def _get_default_shape_for_interface(self, interface_name: str) -> List[int]:
+        """Get reasonable default shape when extraction fails."""
+        if "weight" in interface_name.lower():
+            return [64, 64]
+        elif "bias" in interface_name.lower():
+            return [64]
+        elif "config" in interface_name.lower():
+            return [1]
+        else:
+            return [1, 8, 32, 32]  # Default NCHW input
+    
+    def set_model_wrapper(self, model_wrapper):
+        """Set model wrapper for tensor shape extraction."""
+        self._model_wrapper = model_wrapper
+    
+    def infer_layout_from_shape(self, tensor_shape: List[int]) -> str:
+        """Infer tensor layout with smart defaults."""
+        layout_map = {
+            4: "NCHW",  # 4D tensors → batch, channels, height, width
+            3: "CHW",   # 3D tensors → channels, height, width
+            2: "NC",    # 2D tensors → batch, channels
+            1: "C"      # 1D tensors → channels
+        }
+        return layout_map.get(len(tensor_shape), f"DIM{len(tensor_shape)}")
+    
+    def get_layout_aware_chunking(self, tensor_shape: List[int], layout: str = None) -> Tuple[List[int], List[int]]:
+        """Provide layout-aware default chunking strategies."""
+        if layout is None:
+            layout = self.infer_layout_from_shape(tensor_shape)
+            
+        if layout == "NCHW" and len(tensor_shape) == 4:
+            # Default: no chunking on batch/channels, stream on width
+            return ([1, 1, 1, tensor_shape[3]], [1, tensor_shape[1], tensor_shape[2], 1])
+        elif layout == "CHW" and len(tensor_shape) == 3:
+            # Default: stream on width
+            return ([1, 1, tensor_shape[2]], [tensor_shape[0], tensor_shape[1], 1])
+        elif layout == "NC" and len(tensor_shape) == 2:
+            # Default: stream on channels
+            return ([1, tensor_shape[1]], [tensor_shape[0], 1])
+        elif layout == "C" and len(tensor_shape) == 1:
+            # Default: stream elements
+            return ([tensor_shape[0]], [1])
+        else:
+            # Conservative default: full tensor
+            return ([1] * len(tensor_shape), tensor_shape)

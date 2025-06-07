@@ -1,0 +1,154 @@
+{#-
+Slim HWCustomOp Template for Phase 3 Enhanced TDIM Pragma Integration
+
+This template generates compact HWCustomOp classes (50-80 lines) that leverage
+InterfaceMetadata objects and automatic chunking strategy integration.
+-#}
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Auto-generated HWCustomOp for {{ kernel_name }}
+# Generated from: {{ source_file }}
+# Generation timestamp: {{ generation_timestamp }}
+############################################################################
+
+from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
+from brainsmith.dataflow.core.chunking_strategy import index_chunking, default_chunking, last_dim_chunking
+
+
+class {{ class_name }}(AutoHWCustomOp):
+    """
+    Slim auto-generated HWCustomOp for {{ kernel_name }} kernel.
+    
+    Generated from RTL: {{ source_file }}
+    Uses enhanced TDIM pragma integration for automatic chunking strategies.
+    """
+    
+    def __init__(self, onnx_node, **kwargs):
+        """Initialize {{ class_name }} with interface metadata and chunking strategies."""
+        
+        # Define interface metadata with enhanced TDIM pragma integration
+        # Only include AXI_STREAM interfaces in dataflow model (AXI_LITE will be handled separately)
+        self._interface_metadata = [
+            {% for interface in interfaces %}
+            {% if interface.type.name == 'AXI_STREAM' %}
+            InterfaceMetadata(
+                name="{{ interface.name }}",
+                interface_type=DataflowInterfaceType.{{ interface.dataflow_type }},
+                allowed_datatypes=[
+                    {% for constraint in interface.datatype_constraints %}
+                    DataTypeConstraint(
+                        finn_type="{{ constraint.finn_type }}",
+                        bit_width={{ constraint.bit_width }},
+                        signed={{ constraint.signed|lower }}
+                    ),
+                    {% endfor %}
+                ],
+                chunking_strategy={% if interface.enhanced_tdim %}index_chunking({{ interface.enhanced_tdim.chunk_index }}, {{ interface.enhanced_tdim.chunk_sizes }}){% else %}default_chunking(){% endif %}
+            ),
+            {% endif %}
+            {% endfor %}
+        ]
+        
+        # Initialize parent with interface metadata
+        super().__init__(onnx_node, interface_metadata=self._interface_metadata, **kwargs)
+        
+        # Set kernel-specific attributes
+        self.kernel_name = "{{ kernel_name }}"
+        self.rtl_source = "{{ source_file }}"
+    
+    def get_nodeattr_types(self):
+        """Define kernel-specific node attributes."""
+        attrs = super().get_nodeattr_types()
+        
+        # Add RTL parameters as node attributes
+        kernel_attrs = {
+            {% for param in rtl_parameters %}
+            "{{ param.name }}": ("i", False, {{ param.default_value or 0 }}),
+            {% endfor %}
+        }
+        
+        attrs.update(kernel_attrs)
+        return attrs
+    
+    def get_kernel_interface_specs(self):
+        """Return interface specifications for kernel integration."""
+        return {
+            {% for interface in interfaces %}
+            {% if interface.type.name == 'AXI_STREAM' %}
+            "{{ interface.name }}": {
+                "type": "{{ interface.dataflow_type.lower() }}",
+                "interface_type": "{{ interface.type.name }}",
+                {% if interface.enhanced_tdim %}
+                "chunking_strategy": "index_chunking",
+                "chunk_index": {{ interface.enhanced_tdim.chunk_index }},
+                "chunk_sizes": {{ interface.enhanced_tdim.chunk_sizes }},
+                {% else %}
+                "chunking_strategy": "default_chunking",
+                {% endif %}
+            },
+            {% endif %}
+            {% endfor %}
+        }
+    
+    {% if resource_estimation_required %}
+    # ===== Kernel-Specific Resource Estimation =====
+    
+    def bram_estimation(self) -> int:
+        """Estimate BRAM usage for {{ kernel_name }}."""
+        # TODO: Implement based on {{ kernel_name }} architecture
+        {% if weight_interfaces_count > 0 %}
+        # Weight storage + activation buffers
+        return {{ weight_interfaces_count * 2 + 1 }}  # Placeholder
+        {% else %}
+        # Minimal usage for compute-only kernel
+        return 1
+        {% endif %}
+    
+    def lut_estimation(self) -> int:
+        """Estimate LUT usage for {{ kernel_name }}."""
+        # TODO: Implement based on {{ kernel_name }} logic complexity
+        parallelism = self._get_current_parallelism()
+        base_luts = {{ 500 if kernel_complexity == 'low' else 1500 if kernel_complexity == 'medium' else 3000 }}
+        return base_luts * sum(parallelism.iPar.values())
+    
+    def dsp_estimation(self) -> int:
+        """Estimate DSP usage for {{ kernel_name }}."""
+        {% if kernel_type in ['matmul', 'conv', 'gemm'] %}
+        # Arithmetic-intensive kernel likely uses DSPs
+        parallelism = self._get_current_parallelism()
+        return sum(parallelism.wPar.values())  # One DSP per weight parallel unit
+        {% else %}
+        # Non-arithmetic kernel typically doesn't use DSPs
+        return 0
+        {% endif %}
+    {% endif %}
+    
+    {% if verification_required %}
+    def verify_node(self):
+        """Verify kernel-specific constraints."""
+        super().verify_node()
+        
+        # Add {{ kernel_name }}-specific verification
+        {% for verification in kernel_verifications %}
+        # {{ verification.description }}
+        {{ verification.code }}
+        {% endfor %}
+    {% endif %}
+
+
+# Convenience function for FINN integration
+def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
+    """Create {{ class_name }} ONNX node with enhanced TDIM pragma support."""
+    import onnx.helper
+    
+    return onnx.helper.make_node(
+        "{{ class_name }}",
+        inputs=inputs,
+        outputs=outputs,
+        domain="finn.custom_op.fpgadataflow",
+        **node_attrs
+    )

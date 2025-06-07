@@ -16,10 +16,19 @@ from .dataflow_interface import (
     RangeConstraint,
 )
 from .dataflow_model import DataflowModel
-from .tensor_chunking import (
-    TensorChunk,
+from .tensor_chunking import TensorChunking
+from .chunking_strategy import (
     ChunkingStrategy,
-    calculate_tensor_chunks,
+    ChunkingType,
+    DefaultChunkingStrategy,
+    IndexBasedChunkingStrategy,
+    FullTensorChunkingStrategy,
+    default_chunking,
+    index_chunking,
+    full_tensor_chunking,
+    last_dim_chunking,
+    spatial_chunking,
+    no_chunking,
 )
 from .validation import (
     ValidationResult,
@@ -49,9 +58,18 @@ __all__ = [
     # Model
     "DataflowModel",
     # Chunking
-    "TensorChunk",
+    "TensorChunking",
     "ChunkingStrategy",
-    "calculate_tensor_chunks",
+    "ChunkingType",
+    "DefaultChunkingStrategy",
+    "IndexBasedChunkingStrategy",
+    "FullTensorChunkingStrategy",
+    "default_chunking",
+    "index_chunking",
+    "full_tensor_chunking",
+    "last_dim_chunking",
+    "spatial_chunking",
+    "no_chunking",
     # Validation
     "ValidationResult",
     "ValidationSeverity",
