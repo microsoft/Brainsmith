@@ -28,15 +28,15 @@ git clone git@github.com:microsoft/Brainsmith.git
 
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
 ```
-cd tests/end2end/bert
+cd demos/bert
 make single_layer
 ```
 
 6. Alternatively, run a simplified test skipping DCP gen:
 ```
-cd brainsmith/jobs/bert
-python scripts/gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-python endtoend.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
+cd demos/bert
+python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
+python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
 ```
 
 7. Alternatively, you can also run a suite of tests on the finnbrainsmith repository which will check:

@@ -1,5 +1,5 @@
 """
-Test suite for Phase 3A enhanced template system.
+Test suite for enhanced template system.
 
 Tests the enhanced template system with complete method implementations,
 resource estimation, and multi-file generation capabilities.
@@ -13,8 +13,8 @@ from pathlib import Path
 from brainsmith.tools.hw_kernel_gen.hkg import HardwareKernelGenerator, HardwareKernelGeneratorError
 
 
-class TestPhase3TemplateSystem:
-    """Test Phase 3A enhanced template system implementation."""
+class TestEnhancedTemplateSystem:
+    """Test enhanced template system implementation."""
 
     @pytest.fixture
     def temp_output_dir(self):

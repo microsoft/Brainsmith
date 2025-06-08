@@ -3,8 +3,8 @@
 # Licensed under the MIT License.
 #
 # Auto-generated RTLBackend for thresholding_axi
-# Generated from: /tmp/tmpho3zv5gn/thresholding_enhanced.sv
-# Generation timestamp: 2025-06-07T05:14:58.688590
+# Generated from: /tmp/tmpdwa5i8of/thresholding_enhanced.sv
+# Generation timestamp: 2025-06-08T07:57:10.083734
 ############################################################################
 
 import os
@@ -25,7 +25,7 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
     
     Provides RTL generation with dataflow modeling integration.
     
-    Generated from: /tmp/tmpho3zv5gn/thresholding_enhanced.sv
+    Generated from: /tmp/tmpdwa5i8of/thresholding_enhanced.sv
     
     Interfaces:
     - ap: control
@@ -121,8 +121,8 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
             "top_module_name": "thresholding_axi",
             
             # Basic information
-            "source_file": "/tmp/tmpho3zv5gn/thresholding_enhanced.sv",
-            "generation_timestamp": "2025-06-07T05:14:58.688590",
+            "source_file": "/tmp/tmpdwa5i8of/thresholding_enhanced.sv",
+            "generation_timestamp": "2025-06-08T07:57:10.083734",
             
             # Parameters
             "verilog_parameters": self.get_verilog_parameters(),
@@ -177,8 +177,8 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
         
         with open(param_file, 'w') as f:
             f.write("# Auto-generated parameters for thresholding_axi\n")
-            f.write(f"# Source: /tmp/tmpho3zv5gn/thresholding_enhanced.sv\n") 
-            f.write(f"# Generated: 2025-06-07T05:14:58.688590\n\n")
+            f.write(f"# Source: /tmp/tmpdwa5i8of/thresholding_enhanced.sv\n") 
+            f.write(f"# Generated: 2025-06-08T07:57:10.083734\n\n")
             
             # Write Verilog parameters
             params = self.get_verilog_parameters()

@@ -479,3 +479,6 @@ old/
 deps/
 *.egg-info/
 *.egg
+__pycache__/
+*.pyc
+*.egg-info/

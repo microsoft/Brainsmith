@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: thresholding_enhanced.sv
-# Generation timestamp: 2025-06-07T05:14:58.680123
+# Generation timestamp: 2025-06-08T07:57:10.074614
 ############################################################################
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp

@@ -1,0 +1,128 @@
+# Hardware Kernel Generator Configuration for Vector Dot Product Tutorial
+# This configuration demonstrates advanced HKG features and optimization settings
+
+pipeline:
+  # Template configuration for optimal code generation
+  template:
+    template_dirs:
+      - "templates/dataflow/"
+      - "templates/custom/"
+    selection_strategy: "dataflow_preferred"  # Use base class inheritance
+    cache_templates: true
+    auto_reload: true                         # For development
+    optimization_level: "balanced"
+    
+  # Generation configuration
+  generation:
+    enabled_generators:
+      - "hwcustomop"           # Generate FINN HWCustomOp
+      - "rtlbackend"           # Generate RTL backend
+      - "test_suite"           # Generate comprehensive tests
+      - "documentation"        # Generate documentation
+      - "rtl_template"         # Generate RTL wrapper template
+      - "formal_verification"  # Generate formal properties
+    
+    output_organization: "hierarchical"      # Organized directory structure
+    overwrite_existing: true
+    preserve_intermediates: true             # Keep for debugging
+    debug_output: true
+    verbose_logging: true
+    
+    # Code generation preferences
+    code_style:
+      indentation: 4
+      line_length: 100
+      type_hints: true
+      docstring_style: "google"
+    
+  # Analysis configuration for advanced features
+  analysis:
+    interface_detection: "enhanced"          # Full dataflow analysis
+    pragma_processing: true                  # Process all pragma types
+    validation_level: "comprehensive"       # Strict validation
+    
+    # Caching for development speed
+    caching_enabled: true
+    cache_size_limit: 1000                   # MB
+    cache_persistence: true
+    
+    # Advanced analysis features
+    performance_analysis: true
+    resource_analysis: true
+    dependency_analysis: true
+    timing_analysis: true
+    
+  # Dataflow modeling configuration
+  dataflow:
+    mode: "DATAFLOW_ONLY"                    # Pure dataflow approach
+    optimization_level: "aggressive"         # Maximum optimization
+    
+    # Mathematical optimization
+    parallelism_analysis: true
+    dimension_optimization: true
+    constraint_propagation: true
+    
+    # Performance modeling
+    performance_modeling: true
+    resource_modeling: true
+    memory_modeling: true
+    
+    # Resource constraints for optimization
+    resource_constraints:
+      max_luts: 50000
+      max_dsps: 200
+      max_bram: 100
+      max_uram: 20
+      target_frequency: 250                  # MHz
+      power_budget: "moderate"
+    
+  # Validation and quality assurance
+  validation:
+    strict_validation: true
+    error_on_warnings: false                 # Allow warnings in tutorial
+    detailed_reports: true
+    
+    # Validation categories
+    syntax_validation: true
+    semantic_validation: true
+    performance_validation: true
+    resource_validation: true
+    
+    # Test generation
+    generate_test_vectors: true
+    generate_assertions: true
+    generate_coverage_reports: true
+
+# Logging configuration
+logging:
+  level: "DEBUG"                             # Detailed logging for tutorial
+  format: "detailed"
+  timestamp: true
+  file_output: "hkg_tutorial.log"
+  console_output: true
+
+# Tutorial-specific configuration
+tutorial:
+  include_explanations: true
+  generate_intermediate_outputs: true
+  create_visualization_data: true
+  benchmark_generation: true
+  
+  # Educational features
+  explain_decisions: true
+  show_optimization_steps: true
+  include_alternative_approaches: true
+  
+# Performance monitoring for tutorial
+monitoring:
+  enable_profiling: true
+  measure_generation_time: true
+  measure_memory_usage: true
+  track_optimization_effectiveness: true
+  
+# Output customization
+output:
+  include_timestamps: true
+  generate_manifest: true
+  create_build_summary: true
+  include_metrics_report: true

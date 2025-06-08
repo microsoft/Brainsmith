@@ -189,6 +189,27 @@ class ConfigurationError(BrainsmithError):
         super().__init__(message, context=context, suggestions=suggestions, **kwargs)
         self.config_section = config_section
 
+class TemplateError(BrainsmithError):
+    """Errors during template processing and rendering."""
+    
+    def __init__(self, message: str, template_name: str = None, suggestion: str = None, **kwargs):
+        context = kwargs.get('context', {})
+        if template_name:
+            context['template_name'] = template_name
+        
+        suggestions = kwargs.get('suggestions', [])
+        if suggestion and suggestion not in suggestions:
+            suggestions.append(suggestion)
+        if not suggestions:
+            suggestions = [
+                "Check template syntax and Jinja2 expressions",
+                "Verify all template variables are provided in context",
+                "Ensure template file exists and is readable"
+            ]
+        
+        super().__init__(message, context=context, suggestions=suggestions, **kwargs)
+        self.template_name = template_name
+
 def handle_error_with_recovery(error: Exception, recovery_strategies: list = None) -> Any:
     """
     Handle errors with optional recovery strategies.
@@ -214,6 +235,86 @@ def handle_error_with_recovery(error: Exception, recovery_strategies: list = Non
     
     # All recovery strategies failed
     raise error
+
+# Week 3 Orchestration Errors
+
+class GeneratorError(BrainsmithError):
+    """Error during generator operation."""
+    
+    def __init__(self, message: str, generator_name: str = None, **kwargs):
+        context = kwargs.get('context', {})
+        if generator_name:
+            context['generator_name'] = generator_name
+        
+        suggestions = kwargs.get('suggestions', [])
+        if not suggestions:
+            suggestions = [
+                "Check generator capabilities and configuration",
+                "Verify generator is properly registered",
+                "Ensure all required inputs are provided"
+            ]
+        
+        super().__init__(message, context=context, suggestions=suggestions, **kwargs)
+
+
+class PipelineError(BrainsmithError):
+    """Error during pipeline execution."""
+    
+    def __init__(self, message: str, stage_name: str = None, **kwargs):
+        context = kwargs.get('context', {})
+        if stage_name:
+            context['stage_name'] = stage_name
+        
+        suggestions = kwargs.get('suggestions', [])
+        if not suggestions:
+            suggestions = [
+                "Check stage dependencies and execution order",
+                "Verify stage inputs and configuration",
+                "Review pipeline orchestration logs"
+            ]
+        
+        super().__init__(message, context=context, suggestions=suggestions, **kwargs)
+
+
+class WorkflowError(BrainsmithError):
+    """Error during workflow execution."""
+    
+    def __init__(self, message: str, workflow_name: str = None, step_name: str = None, **kwargs):
+        context = kwargs.get('context', {})
+        if workflow_name:
+            context['workflow_name'] = workflow_name
+        if step_name:
+            context['step_name'] = step_name
+        
+        suggestions = kwargs.get('suggestions', [])
+        if not suggestions:
+            suggestions = [
+                "Check workflow definition and step dependencies",
+                "Verify step configurations and conditions",
+                "Review workflow execution logs"
+            ]
+        
+        super().__init__(message, context=context, suggestions=suggestions, **kwargs)
+
+
+class IntegrationError(BrainsmithError):
+    """Error during component integration."""
+    
+    def __init__(self, message: str, component: str = None, **kwargs):
+        context = kwargs.get('context', {})
+        if component:
+            context['component'] = component
+        
+        suggestions = kwargs.get('suggestions', [])
+        if not suggestions:
+            suggestions = [
+                "Check component compatibility and versions",
+                "Verify integration configuration",
+                "Review component interaction logs"
+            ]
+        
+        super().__init__(message, context=context, suggestions=suggestions, **kwargs)
+
 
 # Legacy compatibility
 HardwareKernelGeneratorError = BrainsmithError

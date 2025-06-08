@@ -4,7 +4,7 @@
 
 This document describes the auto-generated HWCustomOp implementation for `thresholding_axi`.
 
-**Source RTL:** `/tmp/tmpho3zv5gn/thresholding_enhanced.sv`
+**Source RTL:** `/tmp/tmpdwa5i8of/thresholding_enhanced.sv`
 **Generated Classes:**
 - `AutoThresholdingAxi` - Main HWCustomOp implementation
 - `AutoThresholdingAxiRTLBackend` - RTL backend for synthesis
