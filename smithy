@@ -28,12 +28,6 @@ debug() {
     [ "${BSMITH_DEBUG:-0}" = "1" ] && echo "DEBUG: $1" >&2
 }
 
-debug "Container name generation:"
-debug "BSMITH_DIR=$BSMITH_DIR"
-debug "BSMITH_DIR_HASH=$BSMITH_DIR_HASH"
-debug "DOCKER_UNAME=$DOCKER_UNAME"
-debug "DOCKER_INST_NAME=$DOCKER_INST_NAME"
-
 # Set defaults (same as run-docker.sh)
 : ${BSMITH_HW_COMPILER="finn"}
 
@@ -89,45 +83,136 @@ show_help() {
     cat << EOF
 Brainsmith Container Management
 
-Usage: $0 [COMMAND] [OPTIONS]
+Usage: $0 COMMAND [OPTIONS]
 
 Commands:
-    build          Build the Docker image
-    start          Build image if needed, create container if needed, open interactive shell
-    daemon         Build image if needed, create container if needed, start daemon in background
-    exec CMD       Execute command in running daemon container (fails if no daemon active)
-    shell          Open interactive shell in running daemon container (fails if no daemon active)
-    stop           Stop the running container
-    restart        Restart the container
+    daemon         Start persistent container in background
+    exec CMD       Execute command in running container
+    shell          Interactive shell in running container
+    build          Build Docker image
+    start          Interactive shell (one-time container)
+    stop           Stop container
     status         Show container status
+    cleanup        Remove container
     logs           Show container logs
-    cleanup        Remove stopped container and cleanup
-    help           Show this help
 
 Examples:
-    $0 build                                    # Just build the Docker image
-    $0 start                                    # Interactive shell (builds image/container if needed)
-    $0 daemon                                   # Start daemon in background (builds if needed)
-    $0 exec "python -c 'import brainsmith'"     # Execute command in daemon
-    $0 shell                                    # Interactive shell in running daemon
-    $0 stop                                     # Stop container
-
-Environment Variables:
-    BSMITH_DOCKER_TAG       Docker image tag to use
-    BSMITH_BUILD_DIR        Host build directory
-    BSMITH_QUICK_EXEC       Set to 1 to skip environment setup for exec
+    $0 daemon && $0 exec "python script.py"    # Typical workflow
+    $0 shell                                         # Interactive development
 EOF
 }
 
+# Monitor container startup via log streaming
+monitor_container_startup() {
+    local container_name="$1"
+    local timeout="${2:-300}"  # Default 5 minutes
+    local start_time=$(date +%s)
+    
+    gecho "Starting container and monitoring initialization..."
+    
+    # Create a temporary file to track completion
+    local completion_file="/tmp/.monitor_${container_name}_$$"
+    
+    # Start log monitoring in background
+    {
+        docker logs -f "$container_name" 2>&1 | while IFS= read -r line; do
+            # Check for status messages (with more flexible matching)
+            if [[ "$line" =~ BRAINSMITH_STATUS:(.+)$ ]]; then
+                local status="${BASH_REMATCH[1]}"
+                local status_parts=(${status//:/ })
+                local status_type="${status_parts[0]}"
+                local status_detail="${status_parts[1]:-}"
+                
+                case "$status_type" in
+                    "INITIALIZING")
+                        gecho "→ Container initializing..."
+                        ;;
+                    "FETCHING_DEPENDENCIES")
+                        gecho "→ Fetching dependency repositories..."
+                        ;;
+                    "INSTALLING_PACKAGES")
+                        if [ -n "$status_detail" ]; then
+                            if [ "$status_detail" = "starting" ]; then
+                                gecho "→ Starting package installation..."
+                            else
+                                gecho "→ Installing package: $status_detail"
+                            fi
+                        else
+                            gecho "→ Installing packages..."
+                        fi
+                        ;;
+                    "BUILDING_PYXSI")
+                        gecho "→ Building pyxsi extension..."
+                        ;;
+                    "READY")
+                        gecho "✓ Container is ready!"
+                        echo "SUCCESS" > "$completion_file"
+                        break
+                        ;;
+                    "ERROR")
+                        recho "✗ Container initialization failed: $status_detail"
+                        echo "ERROR:$status_detail" > "$completion_file"
+                        break
+                        ;;
+                esac
+            elif [[ "$line" =~ "All setup complete - container is now fully ready" ]]; then
+                # Fallback detection for ready state
+                gecho "✓ Container is ready!"
+                echo "SUCCESS" > "$completion_file"
+                break
+            elif [ "${BSMITH_SHOW_INIT_LOGS:-false}" = "true" ]; then
+                # Show all logs if requested
+                echo "  $line"
+            fi
+        done
+    } &
+    
+    local monitor_pid=$!
+    
+    # Wait for completion or timeout
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if [ -f "$completion_file" ]; then
+            local result=$(cat "$completion_file")
+            kill $monitor_pid 2>/dev/null || true
+            wait $monitor_pid 2>/dev/null || true
+            rm -f "$completion_file"
+            
+            if [ "$result" = "SUCCESS" ]; then
+                return 0
+            else
+                recho "Container initialization failed: ${result#ERROR:}"
+                return 1
+            fi
+        fi
+        
+        # Check if container is still running
+        if ! docker inspect "$container_name" --format='{{.State.Running}}' 2>/dev/null | grep -q "true"; then
+            kill $monitor_pid 2>/dev/null || true
+            wait $monitor_pid 2>/dev/null || true
+            rm -f "$completion_file"
+            recho "Container stopped unexpectedly during initialization"
+            return 1
+        fi
+        
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    
+    # Timeout reached
+    kill $monitor_pid 2>/dev/null || true
+    wait $monitor_pid 2>/dev/null || true
+    rm -f "$completion_file"
+    recho "Container initialization timeout after ${timeout}s"
+    return 1
+}
+
 get_container_status() {
-    debug "Checking container status for: $DOCKER_INST_NAME"
     docker inspect "$DOCKER_INST_NAME" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         STATUS=$(docker inspect --format='{{.State.Status}}' "$DOCKER_INST_NAME")
-        debug "Container $DOCKER_INST_NAME status: $STATUS"
         echo "$STATUS"
     else
-        debug "Container $DOCKER_INST_NAME not found"
         echo "not_found"
     fi
 }
@@ -166,7 +251,6 @@ setup_container_if_needed() {
     STATUS=$(get_container_status)
     
     if [ "$STATUS" = "running" ]; then
-        debug "Container $DOCKER_INST_NAME is already running"
         return 0
     elif [ "$STATUS" = "exited" ]; then
         gecho "Starting existing container $DOCKER_INST_NAME"
@@ -193,8 +277,6 @@ create_container() {
     # Create necessary directories
     mkdir -p $BSMITH_BUILD_DIR
     mkdir -p $BSMITH_SSH_KEY_DIR
-    debug "Created build directory: $BSMITH_BUILD_DIR"
-    debug "Created SSH key directory: $BSMITH_SSH_KEY_DIR"
     
     # Build Docker command with all required options
     DOCKER_CMD="docker run"
@@ -283,17 +365,13 @@ create_container() {
         DOCKER_CMD+=" -e BSMITH_CONTAINER_MODE=daemon"
         DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
         gecho "Starting daemon container..."
-        debug "Full docker command: $DOCKER_CMD"
         # Execute with explicit empty command to trigger daemon mode
         RESULT=$($DOCKER_CMD "")
         DOCKER_EXIT_CODE=$?
-        debug "Docker run exit code: $DOCKER_EXIT_CODE"
-        debug "Docker run output: $RESULT"
         
         # Wait a moment and check if container actually started
         sleep 2
         FINAL_STATUS=$(get_container_status)
-        debug "Final container status after start: $FINAL_STATUS"
         
         if [ "$FINAL_STATUS" != "running" ]; then
             recho "Container failed to start properly. Status: $FINAL_STATUS"
@@ -303,29 +381,22 @@ create_container() {
             docker inspect "$DOCKER_INST_NAME" --format='{{.State}}' 2>&1 || echo "Inspect failed" >&2
             return 1
         else
-            gecho "Container started successfully in daemon mode"
-            # Additional check: verify the container is actually ready for exec commands
-            if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
-                debug "Verifying container readiness..."
-                # Wait up to 30 seconds for dependency marker
-                local wait_count=0
-                while [ $wait_count -lt 15 ]; do
-                    if docker exec "$DOCKER_INST_NAME" test -f "/tmp/.brainsmith_deps_ready" 2>/dev/null; then
-                        gecho "Container dependencies are ready"
-                        break
-                    fi
-                    debug "Waiting for dependencies... ($wait_count/15)"
-                    sleep 2
-                    wait_count=$((wait_count + 1))
-                done
-                
-                if [ $wait_count -ge 15 ]; then
-                    yecho "Warning: Container may still be initializing dependencies"
-                fi
+            # Use new log monitoring system instead of polling
+            local init_timeout="${BSMITH_INIT_TIMEOUT:-300}"
+            
+            if monitor_container_startup "$DOCKER_INST_NAME" "$init_timeout"; then
+                gecho "Container started successfully in daemon mode"
+                return 0
+            else
+                recho "Container failed to initialize properly"
+                echo "=== Container logs (last 50 lines) ===" >&2
+                docker logs --tail 50 "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
+                echo "=== Stopping and removing failed container ===" >&2
+                docker stop "$DOCKER_INST_NAME" 2>/dev/null || true
+                docker rm "$DOCKER_INST_NAME" 2>/dev/null || true
+                return 1
             fi
         fi
-        
-        return $DOCKER_EXIT_CODE
     else
         DOCKER_CMD+=" $BSMITH_DOCKER_TAG bash"
         gecho "Starting interactive container..."
@@ -335,10 +406,6 @@ create_container() {
 
 # Build image if needed, create container if needed, open interactive shell
 start_interactive() {
-    debug "Starting interactive container"
-    debug "Container name will be: $DOCKER_INST_NAME"
-    debug "Docker tag: $BSMITH_DOCKER_TAG"
-    
     # Build image if it doesn't exist or if not using prebuilt
     if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
         build_image
@@ -350,10 +417,6 @@ start_interactive() {
 
 # Build image if needed, create container if needed, start daemon in background
 start_daemon() {
-    debug "Starting daemon container"
-    debug "Container name will be: $DOCKER_INST_NAME"
-    debug "Docker tag: $BSMITH_DOCKER_TAG"
-    
     setup_container_if_needed "daemon"
 }
 
@@ -392,14 +455,8 @@ show_status() {
 }
 
 exec_in_container() {
-    debug "Attempting to exec in container: $DOCKER_INST_NAME"
-    
     if ! is_container_running; then
         recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
-        debug "Current container status:"
-        get_container_status >&2
-        debug "All containers:"
-        docker ps -a --format "table {{.Names}}\t{{.Status}}" | head -5 >&2 || echo "No containers found" >&2
         return 1
     fi
     
@@ -418,18 +475,9 @@ exec_in_container() {
         fi
     done
     
-    debug "About to execute command: $CMD"
-    
     # Use the fast exec entrypoint for optimized performance
     docker exec "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_exec.sh bash -c "$CMD"
-    EXEC_EXIT_CODE=$?
-    debug "Exec exit code: $EXEC_EXIT_CODE"
-    
-    # Check container status after exec
-    POST_EXEC_STATUS=$(get_container_status)
-    debug "Container status after exec: $POST_EXEC_STATUS"
-    
-    return $EXEC_EXIT_CODE
+    return $?
 }
 
 open_shell() {

@@ -22,17 +22,17 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Colorful terminal output functions
+# Colorful terminal output functions (respecting quiet mode)
 yecho () {
-  echo -e "${YELLOW}WARNING: $1${NC}"
+  [ "${BSMITH_EXEC_QUIET:-0}" != "1" ] && echo -e "${YELLOW}WARNING: $1${NC}"
 }
 
 gecho () {
-  echo -e "${GREEN}$1${NC}"
+  [ "${BSMITH_EXEC_QUIET:-0}" != "1" ] && echo -e "${GREEN}$1${NC}"
 }
 
 recho () {
-  echo -e "${RED}$1${NC}"
+  echo -e "${RED}$1${NC}"  # Always show errors
 }
 
 if [ -f "$VITIS_PATH/settings64.sh" ];then
@@ -106,8 +106,10 @@ if [ -d "$BSMITH_DIR/.Xilinx" ]; then
     yecho "Unable to find $BSMITH_DIR/.Xilinx/Vivado/Vivado_init.tcl"
   fi
 else
-  echo "If you need to enable a beta device, ensure .Xilinx/HLS_init.tcl and/or .Xilinx/Vivado/Vivado_init.tcl are set correctly and mounted"
-  echo "See https://docs.xilinx.com/r/en-US/ug835-vivado-tcl-commands/Tcl-Initialization-Scripts"
+  if [ "${BSMITH_EXEC_QUIET:-0}" != "1" ]; then
+    echo "If you need to enable a beta device, ensure .Xilinx/HLS_init.tcl and/or .Xilinx/Vivado/Vivado_init.tcl are set correctly and mounted"
+    echo "See https://docs.xilinx.com/r/en-US/ug835-vivado-tcl-commands/Tcl-Initialization-Scripts"
+  fi
 fi
 
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"

@@ -20,23 +20,29 @@ log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
 }
 
+# Status emission for container synchronization
+BRAINSMITH_STATUS_PREFIX="BRAINSMITH_STATUS:"
+emit_status() {
+    local status="$1"
+    local detail="${2:-}"
+    echo "${BRAINSMITH_STATUS_PREFIX}${status}${detail:+:$detail}"
+    log_info "Status: $status${detail:+ - $detail}"
+}
+
 log_info "Starting BrainSmith entrypoint"
-log_debug "Environment: BSMITH_DIR=$BSMITH_DIR, BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
-log_debug "Skip deps: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
-log_debug "Container mode: BSMITH_CONTAINER_MODE=$BSMITH_CONTAINER_MODE"
-log_debug "Arguments: $# args: $*"
-log_debug "Working directory before cd: $(pwd)"
+emit_status "INITIALIZING"
 
 cd $BSMITH_DIR
-log_debug "Changed to directory: $(pwd)"
 
 # First: Fetch dependencies if they don't exist (before environment setup)
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/qonnx" ]; then
+    emit_status "FETCHING_DEPENDENCIES"
     log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
     
     if source docker/fetch-repos.sh; then
         log_info "Dependencies fetched successfully"
     else
+        emit_status "ERROR" "Failed to fetch dependencies"
         log_error "Failed to fetch dependencies"
         exit 1
     fi
@@ -47,7 +53,6 @@ else
 fi
 
 # Second: Load environment setup (now that dependencies exist)
-log_debug "Loading environment setup"
 source /usr/local/bin/setup_env.sh
 
 # Check FINN submodule after environment is loaded (so recho function is available)
@@ -60,15 +65,18 @@ fi
 # Third: For daemon mode, ensure pyxsi is built during initialization
 if [ "$BSMITH_CONTAINER_MODE" = "daemon" ] && [ ! -z "${XILINX_VIVADO}" ]; then
     if [ ! -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ] && [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+        emit_status "BUILDING_PYXSI"
         log_info "Building pyxsi during daemon initialization"
         OLDPWD=$(pwd)
         cd ${BSMITH_DIR}/deps/pyxsi || {
+            emit_status "ERROR" "Failed to enter pyxsi directory"
             log_error "Failed to enter pyxsi directory"
             exit 1
         }
         if make; then
             log_info "pyxsi built successfully"
         else
+            emit_status "ERROR" "Failed to build pyxsi during daemon initialization"
             log_error "Failed to build pyxsi during daemon initialization"
             exit 1
         fi
@@ -98,6 +106,7 @@ except ImportError as e:
 # Function to install packages with proper error handling and progress
 install_packages_with_progress() {
     log_info "Starting package installation process"
+    emit_status "INSTALLING_PACKAGES" "starting"
     
     gecho "Installing development packages (this may take a moment)..."
     
@@ -109,6 +118,7 @@ install_packages_with_progress() {
     
     # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
     if [ -d "${BSMITH_DIR}/deps/qonnx" ]; then
+        emit_status "INSTALLING_PACKAGES" "qonnx"
         gecho "Installing qonnx..."
         mv ${BSMITH_DIR}/deps/qonnx/pyproject.toml ${BSMITH_DIR}/deps/qonnx/pyproject.tmp 2>/dev/null || true
         if ! pip install --user -e ${BSMITH_DIR}/deps/qonnx; then
@@ -120,6 +130,7 @@ install_packages_with_progress() {
 
     # finn-experimental
     if [ -d "${BSMITH_DIR}/deps/finn-experimental" ]; then
+        emit_status "INSTALLING_PACKAGES" "finn-experimental"
         gecho "Installing finn-experimental..."
         if ! pip install --user -e ${BSMITH_DIR}/deps/finn-experimental; then
             install_success=false
@@ -129,6 +140,7 @@ install_packages_with_progress() {
 
     # brevitas
     if [ -d "${BSMITH_DIR}/deps/brevitas" ]; then
+        emit_status "INSTALLING_PACKAGES" "brevitas"
         gecho "Installing brevitas..."
         if ! pip install --user -e ${BSMITH_DIR}/deps/brevitas; then
             install_success=false
@@ -138,6 +150,7 @@ install_packages_with_progress() {
 
     # finn
     if [ -d "${BSMITH_DIR}/finn" ]; then
+        emit_status "INSTALLING_PACKAGES" "finn"
         gecho "Installing finn..."
         if ! pip install --user -e ${BSMITH_DIR}/finn; then
             install_success=false
@@ -147,12 +160,14 @@ install_packages_with_progress() {
 
     # brainsmith
     if [ -f "${BSMITH_DIR}/setup.py" ]; then
+        emit_status "INSTALLING_PACKAGES" "brainsmith"
         gecho "Installing brainsmith..."
         if ! pip install --user -e ${BSMITH_DIR}; then
             install_success=false
             failed_packages+="brainsmith "
         fi
     else
+        emit_status "ERROR" "Unable to find Brainsmith source code"
         recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
         recho "Ensure you have passed -v <path-to-brainsmith-repo>:<path-to-brainsmith-repo> to the docker run command"
         exit 1
@@ -164,6 +179,7 @@ install_packages_with_progress() {
         gecho "Development packages installed and cached successfully!"
         return 0
     else
+        emit_status "ERROR" "Package installation failed: $failed_packages"
         recho "Failed to install packages: $failed_packages"
         recho "Some functionality may not work properly."
         return 1
@@ -192,23 +208,21 @@ if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
     log_info "Creating dependency readiness marker"
     touch /tmp/.brainsmith_deps_ready
     
+    # Emit final ready status for log monitoring
+    emit_status "READY"
     log_info "All setup complete - container is now fully ready for exec commands"
-    log_debug "Starting daemon mode with tail -f /dev/null"
     # Industry standard: use tail -f /dev/null to keep container alive
     exec tail -f /dev/null
 fi
 
 # execute the provided command(s)
-log_debug "Command execution logic: args=$#, first_arg='$1'"
 if [ $# -gt 0 ] && [ "$1" != "" ]; then
-    log_debug "Taking command execution path: $*"
     # For direct commands, install packages only if needed
     if ! packages_already_installed; then
         install_packages_with_progress
     fi
     exec bash -c "$*"
 else
-    log_debug "No command provided and not daemon mode, starting bash"
     # For interactive mode, install packages
     if ! packages_already_installed; then
         install_packages_with_progress
