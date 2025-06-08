@@ -13,6 +13,9 @@ import sys # Added for CLI exit
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+# Import new error handling framework
+from .errors import BrainsmithError, RTLParsingError, CodeGenerationError, handle_error_with_recovery
+
 # Assuming RTLParser and HWKernel data structure are in the rtl_parser sibling directory
 # Adjust the import path based on your final project structure
 # Ensure rtl_parser is correctly importable relative to this script's execution context
@@ -49,9 +52,8 @@ except ImportError as e:
         return f"{prefix}{camel_case}"
 
 
-class HardwareKernelGeneratorError(Exception):
-    """Custom exception for HKG errors."""
-    pass
+# Legacy compatibility - use new BrainsmithError framework
+HardwareKernelGeneratorError = BrainsmithError
 
 class HardwareKernelGenerator:
     """
@@ -104,7 +106,15 @@ class HardwareKernelGenerator:
                 self.output_dir.mkdir(parents=True, exist_ok=True)
                 print(f"Created output directory: {self.output_dir}")
             except OSError as e:
-                raise HardwareKernelGeneratorError(f"Could not create output directory {self.output_dir}: {e}")
+                raise BrainsmithError(
+                    message=f"Could not create output directory {self.output_dir}",
+                    context={"output_dir": str(self.output_dir), "original_error": str(e)},
+                    suggestions=[
+                        "Check directory permissions",
+                        "Ensure parent directory exists",
+                        "Verify disk space availability"
+                    ]
+                )
 
 
         self.hw_kernel_data: Optional[HWKernel] = None
@@ -140,9 +150,27 @@ class HardwareKernelGenerator:
             print("RTL parsing successful.")
             # TODO: Add more detailed logging of extracted info (params, ports, interfaces)
         except ParserError as e:
-            raise HardwareKernelGeneratorError(f"Failed to parse RTL: {e}")
+            raise RTLParsingError(
+                message="Failed to parse RTL file",
+                file_path=str(self.rtl_file_path),
+                context={"original_error": str(e)},
+                suggestions=[
+                    "Check RTL syntax",
+                    "Ensure ANSI-style port declarations",
+                    "Verify required interfaces (ap_clk, ap_rst_n)"
+                ]
+            )
         except Exception as e:
-            raise HardwareKernelGeneratorError(f"An unexpected error occurred during RTL parsing: {e}")
+            raise RTLParsingError(
+                message="Unexpected error during RTL parsing",
+                file_path=str(self.rtl_file_path),
+                context={"original_error": str(e)},
+                suggestions=[
+                    "Check file format and encoding",
+                    "Verify file is valid SystemVerilog",
+                    "Review RTL parser debug output"
+                ]
+            )
 
     def _parse_compiler_data(self):
         """Imports and parses the compiler data Python file."""
@@ -151,7 +179,15 @@ class HardwareKernelGenerator:
             # 1. Import the module to access objects (ONNX model, functions)
             spec = importlib.util.spec_from_file_location("compiler_data", self.compiler_data_path)
             if spec is None or spec.loader is None:
-                 raise HardwareKernelGeneratorError(f"Could not create module spec for {self.compiler_data_path}")
+                 raise BrainsmithError(
+                     message="Could not create module spec for compiler data",
+                     context={"compiler_data_path": str(self.compiler_data_path)},
+                     suggestions=[
+                         "Check file path and permissions",
+                         "Ensure file is valid Python",
+                         "Verify file extension is .py"
+                     ]
+                 )
             self.compiler_data_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(self.compiler_data_module)
             print("Compiler data module imported successfully.")
@@ -164,13 +200,54 @@ class HardwareKernelGenerator:
             print("Compiler data AST parsed successfully.")
 
         except FileNotFoundError:
-             raise HardwareKernelGeneratorError(f"Compiler data file not found at {self.compiler_data_path}")
+             raise BrainsmithError(
+                 message="Compiler data file not found",
+                 context={"compiler_data_path": str(self.compiler_data_path)},
+                 suggestions=[
+                     "Check file path",
+                     "Ensure file exists",
+                     "Verify file permissions"
+                 ]
+             )
         except SyntaxError as e:
-            raise HardwareKernelGeneratorError(f"Syntax error in compiler data file {self.compiler_data_path}: {e}")
+            raise BrainsmithError(
+                message="Syntax error in compiler data file",
+                context={
+                    "compiler_data_path": str(self.compiler_data_path),
+                    "syntax_error": str(e)
+                },
+                suggestions=[
+                    "Check Python syntax in compiler data file",
+                    "Verify proper indentation",
+                    "Check for missing imports"
+                ]
+            )
         except ImportError as e:
-            raise HardwareKernelGeneratorError(f"Failed to import compiler data module from {self.compiler_data_path}: {e}")
+            raise BrainsmithError(
+                message="Failed to import compiler data module",
+                context={
+                    "compiler_data_path": str(self.compiler_data_path),
+                    "import_error": str(e)
+                },
+                suggestions=[
+                    "Check for missing dependencies",
+                    "Verify module structure",
+                    "Check Python path configuration"
+                ]
+            )
         except Exception as e:
-            raise HardwareKernelGeneratorError(f"An unexpected error occurred during compiler data parsing: {e}")
+            raise BrainsmithError(
+                message="Unexpected error during compiler data parsing",
+                context={
+                    "compiler_data_path": str(self.compiler_data_path),
+                    "original_error": str(e)
+                },
+                suggestions=[
+                    "Review compiler data file structure",
+                    "Check for runtime dependencies",
+                    "Verify file encoding"
+                ]
+            )
 
     def _load_custom_documentation(self):
         """Loads content from the optional custom documentation file."""
@@ -306,7 +383,20 @@ class HardwareKernelGenerator:
             return output_file
             
         except Exception as e:
-            raise HardwareKernelGeneratorError(f"HWCustomOp generation failed: {e}")
+            raise CodeGenerationError(
+                message="HWCustomOp generation failed",
+                generator_type="HWCustomOpGenerator",
+                context={
+                    "class_name": class_name,
+                    "output_file": str(output_file),
+                    "original_error": str(e)
+                },
+                suggestions=[
+                    "Check template syntax and context",
+                    "Verify output directory permissions",
+                    "Review generator debug output"
+                ]
+            )
         
     
     def generate_auto_hwcustomop(self, template_path: str, output_path: str) -> str:
@@ -351,7 +441,19 @@ class HardwareKernelGenerator:
             return output_path
             
         except Exception as e:
-            raise HardwareKernelGeneratorError(f"AutoHWCustomOp generation failed: {e}")
+            raise CodeGenerationError(
+                message="AutoHWCustomOp generation failed",
+                generator_type="HWCustomOpGenerator",
+                context={
+                    "output_path": output_path,
+                    "original_error": str(e)
+                },
+                suggestions=[
+                    "Check template syntax and context",
+                    "Verify output directory permissions",
+                    "Review generator debug output"
+                ]
+            )
 
 
     def _generate_rtl_backend(self):
