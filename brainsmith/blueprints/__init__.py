@@ -1,22 +1,30 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License.
+"""
+Brainsmith Blueprint System - Week 3 Implementation
 
-from brainsmith.blueprints.manager import get_build_steps
+Comprehensive blueprint system that leverages the Week 2 library structure
+to provide blueprint-driven design space exploration.
+"""
 
-# Legacy registry for backward compatibility
-# Now uses the new YAML blueprint system under the hood
-REGISTRY = {
-    "bert": lambda: get_build_steps("bert"),
-}
+from .core import Blueprint, BlueprintLoader, BlueprintValidator
 
-def get_blueprint_steps(blueprint_name: str):
-    """Get build steps for a blueprint, supporting both legacy and new systems."""
-    if blueprint_name in REGISTRY:
-        steps_func = REGISTRY[blueprint_name]
-        if callable(steps_func):
-            return steps_func()
-        else:
-            return steps_func
-    else:
-        # Try to load from YAML blueprint system
-        return get_build_steps(blueprint_name)
+# Convenience functions
+def load_blueprint(path: str):
+    """Load a blueprint from file."""
+    loader = BlueprintLoader()
+    return loader.load(path)
+
+def validate_blueprint(blueprint):
+    """Validate a blueprint."""
+    validator = BlueprintValidator()
+    return validator.validate(blueprint)
+
+__all__ = [
+    'Blueprint',
+    'BlueprintLoader',
+    'BlueprintValidator', 
+    'load_blueprint',
+    'validate_blueprint'
+]
+
+# Version info
+__version__ = "1.0.0"  # Week 3 implementation
