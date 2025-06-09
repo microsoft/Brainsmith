@@ -35,7 +35,7 @@ brainsmith/dataflow/
 ### Design Principles
 
 1. **Single Source of Truth**: [`DataflowModel`](core/dataflow_model.py:39) serves as the central repository for all interface metadata and computational relationships
-2. **Mathematical Precision**: Standardized relationships between qDim, tDim, and sDim dimensions ensure consistent tensor chunking
+2. **Mathematical Precision**: Three-tier dimension system (qDim/tDim/sDim) with clear tensor chunking relationships
 3. **Flexible Constraints**: [`DataTypeConstraint`](core/dataflow_interface.py:71) system allows RTL creators to specify flexible datatype requirements
 4. **Auto-Generation Friendly**: Base classes eliminate 80%+ of generated code through standardized implementations
 5. **Validation-First**: Comprehensive validation at every level ensures correctness
@@ -44,13 +44,19 @@ brainsmith/dataflow/
 
 ### Interface Dimensions
 
-The framework uses a three-tier dimension system:
+The framework uses a three-tier dimension system that clarifies the distinction between original tensor shape and computed values:
 
-- **qDim** (Query Dimensions): Complete data set dimensions (post-chunking)
-- **tDim** (Tensor Dimensions): Per-calculation dimensions 
-- **sDim** (Stream Dimensions): Per-clock-cycle dimensions
+- **qDim** (Query Dimensions): Original tensor shape (e.g., 768 for BERT hidden size)
+- **tDim** (Tensor Processing Dimensions): Chunk size for processing (e.g., 96 elements per chunk)
+- **sDim** (Stream Dimensions): Hardware parallelism (e.g., 8 elements per clock cycle)
+- **num_tensors**: Computed as qDim ÷ tDim via `get_num_tensors()` method (e.g., 768 ÷ 96 = 8 chunks)
 
-**Mathematical Relationship**: `sDim ≤ tDim ≤ qDim × tDim = original_tensor_shape`
+**Mathematical Relationships**:
+```
+qDim = original_tensor_shape[i]     # Original tensor dimension  
+num_tensors[i] = qDim[i] ÷ tDim[i]   # Number of chunks to process
+tDim[i] % sDim[i] = 0               # Valid streaming constraint
+```
 
 ### Interface Types
 

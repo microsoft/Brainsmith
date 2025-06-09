@@ -143,10 +143,16 @@ class DataflowInterface:
     """
     Unified abstraction for hardware kernel interfaces providing 
     standardized representation of interface characteristics.
+    
+    Three-tier dimension system:
+    - qDim: Query dimension (original tensor shape, e.g., 768 for BERT hidden size)
+    - tDim: Tensor processing dimension (chunk size, e.g., 96 elements per chunk)  
+    - sDim: Stream dimension (hardware parallelism, e.g., 8 elements per cycle)
+    - num_tensors: Computed as qDim ÷ tDim (number of chunks to process)
     """
     name: str                           # Interface identifier (e.g., "in0", "out0", "weights")
     interface_type: DataflowInterfaceType  # INPUT, OUTPUT, WEIGHT, CONFIG, CONTROL
-    num_tensors: List[int]              # Number of tensor chunks (input_shape ÷ tDim)
+    qDim: List[int]                     # Query dimensions (original tensor shape)
     tDim: List[int]                     # Tensor chunk dimensions (size per chunk)
     sDim: List[int]                     # Stream dimensions (elements per clock cycle)
     dtype: DataflowDataType             # Element data type specification
@@ -162,14 +168,18 @@ class DataflowInterface:
     
     def _validate_dimensions(self):
         """Validate dimension consistency with correct tensor chunking relationships"""
-        if len(self.num_tensors) != len(self.tDim) or len(self.tDim) != len(self.sDim):
-            raise ValueError(f"Interface {self.name}: num_tensors, tDim, and sDim must have same length")
+        if len(self.qDim) != len(self.tDim) or len(self.tDim) != len(self.sDim):
+            raise ValueError(f"Interface {self.name}: qDim, tDim, and sDim must have same length")
         
-        for i, (n, t, s) in enumerate(zip(self.num_tensors, self.tDim, self.sDim)):
-            if n <= 0 or t <= 0 or s <= 0:
+        for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
+            if q <= 0 or t <= 0 or s <= 0:
                 raise ValueError(f"Interface {self.name}: All dimensions must be positive")
             
-            # Correct relationship: tDim must be divisible by sDim for streaming
+            # Validate tensor chunking relationship: qDim must be divisible by tDim
+            if q % t != 0:
+                raise ValueError(f"Interface {self.name}: qDim[{i}] ({q}) must be divisible by tDim[{i}] ({t}) for valid chunking")
+            
+            # Validate streaming relationship: tDim must be divisible by sDim
             if t % s != 0:
                 raise ValueError(f"Interface {self.name}: tDim[{i}] ({t}) must be divisible by sDim[{i}] ({s}) for valid streaming")
     
@@ -186,6 +196,22 @@ class DataflowInterface:
             )
             self.allowed_datatypes = [default_constraint]
     
+    def get_num_tensors(self) -> List[int]:
+        """Calculate number of tensor chunks (qDim ÷ tDim) for each dimension"""
+        return [q // t for q, t in zip(self.qDim, self.tDim)]
+    
+    def calculate_total_elements(self) -> int:
+        """Calculate total number of elements across all dimensions"""
+        return np.prod(self.qDim)
+    
+    def calculate_elements_per_chunk(self) -> int:
+        """Calculate number of elements processed per chunk"""
+        return np.prod(self.tDim)
+    
+    def calculate_total_chunks(self) -> int:
+        """Calculate total number of chunks to process"""
+        return np.prod(self.get_num_tensors())
+    
     def calculate_stream_width(self) -> int:
         """Calculate AXI stream width based on sDim and dtype"""
         elements_per_cycle = np.prod(self.sDim)
@@ -197,9 +223,16 @@ class DataflowInterface:
         """Validate interface constraints and configuration"""
         result = create_validation_result()
         
-        # Validate dimension relationships (only streaming constraint)
-        for i, (n, t, s) in enumerate(zip(self.num_tensors, self.tDim, self.sDim)):
-            # Check sDim divisibility into tDim for valid streaming
+        # Validate dimension relationships
+        for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
+            # Check qDim divisibility by tDim for valid chunking
+            if q % t != 0:
+                error = create_divisibility_error(
+                    self.name, f"qDim[{i}]", q, t
+                )
+                result.add_error(error)
+            
+            # Check tDim divisibility by sDim for valid streaming
             if t % s != 0:
                 error = create_divisibility_error(
                     self.name, f"tDim[{i}]", t, s
@@ -321,7 +354,7 @@ class DataflowInterface:
     
     def get_memory_footprint(self) -> int:
         """Calculate total memory footprint in bits"""
-        total_elements = np.prod(self.num_tensors) * np.prod(self.tDim)
+        total_elements = np.prod(self.get_num_tensors()) * np.prod(self.tDim)
         return total_elements * self.dtype.bitwidth
     
     def get_transfer_cycles(self) -> int:
@@ -339,7 +372,7 @@ class DataflowInterface:
         Returns:
             List[int]: Original tensor shape before chunking
         """
-        return self._broadcast_tensor_shape(self.num_tensors, self.tDim)
+        return self._broadcast_tensor_shape(self.get_num_tensors(), self.tDim)
     
     def _broadcast_tensor_shape(self, num_tensors: List[int], tDim: List[int]) -> List[int]:
         """
@@ -386,12 +419,12 @@ class DataflowInterface:
                     component=f"interface.{self.name}",
                     error_type="tensor_chunking_mismatch",
                     message=f"Tensor chunking mismatch: original shape {original_shape} "
-                           f"has {total_elements_original} elements, but num_tensors={self.num_tensors} × tDim={self.tDim} "
+                           f"has {total_elements_original} elements, but num_tensors={self.get_num_tensors()} × tDim={self.tDim} "
                            f"gives {total_elements_reconstructed} elements",
                     severity=ValidationSeverity.ERROR,
                     context={
                         "original_shape": original_shape,
-                        "num_tensors": self.num_tensors,
+                        "num_tensors": self.get_num_tensors(),
                         "tDim": self.tDim,
                         "reconstructed_shape": reconstructed
                     }

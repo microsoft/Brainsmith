@@ -25,14 +25,16 @@ class ChunkingStrategy(ABC):
     @abstractmethod
     def compute_chunking(self, tensor_shape: List[int], interface_name: str) -> Tuple[List[int], List[int]]:
         """
-        Compute num_tensors and tDim for the given tensor shape.
+        Compute qDim and tDim for the given tensor shape.
         
         Args:
             tensor_shape: Input tensor shape
             interface_name: Interface name for context
             
         Returns:
-            Tuple of (num_tensors, tDim) lists
+            Tuple of (qDim, tDim) lists
+            - qDim: Original tensor dimensions (typically same as tensor_shape)
+            - tDim: Processing chunk dimensions
         """
         pass
     
@@ -74,10 +76,10 @@ class DefaultChunkingStrategy(ChunkingStrategy):
     
     def _apply_layout_aware_chunking(self, tensor_shape: List[int], layout: str) -> Tuple[List[int], List[int]]:
         """Apply sophisticated layout-aware chunking."""
-        # Default: minimal chunking, preserve full tensor dimensions
-        num_tensors = [1] * len(tensor_shape)
-        tDim = list(tensor_shape)
-        return num_tensors, tDim
+        # Default: no chunking - qDim equals tensor_shape, tDim equals tensor_shape
+        qDim = list(tensor_shape)  # Original tensor dimensions
+        tDim = list(tensor_shape)  # Process entire tensor (no chunking)
+        return qDim, tDim
 
 
 @dataclass
@@ -123,15 +125,15 @@ class IndexBasedChunkingStrategy(ChunkingStrategy):
     
     def _apply_full_tensor_strategy(self, tensor_shape: List[int]) -> Tuple[List[int], List[int]]:
         """Apply full tensor strategy (no chunking)."""
-        num_tensors = [1] * len(tensor_shape)
-        tDim = list(tensor_shape)
-        return num_tensors, tDim
+        qDim = list(tensor_shape)  # Original tensor dimensions
+        tDim = list(tensor_shape)  # Process entire tensor (no chunking)
+        return qDim, tDim
     
     def _apply_shaped_chunking(self, tensor_shape: List[int], start_idx: int) -> Tuple[List[int], List[int]]:
         """Apply shaped chunking with broadcasting rules."""
-        # Initialize with defaults
-        num_tensors = [1] * len(tensor_shape)
-        tDim = list(tensor_shape)
+        # Initialize with original tensor shape
+        qDim = list(tensor_shape)  # Original tensor dimensions
+        tDim = list(tensor_shape)  # Start with original, will be modified for chunking
         
         # Resolve shape elements
         resolved_shape = [self._resolve_shape_element(s) for s in self.shape]
@@ -142,14 +144,14 @@ class IndexBasedChunkingStrategy(ChunkingStrategy):
             if target_idx < len(tensor_shape):
                 # Chunk at this dimension
                 if shape_val > 0 and tensor_shape[target_idx] >= shape_val:
-                    num_tensors[target_idx] = tensor_shape[target_idx] // shape_val
-                    tDim[target_idx] = shape_val
+                    tDim[target_idx] = shape_val  # Set chunk size
+                    # qDim stays as original tensor_shape[target_idx]
+                    # num_tensors = qDim[target_idx] // tDim[target_idx] will be computed by DataflowInterface
                 else:
-                    # Fallback: preserve dimension
-                    num_tensors[target_idx] = 1
+                    # Fallback: preserve dimension (no chunking at this dimension)
                     tDim[target_idx] = tensor_shape[target_idx]
         
-        return num_tensors, tDim
+        return qDim, tDim
     
     def _resolve_shape_element(self, element: Union[str, int]) -> int:
         """Resolve a shape element to an integer."""
@@ -171,9 +173,9 @@ class FullTensorChunkingStrategy(ChunkingStrategy):
         if not tensor_shape:
             return [1], [1]
         
-        num_tensors = [1] * len(tensor_shape)
-        tDim = list(tensor_shape)
-        return num_tensors, tDim
+        qDim = list(tensor_shape)  # Original tensor dimensions
+        tDim = list(tensor_shape)  # Process entire tensor (no chunking)
+        return qDim, tDim
     
     @property
     def chunking_type(self) -> ChunkingType:

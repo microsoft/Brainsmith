@@ -110,7 +110,7 @@ class AutoHWCustomOp(HWCustomOp):
                 tensor_shape = self._get_default_shape_for_interface(metadata.name)
             
             # Use the interface's own chunking strategy with runtime shape
-            num_tensors, tDim = self._compute_runtime_chunking(metadata, tensor_shape)
+            qDim, tDim = self._compute_runtime_chunking(metadata, tensor_shape)
             
             # Infer layout for better defaults
             layout = self._infer_layout_from_shape(tensor_shape)
@@ -123,8 +123,8 @@ class AutoHWCustomOp(HWCustomOp):
             interface = DataflowInterface(
                 name=metadata.name,
                 interface_type=metadata.interface_type,
-                num_tensors=num_tensors,
-                tDim=tDim,
+                qDim=qDim,  # Use tensor_shape as qDim (original dimensions)
+                tDim=tDim,  # Computed chunk dimensions
                 sDim=tDim.copy(),  # Initialize sDim same as tDim
                 dtype=dataflow_dtype
             )
@@ -279,16 +279,18 @@ class AutoHWCustomOp(HWCustomOp):
             tensor_shape: Actual runtime tensor shape
             
         Returns:
-            Tuple of (num_tensors, tDim)
+            Tuple of (qDim, tDim)
+            - qDim: Original tensor dimensions (same as tensor_shape)
+            - tDim: Computed processing chunk dimensions
         """
         # Use the interface's chunking strategy if available
         if hasattr(metadata, 'chunking_strategy') and metadata.chunking_strategy:
             return metadata.chunking_strategy.compute_chunking(tensor_shape, metadata.name)
         
-        # Fallback: minimal chunking (no chunking)
-        num_tensors = [1] * len(tensor_shape)
-        tDim = list(tensor_shape)
-        return num_tensors, tDim
+        # Fallback: minimal chunking (no chunking, qDim = tDim = tensor_shape)
+        qDim = list(tensor_shape)  # Original tensor dimensions
+        tDim = list(tensor_shape)  # No chunking - process entire tensor
+        return qDim, tDim
     
     def _get_default_shape_for_interface(self, interface_name: str) -> List[int]:
         """
@@ -557,24 +559,24 @@ class AutoHWCustomOp(HWCustomOp):
         
         # Count weight parameters
         for iface in self.dataflow_model.weight_interfaces:
-            params = np.prod(iface.num_tensors) * np.prod(iface.tDim)
+            params = np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
             counts["weight_params"] += params
             counts["params"] += params
             
         # Count config parameters
         for iface in self.dataflow_model.config_interfaces:
-            params = np.prod(iface.num_tensors) * np.prod(iface.tDim)
+            params = np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
             counts["config_params"] += params
             counts["params"] += params
             
         # Estimate operations based on input/output sizes
         if self.dataflow_model.input_interfaces and self.dataflow_model.output_interfaces:
             input_size = sum(
-                np.prod(iface.num_tensors) * np.prod(iface.tDim)
+                np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
                 for iface in self.dataflow_model.input_interfaces
             )
             output_size = sum(
-                np.prod(iface.num_tensors) * np.prod(iface.tDim)
+                np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
                 for iface in self.dataflow_model.output_interfaces
             )
             # Simple estimation: operations proportional to input*output
@@ -618,7 +620,7 @@ class AutoHWCustomOp(HWCustomOp):
         for iface in self.dataflow_model.weight_interfaces:
             # Generate parameters for each weight interface
             shape = (
-                np.prod(iface.num_tensors),
+                np.prod(iface.get_num_tensors()),
                 np.prod(iface.tDim)
             )
             
@@ -713,7 +715,7 @@ class AutoHWCustomOp(HWCustomOp):
         """Estimate DSP usage using DataflowModel resource requirements."""
         try:
             # Simple estimation: assume some operations require DSPs
-            total_ops = sum(np.prod(iface.num_tensors) for iface in self.dataflow_model.input_interfaces)
+            total_ops = sum(np.prod(iface.get_num_tensors()) for iface in self.dataflow_model.input_interfaces)
             
             # Apply estimation mode scaling
             estimation_mode = self.get_nodeattr("resource_estimation_mode")
@@ -751,7 +753,8 @@ class AutoHWCustomOp(HWCustomOp):
                 "finn_type": iface.dtype.finn_type,
                 "signed": iface.dtype.signed
             },
-            "num_tensors": list(iface.num_tensors),  # Correct attribute name
+            "qDim": list(iface.qDim),  # Original tensor dimensions
+            "num_tensors": list(iface.get_num_tensors()),  # Computed number of chunks
             "tDim": list(iface.tDim),  # Correct attribute name
             "parallel": self.get_nodeattr(f"{interface_name}_parallel") or 1,
             "runtime_dtype": self.get_nodeattr(f"{interface_name}_dtype") or iface.dtype.finn_type
