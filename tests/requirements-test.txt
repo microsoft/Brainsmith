@@ -1,0 +1,71 @@
+# BrainSmith Comprehensive Test Suite Dependencies
+
+# Core testing framework
+pytest>=6.0.0
+pytest-cov>=2.10.0
+pytest-xdist>=2.0.0
+pytest-timeout>=1.4.0
+pytest-mock>=3.0.0
+pytest-benchmark>=3.4.0
+
+# Performance and profiling
+memory-profiler>=0.58.0
+psutil>=5.8.0
+py-spy>=0.3.0
+
+# Data analysis and validation
+numpy>=1.19.0
+pandas>=1.3.0
+scipy>=1.7.0
+matplotlib>=3.3.0
+seaborn>=0.11.0
+
+# Configuration and serialization
+pyyaml>=5.4.0
+toml>=0.10.0
+jsonschema>=3.2.0
+
+# Mock and testing utilities
+responses>=0.13.0
+freezegun>=1.1.0
+factory-boy>=3.2.0
+
+# Documentation testing
+doctest>=2.7.0
+sphinx>=4.0.0
+
+# Code quality and analysis
+flake8>=3.8.0
+black>=21.0.0
+isort>=5.0.0
+
+# Optional optimization libraries (for integration testing)
+scikit-optimize>=0.8.0
+optuna>=2.8.0
+deap>=1.3.0
+hyperopt>=0.2.0
+
+# Hardware simulation and mocking
+pyfakefs>=4.5.0
+docker>=5.0.0
+
+# Reporting and visualization
+jinja2>=2.11.0
+plotly>=5.0.0
+dash>=2.0.0
+
+# Network and HTTP testing
+httpx>=0.23.0
+aiohttp>=3.7.0
+
+# Database testing (if needed)
+sqlalchemy>=1.4.0
+alembic>=1.6.0
+
+# Parallel processing
+joblib>=1.0.0
+multiprocessing-logging>=0.3.0
+
+# System monitoring
+resource>=0.2.0
+tracemalloc2>=0.3.0

@@ -1,0 +1,189 @@
+# BrainSmith Test Environment Definitions
+
+# Default test environment
+default:
+  python_version: "3.9"
+  os: "ubuntu-20.04"
+  finn_version: "1.0.0"
+  timeout: 300
+  parallel_workers: 4
+
+# Environment matrix for comprehensive testing
+environments:
+  # Smoke test environment (fastest)
+  smoke:
+    python_version: "3.9"
+    os: "ubuntu-20.04"
+    finn_version: "1.0.0"
+    timeout: 60
+    parallel_workers: 2
+    test_markers: ["smoke"]
+    
+  # Core testing environment
+  core:
+    python_version: "3.9"
+    os: "ubuntu-20.04"
+    finn_version: "1.0.0"
+    timeout: 1800
+    parallel_workers: 4
+    test_markers: ["core", "functional"]
+    
+  # Integration testing environment
+  integration:
+    python_version: "3.9"
+    os: "ubuntu-20.04"
+    finn_version: "1.0.0"
+    timeout: 7200
+    parallel_workers: 2
+    test_markers: ["integration"]
+    external_tools:
+      - finn
+      - scikit-optimize
+      - optuna
+      - deap
+    
+  # Performance testing environment
+  performance:
+    python_version: "3.9"
+    os: "ubuntu-20.04"
+    finn_version: "1.0.0"
+    timeout: 14400
+    parallel_workers: 1
+    test_markers: ["performance"]
+    resources:
+      memory_gb: 16
+      cpu_cores: 8
+      
+  # Multi-platform testing environments
+  python37:
+    python_version: "3.7"
+    os: "ubuntu-18.04"
+    finn_version: "0.9.0"
+    timeout: 600
+    
+  python38:
+    python_version: "3.8"
+    os: "ubuntu-20.04"
+    finn_version: "1.0.0"
+    timeout: 600
+    
+  python310:
+    python_version: "3.10"
+    os: "ubuntu-22.04"
+    finn_version: "1.0.0"
+    timeout: 600
+    
+  python311:
+    python_version: "3.11"
+    os: "ubuntu-22.04"
+    finn_version: "1.0.0"
+    timeout: 600
+    
+  # OS compatibility environments
+  windows:
+    python_version: "3.9"
+    os: "windows-2019"
+    finn_version: "1.0.0"
+    timeout: 900
+    shell: "pwsh"
+    
+  macos:
+    python_version: "3.9"
+    os: "macos-11"
+    finn_version: "1.0.0"
+    timeout: 900
+
+# FINN version compatibility matrix
+finn_versions:
+  "0.8.0":
+    supported_features:
+      - basic_builds
+      - conv_layers
+      - fc_layers
+    deprecated_features:
+      - old_transforms
+      
+  "0.9.0":
+    supported_features:
+      - basic_builds
+      - conv_layers
+      - fc_layers
+      - custom_ops
+      - parallel_builds
+    new_features:
+      - improved_transforms
+      
+  "1.0.0":
+    supported_features:
+      - basic_builds
+      - conv_layers
+      - fc_layers
+      - custom_ops
+      - parallel_builds
+      - advanced_optimization
+    new_features:
+      - enhanced_kernels
+      - better_error_handling
+
+# Hardware platform definitions
+hardware_platforms:
+  cpu_only:
+    description: "CPU-only testing environment"
+    requirements: []
+    
+  gpu_cuda:
+    description: "NVIDIA GPU with CUDA support"
+    requirements:
+      - cuda_version: ">=11.0"
+      - gpu_memory_gb: ">=4"
+      
+  fpga_dev:
+    description: "FPGA development board"
+    requirements:
+      - xilinx_tools: ">=2020.2"
+      - board_type: ["zynq", "ultrascale", "alveo"]
+
+# Test data configurations
+test_data:
+  models:
+    tiny:
+      parameter_count: 100000
+      layer_count: 5
+      complexity: "simple"
+      
+    small:
+      parameter_count: 1000000
+      layer_count: 20
+      complexity: "moderate"
+      
+    medium:
+      parameter_count: 10000000
+      layer_count: 50
+      complexity: "complex"
+      
+    large:
+      parameter_count: 100000000
+      layer_count: 200
+      complexity: "very_complex"
+
+# Performance benchmarks
+benchmarks:
+  throughput:
+    target_ops_per_second: 1000
+    measurement_duration: 60
+    warmup_iterations: 10
+    
+  latency:
+    target_ms: 10
+    percentile: 95
+    measurement_samples: 1000
+    
+  memory:
+    max_peak_mb: 2048
+    max_sustained_mb: 1024
+    leak_threshold_mb: 100
+    
+  scalability:
+    min_problem_size: 100
+    max_problem_size: 100000
+    scaling_factor: 10
