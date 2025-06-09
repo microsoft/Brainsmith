@@ -144,17 +144,21 @@ class DataflowInterface:
     Unified abstraction for hardware kernel interfaces providing 
     standardized representation of interface characteristics.
     
-    Three-tier dimension system:
-    - qDim: Query dimension (original tensor shape, e.g., 768 for BERT hidden size)
-    - tDim: Tensor processing dimension (chunk size, e.g., 96 elements per chunk)  
-    - sDim: Stream dimension (hardware parallelism, e.g., 8 elements per cycle)
+    Three-tier dimension system for Interface-Wise Dataflow Modeling:
+    - qDim: Query dimensions (original input tensor shape before any processing)
+      Example: BERT input [1,128,768] where 1=batch, 128=sequence length, 768=hidden dimension
+    - tDim: Tensor dimensions (processing chunk shape for each operation) 
+      Example: [1,8,96] meaning process 8 sequence elements with 96 features per chunk
+    - sDim: Stream dimensions (hardware parallelism - elements processed per clock cycle)
+      Example: [1,1,8] meaning 8 features processed in parallel each cycle
     - num_tensors: Computed as qDim ÷ tDim (number of chunks to process)
+      Example: [1,128,768] ÷ [1,8,96] = [1,16,8] chunks total
     """
     name: str                           # Interface identifier (e.g., "in0", "out0", "weights")
-    interface_type: DataflowInterfaceType  # INPUT, OUTPUT, WEIGHT, CONFIG, CONTROL
-    qDim: List[int]                     # Query dimensions (original tensor shape)
-    tDim: List[int]                     # Tensor chunk dimensions (size per chunk)
-    sDim: List[int]                     # Stream dimensions (elements per clock cycle)
+    interface_type: DataflowInterfaceType  # INPUT, OUTPUT, WEIGHT interface type
+    qDim: List[int]                     # Query dimensions: original input tensor shape
+    tDim: List[int]                     # Tensor dimensions: processing chunk shape
+    sDim: List[int]                     # Stream dimensions: elements per clock cycle (hardware parallelism)
     dtype: DataflowDataType             # Element data type specification
     allowed_datatypes: List[DataTypeConstraint] = field(default_factory=list)  # Allowed datatypes from DATATYPE pragma
     axi_metadata: Dict[str, Any] = field(default_factory=dict)        # Protocol-specific metadata
@@ -167,19 +171,37 @@ class DataflowInterface:
         self._set_default_constraints()
     
     def _validate_dimensions(self):
-        """Validate dimension consistency with correct tensor chunking relationships"""
-        if len(self.qDim) != len(self.tDim) or len(self.tDim) != len(self.sDim):
-            raise ValueError(f"Interface {self.name}: qDim, tDim, and sDim must have same length")
+        """
+        Validate dimension consistency with flexible length requirements.
         
-        for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
-            if q <= 0 or t <= 0 or s <= 0:
-                raise ValueError(f"Interface {self.name}: All dimensions must be positive")
-            
-            # Validate tensor chunking relationship: qDim must be divisible by tDim
+        qDim, tDim, and sDim can have different lengths to support various tensor shapes:
+        - qDim: Can be multi-dimensional (e.g., [1,128,768] for BERT)
+        - tDim: Can have fewer dimensions (e.g., [128] for 1D processing)  
+        - sDim: Can be single dimension (e.g., [8] for parallelism)
+        """
+        # Basic validation - all dimensions must be non-empty and positive
+        for dim_list, name in [(self.qDim, "qDim"), (self.tDim, "tDim"), (self.sDim, "sDim")]:
+            if not dim_list:
+                raise ValueError(f"Interface {self.name}: {name} cannot be empty")
+            for i, dim in enumerate(dim_list):
+                if dim <= 0:
+                    raise ValueError(f"Interface {self.name}: {name}[{i}] ({dim}) must be positive")
+        
+        # Validate chunking relationship between qDim and tDim
+        # Only validate dimensions that exist in both qDim and tDim
+        min_dims = min(len(self.qDim), len(self.tDim))
+        for i in range(min_dims):
+            q = self.qDim[i]
+            t = self.tDim[i]
             if q % t != 0:
                 raise ValueError(f"Interface {self.name}: qDim[{i}] ({q}) must be divisible by tDim[{i}] ({t}) for valid chunking")
-            
-            # Validate streaming relationship: tDim must be divisible by sDim
+        
+        # Validate streaming relationship between tDim and sDim  
+        # Only validate dimensions that exist in both tDim and sDim
+        min_stream_dims = min(len(self.tDim), len(self.sDim))
+        for i in range(min_stream_dims):
+            t = self.tDim[i]
+            s = self.sDim[i]
             if t % s != 0:
                 raise ValueError(f"Interface {self.name}: tDim[{i}] ({t}) must be divisible by sDim[{i}] ({s}) for valid streaming")
     
@@ -197,19 +219,30 @@ class DataflowInterface:
             self.allowed_datatypes = [default_constraint]
     
     def get_num_tensors(self) -> List[int]:
-        """Calculate number of tensor chunks (qDim ÷ tDim) for each dimension"""
-        return [q // t for q, t in zip(self.qDim, self.tDim)]
+        """
+        Calculate number of processing chunks (qDim ÷ tDim) for each dimension.
+        
+        This represents how many tensor chunks must be processed to handle
+        the complete query (original input tensor).
+        
+        Only calculates for dimensions that exist in both qDim and tDim.
+        
+        Returns:
+            List[int]: Number of chunks per dimension (length = min(len(qDim), len(tDim)))
+        """
+        min_dims = min(len(self.qDim), len(self.tDim))
+        return [self.qDim[i] // self.tDim[i] for i in range(min_dims)]
     
     def calculate_total_elements(self) -> int:
-        """Calculate total number of elements across all dimensions"""
+        """Calculate total number of elements in original input tensor (qDim)"""
         return np.prod(self.qDim)
     
     def calculate_elements_per_chunk(self) -> int:
-        """Calculate number of elements processed per chunk"""
+        """Calculate number of elements in each processing chunk (tDim)"""
         return np.prod(self.tDim)
     
     def calculate_total_chunks(self) -> int:
-        """Calculate total number of chunks to process"""
+        """Calculate total number of processing chunks (num_tensors)"""
         return np.prod(self.get_num_tensors())
     
     def calculate_stream_width(self) -> int:
@@ -266,6 +299,27 @@ class DataflowInterface:
             # Output parallelism typically derived from input parallelism
             if iPar is not None and len(self.sDim) > 0:
                 self.sDim[0] = iPar
+    
+    def calculate_cII(self) -> int:
+        """
+        Calculate calculation initiation interval (cII) for this interface.
+        
+        cII represents the number of cycles between consecutive calculations
+        for this interface: cII = ∏(tDim_i / sDim_i)
+        
+        Only calculates for dimensions that exist in both tDim and sDim.
+        
+        Returns:
+            int: Calculation initiation interval in cycles
+        """
+        cII = 1
+        min_dims = min(len(self.tDim), len(self.sDim))
+        for i in range(min_dims):
+            tdim = self.tDim[i]
+            sdim = self.sDim[i]
+            if sdim > 0:
+                cII *= tdim // sdim
+        return max(cII, 1)
     
     def get_axi_signals(self) -> Dict[str, Dict[str, Any]]:
         """Generate AXI signal specifications for this interface"""
@@ -462,24 +516,11 @@ class DataflowInterface:
         Returns:
             DataflowInterface with computed qDim
         """
-        qDim = cls._compute_qDim_from_chunking(original_shape, tDim, chunking_mode)
+        # In the new architecture, qDim should be the original tensor shape
+        qDim = list(original_shape)
         
-        # Ensure all dimensions have the same length
-        if len(qDim) != len(tDim):
-            if len(qDim) == 1 and len(tDim) > 1:
-                # Expand qDim to match tDim length with 1s
-                qDim = qDim + [1] * (len(tDim) - 1)
-            elif len(tDim) == 1 and len(qDim) > 1:
-                # Keep qDim as is, expand tDim
-                tDim = tDim + [1] * (len(qDim) - 1)
-            else:
-                # For other mismatches, make them all the same length
-                max_len = max(len(qDim), len(tDim))
-                qDim = qDim + [1] * (max_len - len(qDim))
-                tDim = tDim + [1] * (max_len - len(tDim))
-        
-        # Initialize sDim to match tDim (will be updated by parallelism)
-        sDim = tDim.copy()
+        # Initialize sDim to default 1 for each tDim dimension (can be updated by parallelism)
+        sDim = [1] * len(tDim)
         
         return cls(
             name=name,

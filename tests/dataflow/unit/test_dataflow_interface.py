@@ -210,25 +210,63 @@ class TestDataflowInterface:
             DataflowInterface(
                 name="test",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[8],
+                qDim=[16],  # Fixed: 16 % 16 == 0 (valid chunking)
                 tDim=[16],
-                sDim=[5],  # 16 % 5 != 0
+                sDim=[5],  # 16 % 5 != 0 (invalid streaming)
                 dtype=dtype
             )
         
-        # Mismatched dimension lengths
-        with pytest.raises(ValueError, match="qDim, tDim, and sDim must have same length"):
+        # qDim not divisible by tDim (chunking constraint)
+        with pytest.raises(ValueError, match="qDim.*must be divisible by tDim"):
             DataflowInterface(
-                name="test",
+                name="test2",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[16, 16],
+                qDim=[30],
+                tDim=[50],  # 30 % 50 != 0 
+                sDim=[1],
+                dtype=dtype
+            )
+        
+        # Empty dimensions should fail
+        with pytest.raises(ValueError, match="cannot be empty"):
+            DataflowInterface(
+                name="test3",
+                interface_type=DataflowInterfaceType.INPUT,
+                qDim=[],  # Empty qDim
                 tDim=[16],
                 sDim=[4],
                 dtype=dtype
             )
         
+    def test_flexible_dimension_lengths(self):
+        """Test that different dimension lengths are now supported"""
+        dtype = DataflowDataType("INT", 8, True, "")
+        
+        # Multi-dimensional qDim with fewer tDim and sDim dimensions (BERT-like example)
+        interface = DataflowInterface(
+            name="bert_input",
+            interface_type=DataflowInterfaceType.INPUT,
+            qDim=[128, 768],     # BERT: seqlen=128, hidden=768
+            tDim=[128],          # Process 128 sequence elements per chunk  
+            sDim=[8],            # 8-way parallelism (128 % 8 == 0, valid streaming)
+            dtype=dtype
+        )
+        
+        # Should validate successfully
+        result = interface.validate_constraints()
+        assert len(result.errors) == 0
+        
+        # Check calculations work with different lengths
+        num_tensors = interface.get_num_tensors()
+        assert len(num_tensors) == 1  # min(len(qDim), len(tDim)) = min(2, 1) = 1
+        assert num_tensors == [1]  # qDim[0:1] ÷ tDim[0:1] = [128] ÷ [128] = [1]
+        
+        # Verify cII calculation works
+        cII = interface.calculate_cII()
+        assert cII >= 1  # Should calculate based on overlapping dimensions
+
         # Zero or negative dimensions
-        with pytest.raises(ValueError, match="All dimensions must be positive"):
+        with pytest.raises(ValueError, match="must be positive"):
             DataflowInterface(
                 name="test",
                 interface_type=DataflowInterfaceType.INPUT,
@@ -484,50 +522,52 @@ class TestTensorChunking:
         """Test tensor shape reconstruction from qDim and tDim"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Simple case: qDim=[30], tDim=[50] → original=[1500] elements
+        # Simple case: qDim=[150], tDim=[30] → valid chunking (150 % 30 == 0)
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[30],
-            tDim=[50],
-            sDim=[10],
+            qDim=[150],  # Original tensor shape
+            tDim=[30],   # Chunk size (150 % 30 == 0)
+            sDim=[10],   # Stream parallelism (30 % 10 == 0)
             dtype=dtype
         )
         
         reconstructed = interface.reconstruct_tensor_shape()
-        assert reconstructed == [1500]  # 30 * 50
+        # In new architecture: qDim * num_tensors where num_tensors = qDim/tDim
+        num_tensors = interface.get_num_tensors()  # [150/30] = [5]
+        expected = [num_tensors[0] * interface.tDim[0]]  # [5 * 30] = [150]
+        assert reconstructed == expected
         
-        # Multi-dimensional case: qDim=[10, 20], tDim=[3, 5] → concatenated dimensions
+        # Multi-dimensional case: valid chunking with qDim divisible by tDim
         interface_multi = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[10, 20],
-            tDim=[3, 5],
-            sDim=[1, 1],
+            qDim=[15, 20],   # Original shape (15 % 3 == 0, 20 % 5 == 0)
+            tDim=[3, 5],     # Chunk sizes
+            sDim=[1, 1],     # Stream parallelism (3 % 1 == 0, 5 % 1 == 0)
             dtype=dtype
         )
         
         reconstructed = interface_multi.reconstruct_tensor_shape()
-        assert reconstructed == [30, 100]  # Element-wise multiplication: [10*3, 20*5]
+        # num_tensors = [15/3, 20/5] = [5, 4], reconstructed = [5*3, 4*5] = [15, 20]
+        assert reconstructed == [15, 20]  # Should reconstruct to original qDim
     
     def test_tensor_chunking_validation(self):
         """Test validation of tensor chunking against original shape"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Valid chunking: original [10, 30, 50] with qDim=[30], tDim=[50]
-        # Total elements: 10*30*50 = 15000, qDim*tDim = 30*50 = 1500
-        # Should be valid if batch handling is considered separately
+        # Valid chunking: qDim=[150], tDim=[30] (150 % 30 == 0)
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[30],
-            tDim=[50],
-            sDim=[10],
+            qDim=[150],   # Original tensor shape
+            tDim=[30],    # Chunk size (valid: 150 % 30 == 0)  
+            sDim=[10],    # Stream parallelism (valid: 30 % 10 == 0)
             dtype=dtype
         )
         
         # Test validation against compatible original shape
-        original_shape = [1500]  # 30 * 50 = 1500 elements total
+        original_shape = [150]  # Same as qDim - should validate successfully
         result = interface.validate_tensor_chunking(original_shape)
         assert result.success == True
         
@@ -542,12 +582,11 @@ class TestTensorChunking:
         """Test factory method for creating interfaces from tensor chunking"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Test case: original [30, 50] with tDim=[50] → qDim=[30]
-        # This represents chunking where we process 50 elements at a time from a 30x50 tensor
+        # Test case: original [150, 50] with tDim=[50] - valid chunking (150 % 50 == 0)
         interface = DataflowInterface.from_tensor_chunking(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            original_shape=[30, 50],  # 2D tensor shape
+            original_shape=[150, 50],  # 2D tensor shape
             tDim=[50],
             dtype=dtype,
             chunking_mode="broadcast"
@@ -556,8 +595,8 @@ class TestTensorChunking:
         assert interface.name == "input0"
         assert interface.interface_type == DataflowInterfaceType.INPUT
         assert interface.tDim == [50]
-        assert interface.qDim == [30]  # Should be 30 from first dimension
-        assert interface.sDim == [50]  # Initially matches tDim
+        assert interface.qDim == [150, 50]  # In new architecture: preserves original shape
+        assert interface.sDim == [1]  # Default sDim for tDim dimensions
         assert interface.dtype == dtype
     
     def test_compute_qDim_from_chunking(self):
@@ -601,44 +640,47 @@ class TestTensorChunking:
         """Test with user-provided real-world examples"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Example 1: tensor [10, 30, 50] with tDim=[50] → qDim=[30]
-        # Total elements without batch = 30*50 = 1500
+        # Example 1: tensor [150] with tDim=[50] → qDim=[150] (shape preserved)
+        # This tests with valid divisible dimensions
         interface1 = DataflowInterface.from_tensor_chunking(
             name="example1",
             interface_type=DataflowInterfaceType.INPUT,
-            original_shape=[30, 50],  # Non-batch dimensions
+            original_shape=[150],  # Must be divisible by tDim
             tDim=[50],
             dtype=dtype
         )
         
-        assert interface1.qDim == [30]
+        assert interface1.qDim == [150]  # original_shape preserved as qDim
         assert interface1.tDim == [50]
         
-        # Validate reconstruction
-        reconstructed = interface1.reconstruct_tensor_shape()
-        assert np.prod(reconstructed) == np.prod([30, 50])
+        # Validate num_tensors calculation
+        num_tensors = interface1.get_num_tensors()
+        assert num_tensors == [3]  # 150 ÷ 50 = 3 chunks
         
-        # Example 2: tensor [10, 30, 50] with tDim=[3,5] → qDim=[1000]
-        # Where total elements = 10*30*50 = 15000
-        # tDim=[3,5] means 15 elements per calculation
-        # So qDim should represent 15000/15 = 1000 calculations
+        # Example 2: Multi-dimensional tensor with valid divisible dimensions
         interface2 = DataflowInterface.from_tensor_chunking(
             name="example2",
             interface_type=DataflowInterfaceType.INPUT,
-            original_shape=[10, 30, 50],
+            original_shape=[15, 10],  # Must be divisible by tDim
             tDim=[3, 5],
             dtype=dtype
         )
         
-        assert interface2.qDim == [1000, 1]  # 15000 // 15 = 1000, padded to match tDim length
+        assert interface2.qDim == [15, 10]  # original_shape preserved as qDim
         assert interface2.tDim == [3, 5]
         
-        # Validate element count consistency
-        original_elements = np.prod([10, 30, 50])
-        chunked_elements = np.prod(interface2.qDim) * np.prod(interface2.tDim)
-        assert original_elements == chunked_elements
+        # Validate num_tensors calculation  
+        num_tensors2 = interface2.get_num_tensors()
+        assert num_tensors2 == [5, 2]  # [15÷3, 10÷5] = [5, 2]
         
-        # Example 3: Simple 1D case - tensor [1500] with tDim=[50] → qDim=[30]
+        # Validate element count consistency
+        original_elements = np.prod([15, 10])  # 150
+        chunks_total = np.prod(num_tensors2)   # 5 * 2 = 10 chunks
+        elements_per_chunk = np.prod(interface2.tDim)  # 3 * 5 = 15
+        total_elements = chunks_total * elements_per_chunk  # 10 * 15 = 150
+        assert original_elements == total_elements
+        
+        # Example 3: Simple 1D case - tensor [1500] with tDim=[50] 
         interface3 = DataflowInterface.from_tensor_chunking(
             name="example3",
             interface_type=DataflowInterfaceType.INPUT,
@@ -647,7 +689,10 @@ class TestTensorChunking:
             dtype=dtype
         )
         
-        assert interface3.qDim == [30]  # 1500 // 50 = 30
+        assert interface3.qDim == [1500]  # original_shape preserved as qDim
+        # num_tensors should be 1500 // 50 = 30
+        num_tensors3 = interface3.get_num_tensors()
+        assert num_tensors3 == [30]
         assert interface3.tDim == [50]
         
         # Validate reconstruction

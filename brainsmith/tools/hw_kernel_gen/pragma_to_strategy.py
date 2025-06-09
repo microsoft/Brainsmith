@@ -7,7 +7,7 @@ and dataflow (computational) layers.
 """
 
 from typing import Dict, Any, Optional
-from brainsmith.dataflow.core.chunking_strategy import (
+from brainsmith.dataflow.core.tensor_chunking import (
     ChunkingStrategy, default_chunking, index_chunking, last_dim_chunking, 
     spatial_chunking, FullTensorChunkingStrategy
 )
@@ -264,7 +264,7 @@ def generate_strategy_code(strategy: ChunkingStrategy) -> str:
     Returns:
         Python code string for creating the strategy
     """
-    from brainsmith.dataflow.core.chunking_strategy import (
+    from brainsmith.dataflow.core.tensor_chunking import (
         DefaultChunkingStrategy, IndexBasedChunkingStrategy, FullTensorChunkingStrategy
     )
     

@@ -25,7 +25,7 @@ instantiates the HWCustomOp with actual tensor shapes from the ModelWrapper.
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
-from brainsmith.dataflow.core.chunking_strategy import index_chunking, default_chunking, last_dim_chunking
+from brainsmith.dataflow.core.tensor_chunking import index_chunking, default_chunking, last_dim_chunking
 
 
 class {{ class_name }}(AutoHWCustomOp):

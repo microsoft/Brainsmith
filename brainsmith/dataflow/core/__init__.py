@@ -16,8 +16,8 @@ from .dataflow_interface import (
     RangeConstraint,
 )
 from .dataflow_model import DataflowModel
-from .tensor_chunking import TensorChunking
-from .chunking_strategy import (
+from .tensor_chunking import (
+    TensorChunking,
     ChunkingStrategy,
     ChunkingType,
     DefaultChunkingStrategy,

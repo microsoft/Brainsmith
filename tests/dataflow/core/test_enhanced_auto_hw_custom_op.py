@@ -11,7 +11,7 @@ from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import (
     InterfaceMetadata, InterfaceMetadataCollection, DataTypeConstraint, DataflowInterfaceType
 )
-from brainsmith.dataflow.core.chunking_strategy import (
+from brainsmith.dataflow.core.tensor_chunking import (
     default_chunking, index_chunking, last_dim_chunking, DefaultChunkingStrategy, IndexBasedChunkingStrategy
 )
 
@@ -56,9 +56,9 @@ class TestEnhancedAutoHWCustomOp:
             interface_metadata=self.interface_metadata_list
         )
         
-        # Model should not be built initially
-        assert not op._model_built
-        assert op._dataflow_model is None
+        # Model should be built immediately in simplified architecture
+        assert op._dataflow_model is not None
+        assert hasattr(op, '_current_parallelism')
         
         # Interface metadata should be accessible
         assert len(op.interface_metadata.interfaces) == 2
@@ -78,30 +78,24 @@ class TestEnhancedAutoHWCustomOp:
         assert len(metadata.interfaces) == 2
         assert metadata.get_by_name("in0_V_data_V") == self.input_metadata
     
-    def test_lazy_dataflow_model_building(self):
-        """Test that DataflowModel is built lazily on first access."""
+    def test_immediate_dataflow_model_building(self):
+        """Test that DataflowModel is built immediately in simplified architecture."""
         op = AutoHWCustomOp(
             onnx_node=self.mock_onnx_node,
             interface_metadata=self.interface_metadata_list
         )
         
-        # Initially not built
-        assert not op._model_built
+        # Model should be built immediately
+        assert op._dataflow_model is not None
         
-        # Mock the build method to avoid actual tensor chunking
-        mock_model = Mock()
-        mock_model.input_interfaces = []
-        mock_model.output_interfaces = []
-        mock_model.weight_interfaces = []
-        mock_model.config_interfaces = []
-        
-        op._build_dataflow_model = Mock()
-        op._dataflow_model = mock_model
-        op._model_built = True
+        # Should have parallelism tracking
+        assert hasattr(op, '_current_parallelism')
+        assert isinstance(op._current_parallelism, dict)
         
         # Access dataflow_model property - should return the model
         model = op.dataflow_model
-        assert model == mock_model
+        assert model is not None
+        assert model == op._dataflow_model
     
     def test_interface_metadata_collection_access(self):
         """Test access to interface metadata collection."""
@@ -205,28 +199,26 @@ class TestEnhancedAutoHWCustomOp:
                 interface_metadata=duplicate_metadata
             )
     
-    def test_model_invalidation(self):
-        """Test model invalidation functionality."""
+    def test_parallelism_updates(self):
+        """Test parallelism update functionality in simplified architecture."""
         op = AutoHWCustomOp(
             onnx_node=self.mock_onnx_node,
             interface_metadata=self.interface_metadata_list
         )
         
-        # Mock build process
-        op._build_dataflow_model = Mock()
-        mock_model = Mock()
-        op._dataflow_model = mock_model
-        op._model_built = True
+        # Model should be built immediately
+        assert op._dataflow_model is not None
         
-        # Invalidate model
-        op._invalidate_dataflow_model()
-        assert not op._model_built
-        assert op._dataflow_model is None
+        # Test parallelism updates
+        op.update_parallelism(iPar={'in0_V_data_V': 4}, wPar={})
         
-        # Access again should trigger rebuild
-        op._build_dataflow_model = Mock()
-        op._ensure_dataflow_model_built()
-        assert op._build_dataflow_model.called
+        # Should have updated parallelism tracking
+        assert op._current_parallelism['in0_V_data_V_iPar'] == 4
+        
+        # Current parallelism should be accessible
+        current = op.get_current_parallelism()
+        assert 'in0_V_data_V_iPar' in current
+        assert current['in0_V_data_V_iPar'] == 4
     
     def test_required_interface_metadata(self):
         """Test that interface metadata is required."""
@@ -318,18 +310,18 @@ class TestChunkingStrategies:
         strategy = default_chunking()
         qDim, tDim = strategy.compute_chunking([1, 8, 32, 32], "test_interface")
         
-        # Default strategy should preserve tensor shape
-        assert qDim == [1, 1, 1, 1]
-        assert tDim == [1, 8, 32, 32]
+        # In new architecture, qDim preserves original tensor shape
+        assert qDim == [1, 8, 32, 32]  # Original shape preserved
+        assert tDim == [1, 8, 32, 32]  # Default: no chunking
     
     def test_index_based_strategy(self):
         """Test index-based chunking strategy."""
         strategy = index_chunking(-1, [16])
         qDim, tDim = strategy.compute_chunking([1, 8, 32, 32], "test_interface")
         
-        # Should chunk last dimension
-        assert qDim[3] == 2  # 32 // 16
-        assert tDim[3] == 16
+        # In new architecture, qDim preserves original shape, tDim shows chunk size
+        assert qDim == [1, 8, 32, 32]  # Original shape preserved
+        assert tDim[-1] == 16  # Last dimension chunked to size 16
     
     def test_convenience_functions(self):
         """Test convenience chunking functions."""
@@ -339,7 +331,7 @@ class TestChunkingStrategies:
         assert strategy.shape == [8]
         
         # Test spatial_chunking  
-        from brainsmith.dataflow.core.chunking_strategy import spatial_chunking
+        from brainsmith.dataflow.core.tensor_chunking import spatial_chunking
         strategy = spatial_chunking(16, 16)
         assert strategy.start_index == 2
         assert strategy.shape == [16, 16]

@@ -112,8 +112,6 @@ class TestDataflowModel:
         assert len(model.input_interfaces) == 2
         assert len(model.weight_interfaces) == 1
         assert len(model.output_interfaces) == 1
-        assert len(model.config_interfaces) == 0
-        assert len(model.control_interfaces) == 0
         
         # Check correct classification
         input_names = [iface.name for iface in model.input_interfaces]
@@ -150,8 +148,9 @@ class TestDataflowModel:
         # With no weights: eII = cII = 4
         assert intervals.eII["input0"] == expected_cII
         
-        # L = eII * qDim = 4 * 64 = 256
-        expected_L = expected_cII * 64
+        # L = eII * num_tensors = 4 * (64/16) = 4 * 4 = 16
+        num_tensors = 64 // 16  # qDim / tDim = 64 / 16 = 4
+        expected_L = expected_cII * num_tensors
         assert intervals.L == expected_L
     
     def test_unified_initiation_interval_calculation_multi_interface(self):
@@ -176,15 +175,18 @@ class TestDataflowModel:
         assert "input0" in intervals.eII
         assert "input1" in intervals.eII
         
-        # Verify bottleneck analysis
+        # Verify bottleneck analysis with new structure
         bottleneck_analysis = intervals.bottleneck_analysis
         assert "bottleneck_input" in bottleneck_analysis
         assert "bottleneck_eII" in bottleneck_analysis
-        assert "total_inputs" in bottleneck_analysis
-        assert "total_weights" in bottleneck_analysis
+        assert "bottleneck_cII" in bottleneck_analysis
+        assert "interface_counts" in bottleneck_analysis
+        assert "total_cycles_breakdown" in bottleneck_analysis
         
-        assert bottleneck_analysis["total_inputs"] == 2
-        assert bottleneck_analysis["total_weights"] == 1
+        interface_counts = bottleneck_analysis["interface_counts"]
+        assert interface_counts["total_inputs"] == 2
+        assert interface_counts["total_weights"] == 1
+        assert interface_counts["total_outputs"] == 1
     
     def test_parallelism_bounds_generation(self):
         """Test parallelism bounds generation for FINN optimization"""
@@ -206,11 +208,12 @@ class TestDataflowModel:
         assert input0_bounds.max_value == 16  # tDim = 16
         assert len(input0_bounds.divisibility_constraints) > 0
         
-        # Check weights bounds
+        # Check weights bounds (now based on num_tensors instead of qDim)
         weights_bounds = bounds["weights_wPar"]
         assert weights_bounds.interface_name == "weights"
         assert weights_bounds.min_value == 1
-        assert weights_bounds.max_value == 128  # qDim = 128
+        # num_tensors = qDim/tDim = 128/32 = 4, so max_value = np.prod([4]) = 4
+        assert weights_bounds.max_value == 4
     
     def test_bottleneck_analysis(self):
         """Test bottleneck analysis functionality"""
@@ -331,8 +334,10 @@ class TestDataflowModel:
         # eII = cII (no weights) = 4
         assert intervals.eII["only_input"] == 4
         
-        # L = eII * qDim = 4 * 32 = 128
-        assert intervals.L == 128
+        # L = eII * num_tensors = 4 * (32/8) = 4 * 4 = 16
+        num_tensors = 32 // 8  # qDim / tDim = 32 / 8 = 4
+        expected_L = 4 * num_tensors
+        assert intervals.L == expected_L
         
         # Bottleneck should be the only input
         assert intervals.bottleneck_analysis["bottleneck_input"] == "only_input"

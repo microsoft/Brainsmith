@@ -192,7 +192,9 @@ class RTLInterfaceConverter:
         onnx_shape = self.onnx_metadata.get(f"{rtl_interface.name}_shape")
         
         if onnx_layout and onnx_shape:
-            qDim, tDim = self.tensor_chunking.infer_dimensions(onnx_layout, onnx_shape)
+            # In new architecture: qDim = original ONNX shape, tDim = chunking strategy result
+            qDim = list(onnx_shape)  # Preserve original tensor shape
+            tDim = self.tensor_chunking.get_layout_aware_chunking(onnx_shape, onnx_layout)[1]  # Get default chunking
             logger.debug(f"Inferred dimensions from ONNX for '{rtl_interface.name}': qDim={qDim}, tDim={tDim}")
             return qDim, tDim
         
@@ -221,8 +223,10 @@ class RTLInterfaceConverter:
             except Exception as e:
                 logger.warning(f"Failed to infer qDim from ONNX shape for '{rtl_interface.name}': {e}")
         
-        # Fallback to simple qDim calculation
-        return [1] * len(tDim)
+        # Fallback: qDim should be compatible with tDim (preserve divisibility)
+        # In the new architecture, qDim should represent original tensor shape
+        # Use tDim as a reasonable default when ONNX shape is not available
+        return list(tDim)
     
     def _get_default_dimensions(self, rtl_interface: RTLInterface) -> Tuple[List[int], List[int]]:
         """

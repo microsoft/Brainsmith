@@ -92,11 +92,12 @@ class TestRTLInterfaceConverter:
         rtl_interface.name = "in0"
         rtl_interface.metadata = {}
         
-        with patch.object(converter.tensor_chunking, 'infer_dimensions', return_value=([16], [1024])):
-            qDim, tDim = converter._extract_dimensions(rtl_interface, {})
+        qDim, tDim = converter._extract_dimensions(rtl_interface, {})
             
-        assert qDim == [16]
-        assert tDim == [1024]
+        # In the new architecture, qDim should preserve original ONNX shape
+        assert qDim == [1, 16, 32, 32]  # Original ONNX shape preserved
+        assert len(tDim) == 4  # tDim computed from layout-aware chunking
+        assert all(isinstance(dim, int) and dim > 0 for dim in tDim)  # Valid tDim values
     
     def test_dimension_extraction_defaults(self):
         """Test default dimension extraction for interfaces without metadata."""
@@ -200,6 +201,7 @@ class TestRTLInterfaceConverter:
         rtl_interface.type = RTLInterfaceType.AXI_STREAM
         rtl_interface.metadata = {
             "tdim_override": [32],
+            "qdim_override": [32],  # Add qDim override to satisfy validation
             "datatype_constraints": {
                 "base_types": ["INT"],
                 "min_bitwidth": 8,

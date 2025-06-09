@@ -15,11 +15,15 @@ from .validation import ValidationResult, create_validation_result, ValidationEr
 
 @dataclass
 class InitiationIntervals:
-    """Container for initiation interval calculations"""
-    cII: Dict[str, int]  # Per input interface calculation intervals
-    eII: Dict[str, int]  # Per input interface execution intervals
-    L: int               # Overall inference latency
-    bottleneck_analysis: Dict[str, Any]  # Performance bottleneck information
+    """
+    Container for initiation interval and cycle latency calculations.
+    
+    Provides complete cycle timing specification for dataflow operations.
+    """
+    cII: Dict[str, int]  # Calculation Initiation Interval per input interface
+    eII: Dict[str, int]  # Execution Initiation Interval per input interface  
+    L: int               # Overall inference cycle latency (total cycles for complete operation)
+    bottleneck_analysis: Dict[str, Any]  # Detailed performance bottleneck information
 
 @dataclass 
 class ParallelismBounds:
@@ -66,8 +70,7 @@ class DataflowModel:
         return {
             "input_count": len(self.input_interfaces),
             "output_count": len(self.output_interfaces),
-            "weight_count": len(self.weight_interfaces),
-            "config_count": len(self.config_interfaces)
+            "weight_count": len(self.weight_interfaces)
         }
     
     @property
@@ -88,17 +91,6 @@ class DataflowModel:
         return [iface for iface in self.interfaces.values() 
                 if iface.interface_type == DataflowInterfaceType.WEIGHT]
     
-    @property
-    def config_interfaces(self) -> List[DataflowInterface]:
-        """All CONFIG type interfaces"""
-        return [iface for iface in self.interfaces.values() 
-                if iface.interface_type == DataflowInterfaceType.CONFIG]
-    
-    @property
-    def control_interfaces(self) -> List[DataflowInterface]:
-        """All CONTROL type interfaces"""
-        return [iface for iface in self.interfaces.values() 
-                if iface.interface_type == DataflowInterfaceType.CONTROL]
     
     def calculate_initiation_intervals(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> InitiationIntervals:
         """
@@ -136,7 +128,7 @@ class DataflowModel:
             input_if_copy = self._copy_interface_with_parallelism(input_if, input_parallelism, None)
             
             # Calculate cII for this input: cII_i = ∏(tDim_i / sDim_i)
-            cII_per_input[input_name] = self._calculate_cII(input_if_copy)
+            cII_per_input[input_name] = input_if_copy.calculate_cII()
             
             # Find maximum weight constraint for this input
             max_weight_cycles = 1
@@ -161,8 +153,9 @@ class DataflowModel:
         bottleneck_input_name = max(eII_per_input.keys(), key=lambda name: eII_per_input[name])
         bottleneck_input = self.interfaces[bottleneck_input_name]
         
-        # L = eII_bottleneck * ∏(qDim_bottleneck)
-        L = eII_per_input[bottleneck_input_name] * np.prod(bottleneck_input.qDim)
+        # L = eII_bottleneck * num_tensors_bottleneck  
+        num_tensors = np.prod(bottleneck_input.get_num_tensors())
+        L = eII_per_input[bottleneck_input_name] * num_tensors
         
         # Update output stream dimensions based on bottleneck
         bottleneck_parallelism = iPar.get(bottleneck_input_name, 1)
@@ -171,9 +164,21 @@ class DataflowModel:
         bottleneck_analysis = {
             "bottleneck_input": bottleneck_input_name,
             "bottleneck_eII": eII_per_input[bottleneck_input_name],
+            "bottleneck_cII": cII_per_input[bottleneck_input_name], 
+            "bottleneck_num_tensors": num_tensors,
             "bottleneck_qDim": bottleneck_input.qDim,
-            "total_inputs": len(input_interfaces),
-            "total_weights": len(weight_interfaces)
+            "bottleneck_tDim": bottleneck_input.tDim,
+            "bottleneck_sDim": bottleneck_input.sDim,
+            "total_cycles_breakdown": {
+                "tensor_processing_cycles": eII_per_input[bottleneck_input_name],
+                "total_tensor_chunks": num_tensors,
+                "total_inference_cycles": L
+            },
+            "interface_counts": {
+                "total_inputs": len(input_interfaces),
+                "total_outputs": len(output_interfaces),
+                "total_weights": len(weight_interfaces)
+            }
         }
         
         return InitiationIntervals(
@@ -222,20 +227,14 @@ class DataflowModel:
         
         return weight_if
     
-    def _calculate_cII(self, interface: DataflowInterface) -> int:
-        """Calculate calculation initiation interval for an interface"""
-        cII = 1
-        for tdim, sdim in zip(interface.tDim, interface.sDim):
-            if sdim > 0:
-                cII *= tdim // sdim
-        return max(cII, 1)
     
     def _calculate_weight_cycles(self, weight_if: DataflowInterface, weight_parallelism: int) -> int:
-        """Calculate weight loading cycles"""
+        """Calculate weight loading cycles based on number of weight tensors to process"""
         weight_cycles = 1
-        for qdim in weight_if.qDim:
+        num_tensors = weight_if.get_num_tensors()
+        for num_tensor in num_tensors:
             if weight_parallelism > 0:
-                weight_cycles *= (qdim + weight_parallelism - 1) // weight_parallelism
+                weight_cycles *= (num_tensor + weight_parallelism - 1) // weight_parallelism
         return max(weight_cycles, 1)
     
     def _update_output_stream_dimensions(self, output_interfaces: List[DataflowInterface],
@@ -293,12 +292,13 @@ class DataflowModel:
         # Calculate bounds for weight interfaces (wPar)  
         for weight_if in self.weight_interfaces:
             min_val = 1
-            max_val = np.prod(weight_if.qDim) if weight_if.qDim else 1
+            num_tensors = weight_if.get_num_tensors()
+            max_val = np.prod(num_tensors) if num_tensors else 1
             
-            # Divisibility constraints: wPar must divide qDim values
+            # Divisibility constraints: wPar must divide num_tensors values
             divisibility = []
-            for qdim in weight_if.qDim:
-                divisors = [i for i in range(1, qdim + 1) if qdim % i == 0]
+            for num_tensor in num_tensors:
+                divisors = [i for i in range(1, num_tensor + 1) if num_tensor % i == 0]
                 divisibility.extend(divisors)
             
             bounds[f"{weight_if.name}_wPar"] = ParallelismBounds(
