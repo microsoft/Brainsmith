@@ -3,6 +3,59 @@
 
 ---
 
+## 🔬 Dataflow Design Ethos
+
+### Component Hierarchy (Fundamental to Brainsmith)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 DATAFLOW ACCELERATOR                    │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │                DATAFLOW CORE                        │ │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │ │
+│  │  │ HW KERNEL   │─▶│ HW KERNEL   │─▶│ HW KERNEL   │ │ │
+│  │  │ (MatMul)    │  │ (Threshold) │  │ (LayerNorm) │ │ │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘ │ │
+│  │           ▲                ▲                ▲       │ │
+│  │           │                │                │       │ │
+│  │      ┌─────────┐    ┌─────────┐    ┌─────────┐     │ │
+│  │      │Parameters│    │Parameters│    │Parameters│     │ │
+│  │      │PE, SIMD  │    │PE, Steps │    │PE, SIMD  │     │ │
+│  │      └─────────┘    └─────────┘    └─────────┘     │ │
+│  └─────────────────────────────────────────────────────┘ │
+│                            │                             │
+│                    ┌─────────────┐                      │
+│                    │   Shell     │                      │
+│                    │ Integration │                      │
+│                    └─────────────┘                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### FINN Integration Model
+
+**FINN Builder Role**: Optimizes within the *search space* - implementation variations of a given architecture
+**Brainsmith DSE Role**: Optimizes within the *design space* - architectural choices and strategies
+
+| FINN Search Space | Brainsmith Design Space |
+|-------------------|-------------------------|
+| Network optimizations | Platform selection |
+| FIFO sizing | Kernel implementations |
+| Kernel parallelism | DSE model transforms |
+| Kernel variations | DSE HW transforms |
+
+### Dataflow Accelerator Design Philosophy
+
+Brainsmith is fundamentally designed around **dataflow accelerator principles** where:
+
+- **Hardware Kernels** are the atomic units of computation (e.g., MatMul, Thresholding, LayerNorm)
+- **Dataflow Cores** are composed by connecting kernels in a streaming pipeline
+- **Parameters** (PE, SIMD, Steps) control the parallelism and resource utilization of each kernel
+- **Shell Integration** provides the interface between the dataflow core and the FPGA platform
+
+This hierarchy maps directly to FINN's architecture, where Brainsmith orchestrates the higher-level design decisions while FINN handles the low-level implementation details.
+
+---
+
 ## 📋 Architectural Overview
 
 ### High-Level System Architecture
@@ -50,6 +103,7 @@
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
 │  │      FINN       │  │   External DSE  │  │   Custom Tools  │ │
 │  │   Interface     │  │   Frameworks    │  │   Integration   │ │
+│  │  (Primary)      │  │   (Secondary)   │  │   (Optional)    │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -58,16 +112,35 @@
 
 ## 🎯 Design Principles
 
-### 1. Modularity and Separation of Concerns
+### 1. FINN-Centric Design
+
+Brainsmith is fundamentally designed as a **wrapper and extension of FINN**:
+
+```python
+# FINN-first architecture principle
+class BrainsmithCore:
+    def __init__(self):
+        self.finn_interface = FINNInterface()  # Primary integration
+        self.dataflow_builder = DataflowCoreBuilder()
+        self.kernel_library = HardwareKernelLibrary()
+```
+
+**Benefits:**
+- Leverage FINN's proven dataflow acceleration capabilities
+- Build on established hardware kernel implementations
+- Maintain compatibility with FINN ecosystem
+- Focus on higher-level optimization rather than reimplementation
+
+### 2. Modularity and Separation of Concerns
 
 Each component has clearly defined responsibilities and interfaces:
 
 ```python
-# Clear component boundaries
+# Clear component boundaries with dataflow focus
 class APILayer:           # User interface and request handling
-class CoreOrchestration:  # Workflow coordination and management  
-class DSEEngine:          # Optimization algorithm execution
-class LibraryEcosystem:   # Specialized functionality modules
+class CoreOrchestration:  # Dataflow workflow coordination and management  
+class DSEEngine:          # Dataflow optimization algorithm execution
+class LibraryEcosystem:   # Specialized dataflow functionality modules
 class Infrastructure:     # Common services and utilities
 ```
 
@@ -75,54 +148,58 @@ class Infrastructure:     # Common services and utilities
 - Independent development and testing
 - Easy maintenance and debugging
 - Clear upgrade and extension paths
-- Reusable components across projects
+- Reusable components across dataflow projects
 
-### 2. Extensibility Through Interfaces
+### 3. Extensibility Through Interfaces
 
 All major components implement well-defined interfaces:
 
 ```python
-# Example: Library interface for extensions
-class LibraryInterface(ABC):
+# Example: Library interface for dataflow extensions
+class DataflowLibraryInterface(ABC):
     @abstractmethod
-    def get_capabilities(self) -> Dict[str, str]:
+    def get_dataflow_capabilities(self) -> Dict[str, str]:
         pass
     
     @abstractmethod  
-    def configure(self, config: Dict[str, Any]) -> bool:
+    def configure_for_dataflow(self, config: Dict[str, Any]) -> bool:
         pass
     
     @abstractmethod
-    def execute(self, inputs: Any) -> Any:
+    def execute_dataflow_operation(self, inputs: Any) -> Any:
         pass
 ```
 
 **Extension Points:**
-- New optimization strategies
-- Custom analysis algorithms
-- Additional transformation libraries
-- External tool integrations
+- New dataflow optimization strategies
+- Custom dataflow analysis algorithms
+- Additional hardware kernel libraries
+- FINN integration enhancements
 
-### 3. Backward Compatibility
+### 4. Backward Compatibility
 
 Legacy API preservation with automatic routing:
 
 ```python
-# Legacy function automatically routes to new implementation
+# Legacy function automatically routes to new dataflow implementation
 def explore_design_space(*args, **kwargs):
-    # Automatic parameter translation
-    enhanced_config = translate_legacy_params(args, kwargs)
-    # Route to enhanced implementation
+    # Automatic parameter translation for dataflow context
+    enhanced_config = translate_legacy_params_for_dataflow(args, kwargs)
+    # Route to enhanced dataflow implementation
     return brainsmith_explore(enhanced_config)
 ```
 
-### 4. Configuration-Driven Behavior
+### 5. Configuration-Driven Behavior
 
 Minimize hard-coded behavior through comprehensive configuration:
 
 ```yaml
-# Example configuration structure
+# Example dataflow configuration structure
 brainsmith:
+  dataflow:
+    finn_integration: true
+    kernel_library: "standard"
+    core_builder: "automatic"
   dse:
     strategy: "adaptive"
     max_evaluations: 100
@@ -154,7 +231,7 @@ The API layer provides multiple interfaces for different user needs:
 │  │  • Legacy API compatibility checking                │ │
 │  │  • Parameter translation and validation             │ │
 │  │  • Enhanced API feature detection                   │ │
-│  │  • Error handling and response formatting           │ │
+│  │  • Dataflow-specific error handling                 │ │
 │  └─────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │                  Interface Types                        │
@@ -179,15 +256,15 @@ Central coordination of platform operations:
 │                 Blueprint Manager                       │
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │  • YAML configuration loading and validation        │ │
-│  │  • Template expansion and parameter substitution    │ │
-│  │  │  • Design space specification translation        │ │
-│  │  • Multi-model support and library mapping         │ │
+│  │  • Dataflow template expansion and substitution     │ │
+│  │  • Design space specification translation            │ │
+│  │  • Multi-model support and kernel library mapping   │ │
 │  └─────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │               Design Space Orchestrator                 │
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │  • Parameter space construction and validation       │ │
-│  │  • Design point generation and management           │ │
+│  │  • Dataflow design point generation and management  │ │
 │  │  • Constraint checking and feasibility analysis     │ │
 │  │  • Result aggregation and analysis coordination     │ │
 │  └─────────────────────────────────────────────────────┘ │
@@ -195,7 +272,7 @@ Central coordination of platform operations:
 │                 Workflow Manager                        │
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │  • Task scheduling and dependency management        │ │
-│  │  • Library coordination and data flow               │ │
+│  │  • FINN integration and dataflow coordination       │ │
 │  │  • Error recovery and retry logic                   │ │
 │  │  • Progress tracking and status reporting           │ │
 │  └─────────────────────────────────────────────────────┘ │
@@ -226,7 +303,7 @@ Advanced optimization and search capabilities:
 │  │  Automatic recommendation based on:                 │ │
 │  │  • Problem size (parameter count, evaluation budget)│ │
 │  │  • Objective count (single vs multi-objective)     │ │
-│  │  • Search space characteristics                     │ │
+│  │  • Dataflow search space characteristics            │ │
 │  │  • Computational constraints                        │ │
 │  └─────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
@@ -251,8 +328,8 @@ Advanced optimization and search capabilities:
 │   User      │───▶│   API       │───▶│ Blueprint   │
 │   Request   │    │   Layer     │    │ Manager     │
 └─────────────┘    └─────────────┘    └─────────────┘
-                                             │
-                                             ▼
+                                              │
+                                              ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Results   │◀───│ Workflow    │◀───│ Design Space│
 │ & Reports   │    │ Manager     │    │Orchestrator │
@@ -266,38 +343,48 @@ Advanced optimization and search capabilities:
        ▲                  │                   │
        │                  ▼                   ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Metrics &   │◀───│ Transform & │◀───│ Design      │
-│ Performance │    │ HW Optim    │    │ Points      │
+│ Metrics &   │◀───│ Transform & │◀───│ Dataflow    │
+│ Performance │    │ HW Optim    │    │ Design Pts  │
 └─────────────┘    └─────────────┘    └─────────────┘
+       ▲                  │
+       │                  ▼
+┌─────────────┐    ┌─────────────┐
+│ FINN        │◀───│ FINN        │
+│ Results     │    │ Interface   │
+└─────────────┘    └─────────────┘
 ```
 
 ### Data Types and Structures
 
 #### Configuration Data
 ```python
-# Hierarchical configuration structure
+# Hierarchical configuration structure with dataflow focus
 BrainsmithConfig = {
     'blueprint': str,           # Blueprint identifier
     'model': ModelConfig,       # Model specification
     'targets': TargetConfig,    # Performance targets
+    'dataflow': DataflowConfig, # Dataflow-specific settings
     'dse': DSEConfig,          # Optimization settings
     'libraries': LibraryConfig, # Library configurations
+    'finn': FINNConfig,        # FINN integration settings
     'output': OutputConfig      # Result settings
 }
 ```
 
 #### Design Space Data
 ```python
-# Design space representation
-DesignSpace = {
+# Design space representation for dataflow accelerators
+DataflowDesignSpace = {
     'parameters': Dict[str, ParameterDefinition],
     'constraints': List[Constraint],
     'objectives': List[Objective],
+    'kernel_requirements': List[KernelRequirement],
     'metadata': Dict[str, Any]
 }
 
-DesignPoint = {
+DataflowDesignPoint = {
     'parameters': Dict[str, Any],
+    'finn_config': FINNBuildConfig,
     'results': Dict[str, Any],
     'objectives': Dict[str, float],
     'metadata': Dict[str, Any]
@@ -306,13 +393,15 @@ DesignPoint = {
 
 #### Result Data
 ```python
-# Comprehensive result structure
+# Comprehensive result structure with dataflow focus
 BrainsmithResult = {
     'success': bool,
     'build_time': float,
+    'finn_build_result': FINNBuildResult,
     'metrics': BrainsmithMetrics,
-    'design_point': DesignPoint,
+    'design_point': DataflowDesignPoint,
     'artifacts': Dict[str, str],
+    'dataflow_analysis': DataflowAnalysis,
     'errors': List[str],
     'warnings': List[str]
 }
@@ -363,12 +452,12 @@ class DSEStrategy(ABC):
     """Base interface for design space exploration strategies."""
     
     @abstractmethod
-    def suggest(self, n_points: int) -> List[DesignPoint]:
-        """Suggest next design points to evaluate."""
+    def suggest(self, n_points: int) -> List[DataflowDesignPoint]:
+        """Suggest next dataflow design points to evaluate."""
         pass
     
     @abstractmethod
-    def update(self, point: DesignPoint, results: Dict[str, Any]):
+    def update(self, point: DataflowDesignPoint, results: Dict[str, Any]):
         """Update strategy with evaluation results."""
         pass
     
@@ -385,9 +474,9 @@ class DSEStrategy(ABC):
 ### Performance Optimization
 
 - **Lazy Loading**: Components loaded only when needed
-- **Caching**: Expensive computations cached for reuse
-- **Parallel Execution**: Multi-threaded evaluation support
-- **Memory Management**: Efficient data structure usage
+- **Caching**: Expensive FINN computations cached for reuse
+- **Parallel Execution**: Multi-threaded dataflow evaluation support
+- **Memory Management**: Efficient data structure usage for large design spaces
 
 ### Extensibility Patterns
 
@@ -395,6 +484,7 @@ class DSEStrategy(ABC):
 - **Event System**: Loose coupling through event-driven communication
 - **Configuration Injection**: Runtime behavior modification
 - **Interface Versioning**: Backward compatible evolution
+- **FINN Integration Points**: Well-defined extension points for FINN enhancements
 
 ---
 

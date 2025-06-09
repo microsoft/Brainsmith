@@ -3,14 +3,241 @@
 
 ---
 
+## 🔧 Hardware Kernel Library (Core Component)
+
+### Kernel-Centric Architecture
+
+The Brainsmith platform centers around a **Hardware Kernel Library** that provides:
+
+- **FINN-Integrated Kernels**: Leverages FINN's existing kernel implementations (e.g., thresholding example)
+- **Kernel Registration**: Management system for indexing available HW kernels
+- **Kernel Selection Logic**: Automatic selection based on model requirements and performance targets
+- **Kernel Composition**: Automated dataflow core construction from kernel graphs
+- **Performance Models**: Analytical models for kernel performance prediction
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              HARDWARE KERNEL LIBRARY                    │
+├─────────────────────────────────────────────────────────┤
+│                 Operator Kernels                        │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │
+│  │   MatMul    │ │ Thresholding│ │ LayerNorm   │       │
+│  │   Kernels   │ │   Kernels   │ │   Kernels   │       │
+│  │             │ │             │ │             │       │
+│  │ • RTL impl  │ │ • RTL impl  │ │ • RTL impl  │       │
+│  │ • HLS impl  │ │ • HLS impl  │ │ • HLS impl  │       │
+│  │ • Params    │ │ • Params    │ │ • Params    │       │
+│  └─────────────┘ └─────────────┘ └─────────────┘       │
+├─────────────────────────────────────────────────────────┤
+│            Kernel Registration & Management             │
+│  • FINN kernel indexing and discovery                   │
+│  • Performance requirement mapping                      │
+│  • Resource constraint evaluation                       │
+│  • Automated kernel graph construction                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### FINN Kernel Integration
+
+Based on the thresholding kernel example, HW kernels in Brainsmith are **highly dependent on FINN** and include:
+
+- **Python Interface** (`thresholding.py`): FINN HWCustomOp abstraction layer
+- **RTL Implementation** (`thresholding.sv`): Core SystemVerilog implementation  
+- **AXI Interface** (`thresholding_axi.sv`): AXI stream and AXI-lite wrapper
+- **RTL Backend** (`thresholding_rtl.py`): Integration with FINN build flow
+- **Template System** (`thresholding_template_wrapper.v`): Parameterized instantiation
+
+The Brainsmith improvement would focus on **better registration and management** to index all available HW kernels rather than reimplementing this foundational system.
+
+### Hardware Kernel Library Implementation
+
+```python
+class HardwareKernelLibrary(LibraryInterface):
+    """Central repository and management system for FINN-based hardware kernels."""
+    
+    def __init__(self):
+        self.kernel_registry = {}
+        self.performance_models = {}
+        self.finn_integration = FINNKernelIntegration()
+        self._discover_finn_kernels()
+    
+    def get_capabilities(self) -> Dict[str, str]:
+        """Return hardware kernel capabilities."""
+        return {
+            'kernel_discovery': 'Automatic discovery of available FINN kernels',
+            'kernel_registration': 'Registration and indexing of HW kernels',
+            'performance_modeling': 'Analytical performance prediction for kernels',
+            'kernel_selection': 'Automatic kernel selection for model requirements',
+            'dataflow_composition': 'Automated dataflow core construction',
+            'finn_integration': 'Deep integration with FINN kernel infrastructure'
+        }
+    
+    def discover_finn_kernels(self, finn_path: str) -> List[FINNKernelInfo]:
+        """Discover available FINN kernels from installation."""
+        discovered_kernels = []
+        
+        # Scan FINN installation for custom ops and backends
+        custom_ops_path = os.path.join(finn_path, "src/finn/custom_op")
+        
+        for op_dir in os.listdir(custom_ops_path):
+            op_path = os.path.join(custom_ops_path, op_dir)
+            if os.path.isdir(op_path):
+                kernel_info = self._analyze_finn_kernel(op_path)
+                if kernel_info:
+                    discovered_kernels.append(kernel_info)
+                    self.register_kernel(kernel_info)
+        
+        return discovered_kernels
+    
+    def register_kernel(self, kernel_info: FINNKernelInfo):
+        """Register a FINN kernel with performance characterization."""
+        self.kernel_registry[kernel_info.name] = kernel_info
+        
+        # Build performance model
+        perf_model = self._build_performance_model(kernel_info)
+        self.performance_models[kernel_info.name] = perf_model
+    
+    def select_kernels_for_model(self, model_graph: ModelGraph, 
+                                targets: PerformanceTargets) -> KernelSelectionPlan:
+        """Select optimal kernels for model implementation."""
+        selection_plan = KernelSelectionPlan()
+        
+        # Analyze model requirements
+        for node in model_graph.nodes:
+            # Find compatible kernels
+            compatible_kernels = self._find_compatible_kernels(node)
+            
+            # Evaluate performance vs requirements
+            best_kernel = self._select_best_kernel(
+                compatible_kernels, targets, node
+            )
+            
+            selection_plan.add_kernel_assignment(node, best_kernel)
+        
+        return selection_plan
+    
+    def _analyze_finn_kernel(self, kernel_path: str) -> Optional[FINNKernelInfo]:
+        """Analyze FINN kernel implementation structure."""
+        # Look for key files that indicate FINN kernel structure
+        python_impl = os.path.join(kernel_path, f"{os.path.basename(kernel_path)}.py")
+        
+        if os.path.exists(python_impl):
+            # Extract kernel metadata
+            kernel_info = FINNKernelInfo(
+                name=os.path.basename(kernel_path),
+                operator_type=self._extract_operator_type(python_impl),
+                implementation_files=self._scan_implementation_files(kernel_path),
+                parameterization=self._extract_parameterization(python_impl),
+                finn_integration=True
+            )
+            return kernel_info
+        
+        return None
+
+class FINNKernelInfo:
+    """Information about a FINN kernel implementation."""
+    
+    def __init__(self, name: str, operator_type: str, 
+                 implementation_files: Dict[str, str],
+                 parameterization: FINNParameterizationInterface,
+                 finn_integration: bool = True):
+        self.name = name
+        self.operator_type = operator_type
+        self.implementation_files = implementation_files
+        self.parameterization = parameterization
+        self.finn_integration = finn_integration
+        
+        # FINN-specific attributes
+        self.rtl_files = self._extract_rtl_files()
+        self.hls_files = self._extract_hls_files()
+        self.template_files = self._extract_template_files()
+    
+    def estimate_performance(self, parameters: Dict[str, Any], 
+                           platform: Platform) -> PerformanceEstimate:
+        """Estimate performance using FINN kernel models."""
+        # Use FINN's performance modeling if available
+        if self.finn_integration:
+            return self._finn_performance_estimate(parameters, platform)
+        else:
+            return self._analytical_performance_estimate(parameters, platform)
+    
+    def generate_finn_config(self, parameters: Dict[str, Any]) -> FINNKernelConfig:
+        """Generate FINN-specific configuration for kernel instantiation."""
+        return FINNKernelConfig(
+            kernel_name=self.name,
+            operator_type=self.operator_type,
+            parameters=self.parameterization.convert_to_finn_params(parameters),
+            implementation_backend=parameters.get('backend', 'rtl'),
+            resource_targets=parameters.get('resource_targets', {})
+        )
+    
+    def _extract_rtl_files(self) -> List[str]:
+        """Extract RTL implementation files."""
+        rtl_files = []
+        for file_type, file_path in self.implementation_files.items():
+            if file_type.endswith('.sv') or file_type.endswith('.v'):
+                rtl_files.append(file_path)
+        return rtl_files
+    
+    def _extract_hls_files(self) -> List[str]:
+        """Extract HLS implementation files."""
+        hls_files = []
+        for file_type, file_path in self.implementation_files.items():
+            if file_type.endswith('.cpp') or file_type.endswith('.hpp'):
+                hls_files.append(file_path)
+        return hls_files
+
+class DataflowCoreBuilder:
+    """Automated construction of dataflow cores from kernel selections."""
+    
+    def __init__(self, kernel_library: HardwareKernelLibrary):
+        self.kernel_library = kernel_library
+        self.finn_builder_interface = FINNBuilderInterface()
+    
+    def build_dataflow_core(self, kernel_plan: KernelSelectionPlan, 
+                           model_graph: ModelGraph) -> DataflowCoreConfig:
+        """Build complete dataflow core from kernel selection plan."""
+        
+        # Generate FINN configuration from kernel plan
+        finn_config = self._generate_finn_config(kernel_plan)
+        
+        # Configure dataflow pipeline
+        dataflow_config = DataflowCoreConfig(
+            kernels=kernel_plan.get_kernel_assignments(),
+            finn_config=finn_config,
+            model_graph=model_graph,
+            interconnect=self._design_interconnect(kernel_plan),
+            resource_allocation=self._compute_resource_allocation(kernel_plan)
+        )
+        
+        return dataflow_config
+    
+    def _generate_finn_config(self, kernel_plan: KernelSelectionPlan) -> FINNBuildConfig:
+        """Generate FINN build configuration from kernel selection."""
+        finn_config = FINNBuildConfig()
+        
+        for node, kernel_info in kernel_plan.get_kernel_assignments().items():
+            # Convert kernel parameters to FINN format
+            kernel_config = kernel_info.generate_finn_config(
+                kernel_plan.get_parameters(node)
+            )
+            finn_config.add_kernel_config(node.name, kernel_config)
+        
+        return finn_config
+```
+
+---
+
 ## 🎯 Library System Overview
 
 The Brainsmith library ecosystem provides a modular, extensible architecture for incorporating specialized functionality. Each library focuses on a specific aspect of FPGA accelerator design while maintaining consistent interfaces and integration patterns.
 
 ### Design Philosophy
 
+- **Kernel-Centric Design**: Hardware kernels are the fundamental building blocks
 - **Specialization**: Each library focuses on a specific domain (transforms, optimization, analysis)
 - **Modularity**: Libraries can be developed, tested, and deployed independently
+- **FINN Integration**: Deep integration with FINN's kernel and build infrastructure
 - **Extensibility**: New libraries can be easily added through standardized interfaces
 - **Interoperability**: Libraries share data and coordinate through well-defined protocols
 
@@ -46,13 +273,18 @@ The Brainsmith library ecosystem provides a modular, extensible architecture for
 ├─────────────────────────────────────────────────────────┤
 │               Specialized Libraries                     │
 │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────┐ │
-│  │   Transforms    │ │ HW Optimization │ │   Analysis  │ │
-│  │    Library      │ │     Library     │ │   Library   │ │
-│  │                 │ │                 │ │             │ │
-│  │ Domain: Model   │ │ Domain: Hardware│ │ Domain: Eval│ │
-│  │ transformation  │ │ optimization    │ │ & reporting │ │
-│  │ and preparation │ │ and tuning      │ │ & analysis  │ │
+│  │ Hardware Kernel │ │   Transforms    │ │HW Optim     │ │
+│  │    Library      │ │    Library      │ │ Library     │ │
+│  │   (Primary)     │ │                 │ │             │ │
+│  │ Domain: FINN    │ │ Domain: Model   │ │Domain: Multi│ │
+│  │ kernel mgmt &   │ │ transformation  │ │ objective   │ │
+│  │ dataflow cores  │ │ and preparation │ │optimization │ │
 │  └─────────────────┘ └─────────────────┘ └─────────────┘ │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │              Analysis Library                       │ │
+│  │              Domain: Evaluation & reporting         │ │
+│  │              & performance analysis                 │ │
+│  └─────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 

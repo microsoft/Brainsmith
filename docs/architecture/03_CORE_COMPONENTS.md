@@ -3,6 +3,149 @@
 
 ---
 
+## 🔍 Search Space vs Design Space Architecture
+
+### Conceptual Distinction
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                BRAINSMITH DESIGN SPACE                  │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │              Architecture Choices                   │ │
+│  │  • Platform selection (board, FPGA part)            │ │
+│  │  • Kernel implementation choices                    │ │
+│  │  • DSE strategies and transforms                    │ │
+│  │  • High-level parallelism parameters               │ │
+│  └─────────────────────────────────────────────────────┘ │
+│                            │                             │
+│                            ▼                             │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │               FINN SEARCH SPACE                     │ │
+│  │  • Network-level optimizations                      │ │
+│  │  • FIFO depth sizing                               │ │
+│  │  • Kernel parallelism tuning (PE, SIMD)            │ │
+│  │  • Implementation variations (RTL vs HLS)           │ │
+│  └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Optimization Point Mapping
+
+| Level | Responsibility | Examples |
+|-------|----------------|----------|
+| **Global Design Space (Brainsmith)** | Architecture exploration | Platform selection, kernel choices |
+| **Local Search Space (FINN)** | Implementation optimization | PE/SIMD tuning, FIFO sizing |
+
+### Design Space Hierarchy
+
+The fundamental distinction between Brainsmith's **design space** and FINN's **search space** is critical to understanding the platform architecture:
+
+**Brainsmith Design Space (Higher-level)**:
+- **Architectural Decisions**: Which FPGA platform to target, which dataflow kernel implementations to use
+- **DSE Strategy Selection**: Which optimization algorithms to apply at different stages
+- **Model Transform Sequences**: High-level decisions about quantization, folding strategies
+- **Resource Allocation**: How to distribute computational resources across the dataflow pipeline
+
+**FINN Search Space (Lower-level)**:
+- **Implementation Parameters**: PE and SIMD factors for individual kernels
+- **Network Optimization**: FINN's model transformations and streamlining
+- **Hardware Generation**: RTL vs HLS backend choices, FIFO depth optimization
+- **Build Configuration**: Tool-specific settings for synthesis and implementation
+
+---
+
+## 🔌 FINN Integration Layer (Primary Interface)
+
+### Future FINN Interface Architecture
+
+Brainsmith is designed to interface with FINN through four key input categories:
+
+```python
+@dataclass
+class FINNInterfaceConfig:
+    """Future FINN interface configuration as specified in vision."""
+    
+    # 1. Model Ops - ONNX node handling and frontend processing
+    model_ops: ModelOpsConfig = field(default_factory=ModelOpsConfig)
+    
+    # 2. Model Transforms - Network topology optimization  
+    model_transforms: ModelTransformsConfig = field(default_factory=ModelTransformsConfig)
+    
+    # 3. HW Kernels - Available kernel implementations and priorities
+    hw_kernels: HwKernelsConfig = field(default_factory=HwKernelsConfig)
+    
+    # 4. HW Optimization - Automatic parameter optimization algorithms
+    hw_optimization: HwOptimizationConfig = field(default_factory=HwOptimizationConfig)
+
+class ModelOpsConfig:
+    """Configuration for ONNX operator support and frontend processing."""
+    supported_ops: List[str]
+    custom_ops: Dict[str, str]  # Custom operator definitions
+    cleanup_transforms: List[str]
+
+class ModelTransformsConfig:
+    """Network topology optimization configuration."""
+    enabled_transforms: List[str]
+    transform_sequence: List[str]
+    optimization_targets: Dict[str, float]
+
+class HwKernelsConfig:
+    """Hardware kernel selection and instantiation."""
+    available_kernels: Dict[str, List[KernelVariant]]
+    selection_priority: Dict[str, str]  # "performance", "resources", "power"
+    custom_kernels: Dict[str, str]
+
+class HwOptimizationConfig:
+    """Hardware parameter optimization algorithms."""
+    folding_strategy: str  # "auto", "manual", "genetic"
+    optimization_objectives: List[str]
+    constraint_specifications: Dict[str, Any]
+```
+
+### Current vs Future Interface
+
+| Current | Future (Vision-Aligned) |
+|---------|-------------------------|
+| Generic DataflowBuildConfig | Structured four-category interface |
+| Custom build steps | Standardized input categories |
+| Limited configurability | Full control over FINN pipeline |
+
+### FINN Integration Workflow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              FINN INTEGRATION WORKFLOW                  │
+├─────────────────────────────────────────────────────────┤
+│                 Brainsmith Layer                        │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │  Design Space Exploration                           │ │
+│  │  • Platform selection                               │ │
+│  │  • Strategy selection                               │ │
+│  │  │  • Transform sequence planning                   │ │
+│  │  • High-level resource allocation                   │ │
+│  └─────────────────────────────────────────────────────┘ │
+│                            │                             │
+│                            ▼                             │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │  FINN Interface Translation                          │ │
+│  │  • Convert Brainsmith design points                 │ │
+│  │  • Map to FINN four-category interface              │ │
+│  │  • Generate FINN build configurations               │ │
+│  └─────────────────────────────────────────────────────┘ │
+│                            │                             │
+│                            ▼                             │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │               FINN Build Execution                   │ │
+│  │  • Model ops processing                             │ │
+│  │  • Transform application                            │ │
+│  │  • HW kernel instantiation                          │ │
+│  │  • HW optimization execution                        │ │
+│  └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 📋 Component Overview
 
 The Brainsmith platform is built on five core component categories, each with specific responsibilities and well-defined interfaces:
@@ -477,8 +620,8 @@ class DSEResult:
 │ Load        │───▶│ Validate    │───▶│ Transform   │───▶│ Compile     │
 │ Blueprint   │    │ Config      │    │ Model       │    │ Hardware    │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                                             │                  │
-                                             ▼                  ▼
+                                              │                  │
+                                              ▼                  ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │ Generate    │◀───│ Collect     │◀───│ Optimize    │◀───│ Synthesize  │
 │ Report      │    │ Metrics     │    │ Design      │    │ & P&R       │
