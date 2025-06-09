@@ -913,7 +913,10 @@ For more information about the framework, see the main documentation.
         except Exception as e:
             print(f"An unexpected error occurred during phase '{name}': {e}")
             # Wrap unexpected errors
-            raise HardwareKernelGeneratorError(f"Unexpected error in phase '{name}': {e}")
+            raise HardwareKernelGeneratorError(
+                message=f"Unexpected error in phase '{name}': {e}",
+                context={'phase': name, 'original_error': str(e)}
+            )
 
 
         print("--- Hardware Kernel Generation Complete ---")

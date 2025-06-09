@@ -124,10 +124,10 @@ This comprehensive documentation suite provides stakeholders with complete infor
 - API Usage: [Developer Integration Guide](03_developer_integration.md#manual-dataflow-modeling)
 - Deep Dive: [Advanced Topics](05_advanced_topics.md#dataflow-modeling-deep-dive)
 
-**Three-Tier Dimension System (qDim/tDim/sDim)**
+**Tensor Chunking System (num_tensors/tDim/sDim)**
 - Overview: [System Architecture](02_system_architecture.md#mathematical-foundation)
 - Usage: [Developer Integration Guide](03_developer_integration.md#manual-dataflow-modeling)
-- Mathematics: [Advanced Topics](05_advanced_topics.md#three-tier-dimension-system-qdimtdimsdim)
+- Mathematics: [Advanced Topics](05_advanced_topics.md#tensor-chunking-system-num_tensors-tdim-sdim)
 - Validation: [Testing & Validation](06_testing_validation.md#functional-validation)
 
 **Hardware Kernel Generator (HKG)**

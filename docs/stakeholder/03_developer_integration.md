@@ -75,19 +75,25 @@ python end2end_bert.py \
 # ✅ Driver files generated: ./output/driver/
 ```
 
-**Custom Hardware Kernel Generation**
+**Custom Hardware Kernel Generation (HKG)**
 ```bash
-# Generate FINN components from RTL specification
+# Generate FINN components from RTL specification (Updated syntax)
+cd examples/thresholding
 python -m brainsmith.tools.hw_kernel_gen.hkg \
-    examples/thresholding/thresholding_axi.sv \
-    examples/thresholding/dummy_compiler_data.py \
-    --output_dir ./generated_components
+    thresholding_axi.sv \
+    dummy_compiler_data.py \
+    -o ./generated
 
-# Generated files:
-# - AutoThresholdingAxi.py (HWCustomOp implementation)
-# - AutoThresholdingAxiRTLBackend.py (RTL backend)
-# - test_auto_thresholding_axi.py (test suite)
-# - README.md (documentation)
+# Expected output:
+# ✅ RTL parsing successful: 4 interfaces detected
+# ✅ Dataflow model built: 0 interfaces converted  
+# ✅ Generated files:
+#   - autothresholdingaxi.py (HWCustomOp)
+#   - autothresholdingaxi_rtlbackend.py (RTL Backend)
+#   - test_autothresholdingaxi.py (Test Suite)
+#   - thresholding_axi_wrapper.v (Verilog Wrapper)
+#   - autothresholdingaxi_README.md (Documentation)
+
 ```
 
 ## Core Workflows
@@ -153,89 +159,98 @@ for component_type, file_path in artifacts.items():
     print(f"  {component_type}: {file_path}")
 ```
 
-**Manual Dataflow Modeling**
+**Using Interface Metadata (Recommended)**
 ```python
-from brainsmith.dataflow import DataflowInterface, DataflowModel
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
+from brainsmith.dataflow.core.chunking_strategy import index_chunking
 
-# Define custom operation interfaces
-input_interface = DataflowInterface(
+# Define interfaces using enhanced metadata system
+input_metadata = InterfaceMetadata(
     name="data_input",
-    interface_type="INPUT",
-    qDim=768,     # Original tensor dimension
-    tDim=32,      # Processing granularity
-    sDim=8,       # Hardware parallelism
-    dtype="INT8"
+    interface_type=DataflowInterfaceType.INPUT,
+    allowed_datatypes=[
+        DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+    ],
+    chunking_strategy=index_chunking(-1, "[96]")  # Runtime-parameterized
 )
 
-output_interface = DataflowInterface(
-    name="data_output", 
-    interface_type="OUTPUT",
-    qDim=768,
-    tDim=32,
-    sDim=8,
-    dtype="INT8"
-)
-
-# Create computational model
-model = DataflowModel(
-    interfaces=[input_interface, output_interface],
-    operation_type="custom_transform"
-)
-
-# Optimize parallelism
-optimal_config = model.optimize_parallelism({
-    'max_luts': 50000,
-    'max_dsps': 200,
-    'target_frequency': 250  # MHz
-})
-
-print(f"Optimal parallelism: {optimal_config}")
+# Use with AutoHWCustomOp for automatic dimension extraction
+class CustomOperation(AutoHWCustomOp):
+    def __init__(self, onnx_node, **kwargs):
+        self._interface_metadata = [input_metadata, output_metadata]
+        # Dimensions automatically extracted from ModelWrapper at runtime
+        super().__init__(onnx_node, interface_metadata=self._interface_metadata, **kwargs)
+        
+    # All FINN methods automatically implemented by base class
+    # - get_input_datatype() ✓ 
+    # - get_output_datatype() ✓
+    # - bram_estimation() ✓
+    # - lut_estimation() ✓  
+    # - dsp_estimation() ✓
+    # - get_exp_cycles() ✓
 ```
 
 ### 3. Custom Operation Development
 
-**Using AutoHWCustomOp Base Class**
+**Advanced AutoHWCustomOp Usage**
 ```python
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
-from brainsmith.dataflow import DataflowModel
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
+from brainsmith.dataflow.core.chunking_strategy import index_chunking
 
 class CustomLayerNorm(AutoHWCustomOp):
-    """Custom layer normalization with specialized optimizations."""
+    """
+    Enhanced layer normalization using AutoHWCustomOp.
+    Demonstrates runtime dimension extraction and automatic optimization.
+    """
     
     def __init__(self, onnx_node, **kwargs):
-        # Create dataflow model for this operation
-        dataflow_model = self._create_layernorm_model()
-        
-        # Initialize with minimal configuration
-        super().__init__(onnx_node, dataflow_model, **kwargs)
-    
-    def _create_layernorm_model(self):
-        """Create specialized dataflow model for layer normalization."""
-        return DataflowModel(
-            interfaces=self._define_interfaces(),
-            operation_type="layer_normalization",
-            performance_characteristics={
-                'cycles_per_sample': 'O(hidden_size / parallelism)',
-                'resource_scaling': 'linear_with_parallelism'
-            }
-        )
-    
-    def _define_interfaces(self):
-        """Define operation-specific interfaces."""
-        return [
-            DataflowInterface(name="input", interface_type="INPUT"),
-            DataflowInterface(name="output", interface_type="OUTPUT"),
-            DataflowInterface(name="scale", interface_type="WEIGHT"),
-            DataflowInterface(name="bias", interface_type="WEIGHT")
+        # Define interface metadata with chunking strategies
+        self._interface_metadata = [
+            InterfaceMetadata(
+                name="input",
+                interface_type=DataflowInterfaceType.INPUT,
+                allowed_datatypes=[
+                    DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+                ],
+                chunking_strategy=index_chunking(-1, "[hidden_size // parallelism]")
+            ),
+            InterfaceMetadata(
+                name="output", 
+                interface_type=DataflowInterfaceType.OUTPUT,
+                allowed_datatypes=[
+                    DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+                ],
+                chunking_strategy=index_chunking(-1, "[hidden_size // parallelism]")
+            )
         ]
+        
+        # Base class handles all FINN method implementations automatically
+        super().__init__(onnx_node, interface_metadata=self._interface_metadata, **kwargs)
     
-    # Additional methods automatically inherited from AutoHWCustomOp:
-    # - get_input_datatype()
-    # - get_output_datatype()
-    # - bram_estimation()
-    # - lut_estimation()
-    # - dsp_estimation()
-    # - get_exp_cycles()
+    # Optional: Custom methods for operation-specific functionality
+    def get_performance_estimate(self, batch_size: int = 1) -> dict:
+        """Get performance estimate for given batch size."""
+        # Dimensions automatically extracted from ModelWrapper
+        hidden_size = self.extract_runtime_dimension("input", "tDim")
+        parallelism = self.extract_runtime_dimension("input", "sDim")
+        
+        cycles_per_sample = hidden_size // parallelism
+        return {
+            'latency_cycles': cycles_per_sample,
+            'throughput_samples_per_sec': self.get_frequency() / cycles_per_sample,
+            'batch_latency': cycles_per_sample * batch_size
+        }
+    
+    # All standard FINN methods automatically implemented:
+    # ✓ get_input_datatype() - uses runtime extraction
+    # ✓ get_output_datatype() - uses runtime extraction  
+    # ✓ bram_estimation() - uses runtime dimensions
+    # ✓ lut_estimation() - uses runtime dimensions
+    # ✓ dsp_estimation() - uses runtime dimensions
+    # ✓ get_exp_cycles() - uses runtime dimensions
 ```
 
 **Custom RTL Backend Implementation**
@@ -318,7 +333,7 @@ from brainsmith.dataflow import DataflowInterface, DataflowModel
 
 class DataflowInterface:
     def __init__(self, name: str, interface_type: str, 
-                 qDim: int, tDim: int, sDim: int, dtype: str):
+                 num_tensors: List[int], tDim: List[int], sDim: List[int], dtype: str):
         """Create interface with three-tier dimension system."""
     
     def validate_constraints(self) -> ValidationResult:

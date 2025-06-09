@@ -52,14 +52,14 @@ class TensorChunking:
         input_index = self._map_interface_to_input_index(interface_name)
         
         if input_index is None:
-            return self._get_default_shape_for_interface(interface_name)
+            raise RuntimeError(f"Cannot map interface '{interface_name}' to input tensor index")
         
         try:
             # Get input tensor name
             if hasattr(onnx_node, 'input') and len(onnx_node.input) > input_index:
                 input_tensor_name = onnx_node.input[input_index]
             else:
-                return self._get_default_shape_for_interface(interface_name)
+                raise RuntimeError(f"No input tensor at index {input_index} for interface '{interface_name}'")
             
             # Try to extract shape from model wrapper
             if self._model_wrapper:
@@ -71,11 +71,11 @@ class TensorChunking:
                     # Gracefully handle ModelWrapper errors
                     pass
             
-            # Fallback to defaults
-            return self._get_default_shape_for_interface(interface_name)
+            # No fallback - ModelWrapper must provide valid shape
+            raise RuntimeError(f"ModelWrapper required but not available for interface '{interface_name}'")
             
-        except (IndexError, AttributeError):
-            return self._get_default_shape_for_interface(interface_name)
+        except (IndexError, AttributeError) as e:
+            raise RuntimeError(f"Failed to extract tensor shape for interface '{interface_name}': {e}")
     
     def _map_interface_to_input_index(self, interface_name: str) -> Optional[int]:
         """Map interface name to input tensor index."""
@@ -93,15 +93,13 @@ class TensorChunking:
             return 0
     
     def _get_default_shape_for_interface(self, interface_name: str) -> List[int]:
-        """Get reasonable default shape when extraction fails."""
-        if "weight" in interface_name.lower():
-            return [64, 64]
-        elif "bias" in interface_name.lower():
-            return [64]
-        elif "config" in interface_name.lower():
-            return [1]
-        else:
-            return [1, 8, 32, 32]  # Default NCHW input
+        """
+        DEPRECATED: Default shapes not allowed - all dimensions must be runtime extracted.
+        """
+        raise RuntimeError(
+            f"Default shapes not allowed for interface '{interface_name}'. "
+            f"ModelWrapper must be provided for runtime dimension extraction."
+        )
     
     def set_model_wrapper(self, model_wrapper):
         """Set model wrapper for tensor shape extraction."""

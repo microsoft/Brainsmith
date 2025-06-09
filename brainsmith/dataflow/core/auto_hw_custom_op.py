@@ -84,7 +84,7 @@ class AutoHWCustomOp(HWCustomOp):
             self._model_built = True
     
     def _build_dataflow_model(self):
-        """Build DataflowModel from interface metadata with automatic shape extraction."""
+        """Build DataflowModel from interface metadata with runtime shape extraction."""
         # Import here to avoid circular imports
         from .tensor_chunking import TensorChunking
         
@@ -98,41 +98,41 @@ class AutoHWCustomOp(HWCustomOp):
         interfaces = []
         
         for metadata in self._interface_metadata_collection.interfaces:
-            # Extract actual tensor shape with ModelWrapper support
+            # Extract runtime tensor shape from ModelWrapper if available
             try:
-                tensor_shape = chunker.extract_tensor_shape_from_input(metadata.name, self.onnx_node)
+                if self._model_wrapper:
+                    tensor_shape = self._extract_runtime_tensor_shape(metadata.name)
+                else:
+                    # Use chunker for fallback shape extraction
+                    tensor_shape = chunker.extract_tensor_shape_from_input(metadata.name, self.onnx_node)
             except Exception:
-                # Fallback to default shape
-                tensor_shape = chunker._get_default_shape_for_interface(metadata.name)
+                # Final fallback to default shape from metadata
+                tensor_shape = self._get_default_shape_for_interface(metadata.name)
             
-            # Use the interface's own chunking strategy
-            qDim, tDim = chunker.compute_chunking_for_interface(metadata, self.onnx_node)
+            # Use the interface's own chunking strategy with runtime shape
+            num_tensors, tDim = self._compute_runtime_chunking(metadata, tensor_shape)
             
             # Infer layout for better defaults
-            layout = chunker.infer_layout_from_shape(tensor_shape)
+            layout = self._infer_layout_from_shape(tensor_shape)
             
             # Convert InterfaceMetadata datatype to DataflowDataType
             dtype_constraint = metadata.get_default_datatype()
-            dataflow_dtype = DataflowDataType(
-                base_type=dtype_constraint.finn_type.replace('8', '').replace('16', '').replace('32', ''),
-                bitwidth=dtype_constraint.bit_width,
-                signed=dtype_constraint.signed,
-                finn_type=dtype_constraint.finn_type
-            )
+            dataflow_dtype = self._convert_metadata_datatype(dtype_constraint)
             
-            # Create DataflowInterface with extracted information
+            # Create DataflowInterface with runtime-extracted information
             interface = DataflowInterface(
                 name=metadata.name,
                 interface_type=metadata.interface_type,
-                qDim=qDim,
+                num_tensors=num_tensors,
                 tDim=tDim,
                 sDim=tDim.copy(),  # Initialize sDim same as tDim
                 dtype=dataflow_dtype
             )
             
-            # Store additional metadata for debugging/introspection
-            interface._tensor_shape = tensor_shape
+            # Store runtime metadata for debugging/introspection
+            interface._runtime_tensor_shape = tensor_shape
             interface._inferred_layout = layout
+            interface._chunking_source = "runtime_extraction" if self._model_wrapper else "fallback"
             
             interfaces.append(interface)
         
@@ -143,6 +143,189 @@ class AutoHWCustomOp(HWCustomOp):
         """Mark model as needing rebuild after attribute changes."""
         self._model_built = False
         self._dataflow_model = None
+    
+    def _extract_runtime_tensor_shape(self, interface_name: str) -> List[int]:
+        """
+        Extract actual tensor shape from ModelWrapper at runtime.
+        
+        This is the key method that addresses the static vs runtime configuration issue.
+        Instead of using hardcoded static dimensions, we extract actual tensor shapes
+        from the FINN ModelWrapper when the HWCustomOp is instantiated at runtime.
+        
+        Args:
+            interface_name: Name of the interface to extract shape for
+            
+        Returns:
+            List[int]: Actual tensor shape from runtime model
+        """
+        if not self._model_wrapper:
+            raise RuntimeError("ModelWrapper not available for runtime shape extraction")
+        
+        try:
+            # For input interfaces, extract shape from model graph
+            if interface_name in [iface.name for iface in self._interface_metadata_collection.get_input_interfaces()]:
+                return self._extract_input_shape_from_model(interface_name)
+            
+            # For output interfaces, extract shape from model graph
+            elif interface_name in [iface.name for iface in self._interface_metadata_collection.get_output_interfaces()]:
+                return self._extract_output_shape_from_model(interface_name)
+            
+            # For weight interfaces, extract shape from node attributes or initializers
+            elif interface_name in [iface.name for iface in self._interface_metadata_collection.get_weight_interfaces()]:
+                return self._extract_weight_shape_from_model(interface_name)
+            
+            else:
+                # Fallback to default shape
+                return self._get_default_shape_for_interface(interface_name)
+                
+        except Exception as e:
+            # Log the error but continue with fallback
+            print(f"Warning: Failed to extract runtime shape for {interface_name}: {e}")
+            return self._get_default_shape_for_interface(interface_name)
+    
+    def _extract_input_shape_from_model(self, interface_name: str) -> List[int]:
+        """Extract input tensor shape from FINN ModelWrapper."""
+        try:
+            # Get input shape from model graph
+            graph_input = None
+            for inp in self._model_wrapper.graph.input:
+                if inp.name == interface_name or interface_name in inp.name:
+                    graph_input = inp
+                    break
+            
+            if graph_input and graph_input.type.tensor_type.shape:
+                shape = []
+                for dim in graph_input.type.tensor_type.shape.dim:
+                    if dim.dim_value > 0:
+                        shape.append(int(dim.dim_value))
+                    else:
+                        # Handle dynamic dimensions with reasonable defaults
+                        shape.append(1)
+                return shape
+            
+            # Fallback: try to get shape from node inputs
+            if hasattr(self.onnx_node, 'input') and self.onnx_node.input:
+                input_name = self.onnx_node.input[0]  # First input
+                value_info = self._model_wrapper.get_tensor_shape(input_name)
+                if value_info:
+                    return list(value_info)
+            
+            # No fallback - must have valid dimensions
+            raise RuntimeError(f"Cannot extract input shape for {interface_name}: no valid tensor information found")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract input shape for {interface_name}: {e}")
+    
+    def _extract_output_shape_from_model(self, interface_name: str) -> List[int]:
+        """Extract output tensor shape from FINN ModelWrapper."""
+        try:
+            # Get output shape from model graph
+            graph_output = None
+            for out in self._model_wrapper.graph.output:
+                if out.name == interface_name or interface_name in out.name:
+                    graph_output = out
+                    break
+            
+            if graph_output and graph_output.type.tensor_type.shape:
+                shape = []
+                for dim in graph_output.type.tensor_type.shape.dim:
+                    if dim.dim_value > 0:
+                        shape.append(int(dim.dim_value))
+                    else:
+                        # Handle dynamic dimensions with reasonable defaults
+                        shape.append(1)
+                return shape
+            
+            # Fallback: try to get shape from node outputs
+            if hasattr(self.onnx_node, 'output') and self.onnx_node.output:
+                output_name = self.onnx_node.output[0]  # First output
+                value_info = self._model_wrapper.get_tensor_shape(output_name)
+                if value_info:
+                    return list(value_info)
+            
+            # No fallback - must have valid dimensions
+            raise RuntimeError(f"Cannot extract output shape for {interface_name}: no valid tensor information found")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract output shape for {interface_name}: {e}")
+    
+    def _extract_weight_shape_from_model(self, interface_name: str) -> List[int]:
+        """Extract weight tensor shape from FINN ModelWrapper."""
+        try:
+            # Look for initializers in the model
+            for init in self._model_wrapper.graph.initializer:
+                if init.name == interface_name or interface_name in init.name:
+                    return list(init.dims)
+            
+            # Look for node attributes that might contain weight shapes
+            if hasattr(self.onnx_node, 'attribute'):
+                for attr in self.onnx_node.attribute:
+                    if 'weight' in attr.name.lower() or 'param' in attr.name.lower():
+                        if hasattr(attr, 'ints') and attr.ints:
+                            return list(attr.ints)
+            
+            # No fallback - must have valid dimensions
+            raise RuntimeError(f"Cannot extract weight shape for {interface_name}: no valid tensor information found")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract weight shape for {interface_name}: {e}")
+    
+    def _compute_runtime_chunking(self, metadata, tensor_shape: List[int]) -> Tuple[List[int], List[int]]:
+        """
+        Compute chunking based on runtime tensor shape and interface chunking strategy.
+        
+        Args:
+            metadata: InterfaceMetadata with chunking strategy
+            tensor_shape: Actual runtime tensor shape
+            
+        Returns:
+            Tuple of (num_tensors, tDim)
+        """
+        # Use the interface's chunking strategy if available
+        if hasattr(metadata, 'chunking_strategy') and metadata.chunking_strategy:
+            return metadata.chunking_strategy.compute_chunking(tensor_shape, metadata.name)
+        
+        # Fallback: minimal chunking (no chunking)
+        num_tensors = [1] * len(tensor_shape)
+        tDim = list(tensor_shape)
+        return num_tensors, tDim
+    
+    def _get_default_shape_for_interface(self, interface_name: str) -> List[int]:
+        """
+        Get default tensor shape when runtime extraction fails.
+        
+        WARNING: This should only be used during development/testing.
+        In production, the FINN compiler must provide a valid ModelWrapper
+        for proper runtime dimension extraction.
+        """
+        raise RuntimeError(
+            f"Cannot determine tensor shape for interface '{interface_name}': "
+            f"No ModelWrapper available for runtime shape extraction. "
+            f"The HWCustomOp must be instantiated by the FINN compiler with "
+            f"a valid ModelWrapper containing actual tensor shapes."
+        )
+    
+    def _infer_layout_from_shape(self, tensor_shape: List[int]) -> str:
+        """Infer tensor layout from shape."""
+        if len(tensor_shape) == 4:
+            return "NCHW"
+        elif len(tensor_shape) == 3:
+            return "CHW"
+        elif len(tensor_shape) == 2:
+            return "NC"
+        elif len(tensor_shape) == 1:
+            return "C"
+        else:
+            return "UNKNOWN"
+    
+    def _convert_metadata_datatype(self, dtype_constraint) -> DataflowDataType:
+        """Convert InterfaceMetadata datatype constraint to DataflowDataType."""
+        return DataflowDataType(
+            base_type=dtype_constraint.finn_type.replace('8', '').replace('16', '').replace('32', ''),
+            bitwidth=dtype_constraint.bit_width,
+            signed=dtype_constraint.signed,
+            finn_type=dtype_constraint.finn_type
+        )
     
     @property
     def dataflow_model(self) -> DataflowModel:
@@ -374,24 +557,24 @@ class AutoHWCustomOp(HWCustomOp):
         
         # Count weight parameters
         for iface in self.dataflow_model.weight_interfaces:
-            params = np.prod(iface.qDim) * np.prod(iface.tDim)
+            params = np.prod(iface.num_tensors) * np.prod(iface.tDim)
             counts["weight_params"] += params
             counts["params"] += params
             
         # Count config parameters
         for iface in self.dataflow_model.config_interfaces:
-            params = np.prod(iface.qDim) * np.prod(iface.tDim)
+            params = np.prod(iface.num_tensors) * np.prod(iface.tDim)
             counts["config_params"] += params
             counts["params"] += params
             
         # Estimate operations based on input/output sizes
         if self.dataflow_model.input_interfaces and self.dataflow_model.output_interfaces:
             input_size = sum(
-                np.prod(iface.qDim) * np.prod(iface.tDim)
+                np.prod(iface.num_tensors) * np.prod(iface.tDim)
                 for iface in self.dataflow_model.input_interfaces
             )
             output_size = sum(
-                np.prod(iface.qDim) * np.prod(iface.tDim)
+                np.prod(iface.num_tensors) * np.prod(iface.tDim)
                 for iface in self.dataflow_model.output_interfaces
             )
             # Simple estimation: operations proportional to input*output
@@ -435,7 +618,7 @@ class AutoHWCustomOp(HWCustomOp):
         for iface in self.dataflow_model.weight_interfaces:
             # Generate parameters for each weight interface
             shape = (
-                np.prod(iface.qDim),
+                np.prod(iface.num_tensors),
                 np.prod(iface.tDim)
             )
             
@@ -530,7 +713,7 @@ class AutoHWCustomOp(HWCustomOp):
         """Estimate DSP usage using DataflowModel resource requirements."""
         try:
             # Simple estimation: assume some operations require DSPs
-            total_ops = sum(np.prod(iface.qDim) for iface in self.dataflow_model.input_interfaces)
+            total_ops = sum(np.prod(iface.num_tensors) for iface in self.dataflow_model.input_interfaces)
             
             # Apply estimation mode scaling
             estimation_mode = self.get_nodeattr("resource_estimation_mode")
@@ -568,7 +751,7 @@ class AutoHWCustomOp(HWCustomOp):
                 "finn_type": iface.dtype.finn_type,
                 "signed": iface.dtype.signed
             },
-            "qDim": list(iface.qDim),  # Correct attribute name
+            "num_tensors": list(iface.num_tensors),  # Correct attribute name
             "tDim": list(iface.tDim),  # Correct attribute name
             "parallel": self.get_nodeattr(f"{interface_name}_parallel") or 1,
             "runtime_dtype": self.get_nodeattr(f"{interface_name}_dtype") or iface.dtype.finn_type

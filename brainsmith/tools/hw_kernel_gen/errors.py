@@ -72,13 +72,13 @@ class RTLParsingError(BrainsmithError):
     """Errors during RTL file parsing."""
     
     def __init__(self, message: str, file_path: str = None, line_number: int = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if file_path:
             context['file_path'] = file_path
         if line_number:
             context['line_number'] = line_number
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check SystemVerilog syntax",
@@ -92,11 +92,11 @@ class InterfaceDetectionError(BrainsmithError):
     """Errors during interface detection and validation."""
     
     def __init__(self, message: str, interface_name: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if interface_name:
             context['interface_name'] = interface_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check AXI interface signal naming (s_axis_*, m_axis_*)",
@@ -110,13 +110,13 @@ class PragmaProcessingError(BrainsmithError):
     """Errors during pragma processing."""
     
     def __init__(self, message: str, pragma_text: str = None, pragma_type: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if pragma_text:
             context['pragma_text'] = pragma_text
         if pragma_type:
             context['pragma_type'] = pragma_type
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check pragma syntax: // @brainsmith <TYPE> <args>",
@@ -130,13 +130,13 @@ class CodeGenerationError(BrainsmithError):
     """Errors during code generation."""
     
     def __init__(self, message: str, generator_type: str = None, template_name: str = None, suggestion: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if generator_type:
             context['generator_type'] = generator_type
         if template_name:
             context['template_name'] = template_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if suggestion and suggestion not in suggestions:
             suggestions.append(suggestion)
         if not suggestions:
@@ -152,11 +152,11 @@ class ValidationError(BrainsmithError):
     """Errors during validation."""
     
     def __init__(self, message: str, validation_type: str = None, suggestion: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if validation_type:
             context['validation_type'] = validation_type
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if suggestion and suggestion not in suggestions:
             suggestions.append(suggestion)
         if not suggestions:
@@ -172,11 +172,11 @@ class ConfigurationError(BrainsmithError):
     """Errors in configuration setup and validation."""
     
     def __init__(self, message: str, config_section: str = None, suggestion: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if config_section:
             context['config_section'] = config_section
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if suggestion and suggestion not in suggestions:
             suggestions.append(suggestion)
         if not suggestions:
@@ -193,11 +193,11 @@ class TemplateError(BrainsmithError):
     """Errors during template processing and rendering."""
     
     def __init__(self, message: str, template_name: str = None, suggestion: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if template_name:
             context['template_name'] = template_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if suggestion and suggestion not in suggestions:
             suggestions.append(suggestion)
         if not suggestions:
@@ -242,11 +242,11 @@ class GeneratorError(BrainsmithError):
     """Error during generator operation."""
     
     def __init__(self, message: str, generator_name: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if generator_name:
             context['generator_name'] = generator_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check generator capabilities and configuration",
@@ -261,11 +261,11 @@ class PipelineError(BrainsmithError):
     """Error during pipeline execution."""
     
     def __init__(self, message: str, stage_name: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if stage_name:
             context['stage_name'] = stage_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check stage dependencies and execution order",
@@ -280,13 +280,13 @@ class WorkflowError(BrainsmithError):
     """Error during workflow execution."""
     
     def __init__(self, message: str, workflow_name: str = None, step_name: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if workflow_name:
             context['workflow_name'] = workflow_name
         if step_name:
             context['step_name'] = step_name
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check workflow definition and step dependencies",
@@ -301,11 +301,11 @@ class IntegrationError(BrainsmithError):
     """Error during component integration."""
     
     def __init__(self, message: str, component: str = None, **kwargs):
-        context = kwargs.get('context', {})
+        context = kwargs.pop('context', {})
         if component:
             context['component'] = component
         
-        suggestions = kwargs.get('suggestions', [])
+        suggestions = kwargs.pop('suggestions', [])
         if not suggestions:
             suggestions = [
                 "Check component compatibility and versions",

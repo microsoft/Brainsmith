@@ -2,45 +2,61 @@
 
 ## Dataflow Modeling Deep Dive
 
-### Three-Tier Dimension System (qDim/tDim/sDim)
+### Runtime Dimension System (qDim/tDim/sDim)
 
-The **Interface-Wise Dataflow Modeling Framework** implements a novel three-tier dimension system that provides mathematical foundations for hardware optimization. This system enables automatic parallelism optimization and resource estimation through dimensional relationships.
+The **Interface-Wise Dataflow Modeling Framework** implements a revolutionary three-tier dimension system that enables runtime configuration and automatic optimization. This system provides mathematical foundations for hardware optimization while maintaining complete flexibility.
 
-#### Dimensional Hierarchy
+> **Revolutionary Architecture**: The framework uses **runtime dimension extraction** from FINN ModelWrapper, eliminating hardcoded dimensions entirely. Components automatically adapt to any tensor shape at runtime through the chunking strategy system.
+
+#### Three-Tier Dimension System
 
 **qDim (Query Dimension)**
-- Represents the **original tensor query dimension** from the neural network
-- Corresponds to the semantic meaning in the neural network context
-- Examples: sequence length in transformers, batch size in CNNs, feature dimensions
+- Original tensor dimension for the operation (e.g., 768 for BERT hidden size)
+- Extracted automatically from ModelWrapper at runtime
+- Serves as the base dimension for chunking calculations
 
-**tDim (Tensor Dimension)**  
-- Defines the **processing tensor granularity** for hardware implementation
-- Represents the size of tensor chunks processed in parallel
-- Must satisfy: `tDim ≤ qDim`
+**tDim (Tensor Processing Dimension)**  
+- Processing granularity determined by chunking strategy (e.g., 96 elements)
+- Computed from qDim using mathematical relationships
+- Optimized based on algorithm requirements and hardware constraints
 
-**sDim (Stream Dimension)**
-- Specifies **hardware streaming parallelism** and data organization
-- Determines the number of parallel processing elements
-- Must satisfy: `sDim ≤ tDim`
+**sDim (Stream Parallelism Dimension)**
+- Hardware parallelism level (e.g., 8 elements per clock cycle)
+- Extracted from interface metadata and ModelWrapper
+- Must satisfy: `tDim % sDim == 0` for valid streaming
+
+**Runtime Relationships**
+```python
+# Extracted automatically by AutoHWCustomOp
+qDim = self.extract_runtime_dimension(interface_name, "qDim")
+tDim = self.extract_runtime_dimension(interface_name, "tDim")  
+sDim = self.extract_runtime_dimension(interface_name, "sDim")
+
+# Computed values
+num_tensors = qDim // tDim  # Number of processing chunks
+cycles_per_chunk = tDim // sDim  # Cycles per chunk
+total_cycles = num_tensors * cycles_per_chunk  # Total latency
+```
 
 #### Mathematical Relationships
 
-**Fundamental Constraint**
+**Fundamental Relationships**
 ```
-sDim ≤ tDim ≤ qDim
-qDim × tDim = original_tensor_shape
+input_shape = num_tensors × tDim
+num_tensors = input_shape ÷ tDim
+tDim % sDim = 0 (for valid streaming)
 ```
 
 **Parallelism Calculations**
 ```python
-# Streaming parallelism
-stream_parallelism = sDim
+# Elements processed per clock cycle
+elements_per_cycle = sDim
 
-# Tensor processing parallelism  
-tensor_parallelism = tDim / sDim
+# Clock cycles to process one tensor chunk
+cycles_per_chunk = tDim / sDim
 
-# Total effective parallelism
-total_parallelism = qDim / (tDim / sDim) = (qDim × sDim) / tDim
+# Total cycles to process all chunks
+total_cycles = num_tensors * cycles_per_chunk
 ```
 
 **Performance Optimization**
@@ -48,17 +64,17 @@ total_parallelism = qDim / (tDim / sDim) = (qDim × sDim) / tDim
 from brainsmith.dataflow.core.dataflow_model import DataflowModel
 
 class AdvancedDataflowModel(DataflowModel):
-    def optimize_dimensional_configuration(self, constraints):
-        """Optimize qDim/tDim/sDim configuration for performance."""
+    def optimize_dimensional_configuration(self, input_shape, constraints):
+        """Optimize num_tensors/tDim/sDim configuration for performance."""
         
         # Objective function: minimize latency while respecting constraints
         def objective(dims):
-            q_dim, t_dim, s_dim = dims
+            num_tensors, t_dim, s_dim = dims
             
             # Calculate performance metrics
-            initiation_interval = self.calculate_ii(t_dim, s_dim)
-            latency = (q_dim / s_dim) * initiation_interval
-            throughput = 1.0 / initiation_interval
+            cycles_per_chunk = t_dim / s_dim
+            total_latency = num_tensors * cycles_per_chunk
+            throughput = s_dim / cycles_per_chunk  # elements per cycle
             
             # Resource utilization
             lut_usage = self.estimate_lut_usage(t_dim, s_dim)
@@ -66,17 +82,19 @@ class AdvancedDataflowModel(DataflowModel):
             
             # Multi-objective optimization
             return {
-                'latency': latency,
+                'latency': total_latency,
                 'throughput': throughput,
                 'resource_efficiency': (lut_usage + dsp_usage) / constraints['max_resources']
             }
         
         # Constraint satisfaction
         def constraints_satisfied(dims):
-            q_dim, t_dim, s_dim = dims
+            num_tensors, t_dim, s_dim = dims
             
-            # Dimensional constraints
-            if not (s_dim <= t_dim <= q_dim):
+            # Mathematical constraints
+            if num_tensors * t_dim != input_shape:
+                return False
+            if t_dim % s_dim != 0:
                 return False
             
             # Resource constraints  
@@ -94,25 +112,46 @@ class AdvancedDataflowModel(DataflowModel):
         return optimal_dims
 ```
 
-#### Practical Example: BERT Attention
+#### Practical Example: Runtime Configuration
 
 ```python
-# BERT Multi-Head Attention configuration
-attention_interface = DataflowInterface(
-    name="attention_input",
-    interface_type="INPUT",
-    qDim=512,      # Sequence length
-    tDim=64,       # Processing chunk size (efficient for attention)
-    sDim=8,        # 8-way parallel processing
-    dtype="INT8"
-)
+# BERT Multi-Head Attention with Runtime Configuration
+from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from brainsmith.dataflow.core.chunking_strategy import index_chunking
 
-# Mathematical relationships for this configuration:
-# - Process 8 elements in parallel (sDim=8)
-# - Each processing cycle handles 64-element chunks (tDim=64)  
-# - Total sequence length is 512 (qDim=512)
-# - Cycles required: 512 / 8 = 64 cycles
-# - Processing efficiency: 64/8 = 8 elements per cycle
+class BERTAttention(AutoHWCustomOp):
+    def __init__(self, onnx_node, **kwargs):
+        # Define interface with parameterized chunking strategy
+        attention_interface = InterfaceMetadata(
+            name="attention_input",
+            interface_type=DataflowInterfaceType.INPUT,
+            allowed_datatypes=[
+                DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+            ],
+            # Runtime-parameterized chunking: [96] will be applied to actual tensor shape
+            chunking_strategy=index_chunking(-1, "[96]")
+        )
+        
+        super().__init__(onnx_node, interface_metadata=[attention_interface], **kwargs)
+    
+    def analyze_runtime_configuration(self):
+        """Analyze the runtime configuration extracted from ModelWrapper."""
+        # Dimensions automatically extracted at runtime
+        qDim = self.extract_runtime_dimension("attention_input", "qDim")  # e.g., 768
+        tDim = self.extract_runtime_dimension("attention_input", "tDim")  # e.g., 96
+        sDim = self.extract_runtime_dimension("attention_input", "sDim")  # e.g., 8
+        
+        print(f"Runtime Configuration:")
+        print(f"  Query Dimension (qDim): {qDim}")
+        print(f"  Tensor Processing Dimension (tDim): {tDim}")
+        print(f"  Stream Parallelism (sDim): {sDim}")
+        print(f"  Number of chunks: {qDim // tDim}")
+        print(f"  Cycles per chunk: {tDim // sDim}")
+        print(f"  Total cycles: {(qDim // tDim) * (tDim // sDim)}")
+
+# Usage: FINN compiler automatically extracts dimensions from actual model
+# No hardcoded dimensions in generated code!
 ```
 
 ### Custom Interface Development

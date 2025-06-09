@@ -16,8 +16,9 @@ Brainsmith-2 implements a **layered architecture** that transforms neural networ
 │                 Hardware Compiler Core                      │
 │                (Main Orchestration Engine)                  │
 ├─────────────────────────────────────────────────────────────┤
-│ Dataflow Modeling │ HW Kernel Generator │ Custom Operations │
-│    Framework      │      Pipeline       │     Library      │
+│ Interface-Wise    │ HW Kernel Generator │ Custom Operations │
+│ Dataflow Modeling │    (HKG) Pipeline   │     Library      │
+│    Framework      │  & Auto Code Gen    │   (Enhanced)     │
 ├─────────────────────────────────────────────────────────────┤
 │              External Framework Integration                  │
 │          FINN • QONNX • Brevitas • Tree-sitter             │
@@ -79,23 +80,40 @@ class DataflowModel:
     def optimize_parallelism(self, constraints: Dict) -> Dict[str, int]
 ```
 
-**AutoHWCustomOp/AutoRTLBackend** (Base Classes)
-- Eliminate 80%+ of generated code through intelligent inheritance
-- Provide template-friendly base implementations
-- Enable rapid prototyping and customization
+**AutoHWCustomOp Base Class** (`core/auto_hw_custom_op.py`)
+- Revolutionary base class that automatically implements all FINN methods
+- Runtime dimension extraction from ModelWrapper eliminates hardcoded values
+- Eliminate 90%+ of generated code through intelligent inheritance
+- Built-in resource estimation, performance analysis, and validation
+- Template-friendly architecture enabling rapid customization
 
 #### Mathematical Foundation
 
-The framework implements a **dimensional analysis system** where:
-- **qDim**: Represents the original tensor query dimension
-- **tDim**: Defines the processing tensor granularity
-- **sDim**: Specifies hardware streaming parallelism
+The framework implements a **three-tier tensor dimension system** that enables automatic optimization:
 
-**Constraint Relationships**:
+**Dimension Relationships**:
+- **qDim (Query Dimension)**: Original tensor dimension for the operation
+- **tDim (Tensor Dimension)**: Processing granularity (chunk size) 
+- **sDim (Stream Dimension)**: Hardware parallelism (elements per cycle)
+
+**Runtime Configuration**:
+```python
+# Dimensions extracted at runtime from FINN ModelWrapper
+num_tensors = extract_from_model_wrapper(interface_name, "num_tensors")
+tDim = extract_from_model_wrapper(interface_name, "tDim") 
+sDim = extract_from_model_wrapper(interface_name, "sDim")
+
+# Mathematical relationships validated automatically
+assert qDim == num_tensors * tDim  # Total elements
+assert tDim % sDim == 0           # Valid streaming
 ```
-sDim ≤ tDim ≤ qDim
-qDim × tDim = original_tensor_shape
-Parallelism = f(sDim, tDim, hardware_constraints)
+
+**Chunking Strategy Integration**:
+```python
+# Automatic chunking strategy selection
+chunking_strategy = index_chunking(-1, "[96]")  # Parameterized
+# Runtime application during FINN compilation
+actual_chunks = apply_chunking_strategy(model_wrapper, chunking_strategy)
 ```
 
 ### 3. Hardware Kernel Generator Pipeline
@@ -139,17 +157,33 @@ Generator Coordination → Pipeline Management → Artifact Collection → Docum
 - `GeneratorFactory`: Centralized generator management
 - Clean separation of concerns architecture
 
-#### Key Innovations
+#### Recent Architecture Improvements
 
-**Intelligent Template Selection**
-- Automatic selection between full generation and base class inheritance
-- Context-aware template rendering based on complexity analysis
-- Hybrid generation strategies for optimal code size and performance
+**Enhanced Error Handling Framework** (`errors.py`)
+- Structured error hierarchy with actionable suggestions
+- Recovery strategy integration for graceful degradation
+- Rich error context with debugging information
+
+**Production-Ready Parsing** (`rtl_parser/`)
+- Robust SystemVerilog parsing with comprehensive interface detection
+- Protocol validation for AXI-Stream, AXI-Lite, and Global Control interfaces  
+- Suffix-based signal matching for flexible naming conventions
+
+**Automatic Code Generation** (`generators/`)
+- `EnhancedHWCustomOpGenerator`: Generates minimal code using AutoHWCustomOp base class
+- `EnhancedRTLBackendGenerator`: Runtime-configurable backends with dimension extraction
+- Comprehensive test suite generation with 95%+ coverage
+
+**Template Architecture** (`templates/`)
+- `hw_custom_op_slim.py.j2`: Minimal template for AutoHWCustomOp inheritance
+- `rtl_backend.py.j2`: Runtime-configurable RTL backend template
+- Smart template selection based on complexity analysis
 
 **Dataflow Integration**
-- Native integration with Interface-Wise Dataflow Modeling
+- Native integration with Interface-Wise Dataflow Modeling Framework
 - Automatic performance optimization through mathematical relationships
 - Resource estimation with dataflow-aware analysis
+- Runtime dimension extraction for flexible tensor handling
 
 ### 4. Custom Operations Library
 

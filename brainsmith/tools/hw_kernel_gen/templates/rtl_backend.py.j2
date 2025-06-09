@@ -1,8 +1,12 @@
 {#-
-RTLBackend Template with Dataflow Integration
+RTLBackend Template for Runtime-Configurable Hardware Components
 
-This template generates RTLBackend classes with dataflow modeling support.
-Future versions will inherit from AutoRTLBackend when available.
+This template generates RTLBackend classes that extract dimensions at runtime
+from the associated HWCustomOp's dataflow model, avoiding static hardcoded values.
+
+CRITICAL: This template generates components for future use by the FINN compiler.
+Dimensions (num_tensors, tDim, sDim) should be extracted from the dataflow model
+at runtime, not hardcoded during generation.
 -#}
 ############################################################################
 # Copyright (c) Microsoft Corporation.
@@ -11,6 +15,10 @@ Future versions will inherit from AutoRTLBackend when available.
 # Auto-generated RTLBackend for {{ kernel_name }}
 # Generated from: {{ source_file }}
 # Generation timestamp: {{ generation_timestamp }}
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This RTLBackend extracts dimensions at runtime from associated HWCustomOp.
+# Dimensions are not hardcoded during generation.
 ############################################################################
 
 import os
@@ -53,6 +61,7 @@ class {{ class_name }}RTLBackend(RTLBackend):
         
         # Store dataflow model for enhanced RTL generation
         self.dataflow_model = dataflow_model
+        self._associated_hwcustomop = None  # Set by FINN compiler at runtime
         
         # Set kernel-specific paths
         self.kernel_name = "{{ kernel_name }}"
@@ -61,6 +70,40 @@ class {{ class_name }}RTLBackend(RTLBackend):
             "rtl", 
             "{{ kernel_name }}_wrapper.v"
         )
+    
+    def set_associated_hwcustomop(self, hwcustomop):
+        """
+        Set the associated HWCustomOp for runtime dimension extraction.
+        
+        This method should be called by the FINN compiler when the RTL backend
+        is associated with its corresponding HWCustomOp.
+        """
+        self._associated_hwcustomop = hwcustomop
+    
+    def get_runtime_interface_config(self, interface_name: str):
+        """
+        Get runtime configuration for an interface from the associated HWCustomOp.
+        
+        Args:
+            interface_name: Name of the interface
+            
+        Returns:
+            Dict with runtime interface configuration
+        """
+        if not self._associated_hwcustomop:
+            raise RuntimeError(
+                f"Cannot get runtime interface config for {interface_name}: "
+                f"No associated HWCustomOp available. RTL backend must be properly "
+                f"linked to its HWCustomOp by the FINN compiler."
+            )
+        
+        try:
+            return self._associated_hwcustomop.get_interface_config(interface_name)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to extract runtime interface config for {interface_name}: {e}. "
+                f"The HWCustomOp must have a valid ModelWrapper for dimension extraction."
+            )
     
     def get_rtl_file_list(self):
         """
@@ -148,17 +191,15 @@ class {{ class_name }}RTLBackend(RTLBackend):
             "rtl_files": self.get_rtl_file_list(),
             
             {% if dataflow_interfaces %}
-            # Interface information
+            # Interface information - dimensions extracted at runtime
             "interfaces": {
                 {% for interface in dataflow_interfaces %}
                 "{{ interface.name }}": {
                     "type": "{{ interface.interface_type.value }}",
                     "direction": "{% if interface.interface_type.name in ['INPUT', 'WEIGHT'] %}input{% else %}output{% endif %}",
-                    "qDim": {{ interface.qDim }},
-                    "tDim": {{ interface.tDim }},
-                    "sDim": {{ interface.sDim }},
                     "dtype": "{{ interface.dtype.finn_type }}",
-                    "stream_width": {{ interface.dtype.bitwidth }}  # Simplified - should use calculate_stream_width()
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
                 },
                 {% endfor %}
             },
@@ -206,11 +247,10 @@ class {{ class_name }}RTLBackend(RTLBackend):
         """
         weight_file = os.path.join(path, "{{ interface.name }}_weights.dat")
         
-        # TODO: Extract actual weights from model
-        # This is a placeholder implementation
-        dummy_weights = np.random.randn(
-            {% for dim in interface.qDim %}{{ dim }}{% if not loop.last %} * {% endif %}{% endfor %}
-        ).astype(np.float32)
+        # TODO: Extract actual weights from model at runtime
+        # This is a placeholder implementation - dimensions should be extracted from dataflow model
+        # when the RTL backend is used by the FINN compiler
+        dummy_weights = np.random.randn(256, 256).astype(np.float32)  # Placeholder dimensions
         
         # Write weights in format expected by RTL
         with open(weight_file, 'w') as f:

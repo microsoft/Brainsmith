@@ -65,7 +65,7 @@ parameter PARALLELISM = 8              // Parallel processing units
 **📡 Interface Design with Dataflow Pragmas**
 ```systemverilog
 // Primary input with dataflow metadata
-(* dataflow interface_type="INPUT" qDim=768 tDim=96 sDim=8 dtype="INT8" 
+(* dataflow interface_type="INPUT" chunking_strategy="index_chunking(-1, [96])" dtype="INT8" 
    protocol="AXI_STREAM" role="primary_input" *)
 input wire [DATA_WIDTH*PARALLELISM-1:0] s_axis_a_tdata,
 ```
@@ -81,12 +81,12 @@ input wire [DATA_WIDTH*PARALLELISM-1:0] s_axis_a_tdata,
 
 The HKG uses **dataflow pragmas** to understand the RTL design and generate optimal FINN components:
 
-- **`qDim=768`**: Original tensor dimension (full vector size)
-- **`tDim=96`**: Processing tensor granularity (768/8 = 96 elements per processing cycle)
-- **`sDim=8`**: Stream dimension (8 parallel elements processed per clock)
+- **`chunking_strategy="index_chunking(-1, [96])"`**: Specifies chunking strategy for runtime dimension extraction
 - **`dtype="INT8"`**: Data type specification for FINN integration
+- **`protocol="AXI_STREAM"`**: Interface protocol specification
+- **`interface_type="INPUT"`**: Interface type classification
 
-**Mathematical Relationship**: `sDim ≤ tDim ≤ qDim` enables automatic performance optimization.
+**CRITICAL**: The HKG generates components for future use by the FINN compiler. Actual tensor dimensions (num_tensors, tDim, sDim) are extracted at runtime from the ModelWrapper when the FINN compiler instantiates the HWCustomOp with real tensor shapes.
 
 ---
 
@@ -115,9 +115,10 @@ parallelism_factor = 8
 interfaces = {
     "s_axis_a": {
         "type": "INPUT",
-        "protocol": "AXI_STREAM", 
-        "qDim": 768, "tDim": 96, "sDim": 8,
-        "dtype": "INT8"
+        "protocol": "AXI_STREAM",
+        "chunking_strategy": "index_chunking(-1, [96])",
+        "dtype": "INT8",
+        "runtime_configurable": True  # Dimensions extracted at runtime
     },
     # ... complete interface specifications
 }
@@ -265,55 +266,64 @@ for artifact_type, file_path in generated_artifacts.items():
 
 **File**: `generated/vector_dot_product_hwcustomop.py`
 
-The HKG generates a complete FINN HWCustomOp using the **AutoHWCustomOp base class**:
+The HKG generates a complete FINN HWCustomOp using the **AutoHWCustomOp base class** with runtime configuration:
 
 ```python
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
-from brainsmith.dataflow import DataflowInterface, DataflowModel
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
+from brainsmith.dataflow.core.chunking_strategy import index_chunking
 
 class VectorDotProductHWCustomOp(AutoHWCustomOp):
-    """Auto-generated vector dot product implementation."""
+    """
+    Auto-generated vector dot product implementation.
+    
+    RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+    This HWCustomOp uses runtime dimension extraction from ModelWrapper.
+    NEVER set static num_tensors, tDim, or sDim values in generated code.
+    """
     
     def __init__(self, onnx_node, **kwargs):
-        # Create dataflow model from metadata
-        dataflow_model = self._create_dataflow_model()
+        """Initialize with interface metadata and runtime extraction."""
         
-        # Initialize with automatic method implementation
-        super().__init__(onnx_node, dataflow_model, **kwargs)
-    
-    def _create_dataflow_model(self):
-        """Create optimized dataflow model."""
-        interfaces = [
-            DataflowInterface(
-                name="input_a", interface_type="INPUT",
-                qDim=768, tDim=96, sDim=8, dtype="INT8"
+        # Define interface metadata with chunking strategies
+        self._interface_metadata = [
+            InterfaceMetadata(
+                name="input_a",
+                interface_type=DataflowInterfaceType.INPUT,
+                allowed_datatypes=[
+                    DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+                ],
+                chunking_strategy=index_chunking(-1, "[96]")  # Parameterized
             ),
-            DataflowInterface(
-                name="input_b", interface_type="INPUT", 
-                qDim=768, tDim=96, sDim=8, dtype="INT8"
+            InterfaceMetadata(
+                name="input_b",
+                interface_type=DataflowInterfaceType.INPUT,
+                allowed_datatypes=[
+                    DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
+                ],
+                chunking_strategy=index_chunking(-1, "[96]")  # Parameterized
             ),
-            DataflowInterface(
-                name="output", interface_type="OUTPUT",
-                qDim=1, tDim=1, sDim=1, dtype="INT32"
+            InterfaceMetadata(
+                name="output",
+                interface_type=DataflowInterfaceType.OUTPUT,
+                allowed_datatypes=[
+                    DataTypeConstraint(finn_type="INT32", bit_width=32, signed=True)
+                ],
+                chunking_strategy=index_chunking(-1, "[1]")  # Single result
             )
         ]
         
-        return DataflowModel(
-            interfaces=interfaces,
-            operation_type="dot_product",
-            performance_characteristics={
-                'latency_cycles': 96,
-                'throughput_ops_per_cycle': 1
-            }
-        )
+        # Initialize parent with interface metadata (dimensions extracted at runtime)
+        super().__init__(onnx_node, interface_metadata=self._interface_metadata, **kwargs)
     
-    # All standard methods automatically inherited:
-    # - get_input_datatype()
-    # - get_output_datatype()  
-    # - bram_estimation()
-    # - lut_estimation()
-    # - dsp_estimation()
-    # - get_exp_cycles()
+    # All standard methods automatically inherited from AutoHWCustomOp:
+    # - get_input_datatype() - uses runtime extraction
+    # - get_output_datatype() - uses runtime extraction
+    # - bram_estimation() - uses runtime dimensions
+    # - lut_estimation() - uses runtime dimensions  
+    # - dsp_estimation() - uses runtime dimensions
+    # - get_exp_cycles() - uses runtime dimensions
 ```
 
 **Key Benefits of Base Class Approach**:
@@ -327,42 +337,64 @@ class VectorDotProductHWCustomOp(AutoHWCustomOp):
 **File**: `generated/vector_dot_product_rtlbackend.py`
 
 ```python
-from brainsmith.dataflow.core.auto_rtl_backend import AutoRTLBackend
+from finn.backends.fpgadataflow.rtlbackend import RTLBackend
 
-class VectorDotProductRTLBackend(AutoRTLBackend):
-    """Auto-generated RTL backend implementation."""
+class VectorDotProductRTLBackend(RTLBackend):
+    """
+    Auto-generated RTL backend implementation.
+    
+    RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+    This RTLBackend extracts dimensions at runtime from associated HWCustomOp.
+    Dimensions are not hardcoded during generation.
+    """
+    
+    def __init__(self, model, dataflow_model=None):
+        super().__init__(model)
+        self.dataflow_model = dataflow_model
+        self._associated_hwcustomop = None  # Set by FINN compiler at runtime
+    
+    def set_associated_hwcustomop(self, hwcustomop):
+        """
+        Set the associated HWCustomOp for runtime dimension extraction.
+        
+        This method should be called by the FINN compiler when the RTL backend
+        is associated with its corresponding HWCustomOp.
+        """
+        self._associated_hwcustomop = hwcustomop
+    
+    def get_runtime_interface_config(self, interface_name: str):
+        """Get runtime configuration for an interface from the associated HWCustomOp."""
+        if not self._associated_hwcustomop:
+            raise RuntimeError(
+                f"Cannot get runtime interface config for {interface_name}: "
+                f"No associated HWCustomOp available. RTL backend must be properly "
+                f"linked to its HWCustomOp by the FINN compiler."
+            )
+        
+        try:
+            return self._associated_hwcustomop.get_interface_config(interface_name)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to extract runtime interface config for {interface_name}: {e}. "
+                f"The HWCustomOp must have a valid ModelWrapper for dimension extraction."
+            )
     
     def generate_params(self, model, path):
-        """Generate hardware parameters from dataflow model."""
+        """Generate hardware parameters from runtime configuration."""
+        # Extract runtime configuration from associated HWCustomOp
+        input_a_config = self.get_runtime_interface_config("input_a")
         
-        # Extract parallelism from dataflow model
-        optimal_config = self.dataflow_model.optimize_parallelism({
-            'max_luts': 50000,
-            'max_dsps': 200,
-            'target_frequency': 250
-        })
+        # Use runtime dimensions for parameter generation
+        vector_size = sum(input_a_config["num_tensors"]) * sum(input_a_config["tDim"])
+        parallelism = sum(input_a_config["sDim"])
         
         return {
-            'VECTOR_SIZE': 768,
-            'PARALLELISM': optimal_config['input_parallelism'],
-            'DATA_WIDTH': 8,
-            'RESULT_WIDTH': 32,
-            'TARGET_FREQ': 250
+            'VECTOR_SIZE': vector_size,      # Extracted at runtime
+            'PARALLELISM': parallelism,      # Extracted at runtime
+            'DATA_WIDTH': 8,                 # From datatype constraint
+            'RESULT_WIDTH': 32,              # From output datatype
+            'TARGET_FREQ': 250               # From design spec
         }
-    
-    def code_generation_dict(self):
-        """Generate RTL instantiation code."""
-        code_gen_dict = super().code_generation_dict()
-        
-        # Add custom instantiation logic
-        code_gen_dict.update({
-            "$MODULE_NAME$": "vector_dot_product",
-            "$INSTANCE_NAME$": "dot_product_inst",
-            "$PARAMETER_ASSIGNMENTS$": self._generate_parameter_assignments(),
-            "$PORT_CONNECTIONS$": self._generate_port_connections()
-        })
-        
-        return code_gen_dict
 ```
 
 ### Generated Test Suite
@@ -472,21 +504,28 @@ from generated.vector_dot_product_hwcustomop import VectorDotProductHWCustomOp
 node = VectorDotProductHWCustomOp(mock_onnx_node)
 dataflow_model = node.dataflow_model
 
-# Performance analysis
-ii_analysis = dataflow_model.calculate_initiation_intervals(iPar=8, wPar=1)
+# Performance analysis using runtime-extracted dimensions
+input_config = node.get_interface_config("input_a")
+output_config = node.get_interface_config("output")
+
+print(f"Runtime Input Config: {input_config}")
+print(f"Runtime Output Config: {output_config}")
+
+# Performance analysis with actual tensor shapes
+ii_analysis = dataflow_model.calculate_initiation_intervals(
+    iPar={iface.name: 8 for iface in dataflow_model.input_interfaces}, 
+    wPar={}
+)
 print(f"Initiation Interval Analysis: {ii_analysis}")
 
-# Resource optimization
+# Resource optimization based on runtime requirements
 optimal_config = dataflow_model.optimize_parallelism({
     'max_luts': 50000,
     'max_dsps': 200,
-    'target_frequency': 250
+    'target_frequency': 250,
+    'actual_tensor_shapes': True  # Use runtime-extracted shapes
 })
 print(f"Optimal Parallelism: {optimal_config}")
-
-# Performance bounds
-bounds = dataflow_model.get_parallelism_bounds()
-print(f"Parallelism Bounds: {bounds}")
 ```
 
 ### Expected Output Analysis
@@ -651,27 +690,26 @@ Error: Failed to parse dataflow pragma in vector_dot_product.sv:45
 **Solution**: Verify pragma syntax and ensure proper formatting:
 ```systemverilog
 // Correct format
-(* dataflow interface_type="INPUT" qDim=768 tDim=96 sDim=8 dtype="INT8" *)
+(* dataflow interface_type="INPUT" chunking_strategy="index_chunking(-1, [96])" dtype="INT8" *)
 
-// Incorrect format (missing quotes)
-(* dataflow interface_type=INPUT qDim=768 tDim=96 sDim=8 dtype=INT8 *)
+// Incorrect format (missing quotes or invalid chunking strategy)
+(* dataflow interface_type=INPUT chunking_strategy=invalid dtype=INT8 *)
 ```
 
-**Issue 2: Dimensional Constraint Violations**
+**Issue 2: Missing ModelWrapper for Runtime Extraction**
 ```bash
-ValidationError: sDim (16) exceeds tDim (8) for interface 's_axis_a'
+RuntimeError: Cannot determine tensor shape for interface 'input_a': No ModelWrapper available for runtime shape extraction
 ```
 
-**Solution**: Ensure dimensional constraints are satisfied:
+**Solution**: Ensure proper FINN compiler integration:
 ```python
-# In metadata file, ensure: sDim ≤ tDim ≤ qDim
-interfaces = {
-    "s_axis_a": {
-        "qDim": 768,  # ✓
-        "tDim": 96,   # ✓ (96 ≤ 768)
-        "sDim": 8,    # ✓ (8 ≤ 96)
-    }
-}
+# The FINN compiler must provide a ModelWrapper when instantiating HWCustomOp
+hwcustomop = VectorDotProductHWCustomOp(onnx_node)
+hwcustomop.set_model_wrapper(model_wrapper)  # Essential for runtime extraction
+
+# RTL backend must be linked to HWCustomOp
+rtl_backend = VectorDotProductRTLBackend(model)
+rtl_backend.set_associated_hwcustomop(hwcustomop)  # Essential for parameter extraction
 ```
 
 **Issue 3: Resource Estimation Inaccuracy**

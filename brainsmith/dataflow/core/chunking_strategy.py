@@ -25,14 +25,14 @@ class ChunkingStrategy(ABC):
     @abstractmethod
     def compute_chunking(self, tensor_shape: List[int], interface_name: str) -> Tuple[List[int], List[int]]:
         """
-        Compute qDim and tDim for the given tensor shape.
+        Compute num_tensors and tDim for the given tensor shape.
         
         Args:
             tensor_shape: Input tensor shape
             interface_name: Interface name for context
             
         Returns:
-            Tuple of (qDim, tDim) lists
+            Tuple of (num_tensors, tDim) lists
         """
         pass
     
@@ -75,9 +75,9 @@ class DefaultChunkingStrategy(ChunkingStrategy):
     def _apply_layout_aware_chunking(self, tensor_shape: List[int], layout: str) -> Tuple[List[int], List[int]]:
         """Apply sophisticated layout-aware chunking."""
         # Default: minimal chunking, preserve full tensor dimensions
-        qDim = [1] * len(tensor_shape)
+        num_tensors = [1] * len(tensor_shape)
         tDim = list(tensor_shape)
-        return qDim, tDim
+        return num_tensors, tDim
 
 
 @dataclass
@@ -123,14 +123,14 @@ class IndexBasedChunkingStrategy(ChunkingStrategy):
     
     def _apply_full_tensor_strategy(self, tensor_shape: List[int]) -> Tuple[List[int], List[int]]:
         """Apply full tensor strategy (no chunking)."""
-        qDim = [1] * len(tensor_shape)
+        num_tensors = [1] * len(tensor_shape)
         tDim = list(tensor_shape)
-        return qDim, tDim
+        return num_tensors, tDim
     
     def _apply_shaped_chunking(self, tensor_shape: List[int], start_idx: int) -> Tuple[List[int], List[int]]:
         """Apply shaped chunking with broadcasting rules."""
         # Initialize with defaults
-        qDim = [1] * len(tensor_shape)
+        num_tensors = [1] * len(tensor_shape)
         tDim = list(tensor_shape)
         
         # Resolve shape elements
@@ -142,14 +142,14 @@ class IndexBasedChunkingStrategy(ChunkingStrategy):
             if target_idx < len(tensor_shape):
                 # Chunk at this dimension
                 if shape_val > 0 and tensor_shape[target_idx] >= shape_val:
-                    qDim[target_idx] = tensor_shape[target_idx] // shape_val
+                    num_tensors[target_idx] = tensor_shape[target_idx] // shape_val
                     tDim[target_idx] = shape_val
                 else:
                     # Fallback: preserve dimension
-                    qDim[target_idx] = 1
+                    num_tensors[target_idx] = 1
                     tDim[target_idx] = tensor_shape[target_idx]
         
-        return qDim, tDim
+        return num_tensors, tDim
     
     def _resolve_shape_element(self, element: Union[str, int]) -> int:
         """Resolve a shape element to an integer."""
@@ -171,9 +171,9 @@ class FullTensorChunkingStrategy(ChunkingStrategy):
         if not tensor_shape:
             return [1], [1]
         
-        qDim = [1] * len(tensor_shape)
+        num_tensors = [1] * len(tensor_shape)
         tDim = list(tensor_shape)
-        return qDim, tDim
+        return num_tensors, tDim
     
     @property
     def chunking_type(self) -> ChunkingType:

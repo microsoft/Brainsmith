@@ -1,8 +1,13 @@
 {#-
-Slim HWCustomOp Template for Phase 3 Enhanced TDIM Pragma Integration
+Slim HWCustomOp Template for Runtime-Configurable Hardware Components
 
-This template generates compact HWCustomOp classes (50-80 lines) that leverage
-InterfaceMetadata objects and automatic chunking strategy integration.
+This template generates compact HWCustomOp classes that use runtime dimension
+extraction from ModelWrapper instead of static hardcoded dimensions.
+
+CRITICAL: This template generates components for future use by the FINN compiler.
+The HWCustomOp should NEVER set static num_tensors, tDim, or sDim values.
+Instead, these dimensions are extracted at runtime when the FINN compiler
+instantiates the HWCustomOp with actual tensor shapes from the ModelWrapper.
 -#}
 ############################################################################
 # Copyright (c) Microsoft Corporation.
@@ -11,6 +16,10 @@ InterfaceMetadata objects and automatic chunking strategy integration.
 # Auto-generated HWCustomOp for {{ kernel_name }}
 # Generated from: {{ source_file }}
 # Generation timestamp: {{ generation_timestamp }}
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This HWCustomOp uses runtime dimension extraction from ModelWrapper.
+# NEVER set static num_tensors, tDim, or sDim values in generated code.
 ############################################################################
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
@@ -47,7 +56,7 @@ class {{ class_name }}(AutoHWCustomOp):
                     ),
                     {% endfor %}
                 ],
-                chunking_strategy={% if interface.enhanced_tdim %}index_chunking({{ interface.enhanced_tdim.chunk_index }}, {{ interface.enhanced_tdim.chunk_sizes }}){% else %}default_chunking(){% endif %}
+                chunking_strategy={% if interface.enhanced_tdim %}index_chunking({{ interface.enhanced_tdim.chunk_index }}, "{{ interface.enhanced_tdim.chunk_sizes }}"){% else %}default_chunking(){% endif %}
             ),
             {% endif %}
             {% endfor %}
@@ -85,7 +94,7 @@ class {{ class_name }}(AutoHWCustomOp):
                 {% if interface.enhanced_tdim %}
                 "chunking_strategy": "index_chunking",
                 "chunk_index": {{ interface.enhanced_tdim.chunk_index }},
-                "chunk_sizes": {{ interface.enhanced_tdim.chunk_sizes }},
+                "chunk_sizes": "{{ interface.enhanced_tdim.chunk_sizes }}",  # Parameterized - will be resolved at runtime
                 {% else %}
                 "chunking_strategy": "default_chunking",
                 {% endif %}
