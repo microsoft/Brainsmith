@@ -220,7 +220,7 @@ class TestEnhancedTemplateSystem:
         assert '"interface_type":' in generated_content
         assert '"qDim":' in generated_content
         assert '"tDim":' in generated_content
-        assert '"sDim":' in generated_content
+        assert '"stream_dims":' in generated_content
         assert '"dtype":' in generated_content
         assert '"finn_type":' in generated_content
 

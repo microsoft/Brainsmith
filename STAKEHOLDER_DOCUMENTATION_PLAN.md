@@ -110,7 +110,7 @@ This document outlines the structure and content plan for comprehensive stakehol
 **Length**: 8-10 pages
 
 1. **Dataflow Modeling Deep Dive**
-   - Three-tier dimension system (qDim/tDim/sDim)
+   - Three-tier dimension system (qDim/tDim/stream_dims)
    - Mathematical relationships and optimization
    - Custom interface development
 

@@ -4,7 +4,7 @@
 
 This document describes the auto-generated HWCustomOp implementation for `thresholding_axi`.
 
-**Source RTL:** `/tmp/tmpdwa5i8of/thresholding_enhanced.sv`
+**Source RTL:** `/tmp/tmpquagqr66/thresholding_enhanced.sv`
 **Generated Classes:**
 - `AutoThresholdingAxi` - Main HWCustomOp implementation
 - `AutoThresholdingAxiRTLBackend` - RTL backend for synthesis
@@ -12,7 +12,28 @@ This document describes the auto-generated HWCustomOp implementation for `thresh
 
 ## Interface Specification
 
-**Total Interfaces:** 1
+**Total Interfaces:** 4
+
+### Input Interfaces
+
+- **s_axis**
+  - Type: DataflowInterfaceType.INPUT
+  - Dimensions: qDim=[1, 32], tDim=[1, 32], stream_dims=[1, 1]
+  - Data Type: UINT8
+
+### Output Interfaces
+
+- **m_axis**
+  - Type: DataflowInterfaceType.OUTPUT
+  - Dimensions: qDim=[1, 32], tDim=[1, 32], stream_dims=[1, 1]
+  - Data Type: UINT1
+
+### Configuration Interfaces
+
+- **s_axilite**
+  - Type: DataflowInterfaceType.CONFIG
+  - Dimensions: qDim=[32], tDim=[32], stream_dims=[1]
+  - Data Type: UINT32
 
 
 ## Usage Example
@@ -30,6 +51,9 @@ hw_op = AutoThresholdingAxi(node)
 
 # Configure parallelism and datatypes
 hw_op.set_nodeattr("ap_dtype", "UINT32")
+hw_op.set_nodeattr("s_axis_dtype", "UINT8")
+hw_op.set_nodeattr("m_axis_dtype", "UINT1")
+hw_op.set_nodeattr("s_axilite_dtype", "UINT32")
 
 # Verify node configuration
 hw_op.verify_node()

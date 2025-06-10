@@ -572,7 +572,7 @@ class TDimPragma(Pragma):
             target_interface.metadata["tdim_expressions"] = dimension_exprs  # Keep original expressions for debugging
             
             logger.info(f"Applied legacy TDIM pragma from line {self.line_number}: {target_interface.name} "
-                       f"tDim set to {evaluated_dims} (from expressions: {dimension_exprs})")
+                       f"block_dims set to {evaluated_dims} (from expressions: {dimension_exprs})")
             
         except PragmaError as e:
             logger.error(f"Legacy TDIM pragma at line {self.line_number} evaluation failed: {e}")

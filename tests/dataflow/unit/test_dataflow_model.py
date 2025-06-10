@@ -30,18 +30,18 @@ class TestDataflowModel:
         input_interface = DataflowInterface(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[64],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[64],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
         output_interface = DataflowInterface(
             name="output0",
             interface_type=DataflowInterfaceType.OUTPUT,
-            qDim=[64],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[64],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -54,36 +54,36 @@ class TestDataflowModel:
         input0 = DataflowInterface(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[64],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[64],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
         input1 = DataflowInterface(
             name="input1",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[32],
-            tDim=[8],
-            sDim=[2],
+            tensor_dims=[32],
+            block_dims=[8],
+            stream_dims=[2],
             dtype=dtype
         )
         
         weight0 = DataflowInterface(
             name="weights",
             interface_type=DataflowInterfaceType.WEIGHT,
-            qDim=[128],
-            tDim=[32],
-            sDim=[8],
+            tensor_dims=[128],
+            block_dims=[32],
+            stream_dims=[8],
             dtype=dtype
         )
         
         output0 = DataflowInterface(
             name="output0",
             interface_type=DataflowInterfaceType.OUTPUT,
-            qDim=[64],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[64],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -141,7 +141,7 @@ class TestDataflowModel:
         assert intervals.L > 0
         assert "bottleneck_input" in intervals.bottleneck_analysis
         
-        # With simple setup: cII = tDim / sDim = 16 / 4 = 4
+        # With simple setup: cII = tDim / stream_dims = 16 / 4 = 4
         expected_cII = 16 // 4
         assert intervals.cII["input0"] == expected_cII
         
@@ -229,7 +229,7 @@ class TestDataflowModel:
         bottleneck = intervals.bottleneck_analysis
         assert bottleneck["bottleneck_input"] in ["input0", "input1"]
         assert bottleneck["bottleneck_eII"] > 0
-        assert len(bottleneck["bottleneck_qDim"]) > 0
+        assert len(bottleneck["bottleneck_tensor_dims"]) > 0
     
     def test_mathematical_constraint_validation(self):
         """Test mathematical constraint validation"""
@@ -240,15 +240,15 @@ class TestDataflowModel:
         result = model.validate_mathematical_constraints()
         assert result.success == True
         
-        # Create interface with invalid streaming constraint (tDim % sDim != 0)
+        # Create interface with invalid streaming constraint (tDim % stream_dims != 0)
         dtype = DataflowDataType("INT", 8, True, "")
         # First create valid interface to pass construction
         invalid_interface = DataflowInterface(
             name="invalid",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[15],  # qDim can be any value
-            tDim=[15],  # Valid for construction: 15 % 5 == 0
-            sDim=[5],
+            tensor_dims=[15],  # qDim can be any value
+            block_dims=[15],  # Valid for construction: 15 % 5 == 0
+            stream_dims=[5],
             dtype=dtype
         )
         
@@ -268,7 +268,7 @@ class TestDataflowModel:
         config = ParallelismConfiguration(
             iPar={"input0": 4, "input1": 2},
             wPar={"weights": 8},
-            derived_sDim={}
+            derived_stream_dims={}
         )
         
         requirements = model.get_resource_requirements(config)
@@ -295,7 +295,7 @@ class TestDataflowModel:
         assert len(config.iPar) == 1
         assert config.iPar["input0"] == 1
         assert len(config.wPar) == 0  # No weight interfaces
-        assert "input0" in config.derived_sDim
+        assert "input0" in config.derived_stream_dims
     
     def test_empty_interfaces_handling(self):
         """Test model behavior with empty interface list"""
@@ -315,9 +315,9 @@ class TestDataflowModel:
         single_input = DataflowInterface(
             name="only_input",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[32],
-            tDim=[8],
-            sDim=[2],
+            tensor_dims=[32],
+            block_dims=[8],
+            stream_dims=[2],
             dtype=dtype
         )
         
@@ -328,7 +328,7 @@ class TestDataflowModel:
         
         intervals = model.calculate_initiation_intervals(iPar, wPar)
         
-        # cII = tDim / sDim = 8 / 2 = 4
+        # cII = tDim / stream_dims = 8 / 2 = 4
         assert intervals.cII["only_input"] == 4
         
         # eII = cII (no weights) = 4
@@ -353,7 +353,7 @@ class TestInitiationIntervals:
         bottleneck_analysis = {
             "bottleneck_input": "input0",
             "bottleneck_eII": 8,
-            "bottleneck_qDim": [64],
+            "bottleneck_tensor_dims": [64],
             "total_inputs": 2,
             "total_weights": 1
         }
@@ -395,14 +395,14 @@ class TestParallelismConfiguration:
         config = ParallelismConfiguration(
             iPar={"input0": 4, "input1": 2},
             wPar={"weights": 8},
-            derived_sDim={"input0": [4], "input1": [2], "weights": [8]}
+            derived_stream_dims={"input0": [4], "input1": [2], "weights": [8]}
         )
         
         assert config.iPar == {"input0": 4, "input1": 2}
         assert config.wPar == {"weights": 8}
-        assert config.derived_sDim["input0"] == [4]
-        assert config.derived_sDim["input1"] == [2]
-        assert config.derived_sDim["weights"] == [8]
+        assert config.derived_stream_dims["input0"] == [4]
+        assert config.derived_stream_dims["input1"] == [2]
+        assert config.derived_stream_dims["weights"] == [8]
 
 if __name__ == "__main__":
     pytest.main([__file__])

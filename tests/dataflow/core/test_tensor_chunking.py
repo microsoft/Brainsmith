@@ -7,8 +7,8 @@ instead of a global override system.
 
 import pytest
 from unittest.mock import Mock
-from brainsmith.dataflow.core.tensor_chunking import TensorChunking
-from brainsmith.dataflow.core.tensor_chunking import (
+from brainsmith.dataflow.core.block_chunking import TensorChunking
+from brainsmith.dataflow.core.block_chunking import (
     default_chunking, index_chunking, last_dim_chunking, spatial_chunking,
     DefaultChunkingStrategy, IndexBasedChunkingStrategy, FullTensorChunkingStrategy,
     ChunkingType

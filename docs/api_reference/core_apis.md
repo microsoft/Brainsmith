@@ -117,7 +117,7 @@ for component_type, file_path in artifacts.items():
 
 **Core interface abstraction with three-tier dimension system.**
 
-##### `__init__(name: str, interface_type: str, qDim: int, tDim: int, sDim: int, dtype: str, **kwargs)`
+##### `__init__(name: str, interface_type: str, tensor_dims: List[int], block_dims: List[int], stream_dims: List[int], dtype: str, **kwargs)`
 
 **Parameters:**
 - `name` (str): Interface identifier
@@ -127,14 +127,14 @@ for component_type, file_path in artifacts.items():
   - `'WEIGHT'` - Weight/parameter interface
   - `'CONFIG'` - Configuration interface
   - `'CONTROL'` - Control signal interface
-- `qDim` (int): Query dimension (original tensor dimension)
-- `tDim` (int): Tensor dimension (processing granularity)
-- `sDim` (int): Stream dimension (hardware parallelism)
+- `tensor_dims` (List[int]): Full tensor dimensions (original tensor shape)
+- `block_dims` (List[int]): Block dimensions (processing granularity)
+- `stream_dims` (List[int]): Stream dimensions (hardware parallelism per dimension)
 - `dtype` (str): Data type specification (`'INT8'`, `'INT16'`, `'FLOAT32'`)
 
 **Constraints:**
-- `sDim ≤ tDim ≤ qDim`
-- `qDim × tDim = original_tensor_shape` (for tensor operations)
+- `stream_dims[i] ≤ block_dims[i] ≤ tensor_dims[i]` for each dimension
+- `tensor_dims ÷ block_dims = num_blocks` (number of processing blocks)
 
 ##### `validate_constraints() -> ValidationResult`
 
@@ -156,9 +156,9 @@ from brainsmith.dataflow import DataflowInterface
 attention_input = DataflowInterface(
     name="attention_input",
     interface_type="INPUT",
-    qDim=512,      # Sequence length
-    tDim=64,       # Processing chunk size
-    sDim=8,        # 8-way parallel processing
+    tensor_dims=[512],    # Full sequence length
+    block_dims=[64],      # Processing block size
+    stream_dims=[8],            # 8-way parallel processing
     dtype="INT8"
 )
 
@@ -220,8 +220,8 @@ from brainsmith.dataflow import DataflowInterface, DataflowModel
 
 # Create interfaces
 interfaces = [
-    DataflowInterface("input", "INPUT", qDim=768, tDim=64, sDim=8),
-    DataflowInterface("output", "OUTPUT", qDim=768, tDim=64, sDim=8)
+    DataflowInterface("input", "INPUT", tensor_dims=[768], block_dims=[64], stream_dims=[8]),
+    DataflowInterface("output", "OUTPUT", tensor_dims=[768], block_dims=[64], stream_dims=[8])
 ]
 
 # Create model

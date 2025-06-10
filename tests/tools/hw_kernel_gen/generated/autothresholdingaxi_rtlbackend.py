@@ -3,8 +3,12 @@
 # Licensed under the MIT License.
 #
 # Auto-generated RTLBackend for thresholding_axi
-# Generated from: /tmp/tmpdwa5i8of/thresholding_enhanced.sv
-# Generation timestamp: 2025-06-08T07:57:10.083734
+# Generated from: /tmp/tmpquagqr66/thresholding_enhanced.sv
+# Generation timestamp: 2025-06-10T02:34:43.022385
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This RTLBackend extracts dimensions at runtime from associated HWCustomOp.
+# Dimensions are not hardcoded during generation.
 ############################################################################
 
 import os
@@ -25,10 +29,13 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
     
     Provides RTL generation with dataflow modeling integration.
     
-    Generated from: /tmp/tmpdwa5i8of/thresholding_enhanced.sv
+    Generated from: /tmp/tmpquagqr66/thresholding_enhanced.sv
     
     Interfaces:
     - ap: control
+    - s_axis: input
+    - m_axis: output
+    - s_axilite: config
     """
     
     def __init__(self, model, dataflow_model=None):
@@ -43,6 +50,7 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
         
         # Store dataflow model for enhanced RTL generation
         self.dataflow_model = dataflow_model
+        self._associated_hwcustomop = None  # Set by FINN compiler at runtime
         
         # Set kernel-specific paths
         self.kernel_name = "thresholding_axi"
@@ -51,6 +59,40 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
             "rtl", 
             "thresholding_axi_wrapper.v"
         )
+    
+    def set_associated_hwcustomop(self, hwcustomop):
+        """
+        Set the associated HWCustomOp for runtime dimension extraction.
+        
+        This method should be called by the FINN compiler when the RTL backend
+        is associated with its corresponding HWCustomOp.
+        """
+        self._associated_hwcustomop = hwcustomop
+    
+    def get_runtime_interface_config(self, interface_name: str):
+        """
+        Get runtime configuration for an interface from the associated HWCustomOp.
+        
+        Args:
+            interface_name: Name of the interface
+            
+        Returns:
+            Dict with runtime interface configuration
+        """
+        if not self._associated_hwcustomop:
+            raise RuntimeError(
+                f"Cannot get runtime interface config for {interface_name}: "
+                f"No associated HWCustomOp available. RTL backend must be properly "
+                f"linked to its HWCustomOp by the FINN compiler."
+            )
+        
+        try:
+            return self._associated_hwcustomop.get_interface_config(interface_name)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to extract runtime interface config for {interface_name}: {e}. "
+                f"The HWCustomOp must have a valid ModelWrapper for dimension extraction."
+            )
     
     def get_rtl_file_list(self):
         """
@@ -121,23 +163,42 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
             "top_module_name": "thresholding_axi",
             
             # Basic information
-            "source_file": "/tmp/tmpdwa5i8of/thresholding_enhanced.sv",
-            "generation_timestamp": "2025-06-08T07:57:10.083734",
+            "source_file": "/tmp/tmpquagqr66/thresholding_enhanced.sv",
+            "generation_timestamp": "2025-06-10T02:34:43.022385",
             
             # Parameters
             "verilog_parameters": self.get_verilog_parameters(),
             "rtl_files": self.get_rtl_file_list(),
             
-            # Interface information
+            # Interface information - dimensions extracted at runtime
             "interfaces": {
                 "ap": {
                     "type": "control",
                     "direction": "output",
-                    "qDim": [1],
-                    "tDim": [1],
-                    "sDim": [1],
                     "dtype": "UINT32",
-                    "stream_width": 32  # Simplified - should use calculate_stream_width()
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
+                },
+                "s_axis": {
+                    "type": "input",
+                    "direction": "input",
+                    "dtype": "UINT8",
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
+                },
+                "m_axis": {
+                    "type": "output",
+                    "direction": "output",
+                    "dtype": "UINT1",
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
+                },
+                "s_axilite": {
+                    "type": "config",
+                    "direction": "output",
+                    "dtype": "UINT32",
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
                 },
             },
             
@@ -177,8 +238,8 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
         
         with open(param_file, 'w') as f:
             f.write("# Auto-generated parameters for thresholding_axi\n")
-            f.write(f"# Source: /tmp/tmpdwa5i8of/thresholding_enhanced.sv\n") 
-            f.write(f"# Generated: 2025-06-08T07:57:10.083734\n\n")
+            f.write(f"# Source: /tmp/tmpquagqr66/thresholding_enhanced.sv\n") 
+            f.write(f"# Generated: 2025-06-10T02:34:43.022385\n\n")
             
             # Write Verilog parameters
             params = self.get_verilog_parameters()
@@ -186,7 +247,7 @@ class AutoThresholdingAxiRTLBackend(RTLBackend):
                 f.write(f"{name}={value}\n")
             
             f.write(f"\n# Interface Information\n")
-            f.write(f"NUM_INTERFACES=1\n")
+            f.write(f"NUM_INTERFACES=4\n")
             f.write(f"NUM_INPUT_INTERFACES=0\n")
             f.write(f"NUM_OUTPUT_INTERFACES=0\n")
             f.write(f"NUM_WEIGHT_INTERFACES=0\n")

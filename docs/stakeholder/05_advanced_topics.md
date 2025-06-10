@@ -2,7 +2,7 @@
 
 ## Dataflow Modeling Deep Dive
 
-### Runtime Dimension System (qDim/tDim/sDim)
+### Runtime Dimension System (qDim/tDim/stream_dims)
 
 The **Interface-Wise Dataflow Modeling Framework** implements a revolutionary three-tier dimension system that enables runtime configuration and automatic optimization. This system provides mathematical foundations for hardware optimization while maintaining complete flexibility.
 
@@ -20,22 +20,22 @@ The **Interface-Wise Dataflow Modeling Framework** implements a revolutionary th
 - Computed from qDim using mathematical relationships
 - Optimized based on algorithm requirements and hardware constraints
 
-**sDim (Stream Parallelism Dimension)**
+**stream_dims (Stream Parallelism Dimension)**
 - Hardware parallelism level (e.g., 8 elements per clock cycle)
 - Extracted from interface metadata and ModelWrapper
-- Must satisfy: `tDim % sDim == 0` for valid streaming
+- Must satisfy: `tDim % stream_dims == 0` for valid streaming
 
 **Runtime Relationships**
 ```python
 # Extracted automatically by AutoHWCustomOp
 qDim = self.extract_runtime_dimension(interface_name, "qDim")
 tDim = self.extract_runtime_dimension(interface_name, "tDim")  
-sDim = self.extract_runtime_dimension(interface_name, "sDim")
+stream_dims = self.extract_runtime_dimension(interface_name, "stream_dims")
 
 # Computed values
-num_tensors = qDim // tDim  # Number of processing chunks
-cycles_per_chunk = tDim // sDim  # Cycles per chunk
-total_cycles = num_tensors * cycles_per_chunk  # Total latency
+num_blocks = tensor_dims // block_dims  # Number of processing chunks
+cycles_per_block = block_dims // stream_dims  # Cycles per chunk
+total_cycles = num_blocks * cycles_per_block  # Total latency
 ```
 
 #### Mathematical Relationships
@@ -44,19 +44,19 @@ total_cycles = num_tensors * cycles_per_chunk  # Total latency
 ```
 input_shape = num_tensors × tDim
 num_tensors = input_shape ÷ tDim
-tDim % sDim = 0 (for valid streaming)
+tDim % stream_dims = 0 (for valid streaming)
 ```
 
 **Parallelism Calculations**
 ```python
 # Elements processed per clock cycle
-elements_per_cycle = sDim
+elements_per_cycle = stream_dims
 
 # Clock cycles to process one tensor chunk
-cycles_per_chunk = tDim / sDim
+cycles_per_chunk = tDim / stream_dims
 
 # Total cycles to process all chunks
-total_cycles = num_tensors * cycles_per_chunk
+total_cycles = num_blocks * cycles_per_block
 ```
 
 **Performance Optimization**
@@ -65,7 +65,7 @@ from brainsmith.dataflow.core.dataflow_model import DataflowModel
 
 class AdvancedDataflowModel(DataflowModel):
     def optimize_dimensional_configuration(self, input_shape, constraints):
-        """Optimize num_tensors/tDim/sDim configuration for performance."""
+        """Optimize num_tensors/tDim/stream_dims configuration for performance."""
         
         # Objective function: minimize latency while respecting constraints
         def objective(dims):
@@ -140,15 +140,15 @@ class BERTAttention(AutoHWCustomOp):
         # Dimensions automatically extracted at runtime
         qDim = self.extract_runtime_dimension("attention_input", "qDim")  # e.g., 768
         tDim = self.extract_runtime_dimension("attention_input", "tDim")  # e.g., 96
-        sDim = self.extract_runtime_dimension("attention_input", "sDim")  # e.g., 8
+        stream_dims = self.extract_runtime_dimension("attention_input", "stream_dims")  # e.g., 8
         
         print(f"Runtime Configuration:")
         print(f"  Query Dimension (qDim): {qDim}")
         print(f"  Tensor Processing Dimension (tDim): {tDim}")
-        print(f"  Stream Parallelism (sDim): {sDim}")
+        print(f"  Stream Parallelism (stream_dims): {stream_dims}")
         print(f"  Number of chunks: {qDim // tDim}")
-        print(f"  Cycles per chunk: {tDim // sDim}")
-        print(f"  Total cycles: {(qDim // tDim) * (tDim // sDim)}")
+        print(f"  Cycles per chunk: {tDim // stream_dims}")
+        print(f"  Total cycles: {(qDim // tDim) * (tDim // stream_dims)}")
 
 # Usage: FINN compiler automatically extracts dimensions from actual model
 # No hardcoded dimensions in generated code!
@@ -207,7 +207,7 @@ class MemoryInterface(DataflowInterface):
     
     def calculate_memory_bandwidth(self):
         """Calculate required memory bandwidth."""
-        data_rate = self.sDim * self.calculate_frequency()
+        data_rate = self.stream_dims * self.calculate_frequency()
         data_width = self.get_data_width()
         
         return {
@@ -314,19 +314,19 @@ class {{ class_name }}(AutoHWCustomOp):
 interfaces = [
     DataflowInterface(
         name="query", interface_type="INPUT",
-        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, sDim={{ parallelism.query }}
+        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, stream_dims={{ parallelism.query }}
     ),
     DataflowInterface(
         name="key", interface_type="INPUT", 
-        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, sDim={{ parallelism.key }}
+        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, stream_dims={{ parallelism.key }}
     ),
     DataflowInterface(
         name="value", interface_type="INPUT",
-        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, sDim={{ parallelism.value }}
+        qDim={{ sequence_length }}, tDim={{ attention_chunk }}, stream_dims={{ parallelism.value }}
     ),
     DataflowInterface(
         name="attention_output", interface_type="OUTPUT",
-        qDim={{ sequence_length }}, tDim={{ output_chunk }}, sDim={{ parallelism.output }}
+        qDim={{ sequence_length }}, tDim={{ output_chunk }}, stream_dims={{ parallelism.output }}
     )
 ]
 
@@ -420,7 +420,7 @@ class {{ class_name }}(AutoHWCustomOp):
             interface_type="INPUT",
             qDim={{ input_shape[0] }},
             tDim={{ input_shape[1] if input_shape|length > 1 else input_shape[0] }},
-            sDim={{ parallelism_config.get('input_' + loop.index0|string, 1) }}
+            stream_dims={{ parallelism_config.get('input_' + loop.index0|string, 1) }}
         ))
         {% endfor %}
         
@@ -499,9 +499,9 @@ class ParallelismOptimizer:
             throughput = self._calculate_throughput(config)
             constraints.append(throughput - self.constraints['min_throughput'])
             
-            # Dimensional constraints (qDim/tDim/sDim relationships)
+            # Dimensional constraints (qDim/tDim/stream_dims relationships)
             for interface in self.model.interfaces:
-                constraints.append(interface.tDim - interface.sDim)
+                constraints.append(interface.tDim - interface.stream_dims)
                 constraints.append(interface.qDim - interface.tDim)
             
             return np.array(constraints)
@@ -845,7 +845,7 @@ module.exports = grammar(require('./base_systemverilog'), {
     dimension_specification: $ => seq(
       'qDim', '=', field('q_dim', $.number),
       'tDim', '=', field('t_dim', $.number),
-      'sDim', '=', field('s_dim', $.number)
+      'stream_dims', '=', field('s_dim', $.number)
     ),
     
     performance_pragma: $ => seq(
@@ -904,7 +904,7 @@ class ExtendedRTLParser(RTLParser):
             f'{interface_name}_dataflow': {
                 'qDim': int(q_dim),
                 'tDim': int(t_dim),
-                'sDim': int(s_dim),
+                'stream_dims': int(s_dim),
                 'pragma_type': 'dataflow'
             }
         }

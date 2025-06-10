@@ -5,7 +5,7 @@ This template generates compact HWCustomOp classes that use runtime dimension
 extraction from ModelWrapper instead of static hardcoded dimensions.
 
 CRITICAL: This template generates components for future use by the FINN compiler.
-The HWCustomOp should NEVER set static num_tensors, tDim, or sDim values.
+The HWCustomOp should NEVER set static num_tensors, tDim, or stream_dims values.
 Instead, these dimensions are extracted at runtime when the FINN compiler
 instantiates the HWCustomOp with actual tensor shapes from the ModelWrapper.
 -#}
@@ -19,13 +19,14 @@ instantiates the HWCustomOp with actual tensor shapes from the ModelWrapper.
 #
 # RUNTIME-CONFIGURABLE HARDWARE COMPONENT
 # This HWCustomOp uses runtime dimension extraction from ModelWrapper.
-# NEVER set static num_tensors, tDim, or sDim values in generated code.
+# NEVER set static num_tensors, tDim, or stream_dims values in generated code.
 ############################################################################
 
+import numpy as np
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
-from brainsmith.dataflow.core.tensor_chunking import index_chunking, default_chunking, last_dim_chunking
+from brainsmith.dataflow.core.tensor_chunking import default_chunking
 
 
 class {{ class_name }}(AutoHWCustomOp):
@@ -39,7 +40,8 @@ class {{ class_name }}(AutoHWCustomOp):
     def __init__(self, onnx_node, **kwargs):
         """Initialize {{ class_name }} with interface metadata and chunking strategies."""
         
-        # Define interface metadata with enhanced TDIM pragma integration
+        # Define interface metadata with data layout-based chunking
+        # Chunking is determined automatically from ONNX tensor layout (NCHW, NHWC, NLC, etc.)
         # Only include AXI_STREAM interfaces in dataflow model (AXI_LITE will be handled separately)
         self._interface_metadata = [
             {% for interface in interfaces %}
@@ -52,11 +54,11 @@ class {{ class_name }}(AutoHWCustomOp):
                     DataTypeConstraint(
                         finn_type="{{ constraint.finn_type }}",
                         bit_width={{ constraint.bit_width }},
-                        signed={{ constraint.signed|lower }}
+                        signed={{ constraint.signed }}
                     ),
                     {% endfor %}
                 ],
-                chunking_strategy={% if interface.enhanced_tdim %}index_chunking({{ interface.enhanced_tdim.chunk_index }}, "{{ interface.enhanced_tdim.chunk_sizes }}"){% else %}default_chunking(){% endif %}
+                chunking_strategy=default_chunking()  # Data layout-based chunking determined at runtime
             ),
             {% endif %}
             {% endfor %}
@@ -83,6 +85,44 @@ class {{ class_name }}(AutoHWCustomOp):
         attrs.update(kernel_attrs)
         return attrs
     
+    def determine_chunking_from_layout(self, interface_name, tensor_shape, onnx_layout):
+        """
+        Determine qDim and tDim from ONNX tensor layout.
+        
+        Based on Interface-Wise Dataflow Modeling specification:
+        - [N, C]: qDim=1, tDim=C
+        - [N, C, H, W]: qDim=C, tDim=H*W  
+        - [N, H, W, C]: qDim=H*W, tDim=C
+        - [N, L, C]: qDim=L, tDim=C
+        - [N, C, L]: qDim=C, tDim=L
+        - [N, L, h, d]: qDim=L, tDim=h*d
+        
+        For weight interfaces:
+        - 1D weights: qDim=1, tDim=length
+        - 2D weights: qDim=second_dim, tDim=first_dim
+        """
+        if onnx_layout == "[N, C]":
+            N, C = tensor_shape
+            return {"qDim": 1, "tDim": C, "chunk_dimension": None}
+        elif onnx_layout == "[N, C, H, W]":
+            N, C, H, W = tensor_shape
+            return {"qDim": C, "tDim": H * W, "chunk_dimension": 1}
+        elif onnx_layout == "[N, H, W, C]":
+            N, H, W, C = tensor_shape
+            return {"qDim": H * W, "tDim": C, "chunk_dimension": 2}
+        elif onnx_layout == "[N, L, C]":
+            N, L, C = tensor_shape
+            return {"qDim": L, "tDim": C, "chunk_dimension": 1}
+        elif onnx_layout == "[N, C, L]":
+            N, C, L = tensor_shape
+            return {"qDim": C, "tDim": L, "chunk_dimension": 1}
+        elif onnx_layout == "[N, L, h, d]":
+            N, L, h, d = tensor_shape
+            return {"qDim": L, "tDim": h * d, "chunk_dimension": 1}
+        else:
+            # Default fallback - treat as single chunk
+            return {"qDim": 1, "tDim": np.prod(tensor_shape[1:]), "chunk_dimension": None}
+    
     def get_kernel_interface_specs(self):
         """Return interface specifications for kernel integration."""
         return {
@@ -91,13 +131,8 @@ class {{ class_name }}(AutoHWCustomOp):
             "{{ interface.name }}": {
                 "type": "{{ interface.dataflow_type.lower() }}",
                 "interface_type": "{{ interface.type.name }}",
-                {% if interface.enhanced_tdim %}
-                "chunking_strategy": "index_chunking",
-                "chunk_index": {{ interface.enhanced_tdim.chunk_index }},
-                "chunk_sizes": "{{ interface.enhanced_tdim.chunk_sizes }}",  # Parameterized - will be resolved at runtime
-                {% else %}
-                "chunking_strategy": "default_chunking",
-                {% endif %}
+                "chunking_strategy": "data_layout_chunking",  # Determined from ONNX tensor layout
+                "layout_detection": "automatic",  # qDim/tDim calculated from [N,C,H,W], [N,L,C], etc.
             },
             {% endif %}
             {% endfor %}

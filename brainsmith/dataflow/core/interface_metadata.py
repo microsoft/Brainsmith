@@ -8,7 +8,7 @@ static dictionaries in generated AutoHWCustomOp classes.
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 from .dataflow_interface import DataflowInterfaceType
-from .tensor_chunking import ChunkingStrategy, default_chunking
+from .block_chunking import ChunkingStrategy, default_chunking
 
 
 @dataclass

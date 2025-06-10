@@ -67,7 +67,7 @@ num_tensors = qDim ÷ tDim = [8]  # Number of chunks (computed via get_num_tenso
 
 # Validation constraints:
 assert qDim[i] % tDim[i] == 0  # Must be evenly divisible
-assert tDim[i] % sDim[i] == 0  # Streaming constraint
+assert tDim[i] % stream_dims[i] == 0  # Streaming constraint
 ```
 
 **Review Questions:**

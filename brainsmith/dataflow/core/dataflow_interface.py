@@ -121,7 +121,7 @@ class Constraint:
 
 @dataclass
 class DivisibilityConstraint(Constraint):
-    """Divisibility constraint (e.g., tDim % sDim == 0)"""
+    """Divisibility constraint (e.g., block_dims % stream_dims == 0)"""
     dividend: str      # Parameter name or expression
     divisor: str       # Parameter name or expression
     
@@ -130,7 +130,7 @@ class DivisibilityConstraint(Constraint):
 
 @dataclass
 class RangeConstraint(Constraint):
-    """Range constraint (e.g., 1 <= iPar <= tDim)"""
+    """Range constraint (e.g., 1 <= iPar <= block_dims)"""
     parameter: str
     min_value: Union[int, str]  # Literal or parameter reference
     max_value: Union[int, str]  # Literal or parameter reference
@@ -145,20 +145,20 @@ class DataflowInterface:
     standardized representation of interface characteristics.
     
     Three-tier dimension system for Interface-Wise Dataflow Modeling:
-    - qDim: Query dimensions (original input tensor shape before any processing)
+    - tensor_dims: Full tensor dimensions (original input tensor shape before any processing)
       Example: BERT input [1,128,768] where 1=batch, 128=sequence length, 768=hidden dimension
-    - tDim: Tensor dimensions (processing chunk shape for each operation) 
+    - block_dims: Block dimensions (processing chunk shape for each operation) 
       Example: [1,8,96] meaning process 8 sequence elements with 96 features per chunk
-    - sDim: Stream dimensions (hardware parallelism - elements processed per clock cycle)
+    - stream_dims: Stream dimensions (hardware parallelism - elements processed per clock cycle)
       Example: [1,1,8] meaning 8 features processed in parallel each cycle
-    - num_tensors: Computed as qDim ÷ tDim (number of chunks to process)
+    - num_blocks: Computed as tensor_dims ÷ block_dims (number of chunks to process)
       Example: [1,128,768] ÷ [1,8,96] = [1,16,8] chunks total
     """
     name: str                           # Interface identifier (e.g., "in0", "out0", "weights")
     interface_type: DataflowInterfaceType  # INPUT, OUTPUT, WEIGHT interface type
-    qDim: List[int]                     # Query dimensions: original input tensor shape
-    tDim: List[int]                     # Tensor dimensions: processing chunk shape
-    sDim: List[int]                     # Stream dimensions: elements per clock cycle (hardware parallelism)
+    tensor_dims: List[int]              # Full tensor dimensions: original input tensor shape
+    block_dims: List[int]               # Block dimensions: processing chunk shape
+    stream_dims: List[int]                     # Stream dimensions: elements per clock cycle (hardware parallelism)
     dtype: DataflowDataType             # Element data type specification
     allowed_datatypes: List[DataTypeConstraint] = field(default_factory=list)  # Allowed datatypes from DATATYPE pragma
     axi_metadata: Dict[str, Any] = field(default_factory=dict)        # Protocol-specific metadata
@@ -174,36 +174,36 @@ class DataflowInterface:
         """
         Validate dimension consistency with flexible length requirements.
         
-        qDim, tDim, and sDim can have different lengths to support various tensor shapes:
-        - qDim: Can be multi-dimensional (e.g., [1,128,768] for BERT)
-        - tDim: Can have fewer dimensions (e.g., [128] for 1D processing)  
-        - sDim: Can be single dimension (e.g., [8] for parallelism)
+        tensor_dims, block_dims, and stream_dims can have different lengths to support various tensor shapes:
+        - tensor_dims: Can be multi-dimensional (e.g., [1,128,768] for BERT)
+        - block_dims: Can have fewer dimensions (e.g., [128] for 1D processing)  
+        - stream_dims: Can be single dimension (e.g., [8] for parallelism)
         """
         # Basic validation - all dimensions must be non-empty and positive
-        for dim_list, name in [(self.qDim, "qDim"), (self.tDim, "tDim"), (self.sDim, "sDim")]:
+        for dim_list, name in [(self.tensor_dims, "tensor_dims"), (self.block_dims, "block_dims"), (self.stream_dims, "stream_dims")]:
             if not dim_list:
                 raise ValueError(f"Interface {self.name}: {name} cannot be empty")
             for i, dim in enumerate(dim_list):
                 if dim <= 0:
                     raise ValueError(f"Interface {self.name}: {name}[{i}] ({dim}) must be positive")
         
-        # Validate chunking relationship between qDim and tDim
-        # Only validate dimensions that exist in both qDim and tDim
-        min_dims = min(len(self.qDim), len(self.tDim))
+        # Validate chunking relationship between tensor_dims and block_dims
+        # Only validate dimensions that exist in both tensor_dims and block_dims
+        min_dims = min(len(self.tensor_dims), len(self.block_dims))
         for i in range(min_dims):
-            q = self.qDim[i]
-            t = self.tDim[i]
+            q = self.tensor_dims[i]
+            t = self.block_dims[i]
             if q % t != 0:
-                raise ValueError(f"Interface {self.name}: qDim[{i}] ({q}) must be divisible by tDim[{i}] ({t}) for valid chunking")
+                raise ValueError(f"Interface {self.name}: tensor_dims[{i}] ({q}) must be divisible by block_dims[{i}] ({t}) for valid chunking")
         
-        # Validate streaming relationship between tDim and sDim  
-        # Only validate dimensions that exist in both tDim and sDim
-        min_stream_dims = min(len(self.tDim), len(self.sDim))
+        # Validate streaming relationship between block_dims and stream_dims  
+        # Only validate dimensions that exist in both block_dims and stream_dims
+        min_stream_dims = min(len(self.block_dims), len(self.stream_dims))
         for i in range(min_stream_dims):
-            t = self.tDim[i]
-            s = self.sDim[i]
+            t = self.block_dims[i]
+            s = self.stream_dims[i]
             if t % s != 0:
-                raise ValueError(f"Interface {self.name}: tDim[{i}] ({t}) must be divisible by sDim[{i}] ({s}) for valid streaming")
+                raise ValueError(f"Interface {self.name}: block_dims[{i}] ({t}) must be divisible by stream_dims[{i}] ({s}) for valid streaming")
     
     def _set_default_constraints(self):
         """Set default datatype constraints if none provided"""
@@ -218,36 +218,36 @@ class DataflowInterface:
             )
             self.allowed_datatypes = [default_constraint]
     
-    def get_num_tensors(self) -> List[int]:
+    def get_num_blocks(self) -> List[int]:
         """
-        Calculate number of processing chunks (qDim ÷ tDim) for each dimension.
+        Calculate number of processing blocks (tensor_dims ÷ block_dims) for each dimension.
         
-        This represents how many tensor chunks must be processed to handle
-        the complete query (original input tensor).
+        This represents how many tensor blocks must be processed to handle
+        the complete tensor (original input tensor).
         
-        Only calculates for dimensions that exist in both qDim and tDim.
+        Only calculates for dimensions that exist in both tensor_dims and block_dims.
         
         Returns:
-            List[int]: Number of chunks per dimension (length = min(len(qDim), len(tDim)))
+            List[int]: Number of blocks per dimension (length = min(len(tensor_dims), len(block_dims)))
         """
-        min_dims = min(len(self.qDim), len(self.tDim))
-        return [self.qDim[i] // self.tDim[i] for i in range(min_dims)]
+        min_dims = min(len(self.tensor_dims), len(self.block_dims))
+        return [self.tensor_dims[i] // self.block_dims[i] for i in range(min_dims)]
     
     def calculate_total_elements(self) -> int:
-        """Calculate total number of elements in original input tensor (qDim)"""
-        return np.prod(self.qDim)
+        """Calculate total number of elements in original input tensor (tensor_dims)"""
+        return np.prod(self.tensor_dims)
     
-    def calculate_elements_per_chunk(self) -> int:
-        """Calculate number of elements in each processing chunk (tDim)"""
-        return np.prod(self.tDim)
+    def calculate_elements_per_block(self) -> int:
+        """Calculate number of elements in each processing block (block_dims)"""
+        return np.prod(self.block_dims)
     
-    def calculate_total_chunks(self) -> int:
-        """Calculate total number of processing chunks (num_tensors)"""
-        return np.prod(self.get_num_tensors())
+    def calculate_total_blocks(self) -> int:
+        """Calculate total number of processing blocks (num_blocks)"""
+        return np.prod(self.get_num_blocks())
     
     def calculate_stream_width(self) -> int:
-        """Calculate AXI stream width based on sDim and dtype"""
-        elements_per_cycle = np.prod(self.sDim)
+        """Calculate AXI stream width based on stream_dims and dtype"""
+        elements_per_cycle = np.prod(self.stream_dims)
         raw_width = elements_per_cycle * self.dtype.bitwidth
         # Align to 8-bit boundaries for AXI compatibility
         return ((raw_width + 7) // 8) * 8
@@ -257,18 +257,18 @@ class DataflowInterface:
         result = create_validation_result()
         
         # Validate dimension relationships
-        for i, (q, t, s) in enumerate(zip(self.qDim, self.tDim, self.sDim)):
-            # Check qDim divisibility by tDim for valid chunking
+        for i, (q, t, s) in enumerate(zip(self.tensor_dims, self.block_dims, self.stream_dims)):
+            # Check tensor_dims divisibility by block_dims for valid chunking
             if q % t != 0:
                 error = create_divisibility_error(
-                    self.name, f"qDim[{i}]", q, t
+                    self.name, f"tensor_dims[{i}]", q, t
                 )
                 result.add_error(error)
             
-            # Check tDim divisibility by sDim for valid streaming
+            # Check block_dims divisibility by stream_dims for valid streaming
             if t % s != 0:
                 error = create_divisibility_error(
-                    self.name, f"tDim[{i}]", t, s
+                    self.name, f"block_dims[{i}]", t, s
                 )
                 result.add_error(error)
         
@@ -288,37 +288,37 @@ class DataflowInterface:
         return result
     
     def apply_parallelism(self, iPar: Optional[int] = None, wPar: Optional[int] = None) -> None:
-        """Update sDim based on parallelism parameters"""
+        """Update stream_dims based on parallelism parameters"""
         if self.interface_type == DataflowInterfaceType.INPUT and iPar is not None:
-            if len(self.sDim) > 0:
-                self.sDim[0] = iPar
+            if len(self.stream_dims) > 0:
+                self.stream_dims[0] = iPar
         elif self.interface_type == DataflowInterfaceType.WEIGHT and wPar is not None:
-            if len(self.sDim) > 0:
-                self.sDim[0] = wPar
+            if len(self.stream_dims) > 0:
+                self.stream_dims[0] = wPar
         elif self.interface_type == DataflowInterfaceType.OUTPUT:
             # Output parallelism typically derived from input parallelism
-            if iPar is not None and len(self.sDim) > 0:
-                self.sDim[0] = iPar
+            if iPar is not None and len(self.stream_dims) > 0:
+                self.stream_dims[0] = iPar
     
     def calculate_cII(self) -> int:
         """
         Calculate calculation initiation interval (cII) for this interface.
         
         cII represents the number of cycles between consecutive calculations
-        for this interface: cII = ∏(tDim_i / sDim_i)
+        for this interface: cII = ∏(block_dims_i / stream_dims_i)
         
-        Only calculates for dimensions that exist in both tDim and sDim.
+        Only calculates for dimensions that exist in both block_dims and stream_dims.
         
         Returns:
             int: Calculation initiation interval in cycles
         """
         cII = 1
-        min_dims = min(len(self.tDim), len(self.sDim))
+        min_dims = min(len(self.block_dims), len(self.stream_dims))
         for i in range(min_dims):
-            tdim = self.tDim[i]
-            sdim = self.sDim[i]
+            bdim = self.block_dims[i]
+            sdim = self.stream_dims[i]
             if sdim > 0:
-                cII *= tdim // sdim
+                cII *= bdim // sdim
         return max(cII, 1)
     
     def get_axi_signals(self) -> Dict[str, Dict[str, Any]]:
@@ -408,46 +408,46 @@ class DataflowInterface:
     
     def get_memory_footprint(self) -> int:
         """Calculate total memory footprint in bits"""
-        total_elements = np.prod(self.get_num_tensors()) * np.prod(self.tDim)
+        total_elements = np.prod(self.get_num_blocks()) * np.prod(self.block_dims)
         return total_elements * self.dtype.bitwidth
     
     def get_transfer_cycles(self) -> int:
         """Calculate number of transfer cycles needed"""
-        total_elements = np.prod(self.tDim)
-        elements_per_cycle = np.prod(self.sDim)
+        total_elements = np.prod(self.block_dims)
+        elements_per_cycle = np.prod(self.stream_dims)
         return (total_elements + elements_per_cycle - 1) // elements_per_cycle
     
     def reconstruct_tensor_shape(self) -> List[int]:
         """
-        Reconstruct original tensor shape from num_tensors and tDim using broadcasting
+        Reconstruct original tensor shape from num_blocks and block_dims using broadcasting
         
-        Mathematical relationship: original_tensor_shape = num_tensors × tDim
+        Mathematical relationship: original_tensor_shape = num_blocks × block_dims
         
         Returns:
             List[int]: Original tensor shape before chunking
         """
-        return self._broadcast_tensor_shape(self.get_num_tensors(), self.tDim)
+        return self._broadcast_tensor_shape(self.get_num_blocks(), self.block_dims)
     
-    def _broadcast_tensor_shape(self, num_tensors: List[int], tDim: List[int]) -> List[int]:
+    def _broadcast_tensor_shape(self, num_blocks: List[int], block_dims: List[int]) -> List[int]:
         """
-        Broadcast num_tensors and tDim to reconstruct original tensor shape
+        Broadcast num_blocks and block_dims to reconstruct original tensor shape
         
         Args:
-            num_tensors: Number of tensor chunks
-            tDim: Tensor chunk dimensions
+            num_blocks: Number of tensor blocks
+            block_dims: Tensor block dimensions
             
         Returns:
             List[int]: Broadcasted tensor shape
         """
-        if len(num_tensors) == 1 and len(tDim) == 1:
-            # Simple case: [num_tensors[0] * tDim[0]]
-            return [num_tensors[0] * tDim[0]]
-        elif len(num_tensors) == len(tDim):
+        if len(num_blocks) == 1 and len(block_dims) == 1:
+            # Simple case: [num_blocks[0] * block_dims[0]]
+            return [num_blocks[0] * block_dims[0]]
+        elif len(num_blocks) == len(block_dims):
             # Element-wise multiplication
-            return [n * t for n, t in zip(num_tensors, tDim)]
+            return [n * t for n, t in zip(num_blocks, block_dims)]
         else:
             # More complex broadcasting - concatenate dimensions
-            return num_tensors + tDim
+            return num_blocks + block_dims
     
     def validate_tensor_chunking(self, original_shape: List[int]) -> ValidationResult:
         """
@@ -498,7 +498,7 @@ class DataflowInterface:
     
     @classmethod
     def from_tensor_chunking(cls, name: str, interface_type: DataflowInterfaceType,
-                            original_shape: List[int], tDim: List[int],
+                            original_shape: List[int], block_dims: List[int],
                             dtype: DataflowDataType, chunking_mode: str = "broadcast",
                             **kwargs) -> 'DataflowInterface':
         """
@@ -508,64 +508,64 @@ class DataflowInterface:
             name: Interface name
             interface_type: Type of interface
             original_shape: Original tensor shape before chunking
-            tDim: Desired tensor dimensions per calculation
+            block_dims: Desired block dimensions per calculation
             dtype: Data type specification
-            chunking_mode: How to compute qDim ("broadcast", "divide", "explicit")
+            chunking_mode: How to compute tensor_dims ("broadcast", "divide", "explicit")
             **kwargs: Additional interface parameters
             
         Returns:
-            DataflowInterface with computed qDim
+            DataflowInterface with computed tensor_dims
         """
-        # In the new architecture, qDim should be the original tensor shape
-        qDim = list(original_shape)
+        # In the new architecture, tensor_dims should be the original tensor shape
+        tensor_dims = list(original_shape)
         
-        # Initialize sDim to default 1 for each tDim dimension (can be updated by parallelism)
-        sDim = [1] * len(tDim)
+        # Initialize stream_dims to default 1 for each block_dims dimension (can be updated by parallelism)
+        stream_dims = [1] * len(block_dims)
         
         return cls(
             name=name,
             interface_type=interface_type,
-            qDim=qDim,
-            tDim=tDim,
-            sDim=sDim,
+            tensor_dims=tensor_dims,
+            block_dims=block_dims,
+            stream_dims=stream_dims,
             dtype=dtype,
             **kwargs
         )
     
     @staticmethod
-    def _compute_qDim_from_chunking(original_shape: List[int], tDim: List[int],
+    def _compute_tensor_dims_from_chunking(original_shape: List[int], block_dims: List[int],
                                    chunking_mode: str = "broadcast") -> List[int]:
         """
-        Compute qDim from original tensor shape and desired tDim
+        Compute tensor_dims from original tensor shape and desired block_dims
         
         Args:
             original_shape: Original tensor shape
-            tDim: Desired tensor dimensions
+            block_dims: Desired block dimensions
             chunking_mode: Computation method
             
         Returns:
-            List[int]: Computed qDim
+            List[int]: Computed tensor_dims
             
         Examples:
-            original_shape=[30, 50], tDim=[50] → qDim=[30] (chunking along last dim)
-            original_shape=[10, 30, 50], tDim=[3, 5] → qDim=[1000] (where total=15000, tDim=15)
+            original_shape=[30, 50], block_dims=[50] → tensor_dims=[30] (chunking along last dim)
+            original_shape=[10, 30, 50], block_dims=[3, 5] → tensor_dims=[1000] (where total=15000, block_dims=15)
         """
         if chunking_mode == "broadcast":
             total_elements = np.prod(original_shape)
-            tDim_elements = np.prod(tDim)
+            block_dims_elements = np.prod(block_dims)
             
-            if len(tDim) == 1:
-                # Single tDim: compute qDim such that qDim * tDim = total_elements
-                # For original_shape=[30, 50] with tDim=[50], qDim should be [30]
-                if len(original_shape) == 2 and tDim[0] == original_shape[-1]:
+            if len(block_dims) == 1:
+                # Single block_dims: compute tensor_dims such that tensor_dims * block_dims = total_elements
+                # For original_shape=[30, 50] with block_dims=[50], tensor_dims should be [30]
+                if len(original_shape) == 2 and block_dims[0] == original_shape[-1]:
                     return [original_shape[0]]  # Return first dimension
                 elif len(original_shape) == 1:
-                    qDim_val = total_elements // tDim[0]
-                    return [qDim_val]
+                    tensor_dims_val = total_elements // block_dims[0]
+                    return [tensor_dims_val]
                 else:
-                    # Find matching dimension and compute qDim from remaining
+                    # Find matching dimension and compute tensor_dims from remaining
                     for i, dim in enumerate(original_shape):
-                        if dim == tDim[0]:
+                        if dim == block_dims[0]:
                             # Remove this dimension and compute product of others
                             remaining_dims = original_shape[:i] + original_shape[i+1:]
                             if remaining_dims:
@@ -573,18 +573,18 @@ class DataflowInterface:
                             else:
                                 return [1]
                     # If no exact match, compute total division
-                    qDim_val = max(1, total_elements // tDim[0])
-                    return [qDim_val]
+                    tensor_dims_val = max(1, total_elements // block_dims[0])
+                    return [tensor_dims_val]
             else:
-                # Multiple tDim: compute qDim such that qDim × tDim = original_shape elements
-                qDim_elements = max(1, total_elements // tDim_elements)
-                return [qDim_elements]
+                # Multiple block_dims: compute tensor_dims such that tensor_dims × block_dims = original_shape elements
+                tensor_dims_elements = max(1, total_elements // block_dims_elements)
+                return [tensor_dims_elements]
         
         elif chunking_mode == "divide":
-            # Direct division of original_shape by tDim
-            if len(original_shape) != len(tDim):
-                raise ValueError(f"For divide mode, original_shape and tDim must have same length")
-            return [max(1, orig // t) for orig, t in zip(original_shape, tDim)]
+            # Direct division of original_shape by block_dims
+            if len(original_shape) != len(block_dims):
+                raise ValueError(f"For divide mode, original_shape and block_dims must have same length")
+            return [max(1, orig // t) for orig, t in zip(original_shape, block_dims)]
         
         else:
             raise ValueError(f"Unknown chunking_mode: {chunking_mode}")
@@ -593,5 +593,5 @@ class DataflowInterface:
         """String representation of interface"""
         return (f"DataflowInterface(name='{self.name}', "
                 f"type={self.interface_type.value}, "
-                f"qDim={self.qDim}, tDim={self.tDim}, sDim={self.sDim}, "
+                f"tensor_dims={self.tensor_dims}, block_dims={self.block_dims}, stream_dims={self.stream_dims}, "
                 f"dtype={self.dtype.finn_type})")

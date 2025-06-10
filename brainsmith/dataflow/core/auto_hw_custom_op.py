@@ -49,7 +49,7 @@ class AutoHWCustomOp(HWCustomOp):
     Three tiers of information:
     1. Kernel Data (static): Interface metadata, chunking strategies, node attributes
     2. Model Data (runtime): qDim from ONNX, datatypes  
-    3. Parallelism (dynamic): iPar/wPar values, sDim calculations, performance
+    3. Parallelism (dynamic): iPar/wPar values, stream_dims calculations, performance
     
     This simplified approach eliminates lazy building complexity while maintaining
     full compatibility with FINN's node creation → parallelism setting workflow.
@@ -97,13 +97,13 @@ class AutoHWCustomOp(HWCustomOp):
             dataflow_dtype = self._convert_metadata_datatype(metadata.get_default_datatype())
             
             # Create DataflowInterface with Tier 1 + Tier 2 data
-            # Tier 3 (sDim) will be set to minimum parallelism initially
+            # Tier 3 (stream_dims) will be set to minimum parallelism initially
             interface = DataflowInterface(
                 name=metadata.name,
                 interface_type=metadata.interface_type,
-                qDim=qDim,  # Tier 2: From ONNX tensor shape
-                tDim=tDim,  # Tier 1: From chunking strategy
-                sDim=[1] * len(tDim),  # Tier 3: Minimum parallelism (will be updated)
+                tensor_dims=qDim,  # Tier 2: From ONNX tensor shape
+                block_dims=tDim,  # Tier 1: From chunking strategy
+                stream_dims=[1] * len(tDim),  # Tier 3: Minimum parallelism (will be updated)
                 dtype=dataflow_dtype  # Tier 2: From ONNX or metadata
             )
             
@@ -172,7 +172,7 @@ class AutoHWCustomOp(HWCustomOp):
     
     def update_parallelism(self, iPar: Dict[str, int] = None, wPar: Dict[str, int] = None):
         """
-        Update Tier 3 (Parallelism) values and recalculate sDim/performance.
+        Update Tier 3 (Parallelism) values and recalculate stream_dims/performance.
         
         This is separate from construction - parallelism can be updated
         at any time without rebuilding the entire model.
@@ -193,7 +193,7 @@ class AutoHWCustomOp(HWCustomOp):
         for iface_name, parallel_val in wPar.items():
             self._current_parallelism[f"{iface_name}_wPar"] = parallel_val
         
-        # Update sDim for all interfaces based on new parallelism
+        # Update stream_dims for all interfaces based on new parallelism
         for iface in self._dataflow_model.input_interfaces:
             if iface.name in iPar:
                 iface.apply_parallelism(iPar=iPar[iface.name])
@@ -441,7 +441,7 @@ class AutoHWCustomOp(HWCustomOp):
         
         # Count weight parameters
         for iface in self.dataflow_model.weight_interfaces:
-            params = np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
+            params = np.prod(iface.get_num_blocks()) * np.prod(iface.block_dims)
             counts["weight_params"] += params
             counts["params"] += params
             
@@ -450,11 +450,11 @@ class AutoHWCustomOp(HWCustomOp):
         # Estimate operations based on input/output sizes
         if self.dataflow_model.input_interfaces and self.dataflow_model.output_interfaces:
             input_size = sum(
-                np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
+                np.prod(iface.get_num_blocks()) * np.prod(iface.block_dims)
                 for iface in self.dataflow_model.input_interfaces
             )
             output_size = sum(
-                np.prod(iface.get_num_tensors()) * np.prod(iface.tDim)
+                np.prod(iface.get_num_blocks()) * np.prod(iface.block_dims)
                 for iface in self.dataflow_model.output_interfaces
             )
             # Simple estimation: operations proportional to input*output
@@ -498,8 +498,8 @@ class AutoHWCustomOp(HWCustomOp):
         for iface in self.dataflow_model.weight_interfaces:
             # Generate parameters for each weight interface
             shape = (
-                np.prod(iface.get_num_tensors()),
-                np.prod(iface.tDim)
+                np.prod(iface.get_num_blocks()),
+                np.prod(iface.block_dims)
             )
             
             # Extract weights from model (placeholder - depends on actual weight source)
@@ -552,7 +552,7 @@ class AutoHWCustomOp(HWCustomOp):
             parallelism_config = ParallelismConfiguration(
                 iPar=iPar,
                 wPar=wPar,
-                derived_sDim={}  # Will be computed
+                derived_stream_dims={}  # Will be computed
             )
             
             resources = self.dataflow_model.get_resource_requirements(parallelism_config)
@@ -592,7 +592,7 @@ class AutoHWCustomOp(HWCustomOp):
         """Estimate DSP usage using DataflowModel resource requirements."""
         try:
             # Simple estimation: assume some operations require DSPs
-            total_ops = sum(np.prod(iface.get_num_tensors()) for iface in self.dataflow_model.input_interfaces)
+            total_ops = sum(np.prod(iface.get_num_blocks()) for iface in self.dataflow_model.input_interfaces)
             
             # Apply estimation mode scaling
             estimation_mode = self.get_nodeattr("resource_estimation_mode")
@@ -629,9 +629,9 @@ class AutoHWCustomOp(HWCustomOp):
                 "finn_type": iface.dtype.finn_type,
                 "signed": iface.dtype.signed
             },
-            "qDim": list(iface.qDim),  # Original tensor dimensions
-            "num_tensors": list(iface.get_num_tensors()),  # Computed number of chunks
-            "tDim": list(iface.tDim),  # Correct attribute name
+            "tensor_dims": list(iface.tensor_dims),  # Original tensor dimensions
+            "num_blocks": list(iface.get_num_blocks()),  # Computed number of blocks
+            "block_dims": list(iface.block_dims),  # Correct attribute name
             "parallel": self.get_nodeattr(f"{interface_name}_parallel") or 1,
             "runtime_dtype": self.get_nodeattr(f"{interface_name}_dtype") or iface.dtype.finn_type
         }

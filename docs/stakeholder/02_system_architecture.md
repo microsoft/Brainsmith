@@ -67,8 +67,8 @@ This framework represents Brainsmith-2's **core innovation**, providing a mathem
 class DataflowInterface:
     qDim: int  # Query dimension (original tensor shape)
     tDim: int  # Tensor dimension (processing granularity)
-    sDim: int  # Stream dimension (hardware parallelism)
-    # Mathematical relationship: sDim ≤ tDim ≤ qDim × tDim = original_tensor_shape
+    stream_dims: int  # Stream dimension (hardware parallelism)
+    # Mathematical relationship: stream_dims ≤ tDim ≤ qDim × tDim = original_tensor_shape
 ```
 
 **DataflowModel** (`core/dataflow_model.py:39`)
@@ -94,18 +94,18 @@ The framework implements a **three-tier tensor dimension system** that enables a
 **Dimension Relationships**:
 - **qDim (Query Dimension)**: Original tensor dimension for the operation
 - **tDim (Tensor Dimension)**: Processing granularity (chunk size) 
-- **sDim (Stream Dimension)**: Hardware parallelism (elements per cycle)
+- **stream_dims (Stream Dimension)**: Hardware parallelism (elements per cycle)
 
 **Runtime Configuration**:
 ```python
 # Dimensions extracted at runtime from FINN ModelWrapper
-num_tensors = extract_from_model_wrapper(interface_name, "num_tensors")
-tDim = extract_from_model_wrapper(interface_name, "tDim") 
-sDim = extract_from_model_wrapper(interface_name, "sDim")
+num_blocks = extract_from_model_wrapper(interface_name, "num_blocks")
+block_dims = extract_from_model_wrapper(interface_name, "block_dims") 
+stream_dims = extract_from_model_wrapper(interface_name, "stream_dims")
 
 # Mathematical relationships validated automatically
-assert qDim == num_tensors * tDim  # Total elements
-assert tDim % sDim == 0           # Valid streaming
+assert tensor_dims == num_blocks * block_dims  # Total elements
+assert block_dims % stream_dims == 0           # Valid streaming
 ```
 
 **Chunking Strategy Integration**:

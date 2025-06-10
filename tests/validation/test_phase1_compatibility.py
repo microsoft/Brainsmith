@@ -34,7 +34,7 @@ class TestPhase1Compatibility:
             interface_type=DataflowInterfaceType.INPUT,
             qDim=[1, 8],
             tDim=[32, 32],
-            sDim=[32, 32],
+            stream_dims=[32, 32],
             dtype=dtype
         )
         
@@ -59,7 +59,7 @@ class TestPhase1Compatibility:
             interface_type=DataflowInterfaceType.INPUT,
             qDim=[1],
             tDim=[1024],
-            sDim=[1],
+            stream_dims=[1],
             dtype=dtype
         )
         
@@ -68,7 +68,7 @@ class TestPhase1Compatibility:
             interface_type=DataflowInterfaceType.OUTPUT,
             qDim=[1],
             tDim=[1024],
-            sDim=[1],
+            stream_dims=[1],
             dtype=dtype
         )
         
@@ -153,7 +153,7 @@ class TestPhase1Compatibility:
                     interface_type=DataflowInterfaceType.INPUT,
                     qDim=[1],
                     tDim=[1024],
-                    sDim=[1],
+                    stream_dims=[1],
                     dtype=dtype
                 )
                 
@@ -252,7 +252,7 @@ class TestPhase1Compatibility:
         mock_interface.name = "in0_V_data_V"
         mock_interface.qDim = [1]
         mock_interface.tDim = [1024]
-        mock_interface.sDim = [1]
+        mock_interface.stream_dims = [1]
         mock_interface.dtype = Mock()
         mock_interface.dtype.finn_type = "UINT8"
         
@@ -288,7 +288,7 @@ class TestPhase1Compatibility:
             interface_type=DataflowInterfaceType.INPUT,
             qDim=[1],
             tDim=[1024],
-            sDim=[1],
+            stream_dims=[1],
             dtype=dtype
         )
         

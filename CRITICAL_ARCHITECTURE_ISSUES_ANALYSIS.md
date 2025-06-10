@@ -12,7 +12,7 @@ The current documentation and implementation incorrectly describes `qDim` as the
 ### Correct Conceptual Model
 - **`qDim` = `num_tensors`**: The number of tensor chunks that fit into the input shape when divided by `tDim`
 - **`tDim`**: The size/shape of each individual tensor chunk processed per operation
-- **`sDim`**: The streaming parallelism (elements processed per clock cycle)
+- **`stream_dims`**: The streaming parallelism (elements processed per clock cycle)
 
 ### Mathematical Relationship
 ```
@@ -44,12 +44,12 @@ The HKG currently generates code with **hardcoded static dimensions**, violating
 Examples from generated code:
 ```python
 # WRONG: Static hardcoded dimensions
-qDim=768, tDim=96, sDim=8
+qDim=768, tDim=96, stream_dims=8
 
 # CORRECT: Runtime-configurable dimensions
 qDim=self._extract_num_tensors_from_model(),
 tDim=self._extract_tensor_chunk_size(),
-sDim=self._extract_stream_parallelism()
+stream_dims=self._extract_stream_parallelism()
 ```
 
 ## Root Cause Analysis
@@ -61,7 +61,7 @@ sDim=self._extract_stream_parallelism()
 4. **Template System**: Templates generate static code instead of runtime-configurable code
 
 ### Affected Components
-1. **Documentation**: All stakeholder docs incorrectly describe qDim/tDim/sDim relationships
+1. **Documentation**: All stakeholder docs incorrectly describe qDim/tDim/stream_dims relationships
 2. **HKG Tutorial**: Vector dot product example uses static dimensions
 3. **Generated Code**: Templates produce hardcoded dimension values
 4. **Test Suite**: Tests validate incorrect conceptual model
@@ -86,15 +86,15 @@ sDim=self._extract_stream_parallelism()
 #### 1.2 Fix Mathematical Relationships
 **Current (Wrong)**:
 ```python
-# Constraints: sDim ≤ tDim ≤ qDim
+# Constraints: stream_dims ≤ tDim ≤ qDim
 # Relationship: qDim × tDim = original_tensor_shape
 ```
 
 **Correct**:
 ```python
-# Constraints: sDim ≤ tDim, num_tensors = input_shape ÷ tDim
+# Constraints: stream_dims ≤ tDim, num_tensors = input_shape ÷ tDim
 # Relationship: input_shape = num_tensors × tDim
-# Stream constraint: tDim must be divisible by sDim
+# Stream constraint: tDim must be divisible by stream_dims
 ```
 
 #### 1.3 Update Documentation
@@ -126,7 +126,7 @@ class AutoHWCustomOp(HWCustomOp):
 DataflowInterface(
     qDim=768,  # Hardcoded static value
     tDim=96,   # Hardcoded static value
-    sDim=8     # Hardcoded static value
+    stream_dims=8     # Hardcoded static value
 )
 ```
 
@@ -135,7 +135,7 @@ DataflowInterface(
 DataflowInterface(
     num_tensors=self._compute_num_tensors({{interface.name}}),
     tDim=self._compute_tensor_chunk_size({{interface.name}}),
-    sDim=self._compute_stream_parallelism({{interface.name}})
+    stream_dims=self._compute_stream_parallelism({{interface.name}})
 )
 ```
 

@@ -1,8 +1,8 @@
 """
 Auto-generated test suite for thresholding_axi
 Generated using Interface-Wise Dataflow Modeling Framework
-Source: /tmp/tmpdwa5i8of/thresholding_enhanced.sv
-Generated at: 2025-06-08T07:57:10.093675
+Source: /tmp/tmpquagqr66/thresholding_enhanced.sv
+Generated at: 2025-06-10T02:34:43.031993
 """
 
 import pytest
@@ -39,7 +39,7 @@ class TestAutoThresholdingAxi:
     - RTL backend integration
     - End-to-end inference validation
     
-    Interface coverage: 1 interfaces
+    Interface coverage: 4 interfaces
     - Input interfaces: 0
     - Output interfaces: 0
     - Weight interfaces: 0
@@ -87,9 +87,12 @@ class TestAutoThresholdingAxi:
         assert isinstance(test_node, AutoHWCustomOp)
         
         # Verify dataflow interfaces are initialized
-        assert len(test_node.dataflow_interfaces) == 1
+        assert len(test_node.dataflow_interfaces) == 4
         expected_interfaces = {
             "ap",
+            "s_axis",
+            "m_axis",
+            "s_axilite",
         }
         assert set(test_node.dataflow_interfaces.keys()) == expected_interfaces
 
@@ -104,6 +107,9 @@ class TestAutoThresholdingAxi:
         
         # Check dataflow-specific attributes
         assert "ap_dtype" in nodeattr_types
+        assert "s_axis_dtype" in nodeattr_types
+        assert "m_axis_dtype" in nodeattr_types
+        assert "s_axilite_dtype" in nodeattr_types
 
 
 
@@ -198,7 +204,7 @@ class TestAutoThresholdingAxi:
         # Verify interface definitions are present
         if "interfaces" in codegen_dict:
             assert isinstance(codegen_dict["interfaces"], list)
-            assert len(codegen_dict["interfaces"]) == 1
+            assert len(codegen_dict["interfaces"]) == 4
 
 
     def test_number_output_values(self, test_node):

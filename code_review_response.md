@@ -15,12 +15,12 @@ The BERT example with shape [1,128,768] (batch=1, seqlen=128, hidden_dim=768) de
 - Chunking strategies need to handle multi-dimensional queries intelligently
 - Interface analysis must consider how the 3D query gets decomposed into processing tensors
 
-**Q: Line 171 - Why do qDim/tDim/sDim need same length?**
+**Q: Line 171 - Why do qDim/tDim/stream_dims need same length?**
 
 You're correct - they don't need the same length. This was an incorrect assumption:
 - qDim: Multi-dimensional query shape (e.g., [1,128,768])
 - tDim: Processing tensor dimensions (often 1-2D, e.g., [128] or [8,96])
-- sDim: Single stream element (typically 1D, e.g., [768])
+- stream_dims: Single stream element (typically 1D, e.g., [768])
 
 **Q: Line 186 - Default datatype constraints**
 
@@ -57,7 +57,7 @@ However, there is redundancy with DataTypeConstraint that needs cleanup.
 1. **Standardize Terminology**
    - qDim: Query dimensions (original input shape)
    - tDim: Tensor dimensions (chunk shape)  
-   - sDim: Stream dimensions (single element)
+   - stream_dims: Stream dimensions (single element)
    - "query" → input data, "tensor" → processed chunks
 
 2. **Fix qDim/num_tensors Usage**
@@ -73,7 +73,7 @@ However, there is redundancy with DataTypeConstraint that needs cleanup.
 
 1. **DataflowInterface Changes**
    - Switch to qonnx for DataflowDataType
-   - Remove same-length requirement for qDim/tDim/sDim  
+   - Remove same-length requirement for qDim/tDim/stream_dims  
    - Default to "any datatype supported" for constraints
    - Move transfer cycle calculations here from DataflowModel
 

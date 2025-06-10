@@ -38,7 +38,7 @@ class ParallelismConfiguration:
     """Complete parallelism configuration for a kernel"""
     iPar: Dict[str, int]  # Input parallelism per input interface
     wPar: Dict[str, int]  # Weight parallelism per weight interface
-    derived_sDim: Dict[str, List[int]]  # Computed stream dimensions
+    derived_stream_dims: Dict[str, List[int]]  # Computed stream dimensions
 
 class DataflowModel:
     """
@@ -127,7 +127,7 @@ class DataflowModel:
             # Update input stream dimensions (make a copy to avoid modifying original)
             input_if_copy = self._copy_interface_with_parallelism(input_if, input_parallelism, None)
             
-            # Calculate cII for this input: cII_i = ∏(tDim_i / sDim_i)
+            # Calculate cII for this input: cII_i = ∏(block_dims_i / stream_dims_i)
             cII_per_input[input_name] = input_if_copy.calculate_cII()
             
             # Find maximum weight constraint for this input
@@ -137,12 +137,12 @@ class DataflowModel:
                 weight_parallelism = wPar.get(weight_name, 1)
                 
                 # Update weight stream dimensions relative to this input
-                # sDim_W = wPar * iPar * (tDim_W / tDim_I)
+                # stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
                 weight_if_copy = self._copy_interface_with_weight_parallelism(
                     weight_if, weight_parallelism, input_parallelism, input_if
                 )
                 
-                # Calculate weight cycles: ∏(qDim_W / wPar)
+                # Calculate weight cycles: ∏(tensor_dims_W / wPar)
                 weight_cycles = self._calculate_weight_cycles(weight_if_copy, weight_parallelism)
                 max_weight_cycles = max(max_weight_cycles, weight_cycles)
             
@@ -153,9 +153,9 @@ class DataflowModel:
         bottleneck_input_name = max(eII_per_input.keys(), key=lambda name: eII_per_input[name])
         bottleneck_input = self.interfaces[bottleneck_input_name]
         
-        # L = eII_bottleneck * num_tensors_bottleneck  
-        num_tensors = np.prod(bottleneck_input.get_num_tensors())
-        L = eII_per_input[bottleneck_input_name] * num_tensors
+        # L = eII_bottleneck * num_blocks_bottleneck  
+        num_blocks = np.prod(bottleneck_input.get_num_blocks())
+        L = eII_per_input[bottleneck_input_name] * num_blocks
         
         # Update output stream dimensions based on bottleneck
         bottleneck_parallelism = iPar.get(bottleneck_input_name, 1)
@@ -165,13 +165,13 @@ class DataflowModel:
             "bottleneck_input": bottleneck_input_name,
             "bottleneck_eII": eII_per_input[bottleneck_input_name],
             "bottleneck_cII": cII_per_input[bottleneck_input_name], 
-            "bottleneck_num_tensors": num_tensors,
-            "bottleneck_qDim": bottleneck_input.qDim,
-            "bottleneck_tDim": bottleneck_input.tDim,
-            "bottleneck_sDim": bottleneck_input.sDim,
+            "bottleneck_num_blocks": num_blocks,
+            "bottleneck_tensor_dims": bottleneck_input.tensor_dims,
+            "bottleneck_block_dims": bottleneck_input.block_dims,
+            "bottleneck_stream_dims": bottleneck_input.stream_dims,
             "total_cycles_breakdown": {
                 "tensor_processing_cycles": eII_per_input[bottleneck_input_name],
-                "total_tensor_chunks": num_tensors,
+                "total_tensor_blocks": num_blocks,
                 "total_inference_cycles": L
             },
             "interface_counts": {
@@ -192,18 +192,18 @@ class DataflowModel:
                                        input_parallelism: int, 
                                        weight_parallelism: Optional[int]) -> DataflowInterface:
         """Create a copy of interface with updated stream dimensions"""
-        # Create a shallow copy and update sDim
-        new_sDim = interface.sDim.copy()
+        # Create a shallow copy and update stream_dims
+        new_stream_dims = interface.stream_dims.copy()
         
         if interface.interface_type == DataflowInterfaceType.INPUT:
-            new_sDim[0] = input_parallelism
+            new_stream_dims[0] = input_parallelism
         elif interface.interface_type == DataflowInterfaceType.WEIGHT and weight_parallelism is not None:
-            new_sDim[0] = weight_parallelism
+            new_stream_dims[0] = weight_parallelism
         
-        # For simplicity, we'll modify the original interface's sDim
+        # For simplicity, we'll modify the original interface's stream_dims
         # In a production implementation, we might want true copying
-        original_sDim = interface.sDim.copy()
-        interface.sDim = new_sDim
+        original_stream_dims = interface.stream_dims.copy()
+        interface.stream_dims = new_stream_dims
         
         return interface
     
@@ -212,29 +212,29 @@ class DataflowModel:
                                               input_parallelism: int,
                                               input_if: DataflowInterface) -> DataflowInterface:
         """Create copy of weight interface with computed stream dimensions"""
-        # sDim_W = wPar * iPar * (tDim_W / tDim_I)
-        if len(input_if.tDim) > 0 and input_if.tDim[0] != 0:
-            scaling_factor = weight_if.tDim[0] // input_if.tDim[0] if weight_if.tDim[0] >= input_if.tDim[0] else 1
+        # stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
+        if len(input_if.block_dims) > 0 and input_if.block_dims[0] != 0:
+            scaling_factor = weight_if.block_dims[0] // input_if.block_dims[0] if weight_if.block_dims[0] >= input_if.block_dims[0] else 1
         else:
             scaling_factor = 1
             
-        new_sDim = weight_if.sDim.copy()
-        new_sDim[0] = weight_parallelism * input_parallelism * scaling_factor
+        new_stream_dims = weight_if.stream_dims.copy()
+        new_stream_dims[0] = weight_parallelism * input_parallelism * scaling_factor
         
         # Update the interface (temporary modification)
-        original_sDim = weight_if.sDim.copy()
-        weight_if.sDim = new_sDim
+        original_stream_dims = weight_if.stream_dims.copy()
+        weight_if.stream_dims = new_stream_dims
         
         return weight_if
     
     
     def _calculate_weight_cycles(self, weight_if: DataflowInterface, weight_parallelism: int) -> int:
-        """Calculate weight loading cycles based on number of weight tensors to process"""
+        """Calculate weight loading cycles based on number of weight blocks to process"""
         weight_cycles = 1
-        num_tensors = weight_if.get_num_tensors()
-        for num_tensor in num_tensors:
+        num_blocks = weight_if.get_num_blocks()
+        for num_block in num_blocks:
             if weight_parallelism > 0:
-                weight_cycles *= (num_tensor + weight_parallelism - 1) // weight_parallelism
+                weight_cycles *= (num_block + weight_parallelism - 1) // weight_parallelism
         return max(weight_cycles, 1)
     
     def _update_output_stream_dimensions(self, output_interfaces: List[DataflowInterface],
@@ -242,13 +242,13 @@ class DataflowModel:
                                        bottleneck_parallelism: int) -> None:
         """Update output stream dimensions based on bottleneck input"""
         for output_if in output_interfaces:
-            if len(output_if.sDim) > 0 and len(bottleneck_input.tDim) > 0:
-                # sDim_O = iPar_bottleneck * (tDim_O / tDim_I_bottleneck)
-                if bottleneck_input.tDim[0] != 0:
-                    scaling_factor = output_if.tDim[0] // bottleneck_input.tDim[0] if output_if.tDim[0] >= bottleneck_input.tDim[0] else 1
+            if len(output_if.stream_dims) > 0 and len(bottleneck_input.block_dims) > 0:
+                # stream_dims_O = iPar_bottleneck * (block_dims_O / block_dims_I_bottleneck)
+                if bottleneck_input.block_dims[0] != 0:
+                    scaling_factor = output_if.block_dims[0] // bottleneck_input.block_dims[0] if output_if.block_dims[0] >= bottleneck_input.block_dims[0] else 1
                 else:
                     scaling_factor = 1
-                output_if.sDim[0] = bottleneck_parallelism * scaling_factor
+                output_if.stream_dims[0] = bottleneck_parallelism * scaling_factor
     
     def validate_mathematical_constraints(self) -> ValidationResult:
         """
@@ -273,13 +273,13 @@ class DataflowModel:
         # Calculate bounds for input interfaces (iPar)
         for input_if in self.input_interfaces:
             min_val = 1
-            max_val = np.prod(input_if.tDim) if input_if.tDim else 1
+            max_val = np.prod(input_if.block_dims) if input_if.block_dims else 1
             
-            # Divisibility constraints: iPar must divide tDim values
+            # Divisibility constraints: iPar must divide block_dims values
             divisibility = []
-            for tdim in input_if.tDim:
-                # Find all divisors of tdim
-                divisors = [i for i in range(1, tdim + 1) if tdim % i == 0]
+            for block_dim in input_if.block_dims:
+                # Find all divisors of block_dim
+                divisors = [i for i in range(1, block_dim + 1) if block_dim % i == 0]
                 divisibility.extend(divisors)
             
             bounds[f"{input_if.name}_iPar"] = ParallelismBounds(
@@ -292,13 +292,13 @@ class DataflowModel:
         # Calculate bounds for weight interfaces (wPar)  
         for weight_if in self.weight_interfaces:
             min_val = 1
-            num_tensors = weight_if.get_num_tensors()
-            max_val = np.prod(num_tensors) if num_tensors else 1
+            num_blocks = weight_if.get_num_blocks()
+            max_val = np.prod(num_blocks) if num_blocks else 1
             
-            # Divisibility constraints: wPar must divide num_tensors values
+            # Divisibility constraints: wPar must divide num_blocks values
             divisibility = []
-            for num_tensor in num_tensors:
-                divisors = [i for i in range(1, num_tensor + 1) if num_tensor % i == 0]
+            for num_block in num_blocks:
+                divisors = [i for i in range(1, num_block + 1) if num_block % i == 0]
                 divisibility.extend(divisors)
             
             bounds[f"{weight_if.name}_wPar"] = ParallelismBounds(
@@ -351,13 +351,13 @@ class DataflowModel:
         iPar = {iface.name: 1 for iface in self.input_interfaces}
         wPar = {iface.name: 1 for iface in self.weight_interfaces}
         
-        # Calculate derived sDim
-        derived_sDim = {}
+        # Calculate derived stream_dims
+        derived_stream_dims = {}
         for iface in self.interfaces.values():
-            derived_sDim[iface.name] = iface.sDim.copy()
+            derived_stream_dims[iface.name] = iface.stream_dims.copy()
         
         return ParallelismConfiguration(
             iPar=iPar,
             wPar=wPar,
-            derived_sDim=derived_sDim
+            derived_stream_dims=derived_stream_dims
         )

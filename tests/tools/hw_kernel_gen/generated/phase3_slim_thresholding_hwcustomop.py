@@ -4,13 +4,17 @@
 #
 # Auto-generated HWCustomOp for phase3_slim_thresholding
 # Generated from: unknown.sv
-# Generation timestamp: 2025-06-08T07:57:10.044005
+# Generation timestamp: 2025-06-10T02:34:42.983996
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This HWCustomOp uses runtime dimension extraction from ModelWrapper.
+# NEVER set static num_tensors, tDim, or stream_dims values in generated code.
 ############################################################################
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
-from brainsmith.dataflow.core.chunking_strategy import index_chunking, default_chunking, last_dim_chunking
+from brainsmith.dataflow.core.tensor_chunking import index_chunking, default_chunking, last_dim_chunking
 
 
 class Phase3SlimThresholdingHWCustomOp(AutoHWCustomOp):
@@ -37,7 +41,7 @@ class Phase3SlimThresholdingHWCustomOp(AutoHWCustomOp):
                         signed=false
                     ),
                 ],
-                chunking_strategy=index_chunking(-1, ['PE'])            ),
+                chunking_strategy=index_chunking(-1, "['PE']")            ),
             InterfaceMetadata(
                 name="m_axis_tdata",
                 interface_type=DataflowInterfaceType.OUTPUT,
@@ -48,7 +52,7 @@ class Phase3SlimThresholdingHWCustomOp(AutoHWCustomOp):
                         signed=false
                     ),
                 ],
-                chunking_strategy=index_chunking(-1, ['PE'])            ),
+                chunking_strategy=index_chunking(-1, "['PE']")            ),
         ]
         
         # Initialize parent with interface metadata
@@ -80,14 +84,14 @@ class Phase3SlimThresholdingHWCustomOp(AutoHWCustomOp):
                 "interface_type": "AXI_STREAM",
                 "chunking_strategy": "index_chunking",
                 "chunk_index": -1,
-                "chunk_sizes": ['PE'],
+                "chunk_sizes": "['PE']",  # Parameterized - will be resolved at runtime
             },
             "m_axis_tdata": {
                 "type": "output",
                 "interface_type": "AXI_STREAM",
                 "chunking_strategy": "index_chunking",
                 "chunk_index": -1,
-                "chunk_sizes": ['PE'],
+                "chunk_sizes": "['PE']",  # Parameterized - will be resolved at runtime
             },
         }
     

@@ -597,7 +597,7 @@ test_configurations = [
     def test_phase3_pragma_to_strategy_conversion(self):
         """Test Phase 3 automatic pragma-to-strategy conversion."""
         from brainsmith.tools.hw_kernel_gen.pragma_to_strategy import PragmaToStrategyConverter
-        from brainsmith.dataflow.core.chunking_strategy import IndexBasedChunkingStrategy
+        from brainsmith.dataflow.core.tensor_chunking import IndexBasedChunkingStrategy
         
         converter = PragmaToStrategyConverter()
         

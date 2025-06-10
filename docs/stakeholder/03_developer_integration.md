@@ -235,7 +235,7 @@ class CustomLayerNorm(AutoHWCustomOp):
         """Get performance estimate for given batch size."""
         # Dimensions automatically extracted from ModelWrapper
         hidden_size = self.extract_runtime_dimension("input", "tDim")
-        parallelism = self.extract_runtime_dimension("input", "sDim")
+        parallelism = self.extract_runtime_dimension("input", "stream_dims")
         
         cycles_per_sample = hidden_size // parallelism
         return {
@@ -333,7 +333,7 @@ from brainsmith.dataflow import DataflowInterface, DataflowModel
 
 class DataflowInterface:
     def __init__(self, name: str, interface_type: str, 
-                 num_tensors: List[int], tDim: List[int], sDim: List[int], dtype: str):
+                 num_tensors: List[int], tDim: List[int], stream_dims: List[int], dtype: str):
         """Create interface with three-tier dimension system."""
     
     def validate_constraints(self) -> ValidationResult:

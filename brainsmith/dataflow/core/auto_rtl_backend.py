@@ -142,7 +142,7 @@ class AutoRTLBackend(RTLBackend):
                 "protocol": "axi_stream",  # Default protocol
                 "qDim": iface_config["qDim"],
                 "tDim": iface_config["tDim"],
-                "sDim": iface_config["sDim"],
+                "stream_dims": iface_config["stream_dims"],
             }
             interfaces.append(interface_def)
             

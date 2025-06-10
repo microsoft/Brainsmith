@@ -185,18 +185,18 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype,
             allowed_datatypes=[constraint]
         )
         
         assert interface.name == "input0"
         assert interface.interface_type == DataflowInterfaceType.INPUT
-        assert interface.qDim == [16]
-        assert interface.tDim == [16]
-        assert interface.sDim == [4]
+        assert interface.tensor_dims == [16]
+        assert interface.block_dims == [16]
+        assert interface.stream_dims == [4]
         assert interface.dtype == dtype
         assert len(interface.allowed_datatypes) == 1
         assert interface.allowed_datatypes[0] == constraint
@@ -205,14 +205,14 @@ class TestDataflowInterface:
         """Test that invalid dimension relationships raise errors"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # tDim not divisible by sDim (streaming constraint)
-        with pytest.raises(ValueError, match="tDim.*must be divisible by sDim"):
+        # tDim not divisible by stream_dims (streaming constraint)
+        with pytest.raises(ValueError, match="tDim.*must be divisible by stream_dims"):
             DataflowInterface(
                 name="test",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[16],  # Fixed: 16 % 16 == 0 (valid chunking)
-                tDim=[16],
-                sDim=[5],  # 16 % 5 != 0 (invalid streaming)
+                tensor_dims=[16],  # Fixed: 16 % 16 == 0 (valid chunking)
+                block_dims=[16],
+                stream_dims=[5],  # 16 % 5 != 0 (invalid streaming)
                 dtype=dtype
             )
         
@@ -221,9 +221,9 @@ class TestDataflowInterface:
             DataflowInterface(
                 name="test2",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[30],
-                tDim=[50],  # 30 % 50 != 0 
-                sDim=[1],
+                tensor_dims=[30],
+                block_dims=[50],  # 30 % 50 != 0 
+                stream_dims=[1],
                 dtype=dtype
             )
         
@@ -232,9 +232,9 @@ class TestDataflowInterface:
             DataflowInterface(
                 name="test3",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[],  # Empty qDim
-                tDim=[16],
-                sDim=[4],
+                tensor_dims=[],  # Empty qDim
+                block_dims=[16],
+                stream_dims=[4],
                 dtype=dtype
             )
         
@@ -242,13 +242,13 @@ class TestDataflowInterface:
         """Test that different dimension lengths are now supported"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Multi-dimensional qDim with fewer tDim and sDim dimensions (BERT-like example)
+        # Multi-dimensional qDim with fewer tDim and stream_dims dimensions (BERT-like example)
         interface = DataflowInterface(
             name="bert_input",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[128, 768],     # BERT: seqlen=128, hidden=768
-            tDim=[128],          # Process 128 sequence elements per chunk  
-            sDim=[8],            # 8-way parallelism (128 % 8 == 0, valid streaming)
+            tensor_dims=[128, 768],     # BERT: seqlen=128, hidden=768
+            block_dims=[128],          # Process 128 sequence elements per chunk  
+            stream_dims=[8],            # 8-way parallelism (128 % 8 == 0, valid streaming)
             dtype=dtype
         )
         
@@ -257,7 +257,7 @@ class TestDataflowInterface:
         assert len(result.errors) == 0
         
         # Check calculations work with different lengths
-        num_tensors = interface.get_num_tensors()
+        num_tensors = interface.get_num_blocks()
         assert len(num_tensors) == 1  # min(len(qDim), len(tDim)) = min(2, 1) = 1
         assert num_tensors == [1]  # qDim[0:1] ÷ tDim[0:1] = [128] ÷ [128] = [1]
         
@@ -270,9 +270,9 @@ class TestDataflowInterface:
             DataflowInterface(
                 name="test",
                 interface_type=DataflowInterfaceType.INPUT,
-                qDim=[0],
-                tDim=[16],
-                sDim=[4],
+                tensor_dims=[0],
+                block_dims=[16],
+                stream_dims=[4],
                 dtype=dtype
             )
     
@@ -283,9 +283,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -306,9 +306,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -330,9 +330,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -345,14 +345,14 @@ class TestDataflowInterface:
         interface_for_testing = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[15],  # qDim can be any value now
-            tDim=[15],  # Make divisible for construction
-            sDim=[5],   # 15 % 5 = 0, valid for construction
+            tensor_dims=[15],  # qDim can be any value now
+            block_dims=[15],  # Make divisible for construction
+            stream_dims=[5],   # 15 % 5 = 0, valid for construction
             dtype=dtype
         )
         
         # Now modify to create invalid streaming constraint for testing
-        interface_for_testing.tDim = [16]  # 16 % 5 != 0, invalid streaming
+        interface_for_testing.block_dims = [16]  # 16 % 5 != 0, invalid streaming
         
         result = interface_for_testing.validate_constraints()
         assert result.success == False
@@ -367,27 +367,27 @@ class TestDataflowInterface:
         input_interface = DataflowInterface(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[1],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[1],
             dtype=dtype
         )
         
         input_interface.apply_parallelism(iPar=4)
-        assert input_interface.sDim[0] == 4
+        assert input_interface.stream_dims[0] == 4
         
         # Weight interface
         weight_interface = DataflowInterface(
             name="weights",
             interface_type=DataflowInterfaceType.WEIGHT,
-            qDim=[32],
-            tDim=[32],
-            sDim=[1],
+            tensor_dims=[32],
+            block_dims=[32],
+            stream_dims=[1],
             dtype=dtype
         )
         
         weight_interface.apply_parallelism(wPar=8)
-        assert weight_interface.sDim[0] == 8
+        assert weight_interface.stream_dims[0] == 8
     
     def test_axi_signal_generation(self):
         """Test AXI signal generation for different interface types"""
@@ -397,9 +397,9 @@ class TestDataflowInterface:
         input_interface = DataflowInterface(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -415,9 +415,9 @@ class TestDataflowInterface:
         output_interface = DataflowInterface(
             name="output0",
             interface_type=DataflowInterfaceType.OUTPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -444,9 +444,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype,
             allowed_datatypes=[strict_constraint]
         )
@@ -470,9 +470,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16, 16],
-            tDim=[16, 16],
-            sDim=[4, 4],
+            tensor_dims=[16, 16],
+            block_dims=[16, 16],
+            stream_dims=[4, 4],
             dtype=dtype
         )
         
@@ -486,9 +486,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[64],
-            tDim=[64],
-            sDim=[4],
+            tensor_dims=[64],
+            block_dims=[64],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -502,9 +502,9 @@ class TestDataflowInterface:
         interface = DataflowInterface(
             name="test_interface",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[16],
-            tDim=[16],
-            sDim=[4],
+            tensor_dims=[16],
+            block_dims=[16],
+            stream_dims=[4],
             dtype=dtype
         )
         
@@ -522,29 +522,29 @@ class TestTensorChunking:
         """Test tensor shape reconstruction from qDim and tDim"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Simple case: qDim=[150], tDim=[30] → valid chunking (150 % 30 == 0)
+        # Simple case: tensor_dims=[150], block_dims=[30] → valid chunking (150 % 30 == 0)
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[150],  # Original tensor shape
-            tDim=[30],   # Chunk size (150 % 30 == 0)
-            sDim=[10],   # Stream parallelism (30 % 10 == 0)
+            tensor_dims=[150],  # Original tensor shape
+            block_dims=[30],   # Chunk size (150 % 30 == 0)
+            stream_dims=[10],   # Stream parallelism (30 % 10 == 0)
             dtype=dtype
         )
         
         reconstructed = interface.reconstruct_tensor_shape()
         # In new architecture: qDim * num_tensors where num_tensors = qDim/tDim
-        num_tensors = interface.get_num_tensors()  # [150/30] = [5]
-        expected = [num_tensors[0] * interface.tDim[0]]  # [5 * 30] = [150]
+        num_tensors = interface.get_num_blocks()  # [150/30] = [5]
+        expected = [num_tensors[0] * interface.block_dims[0]]  # [5 * 30] = [150]
         assert reconstructed == expected
         
         # Multi-dimensional case: valid chunking with qDim divisible by tDim
         interface_multi = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[15, 20],   # Original shape (15 % 3 == 0, 20 % 5 == 0)
-            tDim=[3, 5],     # Chunk sizes
-            sDim=[1, 1],     # Stream parallelism (3 % 1 == 0, 5 % 1 == 0)
+            tensor_dims=[15, 20],   # Original shape (15 % 3 == 0, 20 % 5 == 0)
+            block_dims=[3, 5],     # Chunk sizes
+            stream_dims=[1, 1],     # Stream parallelism (3 % 1 == 0, 5 % 1 == 0)
             dtype=dtype
         )
         
@@ -556,13 +556,13 @@ class TestTensorChunking:
         """Test validation of tensor chunking against original shape"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Valid chunking: qDim=[150], tDim=[30] (150 % 30 == 0)
+        # Valid chunking: tensor_dims=[150], block_dims=[30] (150 % 30 == 0)
         interface = DataflowInterface(
             name="test",
             interface_type=DataflowInterfaceType.INPUT,
-            qDim=[150],   # Original tensor shape
-            tDim=[30],    # Chunk size (valid: 150 % 30 == 0)  
-            sDim=[10],    # Stream parallelism (valid: 30 % 10 == 0)
+            tensor_dims=[150],   # Original tensor shape
+            block_dims=[30],    # Chunk size (valid: 150 % 30 == 0)  
+            stream_dims=[10],    # Stream parallelism (valid: 30 % 10 == 0)
             dtype=dtype
         )
         
@@ -582,79 +582,79 @@ class TestTensorChunking:
         """Test factory method for creating interfaces from tensor chunking"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Test case: original [150, 50] with tDim=[50] - valid chunking (150 % 50 == 0)
+        # Test case: original [150, 50] with block_dims=[50] - valid chunking (150 % 50 == 0)
         interface = DataflowInterface.from_tensor_chunking(
             name="input0",
             interface_type=DataflowInterfaceType.INPUT,
             original_shape=[150, 50],  # 2D tensor shape
-            tDim=[50],
+            block_dims=[50],
             dtype=dtype,
             chunking_mode="broadcast"
         )
         
         assert interface.name == "input0"
         assert interface.interface_type == DataflowInterfaceType.INPUT
-        assert interface.tDim == [50]
-        assert interface.qDim == [150, 50]  # In new architecture: preserves original shape
-        assert interface.sDim == [1]  # Default sDim for tDim dimensions
+        assert interface.block_dims == [50]
+        assert interface.tensor_dims == [150, 50]  # In new architecture: preserves original shape
+        assert interface.stream_dims == [1]  # Default stream_dims for tDim dimensions
         assert interface.dtype == dtype
     
-    def test_compute_qDim_from_chunking(self):
+    def test_compute_tensor_dims_from_chunking(self):
         """Test qDim computation from original shape and tDim"""
         
         # Test broadcast mode with single tDim
-        # Example: original [30, 50] with tDim=[50] → qDim should be [30]
+        # Example: original [30, 50] with block_dims=[50] → qDim should be [30]
         original_shape = [30, 50]  # 1500 total elements
-        tDim = [50]
-        qDim = DataflowInterface._compute_qDim_from_chunking(original_shape, tDim, "broadcast")
+        block_dims = [50]
+        tensor_dims = DataflowInterface._compute_tensor_dims_from_chunking(original_shape, block_dims, "broadcast")
         
-        # For original [30, 50] with tDim=[50], qDim should be [30]
-        assert qDim == [30]
+        # For original [30, 50] with block_dims=[50], qDim should be [30]
+        assert tensor_dims == [30]
         
         # Test with multiple tDim dimensions
-        # Example: original [10, 30, 50] where total=15000, tDim=[3,5] (15 elements)
+        # Example: original [10, 30, 50] where total=15000, block_dims=[3,5] (15 elements)
         original_shape = [10, 30, 50]  # 15000 total elements
-        tDim = [3, 5]  # 15 elements per tensor
-        qDim = DataflowInterface._compute_qDim_from_chunking(original_shape, tDim, "broadcast")
+        block_dims = [3, 5]  # 15 elements per tensor
+        tensor_dims = DataflowInterface._compute_tensor_dims_from_chunking(original_shape, block_dims, "broadcast")
         
         # Total elements = 15000, tDim elements = 15, so qDim elements = 1000
-        assert qDim == [1000]
+        assert tensor_dims == [1000]
         
         # Test divide mode
         original_shape = [20, 40]
-        tDim = [4, 8]
-        qDim = DataflowInterface._compute_qDim_from_chunking(original_shape, tDim, "divide")
+        block_dims = [4, 8]
+        tensor_dims = DataflowInterface._compute_tensor_dims_from_chunking(original_shape, block_dims, "divide")
         
         # Direct division: [20//4, 40//8] = [5, 5]
-        assert qDim == [5, 5]
+        assert tensor_dims == [5, 5]
         
         # Test simple 1D case
         original_shape = [1500]
-        tDim = [50]
-        qDim = DataflowInterface._compute_qDim_from_chunking(original_shape, tDim, "broadcast")
+        block_dims = [50]
+        tensor_dims = DataflowInterface._compute_tensor_dims_from_chunking(original_shape, block_dims, "broadcast")
         
         # 1500 / 50 = 30
-        assert qDim == [30]
+        assert tensor_dims == [30]
     
     def test_real_world_chunking_examples(self):
         """Test with user-provided real-world examples"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # Example 1: tensor [150] with tDim=[50] → qDim=[150] (shape preserved)
+        # Example 1: tensor [150] with block_dims=[50] → tensor_dims=[150] (shape preserved)
         # This tests with valid divisible dimensions
         interface1 = DataflowInterface.from_tensor_chunking(
             name="example1",
             interface_type=DataflowInterfaceType.INPUT,
             original_shape=[150],  # Must be divisible by tDim
-            tDim=[50],
+            block_dims=[50],
             dtype=dtype
         )
         
-        assert interface1.qDim == [150]  # original_shape preserved as qDim
-        assert interface1.tDim == [50]
+        assert interface1.tensor_dims == [150]  # original_shape preserved as qDim
+        assert interface1.block_dims == [50]
         
         # Validate num_tensors calculation
-        num_tensors = interface1.get_num_tensors()
+        num_tensors = interface1.get_num_blocks()
         assert num_tensors == [3]  # 150 ÷ 50 = 3 chunks
         
         # Example 2: Multi-dimensional tensor with valid divisible dimensions
@@ -662,15 +662,15 @@ class TestTensorChunking:
             name="example2",
             interface_type=DataflowInterfaceType.INPUT,
             original_shape=[15, 10],  # Must be divisible by tDim
-            tDim=[3, 5],
+            block_dims=[3, 5],
             dtype=dtype
         )
         
-        assert interface2.qDim == [15, 10]  # original_shape preserved as qDim
-        assert interface2.tDim == [3, 5]
+        assert interface2.tensor_dims == [15, 10]  # original_shape preserved as qDim
+        assert interface2.block_dims == [3, 5]
         
         # Validate num_tensors calculation  
-        num_tensors2 = interface2.get_num_tensors()
+        num_tensors2 = interface2.get_num_blocks()
         assert num_tensors2 == [5, 2]  # [15÷3, 10÷5] = [5, 2]
         
         # Validate element count consistency
@@ -680,20 +680,20 @@ class TestTensorChunking:
         total_elements = chunks_total * elements_per_chunk  # 10 * 15 = 150
         assert original_elements == total_elements
         
-        # Example 3: Simple 1D case - tensor [1500] with tDim=[50] 
+        # Example 3: Simple 1D case - tensor [1500] with block_dims=[50] 
         interface3 = DataflowInterface.from_tensor_chunking(
             name="example3",
             interface_type=DataflowInterfaceType.INPUT,
             original_shape=[1500],
-            tDim=[50],
+            block_dims=[50],
             dtype=dtype
         )
         
-        assert interface3.qDim == [1500]  # original_shape preserved as qDim
+        assert interface3.tensor_dims == [1500]  # original_shape preserved as qDim
         # num_tensors should be 1500 // 50 = 30
-        num_tensors3 = interface3.get_num_tensors()
+        num_tensors3 = interface3.get_num_blocks()
         assert num_tensors3 == [30]
-        assert interface3.tDim == [50]
+        assert interface3.block_dims == [50]
         
         # Validate reconstruction
         reconstructed = interface3.reconstruct_tensor_shape()

@@ -5,7 +5,7 @@ This template generates RTLBackend classes that extract dimensions at runtime
 from the associated HWCustomOp's dataflow model, avoiding static hardcoded values.
 
 CRITICAL: This template generates components for future use by the FINN compiler.
-Dimensions (num_tensors, tDim, sDim) should be extracted from the dataflow model
+Dimensions (num_tensors, tDim, stream_dims) should be extracted from the dataflow model
 at runtime, not hardcoded during generation.
 -#}
 ############################################################################

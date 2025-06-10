@@ -12,7 +12,7 @@ from brainsmith.dataflow.core.dataflow_interface import (
     DataTypeConstraint
 )
 from brainsmith.dataflow.core.dataflow_model import DataflowModel
-from brainsmith.dataflow.core.tensor_chunking import TensorChunking
+from brainsmith.dataflow.core.block_chunking import TensorChunking
 
 def main():
     """Demonstrate basic dataflow framework usage"""
@@ -49,9 +49,9 @@ def main():
     input_interface = DataflowInterface(
         name="input0",
         interface_type=DataflowInterfaceType.INPUT,
-        qDim=[64],
-        tDim=[16],
-        sDim=[4],
+        tensor_dims=[64],
+        block_dims=[16],
+        stream_dims=[4],
         dtype=input_dtype,
         allowed_datatypes=[flexible_constraint]
     )
@@ -61,9 +61,9 @@ def main():
     weight_interface = DataflowInterface(
         name="weights",
         interface_type=DataflowInterfaceType.WEIGHT,
-        qDim=[128],
-        tDim=[32],
-        sDim=[8],
+        tensor_dims=[128],
+        block_dims=[32],
+        stream_dims=[8],
         dtype=input_dtype,
         allowed_datatypes=[flexible_constraint]
     )
@@ -73,9 +73,9 @@ def main():
     output_interface = DataflowInterface(
         name="output0",
         interface_type=DataflowInterfaceType.OUTPUT,
-        qDim=[64],
-        tDim=[16],
-        sDim=[4],
+        tensor_dims=[64],
+        block_dims=[16],
+        stream_dims=[4],
         dtype=input_dtype,
         allowed_datatypes=[flexible_constraint]
     )
@@ -166,11 +166,11 @@ def main():
     onnx_layout = "[N, C, H, W]"
     shape = [1, 64, 32, 32]  # Batch=1, Channels=64, Height=32, Width=32
     
-    qDim, tDim = TensorChunking.infer_dimensions(onnx_layout, shape)
+    tensor_dims, block_dims = TensorChunking.infer_dimensions(onnx_layout, shape)
     print(f"   ONNX layout: {onnx_layout}")
     print(f"   Shape: {shape}")
-    print(f"   Inferred qDim: {qDim}")
-    print(f"   Inferred tDim: {tDim}")
+    print(f"   Inferred qDim: {tensor_dims}")
+    print(f"   Inferred tDim: {block_dims}")
     
     # Step 9: Calculate AXI signal specifications
     print("\n9. Generating AXI signal specifications...")

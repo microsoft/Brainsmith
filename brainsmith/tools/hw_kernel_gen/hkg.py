@@ -694,7 +694,7 @@ This document describes the auto-generated HWCustomOp implementation for `{self.
                     for iface in interface_group:
                         doc_content += f"- **{iface.name}**\n"
                         doc_content += f"  - Type: {iface.interface_type}\n"
-                        doc_content += f"  - Dimensions: qDim={iface.qDim}, tDim={iface.tDim}, sDim={iface.sDim}\n"
+                        doc_content += f"  - Dimensions: tensor_dims={iface.tensor_dims}, block_dims={iface.block_dims}, stream_dims={iface.stream_dims}\n"
                         if hasattr(iface.dtype, 'finn_type'):
                             doc_content += f"  - Data Type: {iface.dtype.finn_type}\n"
                         if iface.constraints:

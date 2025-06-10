@@ -11,7 +11,7 @@ from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import (
     InterfaceMetadata, InterfaceMetadataCollection, DataTypeConstraint, DataflowInterfaceType
 )
-from brainsmith.dataflow.core.tensor_chunking import (
+from brainsmith.dataflow.core.block_chunking import (
     default_chunking, index_chunking, last_dim_chunking, DefaultChunkingStrategy, IndexBasedChunkingStrategy
 )
 

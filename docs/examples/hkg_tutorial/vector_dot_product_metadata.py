@@ -34,7 +34,7 @@ interfaces = {
         "data_width": 64,  # 8 elements * 8 bits
         "qDim": 768,
         "tDim": 96,
-        "sDim": 8,
+        "stream_dims": 8,
         "dtype": "INT8"
     },
     "s_axis_b": {
@@ -44,7 +44,7 @@ interfaces = {
         "data_width": 64,
         "qDim": 768,
         "tDim": 96,
-        "sDim": 8,
+        "stream_dims": 8,
         "dtype": "INT8"
     },
     "m_axis_result": {
@@ -54,7 +54,7 @@ interfaces = {
         "data_width": 32,
         "qDim": 1,
         "tDim": 1, 
-        "sDim": 1,
+        "stream_dims": 1,
         "dtype": "INT32"
     },
     "config": {
@@ -110,7 +110,7 @@ finn_integration = {
     "weight_precision": "INT8", 
     "activation_precision": "INT8",
     "output_precision": "INT32",
-    "folding_factor": 8,           # Maps to sDim
+    "folding_factor": 8,           # Maps to stream_dims
     "simd_factor": 8,              # Parallel operations
     "pe_count": 1,                 # Single processing element
     "memory_mode": "external"      # No internal weight storage

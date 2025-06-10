@@ -45,7 +45,7 @@ class HWCustomOpGenerator(GeneratorBase):
         elif hw_kernel.kernel_type in ['matmul', 'conv']:
             verifications.append({
                 'description': 'Verify input/output dimension compatibility',
-                'code': 'assert len(self.get_input_dataflow_interface().tDim) >= 2, "Need at least 2D tensors"'
+                'code': 'assert len(self.get_input_dataflow_interface().block_dims) >= 2, "Need at least 2D tensors"'
             })
         
         return verifications

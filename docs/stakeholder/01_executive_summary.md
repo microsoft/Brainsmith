@@ -15,7 +15,7 @@ Modern AI workloads demand computational efficiency that traditional CPU and GPU
 ## Key Differentiators
 
 ### 1. Interface-Wise Dataflow Modeling Framework
-Brainsmith-2 introduces a revolutionary **Interface-Wise Dataflow Modeling Framework** that standardizes hardware interface representation through a mathematical three-tier dimension system (qDim/tDim/sDim). This innovation enables:
+Brainsmith-2 introduces a revolutionary **Interface-Wise Dataflow Modeling Framework** that standardizes hardware interface representation through a mathematical three-tier dimension system (qDim/tDim/stream_dims). This innovation enables:
 
 - **Automatic Performance Optimization**: Mathematical relationships between dimensions enable automated parallelism optimization and resource estimation
 - **Runtime Dimension Extraction**: Dynamic tensor shape extraction from FINN ModelWrapper eliminates hardcoded dimensions

@@ -46,7 +46,7 @@ This comprehensive documentation suite provides stakeholders with complete infor
 **Audience**: Senior Developers, Research Teams  
 **Reading Time**: 18-22 minutes
 
-- Dataflow modeling framework deep dive (qDim/tDim/sDim mathematics)
+- Dataflow modeling framework deep dive (qDim/tDim/stream_dims mathematics)
 - Template system architecture and custom template development
 - Performance optimization techniques and parallelism analysis
 - Extension development (custom blueprints, generators, RTL parser extensions)
@@ -124,7 +124,7 @@ This comprehensive documentation suite provides stakeholders with complete infor
 - API Usage: [Developer Integration Guide](03_developer_integration.md#manual-dataflow-modeling)
 - Deep Dive: [Advanced Topics](05_advanced_topics.md#dataflow-modeling-deep-dive)
 
-**Tensor Chunking System (num_tensors/tDim/sDim)**
+**Tensor Chunking System (num_tensors/tDim/stream_dims)**
 - Overview: [System Architecture](02_system_architecture.md#mathematical-foundation)
 - Usage: [Developer Integration Guide](03_developer_integration.md#manual-dataflow-modeling)
 - Mathematics: [Advanced Topics](05_advanced_topics.md#tensor-chunking-system-num_tensors-tdim-sdim)

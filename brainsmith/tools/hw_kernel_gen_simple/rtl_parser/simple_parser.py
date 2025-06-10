@@ -45,9 +45,12 @@ def parse_rtl_file(rtl_file: Path) -> RTLData:
         interfaces = []
         for interface_name, interface_obj in hw_kernel.interfaces.items():
             try:
+                # Create a type object with name attribute for template compatibility
+                type_obj = type('InterfaceType', (), {'name': _safe_get_type(interface_obj)})()
+                
                 interface_dict = {
                     'name': interface_name,
-                    'type': _safe_get_type(interface_obj),
+                    'type': type_obj,
                     'dataflow_type': _map_to_dataflow_type(interface_obj),
                     'ports': _safe_get_ports(interface_obj),
                     'enhanced_tdim': _extract_enhanced_tdim(interface_obj),
@@ -150,33 +153,45 @@ def _safe_get_ports(interface_obj) -> List[Dict[str, Any]]:
 
 def _map_to_dataflow_type(interface_obj) -> str:
     """Map interface object to dataflow type string."""
-    # Simple mapping based on interface name patterns
+    # Use metadata direction if available
+    if hasattr(interface_obj, 'metadata') and 'direction' in interface_obj.metadata:
+        direction = interface_obj.metadata['direction']
+        if hasattr(direction, 'name'):
+            direction_name = direction.name
+        else:
+            direction_name = str(direction)
+            
+        if 'INPUT' in direction_name:
+            return 'INPUT'
+        elif 'OUTPUT' in direction_name:
+            return 'OUTPUT'
+    
+    # Fallback to interface type and name patterns
     name = interface_obj.name.lower()
     
-    if 'in' in name and ('data' in name or 'stream' in name):
-        return 'INPUT'
-    elif 'out' in name and ('data' in name or 'stream' in name):
-        return 'OUTPUT'
-    elif 'weight' in name or 'param' in name:
+    if hasattr(interface_obj.type, 'name'):
+        type_name = interface_obj.type.name
+    else:
+        type_name = str(interface_obj.type)
+        
+    if 'AXI_STREAM' in type_name:
+        # Use naming convention as fallback
+        if 's_axis' in name or 'input' in name:
+            return 'INPUT'
+        elif 'm_axis' in name or 'output' in name:
+            return 'OUTPUT'
+    elif 'AXI_LITE' in type_name:
+        return 'CONFIG'
+    elif 'GLOBAL_CONTROL' in type_name:
+        return 'CONTROL'
+    
+    # Name-based fallback
+    if 'weight' in name or 'param' in name:
         return 'WEIGHT'
     elif 'config' in name or 'ctrl' in name:
         return 'CONFIG'
-    else:
-        # Default based on interface type
-        if hasattr(interface_obj.type, 'name'):
-            type_name = interface_obj.type.name
-        else:
-            type_name = str(interface_obj.type)
-            
-        if 'AXI_STREAM' in type_name:
-            if 'in' in name:
-                return 'INPUT'
-            else:
-                return 'OUTPUT'
-        elif 'AXI_LITE' in type_name:
-            return 'CONFIG'
-        else:
-            return 'INPUT'  # Safe default
+    
+    return 'INPUT'  # Safe default
 
 
 def _extract_enhanced_tdim(interface_obj) -> Dict[str, Any]:

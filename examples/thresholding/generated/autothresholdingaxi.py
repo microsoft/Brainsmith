@@ -8,7 +8,7 @@
 #
 # RUNTIME-CONFIGURABLE HARDWARE COMPONENT
 # This HWCustomOp uses runtime dimension extraction from ModelWrapper.
-# NEVER set static num_tensors, tDim, or sDim values in generated code.
+# NEVER set static num_tensors, tDim, or stream_dims values in generated code.
 ############################################################################
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp

@@ -69,42 +69,42 @@ class TestDataflowInterface:
     """Comprehensive testing of DataflowInterface functionality."""
     
     def test_dimensional_constraint_validation(self):
-        """Test qDim/tDim/sDim constraint enforcement."""
+        """Test qDim/tDim/stream_dims constraint enforcement."""
         
         # Valid configuration
         valid_interface = DataflowInterface(
             name="test_input",
             interface_type="INPUT", 
-            qDim=768, tDim=64, sDim=8,
+            qDim=768, tDim=64, stream_dims=8,
             dtype="INT8"
         )
         assert valid_interface.validate_constraints().success
         
-        # Invalid: sDim > tDim
-        with pytest.raises(ValueError, match="sDim must be <= tDim"):
+        # Invalid: stream_dims > tDim
+        with pytest.raises(ValueError, match="stream_dims must be <= tDim"):
             DataflowInterface(
                 name="invalid", interface_type="INPUT",
-                qDim=768, tDim=32, sDim=64, dtype="INT8"
+                qDim=768, tDim=32, stream_dims=64, dtype="INT8"
             )
         
         # Invalid: tDim > qDim  
         with pytest.raises(ValueError, match="tDim must be <= qDim"):
             DataflowInterface(
                 name="invalid", interface_type="INPUT", 
-                qDim=256, tDim=512, sDim=8, dtype="INT8"
+                qDim=256, tDim=512, stream_dims=8, dtype="INT8"
             )
     
-    @pytest.mark.parametrize("qDim,tDim,sDim,expected_parallelism", [
+    @pytest.mark.parametrize("qDim,tDim,stream_dims,expected_parallelism", [
         (768, 64, 8, 8),      # Standard BERT configuration
         (1024, 128, 16, 16),  # Higher parallelism
         (512, 32, 4, 4),      # Conservative configuration
     ])
-    def test_parallelism_calculation(self, qDim, tDim, sDim, expected_parallelism):
+    def test_parallelism_calculation(self, qDim, tDim, stream_dims, expected_parallelism):
         """Test parallelism calculation accuracy."""
         
         interface = DataflowInterface(
             name="test", interface_type="INPUT",
-            qDim=qDim, tDim=tDim, sDim=sDim, dtype="INT8"
+            qDim=qDim, tDim=tDim, stream_dims=stream_dims, dtype="INT8"
         )
         
         calculated_parallelism = interface.calculate_stream_parallelism()
@@ -121,10 +121,10 @@ class TestDataflowModelPerformance:
     def bert_attention_model(self):
         """Create BERT attention dataflow model for testing."""
         interfaces = [
-            DataflowInterface("query", "INPUT", qDim=512, tDim=64, sDim=8),
-            DataflowInterface("key", "INPUT", qDim=512, tDim=64, sDim=8),
-            DataflowInterface("value", "INPUT", qDim=512, tDim=64, sDim=8),
-            DataflowInterface("output", "OUTPUT", qDim=512, tDim=64, sDim=8)
+            DataflowInterface("query", "INPUT", tensor_dims=[512], block_dims=[64], stream_dims=[8]),
+            DataflowInterface("key", "INPUT", tensor_dims=[512], block_dims=[64], stream_dims=[8]),
+            DataflowInterface("value", "INPUT", tensor_dims=[512], block_dims=[64], stream_dims=[8]),
+            DataflowInterface("output", "OUTPUT", tensor_dims=[512], block_dims=[64], stream_dims=[8])
         ]
         
         return DataflowModel(
@@ -236,10 +236,10 @@ class TestRTLParser:
         
         rtl_with_pragmas = '''
         module test_module (
-            (* dataflow interface_type="INPUT" qDim=768 tDim=64 sDim=8 *)
+            (* dataflow interface_type="INPUT" qDim=768 tDim=64 stream_dims=8 *)
             input [255:0] data_input,
             
-            (* dataflow interface_type="OUTPUT" qDim=768 tDim=64 sDim=8 *)
+            (* dataflow interface_type="OUTPUT" qDim=768 tDim=64 stream_dims=8 *)
             output [255:0] data_output
         );
         '''
@@ -266,8 +266,8 @@ class TestHWCustomOpGenerator:
         """Create sample dataflow model for testing."""
         return DataflowModel(
             interfaces=[
-                DataflowInterface("input", "INPUT", qDim=256, tDim=32, sDim=4),
-                DataflowInterface("output", "OUTPUT", qDim=256, tDim=32, sDim=4)
+                DataflowInterface("input", "INPUT", qDim=256, tDim=32, stream_dims=4),
+                DataflowInterface("output", "OUTPUT", qDim=256, tDim=32, stream_dims=4)
             ],
             operation_type="test_operation"
         )
@@ -465,13 +465,13 @@ class TestKernelGenerationPipeline:
         )(
             input clk, rst_n,
             
-            (* dataflow interface_type="INPUT" qDim=224 tDim=28 sDim=4 *)
+            (* dataflow interface_type="INPUT" qDim=224 tDim=28 stream_dims=4 *)
             input [INPUT_WIDTH-1:0] feature_input,
             
-            (* dataflow interface_type="WEIGHT" qDim=9 tDim=9 sDim=1 *)
+            (* dataflow interface_type="WEIGHT" qDim=9 tDim=9 stream_dims=1 *)
             input [INPUT_WIDTH-1:0] weight_input,
             
-            (* dataflow interface_type="OUTPUT" qDim=224 tDim=28 sDim=4 *)
+            (* dataflow interface_type="OUTPUT" qDim=224 tDim=28 stream_dims=4 *)
             output [OUTPUT_WIDTH-1:0] feature_output
         );
         // Module implementation...
@@ -530,11 +530,11 @@ class DataflowValidationSuite:
         validation_results = []
         
         # Test dimensional constraints
-        if interface.sDim > interface.tDim:
+        if interface.stream_dims > interface.tDim:
             validation_results.append(ValidationError(
-                "sDim exceeds tDim",
+                "stream_dims exceeds tDim",
                 severity="ERROR",
-                suggestion="Reduce sDim or increase tDim"
+                suggestion="Reduce stream_dims or increase tDim"
             ))
         
         if interface.tDim > interface.qDim:
@@ -549,7 +549,7 @@ class DataflowValidationSuite:
         if parallelism > 64:  # Hardware limitation
             validation_results.append(ValidationWarning(
                 f"High parallelism ({parallelism}) may exceed hardware capabilities",
-                suggestion="Consider reducing sDim for better resource utilization"
+                suggestion="Consider reducing stream_dims for better resource utilization"
             ))
         
         # Test memory bandwidth requirements

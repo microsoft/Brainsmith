@@ -214,7 +214,7 @@ class TestRTLInterfaceConverter:
         assert dataflow_interface is not None
         assert dataflow_interface.name == "in0"
         assert dataflow_interface.interface_type == DataflowInterfaceType.INPUT
-        assert dataflow_interface.tDim == [32]
+        assert dataflow_interface.block_dims == [32]
         assert len(dataflow_interface.allowed_datatypes) == 1
         assert dataflow_interface.allowed_datatypes[0].base_types == ["INT"]
     

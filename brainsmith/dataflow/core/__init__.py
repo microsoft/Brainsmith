@@ -16,8 +16,9 @@ from .dataflow_interface import (
     RangeConstraint,
 )
 from .dataflow_model import DataflowModel
-from .tensor_chunking import (
-    TensorChunking,
+from .block_chunking import (
+    BlockChunking,
+    TensorChunking,  # Legacy alias
     ChunkingStrategy,
     ChunkingType,
     DefaultChunkingStrategy,
@@ -58,7 +59,8 @@ __all__ = [
     # Model
     "DataflowModel",
     # Chunking
-    "TensorChunking",
+    "BlockChunking",
+    "TensorChunking",  # Legacy alias
     "ChunkingStrategy",
     "ChunkingType",
     "DefaultChunkingStrategy",

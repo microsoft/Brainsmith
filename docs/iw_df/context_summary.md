@@ -218,15 +218,15 @@ class HWSoftmax(HWCustomOp):
 - **Control**: Input control signals (clk, rst, optional clk2x)
 
 #### Data Organization
-- **Query**: Complete data of entire hidden state or weight streamed through interface
-- **Tensor**: Data for single calculation in kernel (minimum required for computation)
+- **Tensor**: Complete data of entire hidden state or weight streamed through interface (full tensor dimensions)
+- **Block**: Data for single calculation in kernel (minimum required for computation)
 - **Stream**: Data streamed each clock cycle
 - **Element**: Single value with bitwidth defined by interface datatype
 
 #### Constraint Requirements
-- Each data level must tile into the next (stream → tensor → query)
-- Query dimensions defined by ONNX pattern
-- Tensor dimensions defined by calculation requirements
+- Each data level must tile into the next (stream → block → tensor)
+- Tensor dimensions defined by ONNX pattern
+- Block dimensions defined by calculation requirements
 - Stream dimensions determined by parallelism parameters
 
 ### Computational Model Requirements
@@ -245,12 +245,12 @@ eII: Execution Initiation Interval (cycles per execution)
 L: Inference Cycle Latency (cycles per inference)
 
 # Simple case relationships
-sDim_I = iPar
-sDim_W = wPar * iPar * (tDim_W / tDim_I)
-sDim_O = sDim_I * (tDim_O / tDim_I)
-cII = ∏(tDim_I / sDim_I)
-eII = cII * ∏(qDim_W / wPar)
-L = eII * ∏(qDim_I)
+stream_dims_I = iPar
+stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
+stream_dims_O = stream_dims_I * (block_dims_O / block_dims_I)
+cII = ∏(block_dims_I / stream_dims_I)
+eII = cII * ∏(tensor_dims_W / wPar)
+L = eII * ∏(tensor_dims_I)
 ```
 
 #### Multi-Interface Support

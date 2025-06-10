@@ -4,13 +4,17 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: thresholding_enhanced.sv
-# Generation timestamp: 2025-06-08T07:57:10.074614
+# Generation timestamp: 2025-06-10T02:34:43.014446
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This HWCustomOp uses runtime dimension extraction from ModelWrapper.
+# NEVER set static num_tensors, tDim, or stream_dims values in generated code.
 ############################################################################
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType
-from brainsmith.dataflow.core.chunking_strategy import index_chunking, default_chunking, last_dim_chunking
+from brainsmith.dataflow.core.tensor_chunking import index_chunking, default_chunking, last_dim_chunking
 
 
 class AutoThresholdingAxi(AutoHWCustomOp):

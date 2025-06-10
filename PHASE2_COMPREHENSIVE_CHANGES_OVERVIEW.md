@@ -31,7 +31,7 @@ This document provides a detailed technical overview of the architectural refact
 - **Purpose**: Performance and parallelism configuration
 - **Contents**:
   - iPar/wPar values for parallel processing units
-  - sDim calculations (streaming dimensions)
+  - stream_dims calculations (streaming dimensions)
   - Performance metrics and resource estimates
 - **Lifecycle**: Initialized with minimum values, updatable independently
 
@@ -82,7 +82,7 @@ class AutoHWCustomOp(HWCustomOp):
 **New Parallelism Update System**:
 ```python
 def update_parallelism(self, iPar: Dict[str, int] = None, wPar: Dict[str, int] = None):
-    """Update Tier 3 (Parallelism) values and recalculate sDim/performance."""
+    """Update Tier 3 (Parallelism) values and recalculate stream_dims/performance."""
     if iPar:
         for interface_name, value in iPar.items():
             self._current_parallelism[f"{interface_name}_iPar"] = value
@@ -91,7 +91,7 @@ def update_parallelism(self, iPar: Dict[str, int] = None, wPar: Dict[str, int] =
         for interface_name, value in wPar.items():
             self._current_parallelism[f"{interface_name}_wPar"] = value
     
-    # Recalculate sDim and performance metrics
+    # Recalculate stream_dims and performance metrics
     self._recalculate_streaming_dimensions()
     self._update_performance_estimates()
 ```
@@ -343,7 +343,7 @@ model = op.dataflow_model  # Already available
 ## Future Considerations
 
 ### 9.1 Potential Enhancements
-- **Caching**: Add memoization for expensive sDim calculations
+- **Caching**: Add memoization for expensive stream_dims calculations
 - **Validation**: Enhanced constraint checking for parallelism bounds
 - **Optimization**: Automatic parallelism optimization algorithms
 - **Monitoring**: Performance metrics collection and analysis

@@ -86,7 +86,7 @@ The HKG uses **dataflow pragmas** to understand the RTL design and generate opti
 - **`protocol="AXI_STREAM"`**: Interface protocol specification
 - **`interface_type="INPUT"`**: Interface type classification
 
-**CRITICAL**: The HKG generates components for future use by the FINN compiler. Actual tensor dimensions (num_tensors, tDim, sDim) are extracted at runtime from the ModelWrapper when the FINN compiler instantiates the HWCustomOp with real tensor shapes.
+**CRITICAL**: The HKG generates components for future use by the FINN compiler. Actual tensor dimensions (num_blocks, block_dims, stream_dims) are extracted at runtime from the ModelWrapper when the FINN compiler instantiates the HWCustomOp with real tensor shapes.
 
 ---
 
@@ -141,7 +141,7 @@ The metadata includes complete FINN integration specifications:
 ```python
 finn_integration = {
     "model_precision": "INT8",
-    "folding_factor": 8,           # Maps to sDim
+    "folding_factor": 8,           # Maps to stream_dims
     "simd_factor": 8,              # Parallel operations
     "pe_count": 1,                 # Single processing element
     "memory_mode": "external"      # No internal weight storage
@@ -280,7 +280,7 @@ class VectorDotProductHWCustomOp(AutoHWCustomOp):
     
     RUNTIME-CONFIGURABLE HARDWARE COMPONENT
     This HWCustomOp uses runtime dimension extraction from ModelWrapper.
-    NEVER set static num_tensors, tDim, or sDim values in generated code.
+    NEVER set static num_blocks, block_dims, or stream_dims values in generated code.
     """
     
     def __init__(self, onnx_node, **kwargs):
@@ -385,8 +385,8 @@ class VectorDotProductRTLBackend(RTLBackend):
         input_a_config = self.get_runtime_interface_config("input_a")
         
         # Use runtime dimensions for parameter generation
-        vector_size = sum(input_a_config["num_tensors"]) * sum(input_a_config["tDim"])
-        parallelism = sum(input_a_config["sDim"])
+        vector_size = sum(input_a_config["num_blocks"]) * sum(input_a_config["block_dims"])
+        parallelism = sum(input_a_config["stream_dims"])
         
         return {
             'VECTOR_SIZE': vector_size,      # Extracted at runtime

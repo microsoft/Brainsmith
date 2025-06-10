@@ -14,7 +14,7 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Interface as RTLInter
 from brainsmith.dataflow.core.dataflow_interface import (
     DataflowInterface, DataflowInterfaceType, DataflowDataType, DataTypeConstraint
 )
-from brainsmith.dataflow.core.tensor_chunking import TensorChunking
+from brainsmith.dataflow.core.block_chunking import TensorChunking
 from brainsmith.dataflow.core.validation import ValidationError, ValidationSeverity
 
 logger = logging.getLogger(__name__)
@@ -99,8 +99,8 @@ class RTLInterfaceConverter:
         # Step 2: Extract dimensions (qDim/tDim) from metadata and pragmas
         qDim, tDim = self._extract_dimensions(rtl_interface, parameters)
         
-        # Step 3: Initialize sDim (will be updated during parallelism optimization)
-        sDim = self._initialize_stream_dimensions(tDim)
+        # Step 3: Initialize stream_dims (will be updated during parallelism optimization)
+        stream_dims = self._initialize_stream_dimensions(tDim)
         
         # Step 4: Extract datatype information
         dtype = self._extract_datatype(rtl_interface)
@@ -116,9 +116,9 @@ class RTLInterfaceConverter:
             dataflow_interface = DataflowInterface(
                 name=rtl_interface.name,
                 interface_type=dataflow_type,
-                qDim=qDim,
-                tDim=tDim,
-                sDim=sDim,
+                tensor_dims=qDim,
+                block_dims=tDim,
+                stream_dims=stream_dims,
                 dtype=dtype,
                 allowed_datatypes=allowed_datatypes,
                 axi_metadata=axi_metadata,
@@ -165,25 +165,25 @@ class RTLInterfaceConverter:
     def _extract_dimensions(self, rtl_interface: RTLInterface, 
                           parameters: Dict[str, Any]) -> Tuple[List[int], List[int]]:
         """
-        Extract qDim and tDim from interface metadata and pragmas.
+        Extract tensor_dims and block_dims from interface metadata and pragmas.
         
         Args:
             rtl_interface: RTL Parser Interface object
             parameters: Module parameters for dimension evaluation
             
         Returns:
-            Tuple of (qDim, tDim) lists
+            Tuple of (tensor_dims, block_dims) lists
         """
         # Check for TDIM pragma override first
         if "tdim_override" in rtl_interface.metadata:
             tDim = rtl_interface.metadata["tdim_override"]
             logger.debug(f"Using TDIM pragma override for '{rtl_interface.name}': tDim = {tDim}")
             
-            # If qDim is provided in metadata, use it; otherwise infer from ONNX
+            # If tensor_dims is provided in metadata, use it; otherwise infer from ONNX
             if "qdim_override" in rtl_interface.metadata:
                 qDim = rtl_interface.metadata["qdim_override"]
             else:
-                qDim = self._infer_qDim_from_onnx(rtl_interface, tDim)
+                qDim = self._infer_tensor_dims_from_onnx(rtl_interface, tDim)
             
             return qDim, tDim
         
@@ -203,7 +203,7 @@ class RTLInterfaceConverter:
         logger.debug(f"Using default dimensions for '{rtl_interface.name}': qDim={default_qDim}, tDim={default_tDim}")
         return default_qDim, default_tDim
     
-    def _infer_qDim_from_onnx(self, rtl_interface: RTLInterface, tDim: List[int]) -> List[int]:
+    def _infer_tensor_dims_from_onnx(self, rtl_interface: RTLInterface, tDim: List[int]) -> List[int]:
         """
         Infer qDim from ONNX metadata given tDim from TDIM pragma.
         
@@ -251,7 +251,7 @@ class RTLInterfaceConverter:
     
     def _initialize_stream_dimensions(self, tDim: List[int]) -> List[int]:
         """
-        Initialize stream dimensions (sDim) based on tensor dimensions.
+        Initialize stream dimensions (stream_dims) based on tensor dimensions.
         
         Args:
             tDim: Tensor dimensions
