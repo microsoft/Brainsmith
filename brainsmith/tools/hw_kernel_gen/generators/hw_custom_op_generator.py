@@ -6,11 +6,11 @@
 ############################################################################
 
 """
-HWCustomOp Generator with Enhanced TDIM Pragma Integration
+HWCustomOp Generator with Enhanced BDIM Pragma Integration
 
 This generator creates slim HWCustomOp classes (50-80 lines) that leverage:
 - InterfaceMetadata objects with automatic chunking strategies
-- Enhanced TDIM pragma integration from RTL parser
+- Enhanced BDIM pragma integration from RTL parser
 - Automatic conversion from RTL pragmas to chunking strategies
 """
 
@@ -33,7 +33,7 @@ class InterfaceTemplateData:
     name: str
     type: InterfaceType
     datatype_constraints: List[Dict[str, Any]]
-    enhanced_tdim: Optional[Dict[str, Any]] = None
+    enhanced_bdim: Optional[Dict[str, Any]] = None
     dataflow_type: Optional[str] = None  # INPUT, OUTPUT, or WEIGHT for dataflow model
     
     
@@ -134,11 +134,11 @@ class HWCustomOpGenerator:
             # Extract datatype constraints from interface metadata or pragmas
             datatype_constraints = self._extract_datatype_constraints(interface)
             
-            # Extract enhanced TDIM information from pragma metadata
-            enhanced_tdim = self._extract_enhanced_tdim(interface)
+            # Extract enhanced BDIM information from pragma metadata
+            enhanced_bdim = self._extract_enhanced_bdim(interface)
             
-            if enhanced_tdim:
-                logger.info(f"Interface '{interface.name}' has enhanced TDIM: {enhanced_tdim}")
+            if enhanced_bdim:
+                logger.info(f"Interface '{interface.name}' has enhanced BDIM: {enhanced_bdim}")
             
             # Determine dataflow type for AXI_STREAM interfaces only
             dataflow_type = None
@@ -154,7 +154,7 @@ class HWCustomOpGenerator:
                 name=interface.name,
                 type=interface.type,
                 datatype_constraints=datatype_constraints,
-                enhanced_tdim=enhanced_tdim,
+                enhanced_bdim=enhanced_bdim,
                 dataflow_type=dataflow_type
             ))
         
@@ -208,14 +208,14 @@ class HWCustomOpGenerator:
         
         return constraints
     
-    def _extract_enhanced_tdim(self, interface: Interface) -> Optional[Dict[str, Any]]:
-        """Extract enhanced TDIM information from interface metadata."""
-        enhanced_tdim = interface.metadata.get("enhanced_tdim")
-        if enhanced_tdim:
+    def _extract_enhanced_bdim(self, interface: Interface) -> Optional[Dict[str, Any]]:
+        """Extract enhanced BDIM information from interface metadata."""
+        enhanced_bdim = interface.metadata.get("enhanced_bdim")
+        if enhanced_bdim:
             return {
-                "chunk_index": enhanced_tdim["chunk_index"],
-                "chunk_sizes": enhanced_tdim["chunk_sizes"],
-                "chunking_strategy_type": enhanced_tdim["chunking_strategy_type"]
+                "chunk_index": enhanced_bdim["chunk_index"],
+                "chunk_sizes": enhanced_bdim["chunk_sizes"],
+                "chunking_strategy_type": enhanced_bdim["chunking_strategy_type"]
             }
         return None
     

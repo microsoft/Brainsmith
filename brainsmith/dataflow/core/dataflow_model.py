@@ -312,32 +312,31 @@ class DataflowModel:
     
     def get_resource_requirements(self, parallelism_config: ParallelismConfiguration) -> Dict[str, Any]:
         """
-        Estimate resource requirements for given parallelism configuration
+        Estimate resource requirements for given parallelism configuration using ResourceAnalyzer
         """
-        requirements = {
-            "memory_bits": 0,
-            "transfer_bandwidth": 0,
-            "computation_cycles": 0
-        }
+        # Import ResourceAnalyzer here to avoid circular imports
+        from .resource_analysis import ResourceAnalyzer
         
-        # Calculate memory requirements
-        for interface in self.interfaces.values():
-            if interface.interface_type in [DataflowInterfaceType.INPUT, DataflowInterfaceType.WEIGHT]:
-                requirements["memory_bits"] += interface.get_memory_footprint()
-        
-        # Calculate bandwidth requirements
-        for interface in self.interfaces.values():
-            if interface.interface_type in [DataflowInterfaceType.INPUT, DataflowInterfaceType.OUTPUT, DataflowInterfaceType.WEIGHT]:
-                requirements["transfer_bandwidth"] += interface.calculate_stream_width()
+        # Create analyzer and get comprehensive requirements
+        analyzer = ResourceAnalyzer()
+        resource_req = analyzer.analyze_model(self, parallelism_config)
         
         # Calculate computation cycles using current parallelism
         intervals = self.calculate_initiation_intervals(
             parallelism_config.iPar, 
             parallelism_config.wPar
         )
-        requirements["computation_cycles"] = intervals.L
         
-        return requirements
+        # Return comprehensive resource analysis
+        return {
+            "memory_bits": resource_req.memory_bits,
+            "bandwidth_bits_per_cycle": resource_req.bandwidth_bits_per_cycle,
+            "computation_cycles": intervals.L,
+            "buffer_requirements": resource_req.buffer_requirements,
+            "compute_units": resource_req.compute_units,
+            "detailed_analysis": resource_req.get_summary(),
+            "metadata": resource_req.metadata
+        }
     
     def optimize_parallelism(self, constraints: Dict[str, Any]) -> ParallelismConfiguration:
         """
@@ -361,3 +360,38 @@ class DataflowModel:
             wPar=wPar,
             derived_stream_dims=derived_stream_dims
         )
+    
+    def calculate_resource_efficiency(self, configurations: List[ParallelismConfiguration]) -> Dict[str, Any]:
+        """
+        Compare resource efficiency across multiple parallelism configurations
+        
+        Args:
+            configurations: List of ParallelismConfiguration objects to compare
+            
+        Returns:
+            Dict containing efficiency analysis and recommendations
+        """
+        # Import ResourceAnalyzer here to avoid circular imports
+        from .resource_analysis import ResourceAnalyzer
+        
+        analyzer = ResourceAnalyzer()
+        
+        # Analyze each configuration
+        config_results = []
+        for config in configurations:
+            requirements = analyzer.analyze_model(self, config)
+            config_results.append((config, requirements))
+        
+        # Get comparison analysis
+        comparison = analyzer.compare_configurations(config_results)
+        
+        # Add model-specific context
+        comparison["model_summary"] = {
+            "num_interfaces": len(self.interfaces),
+            "input_interfaces": len(self.input_interfaces),
+            "output_interfaces": len(self.output_interfaces), 
+            "weight_interfaces": len(self.weight_interfaces),
+            "total_configurations_analyzed": len(configurations)
+        }
+        
+        return comparison

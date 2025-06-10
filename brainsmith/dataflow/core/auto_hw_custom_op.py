@@ -90,8 +90,8 @@ class AutoHWCustomOp(HWCustomOp):
             # Tier 2: Extract tensor shape from ONNX node if available
             tensor_shape = self._extract_tensor_shape_from_onnx(metadata.name)
             
-            # Apply interface's chunking strategy to get qDim and tDim  
-            qDim, tDim = self._apply_chunking_strategy(metadata, tensor_shape)
+            # Apply interface's chunking strategy to get tensor_dims and block_dims  
+            tensor_dims, block_dims = self._apply_chunking_strategy(metadata, tensor_shape)
             
             # Convert metadata datatype to DataflowDataType
             dataflow_dtype = self._convert_metadata_datatype(metadata.get_default_datatype())
@@ -101,9 +101,9 @@ class AutoHWCustomOp(HWCustomOp):
             interface = DataflowInterface(
                 name=metadata.name,
                 interface_type=metadata.interface_type,
-                tensor_dims=qDim,  # Tier 2: From ONNX tensor shape
-                block_dims=tDim,  # Tier 1: From chunking strategy
-                stream_dims=[1] * len(tDim),  # Tier 3: Minimum parallelism (will be updated)
+                tensor_dims=tensor_dims,  # Tier 2: From ONNX tensor shape
+                block_dims=block_dims,  # Tier 1: From chunking strategy
+                stream_dims=[1] * len(block_dims),  # Tier 3: Minimum parallelism (will be updated)
                 dtype=dataflow_dtype  # Tier 2: From ONNX or metadata
             )
             
@@ -137,20 +137,20 @@ class AutoHWCustomOp(HWCustomOp):
         Apply chunking strategy from metadata (Tier 1: Kernel Data) to tensor shape.
         
         Returns:
-            tuple: (qDim, tDim) where qDim=original shape, tDim=chunk shape
+            tuple: (tensor_dims, block_dims) where tensor_dims=original shape, block_dims=chunk shape
         """
-        # qDim is always the original tensor shape (Tier 2)
-        qDim = list(tensor_shape)
+        # tensor_dims is always the original tensor shape (Tier 2)
+        tensor_dims = list(tensor_shape)
         
-        # tDim comes from the chunking strategy (Tier 1)
+        # block_dims comes from the chunking strategy (Tier 1)
         if hasattr(metadata, 'chunking_strategy') and metadata.chunking_strategy:
             # Use metadata's chunking strategy
-            _, tDim = metadata.chunking_strategy.compute_chunking(tensor_shape, metadata.name)
+            _, block_dims = metadata.chunking_strategy.compute_chunking(tensor_shape, metadata.name)
         else:
             # Default: no chunking, process entire tensor
-            tDim = list(tensor_shape)
+            block_dims = list(tensor_shape)
         
-        return qDim, tDim
+        return tensor_dims, block_dims
     
     def _initialize_minimum_parallelism(self) -> Dict[str, int]:
         """
@@ -631,7 +631,7 @@ class AutoHWCustomOp(HWCustomOp):
             },
             "tensor_dims": list(iface.tensor_dims),  # Original tensor dimensions
             "num_blocks": list(iface.get_num_blocks()),  # Computed number of blocks
-            "block_dims": list(iface.block_dims),  # Correct attribute name
+            "block_dims": list(iface.block_dims),  # Block dimensions for processing
             "parallel": self.get_nodeattr(f"{interface_name}_parallel") or 1,
             "runtime_dtype": self.get_nodeattr(f"{interface_name}_dtype") or iface.dtype.finn_type
         }

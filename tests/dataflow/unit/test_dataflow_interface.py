@@ -205,8 +205,8 @@ class TestDataflowInterface:
         """Test that invalid dimension relationships raise errors"""
         dtype = DataflowDataType("INT", 8, True, "")
         
-        # tDim not divisible by stream_dims (streaming constraint)
-        with pytest.raises(ValueError, match="tDim.*must be divisible by stream_dims"):
+        # block_dims not divisible by stream_dims (streaming constraint)
+        with pytest.raises(ValueError, match="block_dims.*must be divisible by stream_dims"):
             DataflowInterface(
                 name="test",
                 interface_type=DataflowInterfaceType.INPUT,
@@ -216,8 +216,8 @@ class TestDataflowInterface:
                 dtype=dtype
             )
         
-        # qDim not divisible by tDim (chunking constraint)
-        with pytest.raises(ValueError, match="qDim.*must be divisible by tDim"):
+        # tensor_dims not divisible by block_dims (chunking constraint)
+        with pytest.raises(ValueError, match="tensor_dims.*must be divisible by block_dims"):
             DataflowInterface(
                 name="test2",
                 interface_type=DataflowInterfaceType.INPUT,
@@ -576,7 +576,7 @@ class TestTensorChunking:
         result = interface.validate_tensor_chunking(incompatible_shape)
         assert result.success == False
         assert len(result.errors) > 0
-        assert any("mismatch" in error.message for error in result.errors)
+        assert any("mismatch" in (error.message if hasattr(error, 'message') else str(error)) for error in result.errors)
     
     def test_from_tensor_chunking_factory_method(self):
         """Test factory method for creating interfaces from tensor chunking"""
@@ -676,7 +676,7 @@ class TestTensorChunking:
         # Validate element count consistency
         original_elements = np.prod([15, 10])  # 150
         chunks_total = np.prod(num_tensors2)   # 5 * 2 = 10 chunks
-        elements_per_chunk = np.prod(interface2.tDim)  # 3 * 5 = 15
+        elements_per_chunk = np.prod(interface2.block_dims)  # 3 * 5 = 15
         total_elements = chunks_total * elements_per_chunk  # 10 * 15 = 150
         assert original_elements == total_elements
         

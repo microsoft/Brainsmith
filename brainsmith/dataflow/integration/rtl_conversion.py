@@ -96,11 +96,11 @@ class RTLInterfaceConverter:
             logger.debug(f"Skipping interface '{rtl_interface.name}' - not a data interface")
             return None
         
-        # Step 2: Extract dimensions (qDim/tDim) from metadata and pragmas
-        qDim, tDim = self._extract_dimensions(rtl_interface, parameters)
+        # Step 2: Extract dimensions (tensor_dims/block_dims) from metadata and pragmas
+        tensor_dims, block_dims = self._extract_dimensions(rtl_interface, parameters)
         
         # Step 3: Initialize stream_dims (will be updated during parallelism optimization)
-        stream_dims = self._initialize_stream_dimensions(tDim)
+        stream_dims = self._initialize_stream_dimensions(block_dims)
         
         # Step 4: Extract datatype information
         dtype = self._extract_datatype(rtl_interface)
@@ -116,8 +116,8 @@ class RTLInterfaceConverter:
             dataflow_interface = DataflowInterface(
                 name=rtl_interface.name,
                 interface_type=dataflow_type,
-                tensor_dims=qDim,
-                block_dims=tDim,
+                tensor_dims=tensor_dims,
+                block_dims=block_dims,
                 stream_dims=stream_dims,
                 dtype=dtype,
                 allowed_datatypes=allowed_datatypes,
@@ -174,59 +174,59 @@ class RTLInterfaceConverter:
         Returns:
             Tuple of (tensor_dims, block_dims) lists
         """
-        # Check for TDIM pragma override first
-        if "tdim_override" in rtl_interface.metadata:
-            tDim = rtl_interface.metadata["tdim_override"]
-            logger.debug(f"Using TDIM pragma override for '{rtl_interface.name}': tDim = {tDim}")
+        # Check for BDIM pragma override first (also check legacy tdim_override for backward compatibility)
+        if "bdim_override" in rtl_interface.metadata or "tdim_override" in rtl_interface.metadata:
+            block_dims = rtl_interface.metadata.get("bdim_override") or rtl_interface.metadata.get("tdim_override")
+            logger.debug(f"Using BDIM pragma override for '{rtl_interface.name}': block_dims = {block_dims}")
             
             # If tensor_dims is provided in metadata, use it; otherwise infer from ONNX
-            if "qdim_override" in rtl_interface.metadata:
-                qDim = rtl_interface.metadata["qdim_override"]
+            if "tensor_dims_override" in rtl_interface.metadata or "qdim_override" in rtl_interface.metadata:
+                tensor_dims = rtl_interface.metadata.get("tensor_dims_override") or rtl_interface.metadata.get("qdim_override")
             else:
-                qDim = self._infer_tensor_dims_from_onnx(rtl_interface, tDim)
+                tensor_dims = self._infer_tensor_dims_from_onnx(rtl_interface, block_dims)
             
-            return qDim, tDim
+            return tensor_dims, block_dims
         
         # Use ONNX metadata for standard dimension inference
         onnx_layout = self.onnx_metadata.get(f"{rtl_interface.name}_layout")
         onnx_shape = self.onnx_metadata.get(f"{rtl_interface.name}_shape")
         
         if onnx_layout and onnx_shape:
-            # In new architecture: qDim = original ONNX shape, tDim = chunking strategy result
-            qDim = list(onnx_shape)  # Preserve original tensor shape
-            tDim = self.tensor_chunking.get_layout_aware_chunking(onnx_shape, onnx_layout)[1]  # Get default chunking
-            logger.debug(f"Inferred dimensions from ONNX for '{rtl_interface.name}': qDim={qDim}, tDim={tDim}")
-            return qDim, tDim
+            # In new architecture: tensor_dims = original ONNX shape, block_dims = chunking strategy result
+            tensor_dims = list(onnx_shape)  # Preserve original tensor shape
+            block_dims = self.tensor_chunking.get_layout_aware_chunking(onnx_shape, onnx_layout)[1]  # Get default chunking
+            logger.debug(f"Inferred dimensions from ONNX for '{rtl_interface.name}': tensor_dims={tensor_dims}, block_dims={block_dims}")
+            return tensor_dims, block_dims
         
         # Default dimensions for interfaces without ONNX metadata
-        default_qDim, default_tDim = self._get_default_dimensions(rtl_interface)
-        logger.debug(f"Using default dimensions for '{rtl_interface.name}': qDim={default_qDim}, tDim={default_tDim}")
-        return default_qDim, default_tDim
+        default_tensor_dims, default_block_dims = self._get_default_dimensions(rtl_interface)
+        logger.debug(f"Using default dimensions for '{rtl_interface.name}': tensor_dims={default_tensor_dims}, block_dims={default_block_dims}")
+        return default_tensor_dims, default_block_dims
     
-    def _infer_tensor_dims_from_onnx(self, rtl_interface: RTLInterface, tDim: List[int]) -> List[int]:
+    def _infer_tensor_dims_from_onnx(self, rtl_interface: RTLInterface, block_dims: List[int]) -> List[int]:
         """
-        Infer qDim from ONNX metadata given tDim from TDIM pragma.
+        Infer tensor_dims from ONNX metadata given block_dims from BDIM pragma.
         
         Args:
             rtl_interface: RTL Parser Interface object
-            tDim: Tensor dimensions from TDIM pragma
+            block_dims: Block dimensions from BDIM pragma
             
         Returns:
-            Inferred qDim list
+            Inferred tensor_dims list
         """
         onnx_shape = self.onnx_metadata.get(f"{rtl_interface.name}_shape")
         if onnx_shape:
             try:
-                # Compute qDim such that qDim * tDim = original_shape (with broadcasting)
-                qDim = TensorChunking._compute_qDim_from_chunking(onnx_shape, tDim)
-                return qDim
+                # Compute tensor_dims such that tensor_dims * block_dims = original_shape (with broadcasting)
+                tensor_dims = TensorChunking._compute_tensor_dims_from_chunking(onnx_shape, block_dims)
+                return tensor_dims
             except Exception as e:
-                logger.warning(f"Failed to infer qDim from ONNX shape for '{rtl_interface.name}': {e}")
+                logger.warning(f"Failed to infer tensor_dims from ONNX shape for '{rtl_interface.name}': {e}")
         
-        # Fallback: qDim should be compatible with tDim (preserve divisibility)
-        # In the new architecture, qDim should represent original tensor shape
-        # Use tDim as a reasonable default when ONNX shape is not available
-        return list(tDim)
+        # Fallback: tensor_dims should be compatible with block_dims (preserve divisibility)
+        # In the new architecture, tensor_dims should represent original tensor shape
+        # Use block_dims as a reasonable default when ONNX shape is not available
+        return list(block_dims)
     
     def _get_default_dimensions(self, rtl_interface: RTLInterface) -> Tuple[List[int], List[int]]:
         """
@@ -236,7 +236,7 @@ class RTLInterfaceConverter:
             rtl_interface: RTL Parser Interface object
             
         Returns:
-            Tuple of default (qDim, tDim)
+            Tuple of default (tensor_dims, block_dims)
         """
         if rtl_interface.type == RTLInterfaceType.AXI_STREAM:
             # Default stream dimensions based on interface type
@@ -249,18 +249,18 @@ class RTLInterfaceConverter:
         else:
             return [1], [1]        # Control interfaces are scalar
     
-    def _initialize_stream_dimensions(self, tDim: List[int]) -> List[int]:
+    def _initialize_stream_dimensions(self, block_dims: List[int]) -> List[int]:
         """
         Initialize stream dimensions (stream_dims) based on tensor dimensions.
         
         Args:
-            tDim: Tensor dimensions
+            block_dims: Tensor dimensions
             
         Returns:
             Initial stream dimensions (will be updated during parallelism optimization)
         """
         # Default to single element per cycle
-        return [1] * len(tDim)
+        return [1] * len(block_dims)
     
     def _extract_datatype(self, rtl_interface: RTLInterface) -> DataflowDataType:
         """

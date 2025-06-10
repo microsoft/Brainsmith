@@ -253,7 +253,7 @@ class TestDataflowModel:
         )
         
         # Now modify to create invalid streaming constraint for testing
-        invalid_interface.tDim = [16]  # 16 % 5 != 0, invalid streaming
+        invalid_interface.block_dims = [16]  # 16 % 5 != 0, invalid streaming
         
         invalid_model = DataflowModel([invalid_interface], {})
         result = invalid_model.validate_mathematical_constraints()
@@ -274,11 +274,11 @@ class TestDataflowModel:
         requirements = model.get_resource_requirements(config)
         
         assert "memory_bits" in requirements
-        assert "transfer_bandwidth" in requirements
+        assert "bandwidth_bits_per_cycle" in requirements
         assert "computation_cycles" in requirements
         
         assert requirements["memory_bits"] > 0
-        assert requirements["transfer_bandwidth"] > 0
+        assert requirements["bandwidth_bits_per_cycle"] > 0
         assert requirements["computation_cycles"] > 0
     
     def test_parallelism_optimization_placeholder(self):

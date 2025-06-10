@@ -169,8 +169,8 @@ def main():
     tensor_dims, block_dims = TensorChunking.infer_dimensions(onnx_layout, shape)
     print(f"   ONNX layout: {onnx_layout}")
     print(f"   Shape: {shape}")
-    print(f"   Inferred qDim: {tensor_dims}")
-    print(f"   Inferred tDim: {block_dims}")
+    print(f"   Inferred tensor_dims: {tensor_dims}")
+    print(f"   Inferred block_dims: {block_dims}")
     
     # Step 9: Calculate AXI signal specifications
     print("\n9. Generating AXI signal specifications...")

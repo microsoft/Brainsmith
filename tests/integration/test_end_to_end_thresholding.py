@@ -138,17 +138,17 @@ endmodule : thresholding_axi
             f.write(rtl_content)
     
     def _create_enhanced_thresholding_rtl(self):
-        """Create enhanced RTL with Phase 3 TDIM pragmas for comprehensive testing."""
+        """Create enhanced RTL with Phase 3 BDIM pragmas for comprehensive testing."""
         enhanced_content = '''
 /******************************************************************************
- * Enhanced Thresholding AXI Module with Phase 3 Enhanced TDIM Pragmas
+ * Enhanced Thresholding AXI Module with Phase 3 Enhanced BDIM Pragmas
  *****************************************************************************/
 
 // @brainsmith TOP_MODULE thresholding_axi
-// Phase 3 Enhanced TDIM Pragma Syntax - Parameter-based chunking
-// @brainsmith TDIM s_axis_tdata -1 [PE]
-// @brainsmith TDIM m_axis_tdata -1 [PE]
-// @brainsmith TDIM s_axilite_WDATA 0 [THRESHOLD_PARAMS]
+// Phase 3 Enhanced BDIM Pragma Syntax - Parameter-based chunking
+// @brainsmith BDIM s_axis_tdata -1 [PE]
+// @brainsmith BDIM m_axis_tdata -1 [PE]
+// @brainsmith BDIM s_axilite_WDATA 0 [THRESHOLD_PARAMS]
 // @brainsmith DATATYPE s_axis UINT 8 8
 // @brainsmith DATATYPE m_axis UINT 1 1
 // @brainsmith WEIGHT s_axilite
@@ -410,7 +410,7 @@ test_configurations = [
     
     @patch('brainsmith.tools.hw_kernel_gen.hkg.DATAFLOW_AVAILABLE', True)
     def test_enhanced_dataflow_conversion_with_pragmas(self):
-        """Test enhanced dataflow conversion with TDIM and DATATYPE pragmas."""
+        """Test enhanced dataflow conversion with BDIM and DATATYPE pragmas."""
         # Use enhanced RTL with pragmas
         hkg = HardwareKernelGenerator(
             rtl_file_path=str(self.enhanced_rtl_file),
@@ -437,10 +437,10 @@ test_configurations = [
             elif iface.name == "s_axilite":
                 s_axilite_iface = iface
         
-        # Verify TDIM pragma effects
+        # Verify BDIM pragma effects
         if s_axis_iface:
             assert s_axis_iface.interface_type == DataflowInterfaceType.INPUT
-            # Verify TDIM pragma was applied (would have PE*32, PE in metadata)
+            # Verify BDIM pragma was applied (would have PE*32, PE in metadata)
             assert "tdim_override" in s_axis_iface.pragma_metadata or s_axis_iface.tDim is not None
         
         if m_axis_iface:
@@ -548,10 +548,10 @@ test_configurations = [
     
     @patch('brainsmith.tools.hw_kernel_gen.hkg.DATAFLOW_AVAILABLE', True)
     def test_phase3_enhanced_tdim_pragma_parsing(self):
-        """Test Phase 3 enhanced TDIM pragma parsing with constraint enforcement."""
-        from brainsmith.tools.hw_kernel_gen.rtl_parser.data import TDimPragma, PragmaType, PragmaError
+        """Test Phase 3 enhanced BDIM pragma parsing with constraint enforcement."""
+        from brainsmith.tools.hw_kernel_gen.rtl_parser.data import BDimPragma, PragmaType, PragmaError
         
-        # Test enhanced TDIM pragma parsing
+        # Test enhanced BDIM pragma parsing
         valid_pragmas = [
             (["s_axis_tdata", "-1", "[PE]"], "Enhanced format with parameter"),
             (["m_axis_tdata", "-1", "[PE]"], "Enhanced format with parameter"),
@@ -568,8 +568,8 @@ test_configurations = [
         # Test valid pragmas
         for inputs, description in valid_pragmas:
             try:
-                pragma = TDimPragma(
-                    type=PragmaType.TDIM,
+                pragma = BDimPragma(
+                    type=PragmaType.BDIM,
                     inputs=inputs,
                     line_number=1
                 )
@@ -587,8 +587,8 @@ test_configurations = [
         # Test invalid pragmas (should raise PragmaError)
         for inputs, description in invalid_pragmas:
             with pytest.raises(PragmaError, match="Magic numbers are not allowed|Invalid parameter"):
-                TDimPragma(
-                    type=PragmaType.TDIM,
+                BDimPragma(
+                    type=PragmaType.BDIM,
                     inputs=inputs,
                     line_number=1
                 )
@@ -680,11 +680,11 @@ test_configurations = [
         assert len(context.interfaces) == 2
         assert len(context.rtl_parameters) == 3
         
-        # Verify enhanced TDIM integration
+        # Verify enhanced BDIM integration
         for interface_data in context.interfaces:
-            if interface_data.enhanced_tdim:
-                assert interface_data.enhanced_tdim["chunk_index"] == -1
-                assert interface_data.enhanced_tdim["chunk_sizes"] == ["PE"]
+            if interface_data.enhanced_bdim:
+                assert interface_data.enhanced_bdim["chunk_index"] == -1
+                assert interface_data.enhanced_bdim["chunk_sizes"] == ["PE"]
     
     @patch('brainsmith.tools.hw_kernel_gen.hkg.DATAFLOW_AVAILABLE', True)
     def test_phase3_complete_enhanced_pipeline(self):
@@ -701,12 +701,12 @@ test_configurations = [
         # Verify Phase 3 enhancements were applied
         parsed_data = hkg.get_parsed_rtl_data()
         
-        # Check for enhanced TDIM pragmas in parsed data
+        # Check for enhanced BDIM pragmas in parsed data
         if hasattr(parsed_data, 'pragmas'):
-            tdim_pragmas = [p for p in parsed_data.pragmas if p.type.name == 'TDIM']
+            bdim_pragmas = [p for p in parsed_data.pragmas if p.type.name == 'BDIM']
             
             # Verify enhanced pragma parsing
-            for pragma in tdim_pragmas:
+            for pragma in bdim_pragmas:
                 assert pragma.parsed_data is not None
                 assert "format" in pragma.parsed_data
                 
@@ -722,10 +722,10 @@ test_configurations = [
         if hkg.dataflow_interfaces:
             enhanced_interfaces = [
                 iface for iface in hkg.dataflow_interfaces
-                if hasattr(iface, 'pragma_metadata') and 'enhanced_tdim' in iface.pragma_metadata
+                if hasattr(iface, 'pragma_metadata') and 'enhanced_bdim' in iface.pragma_metadata
             ]
             
-            # Should have interfaces with enhanced TDIM metadata
+            # Should have interfaces with enhanced BDIM metadata
             assert len(enhanced_interfaces) >= 0  # May not have enhanced interfaces yet in integration
         
         # Verify generated files include Phase 3 improvements
@@ -750,7 +750,7 @@ test_configurations = [
     def test_phase3_constraint_enforcement_integration(self):
         """Test Phase 3 constraint enforcement in end-to-end pipeline."""
         # Test that the constraint enforcement system works by checking pragma parsing
-        from brainsmith.tools.hw_kernel_gen.rtl_parser.data import TDimPragma, PragmaType, PragmaError
+        from brainsmith.tools.hw_kernel_gen.rtl_parser.data import BDimPragma, PragmaType, PragmaError
         
         # Test Phase 3 constraint enforcement directly
         invalid_pragma_tests = [
@@ -763,8 +763,8 @@ test_configurations = [
         
         for inputs, description in invalid_pragma_tests:
             try:
-                pragma = TDimPragma(
-                    type=PragmaType.TDIM,
+                pragma = BDimPragma(
+                    type=PragmaType.BDIM,
                     inputs=inputs,
                     line_number=1
                 )
@@ -786,8 +786,8 @@ test_configurations = [
         
         for inputs, description in valid_pragma_tests:
             try:
-                pragma = TDimPragma(
-                    type=PragmaType.TDIM,
+                pragma = BDimPragma(
+                    type=PragmaType.BDIM,
                     inputs=inputs,
                     line_number=1
                 )
@@ -844,7 +844,7 @@ test_configurations = [
         generated_dir = Path("tests/tools/hw_kernel_gen/generated")
         generated_dir.mkdir(exist_ok=True)
         
-        # Use enhanced RTL with Phase 3 TDIM pragmas
+        # Use enhanced RTL with Phase 3 BDIM pragmas
         hkg = HardwareKernelGenerator(
             rtl_file_path=str(self.enhanced_rtl_file),
             compiler_data_path=str(self.compiler_file),
@@ -982,7 +982,7 @@ test_configurations = [
                 
                 # Should contain Phase 3 features
                 assert "AutoHWCustomOp" in content
-                assert "enhanced TDIM pragma integration" in content
+                assert "enhanced BDIM pragma integration" in content
                 
                 # Should have parameter-based chunking
                 assert "PE" in content
@@ -1155,10 +1155,10 @@ test_configurations = [
         
         # Validate Phase 3 enhanced pragma parsing
         if hasattr(parsed_rtl, 'pragmas') and parsed_rtl.pragmas:
-            tdim_pragmas = [p for p in parsed_rtl.pragmas if hasattr(p, 'type') and p.type.name == 'TDIM']
-            print(f"   • Enhanced TDIM pragmas: {len(tdim_pragmas)}")
+            bdim_pragmas = [p for p in parsed_rtl.pragmas if hasattr(p, 'type') and p.type.name == 'BDIM']
+            print(f"   • Enhanced BDIM pragmas: {len(bdim_pragmas)}")
             
-            for pragma in tdim_pragmas:
+            for pragma in bdim_pragmas:
                 if hasattr(pragma, 'parsed_data') and pragma.parsed_data:
                     print(f"     - {pragma.parsed_data.get('interface_name', 'unknown')}: {pragma.parsed_data.get('format', 'unknown')} format")
         
@@ -1255,7 +1255,7 @@ test_configurations = [
             
         print(f"   • Line count: {len(lines)}")
         print(f"   • Generator integration: {'HWCustomOpGenerator' in hwcustomop_content}")
-        print(f"   • Phase 3 features: {'enhanced TDIM pragma' in hwcustomop_content}")
+        print(f"   • Phase 3 features: {'enhanced BDIM pragma' in hwcustomop_content}")
         print(f"   • AutoHWCustomOp inheritance: {'AutoHWCustomOp' in hwcustomop_content}")
         
         # Validate HWCustomOp structure
@@ -1353,7 +1353,7 @@ test_configurations = [
         
         print("\n✨ Phase 3 Enhancements Demonstrated:")
         print("   • ✅ HWCustomOpGenerator integration (renamed from SlimHWCustomOpGenerator)")
-        print("   • ✅ Enhanced TDIM pragma parsing with parameter validation")
+        print("   • ✅ Enhanced BDIM pragma parsing with parameter validation")
         print("   • ✅ Automatic interface classification (AXI_STREAM -> INPUT/OUTPUT)")
         print("   • ✅ Slim template generation with embedded chunking strategies")
         print("   • ✅ Clean separation between orchestration (HWKG) and generation")

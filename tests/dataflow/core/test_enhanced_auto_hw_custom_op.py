@@ -331,7 +331,7 @@ class TestChunkingStrategies:
         assert strategy.shape == [8]
         
         # Test spatial_chunking  
-        from brainsmith.dataflow.core.tensor_chunking import spatial_chunking
+        from brainsmith.dataflow.core.block_chunking import spatial_chunking
         strategy = spatial_chunking(16, 16)
         assert strategy.start_index == 2
         assert strategy.shape == [16, 16]

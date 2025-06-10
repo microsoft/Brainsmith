@@ -4,6 +4,8 @@ HWKG Pragma to Chunking Strategy Converter
 This module converts parsed RTL pragmas to chunking strategies for the AutoHWCustomOp
 per-interface strategy pattern. This enables clean separation between HWKG (pragma-aware)
 and dataflow (computational) layers.
+
+Supports both BDIM (block dimension) pragmas and legacy TDIM pragmas for backward compatibility.
 """
 
 from typing import Dict, Any, Optional
@@ -16,9 +18,9 @@ from brainsmith.dataflow.core.tensor_chunking import (
 class PragmaToStrategyConverter:
     """Convert parsed RTL pragmas to chunking strategies."""
     
-    def convert_tdim_pragma(self, pragma_data: Dict[str, Any]) -> ChunkingStrategy:
+    def convert_bdim_pragma(self, pragma_data: Dict[str, Any]) -> ChunkingStrategy:
         """
-        Convert TDIM pragma to appropriate chunking strategy.
+        Convert BDIM pragma to appropriate chunking strategy.
         
         Args:
             pragma_data: Parsed pragma data containing type and parameters
@@ -45,15 +47,15 @@ class PragmaToStrategyConverter:
         else:
             return default_chunking()
     
-    def parse_enhanced_tdim_pragma(self, pragma_string: str) -> Dict[str, Any]:
+    def parse_enhanced_bdim_pragma(self, pragma_string: str) -> Dict[str, Any]:
         """
-        Parse enhanced TDIM pragma string.
+        Parse enhanced BDIM pragma string.
         
         Supported formats:
-        - "@brainsmith TDIM in0_V_data_V -1 [16]" -> index-based chunking
-        - "@brainsmith TDIM weights spatial 8x8" -> spatial chunking
-        - "@brainsmith TDIM bias none" -> no chunking
-        - "@brainsmith TDIM input last_dim 32" -> last dimension chunking
+        - "@brainsmith BDIM in0_V_data_V -1 [16]" -> index-based chunking
+        - "@brainsmith BDIM weights spatial 8x8" -> spatial chunking
+        - "@brainsmith BDIM bias none" -> no chunking
+        - "@brainsmith BDIM input last_dim 32" -> last dimension chunking
         
         Args:
             pragma_string: Raw pragma string from RTL
@@ -63,8 +65,8 @@ class PragmaToStrategyConverter:
         """
         parts = pragma_string.strip().split()
         
-        if len(parts) < 4 or parts[0] != "@brainsmith" or parts[1] != "TDIM":
-            raise ValueError(f"Invalid TDIM pragma format: {pragma_string}")
+        if len(parts) < 4 or parts[0] != "@brainsmith" or (parts[1] != "BDIM" and parts[1] != "TDIM"):
+            raise ValueError(f"Invalid BDIM/TDIM pragma format: {pragma_string}")
         
         interface_name = parts[2]
         pragma_type = parts[3]
@@ -173,8 +175,17 @@ class PragmaToStrategyConverter:
         Returns:
             ChunkingStrategy object
         """
-        if 'enhanced_tdim' in pragma_dict:
-            return self.convert_tdim_pragma(pragma_dict['enhanced_tdim'])
+        if 'enhanced_bdim' in pragma_dict:
+            return self.convert_bdim_pragma(pragma_dict['enhanced_bdim'])
+        elif 'enhanced_tdim' in pragma_dict:
+            # Backward compatibility for legacy enhanced_tdim
+            import warnings
+            warnings.warn(
+                "enhanced_tdim pragma dictionary key is deprecated. Use enhanced_bdim instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            return self.convert_bdim_pragma(pragma_dict['enhanced_tdim'])
         else:
             # No specific pragma configuration - use default
             return default_chunking()
@@ -205,6 +216,35 @@ class PragmaToStrategyConverter:
         """
         return spatial_chunking(layout, streaming_dim)
     
+    # Backward compatibility methods for legacy TDIM pragma support
+    def convert_tdim_pragma(self, pragma_data: Dict[str, Any]) -> ChunkingStrategy:
+        """
+        Backward compatibility method for TDIM pragma conversion.
+        
+        DEPRECATED: Use convert_bdim_pragma() instead.
+        """
+        import warnings
+        warnings.warn(
+            "convert_tdim_pragma() is deprecated. Use convert_bdim_pragma() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.convert_bdim_pragma(pragma_data)
+    
+    def parse_enhanced_tdim_pragma(self, pragma_string: str) -> Dict[str, Any]:
+        """
+        Backward compatibility method for TDIM pragma parsing.
+        
+        DEPRECATED: Use parse_enhanced_bdim_pragma() instead.
+        """
+        import warnings
+        warnings.warn(
+            "parse_enhanced_tdim_pragma() is deprecated. Use parse_enhanced_bdim_pragma() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.parse_enhanced_bdim_pragma(pragma_string.replace("TDIM", "BDIM"))
+    
     def create_last_dim_chunking_strategy(self, chunk_size: int) -> ChunkingStrategy:
         """
         Create a last dimension chunking strategy directly.
@@ -227,8 +267,8 @@ class PragmaToStrategyConverter:
         Returns:
             ChunkingStrategy object
         """
-        parsed = self.parse_enhanced_tdim_pragma(pragma_string)
-        return self.convert_tdim_pragma(parsed)
+        parsed = self.parse_enhanced_bdim_pragma(pragma_string)
+        return self.convert_bdim_pragma(parsed)
 
 
 def convert_pragmas_to_strategies(pragmas: Dict[str, Dict[str, Any]]) -> Dict[str, ChunkingStrategy]:
@@ -295,9 +335,9 @@ def example_hwkg_integration():
     pragma_configs = {}
     
     for pragma_str in rtl_pragmas:
-        parsed = converter.parse_enhanced_tdim_pragma(pragma_str)
+        parsed = converter.parse_enhanced_bdim_pragma(pragma_str)
         interface_name = parsed['interface_name']
-        pragma_configs[interface_name] = {'enhanced_tdim': parsed}
+        pragma_configs[interface_name] = {'enhanced_bdim': parsed}
     
     # 3. Generate chunking strategies
     strategies = convert_pragmas_to_strategies(pragma_configs)

@@ -140,8 +140,8 @@ class AutoRTLBackend(RTLBackend):
                 "width": self.calculate_interface_width(iface_name),
                 "direction": "input" if iface_config["interface_type"] in ["INPUT", "WEIGHT", "CONFIG"] else "output",
                 "protocol": "axi_stream",  # Default protocol
-                "qDim": iface_config["qDim"],
-                "tDim": iface_config["tDim"],
+                "tensor_dims": iface_config["tensor_dims"],
+                "block_dims": iface_config["block_dims"],
                 "stream_dims": iface_config["stream_dims"],
             }
             interfaces.append(interface_def)
@@ -180,7 +180,7 @@ class AutoRTLBackend(RTLBackend):
             # Add interface parameters
             params.update({
                 f"{iface_name.upper()}_WIDTH": self.calculate_interface_width(iface_name),
-                f"{iface_name.upper()}_DEPTH": np.prod(iface_config["qDim"]) * np.prod(iface_config["tDim"]),
+                f"{iface_name.upper()}_DEPTH": np.prod(iface_config["tensor_dims"]) * np.prod(iface_config["block_dims"]),
             })
             
         return params
@@ -283,9 +283,9 @@ class AutoRTLBackend(RTLBackend):
         interface_config = self.dataflow_interfaces[interface_name]
         
         # Calculate parameter dimensions
-        qDim = interface_config["qDim"]
-        tDim = interface_config["tDim"]
-        total_elements = np.prod(qDim) * np.prod(tDim)
+        tensor_dims = interface_config["tensor_dims"]
+        block_dims = interface_config["block_dims"]
+        total_elements = np.prod(tensor_dims) * np.prod(block_dims)
         
         # Get datatype configuration
         dtype_name = model.get_nodeattr(f"{interface_name}_dtype") or interface_config["dtype"]["finn_type"]
@@ -366,10 +366,10 @@ class AutoRTLBackend(RTLBackend):
         config_values.append(dtype_code)
         
         # Add dimension information
-        qDim = interface_config["qDim"]
-        tDim = interface_config["tDim"]
-        config_values.extend(qDim)
-        config_values.extend(tDim)
+        tensor_dims = interface_config["tensor_dims"]
+        block_dims = interface_config["block_dims"]
+        config_values.extend(tensor_dims)
+        config_values.extend(block_dims)
         
         return config_values
         

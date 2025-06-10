@@ -61,7 +61,7 @@ class Test{{ class_name }}:
             helper.make_tensor_value_info(
                 "{{ iface.name }}", 
                 TensorProto.FLOAT, 
-                {{ iface.qDim + iface.tDim + iface.stream_dims }}
+                {{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}
             ),
             {% endfor %}
         ]
@@ -76,7 +76,7 @@ class Test{{ class_name }}:
             helper.make_tensor_value_info(
                 "{{ iface.name }}", 
                 TensorProto.FLOAT, 
-                {{ iface.qDim + iface.tDim + iface.stream_dims }}
+                {{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}
             ),
             {% endfor %}
         ]
@@ -426,7 +426,7 @@ class Test{{ class_name }}:
         {% if input_interfaces %}
         max_input_size = max([
             {% for iface in input_interfaces %}
-            np.prod({{ iface.qDim + iface.tDim + iface.stream_dims }}),
+            np.prod({{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}),
             {% endfor %}
         ])
         # Cycles should be related to input size but not excessive

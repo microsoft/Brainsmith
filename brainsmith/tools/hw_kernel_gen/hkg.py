@@ -303,7 +303,7 @@ class HardwareKernelGenerator:
             # Convert RTL interfaces to DataflowInterface objects
             self.dataflow_interfaces = self.rtl_converter.convert_interfaces(
                 self.hw_kernel_data.interfaces,
-                # Convert parameters to dict for TDIM pragma evaluation
+                # Convert parameters to dict for BDIM pragma evaluation
                 {param.name: param.default_value for param in self.hw_kernel_data.parameters if param.default_value}
             )
             

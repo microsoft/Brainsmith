@@ -32,9 +32,9 @@ interfaces = {
         "protocol": "AXI_STREAM", 
         "role": "primary_input",
         "data_width": 64,  # 8 elements * 8 bits
-        "qDim": 768,
-        "tDim": 96,
-        "stream_dims": 8,
+        "tensor_dims": 768,  # Full vector dimension
+        "block_dims": 96,    # Block size for processing
+        "stream_dims": 8,    # Elements per cycle
         "dtype": "INT8"
     },
     "s_axis_b": {
@@ -42,9 +42,9 @@ interfaces = {
         "protocol": "AXI_STREAM",
         "role": "secondary_input", 
         "data_width": 64,
-        "qDim": 768,
-        "tDim": 96,
-        "stream_dims": 8,
+        "tensor_dims": 768,  # Full vector dimension
+        "block_dims": 96,    # Block size for processing
+        "stream_dims": 8,    # Elements per cycle
         "dtype": "INT8"
     },
     "m_axis_result": {
@@ -52,9 +52,9 @@ interfaces = {
         "protocol": "AXI_STREAM",
         "role": "result_output",
         "data_width": 32,
-        "qDim": 1,
-        "tDim": 1, 
-        "stream_dims": 1,
+        "tensor_dims": 1,    # Scalar result
+        "block_dims": 1,     # Single value block
+        "stream_dims": 1,    # One result per cycle
         "dtype": "INT32"
     },
     "config": {

@@ -18,7 +18,9 @@ from .validation import (
     create_validation_result,
     create_divisibility_error,
     create_range_error,
-    create_datatype_error
+    create_datatype_error,
+    validate_positive_integers,
+    validate_dimension_relationships
 )
 
 class DataflowInterfaceType(Enum):
@@ -191,19 +193,19 @@ class DataflowInterface:
         # Only validate dimensions that exist in both tensor_dims and block_dims
         min_dims = min(len(self.tensor_dims), len(self.block_dims))
         for i in range(min_dims):
-            q = self.tensor_dims[i]
-            t = self.block_dims[i]
-            if q % t != 0:
-                raise ValueError(f"Interface {self.name}: tensor_dims[{i}] ({q}) must be divisible by block_dims[{i}] ({t}) for valid chunking")
+            tensor_dim = self.tensor_dims[i]
+            block_dim = self.block_dims[i]
+            if tensor_dim % block_dim != 0:
+                raise ValueError(f"Interface {self.name}: tensor_dims[{i}] ({tensor_dim}) must be divisible by block_dims[{i}] ({block_dim}) for valid chunking")
         
         # Validate streaming relationship between block_dims and stream_dims  
         # Only validate dimensions that exist in both block_dims and stream_dims
         min_stream_dims = min(len(self.block_dims), len(self.stream_dims))
         for i in range(min_stream_dims):
-            t = self.block_dims[i]
-            s = self.stream_dims[i]
-            if t % s != 0:
-                raise ValueError(f"Interface {self.name}: block_dims[{i}] ({t}) must be divisible by stream_dims[{i}] ({s}) for valid streaming")
+            block_dim = self.block_dims[i]
+            stream_dim = self.stream_dims[i]
+            if block_dim % stream_dim != 0:
+                raise ValueError(f"Interface {self.name}: block_dims[{i}] ({block_dim}) must be divisible by stream_dims[{i}] ({stream_dim}) for valid streaming")
     
     def _set_default_constraints(self):
         """Set default datatype constraints if none provided"""
@@ -257,18 +259,18 @@ class DataflowInterface:
         result = create_validation_result()
         
         # Validate dimension relationships
-        for i, (q, t, s) in enumerate(zip(self.tensor_dims, self.block_dims, self.stream_dims)):
+        for i, (tensor_dim, block_dim, stream_dim) in enumerate(zip(self.tensor_dims, self.block_dims, self.stream_dims)):
             # Check tensor_dims divisibility by block_dims for valid chunking
-            if q % t != 0:
+            if tensor_dim % block_dim != 0:
                 error = create_divisibility_error(
-                    self.name, f"tensor_dims[{i}]", q, t
+                    self.name, f"tensor_dims[{i}]", tensor_dim, block_dim
                 )
                 result.add_error(error)
             
             # Check block_dims divisibility by stream_dims for valid streaming
-            if t % s != 0:
+            if block_dim % stream_dim != 0:
                 error = create_divisibility_error(
-                    self.name, f"block_dims[{i}]", t, s
+                    self.name, f"block_dims[{i}]", block_dim, stream_dim
                 )
                 result.add_error(error)
         
@@ -284,6 +286,78 @@ class DataflowInterface:
                 list(set(allowed_types))
             )
             result.add_error(error)
+        
+        return result
+    
+    def validate(self) -> ValidationResult:
+        """Comprehensive validation of interface configuration.
+        
+        Validates all aspects of the interface including:
+        - Dimension validity and relationships
+        - Datatype constraints
+        - Interface-specific constraints
+        - Mathematical axiom compliance
+        
+        Returns:
+            ValidationResult with detailed validation feedback
+        """
+        result = ValidationResult(True)
+        
+        # Validate that all dimensions are positive integers
+        tensor_result = validate_positive_integers(self.tensor_dims, "tensor_dims")
+        result.merge(tensor_result)
+        
+        block_result = validate_positive_integers(self.block_dims, "block_dims")
+        result.merge(block_result)
+        
+        stream_result = validate_positive_integers(self.stream_dims, "stream_dims")
+        result.merge(stream_result)
+        
+        # Validate dimension relationships follow axioms
+        if result.is_valid:  # Only if basic validation passed
+            dim_result = validate_dimension_relationships(
+                self.tensor_dims, self.block_dims, self.stream_dims
+            )
+            result.merge(dim_result)
+        
+        # Validate datatype constraints
+        if self.allowed_datatypes:
+            datatype_valid = False
+            for constraint in self.allowed_datatypes:
+                if constraint.is_valid_datatype(self.dtype):
+                    datatype_valid = True
+                    break
+            
+            if not datatype_valid:
+                allowed_types = []
+                for constraint in self.allowed_datatypes:
+                    allowed_types.extend(constraint.base_types)
+                result.add_error(
+                    f"Datatype {self.dtype.finn_type} not allowed. Must be one of: {list(set(allowed_types))}",
+                    {"current_datatype": self.dtype.finn_type, "allowed_types": list(set(allowed_types))}
+                )
+        
+        # Validate interface-specific constraints
+        constraint_result = self.validate_constraints()
+        result.merge(constraint_result)
+        
+        # Add interface-specific validations based on type
+        if self.interface_type == DataflowInterfaceType.WEIGHT:
+            # Weight interfaces should have reasonable dimensions for hardware
+            total_elements = self.calculate_total_elements()
+            if total_elements > 1000000:  # 1M elements threshold
+                result.add_warning(
+                    f"Weight interface has {total_elements} elements, which may require significant memory",
+                    {"total_elements": total_elements, "memory_bits": self.get_memory_footprint()}
+                )
+        
+        # Validate stream width is reasonable for AXI
+        stream_width = self.calculate_stream_width()
+        if stream_width > 1024:  # Common AXI width limit
+            result.add_warning(
+                f"Stream width of {stream_width} bits may exceed typical AXI limits",
+                {"stream_width": stream_width, "elements_per_cycle": np.prod(self.stream_dims)}
+            )
         
         return result
     
@@ -417,6 +491,47 @@ class DataflowInterface:
         elements_per_cycle = np.prod(self.stream_dims)
         return (total_elements + elements_per_cycle - 1) // elements_per_cycle
     
+    def calculate_memory_footprint(self) -> Dict[str, int]:
+        """Calculate memory requirements for this interface.
+        
+        Returns:
+            Dict containing memory analysis:
+            - total_bits: Total memory required in bits
+            - total_bytes: Total memory required in bytes  
+            - buffers: Buffer requirements breakdown
+        """
+        total_bits = self.get_memory_footprint()
+        total_bytes = (total_bits + 7) // 8  # Round up to bytes
+        
+        # Calculate buffer requirements
+        block_buffer_bits = np.prod(self.block_dims) * self.dtype.bitwidth
+        stream_buffer_bits = np.prod(self.stream_dims) * self.dtype.bitwidth
+        
+        return {
+            "total_bits": total_bits,
+            "total_bytes": total_bytes,
+            "buffers": {
+                "block_buffer_bits": block_buffer_bits,
+                "stream_buffer_bits": stream_buffer_bits,
+                "num_blocks": self.calculate_total_blocks()
+            }
+        }
+    
+    def analyze_resource_requirements(self) -> Dict[str, Any]:
+        """Analyze resource requirements using ResourceAnalyzer.
+        
+        Returns:
+            Dict containing comprehensive resource analysis
+        """
+        # Import ResourceAnalyzer here to avoid circular imports
+        from .resource_analysis import ResourceAnalyzer
+        
+        analyzer = ResourceAnalyzer()
+        requirements = analyzer.analyze_interface(self)
+        
+        return requirements.get_summary()
+    
+    
     def reconstruct_tensor_shape(self) -> List[int]:
         """
         Reconstruct original tensor shape from num_blocks and block_dims using broadcasting
@@ -451,7 +566,7 @@ class DataflowInterface:
     
     def validate_tensor_chunking(self, original_shape: List[int]) -> ValidationResult:
         """
-        Validate that num_tensors/tDim correctly chunk the original tensor shape
+        Validate that tensor chunking correctly chunks the original tensor shape
         
         Args:
             original_shape: Original tensor shape to validate against
@@ -473,13 +588,13 @@ class DataflowInterface:
                     component=f"interface.{self.name}",
                     error_type="tensor_chunking_mismatch",
                     message=f"Tensor chunking mismatch: original shape {original_shape} "
-                           f"has {total_elements_original} elements, but num_tensors={self.get_num_tensors()} × tDim={self.tDim} "
+                           f"has {total_elements_original} elements, but num_blocks={self.get_num_blocks()} × block_dims={self.block_dims} "
                            f"gives {total_elements_reconstructed} elements",
                     severity=ValidationSeverity.ERROR,
                     context={
                         "original_shape": original_shape,
-                        "num_tensors": self.get_num_tensors(),
-                        "tDim": self.tDim,
+                        "num_blocks": self.get_num_blocks(),
+                        "block_dims": self.block_dims,
                         "reconstructed_shape": reconstructed
                     }
                 )
@@ -584,7 +699,7 @@ class DataflowInterface:
             # Direct division of original_shape by block_dims
             if len(original_shape) != len(block_dims):
                 raise ValueError(f"For divide mode, original_shape and block_dims must have same length")
-            return [max(1, orig // t) for orig, t in zip(original_shape, block_dims)]
+            return [max(1, orig // block_dim) for orig, block_dim in zip(original_shape, block_dims)]
         
         else:
             raise ValueError(f"Unknown chunking_mode: {chunking_mode}")

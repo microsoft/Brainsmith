@@ -12,7 +12,8 @@ SystemVerilog files and extract module interfaces, parameters, and pragmas.
 
 import collections
 import logging
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Union
+from pathlib import Path
 
 from tree_sitter import Parser, Node
 
@@ -339,6 +340,141 @@ class RTLParser:
                 continue
         logger.info("Stage 4: Pragmas applied.")
 
+    def parse_string(self, systemverilog_code: str, 
+                    module_name: Optional[str] = None,
+                    source_name: str = "<string>") -> HWKernel:
+        """Parse SystemVerilog code from string.
+        
+        Args:
+            systemverilog_code: SystemVerilog module source code
+            module_name: Optional target module name (auto-detect if None)
+            source_name: Name for logging/error messages (default: "<string>")
+            
+        Returns:
+            HWKernel: Parsed kernel with interfaces and metadata
+            
+        Raises:
+            SyntaxError: Invalid SystemVerilog syntax
+            ParserError: Parser configuration or runtime error
+        """
+        logger.info(f"Starting string-based parsing for: {source_name}")
+        try:
+            # Call internal string parsing method
+            self._initial_parse_string(systemverilog_code, source_name, module_name)
+
+            # 2. Call Stage 2: Extract Components
+            self._extract_kernel_components()
+
+            # 3. Call Stage 3: Analyze and Validate Interfaces
+            self._analyze_and_validate_interfaces()
+
+            # 4. Apply pragmas using PragmaHandler
+            self._apply_pragmas()
+
+            # 5. Create HWKernel object
+            kernel = HWKernel(
+                name=self.name,
+                parameters=self.parameters,
+                interfaces=self.interfaces,
+                pragmas=self.pragmas
+            )
+            logger.info(f"HWKernel object created for '{kernel.name}' with {len(kernel.parameters)} params, {len(kernel.interfaces)} interfaces.")
+
+            # 6. Return HWKernel
+            logger.info(f"Successfully parsed and processed module '{kernel.name}' from {source_name}")
+            return kernel
+
+        except (SyntaxError, ParserError) as e:
+            logger.error(f"String parsing failed for {source_name}: {e}")
+            raise
+        except Exception as e:
+            logger.exception(f"Unexpected error during string parsing: {e}")
+            raise ParserError(f"Unexpected error during string parsing: {e}")
+
+    def parse(self, source: Union[str, Path]) -> HWKernel:
+        """Flexible parse method accepting string or file path.
+        
+        Args:
+            source: Either SystemVerilog code string or path to file
+            
+        Returns:
+            HWKernel: Parsed kernel with interfaces and metadata
+            
+        Raises:
+            SyntaxError: Invalid SystemVerilog syntax
+            ParserError: Parser configuration or runtime error
+        """
+        # Check if source is a file path that exists
+        if isinstance(source, (str, Path)):
+            source_path = Path(source)
+            if source_path.exists() and source_path.is_file():
+                return self.parse_file(str(source_path))
+        
+        # Treat as SystemVerilog code string
+        return self.parse_string(str(source))
+
+    def _initial_parse_string(self, systemverilog_code: str, 
+                             source_name: str = "<string>",
+                             target_module: Optional[str] = None) -> None:
+        """Performs Stage 1 of parsing from string: Initial AST generation and module selection.
+
+        Sets self.tree, self.pragmas, and self.module_node.
+
+        Args:
+            systemverilog_code: SystemVerilog source code string
+            source_name: Name for logging/error messages 
+            target_module: Optional specific module name to target
+
+        Raises:
+            ParserError: If core parsing fails, no modules are found,
+                         pragma extraction fails, or module selection logic fails.
+            SyntaxError: If the input code contains SystemVerilog syntax errors.
+        """
+        logger.info(f"Stage 1: Initial string parsing for {source_name}")
+        self.tree = None  # Reset state
+        self.pragmas = []
+        self.module_node = None
+
+        # 1. Parse using self.parser
+        try:
+            self.tree = self.parser.parse(bytes(systemverilog_code, 'utf8'))
+        except Exception as e:
+            logger.exception(f"Tree-sitter parsing failed for {source_name}: {e}")
+            raise ParserError(f"Core parsing failed for {source_name}: {e}")
+
+        # 2. Check syntax
+        if self.tree.root_node.has_error:
+            error_node = self._find_first_error_node(self.tree.root_node)
+            line = error_node.start_point[0] + 1 if error_node else 'unknown'
+            col = error_node.start_point[1] + 1 if error_node else 'unknown'
+            error_msg = f"Invalid SystemVerilog syntax near line {line}, column {col}."
+            logger.error(f"Syntax error in {source_name} near line {line}:{col}")
+            raise SyntaxError(error_msg)
+
+        # 3. Find module nodes
+        module_nodes = self._find_module_nodes(self.tree.root_node)
+        if not module_nodes:
+            logger.error(f"No module definitions found in {source_name}")
+            raise ParserError(f"No module definition found in {source_name}")
+
+        # 4. Extract pragmas
+        try:
+            self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
+            logger.debug(f"Extracted {len(self.pragmas)} pragma(s)")
+        except Exception as e:
+            logger.exception(f"Pragma extraction failed for {source_name}: {e}")
+            raise ParserError(f"Pragma extraction failed for {source_name}: {e}")
+
+        # 5. Select the target module
+        try:
+            self.module_node = self._select_target_module(module_nodes, self.pragmas, source_name, target_module)
+            logger.info(f"Selected module node: {self.module_node.children[1].text.decode('utf8')}")
+        except Exception as e:
+            logger.exception(f"Module selection failed for {source_name}: {e}")
+            raise ParserError(f"Module selection failed for {source_name}: {e}")
+
+        logger.info("Stage 1: Initial string parsing complete.")
+
     def parse_file(self, file_path: str) -> HWKernel:
         """Orchestrates the multi-stage parsing process for a SystemVerilog file.
 
@@ -441,8 +577,22 @@ class RTLParser:
             queue.extend(node.children)
         return module_nodes
 
-    def _select_target_module(self, module_nodes: List[Node], pragmas: List[Pragma], file_path: str) -> Node:
-        """Selects the target module node based on count and TOP_MODULE pragma."""
+    def _select_target_module(self, module_nodes: List[Node], pragmas: List[Pragma], 
+                             source_name: str, target_module: Optional[str] = None) -> Node:
+        """Selects the target module node based on count, TOP_MODULE pragma, or explicit target.
+        
+        Args:
+            module_nodes: List of module nodes found in AST
+            pragmas: List of extracted pragmas
+            source_name: Name of source (file path or "<string>") for error messages
+            target_module: Optional explicit module name to target
+            
+        Returns:
+            Selected module node
+            
+        Raises:
+            ParserError: If module selection fails due to ambiguity or missing targets
+        """
         top_module_pragmas = [p for p in pragmas if p.type == PragmaType.TOP_MODULE]
 
         # Extract module names using the helper function
@@ -455,6 +605,16 @@ class RTLParser:
                 # Log or handle cases where name extraction fails for a node
                 logger.warning(f"Could not extract module name from node: {node.text.decode()[:50]}...")
 
+        # Priority 1: Explicit target_module parameter
+        if target_module:
+            if target_module in module_names_map:
+                logger.info(f"Found explicitly requested module '{target_module}'.")
+                return module_names_map[target_module]
+            else:
+                raise ParserError(f"Requested module '{target_module}' not found in {source_name}. "
+                                f"Available modules: {list(module_names_map.keys())}")
+
+        # Priority 2: Single module (no ambiguity)
         if len(module_nodes) == 1 and not top_module_pragmas:
             logger.debug("Found single module, selecting it as target.")
             return module_nodes[0]
@@ -467,11 +627,11 @@ class RTLParser:
                      logger.debug(f"Found matching module '{target_name}'.")
                      return module_names_map[target_name]
                 else:
-                     raise ParserError(f"TOP_MODULE pragma specified '{target_name}', but no such module found in {file_path}.")
+                     raise ParserError(f"TOP_MODULE pragma specified '{target_name}', but no such module found in {source_name}.")
             elif len(top_module_pragmas) > 1:
-                raise ParserError(f"Multiple TOP_MODULE pragmas found in {file_path}. Only one is allowed.")
+                raise ParserError(f"Multiple TOP_MODULE pragmas found in {source_name}. Only one is allowed.")
             else: # Multiple modules, no pragma
-                raise ParserError(f"Multiple modules ({list(module_names_map.keys())}) found in {file_path}, but no TOP_MODULE pragma specified.")
+                raise ParserError(f"Multiple modules ({list(module_names_map.keys())}) found in {source_name}, but no TOP_MODULE pragma specified.")
         elif len(module_nodes) == 1 and top_module_pragmas:
              # Single module, but pragma exists - check if it matches
              # Use parsed_data from the Pragma subclass instance

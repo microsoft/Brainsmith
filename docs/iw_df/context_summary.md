@@ -320,8 +320,8 @@ L = eII * ∏(tensor_dims_I)
 **Rationale**: Automated estimation requires significant research effort
 **Implications**: Generated code requires manual completion for production use
 
-#### TDIM Pragma Extension
-**Decision**: Add TDIM pragma for complex tensor dimension specification
+#### BDIM Pragma Extension
+**Decision**: Add BDIM pragma for complex block dimension specification
 **Rationale**: Provides flexibility for non-standard tensor chunking patterns
 **Implications**: Requires RTL Parser extension and validation logic
 
@@ -391,8 +391,8 @@ L = eII * ∏(tensor_dims_I)
 **Impact**: Requires flexible parallelism model supporting diverse operation patterns
 **Implementation**: Abstract parallelism concepts with kernel-specific constraint validation
 
-#### TDIM Pragma Necessity
-**Expert Guidance**: TDIM pragma required for complex tensor chunking cases
+#### BDIM Pragma Necessity
+**Expert Guidance**: BDIM pragma required for complex block dimension chunking cases
 **Impact**: Provides necessary flexibility for non-standard operation patterns
 **Implementation**: RTL Parser extension with pragma validation and application logic
 
