@@ -1,13 +1,21 @@
 """
-Utility functions for performance analysis framework
+Utility functions for analysis hooks framework.
+
+Simple utilities that complement the hooks-based approach.
+Users should prefer external libraries (pandas, scipy) for complex analysis.
 """
 
 import numpy as np
-from typing import Dict, List, Any, Optional
-from .models import AnalysisContext, PerformanceData, AnalysisConfiguration
+from typing import Dict, List, Any
 
-def calculate_statistics(values: np.ndarray) -> Dict[str, float]:
-    """Calculate comprehensive statistics for values."""
+
+def calculate_basic_statistics(values: np.ndarray) -> Dict[str, float]:
+    """
+    Calculate basic statistics for values.
+    
+    Note: For advanced statistics, use scipy.stats instead.
+    This is a minimal implementation for simple use cases.
+    """
     if len(values) == 0:
         return {}
     
@@ -18,73 +26,113 @@ def calculate_statistics(values: np.ndarray) -> Dict[str, float]:
         'min': float(np.min(values)),
         'max': float(np.max(values)),
         'median': float(np.median(values)),
-        'q25': float(np.percentile(values, 25)),
-        'q75': float(np.percentile(values, 75)),
-        'range': float(np.ptp(values)),
-        'iqr': float(np.percentile(values, 75) - np.percentile(values, 25))
     }
 
-def fit_distributions(values: np.ndarray) -> Dict[str, Any]:
-    """Fit statistical distributions to data."""
-    # Simple implementation - fit normal distribution
-    if len(values) < 2:
-        return {'normal': {'mean': 0, 'std': 1, 'score': 0}}
+
+def extract_metric_arrays(solutions: List[Any]) -> Dict[str, np.ndarray]:
+    """
+    Extract metric arrays from solution objects.
     
-    mean = float(np.mean(values))
-    std = float(np.std(values, ddof=1))
+    Args:
+        solutions: List of solution objects with objective_values
+        
+    Returns:
+        Dictionary mapping metric names to numpy arrays
+    """
+    metrics = {}
     
-    return {
-        'normal': {
-            'mean': mean,
-            'std': std,
-            'score': 0.8  # Placeholder score
+    if not solutions:
+        return metrics
+    
+    # Determine number of objectives from first solution
+    first_solution = solutions[0]
+    if hasattr(first_solution, 'objective_values') and first_solution.objective_values:
+        num_objectives = len(first_solution.objective_values)
+        
+        # Extract each objective as a separate metric
+        for obj_idx in range(num_objectives):
+            values = []
+            for solution in solutions:
+                if (hasattr(solution, 'objective_values') and 
+                    solution.objective_values and 
+                    obj_idx < len(solution.objective_values)):
+                    values.append(solution.objective_values[obj_idx])
+            
+            if values:
+                metrics[f'objective_{obj_idx}'] = np.array(values)
+    
+    return metrics
+
+
+def format_for_external_tool(solutions: List[Any], tool: str = 'pandas') -> Any:
+    """
+    Format solution data for external analysis tools.
+    
+    Args:
+        solutions: List of solution objects
+        tool: Target tool ('pandas', 'scipy', 'sklearn')
+        
+    Returns:
+        Data formatted for the specified tool
+    """
+    if tool == 'pandas':
+        try:
+            import pandas as pd
+            
+            # Create rows for DataFrame
+            rows = []
+            for i, sol in enumerate(solutions):
+                row = {'solution_id': i}
+                
+                # Add parameters
+                if hasattr(sol, 'design_parameters'):
+                    for param, value in sol.design_parameters.items():
+                        row[f'param_{param}'] = value
+                
+                # Add objectives
+                if hasattr(sol, 'objective_values') and sol.objective_values:
+                    for j, obj_val in enumerate(sol.objective_values):
+                        row[f'objective_{j}'] = obj_val
+                
+                rows.append(row)
+            
+            return pd.DataFrame(rows)
+            
+        except ImportError:
+            return None
+    
+    elif tool == 'scipy':
+        metrics = extract_metric_arrays(solutions)
+        return {
+            'arrays': metrics,
+            'sample_size': len(solutions),
+            'metric_names': list(metrics.keys())
         }
-    }
-
-def detect_outliers(values: np.ndarray, threshold: float = 2.0) -> List[int]:
-    """Detect outliers using Z-score method."""
-    if len(values) < 3:
-        return []
     
-    z_scores = np.abs((values - np.mean(values)) / np.std(values))
-    return np.where(z_scores > threshold)[0].tolist()
-
-def normalize_performance_data(data: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Normalize performance data to [0, 1] range."""
-    normalized = {}
+    elif tool == 'sklearn':
+        try:
+            import numpy as np
+            
+            # Extract features (parameters) and targets (objectives)
+            features = []
+            targets = []
+            
+            for sol in solutions:
+                if hasattr(sol, 'design_parameters'):
+                    param_values = list(sol.design_parameters.values())
+                    if param_values:
+                        features.append(param_values)
+                
+                if hasattr(sol, 'objective_values') and sol.objective_values:
+                    targets.append(sol.objective_values)
+            
+            if features and targets:
+                return {
+                    'X': np.array(features),
+                    'y': np.array(targets)
+                }
+            
+        except ImportError:
+            pass
     
-    for metric, values in data.items():
-        if len(values) == 0:
-            normalized[metric] = values
-            continue
-        
-        min_val = np.min(values)
-        max_val = np.max(values)
-        
-        if max_val > min_val:
-            normalized[metric] = (values - min_val) / (max_val - min_val)
-        else:
-            normalized[metric] = np.ones_like(values) * 0.5
-    
-    return normalized
-
-def create_analysis_context(solutions: List[Any], 
-                          metrics: Optional[Dict[str, np.ndarray]] = None) -> AnalysisContext:
-    """Create analysis context from solutions and metrics."""
-    
-    # Convert metrics to PerformanceData objects
-    performance_data = {}
-    if metrics:
-        for name, values in metrics.items():
-            performance_data[name] = PerformanceData(
-                metric_name=name,
-                values=values
-            )
-    
-    from .models import AnalysisType
-    
-    return AnalysisContext(
-        solutions=solutions,
-        performance_data=performance_data,
-        analysis_types=[AnalysisType.DESCRIPTIVE, AnalysisType.STATISTICAL]
-    )
+    return None

@@ -1,171 +1,80 @@
 """
-Automated Workflows and Integration Framework
+BrainSmith Simple Automation Helpers
 
-This module provides comprehensive automation capabilities for FPGA design optimization,
-integrating all BrainSmith components into cohesive automated workflows.
+Provides simple utilities for common automation patterns in FPGA design space exploration.
+Instead of complex workflow orchestration, these helpers make it easy to run forge() 
+multiple times with different parameters or configurations.
 
-Key Features:
-- Automated end-to-end design optimization workflows
-- Intelligent design recommendation system
-- Adaptive workflow orchestration based on design requirements
-- Historical learning and pattern recognition
-- Quality-driven automation with confidence thresholds
-- Integration of DSE, selection, and analysis components
-
-Main Components:
-1. Workflow Engine: Core automation and orchestration
-2. Recommendation System: AI-driven design suggestions
-3. Quality Assurance: Automated validation and quality control
-4. Learning System: Historical pattern recognition and adaptation
-5. Integration Layer: Seamless component coordination
+Key Philosophy:
+- Simple helpers that leverage existing forge() function
+- No enterprise workflow orchestration
+- Focus on practical automation patterns users actually need
+- Minimal complexity, maximum utility
 
 Example Usage:
-    from brainsmith.automation import AutomationEngine, WorkflowConfiguration
+    from brainsmith.automation import parameter_sweep, batch_process
     
-    # Create automated workflow
-    config = WorkflowConfiguration(
-        optimization_budget=3600,  # 1 hour
-        quality_threshold=0.85,
-        enable_learning=True
+    # Parameter sweep
+    results = parameter_sweep(
+        "model.onnx", 
+        "blueprint.yaml",
+        {'pe_count': [4, 8, 16], 'simd_width': [2, 4, 8]}
     )
     
-    engine = AutomationEngine(config)
-    
-    # Run automated design optimization
-    result = engine.optimize_design(
-        application_spec="cnn_inference",
-        performance_targets={"throughput": 200, "power": 15},
-        constraints={"lut_budget": 0.8, "timing_closure": True}
-    )
-    
-    print(f"Best design: {result.recommended_design}")
-    print(f"Confidence: {result.confidence:.2f}")
-    print(f"Recommendations: {result.improvement_suggestions}")
+    # Batch processing
+    results = batch_process([
+        ("model1.onnx", "blueprint1.yaml"),
+        ("model2.onnx", "blueprint2.yaml")
+    ])
 """
 
-import logging
-from typing import List, Dict, Any, Optional, Union
-
-# Core automation components (will be implemented)
-from .engine import (
-    AutomationEngine,
-    WorkflowResult,
-    WorkflowConfiguration,
-    AutomationMetrics
+from .parameter_sweep import (
+    parameter_sweep,
+    grid_search,
+    random_search
 )
 
-# Workflow orchestration
-from .workflows import (
-    DesignOptimizationWorkflow,
-    BenchmarkingWorkflow,
-    AnalysisWorkflow,
-    WorkflowManager,
-    WorkflowStatus,
-    WorkflowStep
+from .batch_processing import (
+    batch_process,
+    multi_objective_runs,
+    configuration_sweep
 )
 
-# Recommendation system
-from .recommendations import (
-    RecommendationEngine,
-    DesignRecommendation,
-    RecommendationCategory,
-    RecommendationConfidence
-)
-
-# Quality assurance
-from .quality import (
-    QualityController,
-    QualityMetrics,
-    ValidationResult
-)
-
-# Learning and adaptation
-from .learning import (
-    LearningEngine,
-    HistoricalPatterns,
-    AdaptiveParameters
-)
-
-# Integration layer
-from .integration import (
-    ComponentIntegrator,
-    IntegrationResult,
-    ComponentStatus
-)
-
-# Data models
-from .models import (
-    AutomationContext,
-    WorkflowDefinition,
-    DesignTarget,
-    OptimizationJob,
-    AutomationResult
-)
-
-# Utilities
 from .utils import (
-    create_automation_context,
-    validate_workflow_config,
-    generate_workflow_id
+    aggregate_results,
+    find_best_result,
+    find_top_results,
+    save_automation_results,
+    load_automation_results,
+    compare_automation_runs
 )
 
-# Setup logging
-logger = logging.getLogger(__name__)
-
-# Version information
-__version__ = "1.0.0"
+__version__ = "0.1.0"
 __author__ = "BrainSmith Development Team"
 
-# Export all public components
+# Export simple automation helpers
 __all__ = [
-    # Core engine
-    'AutomationEngine',
-    'WorkflowResult',
-    'WorkflowConfiguration',
-    'AutomationMetrics',
+    # Parameter exploration
+    'parameter_sweep',
+    'grid_search', 
+    'random_search',
     
-    # Workflow management
-    'DesignOptimizationWorkflow',
-    'BenchmarkingWorkflow',
-    'AnalysisWorkflow',
-    'WorkflowManager',
-    'WorkflowStatus',
-    'WorkflowStep',
+    # Batch processing
+    'batch_process',
+    'multi_objective_runs',
+    'configuration_sweep',
     
-    # Recommendation system
-    'RecommendationEngine',
-    'DesignRecommendation',
-    'RecommendationCategory',
-    'RecommendationConfidence',
-    
-    # Quality assurance
-    'QualityController',
-    'QualityMetrics',
-    'ValidationResult',
-    
-    # Learning system
-    'LearningEngine',
-    'HistoricalPatterns',
-    'AdaptiveParameters',
-    
-    # Integration layer
-    'ComponentIntegrator',
-    'IntegrationResult',
-    'ComponentStatus',
-    
-    # Data models
-    'AutomationContext',
-    'WorkflowDefinition',
-    'DesignTarget',
-    'OptimizationJob',
-    'AutomationResult',
-    
-    # Utilities
-    'create_automation_context',
-    'validate_workflow_config',
-    'generate_workflow_id'
+    # Result analysis
+    'aggregate_results',
+    'find_best_result',
+    'find_top_results',
+    'save_automation_results',
+    'load_automation_results',
+    'compare_automation_runs'
 ]
 
 # Initialize logging
-logger.info(f"Automation Framework v{__version__} initialized")
-logger.info("Available automation capabilities: Workflows, Recommendations, Quality Control, Learning")
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"BrainSmith Simple Automation v{__version__} initialized")
+logger.info("Available helpers: parameter_sweep, batch_process, result aggregation")

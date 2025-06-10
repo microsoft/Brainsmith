@@ -35,14 +35,13 @@ try:
 except ImportError:
     BrainsmithCompiler = None
 
-# Week 1 Core API (new extensible architecture)
-from .core.api import (
-    brainsmith_explore, brainsmith_roofline, brainsmith_dataflow_analysis,
-    brainsmith_generate, brainsmith_workflow, validate_blueprint,
-    explore_design_space  # Legacy compatibility wrapper
-)
+# Simplified Core API (new forge-based architecture)
+from .core.api import forge, validate_blueprint
 
-from .core import get_core_status
+try:
+    from .core import get_core_status
+except ImportError:
+    get_core_status = None
 
 # Blueprint system (optional for Week 1)
 try:
@@ -84,62 +83,12 @@ except ImportError:
     StrategySelector = None
     COMMON_CONFIGS = None
 
-# Simple API functions (enhanced for Week 1, fallback compatible)
-def build_model(model_path: str, blueprint_name: str, 
-               parameters: dict = None, config=None):
-    """
-    Build a single model configuration.
-    
-    Args:
-        model_path: Path to input model
-        blueprint_name: Name of blueprint to use
-        parameters: Optional parameter overrides
-        config: Optional configuration override
-        
-    Returns:
-        Build result with metrics
-    """
-    if BrainsmithCompiler is None:
-        # Fallback for Week 1 when compiler not available
-        return {
-            'status': 'fallback',
-            'message': 'BrainsmithCompiler not available - using Week 1 fallback',
-            'model_path': model_path,
-            'blueprint_name': blueprint_name,
-            'parameters': parameters or {},
-            'week1_fallback': True
-        }
-    
-    if config is None and BrainsmithConfig is not None:
-        config = BrainsmithConfig()
-    
-    # Apply parameter overrides if provided
-    if parameters and config:
-        for param, value in parameters.items():
-            setattr(config, param, value)
-    
-    compiler = BrainsmithCompiler(config)
-    return compiler.compile_model(model_path, blueprint_name)
-
-
-def optimize_model(model_path: str, blueprint_name: str,
-                  parameters: dict = None,
-                  max_evaluations: int = 100,
-                  strategy: str = "auto",
-                  objectives: list = None):
-    """
-    Optimize model with automatic strategy selection.
-    
-    Week 1 implementation routes to brainsmith_explore.
-    """
-    # Route to Week 1 API
-    results, analysis = brainsmith_explore(
-        model_path=model_path,
-        blueprint_path=blueprint_name,  # Assume blueprint_name is path for Week 1
-        exit_point="dataflow_generation"
-    )
-    
-    return results
+# Tools module (moved from core API)
+try:
+    from .tools.profiling import roofline_analysis, RooflineProfiler
+except ImportError:
+    roofline_analysis = None
+    RooflineProfiler = None
 
 
 def load_design_space(blueprint_name: str) -> DesignSpace:
@@ -339,27 +288,16 @@ def recommend_strategy(n_parameters: int = None,
     )
 
 
-# Enhanced exports for Week 1
+# Simplified exports for API simplification
 __all__ = [
-    # Week 1 Core API
-    'brainsmith_explore',
-    'brainsmith_roofline', 
-    'brainsmith_dataflow_analysis',
-    'brainsmith_generate',
-    'brainsmith_workflow',
+    # Core toolchain
+    'forge',
     'validate_blueprint',
-    'explore_design_space',  # Legacy compatibility
-    'get_core_status',
     
-    # Core components (may be None if not available)
-    'BrainsmithConfig',
-    'BrainsmithResult', 
-    'DSEResult',
-    'BrainsmithMetrics',
+    # Core data structures
     'DesignSpace',
     'DesignPoint',
     'ParameterDefinition',
-    'BrainsmithCompiler',
     
     # Blueprint system (may be None if not available)
     'Blueprint',
@@ -369,33 +307,29 @@ __all__ = [
     
     # DSE system (may be None if not available)
     'DSEInterface',
-    'SimpleDSEEngine', 
-    'ExternalDSEAdapter',
     'DSEAnalyzer',
     'ParetoAnalyzer',
     'DSEConfiguration',
     'DSEObjective',
     'OptimizationObjective',
-    'SamplingStrategy',
-    'OptimizationStrategy',
     
-    # Simple API (with Week 1 fallbacks)
-    'build_model',
-    'optimize_model',
+    # Supplementary tools (moved from core API)
+    'roofline_analysis',
+    'RooflineProfiler',
+    
+    # Utility functions (preserved)
     'load_design_space',
     'sample_design_space',
     'analyze_dse_results',
     'get_pareto_frontier',
-    
-    # Utility functions (with Week 1 fallbacks)
     'list_available_strategies',
     'recommend_strategy',
     
-    # Common configurations (may be None)
-    'COMMON_CONFIGS'
+    # Core status
+    'get_core_status'
 ]
 
-# Version information (Week 1)
-__version__ = "0.4.0"  # Week 1 version
+# Version information (API Simplification)
+__version__ = "0.5.0"  # Updated for API simplification
 __author__ = "Microsoft Research"
-__description__ = "Extensible FPGA accelerator design space exploration platform - Week 1 Implementation"
+__description__ = "Simplified FPGA accelerator design space exploration platform"

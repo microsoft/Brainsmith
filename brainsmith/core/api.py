@@ -1,197 +1,94 @@
 """
-Python API using existing components in extensible structure.
+Simplified BrainSmith Core API - Single `forge` Function
 
-This module provides the main Python API functions for Brainsmith,
-implementing hierarchical exit points with extensible structure
-around existing functionality while maintaining backward compatibility.
+This module provides the main Python API for BrainSmith,
+implementing a single unified `forge` function that serves as
+the core toolchain for FPGA accelerator design space exploration.
 """
 
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from pathlib import Path
 import logging
-import warnings
+import json
 
 logger = logging.getLogger(__name__)
 
-def brainsmith_explore(model_path: str, 
-                      blueprint_path: str,
-                      exit_point: str = "dataflow_generation",
-                      output_dir: Optional[str] = None,
-                      **kwargs) -> Tuple[Any, Dict[str, Any]]:
+
+def forge(
+    model_path: str,
+    blueprint_path: str,
+    objectives: Dict[str, Any] = None,
+    constraints: Dict[str, Any] = None,
+    target_device: str = None,
+    is_hw_graph: bool = False,
+    build_core: bool = True,
+    output_dir: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Main exploration API using existing components only.
-    
-    Provides hierarchical exit points with extensible structure
-    around current functionality while maintaining compatibility
-    with existing workflows.
+    Core BrainSmith toolchain: DSE on input model to produce Dataflow Core.
     
     Args:
-        model_path: Path to quantized ONNX model
-        blueprint_path: Path to blueprint YAML configuration
-        exit_point: Analysis exit point ('roofline', 'dataflow_analysis', 'dataflow_generation')
+        model_path: Path to pre-quantized ONNX model
+        blueprint_path: Path to blueprint YAML (design space specification)
+        objectives: Target objectives (latency/throughput requirements)
+        constraints: Hardware resource budgets, optimization priorities
+        target_device: Target FPGA device specification
+        is_hw_graph: If True, input is already a Dataflow Graph, skip to HW optimization
+        build_core: If False, exit after Dataflow Graph generation
         output_dir: Optional output directory for results
-        **kwargs: Additional configuration options
-    
-    Returns:
-        Tuple of (DSE results, comprehensive analysis)
-    """
-    logger.info(f"Starting brainsmith_explore with exit_point: {exit_point}")
-    
-    # Validate inputs using existing validation patterns
-    if not Path(model_path).exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    if not Path(blueprint_path).exists():
-        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-    
-    # Validate exit point
-    valid_exit_points = ["roofline", "dataflow_analysis", "dataflow_generation"]
-    if exit_point not in valid_exit_points:
-        raise ValueError(f"Invalid exit point: {exit_point}. Must be one of {valid_exit_points}")
-    
-    try:
-        # Load blueprint using existing Blueprint class with extensions
-        blueprint = _load_and_validate_blueprint(blueprint_path, model_path)
-        
-        # Create orchestrator using existing components
-        from .design_space_orchestrator import DesignSpaceOrchestrator
-        orchestrator = DesignSpaceOrchestrator(blueprint)
-        
-        # Execute exploration with specified exit point
-        results = orchestrator.orchestrate_exploration(exit_point)
-        
-        # Generate analysis using existing analysis tools
-        analysis = _generate_exploration_analysis(results, orchestrator, **kwargs)
-        
-        # Save results if output directory specified
-        if output_dir:
-            _save_results_existing(results, analysis, output_dir, orchestrator)
-        
-        logger.info(f"Exploration completed successfully with exit_point: {exit_point}")
-        
-        return results, analysis
-        
-    except Exception as e:
-        logger.error(f"Exploration failed: {e}")
-        # Create fallback results for graceful error handling
-        fallback_results, fallback_analysis = _create_fallback_results(
-            model_path, blueprint_path, exit_point, str(e)
-        )
-        
-        if output_dir:
-            _save_results_existing(fallback_results, fallback_analysis, output_dir, None)
-        
-        return fallback_results, fallback_analysis
-
-def brainsmith_roofline(model_path: str, blueprint_path: str, 
-                       output_dir: Optional[str] = None, **kwargs) -> Tuple[Any, Dict[str, Any]]:
-    """
-    Roofline analysis using existing tools (Exit Point 1).
-    
-    Performs quick analytical performance bounds estimation
-    without hardware generation using existing analysis capabilities.
-    
-    Args:
-        model_path: Path to quantized ONNX model
-        blueprint_path: Path to blueprint YAML configuration  
-        output_dir: Optional output directory for results
-        **kwargs: Additional configuration options
         
     Returns:
-        Tuple of (DSE results, roofline analysis)
+        Dict containing:
+        - dataflow_graph: ONNX graph of HWCustomOps describing Dataflow Core
+        - dataflow_core: Stitched IP design (if build_core=True)
+        - metrics: Performance and resource utilization metrics
+        - analysis: DSE analysis and recommendations
     """
-    logger.info("Starting roofline analysis using existing tools")
-    return brainsmith_explore(model_path, blueprint_path, "roofline", output_dir, **kwargs)
+    logger.info(f"Starting forge with model: {model_path}, blueprint: {blueprint_path}")
+    
+    # 1. Input validation
+    _validate_inputs(model_path, blueprint_path, objectives, constraints)
+    
+    # 2. Load and validate blueprint (hard error)
+    blueprint = _load_and_validate_blueprint(blueprint_path)
+    
+    # 3. Setup DSE configuration
+    dse_config = _setup_dse_configuration(blueprint, objectives, constraints, target_device)
+    
+    # 4. Branch based on is_hw_graph flag
+    if is_hw_graph:
+        # Input is already Dataflow Graph, skip to HW optimization
+        logger.info("Hardware graph mode: Skipping to HW optimization")
+        dataflow_graph = _load_dataflow_graph(model_path)
+        dse_results = _run_hw_optimization_dse(dataflow_graph, dse_config)
+    else:
+        # Standard flow: Model -> DSE -> Dataflow Graph
+        logger.info("Standard mode: Running full model-to-hardware DSE")
+        dse_results = _run_full_dse(model_path, dse_config)
+        dataflow_graph = dse_results.get('best_result', {}).get('dataflow_graph')
+    
+    # 5. Generate Dataflow Core if requested
+    dataflow_core = None
+    if build_core and dataflow_graph:
+        logger.info("Generating Dataflow Core (stitched IP design)")
+        dataflow_core = _generate_dataflow_core(dataflow_graph, dse_config)
+    elif not build_core:
+        logger.info("Checkpoint mode: Exiting after Dataflow Graph generation")
+    
+    # 6. Prepare results
+    results = _assemble_results(dataflow_graph, dataflow_core, dse_results)
+    
+    # 7. Save results if output directory specified
+    if output_dir:
+        _save_forge_results(results, output_dir)
+    
+    logger.info("Forge process completed successfully")
+    return results
 
-def brainsmith_dataflow_analysis(model_path: str, blueprint_path: str,
-                                output_dir: Optional[str] = None, **kwargs) -> Tuple[Any, Dict[str, Any]]:
-    """
-    Dataflow analysis using existing transforms and estimation (Exit Point 2).
-    
-    Applies existing transforms and provides dataflow-level performance
-    estimation without RTL generation.
-    
-    Args:
-        model_path: Path to quantized ONNX model
-        blueprint_path: Path to blueprint YAML configuration
-        output_dir: Optional output directory for results
-        **kwargs: Additional configuration options
-        
-    Returns:
-        Tuple of (DSE results, dataflow analysis)
-    """
-    logger.info("Starting dataflow analysis using existing transforms")
-    return brainsmith_explore(model_path, blueprint_path, "dataflow_analysis", output_dir, **kwargs)
 
-def brainsmith_generate(model_path: str, blueprint_path: str,
-                       output_dir: Optional[str] = None, **kwargs) -> Tuple[Any, Dict[str, Any]]:
+def validate_blueprint(blueprint_path: str) -> tuple[bool, list[str]]:
     """
-    Full RTL/HLS generation using existing FINN flow (Exit Point 3).
-    
-    Performs complete optimization and generation using existing
-    DataflowBuildConfig workflow and optimization strategies.
-    
-    Args:
-        model_path: Path to quantized ONNX model
-        blueprint_path: Path to blueprint YAML configuration
-        output_dir: Optional output directory for results
-        **kwargs: Additional configuration options
-        
-    Returns:
-        Tuple of (DSE results, generation results)
-    """
-    logger.info("Starting full generation using existing FINN flow")
-    return brainsmith_explore(model_path, blueprint_path, "dataflow_generation", output_dir, **kwargs)
-
-# Backward compatibility layer maintaining existing functionality
-def explore_design_space(model_path: str, blueprint_name: str, **kwargs):
-    """
-    Backward compatibility wrapper for existing API.
-    
-    Maintains 100% compatibility with current usage patterns while
-    routing to new extensible architecture when appropriate.
-    
-    Args:
-        model_path: Path to model file
-        blueprint_name: Blueprint name or path
-        **kwargs: Additional arguments matching existing API
-        
-    Returns:
-        Results in existing format for compatibility
-    """
-    logger.info(f"Legacy API called: explore_design_space({model_path}, {blueprint_name})")
-    
-    # Warn about legacy usage while maintaining support
-    warnings.warn(
-        "explore_design_space is legacy API. Consider using brainsmith_explore for enhanced features.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    
-    try:
-        # Check if blueprint_name is a path or legacy name
-        if Path(blueprint_name).exists():
-            # Use new API with blueprint path
-            results, analysis = brainsmith_explore(
-                model_path, 
-                blueprint_name, 
-                exit_point=kwargs.get('exit_point', 'dataflow_generation'),
-                **kwargs
-            )
-            
-            # Convert to legacy format for compatibility
-            return _convert_to_legacy_format(results, analysis)
-        else:
-            # Route to existing legacy system if available
-            return _route_to_existing_legacy_system(model_path, blueprint_name, **kwargs)
-            
-    except Exception as e:
-        logger.error(f"Legacy API failed: {e}")
-        # Return legacy-compatible error format
-        return _create_legacy_error_result(model_path, blueprint_name, str(e))
-
-def validate_blueprint(blueprint_path: str) -> Tuple[bool, List[str]]:
-    """
-    Validate blueprint configuration for existing components.
+    Validate blueprint configuration - hard error if invalid.
     
     Args:
         blueprint_path: Path to blueprint YAML file
@@ -202,263 +99,364 @@ def validate_blueprint(blueprint_path: str) -> Tuple[bool, List[str]]:
     logger.info(f"Validating blueprint: {blueprint_path}")
     
     try:
-        blueprint = _load_blueprint_for_validation(blueprint_path)
-        return blueprint.validate_library_config()
+        blueprint = _load_and_validate_blueprint(blueprint_path)
+        logger.info(f"Blueprint validation successful: {blueprint.name if hasattr(blueprint, 'name') else 'unnamed'}")
+        return True, []
     except Exception as e:
-        logger.error(f"Blueprint validation failed: {e}")
-        return False, [f"Validation error: {str(e)}"]
+        error_msg = f"Blueprint validation failed: {str(e)}"
+        logger.error(error_msg)
+        return False, [error_msg]
 
-# Internal helper functions
 
-def _load_and_validate_blueprint(blueprint_path: str, model_path: str):
-    """Load and validate blueprint with model path assignment."""
+# Helper function implementations
+
+def _validate_inputs(model_path: str, blueprint_path: str, objectives: Dict, constraints: Dict):
+    """Validate all input parameters with descriptive error messages."""
+    if not Path(model_path).exists():
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
+    if not Path(blueprint_path).exists():
+        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
+    
+    if not model_path.lower().endswith('.onnx'):
+        raise ValueError(f"Model must be ONNX format, got: {model_path}")
+    
+    if not blueprint_path.lower().endswith(('.yaml', '.yml')):
+        raise ValueError(f"Blueprint must be YAML format, got: {blueprint_path}")
+    
+    # Validate objectives format
+    if objectives:
+        for obj_name, obj_config in objectives.items():
+            if not isinstance(obj_config, dict):
+                raise ValueError(f"Objective '{obj_name}' must be a dictionary")
+            if 'direction' not in obj_config:
+                raise ValueError(f"Objective '{obj_name}' missing 'direction' field")
+            if obj_config['direction'] not in ['maximize', 'minimize']:
+                raise ValueError(f"Objective '{obj_name}' direction must be 'maximize' or 'minimize'")
+    
+    # Validate constraints format  
+    if constraints:
+        numeric_constraints = ['max_luts', 'max_dsps', 'max_brams', 'max_power', 'target_frequency']
+        for key, value in constraints.items():
+            if key in numeric_constraints and not isinstance(value, (int, float)):
+                raise ValueError(f"Constraint '{key}' must be numeric, got {type(value)}")
+
+
+def _load_and_validate_blueprint(blueprint_path: str):
+    """Load and validate blueprint - throw hard error if invalid."""
     try:
-        # Import existing Blueprint class
         from ..blueprints.base import Blueprint
-        
-        # Load blueprint from YAML file
         blueprint = Blueprint.from_yaml_file(Path(blueprint_path))
         
-        # Validate blueprint supports library-driven DSE using existing components
-        if hasattr(blueprint, 'validate_library_config'):
-            is_valid, errors = blueprint.validate_library_config()
-            if not is_valid:
-                raise ValueError(f"Blueprint validation failed: {'; '.join(errors)}")
+        # Validate blueprint configuration
+        is_valid, errors = blueprint.validate_library_config()
+        if not is_valid:
+            raise ValueError(f"Blueprint validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
         
-        # Store model path for orchestrator access
-        blueprint.model_path = model_path
-        
-        logger.info(f"Blueprint loaded and validated: {blueprint.name if hasattr(blueprint, 'name') else 'unnamed'}")
+        logger.info(f"Successfully loaded blueprint: {blueprint.name if hasattr(blueprint, 'name') else 'unnamed'}")
         return blueprint
         
     except ImportError:
-        # Fallback for when Blueprint class is not available
-        logger.warning("Blueprint class not available, using mock blueprint")
-        return _create_mock_blueprint(blueprint_path, model_path)
+        raise RuntimeError("Blueprint system not available. Cannot proceed without valid blueprint.")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
     except Exception as e:
-        logger.error(f"Failed to load blueprint: {e}")
-        raise
+        raise ValueError(f"Failed to load blueprint '{blueprint_path}': {str(e)}")
 
-def _generate_exploration_analysis(results, orchestrator, **kwargs) -> Dict[str, Any]:
-    """Generate comprehensive analysis using existing analysis tools."""
-    analysis = {
-        'exit_point': results.analysis.get('exit_point', 'unknown'),
-        'method': results.analysis.get('method', 'existing_tools'),
-        'components_source': 'existing_only',
-        'orchestrator_history': orchestrator.get_orchestration_history(),
-        'libraries_status': _get_libraries_status(orchestrator),
-        'analysis_timestamp': str(Path.cwd()),  # Placeholder for timestamp
-        'configuration': kwargs
-    }
-    
-    # Add exit-point specific analysis
-    if results.analysis.get('exit_point') == 'roofline':
-        analysis['roofline_specific'] = _analyze_roofline_results(results)
-    elif results.analysis.get('exit_point') == 'dataflow_analysis':
-        analysis['dataflow_specific'] = _analyze_dataflow_results(results)
-    elif results.analysis.get('exit_point') == 'dataflow_generation':
-        analysis['generation_specific'] = _analyze_generation_results(results)
-    
-    return analysis
 
-def _get_libraries_status(orchestrator) -> Dict[str, Any]:
-    """Get status of all libraries in orchestrator."""
-    status = {}
-    
-    for lib_name, lib in orchestrator.libraries.items():
-        status[lib_name] = {
-            'available': lib is not None,
-            'type': 'existing_component_library',
-            'class_name': lib.__class__.__name__ if lib else None
+def _setup_dse_configuration(blueprint, objectives, constraints, target_device):
+    """Setup comprehensive DSE configuration."""
+    try:
+        from ..dse.interface import DSEConfiguration, DSEObjective, OptimizationObjective
+        
+        # Extract design space from blueprint
+        design_space = blueprint.get_design_space()
+        
+        # Setup objectives
+        dse_objectives = []
+        if objectives:
+            for obj_name, obj_config in objectives.items():
+                direction = OptimizationObjective.MAXIMIZE if obj_config['direction'] == 'maximize' else OptimizationObjective.MINIMIZE
+                weight = obj_config.get('weight', 1.0)
+                target = obj_config.get('target', None)
+                
+                dse_objectives.append(DSEObjective(
+                    name=obj_name,
+                    direction=direction,
+                    weight=weight,
+                    target_value=target
+                ))
+        else:
+            # Default objectives
+            dse_objectives = [
+                DSEObjective('throughput', OptimizationObjective.MAXIMIZE, weight=1.0),
+                DSEObjective('latency', OptimizationObjective.MINIMIZE, weight=0.8)
+            ]
+        
+        # Setup constraints  
+        dse_constraints = constraints.copy() if constraints else {}
+        if target_device:
+            dse_constraints['target_device'] = target_device
+            
+        # Add default constraints if not specified
+        if 'max_luts' not in dse_constraints:
+            dse_constraints['max_luts'] = 0.8
+        if 'max_dsps' not in dse_constraints:
+            dse_constraints['max_dsps'] = 0.8
+        
+        return DSEConfiguration(
+            design_space=design_space,
+            objectives=dse_objectives,
+            constraints=dse_constraints,
+            blueprint=blueprint
+        )
+    except ImportError:
+        # Fallback configuration for when DSE system not available
+        logger.warning("DSE system not available, using fallback configuration")
+        return {
+            'design_space': blueprint.get_design_space() if hasattr(blueprint, 'get_design_space') else {},
+            'objectives': objectives or {'throughput': {'direction': 'maximize'}},
+            'constraints': constraints or {},
+            'blueprint': blueprint,
+            'fallback_mode': True
         }
+
+
+def _run_full_dse(model_path: str, dse_config):
+    """Execute full model-to-hardware DSE pipeline."""
+    try:
+        from ..dse.interface import DSEInterface
+        
+        logger.info("Starting full DSE: Model analysis -> Transformation -> Kernel mapping -> HW optimization")
+        
+        dse_engine = DSEInterface(dse_config)
+        
+        # Execute complete pipeline
+        results = dse_engine.explore_design_space(
+            model_path=model_path,
+            stages=['analysis', 'transformation', 'kernel_mapping', 'hw_optimization']
+        )
+        
+        logger.info(f"DSE completed: {len(results.results) if hasattr(results, 'results') else 0} design points evaluated")
+        return results
+        
+    except ImportError:
+        logger.warning("DSE interface not available, using fallback DSE")
+        return _fallback_dse(model_path, dse_config)
+
+
+def _run_hw_optimization_dse(dataflow_graph, dse_config):
+    """Execute hardware optimization DSE on existing Dataflow Graph."""
+    try:
+        from ..dse.interface import DSEInterface
+        
+        logger.info("Starting HW optimization DSE on existing Dataflow Graph")
+        
+        dse_engine = DSEInterface(dse_config)
+        
+        # Execute only HW optimization stage
+        results = dse_engine.optimize_dataflow_graph(
+            dataflow_graph=dataflow_graph,
+            stages=['hw_optimization']
+        )
+        
+        logger.info(f"HW optimization completed: {len(results.results) if hasattr(results, 'results') else 0} configurations evaluated")
+        return results
+        
+    except ImportError:
+        logger.warning("DSE interface not available, using fallback optimization")
+        return _fallback_hw_optimization(dataflow_graph, dse_config)
+
+
+def _load_dataflow_graph(model_path: str):
+    """Load existing Dataflow Graph from ONNX file."""
+    try:
+        import onnx
+        model = onnx.load(model_path)
+        logger.info(f"Loaded Dataflow Graph with {len(model.graph.node)} nodes")
+        return model
+    except ImportError:
+        raise RuntimeError("ONNX library not available for loading Dataflow Graph")
+    except Exception as e:
+        raise ValueError(f"Failed to load Dataflow Graph from {model_path}: {str(e)}")
+
+
+def _generate_dataflow_core(dataflow_graph, dse_config):
+    """Generate complete stitched IP design from Dataflow Graph."""
+    try:
+        from ..finn.orchestration import FINNBuildOrchestrator
+        
+        logger.info("Generating Dataflow Core (stitched IP design)")
+        
+        orchestrator = FINNBuildOrchestrator(dse_config)
+        
+        # Generate IP core with synthesis
+        core_results = orchestrator.generate_ip_core(
+            dataflow_graph=dataflow_graph,
+            generate_bitstream=True,
+            run_synthesis=True,
+            generate_drivers=True
+        )
+        
+        logger.info("Dataflow Core generation completed")
+        return core_results
+        
+    except ImportError:
+        logger.warning("FINN orchestration not available, using fallback core generation")
+        return _fallback_core_generation(dataflow_graph, dse_config)
+
+
+def _assemble_results(dataflow_graph, dataflow_core, dse_results):
+    """Assemble final results dictionary."""
     
-    return status
+    # Import analysis hooks
+    from ..analysis import expose_analysis_data, register_analyzer, get_raw_data
+    
+    results = {
+        'dataflow_graph': {
+            'onnx_model': dataflow_graph,
+            'metadata': {
+                'kernel_mapping': getattr(dse_results, 'kernel_mapping', {}) if hasattr(dse_results, 'kernel_mapping') else {},
+                'resource_estimates': getattr(dse_results, 'resource_estimates', {}) if hasattr(dse_results, 'resource_estimates') else {},
+                'performance_estimates': getattr(dse_results, 'performance_estimates', {}) if hasattr(dse_results, 'performance_estimates') else {}
+            }
+        },
+        'dataflow_core': dataflow_core,
+        'dse_results': {
+            'best_configuration': getattr(dse_results, 'best_result', {}) if hasattr(dse_results, 'best_result') else {},
+            'pareto_frontier': getattr(dse_results, 'pareto_points', []) if hasattr(dse_results, 'pareto_points') else [],
+            'exploration_history': getattr(dse_results, 'results', []) if hasattr(dse_results, 'results') else [],
+            'convergence_metrics': getattr(dse_results, 'convergence', {}) if hasattr(dse_results, 'convergence') else {}
+        },
+        'metrics': _extract_metrics(dse_results),
+        'analysis': _generate_analysis(dse_results),
+        
+        # NEW: Analysis hooks for external tools
+        'analysis_data': expose_analysis_data(getattr(dse_results, 'results', [])),
+        'analysis_hooks': {
+            'register_analyzer': register_analyzer,
+            'get_raw_data': lambda: get_raw_data(getattr(dse_results, 'results', [])),
+            'available_adapters': ['pandas', 'scipy', 'sklearn']
+        }
+    }
+    
+    return results
 
-def _analyze_roofline_results(results) -> Dict[str, Any]:
-    """Analyze roofline-specific results."""
+
+def _extract_metrics(dse_results):
+    """Extract performance and resource metrics from DSE results."""
+    if hasattr(dse_results, 'best_result') and dse_results.best_result:
+        best_result = dse_results.best_result
+        return {
+            'performance': {
+                'throughput_ops_sec': getattr(best_result, 'throughput', 0.0),
+                'latency_ms': getattr(best_result, 'latency', 0.0),
+                'frequency_mhz': getattr(best_result, 'frequency', 0.0)
+            },
+            'resources': {
+                'lut_utilization': getattr(best_result, 'lut_util', 0.0),
+                'dsp_utilization': getattr(best_result, 'dsp_util', 0.0),
+                'bram_utilization': getattr(best_result, 'bram_util', 0.0),
+                'power_consumption_w': getattr(best_result, 'power', 0.0)
+            }
+        }
+    else:
+        return {
+            'performance': {'throughput_ops_sec': 0.0, 'latency_ms': 0.0, 'frequency_mhz': 0.0},
+            'resources': {'lut_utilization': 0.0, 'dsp_utilization': 0.0, 'bram_utilization': 0.0, 'power_consumption_w': 0.0}
+        }
+
+
+def _generate_analysis(dse_results):
+    """Generate analysis and recommendations from DSE results."""
+    num_results = len(getattr(dse_results, 'results', []))
+    
     return {
-        'analysis_type': 'roofline_bounds',
-        'roofline_data': results.analysis.get('roofline_results', {}),
-        'performance_bounds': 'computed_using_existing_tools',
-        'recommendations': ['Use dataflow_analysis for more detailed estimation']
+        'design_space_coverage': min(1.0, num_results / 100.0),  # Estimate based on results count
+        'optimization_quality': 0.8 if num_results > 10 else 0.5,  # Simple quality metric
+        'recommendations': [
+            "Consider increasing evaluation budget for better optimization",
+            "Review resource constraints for feasibility",
+            "Validate blueprint configuration for completeness"
+        ],
+        'warnings': [] if num_results > 0 else ["No valid design points found - check constraints"]
     }
 
-def _analyze_dataflow_results(results) -> Dict[str, Any]:
-    """Analyze dataflow-specific results."""
-    return {
-        'analysis_type': 'dataflow_estimation',
-        'transformed_model': results.analysis.get('transformed_model', {}),
-        'kernel_mapping': results.analysis.get('kernel_mapping', {}),
-        'performance_estimates': results.analysis.get('performance_estimates', {}),
-        'recommendations': ['Use dataflow_generation for actual RTL/HLS files']
-    }
 
-def _analyze_generation_results(results) -> Dict[str, Any]:
-    """Analyze generation-specific results."""
-    generation_data = results.analysis.get('generation_results', {})
-    return {
-        'analysis_type': 'complete_generation',
-        'rtl_files_count': len(generation_data.get('rtl_files', [])),
-        'hls_files_count': len(generation_data.get('hls_files', [])),
-        'synthesis_status': generation_data.get('synthesis_results', {}).get('status', 'unknown'),
-        'recommendations': ['Review generated files and synthesis results']
-    }
-
-def _save_results_existing(results, analysis: Dict, output_dir: str, orchestrator):
-    """Save exploration results using existing save functionality."""
+def _save_forge_results(results: Dict[str, Any], output_dir: str):
+    """Save forge results to output directory."""
     try:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # Save raw results using existing result save method
-        if hasattr(results, 'save'):
-            results.save(output_path / "dse_results.json")
-        else:
-            # Fallback save method
-            import json
-            with open(output_path / "dse_results.json", 'w') as f:
-                json.dump({
-                    'results': str(results),
-                    'type': 'fallback_save'
-                }, f, indent=2)
+        # Save main results as JSON
+        results_copy = results.copy()
+        # Remove ONNX model for JSON serialization
+        if 'dataflow_graph' in results_copy and 'onnx_model' in results_copy['dataflow_graph']:
+            results_copy['dataflow_graph']['onnx_model'] = str(results_copy['dataflow_graph']['onnx_model'])
         
-        # Save analysis using existing export methods
-        import json
-        with open(output_path / "analysis.json", 'w') as f:
-            json.dump(analysis, f, indent=2, default=str)
+        with open(output_path / "forge_results.json", 'w') as f:
+            json.dump(results_copy, f, indent=2, default=str)
         
-        # Generate report if orchestrator has analysis library
-        if orchestrator and 'analysis' in orchestrator.libraries:
+        # Save ONNX model separately if available
+        if results.get('dataflow_graph', {}).get('onnx_model'):
             try:
-                analyzer = orchestrator.libraries['analysis']
-                if hasattr(analyzer, 'generate_report'):
-                    report = analyzer.generate_report(results, analysis)
-                    with open(output_path / "report.html", 'w') as f:
-                        f.write(report)
-            except Exception as e:
-                logger.warning(f"Could not generate report: {e}")
+                import onnx
+                onnx.save(results['dataflow_graph']['onnx_model'], str(output_path / "dataflow_graph.onnx"))
+            except ImportError:
+                logger.warning("ONNX library not available, skipping ONNX model save")
         
-        logger.info(f"Results saved to: {output_path}")
+        logger.info(f"Forge results saved to: {output_path}")
         
     except Exception as e:
-        logger.error(f"Failed to save results: {e}")
+        logger.error(f"Failed to save forge results: {e}")
 
-def _create_fallback_results(model_path: str, blueprint_path: str, exit_point: str, error_msg: str):
-    """Create fallback results when exploration fails."""
-    # Import result class
-    try:
-        from ..core.result import DSEResult
-        
-        fallback_results = DSEResult(
-            results=[],
-            analysis={
-                'exit_point': exit_point,
-                'status': 'failed',
-                'error': error_msg,
-                'fallback': True,
-                'model_path': model_path,
-                'blueprint_path': blueprint_path
+
+# Fallback implementations for when components are not available
+
+def _fallback_dse(model_path: str, dse_config):
+    """Fallback DSE when full DSE system not available."""
+    logger.warning("Using fallback DSE implementation")
+    
+    class FallbackResult:
+        def __init__(self):
+            self.results = []
+            self.best_result = {
+                'dataflow_graph': None,
+                'throughput': 100.0,
+                'latency': 10.0,
+                'lut_util': 0.5,
+                'dsp_util': 0.6
             }
-        )
-    except ImportError:
-        # Mock result if DSEResult not available
-        fallback_results = {
-            'results': [],
-            'analysis': {
-                'exit_point': exit_point,
-                'status': 'failed',
-                'error': error_msg,
-                'fallback': True
+    
+    return FallbackResult()
+
+
+def _fallback_hw_optimization(dataflow_graph, dse_config):
+    """Fallback HW optimization when DSE system not available."""
+    logger.warning("Using fallback HW optimization")
+    
+    class FallbackOptimization:
+        def __init__(self):
+            self.results = []
+            self.best_result = {
+                'dataflow_graph': dataflow_graph,
+                'throughput': 150.0,
+                'latency': 8.0,
+                'frequency': 200.0
             }
-        }
     
-    fallback_analysis = {
-        'exit_point': exit_point,
-        'method': 'fallback_error_handling',
-        'error': error_msg,
-        'status': 'failed',
-        'components_source': 'none_due_to_error'
-    }
+    return FallbackOptimization()
+
+
+def _fallback_core_generation(dataflow_graph, dse_config):
+    """Fallback core generation when FINN orchestration not available."""
+    logger.warning("Using fallback core generation")
     
-    return fallback_results, fallback_analysis
-
-def _route_to_existing_legacy_system(model_path: str, blueprint_name: str, **kwargs):
-    """Route to existing legacy system when available."""
-    try:
-        # Try to import and use existing explore_design_space function
-        from ..legacy.compatibility import existing_explore_design_space
-        return existing_explore_design_space(model_path, blueprint_name, **kwargs)
-    except ImportError:
-        # Fallback if legacy system not available
-        logger.warning("Legacy system not available, creating mock result")
-        return _create_legacy_error_result(model_path, blueprint_name, "Legacy system not available")
-
-def _convert_to_legacy_format(results, analysis) -> Dict[str, Any]:
-    """Convert new results format to legacy format for compatibility."""
     return {
-        'results': results,
-        'analysis': analysis,
-        'legacy_format': True,
-        'converted_from': 'new_api'
+        'ip_files': [],
+        'synthesis_results': {'status': 'fallback_mode'},
+        'driver_code': {},
+        'bitstream': None,
+        'fallback': True
     }
-
-def _create_legacy_error_result(model_path: str, blueprint_name: str, error_msg: str) -> Dict[str, Any]:
-    """Create legacy-compatible error result."""
-    return {
-        'error': error_msg,
-        'model_path': model_path,
-        'blueprint_name': blueprint_name,
-        'legacy_format': True,
-        'status': 'error'
-    }
-
-def _load_blueprint_for_validation(blueprint_path: str):
-    """Load blueprint for validation purposes."""
-    try:
-        from ..blueprints.base import Blueprint
-        return Blueprint.from_yaml_file(Path(blueprint_path))
-    except ImportError:
-        return _create_mock_blueprint(blueprint_path, None)
-
-def _create_mock_blueprint(blueprint_path: str, model_path: Optional[str]):
-    """Create mock blueprint when Blueprint class not available."""
-    class MockBlueprint:
-        def __init__(self, path, model_path):
-            self.path = path
-            self.model_path = model_path
-            self.name = f"mock_blueprint_{Path(path).stem}"
-        
-        def validate_library_config(self):
-            return True, []
-        
-        def get_finn_legacy_config(self):
-            return {}
-    
-    return MockBlueprint(blueprint_path, model_path)
-
-# Workflow convenience functions
-def brainsmith_workflow(model_path: str, blueprint_path: str, workflow_type: str = "standard", **kwargs):
-    """
-    Execute predefined workflows using existing components.
-    
-    Args:
-        model_path: Path to model file
-        blueprint_path: Path to blueprint configuration
-        workflow_type: Workflow type ('fast', 'standard', 'comprehensive')
-        **kwargs: Additional workflow configuration
-        
-    Returns:
-        Workflow execution results
-    """
-    logger.info(f"Executing predefined workflow: {workflow_type}")
-    
-    # Map workflow types to exit points
-    workflow_mapping = {
-        'fast': 'roofline',
-        'standard': 'dataflow_analysis', 
-        'comprehensive': 'dataflow_generation'
-    }
-    
-    exit_point = workflow_mapping.get(workflow_type, 'dataflow_analysis')
-    
-    return brainsmith_explore(model_path, blueprint_path, exit_point, **kwargs)
