@@ -17,11 +17,10 @@ becho () { echo -e "${BLUE}$1${NC}"; }
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 
-# Generate unique container name based on brainsmith directory
+# Generate container name based on brainsmith directory (no timestamp for persistence)
 BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
 DOCKER_UNAME=$(id -un)
-TIMESTAMP=$(date +%s | tail -c 6)  # Last 6 digits of epoch
-DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}_${TIMESTAMP}"
+DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
 DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Debug output for container name generation (only if BSMITH_DEBUG is set)
@@ -276,13 +275,14 @@ build_image() {
     cd $OLD_PWD
 }
 
-# Check for existing containers with similar names
+# Check for existing containers with the same name
 check_container_conflicts() {
-    local base_name="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
-    local existing=$(docker ps -a --format '{{.Names}}' | grep "^${base_name}" | wc -l)
-    if [ $existing -gt 0 ]; then
-        yecho "Found $existing existing containers with similar names"
-        yecho "Consider cleanup with: docker ps -a | grep '$base_name'"
+    local status=$(get_container_status)
+    if [ "$status" != "not_found" ]; then
+        becho "Found existing container $DOCKER_INST_NAME (status: $status)"
+        if [ "$status" = "exited" ]; then
+            becho "Will reuse existing container"
+        fi
     fi
 }
 

@@ -372,6 +372,7 @@ jobs:
     runs-on: pre-release
     timeout-minutes: 240
     needs: [validate-environment, docker-build-and-test, e2e-test]  # Run after e2e-test passes
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -549,6 +550,7 @@ jobs:
           ./smithy cleanup || true
           # Keep GHCR image for potential reuse
           docker container prune -f
+
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:
