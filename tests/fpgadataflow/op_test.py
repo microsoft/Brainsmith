@@ -509,6 +509,8 @@ class OpTest(ABC):
             cfg_settings["synth_clk_period_ns"] = 4.0
         if "generate_outputs" not in cfg_settings:
             cfg_settings["generate_outputs"] = []
+        if "board" not in cfg_settings:
+            cfg_settings["board"] = "ZCU104"
 
         # Create a dummy config so we can call the step correctly.
         config: DataflowBuildConfig = DataflowBuildConfig(**cfg_settings)
