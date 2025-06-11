@@ -34,11 +34,10 @@ jobs:
       container-name: ${{ steps.env-check.outputs.container-name }}
       docker-tag: ${{ steps.env-check.outputs.docker-tag }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-and-test
         with:
-          submodules: recursive
-          fetch-depth: 0
+          check-disk: 'false'  # We'll check it manually in the validation
+          pull-image: 'false'  # No image to pull yet
 
       - name: Validate environment and generate outputs
         id: env-check
@@ -81,89 +80,30 @@ jobs:
     timeout-minutes: 60
     needs: validate-environment
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-and-test
         with:
-          submodules: recursive
-          fetch-depth: 0
+          pull-image: 'false'  # We're building the image, not pulling it
+          docker-cleanup: 'true'
 
-      - name: Setup and cleanup
+      - name: Build and verify image
+        run: .github/scripts/ci-common.sh build-verify
+      
+      - name: Test container functionality
         run: |
-          echo "=== Pre-build cleanup ==="
-          # Clean Docker resources (requires docker group membership, no sudo needed)
-          docker container prune -f || true
-          docker image prune -f || true
-          docker volume prune -f || true
-          echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
-          echo "Note: System cleanup handled by CI infrastructure"
-
-      - name: Check disk space
-        run: |
-          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
-          echo "Available disk space: ${AVAILABLE}GB"
-          if [ $AVAILABLE -lt 20 ]; then
-            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
-            exit 1
-          fi
-
-      - name: Build and test Docker image
-        run: |
-          chmod +x smithy
-          echo "=== Testing build command ==="
-          echo "Using Docker tag: $BSMITH_DOCKER_TAG"
+          .github/scripts/ci-common.sh smithy-test \
+            "Basic Functionality" \
+            "echo 'Container test: SUCCESS' && python --version && ls -la \$BSMITH_DIR | head -10" \
+            5
           
-          # Test the build command explicitly
-          ./smithy build
-          
-          echo "=== Verifying image was built ==="
-          docker images | grep "microsoft/brainsmith" || {
-            echo "ERROR: Docker image not found after build"
-            exit 1
-          }
-          
-          echo "=== Testing daemon startup ==="
-          ./smithy daemon
-          
-          # Wait for container to be fully ready before exec commands
-          echo "=== Waiting for container readiness ==="
-          sleep 10
-          
-          # Quick functionality tests
-          ./smithy exec "echo 'Container exec test: SUCCESS'"
-          ./smithy exec "python --version"
-          ./smithy exec "ls -la \$BSMITH_DIR | head -10"
-          
-          ./smithy stop
-
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         if: success()
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Tag and push to GHCR
+        
+      - name: Push to GHCR
         if: success()
-        run: |
-          echo "=== Pushing image to GitHub Container Registry ==="
-          echo "Local image: $BSMITH_DOCKER_TAG"
-          echo "GHCR image: $GHCR_IMAGE"
-          
-          # Tag the image for GHCR
-          docker tag $BSMITH_DOCKER_TAG $GHCR_IMAGE
-          
-          # Push to GHCR
-          docker push $GHCR_IMAGE
-          
-          echo "Successfully pushed image: $GHCR_IMAGE"
-          
-          # Capture digest for verification
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
-          echo "Image digest: $DIGEST"
-          echo "GHCR_DIGEST=$DIGEST" >> $GITHUB_ENV
-          
-          # Save digest for other jobs
-          mkdir -p /tmp
-          echo "$DIGEST" > /tmp/image-digest.txt
-
+        run: .github/scripts/ci-common.sh push-ghcr
+      
       - name: Upload digest
         if: success()
         uses: actions/upload-artifact@v4
@@ -182,12 +122,10 @@ jobs:
             ~/.docker/
           retention-days: 3
 
-      - name: Cleanup local artifacts only
+      - name: Cleanup
         if: always()
         run: |
           ./smithy cleanup || true
-          # Keep the GHCR image for other jobs to use
-          # Only clean up containers and unnamed images
           docker container prune -f
 
   # End-to-end test with dependency fetching and compilation
@@ -198,158 +136,24 @@ jobs:
     needs: [validate-environment, docker-build-and-test]
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Setup environment
-        run: |
-          echo "=== Environment Setup ==="
-          # Clean Docker resources (requires docker group membership, no sudo needed)
-          docker container prune -f || true
-          
-          echo "=== Environment Debug Info ==="
-          echo "Working directory: $(pwd)"
-          echo "User: $(whoami)"
-          echo "Expected container: ${{ needs.validate-environment.outputs.container-name }}"
-          echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
-          echo "Note: System cleanup handled by CI infrastructure"
-
-      - name: Check disk space
-        run: |
-          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
-          echo "Available disk space: ${AVAILABLE}GB"
-          if [ $AVAILABLE -lt 20 ]; then
-            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
-            exit 1
-          fi
-
-      - name: Login to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Download and verify digest
+      - uses: ./.github/actions/setup-and-test
+      
+      - name: Download digest
         uses: actions/download-artifact@v4
         with:
           name: image-digest
           path: /tmp/
-
-      - name: Pull and verify image
+      
+      - name: Run E2E test
         run: |
-          echo "=== Pulling pre-built image from GitHub Container Registry ==="
-          echo "GHCR image: $GHCR_IMAGE"
-          echo "Local tag: $BSMITH_DOCKER_TAG"
-          
-          # Pull the image built by docker-build-and-test job
-          docker pull $GHCR_IMAGE
-          
-          # Verify digest matches
-          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
-          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
-          
-          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
-            echo "ERROR: Image digest mismatch!"
-            echo "Expected: $EXPECTED_DIGEST"
-            echo "Actual: $ACTUAL_DIGEST"
-            exit 1
-          fi
-          echo "✓ Image digest verified: $ACTUAL_DIGEST"
-          
-          # Tag it with the expected local tag for smithy
-          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
-          
-          echo "=== Verifying image is available ==="
-          docker images | grep "microsoft/brainsmith"
+          .github/scripts/ci-common.sh smithy-test \
+            "E2E BERT" \
+            "cd demos/bert && make clean && make" \
+            30
 
-      - name: Start container with pre-built image
-        run: |
-          chmod +x smithy
-          
-          echo "=== Starting daemon container with pre-built image ==="
-          ./smithy daemon || {
-            echo "ERROR: Container start failed"
-            echo "=== Container status ==="
-            ./smithy status
-            echo "=== Docker containers ==="
-            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Command}}" | head -10
-            exit 1
-          }
-          
-          echo "=== Verifying container readiness ==="
-          ./smithy status
-          docker ps --filter "name=brainsmith" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-      - name: Test core functionality
-        run: |
-          echo "=== Testing basic exec functionality ==="
-          ./smithy exec "echo 'Exec test: SUCCESS'" || {
-            echo "ERROR: Basic exec failed"
-            ./smithy status
-            ./smithy logs --tail 20
-            exit 1
-          }
-          
-          echo "=== Environment verification ==="
-          ./smithy exec "echo \"BSMITH_DIR=\$BSMITH_DIR\""
-          ./smithy exec "echo \"BSMITH_BUILD_DIR=\$BSMITH_BUILD_DIR\""
-          ./smithy exec "echo \"BSMITH_SKIP_DEP_REPOS=\$BSMITH_SKIP_DEP_REPOS\""
-          
-          echo "=== Python environment check ==="
-          ./smithy exec "python --version && which python"
-
-      - name: Test dependency verification
-        run: |
-          echo "=== Verifying dependencies are already available ==="
-          ./smithy exec "ls -la \$BSMITH_DIR/deps/ | head -20" || {
-            echo "ERROR: Dependencies directory not found"
-            echo "=== Container status ==="
-            ./smithy status
-            echo "=== Container logs (last 50 lines) ==="
-            ./smithy logs --tail 50
-            exit 1
-          }
-          
-          echo "=== Counting dependency directories ==="
-          ./smithy exec "find \$BSMITH_DIR/deps -maxdepth 2 -type d | wc -l"
-          
-          echo "=== Testing Python imports ==="
-          ./smithy exec "python -c 'import brainsmith; print(\"Brainsmith import: SUCCESS\")'" || {
-            echo "WARNING: Brainsmith import failed, but this may be expected during setup"
-          }
-          
-          ./smithy exec "python -c 'import finn; print(\"FINN import: SUCCESS\")'" || {
-            echo "WARNING: FINN import failed, but dependencies appear to be present"
-          }
-
-      - name: Test compilation workflow
-        run: |
-          echo "=== Testing BERT compilation ==="
-          ./smithy exec "ls -la demos/bert/"
-          
-          timeout 30m ./smithy exec "cd demos/bert && make clean && make" || {
-            echo "WARNING: BERT compilation failed or timed out (this may be expected in CI)"
-            echo "=== Checking generated files ==="
-            ./smithy exec "find demos/bert -newer demos/bert/Makefile | head -20 || true"
-          }
-
-      - name: Collect artifacts and debug info
+      - name: Collect artifacts
         if: always()
-        run: |
-          mkdir -p artifacts
-          
-          echo "=== Collecting system info ==="
-          df -h > artifacts/disk_usage.txt
-          free -h > artifacts/memory_usage.txt
-          
-          echo "=== Collecting container info ==="
-          ./smithy status > artifacts/container_status.txt 2>&1 || echo "Status failed" > artifacts/container_status.txt
-          ./smithy logs > artifacts/container.log 2>&1 || echo "No logs" > artifacts/container.log
-          
-          echo "=== Collecting environment info ==="
-          ./smithy exec "find \$BSMITH_DIR/deps -type d | head -50" > artifacts/deps_dirs.txt 2>&1 || true
-          ./smithy exec "pip list" > artifacts/pip_list.txt 2>&1 || true
+        run: .github/scripts/ci-common.sh collect-artifacts artifacts
 
       - name: Upload artifacts
         if: always()
@@ -359,13 +163,6 @@ jobs:
           path: artifacts/
           retention-days: 7
 
-      - name: Cleanup
-        if: always()
-        run: |
-          ./smithy stop || true
-          ./smithy cleanup || true
-          # Keep GHCR image for potential reuse
-
   # Full pytest suite (only on schedule to save resources)
   full-test-suite:
     if: github.event_name == 'schedule'
@@ -374,72 +171,20 @@ jobs:
     needs: [validate-environment, docker-build-and-test, e2e-test]  # Run after e2e-test passes
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Check disk space
-        run: |
-          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
-          echo "Available disk space: ${AVAILABLE}GB"
-          if [ $AVAILABLE -lt 20 ]; then
-            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
-            exit 1
-          fi
-
-      - name: Login to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Download and verify digest
+      - uses: ./.github/actions/setup-and-test
+      
+      - name: Download digest
         uses: actions/download-artifact@v4
         with:
           name: image-digest
           path: /tmp/
-
-      - name: Pull and verify image
+      
+      - name: Run full test suite
         run: |
-          echo "=== Pulling pre-built image from GitHub Container Registry ==="
-          echo "GHCR image: $GHCR_IMAGE"
-          echo "Local tag: $BSMITH_DOCKER_TAG"
-          
-          # Pull the image built by docker-build-and-test job
-          docker pull $GHCR_IMAGE
-          
-          # Verify digest matches
-          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
-          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
-          
-          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
-            echo "ERROR: Image digest mismatch!"
-            echo "Expected: $EXPECTED_DIGEST"
-            echo "Actual: $ACTUAL_DIGEST"
-            exit 1
-          fi
-          echo "✓ Image digest verified: $ACTUAL_DIGEST"
-          
-          # Tag it with the expected local tag for smithy
-          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
-          
-          echo "=== Verifying image is available ==="
-          docker images | grep "microsoft/brainsmith"
-
-      - name: Run comprehensive tests with pre-built image
-        run: |
-          chmod +x smithy
-          
-          echo "=== Starting container for full test suite with pre-built image ==="
-          ./smithy daemon
-          
-          echo "=== Running full pytest suite ==="
-          ./smithy exec "cd tests && timeout 180m pytest -v --tb=short ./" || {
-            echo "ERROR: Full test suite failed or timed out"
-            echo "=== Container logs ==="
-            ./smithy logs --tail 100
-            exit 1
-          }
+          .github/scripts/ci-common.sh smithy-test \
+            "Full Test Suite" \
+            "cd tests && timeout 180m pytest -v --tb=short ./" \
+            180
 
       - name: Upload test results
         if: always()
@@ -450,14 +195,6 @@ jobs:
             tests/
           retention-days: 14
 
-      - name: Cleanup
-        if: always()
-        run: |
-          ./smithy stop || true
-          ./smithy cleanup || true
-          # Keep GHCR image for potential reuse
-          docker container prune -f
-
   # BERT Large biweekly testing using smithy
   bert-large-biweekly:
     if: github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 0 * * 4')
@@ -466,91 +203,22 @@ jobs:
     needs: [validate-environment, docker-build-and-test]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Setup environment
-        run: |
-          echo "=== Environment Setup ==="
-          # Clean Docker resources (requires docker group membership, no sudo needed)
-          docker container prune -f || true
-          echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
-          echo "Note: System cleanup handled by CI infrastructure"
-
-      - name: Check disk space
-        run: |
-          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
-          echo "Available disk space: ${AVAILABLE}GB"
-          if [ $AVAILABLE -lt 20 ]; then
-            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
-            exit 1
-          fi
-
-      - name: Login to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Download and verify digest
+      - uses: ./.github/actions/setup-and-test
+      
+      - name: Download digest
         uses: actions/download-artifact@v4
         with:
           name: image-digest
           path: /tmp/
-
-      - name: Pull and verify image
+      
+      - name: Run BERT Large test
         run: |
-          echo "=== Pulling pre-built image from GitHub Container Registry ==="
-          echo "GHCR image: $GHCR_IMAGE"
-          echo "Local tag: $BSMITH_DOCKER_TAG"
-          
-          # Pull the image built by docker-build-and-test job
-          docker pull $GHCR_IMAGE
-          
-          # Verify digest matches
-          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
-          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
-          
-          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
-            echo "ERROR: Image digest mismatch!"
-            echo "Expected: $EXPECTED_DIGEST"
-            echo "Actual: $ACTUAL_DIGEST"
-            exit 1
-          fi
-          echo "✓ Image digest verified: $ACTUAL_DIGEST"
-          
-          # Tag it with the expected local tag for smithy
-          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
-          
-          echo "=== Verifying image is available ==="
-          docker images | grep "microsoft/brainsmith"
-
-      - name: Run BERT Large tests with pre-built image
-        run: |
-          chmod +x smithy
-          
-          echo "=== Starting smithy daemon for BERT Large testing with pre-built image ==="
-          ./smithy daemon
-          
-          echo "=== Running BERT Large single layer test ==="
-          ./smithy exec "cd demos/bert && make bert_large_single_layer" || {
-            echo "ERROR: BERT Large test failed"
-            echo "=== Container logs ==="
-            ./smithy logs --tail 100
-            exit 1
-          }
+          .github/scripts/ci-common.sh smithy-test \
+            "BERT Large" \
+            "cd demos/bert && make bert_large_single_layer" \
+            1440
         env:
           BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
-
-      - name: Cleanup
-        if: always()
-        run: |
-          ./smithy stop || true
-          ./smithy cleanup || true
-          # Keep GHCR image for potential reuse
-          docker container prune -f
-
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:

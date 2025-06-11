@@ -1,0 +1,50 @@
+name: 'Setup and Test'
+description: 'Common setup for all test jobs'
+inputs:
+  checkout:
+    default: 'true'
+  check-disk:
+    default: 'true'
+  pull-image:
+    default: 'true'
+  ghcr-image:
+    default: ''  # Will use env.GHCR_IMAGE if not provided
+  docker-tag:
+    default: ''  # Will use env.BSMITH_DOCKER_TAG if not provided
+  docker-cleanup:
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      if: inputs.checkout == 'true'
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+        
+    - name: Setup
+      shell: bash
+      run: |
+        chmod +x .github/scripts/ci-common.sh
+        
+    - name: Docker cleanup
+      if: inputs.docker-cleanup == 'true'
+      shell: bash
+      run: .github/scripts/ci-common.sh docker-cleanup
+        
+    - name: Check disk
+      if: inputs.check-disk == 'true'
+      shell: bash
+      run: .github/scripts/ci-common.sh check-disk
+        
+    - name: Pull image
+      if: inputs.pull-image == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GHCR_IMAGE: ${{ inputs.ghcr-image || env.GHCR_IMAGE }}
+        BSMITH_DOCKER_TAG: ${{ inputs.docker-tag || env.BSMITH_DOCKER_TAG }}
+      run: .github/scripts/ci-common.sh ghcr-pull
