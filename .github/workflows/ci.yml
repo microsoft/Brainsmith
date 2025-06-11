@@ -7,6 +7,8 @@ on:
     branches: [ develop ]
   schedule:
     - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
+    - cron: '0 0 * * 1'  # Monday at 00:00 UTC
+    - cron: '0 0 * * 4'  # Thursday at 00:00 UTC
 
 env:
   DOCKER_BUILDKIT: 1
@@ -21,7 +23,7 @@ env:
 
 jobs:
   docker-build:
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+    if: github.event_name.schedule == '0 0 * * 0' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 30
     steps:
@@ -45,10 +47,10 @@ jobs:
           docker builder prune -f
 
   e2e-build:
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request'
+    if: github.event_name.schedule == '0 0 * * 0' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 480 # 8-hour timeout
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -76,10 +78,10 @@ jobs:
           docker builder prune -f
 
   pytest-fpgadataflow:
-    if: github.event_name == 'schedule'
+    if: github.event_name.schedule == '0 0 * * 0'
     runs-on: pre-release
     timeout-minutes: 240 # 4-hour timeout for weekly tests
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -114,6 +116,37 @@ jobs:
             brainsmith/tests/**/*.log
             ${{ env.BSMITH_BUILD_DIR }}/**/*.log
           retention-days: 7
+
+      - name: Cleanup Docker artifacts
+        if: always()
+        run: |
+          # Clean up Docker artifacts immediately
+          docker container prune -f
+          docker image prune -f
+          docker volume prune -f
+          docker builder prune -f
+
+  bert-large-biweekly:
+    if: github.event_name.schedule == '0 0 * * 1' || github.event_name.schedule == '0 0 * * 4'
+    runs-on: pre-release
+    timeout-minutes: 1440 # 24-hour timeout for biweekly tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up environment
+        run: |
+          mkdir -p ${{ env.BSMITH_BUILD_DIR }}
+
+      - name: Run Docker and tests
+        run: |
+          chmod +x run-docker.sh
+          ./run-docker.sh bert-large-biweekly
+        env:
+          BSMITH_DOCKER_EXTRA: " -e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} "
 
       - name: Cleanup Docker artifacts
         if: always()
