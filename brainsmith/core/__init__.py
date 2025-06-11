@@ -6,9 +6,10 @@ Provides essential tools aligned with North Star goals: Functions Over Framework
 """
 
 from .api import forge, validate_blueprint
-from .design_space import DesignSpace
 from .metrics import DSEMetrics
-from .finn_interface import FINNInterface
+
+# Import from new infrastructure locations for backward compatibility
+from ..infrastructure.dse.design_space import DesignSpace
 
 __version__ = "0.5.0"
-__all__ = ['forge', 'validate_blueprint', 'DesignSpace', 'DSEMetrics', 'FINNInterface']
+__all__ = ['forge', 'validate_blueprint', 'DesignSpace', 'DSEMetrics']

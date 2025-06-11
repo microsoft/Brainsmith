@@ -28,7 +28,12 @@ try:
 except ImportError:
     BrainsmithMetrics = None
 
-from .core.design_space import DesignSpace, DesignPoint, ParameterDefinition
+from .infrastructure.dse.types import DesignPoint, ParameterSpace
+from .infrastructure.dse.design_space import DesignSpace
+try:
+    from .infrastructure.dse.types import ParameterDefinition
+except ImportError:
+    ParameterDefinition = None
 
 try:
     from .core.compiler import BrainsmithCompiler
@@ -43,12 +48,23 @@ try:
 except ImportError:
     get_core_status = None
 
-# Blueprint system (optional for Week 1)
+# Blueprint system (updated for new structure)
 try:
-    from .blueprints import (
-        Blueprint, get_blueprint, load_blueprint, 
-        list_blueprints, get_design_space as get_blueprint_design_space
-    )
+    from .infrastructure.dse.blueprint_manager import BlueprintManager, load_blueprint, list_available_blueprints
+    from libraries.blueprints import discover_all_blueprints, get_blueprint_by_name
+    
+    # Compatibility wrappers
+    def get_blueprint(name):
+        return get_blueprint_by_name(name)
+    
+    def list_blueprints():
+        return list_available_blueprints()
+        
+    def get_blueprint_design_space(name):
+        manager = BlueprintManager()
+        return manager.get_blueprint_parameter_space(name)
+        
+    Blueprint = None  # Legacy class not available
 except ImportError:
     Blueprint = None
     get_blueprint = None
@@ -56,18 +72,27 @@ except ImportError:
     list_blueprints = None
     get_blueprint_design_space = None
 
-# DSE system (Phase 3 - optional for Week 1)
+# DSE system (updated for new infrastructure)
 try:
-    from .dse import (
-        DSEInterface, SimpleDSEEngine, ExternalDSEAdapter,
-        DSEAnalyzer, ParetoAnalyzer
+    from .infrastructure.dse import (
+        DSEInterface, parameter_sweep, batch_evaluate,
+        discover_all_steps, optimize_design_space
     )
-    from .dse.interface import DSEConfiguration, DSEObjective, OptimizationObjective
-    from .dse.strategies import (
-        SamplingStrategy, OptimizationStrategy, 
-        create_dse_config_for_strategy, StrategySelector,
-        COMMON_CONFIGS
+    from .infrastructure.dse.interface import DSEInterface as DSEInterfaceClass
+    from .infrastructure.dse.types import (
+        DSEConfiguration, DSEResult, DSEObjective, OptimizationObjective,
+        SamplingStrategy, ParameterSpace
     )
+    
+    # Legacy compatibility
+    SimpleDSEEngine = DSEInterfaceClass
+    ExternalDSEAdapter = None  # Not implemented in new structure
+    DSEAnalyzer = None  # Not implemented in new structure
+    ParetoAnalyzer = None  # Not implemented in new structure
+    OptimizationStrategy = SamplingStrategy
+    create_dse_config_for_strategy = None  # Not implemented in new structure
+    StrategySelector = None  # Not implemented in new structure
+    COMMON_CONFIGS = None  # Not implemented in new structure
 except ImportError:
     DSEInterface = None
     SimpleDSEEngine = None
@@ -83,12 +108,185 @@ except ImportError:
     StrategySelector = None
     COMMON_CONFIGS = None
 
-# Tools module (moved from core API)
+# Tools module (moved from core API) - backward compatibility
 try:
-    from .tools.profiling import roofline_analysis, RooflineProfiler
+    from .libraries.analysis.profiling import roofline_analysis, RooflineProfiler
 except ImportError:
     roofline_analysis = None
     RooflineProfiler = None
+
+# Backward compatibility imports for moved components
+try:
+    # Automation tools
+    from .libraries.automation import batch_process, parameter_sweep, find_best, aggregate_stats
+    # Legacy compatibility
+    class batch:
+        process = staticmethod(batch_process)
+    class sweep:
+        parameter_sweep = staticmethod(parameter_sweep)
+        find_best = staticmethod(find_best)
+        aggregate_stats = staticmethod(aggregate_stats)
+except ImportError:
+    batch = None
+    sweep = None
+
+try:
+    # Kernel libraries (updated structure)
+    from .libraries.kernels import (
+        discover_all_kernels, get_kernel_by_name, find_kernels_for_operator,
+        list_available_kernels, KernelRegistry
+    )
+    from .libraries.kernels import (
+        load_kernel_package, find_compatible_kernels, select_optimal_kernel,
+        validate_kernel_package, generate_finn_config
+    )
+    from .libraries.kernels.types import (
+        KernelPackage, KernelRequirements, KernelSelection,
+        OperatorType, BackendType
+    )
+    
+    # Legacy compatibility
+    class kernel_functions:
+        discover_all_kernels = staticmethod(discover_all_kernels)
+        load_kernel_package = staticmethod(load_kernel_package)
+        find_compatible_kernels = staticmethod(find_compatible_kernels)
+        select_optimal_kernel = staticmethod(select_optimal_kernel)
+        
+    class kernel_types:
+        KernelPackage = KernelPackage
+        KernelRequirements = KernelRequirements
+        OperatorType = OperatorType
+        BackendType = BackendType
+        
+except ImportError:
+    kernel_functions = None
+    kernel_types = None
+
+try:
+    # Transform libraries (updated structure)
+    from .libraries.transforms import (
+        discover_all_transforms, get_transform_by_name, find_transforms_by_type,
+        list_available_transforms, TransformRegistry, TransformType
+    )
+    from .libraries.transforms import (
+        cleanup_step, cleanup_advanced_step, qonnx_to_finn_step,
+        streamlining_step, infer_hardware_step, generate_reference_io_step,
+        shell_metadata_handover_step, remove_head_step, remove_tail_step,
+        get_step, validate_step_sequence, discover_all_steps
+    )
+    
+    # Legacy compatibility - create modules with step functions
+    class bert:
+        remove_head_step = staticmethod(remove_head_step)
+        remove_tail_step = staticmethod(remove_tail_step)
+    
+    class cleanup:
+        cleanup_step = staticmethod(cleanup_step)
+        cleanup_advanced_step = staticmethod(cleanup_advanced_step)
+    
+    class conversion:
+        qonnx_to_finn_step = staticmethod(qonnx_to_finn_step)
+    
+    class hardware:
+        infer_hardware_step = staticmethod(infer_hardware_step)
+    
+    class metadata:
+        shell_metadata_handover_step = staticmethod(shell_metadata_handover_step)
+    
+    class optimizations:
+        pass  # Legacy placeholder
+    
+    class streamlining:
+        streamlining_step = staticmethod(streamlining_step)
+    
+    class validation:
+        generate_reference_io_step = staticmethod(generate_reference_io_step)
+    
+    # Operations (these would need to be imported from operations modules)
+    convert_to_hw_layers = None  # Not directly available in new structure
+    expand_norms = None  # Not directly available in new structure
+    shuffle_helpers = None  # Not directly available in new structure
+    
+except ImportError:
+    bert = cleanup = conversion = hardware = None
+    metadata = optimizations = streamlining = validation = None
+    convert_to_hw_layers = expand_norms = shuffle_helpers = None
+
+try:
+    # Hooks system (updated structure)
+    from .infrastructure.hooks import (
+        log_optimization_event, log_parameter_change, log_performance_metric,
+        log_strategy_decision, log_dse_event, get_recent_events, get_events_by_type,
+        register_event_handler, register_global_handler, HooksRegistry,
+        discover_all_plugins, get_plugin_by_name, install_hook_plugin
+    )
+    from .infrastructure.hooks.types import (
+        OptimizationEvent, EventHandler, SimpleMetric, ParameterChange,
+        EventTypes, HooksPlugin
+    )
+    
+    # Legacy compatibility
+    class events:
+        log_optimization_event = staticmethod(log_optimization_event)
+        log_parameter_change = staticmethod(log_parameter_change)
+        log_performance_metric = staticmethod(log_performance_metric)
+        get_recent_events = staticmethod(get_recent_events)
+        get_events_by_type = staticmethod(get_events_by_type)
+    
+    class hook_types:
+        OptimizationEvent = OptimizationEvent
+        EventHandler = EventHandler
+        SimpleMetric = SimpleMetric
+        ParameterChange = ParameterChange
+    
+    hook_examples = None  # Examples not directly exposed
+    
+except ImportError:
+    events = hook_types = hook_examples = None
+    
+    # Legacy compatibility
+    class events:
+        log_optimization_event = staticmethod(log_optimization_event)
+        log_parameter_change = staticmethod(log_parameter_change)
+        log_performance_metric = staticmethod(log_performance_metric)
+        get_recent_events = staticmethod(get_recent_events)
+        get_events_by_type = staticmethod(get_events_by_type)
+    
+    class hook_types:
+        OptimizationEvent = OptimizationEvent
+        EventHandler = EventHandler
+        SimpleMetric = SimpleMetric
+        ParameterChange = ParameterChange
+# New registry systems for auto-discovery and management
+try:
+    from .libraries.kernels import KernelRegistry, discover_all_kernels
+    from .libraries.transforms import TransformRegistry, discover_all_transforms  
+    from .libraries.analysis import AnalysisRegistry, discover_all_analysis_tools
+    from .libraries.automation import AutomationRegistry, discover_all_automation_tools
+    from libraries.blueprints import BlueprintLibraryRegistry, discover_all_blueprints
+    from .infrastructure.hooks import HooksRegistry, discover_all_plugins
+    
+    # Convenience function to discover all components
+    def discover_all_components():
+        """Discover all available BrainSmith components."""
+        return {
+            'kernels': discover_all_kernels(),
+            'transforms': discover_all_transforms(), 
+            'analysis_tools': discover_all_analysis_tools(),
+            'automation_tools': discover_all_automation_tools(),
+            'blueprints': discover_all_blueprints(),
+            'hooks_plugins': discover_all_plugins()
+        }
+        
+except ImportError:
+    KernelRegistry = TransformRegistry = AnalysisRegistry = None
+    AutomationRegistry = BlueprintLibraryRegistry = HooksRegistry = None
+    discover_all_components = lambda: {}
+    
+    hook_examples = None  # Examples not directly exposed
+    
+except ImportError:
+    events = hook_types = hook_examples = None
 
 
 def load_design_space(blueprint_name: str) -> DesignSpace:

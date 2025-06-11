@@ -19,7 +19,7 @@ def brainsmith():
     pass
 
 
-@brainsmith.command()
+@brainsmith.command(name="forge")
 @click.argument('model_path', type=click.Path(exists=True))
 @click.argument('blueprint_path', type=click.Path(exists=True))
 @click.option('--output', '-o', help='Output directory')
