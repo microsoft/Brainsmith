@@ -1,7 +1,7 @@
 """
 RTL to DataflowModel Converter.
 
-This module implements the core conversion pipeline from HWKernel (RTL parsing result)
+This module implements the core conversion pipeline from RTLParsingResult (lightweight RTL parsing result)
 to DataflowModel instances, bridging the gap between HWKG's RTL parsing and the
 Interface-Wise Dataflow Modeling system.
 
@@ -18,6 +18,7 @@ from ..core.dataflow_interface import DataflowInterface, DataflowInterfaceType, 
 from ..core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from .pragma_converter import PragmaToStrategyConverter
 from .interface_mapper import InterfaceMapper
+from ...tools.hw_kernel_gen.rtl_parser.data import RTLParsingResult
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class ConversionResult:
 
 class RTLDataflowConverter:
     """
-    Convert HWKernel to DataflowModel with complete pragma processing.
+    Convert RTLParsingResult to DataflowModel with complete pragma processing.
     
     This class implements the core integration between HWKG's RTL parsing
     and the Interface-Wise Dataflow Modeling system, enabling automatic
@@ -47,7 +48,7 @@ class RTLDataflowConverter:
     DataflowModel instances.
     
     Conversion Pipeline:
-    1. Extract interfaces from HWKernel
+    1. Extract interfaces from RTLParsingResult
     2. Apply pragma-based chunking strategies  
     3. Build DataflowInterface objects
     4. Create unified DataflowModel
@@ -58,21 +59,21 @@ class RTLDataflowConverter:
         self.pragma_converter = PragmaToStrategyConverter()
         self.interface_mapper = InterfaceMapper()
         
-    def convert(self, hw_kernel) -> ConversionResult:
+    def convert(self, rtl_result: RTLParsingResult) -> ConversionResult:
         """
-        Complete conversion pipeline from HWKernel to DataflowModel.
+        Complete conversion pipeline from RTLParsingResult to DataflowModel.
         
         Args:
-            hw_kernel: HWKernel instance from RTL parser
+            rtl_result: RTLParsingResult instance from RTL parser
             
         Returns:
             ConversionResult: Success/failure with DataflowModel or errors
         """
         try:
-            logger.info(f"Starting RTL to DataflowModel conversion for kernel: {hw_kernel.name}")
+            logger.info(f"Starting RTL to DataflowModel conversion for kernel: {rtl_result.name}")
             
-            # Step 1: Validate HWKernel input
-            validation_result = self._validate_hw_kernel(hw_kernel)
+            # Step 1: Validate RTLParsingResult input
+            validation_result = self._validate_rtl_result(rtl_result)
             if not validation_result.success:
                 return validation_result
                 
@@ -80,16 +81,16 @@ class RTLDataflowConverter:
             dataflow_interfaces = []
             conversion_errors = []
             
-            for interface_name, rtl_interface in hw_kernel.interfaces.items():
+            for interface_name, rtl_interface in rtl_result.interfaces.items():
                 logger.debug(f"Converting interface: {interface_name}")
                 
                 try:
                     # Find relevant pragmas for this interface
-                    interface_pragmas = self._find_interface_pragmas(rtl_interface, hw_kernel.pragmas)
+                    interface_pragmas = self._find_interface_pragmas(rtl_interface, rtl_result.pragmas)
                     
                     # Convert RTL interface to DataflowInterface
                     dataflow_interface = self._convert_interface(
-                        rtl_interface, interface_pragmas, hw_kernel
+                        rtl_interface, interface_pragmas, rtl_result
                     )
                     
                     if dataflow_interface:
@@ -115,14 +116,14 @@ class RTLDataflowConverter:
                 dataflow_model = DataflowModel(
                     interfaces=dataflow_interfaces,
                     parameters={
-                        "kernel_name": hw_kernel.name,
-                        "source_file": str(hw_kernel.source_file) if hw_kernel.source_file else None,
-                        "pragma_level": hw_kernel.pragma_sophistication_level,
-                        "conversion_warnings": hw_kernel.parsing_warnings
+                        "kernel_name": rtl_result.name,
+                        "source_file": str(rtl_result.source_file) if rtl_result.source_file else None,
+                        "pragma_level": rtl_result.pragma_sophistication_level,
+                        "conversion_warnings": rtl_result.parsing_warnings
                     }
                 )
                 
-                logger.info(f"Successfully created DataflowModel for kernel: {hw_kernel.name}")
+                logger.info(f"Successfully created DataflowModel for kernel: {rtl_result.name}")
                 
                 return ConversionResult(
                     dataflow_model=dataflow_model,
@@ -148,12 +149,12 @@ class RTLDataflowConverter:
                 errors=[error_msg]
             )
     
-    def _validate_hw_kernel(self, hw_kernel) -> ConversionResult:
+    def _validate_rtl_result(self, rtl_result: RTLParsingResult) -> ConversionResult:
         """
-        Validate HWKernel input for conversion compatibility.
+        Validate RTLParsingResult input for conversion compatibility.
         
         Args:
-            hw_kernel: HWKernel instance to validate
+            rtl_result: RTLParsingResult instance to validate
             
         Returns:
             ConversionResult: Validation result
@@ -162,21 +163,19 @@ class RTLDataflowConverter:
         warnings = []
         
         # Check required attributes
-        if not hasattr(hw_kernel, 'name') or not hw_kernel.name:
-            errors.append("HWKernel missing required 'name' attribute")
+        if not rtl_result.name:
+            errors.append("RTLParsingResult missing required 'name' field")
             
-        if not hasattr(hw_kernel, 'interfaces'):
-            errors.append("HWKernel missing required 'interfaces' attribute")
-        elif not hw_kernel.interfaces:
-            warnings.append("HWKernel has no interfaces defined")
+        if not rtl_result.interfaces:
+            warnings.append("RTLParsingResult has no interfaces defined")
             
-        if not hasattr(hw_kernel, 'pragmas'):
-            warnings.append("HWKernel has no 'pragmas' attribute - using empty list")
-            hw_kernel.pragmas = []
+        if rtl_result.pragmas is None:
+            warnings.append("RTLParsingResult has no 'pragmas' field - using empty list")
+            rtl_result.pragmas = []
             
         # Validate interface structure
-        if hasattr(hw_kernel, 'interfaces') and hw_kernel.interfaces:
-            for iface_name, iface in hw_kernel.interfaces.items():
+        if rtl_result.interfaces:
+            for iface_name, iface in rtl_result.interfaces.items():
                 if not hasattr(iface, 'type'):
                     errors.append(f"Interface {iface_name} missing 'type' attribute")
                 if not hasattr(iface, 'ports'):
@@ -202,7 +201,7 @@ class RTLDataflowConverter:
         
         Args:
             rtl_interface: RTL Interface object
-            all_pragmas: List of all pragmas from HWKernel
+            all_pragmas: List of all pragmas from RTLParsingResult
             
         Returns:
             List of pragmas relevant to this interface
@@ -223,14 +222,14 @@ class RTLDataflowConverter:
         
         return relevant_pragmas
     
-    def _convert_interface(self, rtl_interface, pragmas: List, hw_kernel) -> Optional[DataflowInterface]:
+    def _convert_interface(self, rtl_interface, pragmas: List, rtl_result: RTLParsingResult) -> Optional[DataflowInterface]:
         """
         Convert single RTL interface to DataflowInterface.
         
         Args:
             rtl_interface: RTL Interface object  
             pragmas: List of pragmas relevant to this interface
-            hw_kernel: Parent HWKernel for context
+            rtl_result: Parent RTLParsingResult for context
             
         Returns:
             DataflowInterface instance or None if conversion fails
@@ -258,7 +257,7 @@ class RTLDataflowConverter:
                 interface_type=dataflow_interface_type,
                 chunking_strategy=chunking_strategy,
                 dtype_constraint=dtype_constraint,
-                hw_kernel=hw_kernel
+                hw_kernel=rtl_result  # InterfaceMapper expects hw_kernel parameter
             )
             
             return dataflow_interface

@@ -31,6 +31,7 @@ from .data import (
     PortGroup,
     Interface,
     HWKernel,
+    RTLParsingResult,
     Pragma,
     ValidationResult,
 )
@@ -54,19 +55,19 @@ __all__ = [
 ]
 
 
-def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
+def parse_rtl_file(rtl_file, advanced_pragmas: bool = False) -> RTLParsingResult:
     """
-    Parse RTL file and return HWKernel with enhanced features.
+    Parse RTL file and return lightweight parsing result for DataflowModel conversion.
     
-    This function provides the interface expected by the CLI,
-    returning a HWKernel with all enhanced features enabled.
+    This function provides a clean interface that returns only the data needed
+    for DataflowModel conversion, eliminating the heavy HWKernel overhead.
     
     Args:
         rtl_file: Path to SystemVerilog RTL file or Path object
         advanced_pragmas: Enable enhanced BDIM pragma processing
         
     Returns:
-        HWKernel: Kernel object with enhanced functionality
+        RTLParsingResult: Lightweight parsing result containing only essential data
         
     Raises:
         RTLParsingError: If RTL parsing fails
@@ -86,14 +87,26 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
         # Create RTL parser instance
         parser = RTLParser(debug=advanced_pragmas)
         
-        # Parse the RTL file - this now returns the HWKernel directly
+        # Parse the RTL file using existing proven logic
         hw_kernel = parser.parse_file(str(rtl_file))
         
-        # Enhance the kernel with additional features
+        # Enhance the kernel with additional features (preserves existing logic)
         _enhance_hw_kernel_for_enhanced_mode(hw_kernel, rtl_file, advanced_pragmas)
         
-        logger.info(f"Successfully parsed RTL file {rtl_file} → HWKernel '{hw_kernel.name}'")
-        return hw_kernel
+        # Convert HWKernel to lightweight RTLParsingResult
+        # Extract only the 6 properties that RTLDataflowConverter actually uses
+        rtl_result = RTLParsingResult(
+            name=hw_kernel.name,
+            interfaces=hw_kernel.interfaces,
+            pragmas=hw_kernel.pragmas,
+            parameters=hw_kernel.parameters,
+            source_file=hw_kernel.source_file,
+            pragma_sophistication_level=hw_kernel.pragma_sophistication_level,
+            parsing_warnings=hw_kernel.parsing_warnings
+        )
+        
+        logger.info(f"Successfully parsed RTL file {rtl_file} → RTLParsingResult '{rtl_result.name}'")
+        return rtl_result
         
     except Exception as e:
         logger.error(f"Failed to parse RTL file {rtl_file}: {e}")

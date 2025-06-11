@@ -49,8 +49,8 @@ class UnifiedHWKGGenerator:
     Generate AutoHWCustomOp/AutoRTLBackend instances from DataflowModel.
     
     This class implements the unified HWKG approach where:
-    1. RTL is parsed to HWKernel
-    2. HWKernel is converted to DataflowModel  
+    1. RTL is parsed to RTLParsingResult
+    2. RTLParsingResult is converted to DataflowModel  
     3. Templates instantiate AutoHWCustomOp/AutoRTLBackend with DataflowModel
     4. Generated code uses mathematical foundation instead of placeholders
     
@@ -81,15 +81,15 @@ class UnifiedHWKGGenerator:
             logger.info(f"Starting unified generation for RTL file: {rtl_file}")
             
             # Step 1: Parse RTL file using existing RTL parser
-            hw_kernel = parse_rtl_file(rtl_file)
-            if not hw_kernel:
+            rtl_result = parse_rtl_file(rtl_file)
+            if not rtl_result:
                 return UnifiedGenerationResult(
                     success=False,
                     errors=[f"Failed to parse RTL file: {rtl_file}"]
                 )
             
-            # Step 2: Convert HWKernel to DataflowModel
-            conversion_result = self.rtl_converter.convert(hw_kernel)
+            # Step 2: Convert RTLParsingResult to DataflowModel
+            conversion_result = self.rtl_converter.convert(rtl_result)
             if not conversion_result.success:
                 return UnifiedGenerationResult(
                     success=False,
@@ -98,11 +98,11 @@ class UnifiedHWKGGenerator:
                 )
             
             dataflow_model = conversion_result.dataflow_model
-            logger.info(f"Successfully created DataflowModel for kernel: {hw_kernel.name}")
+            logger.info(f"Successfully created DataflowModel for kernel: {rtl_result.name}")
             
             # Step 3: Generate files using DataflowModel
             generation_result = self._generate_files(
-                hw_kernel, dataflow_model, output_dir, **kwargs
+                rtl_result, dataflow_model, output_dir, **kwargs
             )
             
             return generation_result
@@ -234,13 +234,13 @@ class UnifiedHWKGGenerator:
             logger.error(f"Failed to generate test suite: {str(e)}")
             return None
     
-    def _generate_files(self, hw_kernel, dataflow_model, output_dir: Path, 
+    def _generate_files(self, rtl_result, dataflow_model, output_dir: Path, 
                        **kwargs) -> UnifiedGenerationResult:
         """
         Generate all files for the kernel.
         
         Args:
-            hw_kernel: HWKernel from RTL parsing
+            rtl_result: RTLParsingResult from RTL parsing
             dataflow_model: DataflowModel instance
             output_dir: Output directory
             **kwargs: Additional options
@@ -253,7 +253,7 @@ class UnifiedHWKGGenerator:
         warnings = []
         
         try:
-            kernel_name = hw_kernel.name
+            kernel_name = rtl_result.name
             
             # Generate HWCustomOp
             hwcustomop_file = self.generate_hwcustomop(dataflow_model, kernel_name, output_dir)
