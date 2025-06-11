@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from brainsmith.tools.hw_kernel_gen.hkg import HardwareKernelGenerator, HardwareKernelGeneratorError
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import InterfaceType as RTLInterfaceType
-from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType, DataflowDataType
+from brainsmith.dataflow.core.interface_types import InterfaceType
+from brainsmith.dataflow.core.dataflow_interface import DataflowDataType
 from brainsmith.dataflow.core.validation import ValidationSeverity
 
 
@@ -353,11 +353,11 @@ test_configurations = [
         output_stream_iface = None
         
         for name, iface in interfaces.items():
-            if iface.type == RTLInterfaceType.GLOBAL_CONTROL:
+            if iface.type == InterfaceType.GLOBAL_CONTROL:
                 global_iface = iface
-            elif iface.type == RTLInterfaceType.AXI_LITE:
+            elif iface.type == InterfaceType.AXI_LITE:
                 axilite_iface = iface
-            elif iface.type == RTLInterfaceType.AXI_STREAM:
+            elif iface.type == InterfaceType.AXI_STREAM:
                 # Use interface name to determine direction - interface builder uses original prefixes
                 if name == "s_axis":  # Input stream interface
                     input_stream_iface = iface
@@ -398,10 +398,10 @@ test_configurations = [
         
         # Verify dataflow interfaces
         interface_types = [iface.interface_type for iface in hkg.dataflow_interfaces]
-        assert DataflowInterfaceType.INPUT in interface_types
-        assert DataflowInterfaceType.OUTPUT in interface_types
-        assert DataflowInterfaceType.CONFIG in interface_types
-        assert DataflowInterfaceType.CONTROL in interface_types
+        assert InterfaceType.INPUT in interface_types
+        assert InterfaceType.OUTPUT in interface_types
+        assert InterfaceType.CONFIG in interface_types
+        assert InterfaceType.CONTROL in interface_types
         
         # Verify interface naming
         interface_names = {iface.name for iface in hkg.dataflow_interfaces}
@@ -439,16 +439,16 @@ test_configurations = [
         
         # Verify BDIM pragma effects
         if s_axis_iface:
-            assert s_axis_iface.interface_type == DataflowInterfaceType.INPUT
+            assert s_axis_iface.interface_type == InterfaceType.INPUT
             # Verify BDIM pragma was applied (would have PE*32, PE in metadata)
             assert "tdim_override" in s_axis_iface.pragma_metadata or s_axis_iface.tDim is not None
         
         if m_axis_iface:
-            assert m_axis_iface.interface_type == DataflowInterfaceType.OUTPUT
+            assert m_axis_iface.interface_type == InterfaceType.OUTPUT
             
         # Verify WEIGHT pragma effects
         if s_axilite_iface:
-            assert s_axilite_iface.interface_type == DataflowInterfaceType.WEIGHT or DataflowInterfaceType.CONFIG
+            assert s_axilite_iface.interface_type == InterfaceType.WEIGHT or InterfaceType.CONFIG
         
         # Verify DATATYPE constraints
         for iface in [s_axis_iface, m_axis_iface]:
@@ -1148,7 +1148,7 @@ test_configurations = [
         
         # Validate specific interface types
         interface_types = {iface.type for iface in parsed_rtl.interfaces.values()}
-        expected_types = {RTLInterfaceType.AXI_STREAM, RTLInterfaceType.AXI_LITE, RTLInterfaceType.GLOBAL_CONTROL}
+        expected_types = {InterfaceType.AXI_STREAM, InterfaceType.AXI_LITE, InterfaceType.GLOBAL_CONTROL}
         assert expected_types.issubset(interface_types), f"Missing interface types. Found: {interface_types}"
         
         print(f"   • Interface types: {[t.name for t in interface_types]}")

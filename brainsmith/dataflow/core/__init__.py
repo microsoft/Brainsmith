@@ -5,9 +5,9 @@ This module provides the core components for interface-wise dataflow modeling,
 including base classes for auto-generated hardware operators.
 """
 
+from .interface_types import InterfaceType
 from .dataflow_interface import (
     DataflowInterface,
-    DataflowInterfaceType,
     DataflowDataType,
     DataTypeConstraint,
     ConstraintType,
@@ -47,9 +47,10 @@ from .class_naming import (
 )
 
 __all__ = [
+    # Interface types
+    "InterfaceType",
     # Interfaces
     "DataflowInterface",
-    "DataflowInterfaceType",
     "DataflowDataType",
     "DataTypeConstraint",
     "ConstraintType",

@@ -9,8 +9,9 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
 from brainsmith.dataflow.core.interface_metadata import (
-    InterfaceMetadata, InterfaceMetadataCollection, DataTypeConstraint, DataflowInterfaceType
+    InterfaceMetadata, InterfaceMetadataCollection, DataTypeConstraint
 )
+from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.block_chunking import (
     default_chunking, index_chunking, last_dim_chunking, DefaultChunkingStrategy, IndexBasedChunkingStrategy
 )
@@ -29,7 +30,7 @@ class TestEnhancedAutoHWCustomOp:
         # Create test interface metadata with default strategies
         self.input_metadata = InterfaceMetadata(
             name="in0_V_data_V",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[
                 DataTypeConstraint(finn_type="UINT8", bit_width=8),
                 DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True)
@@ -39,7 +40,7 @@ class TestEnhancedAutoHWCustomOp:
         
         self.output_metadata = InterfaceMetadata(
             name="out_V_data_V",
-            interface_type=DataflowInterfaceType.OUTPUT,
+            interface_type=InterfaceType.OUTPUT,
             allowed_datatypes=[
                 DataTypeConstraint(finn_type="UINT8", bit_width=8)
             ],
@@ -125,21 +126,21 @@ class TestEnhancedAutoHWCustomOp:
         # Create interfaces with different chunking strategies
         default_interface = InterfaceMetadata(
             name="default_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=default_chunking()
         )
         
         custom_interface = InterfaceMetadata(
             name="custom_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=index_chunking(-1, [16])
         )
         
         convenience_interface = InterfaceMetadata(
             name="conv_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=last_dim_chunking(32)
         )
@@ -268,13 +269,13 @@ class TestInterfaceMetadata:
         """Test creating interface metadata with chunking strategy."""
         metadata = InterfaceMetadata(
             name="test_interface",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=index_chunking(-1, [16])
         )
         
         assert metadata.name == "test_interface"
-        assert metadata.interface_type == DataflowInterfaceType.INPUT
+        assert metadata.interface_type == InterfaceType.INPUT
         assert len(metadata.allowed_datatypes) == 1
         assert isinstance(metadata.chunking_strategy, IndexBasedChunkingStrategy)
     
@@ -283,7 +284,7 @@ class TestInterfaceMetadata:
         with pytest.raises(ValueError, match="Interface name cannot be empty"):
             InterfaceMetadata(
                 name="",
-                interface_type=DataflowInterfaceType.INPUT,
+                interface_type=InterfaceType.INPUT,
                 allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)]
             )
     
@@ -291,7 +292,7 @@ class TestInterfaceMetadata:
         """Test getting default datatype."""
         metadata = InterfaceMetadata(
             name="test",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[
                 DataTypeConstraint(finn_type="UINT8", bit_width=8),
                 DataTypeConstraint(finn_type="UINT16", bit_width=16)

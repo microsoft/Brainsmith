@@ -14,7 +14,8 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
 from ..core.dataflow_model import DataflowModel
-from ..core.dataflow_interface import DataflowInterface, DataflowInterfaceType, DataflowDataType
+from ..core.interface_types import InterfaceType
+from ..core.dataflow_interface import DataflowInterface, DataflowDataType
 from ..core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from .pragma_converter import PragmaToStrategyConverter
 from .interface_mapper import InterfaceMapper
@@ -235,7 +236,7 @@ class RTLDataflowConverter:
             DataflowInterface instance or None if conversion fails
         """
         try:
-            # Step 1: Map RTL interface type to DataflowInterfaceType
+            # Step 1: Map RTL interface type to InterfaceType
             dataflow_interface_type = self.interface_mapper.map_interface_type(rtl_interface)
             
             # Step 2: Apply pragma-based chunking strategies

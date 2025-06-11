@@ -258,7 +258,7 @@ class TestDataflowInterfaceConverter:
         # The dataflow type inference should work even without full dataflow system
         with patch('brainsmith.tools.hw_kernel_gen.analysis.enhanced_interface_analyzer.DATAFLOW_AVAILABLE', True):
             # Mock the DataflowInterfaceType
-            with patch('brainsmith.tools.hw_kernel_gen.analysis.enhanced_interface_analyzer.DataflowInterfaceType') as mock_type:
+            with patch('brainsmith.tools.hw_kernel_gen.analysis.enhanced_interface_analyzer.InterfaceType') as mock_type:
                 mock_type.INPUT = "INPUT"
                 mock_type.OUTPUT = "OUTPUT"
                 mock_type.CONTROL = "CONTROL"

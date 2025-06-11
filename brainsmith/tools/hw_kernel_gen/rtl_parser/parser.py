@@ -18,7 +18,8 @@ from pathlib import Path
 from tree_sitter import Parser, Node
 
 from .data import HWKernel, Port, Parameter, Direction
-from .data import InterfaceType, Interface
+from brainsmith.dataflow.core.interface_types import InterfaceType
+from .data import Interface
 from .pragma import PragmaHandler, PragmaType, Pragma
 from .interface_builder import InterfaceBuilder
 from . import grammar

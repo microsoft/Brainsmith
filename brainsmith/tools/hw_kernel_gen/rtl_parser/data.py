@@ -27,6 +27,9 @@ from typing import List, Dict, Optional, Any, Callable
 from pathlib import Path
 import logging
 
+# Import unified interface types from dataflow module
+from brainsmith.dataflow.core.interface_types import InterfaceType
+
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
@@ -43,12 +46,8 @@ class Direction(Enum):
     OUTPUT = "output"
     INOUT = "inout"
 
-class InterfaceType(Enum):
-    """Enumeration of supported interface types."""
-    GLOBAL_CONTROL = "global"
-    AXI_STREAM = "axistream"
-    AXI_LITE = "axilite"
-    UNKNOWN = "unknown" # For ports not part of a recognized interface
+# Legacy InterfaceType enum removed - now using unified types from dataflow module
+# All interface type references now use brainsmith.dataflow.core.interface_types.InterfaceType
 
 class PragmaType(Enum):
     """Valid pragma types recognized by the parser."""
@@ -868,7 +867,7 @@ class HWKernel:
         Returns AXI-Stream interfaces for dataflow processing.
         """
         return [iface for iface in self.interfaces.values() 
-                if iface.type == InterfaceType.AXI_STREAM]
+                if iface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]]
     
     @property
     def chunking_strategies(self) -> Dict[str, Any]:
@@ -956,3 +955,561 @@ class RTLParsingResult:
             self.pragmas = []
         if self.parameters is None:
             self.parameters = []
+
+
+@dataclass
+class EnhancedRTLParsingResult:
+    """
+    Enhanced RTL parsing result with template-ready metadata generation.
+    
+    This eliminates DataflowModel overhead for template generation by providing
+    all template-required metadata directly from RTL parsing. DataflowModel is
+    reserved for runtime mathematical operations when actual tensor shapes and
+    parallelism are known.
+    
+    Key Features:
+    - Direct template context generation without DataflowModel conversion
+    - Interface categorization from RTL patterns (input/output/weight/config)
+    - Datatype constraint extraction from RTL port information
+    - Dimensional metadata from pragmas with sensible defaults
+    - Template-ready helper methods and caching
+    """
+    # Core RTL data (same as RTLParsingResult)
+    name: str
+    interfaces: Dict[str, 'Interface']
+    pragmas: List['Pragma']
+    parameters: List['Parameter']
+    source_file: Optional[Path] = None
+    pragma_sophistication_level: str = "simple"
+    parsing_warnings: List[str] = field(default_factory=list)
+    
+    # Template context caching (computed once, reused)
+    _template_context: Optional[Dict[str, Any]] = field(default=None, init=False, repr=False)
+    
+    def __post_init__(self):
+        """Ensure lists are properly initialized."""
+        if self.parsing_warnings is None:
+            self.parsing_warnings = []
+        if self.pragmas is None:
+            self.pragmas = []
+        if self.parameters is None:
+            self.parameters = []
+    
+    def get_template_context(self) -> Dict[str, Any]:
+        """
+        Get complete template context without DataflowModel conversion.
+        
+        This provides all template variables by processing RTL data directly,
+        eliminating the need for DataflowModel intermediate representation.
+        
+        Returns:
+            Dict containing all template variables needed for generation
+        """
+        if self._template_context is not None:
+            return self._template_context
+        
+        from datetime import datetime
+        
+        # Generate template context from RTL data
+        self._template_context = {
+            # Basic metadata
+            "kernel_name": self.name,
+            "class_name": self._generate_class_name(),
+            "source_file": str(self.source_file) if self.source_file else "",
+            "generation_timestamp": datetime.now().isoformat(),
+            
+            # Interface data with template compatibility
+            "interfaces": self._get_template_compatible_interfaces(),
+            "input_interfaces": self._get_interfaces_by_category("input"),
+            "output_interfaces": self._get_interfaces_by_category("output"),
+            "weight_interfaces": self._get_interfaces_by_category("weight"),
+            "config_interfaces": self._get_interfaces_by_category("config"),
+            "dataflow_interfaces": self._get_dataflow_interfaces(),
+            
+            # RTL parameters (already available)
+            "rtl_parameters": [
+                {
+                    "name": p.name,
+                    "param_type": p.param_type or "int",
+                    "default_value": p.default_value or 0,
+                    "template_param_name": f"${p.name.upper()}$"
+                }
+                for p in self.parameters
+            ],
+            
+            # Interface metadata (enhanced from RTL)
+            "interface_metadata": self._extract_interface_metadata(),
+            
+            # Dimensional metadata (from pragmas or defaults)
+            "dimensional_metadata": self._extract_dimensional_metadata(),
+            
+            # Summary statistics for templates
+            "dataflow_model_summary": {
+                "num_interfaces": len(self.interfaces),
+                "input_count": len(self._get_interfaces_by_category("input")),
+                "output_count": len(self._get_interfaces_by_category("output")),
+                "weight_count": len(self._get_interfaces_by_category("weight")),
+            },
+            
+            # Template-specific enhancements
+            "resource_estimation_required": self._has_resource_estimation_pragmas(),
+            "verification_required": self._has_verification_pragmas(),
+            "kernel_complexity": self._estimate_kernel_complexity(),
+            "kernel_type": self._infer_kernel_type(),
+            "weight_interfaces_count": len(self._get_interfaces_by_category("weight")),
+            "input_interfaces_count": len(self._get_interfaces_by_category("input")),
+            "output_interfaces_count": len(self._get_interfaces_by_category("output")),
+            "complexity_level": self._estimate_kernel_complexity(),
+            
+            # Boolean flags for template conditionals
+            "has_weights": len(self._get_interfaces_by_category("weight")) > 0,
+            "has_inputs": len(self._get_interfaces_by_category("input")) > 0,
+            "has_outputs": len(self._get_interfaces_by_category("output")) > 0,
+            
+            # Datatype and interface metadata
+            "datatype_constraints": self._extract_datatype_constraints(),
+            "interface_types": self._get_interface_types(),
+            "DataType": self._get_datatype_enum(),
+            
+            # Compiler data (placeholder - filled by generator)
+            "compiler_data": {},
+            
+            # Kernel object for RTL wrapper template compatibility
+            "kernel": {
+                "name": self.name,
+                "parameters": self.parameters
+            },
+            
+            # Interface list for RTL wrapper template
+            "interfaces_list": list(self.interfaces.values()),
+            
+            # Enum for RTL wrapper template
+            "InterfaceType": InterfaceType,
+        }
+        
+        return self._template_context
+    
+    def _generate_class_name(self) -> str:
+        """Generate Python class name from RTL module name."""
+        # Convert snake_case or kebab-case to PascalCase
+        parts = self.name.replace('-', '_').split('_')
+        return ''.join(word.capitalize() for word in parts)
+    
+    def _categorize_interfaces(self, category: str) -> List[Dict[str, Any]]:
+        """
+        Categorize interfaces using existing RTL Parser interface analysis.
+        
+        Args:
+            category: "input", "output", "weight", "config"
+            
+        Returns:
+            List of interface dictionaries with template-ready metadata
+        """
+        categorized = []
+        
+        for name, iface in self.interfaces.items():
+            # Use existing Interface.type and metadata instead of re-implementing
+            interface_category = self._map_rtl_interface_to_category(iface)
+            
+            if interface_category == category:
+                # Create enum-like object for interface_type compatibility
+                class InterfaceTypeObj:
+                    def __init__(self, value):
+                        self.value = value
+                        self.name = value
+                
+                # Create template-compatible interface object
+                class TemplateInterface:
+                    def __init__(self, name, iface, category, enhanced_result):
+                        self.name = name
+                        self.type = iface
+                        self.dataflow_type = category
+                        self.interface_type = InterfaceTypeObj(category.upper())
+                        self.rtl_type = iface.type.name
+                        self.ports = iface.ports
+                        self.metadata = iface.metadata
+                        self.wrapper_name = iface.wrapper_name or name
+                        self.dtype = enhanced_result._get_dtype_from_interface_metadata(iface)
+                        self.direction = iface.metadata.get('direction', 'unknown')
+                        self.protocol = enhanced_result._get_protocol_from_interface_type(iface.type)
+                        self.data_width_expr = iface.metadata.get('data_width_expr', '')
+                        # Dimensional information as direct attributes for templates
+                        self.tensor_dims = [128]  # Default tensor dimensions
+                        self.block_dims = [128]   # Default block dimensions  
+                        self.stream_dims = [1]    # Default stream dimensions
+                
+                interface_data = TemplateInterface(name, iface, category, self)
+                categorized.append(interface_data)
+        
+        return categorized
+    
+    def _map_rtl_interface_to_category(self, interface) -> str:
+        """Map RTL Parser Interface to template category using existing metadata."""
+        # Use existing Interface.type from RTL Parser with unified types
+        if interface.type == InterfaceType.CONFIG:
+            return "config"
+        elif interface.type == InterfaceType.CONTROL:
+            return "config"  # Global control is configuration  
+        elif interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+            # Use existing direction metadata from RTL Parser
+            direction = interface.metadata.get('direction')
+            if direction == Direction.INPUT:
+                return "input"
+            elif direction == Direction.OUTPUT:
+                return "output"
+            else:
+                # Fallback: use interface naming for direction
+                name = interface.name.lower()
+                if 's_axis' in name or 'slave' in name:
+                    return "input"
+                elif 'm_axis' in name or 'master' in name:
+                    return "output"
+                else:
+                    return "input"  # Default
+        else:
+            return "config"  # Unknown interfaces default to config
+    
+    def _get_dtype_from_interface_metadata(self, interface) -> Dict[str, Any]:
+        """Get datatype information from existing interface metadata."""
+        # Use existing width expressions from RTL Parser
+        data_width_expr = interface.metadata.get('data_width_expr', '')
+        
+        # Create template-compatible dtype object
+        class DTypeObj:
+            def __init__(self):
+                self.name = "FIXED"
+                self.value = "FIXED" 
+                self.finn_type = "FIXED"
+                self.bitwidth = data_width_expr
+                self.bit_width = data_width_expr
+                self.signed = False
+                self.base_types = ["FIXED"]  # Required by templates
+                self.base_type = "FIXED"     # Required by templates
+                self.min_bits = 8            # Required by templates
+                self.max_bits = 32           # Required by templates
+        
+        return DTypeObj()
+    
+    def _get_protocol_from_interface_type(self, interface_type) -> str:
+        """Get protocol name from RTL Parser InterfaceType."""
+        # Use unified InterfaceType protocol property
+        return interface_type.protocol
+    
+    def _get_dataflow_interfaces(self) -> List[Any]:
+        """Get AXI_STREAM interfaces for dataflow processing using existing RTL Parser data."""
+        # Use template-compatible interfaces and filter for AXI_STREAM only
+        template_interfaces = self._get_template_compatible_interfaces()
+        
+        dataflow_interfaces = []
+        for iface in template_interfaces:
+            # Check if it's a dataflow interface using unified properties
+            if iface.type.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+                dataflow_interfaces.append(iface)
+        
+        return dataflow_interfaces
+    
+    def _extract_interface_metadata(self) -> Dict[str, Any]:
+        """Extract interface metadata using existing RTL Parser data."""
+        metadata = {}
+        
+        for name, iface in self.interfaces.items():
+            metadata[name] = {
+                "axi_metadata": {
+                    "protocol": self._get_protocol_from_interface_type(iface.type),
+                    "data_width_expr": iface.metadata.get('data_width_expr', '')
+                },
+                "dtype_constraint": self._get_dtype_from_interface_metadata(iface),
+                "rtl_metadata": iface.metadata,  # Include original RTL Parser metadata
+                "interface_type": iface.type.value,
+                "direction": iface.metadata.get('direction', 'unknown')
+            }
+        
+        return metadata
+    
+    def _extract_data_width(self, interface) -> int:
+        """Extract data width from interface ports."""
+        if not hasattr(interface, 'ports') or not interface.ports:
+            return 8  # Default fallback
+        
+        # Look for TDATA or data ports
+        for port_name, port in interface.ports.items():
+            if any(pattern in port_name.lower() for pattern in ['tdata', 'data']):
+                try:
+                    # Parse width expressions like "[7:0]", "8", etc.
+                    width_str = port.width
+                    if width_str.isdigit():
+                        return int(width_str)
+                    # Handle [N:0] format
+                    import re
+                    match = re.search(r'\[(\d+):0\]', width_str)
+                    if match:
+                        return int(match.group(1)) + 1
+                except (ValueError, AttributeError):
+                    pass
+        
+        # Default fallback
+        return 8
+    
+    def _create_dtype_info(self, interface):
+        """Create dtype information object for templates."""
+        data_width = self._extract_data_width(interface)
+        
+        # Create a simple object with finn_type attribute
+        class DTypeInfo:
+            def __init__(self, width):
+                self.finn_type = f"UINT{width}"
+                self.base_type = "UINT"
+                self.base_types = ["UINT"]  # List for template compatibility
+                self.bitwidth = width
+                self.bit_width = width  # Template compatibility
+                self.signed = False
+                self.min_bits = width
+                self.max_bits = width
+                self.name = "UINT"
+                self.value = "UINT"
+        
+        return DTypeInfo(data_width)
+    
+    def _extract_datatype_constraints(self, interface) -> Dict[str, Any]:
+        """Extract datatype constraints from interface."""
+        data_width = self._extract_data_width(interface)
+        
+        return {
+            "finn_type": f"UINT{data_width}",
+            "base_type": "UINT",
+            "bitwidth": data_width,
+            "bit_width": data_width,  # Template compatibility
+            "signed": False,
+            "min_bits": data_width,
+            "max_bits": data_width,
+            "allowed_types": ["UINT"]
+        }
+    
+    def _get_default_tensor_dims(self, interface) -> List[int]:
+        """Get default tensor dimensions (can be overridden by pragmas)."""
+        # Check for BDIM pragmas first
+        for pragma in self.pragmas:
+            if (hasattr(pragma, 'parsed_data') and 
+                pragma.parsed_data.get('interface_name') == interface.name):
+                if hasattr(pragma, 'type') and pragma.type.name == 'BDIM':
+                    # Extract dimensions from pragma
+                    return pragma.parsed_data.get('tensor_dims', [128])
+        
+        # Default based on interface type
+        data_width = self._extract_data_width(interface)
+        return [data_width] if data_width > 1 else [128]
+    
+    def _get_default_block_dims(self, interface) -> List[int]:
+        """Get default block dimensions."""
+        return self._get_default_tensor_dims(interface)  # Default: process full tensor
+    
+    def _get_default_stream_dims(self, interface) -> List[int]:
+        """Get default stream dimensions."""
+        tensor_dims = self._get_default_tensor_dims(interface)
+        return [1] * len(tensor_dims)  # Default: minimal parallelism
+    
+    def _get_chunking_strategy(self, interface) -> Dict[str, Any]:
+        """Get chunking strategy for interface."""
+        return {
+            "type": "default",
+            "tensor_dims": self._get_default_tensor_dims(interface),
+            "block_dims": self._get_default_block_dims(interface)
+        }
+    
+    def _extract_dimensional_metadata(self) -> Dict[str, Any]:
+        """Extract dimensional metadata using existing RTL Parser pragma processing."""
+        metadata = {
+            "tensor_dims": {},      # Required by templates
+            "block_dims": {},       # Required by templates  
+            "stream_dims": {},      # Required by templates
+        }
+        
+        # Use existing Interface data for basic dimensions
+        for name, iface in self.interfaces.items():
+            if iface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:  # Use unified types for dataflow interfaces
+                # Use existing width expressions from RTL Parser
+                data_width_expr = iface.metadata.get('data_width_expr', '')
+                direction = iface.metadata.get('direction', 'unknown')
+                
+                metadata["tensor_dims"][name] = {
+                    "data_width_expr": data_width_expr,
+                    "direction": direction.value if hasattr(direction, 'value') else str(direction),
+                    "interface_type": iface.type.value
+                }
+        
+        # Use existing pragma processing from RTL Parser
+        for pragma in self.pragmas:
+            # Use existing pragma.type and pragma.parsed_data from RTL Parser
+            if hasattr(pragma, 'type') and hasattr(pragma.type, 'value'):
+                pragma_type = pragma.type.value
+                if pragma_type in ['bdim', 'tdim']:
+                    # Use existing parsed_data from RTL Parser pragma processing
+                    parsed_data = getattr(pragma, 'parsed_data', {})
+                    interface_name = parsed_data.get('interface_name')
+                    
+                    if interface_name:
+                        pragma_info = {
+                            "pragma_type": pragma_type,
+                            "parsed_data": parsed_data,
+                            "line_number": pragma.line_number
+                        }
+                        
+                        # Categorize based on pragma type
+                        if pragma_type == 'bdim':
+                            metadata["block_dims"][interface_name] = pragma_info
+                        elif pragma_type == 'tdim':
+                            metadata["tensor_dims"][interface_name] = pragma_info
+        
+        return metadata
+    
+    def _has_resource_estimation_pragmas(self) -> bool:
+        """Check if resource estimation is required."""
+        # Simple heuristic: enable for complex kernels
+        return len(self.interfaces) > 2 or len(self.parameters) > 5
+    
+    def _has_verification_pragmas(self) -> bool:
+        """Check if verification is required."""
+        # Simple heuristic: enable for kernels with pragmas
+        return len(self.pragmas) > 0
+    
+    def _estimate_kernel_complexity(self) -> str:
+        """Estimate kernel complexity for resource calculations."""
+        interface_count = len(self.interfaces)
+        param_count = len(self.parameters)
+        
+        if interface_count <= 2 and param_count <= 3:
+            return 'low'
+        elif interface_count <= 4 and param_count <= 6:
+            return 'medium'
+        else:
+            return 'high'
+    
+    def _get_interface_types(self) -> Dict[str, Any]:
+        """Get interface types mapping using existing RTL Parser data."""
+        return {name: self._map_rtl_interface_to_category(iface) 
+                for name, iface in self.interfaces.items()}
+    
+    def _get_datatype_enum(self):
+        """Get DataType enum for templates."""
+        # Create simple datatype object
+        class DataType:
+            FIXED = "fixed"
+            FLOAT = "float"
+            INT = "int"
+        return DataType
+    
+    def _extract_datatype_constraints(self) -> Dict[str, Any]:
+        """Extract datatype constraints using existing RTL Parser interface metadata."""
+        constraints = {}
+        for name, iface in self.interfaces.items():
+            if iface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:  # Use unified types for dataflow interfaces
+                # Use existing data width expressions from RTL Parser
+                data_width_expr = iface.metadata.get('data_width_expr', '')
+                constraints[name] = {
+                    "data_width_expr": data_width_expr,
+                    "signedness": "unsigned",  # RTL typically unsigned
+                    "datatype": "fixed"  # Default for RTL
+                }
+        return constraints
+    
+    def _infer_kernel_type(self) -> str:
+        """Infer kernel type from name for resource estimation."""
+        name_lower = self.name.lower()
+        if any(term in name_lower for term in ['matmul', 'gemm', 'dot']):
+            return 'matmul'
+        elif any(term in name_lower for term in ['conv', 'convolution']):
+            return 'conv'
+        elif any(term in name_lower for term in ['threshold', 'compare']):
+            return 'threshold'
+        elif any(term in name_lower for term in ['norm', 'batch', 'layer']):
+            return 'norm'
+        else:
+            return 'generic'
+    
+    def _get_template_compatible_interfaces(self) -> List[Any]:
+        """
+        Get interfaces in template-compatible format.
+        
+        This provides interfaces with the structure expected by templates,
+        including proper dataflow_type mapping and datatype constraints.
+        Templates expect interface objects with direct attribute access.
+        """
+        template_interfaces = []
+        
+        for name, iface in self.interfaces.items():
+            interface_category = self._map_rtl_interface_to_category(iface)
+            
+            # Create enum-like object for interface_type compatibility
+            class InterfaceTypeObj:
+                def __init__(self, value):
+                    self.value = value
+                    self.name = value  # Templates expect both .value and .name
+            
+            # Create template-compatible interface object (not dictionary)
+            class TemplateInterface:
+                def __init__(self, name, iface, category, enhanced_result):
+                    self.name = name
+                    self.type = iface  # Original RTL interface object
+                    self.dataflow_type = category
+                    self.interface_type = InterfaceTypeObj(category.upper())
+                    self.rtl_type = iface.type.name
+                    self.ports = iface.ports
+                    self.metadata = iface.metadata
+                    self.wrapper_name = iface.wrapper_name or name
+                    self.dtype = enhanced_result._get_dtype_from_interface_metadata(iface)
+                    self.direction = iface.metadata.get('direction', 'unknown')
+                    self.protocol = enhanced_result._get_protocol_from_interface_type(iface.type)
+                    self.data_width_expr = iface.metadata.get('data_width_expr', '')
+                    
+                    # Dimensional information as direct attributes for templates
+                    self.tensor_dims = [128]  # Default tensor dimensions
+                    self.block_dims = [128]   # Default block dimensions  
+                    self.stream_dims = [1]    # Default stream dimensions
+                    
+                    # Additional template-required attributes
+                    self.datatype_constraints = [self.dtype]
+                    self.constraints = {}
+                    self.axi_metadata = {
+                        "protocol": "axi_stream" if iface.type.name == "AXI_STREAM" else "axi_lite",
+                        "data_width_expr": iface.metadata.get('data_width_expr', '')
+                    }
+            
+            template_interface = TemplateInterface(name, iface, interface_category, self)
+            template_interfaces.append(template_interface)
+        
+        return template_interfaces
+    
+    def _get_interfaces_by_category(self, category: str) -> List[Any]:
+        """
+        Get interfaces filtered by category using template-compatible structure.
+        
+        Args:
+            category: "input", "output", "weight", "config"
+            
+        Returns:
+            List of template-compatible interface objects
+        """
+        template_interfaces = self._get_template_compatible_interfaces()
+        
+        # Filter by category using existing categorization
+        category_interfaces = []
+        for iface in template_interfaces:
+            # Use the dataflow_type from our template interface object
+            if iface.dataflow_type == category:
+                category_interfaces.append(iface)
+        
+        return category_interfaces
+
+
+# Conversion function from RTLParsingResult to EnhancedRTLParsingResult
+def create_enhanced_rtl_parsing_result(rtl_result: RTLParsingResult) -> EnhancedRTLParsingResult:
+    """Convert RTLParsingResult to EnhancedRTLParsingResult."""
+    return EnhancedRTLParsingResult(
+        name=rtl_result.name,
+        interfaces=rtl_result.interfaces,
+        pragmas=rtl_result.pragmas,
+        parameters=rtl_result.parameters,
+        source_file=rtl_result.source_file,
+        pragma_sophistication_level=rtl_result.pragma_sophistication_level,
+        parsing_warnings=rtl_result.parsing_warnings
+    )

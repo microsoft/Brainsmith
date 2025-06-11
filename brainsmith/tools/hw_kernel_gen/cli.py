@@ -13,7 +13,7 @@ from typing import List
 
 from .config import Config
 from .data import GenerationResult
-from .rtl_parser import parse_rtl_file, HWKernel
+from .rtl_parser import parse_rtl_file, parse_rtl_file_enhanced, HWKernel
 from .generators import HWCustomOpGenerator, RTLBackendGenerator, TestSuiteGenerator
 from .errors import HWKGError, CompilerDataError
 
@@ -74,9 +74,91 @@ def create_hw_kernel(config: Config) -> HWKernel:
     return hw_kernel
 
 
+def _load_compiler_data(config: Config) -> dict:
+    """Load compiler data from file."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("compiler_data", config.compiler_data_file)
+        if spec is None or spec.loader is None:
+            raise CompilerDataError(f"Could not load compiler data from {config.compiler_data_file}")
+        
+        compiler_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(compiler_module)
+        
+        if not hasattr(compiler_module, 'compiler_data'):
+            raise CompilerDataError(f"No 'compiler_data' variable found in {config.compiler_data_file}")
+        
+        return compiler_module.compiler_data
+        
+    except Exception as e:
+        raise CompilerDataError(f"Failed to load compiler data: {e}") from e
+
+
+def generate_all_enhanced(config: Config) -> GenerationResult:
+    """
+    Enhanced generation using direct RTL-to-templates pipeline.
+    
+    This bypasses HWKernel and DataflowModel conversion for improved performance.
+    """
+    try:
+        # Import here to avoid circular import
+        from ..unified_hwkg.generator import create_enhanced_generator
+        
+        # Create enhanced generator
+        generator = create_enhanced_generator()
+        
+        # Load compiler data
+        compiler_data = _load_compiler_data(config)
+        
+        # Use enhanced generation pipeline
+        unified_result = generator.generate_from_rtl(
+            rtl_file=config.rtl_file,
+            compiler_data=compiler_data,
+            output_dir=config.output_dir,
+            generate_wrapper=True,
+            generate_docs=config.debug  # Generate docs in debug mode
+        )
+        
+        # Convert to legacy GenerationResult format for CLI compatibility
+        result = GenerationResult(
+            generated_files=unified_result.generated_files,
+            success=unified_result.success,
+            complexity_level=config.complexity_level
+        )
+        
+        if unified_result.errors:
+            for error in unified_result.errors:
+                result.add_error(error)
+        
+        if unified_result.warnings:
+            for warning in unified_result.warnings:
+                result.add_warning(warning)
+        
+        if config.debug:
+            print(f"Enhanced generation completed: {len(unified_result.generated_files)} files")
+            for file_path in unified_result.generated_files:
+                print(f"Generated: {file_path}")
+        
+        return result
+        
+    except Exception as e:
+        result = GenerationResult(
+            generated_files=[], 
+            success=False,
+            complexity_level=config.complexity_level
+        )
+        result.add_error(f"Enhanced generation failed: {e}")
+        
+        if config.debug:
+            import traceback
+            traceback.print_exc()
+        
+        return result
+
+
 def generate_all(hw_kernel: HWKernel, config: Config) -> GenerationResult:
     """
-    Generate all output files with optional multi-phase execution.
+    Legacy generation using HWKernel (maintained for backward compatibility).
     
     Simple mode: Direct generation like hw_kernel_gen_simple
     Advanced mode: Optional multi-phase execution with stop points
@@ -298,23 +380,34 @@ Follows Interface-Wise Dataflow Modeling axioms for consistent terminology.
                 print("🔧 Multi-phase execution enabled")
             print()
         
-        # Create hardware kernel representation
-        hw_kernel = create_hw_kernel(config)
-        
-        if config.debug:
-            print(f"Created kernel: {hw_kernel.name} → {hw_kernel.class_name}")
-            print(f"Interfaces: {len(hw_kernel.interfaces)}")
-            print(f"Parameters: {len(hw_kernel.rtl_parameters)}")
-            print(f"Kernel type: {hw_kernel.kernel_type}")
-            print(f"Complexity: {hw_kernel.kernel_complexity}")
-            if hw_kernel.parsing_warnings:
-                print(f"⚠️  Parsing warnings: {len(hw_kernel.parsing_warnings)}")
-            print()
-        
-        # Generate all outputs
+        # Generate all outputs using enhanced approach by default
         if not config.multi_phase_execution:
             print("Generating files...")
-        result = generate_all(hw_kernel, config)
+        
+        # Try enhanced generation first (faster, no DataflowModel overhead)
+        try:
+            result = generate_all_enhanced(config)
+            if config.debug:
+                print("✨ Used enhanced generation pipeline (no DataflowModel conversion)")
+        except Exception as e:
+            if config.debug:
+                print(f"⚠️  Enhanced generation failed, falling back to legacy: {e}")
+            
+            # Fallback to legacy approach
+            hw_kernel = create_hw_kernel(config)
+            
+            if config.debug:
+                print(f"Created kernel: {hw_kernel.name} → {hw_kernel.class_name}")
+                print(f"Interfaces: {len(hw_kernel.interfaces)}")
+                print(f"Parameters: {len(hw_kernel.rtl_parameters)}")
+                print(f"Kernel type: {hw_kernel.kernel_type}")
+                print(f"Complexity: {hw_kernel.kernel_complexity}")
+                if hw_kernel.parsing_warnings:
+                    print(f"⚠️  Parsing warnings: {len(hw_kernel.parsing_warnings)}")
+                print("🔄 Using legacy generation pipeline")
+                print()
+            
+            result = generate_all(hw_kernel, config)
         
         # Report results with enhanced information
         if result.success:

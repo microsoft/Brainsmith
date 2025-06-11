@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Any, Optional, Union
 
+from .interface_types import InterfaceType
 from .validation import (
     ValidationError, 
     ValidationResult, 
@@ -23,13 +24,7 @@ from .validation import (
     validate_dimension_relationships
 )
 
-class DataflowInterfaceType(Enum):
-    """Interface type hierarchy for dataflow modeling"""
-    INPUT = "input"      # AXI-Stream input for activation data
-    OUTPUT = "output"    # AXI-Stream output for result data  
-    WEIGHT = "weight"    # AXI-Stream input for weight/parameter data
-    CONFIG = "config"    # AXI-Lite for runtime configuration
-    CONTROL = "control"  # Global control signals (clk, rst, etc.)
+# Legacy InterfaceType removed - use InterfaceType directly
 
 @dataclass
 class DataflowDataType:
@@ -157,7 +152,7 @@ class DataflowInterface:
       Example: [1,128,768] ÷ [1,8,96] = [1,16,8] chunks total
     """
     name: str                           # Interface identifier (e.g., "in0", "out0", "weights")
-    interface_type: DataflowInterfaceType  # INPUT, OUTPUT, WEIGHT interface type
+    interface_type: InterfaceType  # INPUT, OUTPUT, WEIGHT interface type
     tensor_dims: List[int]              # Full tensor dimensions: original input tensor shape
     block_dims: List[int]               # Block dimensions: processing chunk shape
     stream_dims: List[int]                     # Stream dimensions: elements per clock cycle (hardware parallelism)
@@ -342,7 +337,7 @@ class DataflowInterface:
         result.merge(constraint_result)
         
         # Add interface-specific validations based on type
-        if self.interface_type == DataflowInterfaceType.WEIGHT:
+        if self.interface_type == InterfaceType.WEIGHT:
             # Weight interfaces should have reasonable dimensions for hardware
             total_elements = self.calculate_total_elements()
             if total_elements > 1000000:  # 1M elements threshold
@@ -363,13 +358,13 @@ class DataflowInterface:
     
     def apply_parallelism(self, iPar: Optional[int] = None, wPar: Optional[int] = None) -> None:
         """Update stream_dims based on parallelism parameters"""
-        if self.interface_type == DataflowInterfaceType.INPUT and iPar is not None:
+        if self.interface_type == InterfaceType.INPUT and iPar is not None:
             if len(self.stream_dims) > 0:
                 self.stream_dims[0] = iPar
-        elif self.interface_type == DataflowInterfaceType.WEIGHT and wPar is not None:
+        elif self.interface_type == InterfaceType.WEIGHT and wPar is not None:
             if len(self.stream_dims) > 0:
                 self.stream_dims[0] = wPar
-        elif self.interface_type == DataflowInterfaceType.OUTPUT:
+        elif self.interface_type == InterfaceType.OUTPUT:
             # Output parallelism typically derived from input parallelism
             if iPar is not None and len(self.stream_dims) > 0:
                 self.stream_dims[0] = iPar
@@ -399,7 +394,7 @@ class DataflowInterface:
         """Generate AXI signal specifications for this interface"""
         signals = {}
         
-        if self.interface_type in [DataflowInterfaceType.INPUT, DataflowInterfaceType.WEIGHT]:
+        if self.interface_type in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
             # Slave AXI-Stream interface
             signals[f"{self.name}_TDATA"] = {
                 "direction": "input",
@@ -416,7 +411,7 @@ class DataflowInterface:
                 "width": 1, 
                 "description": f"Ready signal for {self.name}"
             }
-        elif self.interface_type == DataflowInterfaceType.OUTPUT:
+        elif self.interface_type == InterfaceType.OUTPUT:
             # Master AXI-Stream interface
             signals[f"{self.name}_TDATA"] = {
                 "direction": "output",
@@ -612,7 +607,7 @@ class DataflowInterface:
         return result
     
     @classmethod
-    def from_tensor_chunking(cls, name: str, interface_type: DataflowInterfaceType,
+    def from_tensor_chunking(cls, name: str, interface_type: InterfaceType,
                             original_shape: List[int], block_dims: List[int],
                             dtype: DataflowDataType, chunking_mode: str = "broadcast",
                             **kwargs) -> 'DataflowInterface':

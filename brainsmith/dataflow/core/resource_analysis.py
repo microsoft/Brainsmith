@@ -252,9 +252,8 @@ class ResourceAnalyzer:
         
         # Input/output buffers based on interface type
         if hasattr(interface, 'interface_type'):
-            from .dataflow_interface import DataflowInterfaceType
-            
-            if interface.interface_type == DataflowInterfaceType.INPUT:
+            from .interface_types import InterfaceType
+            if interface.interface_type == InterfaceType.INPUT:
                 # Input buffer needs to hold at least one block
                 block_elements = np.prod(interface.block_dims)
                 buffers["input_buffer_bits"] = block_elements * interface.dtype.bitwidth
@@ -263,12 +262,12 @@ class ResourceAnalyzer:
                 stream_elements = np.prod(interface.stream_dims)
                 buffers["stream_buffer_bits"] = stream_elements * interface.dtype.bitwidth
                 
-            elif interface.interface_type == DataflowInterfaceType.WEIGHT:
+            elif interface.interface_type == InterfaceType.WEIGHT:
                 # Weight buffer typically needs full weight storage
                 total_elements = interface.calculate_total_elements()
                 buffers["weight_buffer_bits"] = total_elements * interface.dtype.bitwidth
                 
-            elif interface.interface_type == DataflowInterfaceType.OUTPUT:
+            elif interface.interface_type == InterfaceType.OUTPUT:
                 # Output buffer for accumulation and streaming
                 block_elements = np.prod(interface.block_dims)
                 buffers["output_buffer_bits"] = block_elements * interface.dtype.bitwidth
@@ -280,19 +279,18 @@ class ResourceAnalyzer:
         compute = {}
         
         if hasattr(interface, 'interface_type'):
-            from .dataflow_interface import DataflowInterfaceType
-            
+            from .interface_types import InterfaceType
             # Estimate compute units based on parallelism
             parallelism = np.prod(interface.stream_dims)
             
-            if interface.interface_type == DataflowInterfaceType.INPUT:
+            if interface.interface_type == InterfaceType.INPUT:
                 compute["processing_elements"] = parallelism
                 
-            elif interface.interface_type == DataflowInterfaceType.WEIGHT:
+            elif interface.interface_type == InterfaceType.WEIGHT:
                 # Weight processing typically needs MAC units
                 compute["mac_units"] = parallelism
                 
-            elif interface.interface_type == DataflowInterfaceType.OUTPUT:
+            elif interface.interface_type == InterfaceType.OUTPUT:
                 compute["accumulator_units"] = parallelism
         
         return compute

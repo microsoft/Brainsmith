@@ -10,9 +10,10 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Interface as RTLInterface, InterfaceType as RTLInterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Interface as RTLInterface
+from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.dataflow_interface import (
-    DataflowInterface, DataflowInterfaceType, DataflowDataType, DataTypeConstraint
+    DataflowInterface, DataflowDataType, DataTypeConstraint
 )
 from brainsmith.dataflow.core.block_chunking import TensorChunking
 from brainsmith.dataflow.core.validation import ValidationError, ValidationSeverity
@@ -90,7 +91,7 @@ class RTLInterfaceConverter:
         Returns:
             DataflowInterface object or None if conversion not applicable
         """
-        # Step 1: Determine DataflowInterfaceType
+        # Step 1: Determine InterfaceType
         dataflow_type = self._map_interface_type(rtl_interface)
         if dataflow_type is None:
             logger.debug(f"Skipping interface '{rtl_interface.name}' - not a data interface")
@@ -133,32 +134,32 @@ class RTLInterfaceConverter:
             logger.error(f"Failed to create DataflowInterface for '{rtl_interface.name}': {e}")
             raise
     
-    def _map_interface_type(self, rtl_interface: RTLInterface) -> Optional[DataflowInterfaceType]:
+    def _map_interface_type(self, rtl_interface: RTLInterface) -> Optional[InterfaceType]:
         """
-        Map RTL interface type to DataflowInterfaceType.
+        Map RTL interface type to InterfaceType.
         
         Args:
             rtl_interface: RTL Parser Interface object
             
         Returns:
-            DataflowInterfaceType or None for non-data interfaces
+            InterfaceType or None for non-data interfaces
         """
-        if rtl_interface.type == RTLInterfaceType.GLOBAL_CONTROL:
-            return DataflowInterfaceType.CONTROL
-        elif rtl_interface.type == RTLInterfaceType.AXI_LITE:
-            return DataflowInterfaceType.CONFIG
-        elif rtl_interface.type == RTLInterfaceType.AXI_STREAM:
+        if rtl_interface.type == InterfaceType.CONTROL:
+            return InterfaceType.CONTROL
+        elif rtl_interface.type == InterfaceType.CONFIG:
+            return InterfaceType.CONFIG
+        elif rtl_interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             # Determine if INPUT, OUTPUT, or WEIGHT based on metadata
             if rtl_interface.metadata.get("is_weight"):
-                return DataflowInterfaceType.WEIGHT
+                return InterfaceType.WEIGHT
             elif "in" in rtl_interface.name.lower() or rtl_interface.name.startswith("s_"):
-                return DataflowInterfaceType.INPUT
+                return InterfaceType.INPUT
             elif "out" in rtl_interface.name.lower() or rtl_interface.name.startswith("m_"):
-                return DataflowInterfaceType.OUTPUT
+                return InterfaceType.OUTPUT
             else:
                 # Default to INPUT for ambiguous cases
                 logger.warning(f"Ambiguous AXI-Stream interface '{rtl_interface.name}', defaulting to INPUT")
-                return DataflowInterfaceType.INPUT
+                return InterfaceType.INPUT
         else:
             return None
     
@@ -238,13 +239,13 @@ class RTLInterfaceConverter:
         Returns:
             Tuple of default (tensor_dims, block_dims)
         """
-        if rtl_interface.type == RTLInterfaceType.AXI_STREAM:
+        if rtl_interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             # Default stream dimensions based on interface type
             if rtl_interface.metadata.get("is_weight"):
                 return [32], [16]  # Default weight dimensions
             else:
                 return [16], [8]   # Default activation dimensions
-        elif rtl_interface.type == RTLInterfaceType.AXI_LITE:
+        elif rtl_interface.type == InterfaceType.CONFIG:
             return [1], [1]        # Config interfaces are scalar
         else:
             return [1], [1]        # Control interfaces are scalar
@@ -316,7 +317,7 @@ class RTLInterfaceConverter:
                 )
         
         # Default datatype based on interface type
-        if rtl_interface.type == RTLInterfaceType.AXI_STREAM:
+        if rtl_interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             if rtl_interface.metadata.get("is_weight"):
                 # Default weight datatype
                 return DataflowDataType(base_type="INT", bitwidth=8, signed=True, finn_type="INT8")
@@ -371,7 +372,7 @@ class RTLInterfaceConverter:
         Returns:
             Default DataTypeConstraint
         """
-        if rtl_interface.type == RTLInterfaceType.AXI_STREAM:
+        if rtl_interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             # Flexible constraints for data interfaces
             return DataTypeConstraint(
                 base_types=["INT", "UINT", "FIXED"],
@@ -403,13 +404,13 @@ class RTLInterfaceConverter:
         axi_metadata = {}
         
         # Copy relevant metadata from RTL interface
-        if rtl_interface.type in [RTLInterfaceType.AXI_STREAM, RTLInterfaceType.AXI_LITE]:
+        if rtl_interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT, InterfaceType.CONFIG]:
             # Data width information
             if "data_width" in rtl_interface.metadata:
                 axi_metadata["data_width"] = rtl_interface.metadata["data_width"]
             
             # Address width for AXI-Lite
-            if rtl_interface.type == RTLInterfaceType.AXI_LITE and "address_width" in rtl_interface.metadata:
+            if rtl_interface.type == InterfaceType.CONFIG and "address_width" in rtl_interface.metadata:
                 axi_metadata["address_width"] = rtl_interface.metadata["address_width"]
             
             # Protocol-specific features
@@ -468,8 +469,8 @@ def validate_conversion_result(dataflow_interfaces: List[DataflowInterface]) -> 
     errors = []
     
     # Check for required interface types
-    input_interfaces = [iface for iface in dataflow_interfaces if iface.interface_type == DataflowInterfaceType.INPUT]
-    output_interfaces = [iface for iface in dataflow_interfaces if iface.interface_type == DataflowInterfaceType.OUTPUT]
+    input_interfaces = [iface for iface in dataflow_interfaces if iface.interface_type == InterfaceType.INPUT]
+    output_interfaces = [iface for iface in dataflow_interfaces if iface.interface_type == InterfaceType.OUTPUT]
     
     if not input_interfaces:
         errors.append(ValidationError(

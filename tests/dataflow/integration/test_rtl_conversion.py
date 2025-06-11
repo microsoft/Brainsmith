@@ -7,9 +7,10 @@ and the Dataflow Framework.
 
 import pytest
 from unittest.mock import Mock, patch
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Interface as RTLInterface, InterfaceType as RTLInterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Interface as RTLInterface
+from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.integration.rtl_conversion import RTLInterfaceConverter, validate_conversion_result
-from brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType, DataflowDataType, DataTypeConstraint
+from brainsmith.dataflow.core.dataflow_interface import DataflowDataType, DataTypeConstraint
 
 
 class TestRTLInterfaceConverter:
@@ -23,51 +24,51 @@ class TestRTLInterfaceConverter:
         """Test mapping AXI-Stream to INPUT interface type."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "in0"
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {}
         
         interface_type = self.converter._map_interface_type(rtl_interface)
-        assert interface_type == DataflowInterfaceType.INPUT
+        assert interface_type == InterfaceType.INPUT
     
     def test_interface_type_mapping_axi_stream_output(self):
         """Test mapping AXI-Stream to OUTPUT interface type."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "out0"
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {}
         
         interface_type = self.converter._map_interface_type(rtl_interface)
-        assert interface_type == DataflowInterfaceType.OUTPUT
+        assert interface_type == InterfaceType.OUTPUT
     
     def test_interface_type_mapping_axi_stream_weight(self):
         """Test mapping AXI-Stream with weight metadata to WEIGHT interface type."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "weights"
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {"is_weight": True}
         
         interface_type = self.converter._map_interface_type(rtl_interface)
-        assert interface_type == DataflowInterfaceType.WEIGHT
+        assert interface_type == InterfaceType.WEIGHT
     
     def test_interface_type_mapping_axi_lite(self):
         """Test mapping AXI-Lite to CONFIG interface type."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "s_axi_control"
-        rtl_interface.type = RTLInterfaceType.AXI_LITE
+        rtl_interface.type = InterfaceType.AXI_LITE
         rtl_interface.metadata = {}
         
         interface_type = self.converter._map_interface_type(rtl_interface)
-        assert interface_type == DataflowInterfaceType.CONFIG
+        assert interface_type == InterfaceType.CONFIG
     
     def test_interface_type_mapping_global_control(self):
         """Test mapping Global Control to CONTROL interface type."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "global"
-        rtl_interface.type = RTLInterfaceType.GLOBAL_CONTROL
+        rtl_interface.type = InterfaceType.GLOBAL_CONTROL
         rtl_interface.metadata = {}
         
         interface_type = self.converter._map_interface_type(rtl_interface)
-        assert interface_type == DataflowInterfaceType.CONTROL
+        assert interface_type == InterfaceType.CONTROL
     
     def test_dimension_extraction_tdim_override(self):
         """Test dimension extraction with TDIM pragma override."""
@@ -103,7 +104,7 @@ class TestRTLInterfaceConverter:
         """Test default dimension extraction for interfaces without metadata."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "in0"
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {}
         
         qDim, tDim = self.converter._extract_dimensions(rtl_interface, {})
@@ -115,7 +116,7 @@ class TestRTLInterfaceConverter:
     def test_datatype_extraction_default(self):
         """Test default datatype extraction."""
         rtl_interface = Mock(spec=RTLInterface)
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {}
         
         dtype = self.converter._extract_datatype(rtl_interface)
@@ -166,7 +167,7 @@ class TestRTLInterfaceConverter:
     def test_datatype_constraints_default(self):
         """Test default datatype constraint generation."""
         rtl_interface = Mock(spec=RTLInterface)
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {}
         
         constraints = self.converter._extract_datatype_constraints(rtl_interface)
@@ -181,7 +182,7 @@ class TestRTLInterfaceConverter:
     def test_axi_metadata_extraction(self):
         """Test AXI metadata extraction."""
         rtl_interface = Mock(spec=RTLInterface)
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {
             "data_width": 64,
             "has_tlast": True,
@@ -198,7 +199,7 @@ class TestRTLInterfaceConverter:
         """Test complete single interface conversion."""
         rtl_interface = Mock(spec=RTLInterface)
         rtl_interface.name = "in0"
-        rtl_interface.type = RTLInterfaceType.AXI_STREAM
+        rtl_interface.type = InterfaceType.AXI_STREAM
         rtl_interface.metadata = {
             "tdim_override": [32],
             "qdim_override": [32],  # Add qDim override to satisfy validation
@@ -213,7 +214,7 @@ class TestRTLInterfaceConverter:
         
         assert dataflow_interface is not None
         assert dataflow_interface.name == "in0"
-        assert dataflow_interface.interface_type == DataflowInterfaceType.INPUT
+        assert dataflow_interface.interface_type == InterfaceType.INPUT
         assert dataflow_interface.block_dims == [32]
         assert len(dataflow_interface.allowed_datatypes) == 1
         assert dataflow_interface.allowed_datatypes[0].base_types == ["INT"]
@@ -225,21 +226,21 @@ class TestRTLInterfaceConverter:
         # Create input interface
         input_interface = Mock(spec=RTLInterface)
         input_interface.name = "in0"
-        input_interface.type = RTLInterfaceType.AXI_STREAM
+        input_interface.type = InterfaceType.AXI_STREAM
         input_interface.metadata = {}
         rtl_interfaces["in0"] = input_interface
         
         # Create output interface
         output_interface = Mock(spec=RTLInterface)
         output_interface.name = "out0"
-        output_interface.type = RTLInterfaceType.AXI_STREAM
+        output_interface.type = InterfaceType.AXI_STREAM
         output_interface.metadata = {}
         rtl_interfaces["out0"] = output_interface
         
         # Create config interface
         config_interface = Mock(spec=RTLInterface)
         config_interface.name = "s_axi_control"
-        config_interface.type = RTLInterfaceType.AXI_LITE
+        config_interface.type = InterfaceType.AXI_LITE
         config_interface.metadata = {}
         rtl_interfaces["config"] = config_interface
         
@@ -249,9 +250,9 @@ class TestRTLInterfaceConverter:
         
         # Verify interface types
         interface_types = [iface.interface_type for iface in dataflow_interfaces]
-        assert DataflowInterfaceType.INPUT in interface_types
-        assert DataflowInterfaceType.OUTPUT in interface_types
-        assert DataflowInterfaceType.CONFIG in interface_types
+        assert InterfaceType.INPUT in interface_types
+        assert InterfaceType.OUTPUT in interface_types
+        assert InterfaceType.CONFIG in interface_types
 
 
 class TestConversionValidation:
@@ -263,13 +264,13 @@ class TestConversionValidation:
         
         # Create input interface
         input_interface = Mock()
-        input_interface.interface_type = DataflowInterfaceType.INPUT
+        input_interface.interface_type = InterfaceType.INPUT
         input_interface.validate_constraints.return_value = []
         dataflow_interfaces.append(input_interface)
         
         # Create output interface
         output_interface = Mock()
-        output_interface.interface_type = DataflowInterfaceType.OUTPUT
+        output_interface.interface_type = InterfaceType.OUTPUT
         output_interface.validate_constraints.return_value = []
         dataflow_interfaces.append(output_interface)
         
@@ -282,7 +283,7 @@ class TestConversionValidation:
         
         # Only create output interface
         output_interface = Mock()
-        output_interface.interface_type = DataflowInterfaceType.OUTPUT
+        output_interface.interface_type = InterfaceType.OUTPUT
         output_interface.validate_constraints.return_value = []
         dataflow_interfaces.append(output_interface)
         
@@ -298,7 +299,7 @@ class TestConversionValidation:
         
         # Only create input interface
         input_interface = Mock()
-        input_interface.interface_type = DataflowInterfaceType.INPUT
+        input_interface.interface_type = InterfaceType.INPUT
         input_interface.validate_constraints.return_value = []
         dataflow_interfaces.append(input_interface)
         
@@ -316,7 +317,7 @@ class TestConversionValidation:
         
         # Create interface with validation errors
         input_interface = Mock()
-        input_interface.interface_type = DataflowInterfaceType.INPUT
+        input_interface.interface_type = InterfaceType.INPUT
         input_interface.validate_constraints.return_value = [
             ValidationError(
                 component="test_interface",

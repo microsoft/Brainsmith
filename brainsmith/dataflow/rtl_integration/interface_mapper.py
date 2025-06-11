@@ -12,7 +12,8 @@ the interface mapping component of the RTL → DataflowInterface → FINN pipeli
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 
-from ..core.dataflow_interface import DataflowInterface, DataflowInterfaceType, DataflowDataType
+from ..core.interface_types import InterfaceType
+from ..core.dataflow_interface import DataflowInterface, DataflowDataType
 from ..core.interface_metadata import DataTypeConstraint
 from ..core.block_chunking import ChunkingStrategy, DefaultChunkingStrategy
 
@@ -28,7 +29,7 @@ class InterfaceMapper:
     inference, and integration with pragma-derived chunking strategies.
     
     Responsibilities:
-    - Map RTL interface types to DataflowInterfaceType enum
+    - Map RTL interface types to InterfaceType enum
     - Infer default tensor shapes from RTL port information
     - Integrate chunking strategies from pragma conversion
     - Apply datatype constraints from pragma conversion
@@ -37,12 +38,12 @@ class InterfaceMapper:
     
     def __init__(self):
         """Initialize interface mapper."""
-        # RTL interface type to DataflowInterfaceType mapping
-        self.interface_type_mapping = {
-            'AXI_STREAM': DataflowInterfaceType.INPUT,    # Default AXI-Stream to INPUT
-            'GLOBAL_CONTROL': DataflowInterfaceType.CONFIG,
-            'AXI_LITE': DataflowInterfaceType.CONFIG,
-            'UNKNOWN': DataflowInterfaceType.INPUT        # Default unknown to INPUT
+        # Protocol to InterfaceType mapping (for legacy protocol strings)
+        self.protocol_type_mapping = {
+            'axi_stream': InterfaceType.INPUT,     # Default AXI-Stream to INPUT
+            'global_control': InterfaceType.CONTROL,
+            'axi_lite': InterfaceType.CONFIG,
+            'unknown': InterfaceType.INPUT         # Default unknown to INPUT
         }
         
         # Port pattern mapping for interface type inference
@@ -53,15 +54,15 @@ class InterfaceMapper:
             'config': ['config', 'ctrl', 'control', 'enable', 'start', 'ap_']
         }
     
-    def map_interface_type(self, rtl_interface) -> DataflowInterfaceType:
+    def map_interface_type(self, rtl_interface) -> InterfaceType:
         """
-        Map RTL interface type to DataflowInterfaceType.
+        Map RTL interface type to InterfaceType.
         
         Args:
             rtl_interface: RTL Interface object from parser
             
         Returns:
-            DataflowInterfaceType: Mapped interface type
+            InterfaceType: Mapped interface type
         """
         try:
             # Get RTL interface type
@@ -69,21 +70,21 @@ class InterfaceMapper:
             
             # Check for weight interface hints in metadata or name
             if self._is_weight_interface(rtl_interface):
-                return DataflowInterfaceType.WEIGHT
+                return InterfaceType.WEIGHT
             
             # Check for output interface hints
             if self._is_output_interface(rtl_interface):
-                return DataflowInterfaceType.OUTPUT
+                return InterfaceType.OUTPUT
                 
-            # Use default mapping
-            mapped_type = self.interface_type_mapping.get(rtl_type, DataflowInterfaceType.INPUT)
+            # Use default mapping from protocol_type_mapping
+            mapped_type = self.protocol_type_mapping.get(rtl_type, InterfaceType.INPUT)
             
-            logger.debug(f"Mapped RTL interface type '{rtl_type}' to DataflowInterfaceType.{mapped_type.name}")
+            logger.debug(f"Mapped RTL interface type '{rtl_type}' to InterfaceType.{mapped_type.name}")
             return mapped_type
             
         except Exception as e:
             logger.warning(f"Failed to map interface type for {rtl_interface.name}: {str(e)}")
-            return DataflowInterfaceType.INPUT  # Safe default
+            return InterfaceType.INPUT  # Safe default
     
     def _is_weight_interface(self, rtl_interface) -> bool:
         """Check if RTL interface should be mapped to WEIGHT type."""
@@ -203,7 +204,7 @@ class InterfaceMapper:
         
         return None
     
-    def create_dataflow_interface(self, rtl_interface, interface_type: DataflowInterfaceType,
+    def create_dataflow_interface(self, rtl_interface, interface_type: InterfaceType,
                                  chunking_strategy: Optional[ChunkingStrategy] = None,
                                  dtype_constraint: Optional[DataTypeConstraint] = None,
                                  hw_kernel=None) -> Optional[DataflowInterface]:
@@ -212,7 +213,7 @@ class InterfaceMapper:
         
         Args:
             rtl_interface: RTL Interface object
-            interface_type: Mapped DataflowInterfaceType
+            interface_type: Mapped InterfaceType
             chunking_strategy: ChunkingStrategy from pragma conversion (optional)
             dtype_constraint: DataTypeConstraint from pragma conversion (optional)
             hw_kernel: Parent HWKernel for context (optional)
@@ -278,13 +279,13 @@ class InterfaceMapper:
             return None
     
     def create_interface_with_defaults(self, interface_name: str, 
-                                     interface_type: DataflowInterfaceType) -> DataflowInterface:
+                                     interface_type: InterfaceType) -> DataflowInterface:
         """
         Create DataflowInterface with sensible defaults.
         
         Args:
             interface_name: Name of the interface
-            interface_type: DataflowInterfaceType
+            interface_type: InterfaceType
             
         Returns:
             DataflowInterface with default configuration

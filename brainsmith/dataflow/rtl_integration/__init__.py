@@ -45,11 +45,11 @@ def create_interface_metadata(name: str, interface_type: str,
         InterfaceMetadata: Complete interface metadata instance
     """
     from ..core.interface_metadata import InterfaceMetadata, DataTypeConstraint
-    from ..core.dataflow_interface import DataflowInterfaceType
+    from ..core.interface_types import InterfaceType 
     
     # Convert string interface type to enum
     if isinstance(interface_type, str):
-        interface_type = DataflowInterfaceType(interface_type)
+        interface_type = InterfaceType(interface_type)
     
     return InterfaceMetadata(
         name=name,

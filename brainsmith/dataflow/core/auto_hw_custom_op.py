@@ -10,7 +10,8 @@ import numpy as np
 from typing import Dict, Any, List, Optional, Tuple, Union
 from .class_naming import generate_class_name
 from .dataflow_model import DataflowModel, ParallelismConfiguration
-from .dataflow_interface import DataflowInterface, DataflowInterfaceType, DataflowDataType
+from .interface_types import InterfaceType
+from .dataflow_interface import DataflowInterface, DataflowDataType
 from .interface_metadata import InterfaceMetadata, InterfaceMetadataCollection, DataTypeConstraint
 
 # Try to import FINN, but make it optional for development

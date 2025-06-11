@@ -7,7 +7,7 @@ static dictionaries in generated AutoHWCustomOp classes.
 
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
-from .dataflow_interface import DataflowInterfaceType
+from .interface_types import InterfaceType
 from .block_chunking import ChunkingStrategy, default_chunking
 
 
@@ -68,7 +68,7 @@ class InterfaceMetadata:
     a dataflow interface with pure computational properties and chunking strategy.
     """
     name: str
-    interface_type: DataflowInterfaceType
+    interface_type: InterfaceType
     allowed_datatypes: List[DataTypeConstraint]
     chunking_strategy: ChunkingStrategy = field(default_factory=default_chunking)
     default_layout: Optional[str] = None
@@ -105,7 +105,7 @@ class InterfaceMetadata:
         # Convert interface type
         iface_type_str = interface_dict.get("interface_type", "INPUT")
         if isinstance(iface_type_str, str):
-            interface_type = DataflowInterfaceType(iface_type_str.upper())
+            interface_type = InterfaceType(iface_type_str.upper())
         else:
             interface_type = iface_type_str
         
@@ -159,25 +159,25 @@ class InterfaceMetadataCollection:
                 return iface
         return None
     
-    def get_by_type(self, interface_type: DataflowInterfaceType) -> List[InterfaceMetadata]:
+    def get_by_type(self, interface_type: InterfaceType) -> List[InterfaceMetadata]:
         """Get all interfaces of a specific type."""
         return [iface for iface in self.interfaces if iface.interface_type == interface_type]
     
     def get_input_interfaces(self) -> List[InterfaceMetadata]:
         """Get all input interfaces."""
-        return self.get_by_type(DataflowInterfaceType.INPUT)
+        return self.get_by_type(InterfaceType.INPUT)
     
     def get_output_interfaces(self) -> List[InterfaceMetadata]:
         """Get all output interfaces."""
-        return self.get_by_type(DataflowInterfaceType.OUTPUT)
+        return self.get_by_type(InterfaceType.OUTPUT)
     
     def get_weight_interfaces(self) -> List[InterfaceMetadata]:
         """Get all weight interfaces."""
-        return self.get_by_type(DataflowInterfaceType.WEIGHT)
+        return self.get_by_type(InterfaceType.WEIGHT)
     
     def get_config_interfaces(self) -> List[InterfaceMetadata]:
         """Get all config interfaces."""
-        return self.get_by_type(DataflowInterfaceType.CONFIG)
+        return self.get_by_type(InterfaceType.CONFIG)
     
     def interface_names(self) -> List[str]:
         """Get list of all interface names."""

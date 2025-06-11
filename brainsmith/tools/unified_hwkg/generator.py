@@ -18,8 +18,9 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from ...dataflow.rtl_integration import RTLDataflowConverter
-from ..hw_kernel_gen.rtl_parser import parse_rtl_file
+from ..hw_kernel_gen.rtl_parser import parse_rtl_file, parse_rtl_file_enhanced
 from ..hw_kernel_gen.data import GenerationResult
+from ..hw_kernel_gen.templates.direct_renderer import DirectTemplateRenderer
 from .template_system import create_template_system
 
 logger = logging.getLogger(__name__)
@@ -46,22 +47,36 @@ class UnifiedGenerationResult:
 
 class UnifiedHWKGGenerator:
     """
-    Generate AutoHWCustomOp/AutoRTLBackend instances from DataflowModel.
+    Generate AutoHWCustomOp/AutoRTLBackend instances from RTL files.
     
-    This class implements the unified HWKG approach where:
-    1. RTL is parsed to RTLParsingResult
-    2. RTLParsingResult is converted to DataflowModel  
-    3. Templates instantiate AutoHWCustomOp/AutoRTLBackend with DataflowModel
-    4. Generated code uses mathematical foundation instead of placeholders
+    This class supports two generation approaches:
     
-    This eliminates the need for complex template generation while providing
-    the same functionality through the inheritance-based approach.
+    1. Legacy DataflowModel approach (default):
+       RTL → RTLParsingResult → DataflowModel → Templates
+       
+    2. Enhanced direct approach (enhanced=True):
+       RTL → EnhancedRTLParsingResult → Templates (no DataflowModel conversion)
+    
+    The enhanced approach eliminates DataflowModel overhead for template
+    generation while preserving all functionality.
     """
     
-    def __init__(self):
-        """Initialize unified HWKG generator."""
-        self.rtl_converter = RTLDataflowConverter()
-        self.template_loader, self.context_builder = create_template_system()
+    def __init__(self, enhanced: bool = True):
+        """
+        Initialize unified HWKG generator.
+        
+        Args:
+            enhanced: Use enhanced direct template generation (default: True)
+        """
+        self.enhanced = enhanced
+        
+        if self.enhanced:
+            # Enhanced approach: direct template rendering
+            self.direct_renderer = DirectTemplateRenderer()
+        else:
+            # Legacy approach: DataflowModel-based rendering
+            self.rtl_converter = RTLDataflowConverter()
+            self.template_loader, self.context_builder = create_template_system()
         
     def generate_from_rtl(self, rtl_file: Path, compiler_data: Dict[str, Any], 
                          output_dir: Path, **kwargs) -> UnifiedGenerationResult:
@@ -78,35 +93,11 @@ class UnifiedHWKGGenerator:
             UnifiedGenerationResult: Complete generation results
         """
         try:
-            logger.info(f"Starting unified generation for RTL file: {rtl_file}")
-            
-            # Step 1: Parse RTL file using existing RTL parser
-            rtl_result = parse_rtl_file(rtl_file)
-            if not rtl_result:
-                return UnifiedGenerationResult(
-                    success=False,
-                    errors=[f"Failed to parse RTL file: {rtl_file}"]
-                )
-            
-            # Step 2: Convert RTLParsingResult to DataflowModel
-            conversion_result = self.rtl_converter.convert(rtl_result)
-            if not conversion_result.success:
-                return UnifiedGenerationResult(
-                    success=False,
-                    errors=[f"RTL to DataflowModel conversion failed"] + conversion_result.errors,
-                    warnings=conversion_result.warnings
-                )
-            
-            dataflow_model = conversion_result.dataflow_model
-            logger.info(f"Successfully created DataflowModel for kernel: {rtl_result.name}")
-            
-            # Step 3: Generate files using DataflowModel
-            generation_result = self._generate_files(
-                rtl_result, dataflow_model, output_dir, **kwargs
-            )
-            
-            return generation_result
-            
+            if self.enhanced:
+                return self._generate_enhanced(rtl_file, compiler_data, output_dir, **kwargs)
+            else:
+                return self._generate_legacy(rtl_file, compiler_data, output_dir, **kwargs)
+                
         except Exception as e:
             error_msg = f"Unexpected error during unified generation: {str(e)}"
             logger.error(error_msg)
@@ -114,6 +105,109 @@ class UnifiedHWKGGenerator:
                 success=False,
                 errors=[error_msg]
             )
+    
+    def _generate_enhanced(self, rtl_file: Path, compiler_data: Dict[str, Any], 
+                          output_dir: Path, **kwargs) -> UnifiedGenerationResult:
+        """
+        Enhanced generation pipeline using EnhancedRTLParsingResult.
+        
+        This bypasses DataflowModel conversion for template generation,
+        providing significant performance improvement.
+        """
+        logger.info(f"Starting enhanced generation for RTL file: {rtl_file}")
+        
+        # Step 1: Parse RTL file to enhanced result
+        enhanced_result = parse_rtl_file_enhanced(rtl_file)
+        if not enhanced_result:
+            return UnifiedGenerationResult(
+                success=False,
+                errors=[f"Failed to parse RTL file to enhanced result: {rtl_file}"]
+            )
+        
+        # Step 2: Generate files directly from enhanced result
+        generated_files = []
+        errors = []
+        warnings = []
+        
+        try:
+            # Generate HWCustomOp
+            hwcustomop_file = self.direct_renderer.render_hwcustomop(enhanced_result, output_dir, compiler_data=compiler_data)
+            generated_files.append(hwcustomop_file)
+            
+            # Generate RTLBackend
+            rtlbackend_file = self.direct_renderer.render_rtlbackend(enhanced_result, output_dir, compiler_data=compiler_data)
+            generated_files.append(rtlbackend_file)
+            
+            # Generate test suite
+            test_file = self.direct_renderer.render_test_suite(enhanced_result, output_dir, compiler_data=compiler_data)
+            generated_files.append(test_file)
+            
+            # Generate RTL wrapper if requested
+            if kwargs.get('generate_wrapper', True):
+                wrapper_file = self.direct_renderer.render_rtl_wrapper(enhanced_result, output_dir)
+                generated_files.append(wrapper_file)
+            
+            # Generate documentation if requested
+            if kwargs.get('generate_docs', False):
+                doc_file = self.direct_renderer.render_documentation(enhanced_result, output_dir)
+                generated_files.append(doc_file)
+            
+            success = len(generated_files) >= 2  # At least HWCustomOp and RTLBackend
+            
+            logger.info(f"Enhanced generation completed: {len(generated_files)} files generated")
+            return UnifiedGenerationResult(
+                success=success,
+                generated_files=generated_files,
+                dataflow_model=None,  # No DataflowModel in enhanced approach
+                errors=errors,
+                warnings=warnings
+            )
+            
+        except Exception as e:
+            error_msg = f"Enhanced generation failed: {str(e)}"
+            logger.error(error_msg)
+            return UnifiedGenerationResult(
+                success=False,
+                generated_files=generated_files,
+                errors=[error_msg],
+                warnings=warnings
+            )
+    
+    def _generate_legacy(self, rtl_file: Path, compiler_data: Dict[str, Any], 
+                        output_dir: Path, **kwargs) -> UnifiedGenerationResult:
+        """
+        Legacy generation pipeline using DataflowModel conversion.
+        
+        This maintains backward compatibility with existing HWKG approach.
+        """
+        logger.info(f"Starting legacy generation for RTL file: {rtl_file}")
+        
+        # Step 1: Parse RTL file using existing RTL parser
+        rtl_result = parse_rtl_file(rtl_file)
+        if not rtl_result:
+            return UnifiedGenerationResult(
+                success=False,
+                errors=[f"Failed to parse RTL file: {rtl_file}"]
+            )
+        
+        # Step 2: Convert RTLParsingResult to DataflowModel
+        conversion_result = self.rtl_converter.convert(rtl_result)
+        if not conversion_result.success:
+            return UnifiedGenerationResult(
+                success=False,
+                errors=[f"RTL to DataflowModel conversion failed"] + conversion_result.errors,
+                warnings=conversion_result.warnings
+            )
+        
+        dataflow_model = conversion_result.dataflow_model
+        logger.info(f"Successfully created DataflowModel for kernel: {rtl_result.name}")
+        
+        # Step 3: Generate files using DataflowModel
+        generation_result = self._generate_files(
+            rtl_result, dataflow_model, output_dir, **kwargs
+        )
+        
+        return generation_result
     
     def generate_hwcustomop(self, dataflow_model, kernel_name: str, 
                            output_dir: Path) -> Optional[Path]:
@@ -318,11 +412,36 @@ class UnifiedHWKGGenerator:
         return None
 
 
-def create_unified_generator() -> UnifiedHWKGGenerator:
+def create_unified_generator(enhanced: bool = True) -> UnifiedHWKGGenerator:
     """
     Factory function for creating UnifiedHWKGGenerator instances.
+    
+    Args:
+        enhanced: Use enhanced direct template generation (default: True)
     
     Returns:
         UnifiedHWKGGenerator: Configured generator instance
     """
-    return UnifiedHWKGGenerator()
+    return UnifiedHWKGGenerator(enhanced=enhanced)
+
+
+def create_enhanced_generator() -> UnifiedHWKGGenerator:
+    """
+    Factory function for creating enhanced UnifiedHWKGGenerator instances.
+    
+    Returns:
+        UnifiedHWKGGenerator: Enhanced generator instance
+    """
+    return UnifiedHWKGGenerator(enhanced=True)
+
+
+def create_legacy_generator() -> UnifiedHWKGGenerator:
+    """
+    Factory function for creating legacy UnifiedHWKGGenerator instances.
+    
+    Uses DataflowModel conversion for backward compatibility.
+    
+    Returns:
+        UnifiedHWKGGenerator: Legacy generator instance
+    """
+    return UnifiedHWKGGenerator(enhanced=False)

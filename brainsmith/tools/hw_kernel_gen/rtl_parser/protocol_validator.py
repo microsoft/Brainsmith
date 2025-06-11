@@ -16,7 +16,8 @@ presence of required signals and correct port directions. Protocol definitions
 import logging
 from typing import Dict, Set, List, Tuple
 
-from .data import Port, Direction, PortGroup, ValidationResult, InterfaceType
+from brainsmith.dataflow.core.interface_types import InterfaceType
+from .data import Port, Direction, PortGroup, ValidationResult
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
@@ -84,11 +85,12 @@ class ProtocolValidator:
         itype = group.interface_type
         logger.debug(f"Validating {itype} group '{group.name}'. Received ports: {list(group.ports.keys())}")
         
-        if itype == InterfaceType.GLOBAL_CONTROL:
+        # Dispatch based on protocol (using interface type properties)
+        if itype == InterfaceType.CONTROL:
             return self.validate_global_control(group)
-        elif itype == InterfaceType.AXI_STREAM:
+        elif itype in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             return self.validate_axi_stream(group)
-        elif itype == InterfaceType.AXI_LITE:
+        elif itype == InterfaceType.CONFIG:
             return self.validate_axi_lite(group)
         else:
             return ValidationResult(False, f"Unknown interface type '{itype}' for group '{group.name}'.")
@@ -107,8 +109,11 @@ class ProtocolValidator:
         return missing, unexpected
 
     def validate_global_control(self, group: PortGroup) -> ValidationResult:
-        if group.interface_type != InterfaceType.GLOBAL_CONTROL:
+        if group.interface_type != InterfaceType.CONTROL:
             return ValidationResult(False, "Invalid group type for Global Control validation.")
+        
+        # Set final interface type to CONTROL (global control signals)
+        group.interface_type = InterfaceType.CONTROL
         
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, GLOBAL_SIGNAL_SUFFIXES)
@@ -132,7 +137,8 @@ class ProtocolValidator:
         return ValidationResult(True)
 
     def validate_axi_stream(self, group: PortGroup) -> ValidationResult:
-        if group.interface_type != InterfaceType.AXI_STREAM:
+        # Accept any preliminary AXI-Stream type (INPUT, OUTPUT, WEIGHT)
+        if group.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             return ValidationResult(False, "Invalid group type for AXI-Stream validation.")
 
         # Check against required & expected signals
@@ -161,19 +167,26 @@ class ProtocolValidator:
             return ValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
         
         # Set interface direction metadata
-        group.metadata['direction'] = Direction.INPUT if all_forward else Direction.OUTPUT
+        direction = Direction.INPUT if all_forward else Direction.OUTPUT
+        group.metadata['direction'] = direction
 
         # Extract data width metadata
         tdata_port = group.ports.get("TDATA")
         if tdata_port:
             group.metadata['data_width_expr'] = tdata_port.width
+        
+        # Determine specific dataflow interface type based on direction and naming
+        group.interface_type = self._determine_dataflow_type(group.name, direction)
 
-        logger.debug(f"  Validation successful for AXI-Stream group '{group.name}'")
+        logger.debug(f"  Validation successful for AXI-Stream group '{group.name}' → {group.interface_type}")
         return ValidationResult(True)
 
     def validate_axi_lite(self, group: PortGroup) -> ValidationResult:
-        if group.interface_type != InterfaceType.AXI_LITE:
+        if group.interface_type != InterfaceType.CONFIG:
             return ValidationResult(False, "Invalid group type for AXI-Lite validation.")
+        
+        # Set final interface type to CONFIG (AXI-Lite always for configuration)
+        group.interface_type = InterfaceType.CONFIG
         
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, AXI_LITE_SUFFIXES)
@@ -225,20 +238,39 @@ class ProtocolValidator:
         logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
         return ValidationResult(True)
 
+    def _determine_dataflow_type(self, interface_name: str, direction: Direction) -> InterfaceType:
+        """Determine dataflow interface type from name patterns and direction."""
+        name_lower = interface_name.lower()
+        
+        # Weight interface patterns
+        if any(pattern in name_lower for pattern in ['weight', 'weights', 'param', 'coeff']):
+            return InterfaceType.WEIGHT
+        
+        # Input/output based on direction
+        if direction == Direction.INPUT:
+            return InterfaceType.INPUT
+        elif direction == Direction.OUTPUT:
+            return InterfaceType.OUTPUT
+        else:
+            return InterfaceType.INPUT  # Default to input for unknown directions
+
     def _assign_wrapper_names(self, interfaces: List[PortGroup]) -> None:
         """Assign wrapper names to interfaces based on their type."""
         input_count, output_count = 0, 0
 
         for group in interfaces:
-            if group.interface_type == InterfaceType.GLOBAL_CONTROL:
+            if group.interface_type == InterfaceType.CONTROL:
                 for signal in group.ports:
                     group.metadata["wrapper_name"] = signal
-            elif group.interface_type == InterfaceType.AXI_STREAM:
-                if group.metadata['direction'] == Direction.INPUT:
+            elif group.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+                if group.interface_type == InterfaceType.INPUT:
                     group.metadata["wrapper_name"] = f"in{input_count}"
                     input_count += 1
-                elif group.metadata['direction'] == Direction.OUTPUT:
+                elif group.interface_type == InterfaceType.OUTPUT:
                     group.metadata["wrapper_name"] = f"out{output_count}"
                     output_count += 1
-            elif group.interface_type == InterfaceType.AXI_LITE:
+                elif group.interface_type == InterfaceType.WEIGHT:
+                    group.metadata["wrapper_name"] = f"weight{input_count}"  # Weights count as inputs
+                    input_count += 1
+            elif group.interface_type == InterfaceType.CONFIG:
                 group.metadata["wrapper_name"] = "config"

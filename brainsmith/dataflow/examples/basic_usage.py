@@ -7,7 +7,7 @@ and perform unified computational calculations with constraint support.
 
 from brainsmith.dataflow.core.dataflow_interface import (
     DataflowInterface,
-    DataflowInterfaceType,
+    InterfaceType,
     DataflowDataType,
     DataTypeConstraint
 )
@@ -48,7 +48,7 @@ def main():
     # Input interface
     input_interface = DataflowInterface(
         name="input0",
-        interface_type=DataflowInterfaceType.INPUT,
+        interface_type=InterfaceType.INPUT,
         tensor_dims=[64],
         block_dims=[16],
         stream_dims=[4],
@@ -60,7 +60,7 @@ def main():
     # Weight interface
     weight_interface = DataflowInterface(
         name="weights",
-        interface_type=DataflowInterfaceType.WEIGHT,
+        interface_type=InterfaceType.WEIGHT,
         tensor_dims=[128],
         block_dims=[32],
         stream_dims=[8],
@@ -72,7 +72,7 @@ def main():
     # Output interface
     output_interface = DataflowInterface(
         name="output0",
-        interface_type=DataflowInterfaceType.OUTPUT,
+        interface_type=InterfaceType.OUTPUT,
         tensor_dims=[64],
         block_dims=[16],
         stream_dims=[4],

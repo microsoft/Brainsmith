@@ -10,9 +10,9 @@ import numpy as np
 
 from brainsmith.dataflow.core.dataflow_interface import (
     DataflowInterface,
-    DataflowInterfaceType,
     DataflowDataType
 )
+from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.dataflow_model import (
     DataflowModel,
     InitiationIntervals,
@@ -29,7 +29,7 @@ class TestDataflowModel:
         
         input_interface = DataflowInterface(
             name="input0",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             tensor_dims=[64],
             block_dims=[16],
             stream_dims=[4],
@@ -38,7 +38,7 @@ class TestDataflowModel:
         
         output_interface = DataflowInterface(
             name="output0",
-            interface_type=DataflowInterfaceType.OUTPUT,
+            interface_type=InterfaceType.OUTPUT,
             tensor_dims=[64],
             block_dims=[16],
             stream_dims=[4],
@@ -53,7 +53,7 @@ class TestDataflowModel:
         
         input0 = DataflowInterface(
             name="input0",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             tensor_dims=[64],
             block_dims=[16],
             stream_dims=[4],
@@ -62,7 +62,7 @@ class TestDataflowModel:
         
         input1 = DataflowInterface(
             name="input1",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             tensor_dims=[32],
             block_dims=[8],
             stream_dims=[2],
@@ -71,7 +71,7 @@ class TestDataflowModel:
         
         weight0 = DataflowInterface(
             name="weights",
-            interface_type=DataflowInterfaceType.WEIGHT,
+            interface_type=InterfaceType.WEIGHT,
             tensor_dims=[128],
             block_dims=[32],
             stream_dims=[8],
@@ -80,7 +80,7 @@ class TestDataflowModel:
         
         output0 = DataflowInterface(
             name="output0",
-            interface_type=DataflowInterfaceType.OUTPUT,
+            interface_type=InterfaceType.OUTPUT,
             tensor_dims=[64],
             block_dims=[16],
             stream_dims=[4],
@@ -245,7 +245,7 @@ class TestDataflowModel:
         # First create valid interface to pass construction
         invalid_interface = DataflowInterface(
             name="invalid",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             tensor_dims=[15],  # qDim can be any value
             block_dims=[15],  # Valid for construction: 15 % 5 == 0
             stream_dims=[5],
@@ -314,7 +314,7 @@ class TestDataflowModel:
         
         single_input = DataflowInterface(
             name="only_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             tensor_dims=[32],
             block_dims=[8],
             stream_dims=[2],

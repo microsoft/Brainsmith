@@ -10,7 +10,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional, Tuple
 
-from .dataflow_interface import DataflowInterface, DataflowInterfaceType
+from .interface_types import InterfaceType
+from .dataflow_interface import DataflowInterface 
 from .validation import ValidationResult, create_validation_result, ValidationError, ValidationSeverity
 
 @dataclass
@@ -77,19 +78,19 @@ class DataflowModel:
     def input_interfaces(self) -> List[DataflowInterface]:
         """All INPUT type interfaces"""
         return [iface for iface in self.interfaces.values() 
-                if iface.interface_type == DataflowInterfaceType.INPUT]
+                if iface.interface_type == InterfaceType.INPUT]
     
     @property  
     def output_interfaces(self) -> List[DataflowInterface]:
         """All OUTPUT type interfaces"""
         return [iface for iface in self.interfaces.values() 
-                if iface.interface_type == DataflowInterfaceType.OUTPUT]
+                if iface.interface_type == InterfaceType.OUTPUT]
     
     @property
     def weight_interfaces(self) -> List[DataflowInterface]:
         """All WEIGHT type interfaces"""
         return [iface for iface in self.interfaces.values() 
-                if iface.interface_type == DataflowInterfaceType.WEIGHT]
+                if iface.interface_type == InterfaceType.WEIGHT]
     
     
     def calculate_initiation_intervals(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> InitiationIntervals:
@@ -195,9 +196,9 @@ class DataflowModel:
         # Create a shallow copy and update stream_dims
         new_stream_dims = interface.stream_dims.copy()
         
-        if interface.interface_type == DataflowInterfaceType.INPUT:
+        if interface.interface_type == InterfaceType.INPUT:
             new_stream_dims[0] = input_parallelism
-        elif interface.interface_type == DataflowInterfaceType.WEIGHT and weight_parallelism is not None:
+        elif interface.interface_type == InterfaceType.WEIGHT and weight_parallelism is not None:
             new_stream_dims[0] = weight_parallelism
         
         # For simplicity, we'll modify the original interface's stream_dims

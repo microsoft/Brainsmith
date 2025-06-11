@@ -13,7 +13,8 @@ from brainsmith.dataflow.core.block_chunking import (
     DefaultChunkingStrategy, IndexBasedChunkingStrategy, FullTensorChunkingStrategy,
     ChunkingType
 )
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint, DataflowInterfaceType
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.interface_types import InterfaceType
 
 
 class TestSimplifiedTensorChunking:
@@ -30,7 +31,7 @@ class TestSimplifiedTensorChunking:
         """Test chunking computation with default strategy."""
         interface_metadata = InterfaceMetadata(
             name="test_interface",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=default_chunking()
         )
@@ -48,7 +49,7 @@ class TestSimplifiedTensorChunking:
         """Test chunking computation with index-based strategy."""
         interface_metadata = InterfaceMetadata(
             name="test_interface",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=index_chunking(-1, [16])
         )
@@ -248,7 +249,7 @@ class TestIntegrationWithInterfaceMetadata:
         """Test interface metadata with default chunking strategy."""
         metadata = InterfaceMetadata(
             name="test_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)]
             # chunking_strategy defaults to default_chunking()
         )
@@ -262,7 +263,7 @@ class TestIntegrationWithInterfaceMetadata:
         
         metadata = InterfaceMetadata(
             name="test_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=custom_strategy
         )
@@ -277,7 +278,7 @@ class TestIntegrationWithInterfaceMetadata:
         # Create interface with specific strategy
         metadata = InterfaceMetadata(
             name="test_input",
-            interface_type=DataflowInterfaceType.INPUT,
+            interface_type=InterfaceType.INPUT,
             allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
             chunking_strategy=last_dim_chunking(16)
         )

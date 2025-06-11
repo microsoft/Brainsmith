@@ -22,16 +22,20 @@ Example Usage:
 
 from typing import Dict, List, Any
 
+# Import unified InterfaceType from dataflow module
+from brainsmith.dataflow.core.interface_types import InterfaceType
+
 # Expose key classes and functions for easier import
 from .data import (
     Direction,
-    InterfaceType,
     Parameter,
     Port,
     PortGroup,
     Interface,
     HWKernel,
     RTLParsingResult,
+    EnhancedRTLParsingResult,
+    create_enhanced_rtl_parsing_result,
     Pragma,
     ValidationResult,
 )
@@ -43,6 +47,9 @@ __all__ = [
     "ParserError",
     "ProtocolValidator",
     "HWKernel",
+    "RTLParsingResult",
+    "EnhancedRTLParsingResult",
+    "create_enhanced_rtl_parsing_result",
     "Parameter",
     "Port",
     "PortGroup",
@@ -52,6 +59,7 @@ __all__ = [
     "Pragma",
     "ValidationResult",
     "parse_rtl_file",
+    "parse_rtl_file_enhanced",
 ]
 
 
@@ -113,6 +121,45 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False) -> RTLParsingResult
         # Re-raise as RTLParsingError for consistent error handling
         from ..errors import RTLParsingError
         raise RTLParsingError(f"RTL parsing failed for {rtl_file}: {e}") from e
+
+
+def parse_rtl_file_enhanced(rtl_file, advanced_pragmas: bool = False) -> EnhancedRTLParsingResult:
+    """
+    Parse RTL file and return enhanced parsing result for direct template generation.
+    
+    This function eliminates DataflowModel conversion overhead by providing all
+    template-required metadata directly from RTL parsing. This is the preferred
+    method for template generation workflows.
+    
+    Args:
+        rtl_file: Path to SystemVerilog RTL file or Path object
+        advanced_pragmas: Enable enhanced BDIM pragma processing
+        
+    Returns:
+        EnhancedRTLParsingResult: Enhanced parsing result with template context generation
+        
+    Raises:
+        RTLParsingError: If RTL parsing fails
+    """
+    from pathlib import Path
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # First get the standard RTL parsing result
+        rtl_result = parse_rtl_file(rtl_file, advanced_pragmas)
+        
+        # Convert to enhanced version with template context generation
+        enhanced_result = create_enhanced_rtl_parsing_result(rtl_result)
+        
+        logger.info(f"Successfully parsed RTL file {rtl_file} → EnhancedRTLParsingResult '{enhanced_result.name}'")
+        return enhanced_result
+        
+    except Exception as e:
+        logger.error(f"Failed to parse RTL file {rtl_file} to enhanced result: {e}")
+        from ..errors import RTLParsingError
+        raise RTLParsingError(f"Enhanced RTL parsing failed for {rtl_file}: {e}") from e
 
 
 def _enhance_hw_kernel_for_enhanced_mode(hw_kernel, source_file, advanced_pragmas: bool):

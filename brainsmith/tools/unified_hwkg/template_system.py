@@ -22,7 +22,7 @@ from datetime import datetime
 import jinja2
 
 from ...dataflow.core.dataflow_model import DataflowModel
-from ...dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
+from ...dataflow.core.dataflow_interface import DataflowInterface
 from ...dataflow.core.class_naming import generate_class_name, generate_backend_class_name
 
 logger = logging.getLogger(__name__)

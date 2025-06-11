@@ -17,7 +17,8 @@ import logging
 from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
 
-from .data import Port, InterfaceType, PortGroup
+from brainsmith.dataflow.core.interface_types import InterfaceType
+from .data import Port, PortGroup
 from .protocol_validator import (
     GLOBAL_SIGNAL_SUFFIXES,
     AXI_STREAM_SUFFIXES,
@@ -32,16 +33,18 @@ class InterfaceScanner:
 
     def __init__(self, debug: bool = False):
         """Initializes the InterfaceScanner."""
+        # Map protocol patterns to preliminary interface types 
+        # Protocol validator will determine specific dataflow types later
         self.suffixes = {
-            InterfaceType.GLOBAL_CONTROL: GLOBAL_SIGNAL_SUFFIXES,
-            InterfaceType.AXI_STREAM: AXI_STREAM_SUFFIXES,
-            InterfaceType.AXI_LITE: AXI_LITE_SUFFIXES
+            InterfaceType.CONTROL: GLOBAL_SIGNAL_SUFFIXES,  # Global control → CONTROL
+            InterfaceType.INPUT: AXI_STREAM_SUFFIXES,       # AXI-Stream → INPUT (refined by validator)
+            InterfaceType.CONFIG: AXI_LITE_SUFFIXES         # AXI-Lite → CONFIG
         }
         # Create regex maps for each interface type
         self.regex_maps = {
-            InterfaceType.GLOBAL_CONTROL: self._generate_interface_regex(GLOBAL_SIGNAL_SUFFIXES),
-            InterfaceType.AXI_STREAM: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
-            InterfaceType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES)
+            InterfaceType.CONTROL: self._generate_interface_regex(GLOBAL_SIGNAL_SUFFIXES),
+            InterfaceType.INPUT: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
+            InterfaceType.CONFIG: self._generate_interface_regex(AXI_LITE_SUFFIXES)
         }
         self.debug = debug
 
@@ -87,9 +90,9 @@ class InterfaceScanner:
         """
         port_groups = []
         temp_port_groups = {
-            InterfaceType.GLOBAL_CONTROL: defaultdict(dict),
-            InterfaceType.AXI_STREAM: defaultdict(dict),
-            InterfaceType.AXI_LITE: defaultdict(dict)
+            InterfaceType.CONTROL: defaultdict(dict),    # Global control → CONTROL
+            InterfaceType.INPUT: defaultdict(dict),      # AXI-Stream → INPUT (refined by validator) 
+            InterfaceType.CONFIG: defaultdict(dict)      # AXI-Lite → CONFIG
         }
         unassigned_ports = []
 
