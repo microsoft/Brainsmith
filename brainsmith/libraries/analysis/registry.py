@@ -4,6 +4,8 @@ Analysis Tools Registry System
 Auto-discovery and management of analysis tools in the BrainSmith libraries.
 Provides registration, caching, and lookup functionality for profiling tools,
 code generators, and other analysis utilities.
+
+BREAKING CHANGE: Now uses unified BaseRegistry interface with standardized method names.
 """
 
 import os
@@ -13,6 +15,7 @@ from typing import Dict, List, Optional, Set, Callable, Union, Any
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
+from brainsmith.core.registry import BaseRegistry, ComponentInfo
 
 logger = logging.getLogger(__name__)
 
@@ -42,29 +45,24 @@ class AnalysisToolInfo:
             self.dependencies = []
 
 
-class AnalysisRegistry:
+class AnalysisRegistry(BaseRegistry[AnalysisToolInfo]):
     """Registry for auto-discovery and management of analysis tools."""
     
-    def __init__(self, analysis_dirs: Optional[List[str]] = None):
+    def __init__(self, search_dirs: Optional[List[str]] = None, config_manager=None):
         """
         Initialize analysis registry.
         
         Args:
-            analysis_dirs: List of directories to search for analysis tools.
-                          Defaults to current analysis directory
+            search_dirs: List of directories to search for analysis tools.
+                        If None, uses default analysis directories.
+            config_manager: Optional configuration manager.
         """
-        if analysis_dirs is None:
-            # Default to the current analysis directory
-            current_dir = Path(__file__).parent
-            analysis_dirs = [str(current_dir)]
-        
-        self.analysis_dirs = analysis_dirs
-        self.tool_cache = {}
-        self.metadata_cache = {}
-        
-        logger.info(f"Analysis registry initialized with dirs: {self.analysis_dirs}")
+        super().__init__(search_dirs, config_manager)
+        # For backward compatibility, maintain tool_cache reference
+        self.tool_cache = self._cache
+        self.metadata_cache = self._metadata_cache
     
-    def discover_tools(self, rescan: bool = False) -> Dict[str, AnalysisToolInfo]:
+    def discover_components(self, rescan: bool = False) -> Dict[str, AnalysisToolInfo]:
         """
         Discover all available analysis tools.
         
@@ -74,8 +72,8 @@ class AnalysisRegistry:
         Returns:
             Dictionary mapping tool names to AnalysisToolInfo objects
         """
-        if self.tool_cache and not rescan:
-            return self.tool_cache
+        if not rescan and self._cache:
+            return self._cache
         
         discovered = {}
         
@@ -88,10 +86,124 @@ class AnalysisRegistry:
         discovered.update(codegen_tools)
         
         # Cache the results
-        self.tool_cache = discovered
+        self._cache = discovered
+        self.tool_cache = self._cache  # Maintain backward compatibility reference
         
-        logger.info(f"Discovered {len(discovered)} analysis tools")
+        self._log_info(f"Discovered {len(discovered)} analysis tools")
         return discovered
+    
+    def find_components_by_type(self, analysis_type: AnalysisType) -> List[AnalysisToolInfo]:
+        """
+        Find tools by analysis type.
+        
+        Args:
+            analysis_type: Type of analysis to search for
+            
+        Returns:
+            List of matching AnalysisToolInfo objects
+        """
+        tools = self.discover_components()
+        matches = []
+        
+        for tool in tools.values():
+            if tool.analysis_type == analysis_type:
+                matches.append(tool)
+        
+        return matches
+    
+    def find_tools_by_category(self, category: str) -> List[AnalysisToolInfo]:
+        """
+        Find tools by category.
+        
+        Args:
+            category: Category to search for
+            
+        Returns:
+            List of matching AnalysisToolInfo objects
+        """
+        tools = self.discover_components()
+        matches = []
+        
+        for tool in tools.values():
+            if tool.category == category:
+                matches.append(tool)
+        
+        return matches
+    
+    def list_available_tools(self) -> List[str]:
+        """Get list of available tool names (excluding unavailable ones)."""
+        tools = self.discover_components()
+        return [name for name, tool in tools.items() if tool.available]
+    
+    def list_categories(self) -> Set[str]:
+        """Get set of all available categories."""
+        tools = self.discover_components()
+        return {tool.category for tool in tools.values()}
+    
+    def check_tool_availability(self, tool_name: str) -> tuple[bool, Optional[str]]:
+        """
+        Check if a tool is available for use.
+        
+        Args:
+            tool_name: Name of the tool
+            
+        Returns:
+            Tuple of (is_available, error_message)
+        """
+        tool = self.get_component(tool_name)
+        if not tool:
+            return False, f"Tool '{tool_name}' not found"
+        
+        if not tool.available:
+            return False, f"Tool '{tool_name}' is not available (missing dependencies)"
+        
+        return True, None
+    
+    def _get_default_dirs(self) -> List[str]:
+        """Get default search directories for analysis registry."""
+        current_dir = Path(__file__).parent
+        return [str(current_dir)]
+    
+    def _extract_info(self, component: AnalysisToolInfo) -> Dict[str, Any]:
+        """Extract standardized info from analysis tool component."""
+        return {
+            'name': component.name,
+            'type': 'analysis_tool',
+            'analysis_type': component.analysis_type.value,
+            'category': component.category,
+            'description': component.description,
+            'module_path': component.module_path,
+            'dependencies': component.dependencies,
+            'available': component.available,
+            'tool_type': type(component.tool_object).__name__
+        }
+    
+    def _validate_component_implementation(self, component: AnalysisToolInfo) -> tuple[bool, List[str]]:
+        """Analysis tool-specific validation logic."""
+        errors = []
+        
+        # Validate basic fields
+        if not component.name:
+            errors.append("Analysis tool name is required")
+        
+        if not component.analysis_type:
+            errors.append("Analysis type is required")
+        
+        if not component.tool_object:
+            errors.append("Tool object is required")
+        elif not callable(component.tool_object) and not inspect.isclass(component.tool_object):
+            errors.append("Tool object must be callable or a class")
+        
+        # Validate dependencies if specified
+        if component.dependencies:
+            # Check if dependencies are available (basic check)
+            for dep in component.dependencies:
+                try:
+                    __import__(dep)
+                except ImportError:
+                    errors.append(f"Dependency '{dep}' not available")
+        
+        return len(errors) == 0, errors
     
     def _discover_profiling_tools(self) -> Dict[str, AnalysisToolInfo]:
         """Discover profiling tools."""
@@ -139,7 +251,7 @@ class AnalysisRegistry:
                     )
                     
         except ImportError:
-            logger.debug("Could not import profiling module")
+            self._log_debug("Could not import profiling module")
         
         return tools
     
@@ -198,7 +310,7 @@ class AnalysisRegistry:
                             )
                             
             except ImportError:
-                logger.debug("Could not import hw_kernel_gen module")
+                self._log_debug("Could not import hw_kernel_gen module")
             
             # Discover other tools
             for name, obj in inspect.getmembers(tools_module):
@@ -214,125 +326,9 @@ class AnalysisRegistry:
                     )
                     
         except ImportError:
-            logger.debug("Could not import tools module")
+            self._log_debug("Could not import tools module")
         
         return tools
-    
-    def get_tool(self, tool_name: str) -> Optional[AnalysisToolInfo]:
-        """
-        Get a specific analysis tool by name.
-        
-        Args:
-            tool_name: Name of the analysis tool
-            
-        Returns:
-            AnalysisToolInfo object or None if not found
-        """
-        tools = self.discover_tools()
-        return tools.get(tool_name)
-    
-    def find_tools_by_type(self, analysis_type: AnalysisType) -> List[AnalysisToolInfo]:
-        """
-        Find tools by analysis type.
-        
-        Args:
-            analysis_type: Type of analysis to search for
-            
-        Returns:
-            List of matching AnalysisToolInfo objects
-        """
-        tools = self.discover_tools()
-        matches = []
-        
-        for tool in tools.values():
-            if tool.analysis_type == analysis_type:
-                matches.append(tool)
-        
-        return matches
-    
-    def find_tools_by_category(self, category: str) -> List[AnalysisToolInfo]:
-        """
-        Find tools by category.
-        
-        Args:
-            category: Category to search for
-            
-        Returns:
-            List of matching AnalysisToolInfo objects
-        """
-        tools = self.discover_tools()
-        matches = []
-        
-        for tool in tools.values():
-            if tool.category == category:
-                matches.append(tool)
-        
-        return matches
-    
-    def list_available_tools(self) -> List[str]:
-        """Get list of available tool names (excluding unavailable ones)."""
-        tools = self.discover_tools()
-        return [name for name, tool in tools.items() if tool.available]
-    
-    def list_all_tools(self) -> List[str]:
-        """Get list of all tool names."""
-        tools = self.discover_tools()
-        return list(tools.keys())
-    
-    def list_categories(self) -> Set[str]:
-        """Get set of all available categories."""
-        tools = self.discover_tools()
-        return {tool.category for tool in tools.values()}
-    
-    def get_tool_info(self, tool_name: str) -> Optional[Dict]:
-        """
-        Get summary information about a tool.
-        
-        Args:
-            tool_name: Name of the tool
-            
-        Returns:
-            Dictionary with tool summary or None if not found
-        """
-        tool = self.get_tool(tool_name)
-        if not tool:
-            return None
-        
-        return {
-            'name': tool.name,
-            'type': tool.analysis_type.value,
-            'category': tool.category,
-            'description': tool.description,
-            'module_path': tool.module_path,
-            'dependencies': tool.dependencies,
-            'available': tool.available,
-            'tool_type': type(tool.tool_object).__name__
-        }
-    
-    def check_tool_availability(self, tool_name: str) -> tuple[bool, Optional[str]]:
-        """
-        Check if a tool is available for use.
-        
-        Args:
-            tool_name: Name of the tool
-            
-        Returns:
-            Tuple of (is_available, error_message)
-        """
-        tool = self.get_tool(tool_name)
-        if not tool:
-            return False, f"Tool '{tool_name}' not found"
-        
-        if not tool.available:
-            return False, f"Tool '{tool_name}' is not available (missing dependencies)"
-        
-        return True, None
-    
-    def refresh_cache(self):
-        """Refresh the tool cache by clearing it."""
-        self.tool_cache.clear()
-        self.metadata_cache.clear()
-        logger.info("Analysis registry cache refreshed")
     
     def _extract_description(self, obj: Union[Callable, type]) -> str:
         """Extract description from object docstring."""
@@ -355,7 +351,7 @@ def get_analysis_registry() -> AnalysisRegistry:
     return _global_registry
 
 
-# Convenience functions for common operations
+# BREAKING CHANGE: Updated convenience functions to use new unified interface
 def discover_all_analysis_tools(rescan: bool = False) -> Dict[str, AnalysisToolInfo]:
     """
     Discover all available analysis tools.
@@ -367,7 +363,7 @@ def discover_all_analysis_tools(rescan: bool = False) -> Dict[str, AnalysisToolI
         Dictionary mapping tool names to AnalysisToolInfo objects
     """
     registry = get_analysis_registry()
-    return registry.discover_tools(rescan)
+    return registry.discover_components(rescan)
 
 
 def get_analysis_tool(tool_name: str) -> Optional[AnalysisToolInfo]:
@@ -381,7 +377,7 @@ def get_analysis_tool(tool_name: str) -> Optional[AnalysisToolInfo]:
         AnalysisToolInfo object or None if not found
     """
     registry = get_analysis_registry()
-    return registry.get_tool(tool_name)
+    return registry.get_component(tool_name)
 
 
 def find_tools_by_type(analysis_type: AnalysisType) -> List[AnalysisToolInfo]:
@@ -395,7 +391,7 @@ def find_tools_by_type(analysis_type: AnalysisType) -> List[AnalysisToolInfo]:
         List of matching AnalysisToolInfo objects
     """
     registry = get_analysis_registry()
-    return registry.find_tools_by_type(analysis_type)
+    return registry.find_components_by_type(analysis_type)
 
 
 def list_available_analysis_tools() -> List[str]:
@@ -406,7 +402,7 @@ def list_available_analysis_tools() -> List[str]:
         List of tool names
     """
     registry = get_analysis_registry()
-    return registry.list_available_tools()
+    return registry.list_component_names()
 
 
 def refresh_analysis_registry():

@@ -4,6 +4,8 @@ Blueprint Libraries Registry System
 Auto-discovery and management of blueprint YAML collections.
 Provides registration, caching, and lookup functionality for blueprint templates
 in the libraries directory structure.
+
+BREAKING CHANGE: Now uses unified BaseRegistry interface with standardized method names.
 """
 
 import os
@@ -13,6 +15,7 @@ from typing import Dict, List, Optional, Set, Any
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
+from brainsmith.core.registry import BaseRegistry, ComponentInfo
 
 logger = logging.getLogger(__name__)
 
@@ -45,29 +48,24 @@ class BlueprintInfo:
             self.targets = {}
 
 
-class BlueprintLibraryRegistry:
+class BlueprintLibraryRegistry(BaseRegistry[BlueprintInfo]):
     """Registry for auto-discovery and management of blueprint libraries."""
     
-    def __init__(self, blueprint_dirs: Optional[List[str]] = None):
+    def __init__(self, search_dirs: Optional[List[str]] = None, config_manager=None):
         """
         Initialize blueprint library registry.
         
         Args:
-            blueprint_dirs: List of directories to search for blueprints.
-                          Defaults to current libraries/blueprints directory
+            search_dirs: List of directories to search for blueprints.
+                        If None, uses default blueprint directories.
+            config_manager: Optional configuration manager.
         """
-        if blueprint_dirs is None:
-            # Default to the current blueprints directory
-            current_dir = Path(__file__).parent
-            blueprint_dirs = [str(current_dir)]
-        
-        self.blueprint_dirs = blueprint_dirs
-        self.blueprint_cache = {}
-        self.metadata_cache = {}
-        
-        logger.info(f"Blueprint library registry initialized with dirs: {self.blueprint_dirs}")
+        super().__init__(search_dirs, config_manager)
+        # For backward compatibility, maintain blueprint_cache reference
+        self.blueprint_cache = self._cache
+        self.metadata_cache = self._metadata_cache
     
-    def discover_blueprints(self, rescan: bool = False) -> Dict[str, BlueprintInfo]:
+    def discover_components(self, rescan: bool = False) -> Dict[str, BlueprintInfo]:
         """
         Discover all available blueprint YAML files.
         
@@ -77,14 +75,14 @@ class BlueprintLibraryRegistry:
         Returns:
             Dictionary mapping blueprint names to BlueprintInfo objects
         """
-        if self.blueprint_cache and not rescan:
-            return self.blueprint_cache
+        if not rescan and self._cache:
+            return self._cache
         
         discovered = {}
         
-        for blueprint_dir in self.blueprint_dirs:
+        for blueprint_dir in self.search_dirs:
             if not os.path.exists(blueprint_dir):
-                logger.warning(f"Blueprint directory not found: {blueprint_dir}")
+                self._log_warning(f"Blueprint directory not found: {blueprint_dir}")
                 continue
             
             # Look for category directories
@@ -114,28 +112,16 @@ class BlueprintLibraryRegistry:
                             logger.debug(f"Discovered blueprint: {blueprint_name} ({category.value})")
                             
                         except Exception as e:
-                            logger.warning(f"Failed to load blueprint {file_path}: {e}")
+                            self._log_warning(f"Failed to load blueprint {file_path}: {e}")
         
         # Cache the results
-        self.blueprint_cache = discovered
+        self._cache = discovered
+        self.blueprint_cache = self._cache  # Maintain backward compatibility reference
         
-        logger.info(f"Discovered {len(discovered)} blueprint templates")
+        self._log_info(f"Discovered {len(discovered)} blueprint templates")
         return discovered
     
-    def get_blueprint(self, blueprint_name: str) -> Optional[BlueprintInfo]:
-        """
-        Get a specific blueprint by name.
-        
-        Args:
-            blueprint_name: Name of the blueprint
-            
-        Returns:
-            BlueprintInfo object or None if not found
-        """
-        blueprints = self.discover_blueprints()
-        return blueprints.get(blueprint_name)
-    
-    def find_blueprints_by_category(self, category: BlueprintCategory) -> List[BlueprintInfo]:
+    def find_components_by_type(self, category: BlueprintCategory) -> List[BlueprintInfo]:
         """
         Find blueprints by category.
         
@@ -145,7 +131,7 @@ class BlueprintLibraryRegistry:
         Returns:
             List of matching BlueprintInfo objects
         """
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         matches = []
         
         for blueprint in blueprints.values():
@@ -164,7 +150,7 @@ class BlueprintLibraryRegistry:
         Returns:
             List of matching BlueprintInfo objects
         """
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         matches = []
         
         for blueprint in blueprints.values():
@@ -183,7 +169,7 @@ class BlueprintLibraryRegistry:
         Returns:
             List of matching BlueprintInfo objects
         """
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         matches = []
         
         for blueprint in blueprints.values():
@@ -192,51 +178,20 @@ class BlueprintLibraryRegistry:
         
         return matches
     
-    def list_blueprint_names(self) -> List[str]:
-        """Get list of all available blueprint names."""
-        blueprints = self.discover_blueprints()
-        return list(blueprints.keys())
-    
     def list_categories(self) -> Set[BlueprintCategory]:
         """Get set of all available categories."""
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         return {blueprint.category for blueprint in blueprints.values()}
     
     def list_model_types(self) -> Set[str]:
         """Get set of all available model types."""
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         return {blueprint.model_type for blueprint in blueprints.values()}
     
     def list_platforms(self) -> Set[str]:
         """Get set of all available target platforms."""
-        blueprints = self.discover_blueprints()
+        blueprints = self.discover_components()
         return {blueprint.target_platform for blueprint in blueprints.values()}
-    
-    def get_blueprint_info(self, blueprint_name: str) -> Optional[Dict]:
-        """
-        Get summary information about a blueprint.
-        
-        Args:
-            blueprint_name: Name of the blueprint
-            
-        Returns:
-            Dictionary with blueprint summary or None if not found
-        """
-        blueprint = self.get_blueprint(blueprint_name)
-        if not blueprint:
-            return None
-        
-        return {
-            'name': blueprint.name,
-            'category': blueprint.category.value,
-            'version': blueprint.version,
-            'description': blueprint.description,
-            'model_type': blueprint.model_type,
-            'target_platform': blueprint.target_platform,
-            'file_path': blueprint.file_path,
-            'parameter_count': len(blueprint.parameters),
-            'has_targets': bool(blueprint.targets)
-        }
     
     def load_blueprint_yaml(self, blueprint_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -248,7 +203,7 @@ class BlueprintLibraryRegistry:
         Returns:
             Blueprint YAML content as dictionary or None if not found
         """
-        blueprint = self.get_blueprint(blueprint_name)
+        blueprint = self.get_component(blueprint_name)
         if not blueprint:
             return None
         
@@ -259,30 +214,38 @@ class BlueprintLibraryRegistry:
             logger.error(f"Failed to load blueprint YAML {blueprint.file_path}: {e}")
             return None
     
-    def validate_blueprint(self, blueprint_name: str) -> tuple[bool, List[str]]:
-        """
-        Validate a blueprint structure.
-        
-        Args:
-            blueprint_name: Name of the blueprint to validate
-            
-        Returns:
-            Tuple of (is_valid, list_of_errors)
-        """
-        blueprint = self.get_blueprint(blueprint_name)
-        if not blueprint:
-            return False, [f"Blueprint '{blueprint_name}' not found"]
-        
+    def _get_default_dirs(self) -> List[str]:
+        """Get default search directories for blueprint registry."""
+        current_dir = Path(__file__).parent
+        return [str(current_dir)]
+    
+    def _extract_info(self, component: BlueprintInfo) -> Dict[str, Any]:
+        """Extract standardized info from blueprint component."""
+        return {
+            'name': component.name,
+            'type': 'blueprint',
+            'category': component.category.value,
+            'version': component.version,
+            'description': component.description,
+            'model_type': component.model_type,
+            'target_platform': component.target_platform,
+            'file_path': component.file_path,
+            'parameter_count': len(component.parameters),
+            'has_targets': bool(component.targets)
+        }
+    
+    def _validate_component_implementation(self, component: BlueprintInfo) -> tuple[bool, List[str]]:
+        """Blueprint-specific validation logic."""
         errors = []
         
         # Check file exists
-        if not os.path.exists(blueprint.file_path):
-            errors.append(f"Blueprint file not found: {blueprint.file_path}")
+        if not os.path.exists(component.file_path):
+            errors.append(f"Blueprint file not found: {component.file_path}")
             return False, errors
         
         # Load and validate YAML structure
         try:
-            yaml_content = self.load_blueprint_yaml(blueprint_name)
+            yaml_content = self.load_blueprint_yaml(component.name)
             if not yaml_content:
                 errors.append("Could not load blueprint YAML content")
                 return False, errors
@@ -312,12 +275,6 @@ class BlueprintLibraryRegistry:
             errors.append(f"Validation error: {e}")
         
         return len(errors) == 0, errors
-    
-    def refresh_cache(self):
-        """Refresh the blueprint cache by clearing it."""
-        self.blueprint_cache.clear()
-        self.metadata_cache.clear()
-        logger.info("Blueprint library registry cache refreshed")
     
     def _load_blueprint_info(self, file_path: str, category: BlueprintCategory) -> BlueprintInfo:
         """
@@ -358,7 +315,7 @@ def get_blueprint_library_registry() -> BlueprintLibraryRegistry:
     return _global_registry
 
 
-# Convenience functions for common operations
+# BREAKING CHANGE: Updated convenience functions to use new unified interface
 def discover_all_blueprints(rescan: bool = False) -> Dict[str, BlueprintInfo]:
     """
     Discover all available blueprint templates.
@@ -370,7 +327,7 @@ def discover_all_blueprints(rescan: bool = False) -> Dict[str, BlueprintInfo]:
         Dictionary mapping blueprint names to BlueprintInfo objects
     """
     registry = get_blueprint_library_registry()
-    return registry.discover_blueprints(rescan)
+    return registry.discover_components(rescan)
 
 
 def get_blueprint_by_name(blueprint_name: str) -> Optional[BlueprintInfo]:
@@ -384,7 +341,7 @@ def get_blueprint_by_name(blueprint_name: str) -> Optional[BlueprintInfo]:
         BlueprintInfo object or None if not found
     """
     registry = get_blueprint_library_registry()
-    return registry.get_blueprint(blueprint_name)
+    return registry.get_component(blueprint_name)
 
 
 def find_blueprints_by_category(category: BlueprintCategory) -> List[BlueprintInfo]:
@@ -398,7 +355,7 @@ def find_blueprints_by_category(category: BlueprintCategory) -> List[BlueprintIn
         List of matching BlueprintInfo objects
     """
     registry = get_blueprint_library_registry()
-    return registry.find_blueprints_by_category(category)
+    return registry.find_components_by_type(category)
 
 
 def list_available_blueprints() -> List[str]:
@@ -409,7 +366,7 @@ def list_available_blueprints() -> List[str]:
         List of blueprint names
     """
     registry = get_blueprint_library_registry()
-    return registry.list_blueprint_names()
+    return registry.list_component_names()
 
 
 def refresh_blueprint_library_registry():

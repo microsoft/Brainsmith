@@ -36,10 +36,10 @@ from .registry import (
     AutomationType,
     AutomationToolInfo,
     get_automation_registry,
-    discover_all_automation_tools,
-    get_automation_tool,
-    find_tools_by_type,
-    list_available_automation_tools,
+    discover_all_automation_components,
+    get_automation_component,
+    find_components_by_type,
+    list_available_automation_components,
     refresh_automation_registry
 )
 
@@ -69,10 +69,10 @@ __all__ = [
     'AutomationType',
     'AutomationToolInfo',
     'get_automation_registry',
-    'discover_all_automation_tools',
-    'get_automation_tool',
-    'find_tools_by_type',
-    'list_available_automation_tools',
+    'discover_all_automation_components',
+    'get_automation_component',
+    'find_components_by_type',
+    'list_available_automation_components',
     'refresh_automation_registry'
 ]
 

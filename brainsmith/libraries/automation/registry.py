@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Set, Callable, Any
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
+from brainsmith.core.registry import BaseRegistry, ComponentInfo
 
 logger = logging.getLogger(__name__)
 
@@ -43,29 +44,21 @@ class AutomationToolInfo:
             self.parameters = []
 
 
-class AutomationRegistry:
+class AutomationRegistry(BaseRegistry[AutomationToolInfo]):
     """Registry for auto-discovery and management of automation tools."""
     
-    def __init__(self, automation_dirs: Optional[List[str]] = None):
+    def __init__(self, search_dirs: Optional[List[str]] = None, config_manager=None):
         """
         Initialize automation registry.
         
         Args:
-            automation_dirs: List of directories to search for automation tools.
-                           Defaults to current automation directory
+            search_dirs: List of directories to search for automation tools.
+                        If None, uses default automation directories.
+            config_manager: Optional configuration manager.
         """
-        if automation_dirs is None:
-            # Default to the current automation directory
-            current_dir = Path(__file__).parent
-            automation_dirs = [str(current_dir)]
-        
-        self.automation_dirs = automation_dirs
-        self.tool_cache = {}
-        self.metadata_cache = {}
-        
-        logger.info(f"Automation registry initialized with dirs: {self.automation_dirs}")
+        super().__init__(search_dirs, config_manager)
     
-    def discover_tools(self, rescan: bool = False) -> Dict[str, AutomationToolInfo]:
+    def discover_components(self, rescan: bool = False) -> Dict[str, AutomationToolInfo]:
         """
         Discover all available automation tools.
         
@@ -73,10 +66,10 @@ class AutomationRegistry:
             rescan: Force rescan even if cache exists
             
         Returns:
-            Dictionary mapping tool names to AutomationToolInfo objects
+            Dictionary mapping component names to AutomationToolInfo objects
         """
-        if self.tool_cache and not rescan:
-            return self.tool_cache
+        if self._cache and not rescan:
+            return self._cache
         
         discovered = {}
         
@@ -89,10 +82,32 @@ class AutomationRegistry:
         discovered.update(contrib_tools)
         
         # Cache the results
-        self.tool_cache = discovered
+        self._cache = discovered
         
-        logger.info(f"Discovered {len(discovered)} automation tools")
+        self._log_debug(f"Discovered {len(discovered)} automation tools")
         return discovered
+    
+    def _validate_component(self, component: AutomationToolInfo) -> bool:
+        """Validate an automation tool component."""
+        try:
+            if not component.name or not isinstance(component.name, str):
+                return False
+            if not component.function or not callable(component.function):
+                return False
+            if not component.module_path or not isinstance(component.module_path, str):
+                return False
+            if not isinstance(component.automation_type, AutomationType):
+                return False
+            return True
+        except Exception as e:
+            self._log_debug(f"Component validation failed: {e}")
+            return False
+    
+    def _process_component(self, tool_path: Path, metadata: Dict) -> Optional[AutomationToolInfo]:
+        """Process a discovered automation tool into AutomationToolInfo."""
+        # AutomationRegistry discovers functions dynamically, not from file paths
+        # This method is required by BaseRegistry but not used in this implementation
+        return None
     
     def _discover_core_tools(self) -> Dict[str, AutomationToolInfo]:
         """Discover core automation tools."""
@@ -187,10 +202,10 @@ class AutomationRegistry:
                         )
                         
             except ImportError:
-                logger.debug("Could not import individual automation modules")
+                self._log_debug("Could not import individual automation modules")
             
         except ImportError:
-            logger.debug("Could not import automation module")
+            self._log_debug("Could not import automation module")
         
         return tools
     
@@ -198,7 +213,7 @@ class AutomationRegistry:
         """Discover contrib automation tools."""
         tools = {}
         
-        for automation_dir in self.automation_dirs:
+        for automation_dir in self.search_dirs:
             contrib_dir = os.path.join(automation_dir, "contrib")
             
             if not os.path.exists(contrib_dir):
@@ -236,87 +251,91 @@ class AutomationRegistry:
                                     )
                                     
                     except Exception as e:
-                        logger.debug(f"Could not load contrib module {module_name}: {e}")
+                        self._log_debug(f"Could not load contrib module {module_name}: {e}")
         
         return tools
     
-    def get_tool(self, tool_name: str) -> Optional[AutomationToolInfo]:
+    def get_component(self, component_name: str) -> Optional[AutomationToolInfo]:
         """
         Get a specific automation tool by name.
         
         Args:
-            tool_name: Name of the automation tool
+            component_name: Name of the automation tool
             
         Returns:
             AutomationToolInfo object or None if not found
         """
-        tools = self.discover_tools()
-        return tools.get(tool_name)
+        components = self.discover_components()
+        return components.get(component_name)
     
-    def find_tools_by_type(self, automation_type: AutomationType) -> List[AutomationToolInfo]:
+    def find_components_by_type(self, component_type: str) -> List[AutomationToolInfo]:
         """
-        Find tools by automation type.
+        Find tools by type.
         
         Args:
-            automation_type: Type of automation to search for
+            component_type: Type or category to search for (AutomationType value or category string)
             
         Returns:
             List of matching AutomationToolInfo objects
         """
-        tools = self.discover_tools()
+        components = self.discover_components()
         matches = []
         
-        for tool in tools.values():
-            if tool.automation_type == automation_type:
-                matches.append(tool)
+        for component in components.values():
+            # Check if matches AutomationType enum value
+            if component.automation_type.value == component_type:
+                matches.append(component)
+            # Check if matches category string
+            elif component.category == component_type:
+                matches.append(component)
         
         return matches
     
     def find_parallel_tools(self) -> List[AutomationToolInfo]:
         """Find tools that support parallel execution."""
-        tools = self.discover_tools()
-        return [tool for tool in tools.values() if tool.supports_parallel]
+        components = self.discover_components()
+        return [component for component in components.values() if component.supports_parallel]
     
-    def list_tool_names(self) -> List[str]:
-        """Get list of all available tool names."""
-        tools = self.discover_tools()
-        return list(tools.keys())
+    def list_component_names(self) -> List[str]:
+        """Get list of all available component names."""
+        components = self.discover_components()
+        return list(components.keys())
     
     def list_categories(self) -> Set[str]:
         """Get set of all available categories."""
-        tools = self.discover_tools()
-        return {tool.category for tool in tools.values()}
+        components = self.discover_components()
+        return {component.category for component in components.values()}
     
-    def get_tool_info(self, tool_name: str) -> Optional[Dict]:
+    def get_component_info(self, component_name: str) -> Optional[Dict]:
         """
-        Get summary information about a tool.
+        Get summary information about a component.
         
         Args:
-            tool_name: Name of the tool
+            component_name: Name of the component
             
         Returns:
-            Dictionary with tool summary or None if not found
+            Dictionary with component summary or None if not found
         """
-        tool = self.get_tool(tool_name)
-        if not tool:
+        component = self.get_component(component_name)
+        if not component:
             return None
         
         return {
-            'name': tool.name,
-            'type': tool.automation_type.value,
-            'category': tool.category,
-            'description': tool.description,
-            'module_path': tool.module_path,
-            'parameters': tool.parameters,
-            'supports_parallel': tool.supports_parallel,
-            'function_name': tool.function.__name__
+            'name': component.name,
+            'type': component.automation_type.value,
+            'category': component.category,
+            'description': component.description,
+            'module_path': component.module_path,
+            'parameters': component.parameters,
+            'supports_parallel': component.supports_parallel,
+            'function_name': component.function.__name__
         }
     
     def refresh_cache(self):
-        """Refresh the tool cache by clearing it."""
-        self.tool_cache.clear()
-        self.metadata_cache.clear()
-        logger.info("Automation registry cache refreshed")
+        """Refresh the component cache by clearing it."""
+        self._cache.clear()
+        self._metadata_cache.clear()
+        self._log_debug("Automation registry cache refreshed")
     
     def _classify_function_type(self, name: str, func: Callable) -> AutomationType:
         """Classify function type based on name and signature."""
@@ -348,6 +367,58 @@ class AutomationRegistry:
             return list(sig.parameters.keys())
         except (ValueError, TypeError):
             return []
+    
+    def _get_default_dirs(self) -> List[str]:
+        """Get default search directories for automation tools."""
+        current_dir = Path(__file__).parent
+        return [str(current_dir)]
+    
+    def _extract_info(self, component: AutomationToolInfo) -> Dict[str, Any]:
+        """Extract standardized info from automation tool component."""
+        return {
+            'name': component.name,
+            'type': component.automation_type.value,
+            'category': component.category,
+            'description': component.description,
+            'module_path': component.module_path,
+            'parameters': component.parameters,
+            'supports_parallel': component.supports_parallel,
+            'function_name': component.function.__name__ if component.function else None
+        }
+    
+    def _validate_component_implementation(self, component: AutomationToolInfo) -> tuple[bool, List[str]]:
+        """Registry-specific validation logic for automation tools."""
+        errors = []
+        
+        try:
+            # Validate name
+            if not component.name or not isinstance(component.name, str):
+                errors.append("Component name must be a non-empty string")
+            
+            # Validate function
+            if not component.function or not callable(component.function):
+                errors.append("Component function must be callable")
+            
+            # Validate module path
+            if not component.module_path or not isinstance(component.module_path, str):
+                errors.append("Component module_path must be a non-empty string")
+            
+            # Validate automation type
+            if not isinstance(component.automation_type, AutomationType):
+                errors.append("Component automation_type must be a valid AutomationType")
+            
+            # Validate parameters list
+            if component.parameters and not isinstance(component.parameters, list):
+                errors.append("Component parameters must be a list")
+            
+            # Validate supports_parallel
+            if not isinstance(component.supports_parallel, bool):
+                errors.append("Component supports_parallel must be a boolean")
+            
+            return len(errors) == 0, errors
+            
+        except Exception as e:
+            return False, [f"Validation error: {e}"]
 
 
 # Global registry instance
@@ -363,37 +434,37 @@ def get_automation_registry() -> AutomationRegistry:
 
 
 # Convenience functions for common operations
-def discover_all_automation_tools(rescan: bool = False) -> Dict[str, AutomationToolInfo]:
+def discover_all_automation_components(rescan: bool = False) -> Dict[str, AutomationToolInfo]:
     """
-    Discover all available automation tools.
+    Discover all available automation components.
     
     Args:
         rescan: Force rescan even if cache exists
         
     Returns:
-        Dictionary mapping tool names to AutomationToolInfo objects
+        Dictionary mapping component names to AutomationToolInfo objects
     """
     registry = get_automation_registry()
-    return registry.discover_tools(rescan)
+    return registry.discover_components(rescan)
 
 
-def get_automation_tool(tool_name: str) -> Optional[AutomationToolInfo]:
+def get_automation_component(component_name: str) -> Optional[AutomationToolInfo]:
     """
-    Get an automation tool by name.
+    Get an automation component by name.
     
     Args:
-        tool_name: Name of the tool
+        component_name: Name of the component
         
     Returns:
         AutomationToolInfo object or None if not found
     """
     registry = get_automation_registry()
-    return registry.get_tool(tool_name)
+    return registry.get_component(component_name)
 
 
-def find_tools_by_type(automation_type: AutomationType) -> List[AutomationToolInfo]:
+def find_components_by_type(automation_type: AutomationType) -> List[AutomationToolInfo]:
     """
-    Find all tools of a specific type.
+    Find all components of a specific type.
     
     Args:
         automation_type: Type of automation
@@ -402,18 +473,18 @@ def find_tools_by_type(automation_type: AutomationType) -> List[AutomationToolIn
         List of matching AutomationToolInfo objects
     """
     registry = get_automation_registry()
-    return registry.find_tools_by_type(automation_type)
+    return registry.find_components_by_type(automation_type.value)
 
 
-def list_available_automation_tools() -> List[str]:
+def list_available_automation_components() -> List[str]:
     """
-    Get list of all available automation tool names.
+    Get list of all available automation component names.
     
     Returns:
-        List of tool names
+        List of component names
     """
     registry = get_automation_registry()
-    return registry.list_tool_names()
+    return registry.list_component_names()
 
 
 def refresh_automation_registry():

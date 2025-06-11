@@ -1,12 +1,18 @@
 """
-BrainSmith Automation Simplification Demo
+BrainSmith North Star API Demo
 
-Demonstrates the North Star simplification of the automation module
-with practical examples of parameter exploration and batch processing.
+Demonstrates the North Star promise: "Make FPGA accelerator design as simple as calling a function"
+with practical examples using the unified brainsmith.core API.
+
+NORTH STAR FEATURES:
+- Single import: brainsmith.core
+- Primary function: forge()
+- Helper functions: parameter_sweep, find_best, etc.
+- Zero configuration objects
 """
 
 import logging
-from brainsmith.automation import parameter_sweep, batch_process, find_best, aggregate_stats
+import brainsmith.core as bs
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -61,7 +67,7 @@ def demo_parameter_sweep():
         return []
 
 
-def demo_find_best(results):
+def demo_bs.find_best(results):
     """Demonstrate finding optimal configurations."""
     print("\n🎯 OPTIMIZATION DEMONSTRATION")
     print("=" * 40)
@@ -71,7 +77,7 @@ def demo_find_best(results):
         return None
     
     # Find best throughput
-    best_throughput = find_best(results, metric='throughput', maximize=True)
+    best_throughput = bs.bs.find_best(results, metric='throughput', maximize=True)
     if best_throughput:
         throughput_val = best_throughput['metrics']['performance']['throughput']
         params = best_throughput.get('sweep_info', {}).get('parameters', {})
@@ -79,7 +85,7 @@ def demo_find_best(results):
         print(f"   Parameters: {params}")
     
     # Find best power efficiency (minimize power)
-    best_power = find_best(results, metric='power', maximize=False)
+    best_power = bs.find_best(results, metric='power', maximize=False)
     if best_power:
         power_val = best_power['metrics']['performance']['power']
         params = best_power.get('sweep_info', {}).get('parameters', {})
@@ -87,7 +93,7 @@ def demo_find_best(results):
         print(f"   Parameters: {params}")
     
     # Find best latency
-    best_latency = find_best(results, metric='latency', maximize=False)
+    best_latency = bs.find_best(results, metric='latency', maximize=False)
     if best_latency:
         latency_val = best_latency['metrics']['performance']['latency']
         params = best_latency.get('sweep_info', {}).get('parameters', {})
@@ -204,7 +210,7 @@ def demo_complete_workflow():
     sweep_results = demo_parameter_sweep()
     
     # Optimization
-    best_config = demo_find_best(sweep_results)
+    best_config = demo_bs.find_best(sweep_results)
     
     # Statistics
     sweep_stats = demo_aggregate_stats(sweep_results)

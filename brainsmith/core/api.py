@@ -13,15 +13,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Import hooks for optimization event logging
-try:
-    from ..infrastructure.hooks import log_optimization_event, log_strategy_decision, log_dse_event
-    HOOKS_AVAILABLE = True
-except ImportError:
-    HOOKS_AVAILABLE = False
-    log_optimization_event = lambda *args, **kwargs: None
-    log_strategy_decision = lambda *args, **kwargs: None
-    log_dse_event = lambda *args, **kwargs: None
+# Import hooks for optimization event logging (now unified in core)
+from .hooks import log_optimization_event, log_strategy_decision, log_dse_event
 
 
 def forge(
@@ -69,18 +62,16 @@ def forge(
     if is_hw_graph:
         # Input is already Dataflow Graph, skip to HW optimization
         logger.info("Hardware graph mode: Skipping to HW optimization")
-        if HOOKS_AVAILABLE:
-            log_strategy_decision('hw_optimization_only', 'Input is already a dataflow graph')
-            log_dse_event('hw_optimization_start', {'mode': 'hw_graph'})
+        log_strategy_decision('hw_optimization_only', 'Input is already a dataflow graph')
+        log_dse_event('hw_optimization_start', {'mode': 'hw_graph'})
         
         dataflow_graph = _load_dataflow_graph(model_path)
         dse_results = _run_hw_optimization_dse(dataflow_graph, dse_config)
     else:
         # Standard flow: Model -> DSE -> Dataflow Graph
         logger.info("Standard mode: Running full model-to-hardware DSE")
-        if HOOKS_AVAILABLE:
-            log_strategy_decision('full_dse', 'Standard model-to-hardware flow')
-            log_dse_event('full_dse_start', {'mode': 'model_to_hw'})
+        log_strategy_decision('full_dse', 'Standard model-to-hardware flow')
+        log_dse_event('full_dse_start', {'mode': 'model_to_hw'})
         
         dse_results = _run_full_dse(model_path, dse_config)
         # Handle both dict and object results
@@ -105,16 +96,15 @@ def forge(
         _save_forge_results(results, output_dir)
     
     # Log optimization completion
-    if HOOKS_AVAILABLE:
-        log_dse_event('optimization_complete', {
-            'dataflow_graph_generated': dataflow_graph is not None,
-            'dataflow_core_generated': dataflow_core is not None,
-            'output_saved': output_dir is not None
-        })
-        log_optimization_event('optimization_end', {
-            'success': True,
-            'duration_info': 'completed_successfully'
-        })
+    log_dse_event('optimization_complete', {
+        'dataflow_graph_generated': dataflow_graph is not None,
+        'dataflow_core_generated': dataflow_core is not None,
+        'output_saved': output_dir is not None
+    })
+    log_optimization_event('optimization_end', {
+        'success': True,
+        'duration_info': 'completed_successfully'
+    })
     
     logger.info("Forge process completed successfully")
     return results
@@ -179,7 +169,7 @@ def _validate_inputs(model_path: str, blueprint_path: str, objectives: Dict, con
 def _load_and_validate_blueprint(blueprint_path: str):
     """Load and validate blueprint using new blueprint manager."""
     try:
-        from ..infrastructure.dse.blueprint_manager import BlueprintManager
+        from .dse.blueprint_manager import BlueprintManager
         import yaml
         
         blueprint_name = Path(blueprint_path).stem
@@ -224,8 +214,8 @@ def _load_and_validate_blueprint(blueprint_path: str):
 def _setup_dse_configuration(blueprint_data, objectives, constraints, target_device):
     """Setup comprehensive DSE configuration using simplified blueprint data."""
     try:
-        from ..infrastructure.dse.interface import DSEInterface
-        from ..infrastructure.dse.types import DSEConfiguration, DSEObjective, OptimizationObjective
+        from .dse.interface import DSEInterface
+        from .dse.types import DSEConfiguration, DSEObjective, OptimizationObjective
         
         # Extract objectives and constraints from blueprint data
         blueprint_objectives = blueprint_data.get('targets', {})
@@ -282,7 +272,7 @@ def _setup_dse_configuration(blueprint_data, objectives, constraints, target_dev
 def _run_full_dse(model_path: str, dse_config):
     """Execute full model-to-hardware DSE pipeline."""
     try:
-        from ..infrastructure.dse.interface import DSEInterface
+        from .dse.interface import DSEInterface
         
         logger.info("Starting full DSE: Model analysis -> Transformation -> Kernel mapping -> HW optimization")
         
@@ -305,7 +295,7 @@ def _run_full_dse(model_path: str, dse_config):
 def _run_hw_optimization_dse(dataflow_graph, dse_config):
     """Execute hardware optimization DSE on existing Dataflow Graph."""
     try:
-        from ..infrastructure.dse.interface import DSEInterface
+        from .dse.interface import DSEInterface
         
         logger.info("Starting HW optimization DSE on existing Dataflow Graph")
         
@@ -341,7 +331,7 @@ def _load_dataflow_graph(model_path: str):
 def _generate_dataflow_core(dataflow_graph, dse_config):
     """Generate complete stitched IP design from Dataflow Graph."""
     try:
-        from ..infrastructure.finn import build_accelerator
+        from .finn import build_accelerator
         
         logger.info("Generating Dataflow Core (stitched IP design)")
         

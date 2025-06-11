@@ -3,42 +3,39 @@ Kernel Registry System
 
 Auto-discovery and management of kernel packages in the BrainSmith libraries.
 Provides registration, caching, and lookup functionality for kernel collections.
+
+BREAKING CHANGE: Now uses unified BaseRegistry interface with standardized method names.
 """
 
 import os
 import yaml
 import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Any
 from pathlib import Path
+from brainsmith.core.registry import BaseRegistry, ComponentInfo
 from .types import KernelPackage, OperatorType, BackendType
 
 logger = logging.getLogger(__name__)
 
 
-class KernelRegistry:
+class KernelRegistry(BaseRegistry[KernelPackage]):
     """Registry for auto-discovery and management of kernel packages."""
     
-    def __init__(self, kernel_dirs: Optional[List[str]] = None):
+    def __init__(self, search_dirs: Optional[List[str]] = None, config_manager=None):
         """
         Initialize kernel registry.
         
         Args:
-            kernel_dirs: List of directories to search for kernels.
-                        Defaults to current kernels directory
+            search_dirs: List of directories to search for kernels.
+                        If None, uses default kernel directories.
+            config_manager: Optional configuration manager.
         """
-        if kernel_dirs is None:
-            # Default to the current kernels directory
-            current_dir = Path(__file__).parent
-            kernel_dirs = [str(current_dir)]
-        
-        self.kernel_dirs = kernel_dirs
-        self.kernel_cache = {}
-        self.metadata_cache = {}
-        self._last_scan_time = 0
-        
-        logger.info(f"Kernel registry initialized with dirs: {self.kernel_dirs}")
+        super().__init__(search_dirs, config_manager)
+        # For backward compatibility, maintain kernel_cache reference
+        self.kernel_cache = self._cache
+        self.metadata_cache = self._metadata_cache
     
-    def discover_kernels(self, rescan: bool = False) -> Dict[str, KernelPackage]:
+    def discover_components(self, rescan: bool = False) -> Dict[str, KernelPackage]:
         """
         Discover all available kernel packages.
         
@@ -48,14 +45,14 @@ class KernelRegistry:
         Returns:
             Dictionary mapping kernel names to KernelPackage objects
         """
-        if self.kernel_cache and not rescan:
-            return self.kernel_cache
+        if not rescan and self._cache:
+            return self._cache
         
         discovered = {}
         
-        for kernel_dir in self.kernel_dirs:
+        for kernel_dir in self.search_dirs:
             if not os.path.exists(kernel_dir):
-                logger.warning(f"Kernel directory not found: {kernel_dir}")
+                self._log_warning(f"Kernel directory not found: {kernel_dir}")
                 continue
             
             # Look for subdirectories containing kernel.yaml files
@@ -72,29 +69,17 @@ class KernelRegistry:
                             logger.debug(f"Discovered kernel: {kernel_package.name}")
                             
                         except Exception as e:
-                            logger.warning(f"Failed to load kernel from {item_path}: {e}")
+                            self._log_warning(f"Failed to load kernel from {item_path}: {e}")
         
         # Cache the results
-        self.kernel_cache = discovered
-        self._last_scan_time = os.path.getmtime(self.kernel_dirs[0]) if self.kernel_dirs else 0
+        self._cache = discovered
+        self.kernel_cache = self._cache  # Maintain backward compatibility reference
+        self._last_scan_time = os.path.getmtime(self.search_dirs[0]) if self.search_dirs else 0
         
-        logger.info(f"Discovered {len(discovered)} kernel packages")
+        self._log_info(f"Discovered {len(discovered)} kernel packages")
         return discovered
     
-    def get_kernel(self, kernel_name: str) -> Optional[KernelPackage]:
-        """
-        Get a specific kernel package by name.
-        
-        Args:
-            kernel_name: Name of the kernel package
-            
-        Returns:
-            KernelPackage object or None if not found
-        """
-        kernels = self.discover_kernels()
-        return kernels.get(kernel_name)
-    
-    def find_kernels_by_operator(self, operator_type: OperatorType) -> List[KernelPackage]:
+    def find_components_by_type(self, operator_type: OperatorType) -> List[KernelPackage]:
         """
         Find kernels that support a specific operator type.
         
@@ -104,7 +89,7 @@ class KernelRegistry:
         Returns:
             List of matching KernelPackage objects
         """
-        kernels = self.discover_kernels()
+        kernels = self.discover_components()
         matches = []
         
         for kernel in kernels.values():
@@ -123,7 +108,7 @@ class KernelRegistry:
         Returns:
             List of matching KernelPackage objects
         """
-        kernels = self.discover_kernels()
+        kernels = self.discover_components()
         matches = []
         
         for kernel in kernels.values():
@@ -132,83 +117,55 @@ class KernelRegistry:
         
         return matches
     
-    def list_kernel_names(self) -> List[str]:
-        """Get list of all available kernel names."""
-        kernels = self.discover_kernels()
-        return list(kernels.keys())
-    
     def list_operator_types(self) -> Set[OperatorType]:
         """Get set of all supported operator types."""
-        kernels = self.discover_kernels()
-        return {kernel.operator_type for kernel in kernels.values()}
+        kernels = self.discover_components()
+        return {OperatorType(kernel.operator_type) for kernel in kernels.values() if kernel.operator_type}
     
     def list_backend_types(self) -> Set[BackendType]:
         """Get set of all available backend types."""
-        kernels = self.discover_kernels()
-        return {kernel.backend for kernel in kernels.values()}
+        kernels = self.discover_components()
+        return {BackendType(kernel.backend) for kernel in kernels.values() if kernel.backend}
     
-    def get_kernel_info(self, kernel_name: str) -> Optional[Dict]:
-        """
-        Get summary information about a kernel.
-        
-        Args:
-            kernel_name: Name of the kernel
-            
-        Returns:
-            Dictionary with kernel summary or None if not found
-        """
-        kernel = self.get_kernel(kernel_name)
-        if not kernel:
-            return None
-        
+    def _get_default_dirs(self) -> List[str]:
+        """Get default search directories for kernel registry."""
+        current_dir = Path(__file__).parent
+        return [str(current_dir)]
+    
+    def _extract_info(self, component: KernelPackage) -> Dict[str, Any]:
+        """Extract standardized info from kernel component."""
         return {
-            'name': kernel.name,
-            'operator_type': kernel.operator_type,
-            'backend': kernel.backend,
-            'version': kernel.version,
-            'description': kernel.description,
-            'path': kernel.path,
-            'file_count': len(kernel.files),
-            'verified': kernel.validation.get('verified', False),
-            'last_tested': kernel.validation.get('last_tested', 'Unknown')
+            'name': component.name,
+            'type': 'kernel',
+            'operator_type': component.operator_type.value if hasattr(component.operator_type, 'value') else str(component.operator_type),
+            'backend': component.backend.value if hasattr(component.backend, 'value') else str(component.backend),
+            'version': component.version,
+            'description': component.description,
+            'path': component.package_path,
+            'file_count': len(component.files) if component.files else 0,
+            'verified': component.validation.get('verified', False) if component.validation else False,
+            'last_tested': component.validation.get('last_tested', 'Unknown') if component.validation else 'Unknown'
         }
     
-    def refresh_cache(self):
-        """Refresh the kernel cache by clearing it."""
-        self.kernel_cache.clear()
-        self.metadata_cache.clear()
-        logger.info("Kernel registry cache refreshed")
-    
-    def validate_kernel(self, kernel_name: str) -> tuple[bool, List[str]]:
-        """
-        Validate a kernel package.
-        
-        Args:
-            kernel_name: Name of the kernel to validate
-            
-        Returns:
-            Tuple of (is_valid, list_of_errors)
-        """
-        kernel = self.get_kernel(kernel_name)
-        if not kernel:
-            return False, [f"Kernel '{kernel_name}' not found"]
-        
+    def _validate_component_implementation(self, component: KernelPackage) -> tuple[bool, List[str]]:
+        """Kernel-specific validation logic."""
         errors = []
         
         # Check required files exist
-        for file_type, file_path in kernel.files.items():
-            full_path = os.path.join(kernel.path, file_path)
-            if not os.path.exists(full_path):
-                errors.append(f"Missing file: {file_type} -> {file_path}")
+        if component.files:
+            for file_type, file_path in component.files.items():
+                full_path = os.path.join(component.package_path, file_path)
+                if not os.path.exists(full_path):
+                    errors.append(f"Missing file: {file_type} -> {file_path}")
         
         # Validate metadata structure
-        if not kernel.name:
+        if not component.name:
             errors.append("Kernel name is required")
         
-        if not kernel.operator_type:
+        if not component.operator_type:
             errors.append("Operator type is required")
         
-        if not kernel.backend:
+        if not component.backend:
             errors.append("Backend type is required")
         
         return len(errors) == 0, errors
@@ -244,7 +201,7 @@ class KernelRegistry:
             performance=metadata.get('performance', {}),
             validation=metadata.get('validation', {}),
             repository=metadata.get('repository', {}),
-            path=kernel_dir
+            package_path=kernel_dir
         )
 
 
@@ -260,7 +217,7 @@ def get_kernel_registry() -> KernelRegistry:
     return _global_registry
 
 
-# Convenience functions for common operations
+# BREAKING CHANGE: Updated convenience functions to use new unified interface
 def discover_all_kernels(rescan: bool = False) -> Dict[str, KernelPackage]:
     """
     Discover all available kernel packages.
@@ -272,7 +229,7 @@ def discover_all_kernels(rescan: bool = False) -> Dict[str, KernelPackage]:
         Dictionary mapping kernel names to KernelPackage objects
     """
     registry = get_kernel_registry()
-    return registry.discover_kernels(rescan)
+    return registry.discover_components(rescan)
 
 
 def get_kernel_by_name(kernel_name: str) -> Optional[KernelPackage]:
@@ -286,7 +243,7 @@ def get_kernel_by_name(kernel_name: str) -> Optional[KernelPackage]:
         KernelPackage object or None if not found
     """
     registry = get_kernel_registry()
-    return registry.get_kernel(kernel_name)
+    return registry.get_component(kernel_name)
 
 
 def find_kernels_for_operator(operator_type: OperatorType) -> List[KernelPackage]:
@@ -300,7 +257,7 @@ def find_kernels_for_operator(operator_type: OperatorType) -> List[KernelPackage
         List of matching KernelPackage objects
     """
     registry = get_kernel_registry()
-    return registry.find_kernels_by_operator(operator_type)
+    return registry.find_components_by_type(operator_type)
 
 
 def list_available_kernels() -> List[str]:
@@ -311,7 +268,7 @@ def list_available_kernels() -> List[str]:
         List of kernel names
     """
     registry = get_kernel_registry()
-    return registry.list_kernel_names()
+    return registry.list_component_names()
 
 
 def refresh_kernel_registry():

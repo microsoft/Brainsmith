@@ -163,7 +163,10 @@ Aggressively remove:
 - **Simplify before optimizing**: Clear code before fast code
 - **Reduce before extending**: Cut bloat before adding features
 - **Externalize before implementing**: Use existing tools before building custom
-- **Document while changing**: Update examples as code evolves
+- **Break cleanly over compatibility**: Force migration to better APIs rather than maintaining dual interfaces
+- **Document while changing**: Update examples as code evolve
+
+**Clean Refactor Principle**: When improving APIs, eliminate legacy methods entirely rather than creating backward compatibility layers. Dual interfaces create maintenance burden and API confusion. Better to force immediate migration to cleaner, simpler interfaces that align with our core axioms.
 
 ---
 

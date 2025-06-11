@@ -28,10 +28,10 @@ try:
 except ImportError:
     BrainsmithMetrics = None
 
-from .infrastructure.dse.types import DesignPoint, ParameterSpace
-from .infrastructure.dse.design_space import DesignSpace
+from .core.dse.types import DesignPoint, ParameterSpace
+from .core.dse.design_space import DesignSpace
 try:
-    from .infrastructure.dse.types import ParameterDefinition
+    from .core.dse.types import ParameterDefinition
 except ImportError:
     ParameterDefinition = None
 
@@ -50,7 +50,7 @@ except ImportError:
 
 # Blueprint system (updated for new structure)
 try:
-    from .infrastructure.dse.blueprint_manager import BlueprintManager, load_blueprint, list_available_blueprints
+    from .core.dse.blueprint_manager import BlueprintManager, load_blueprint, list_available_blueprints
     from libraries.blueprints import discover_all_blueprints, get_blueprint_by_name
     
     # Compatibility wrappers
@@ -74,12 +74,12 @@ except ImportError:
 
 # DSE system (updated for new infrastructure)
 try:
-    from .infrastructure.dse import (
+    from .core.dse import (
         DSEInterface, parameter_sweep, batch_evaluate,
         discover_all_steps, optimize_design_space
     )
-    from .infrastructure.dse.interface import DSEInterface as DSEInterfaceClass
-    from .infrastructure.dse.types import (
+    from .core.dse.interface import DSEInterface as DSEInterfaceClass
+    from .core.dse.types import (
         DSEConfiguration, DSEResult, DSEObjective, OptimizationObjective,
         SamplingStrategy, ParameterSpace
     )
@@ -214,13 +214,13 @@ except ImportError:
 
 try:
     # Hooks system (updated structure)
-    from .infrastructure.hooks import (
+    from .core.hooks import (
         log_optimization_event, log_parameter_change, log_performance_metric,
         log_strategy_decision, log_dse_event, get_recent_events, get_events_by_type,
         register_event_handler, register_global_handler, HooksRegistry,
         discover_all_plugins, get_plugin_by_name, install_hook_plugin
     )
-    from .infrastructure.hooks.types import (
+    from .core.hooks.types import (
         OptimizationEvent, EventHandler, SimpleMetric, ParameterChange,
         EventTypes, HooksPlugin
     )
@@ -262,9 +262,9 @@ try:
     from .libraries.kernels import KernelRegistry, discover_all_kernels
     from .libraries.transforms import TransformRegistry, discover_all_transforms  
     from .libraries.analysis import AnalysisRegistry, discover_all_analysis_tools
-    from .libraries.automation import AutomationRegistry, discover_all_automation_tools
+    from .libraries.automation import AutomationRegistry, discover_all_automation_components
     from libraries.blueprints import BlueprintLibraryRegistry, discover_all_blueprints
-    from .infrastructure.hooks import HooksRegistry, discover_all_plugins
+    from .core.hooks import HooksRegistry, discover_all_plugins
     
     # Convenience function to discover all components
     def discover_all_components():
@@ -273,7 +273,7 @@ try:
             'kernels': discover_all_kernels(),
             'transforms': discover_all_transforms(), 
             'analysis_tools': discover_all_analysis_tools(),
-            'automation_tools': discover_all_automation_tools(),
+            'automation_tools': discover_all_automation_components(),
             'blueprints': discover_all_blueprints(),
             'hooks_plugins': discover_all_plugins()
         }
