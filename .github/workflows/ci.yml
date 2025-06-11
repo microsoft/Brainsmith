@@ -34,10 +34,11 @@ jobs:
       container-name: ${{ steps.env-check.outputs.container-name }}
       docker-tag: ${{ steps.env-check.outputs.docker-tag }}
     steps:
-      - uses: ./.github/actions/setup-and-test
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          check-disk: 'false'  # We'll check it manually in the validation
-          pull-image: 'false'  # No image to pull yet
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Validate environment and generate outputs
         id: env-check
