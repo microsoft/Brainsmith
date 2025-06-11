@@ -54,25 +54,34 @@ class OpTest(ABC):
 
     @pytest.fixture()
     def f_model_hw(
-        self, f_model: ModelWrapper, f_infer_hw_transform: Transformation
+        self,
+        f_model: ModelWrapper,
+        f_infer_hw_transform: Transformation,
+        f_save_models: bool,
+        f_output_dir: str,
     ) -> ModelWrapper:
         """Converts all ONNX layers of a specific type to hardware layers,
         using a given inference function. If that function does not exist
         (i.e. f_infer_hw_transform == 'None'), then the model is directly
         passed through. All fixtures reliant on hardware inference should
         check if f_infer_hw_transform == 'None' before using this fixture.
-        
+
         :param f_model: Auto-populated by the :func:`OpTest.f_model` fixture's return value
         :type f_model: :class:`qonnx.core.modelwrapper.ModelWrapper`
-        
+
         :param f_infer_hw_transform: Auto-populated by the :func:`OpTest.f_infer_hw_transform` fixture's return value
         :type minfer_hw_transformodel: :class:`qonnx.transformation.base.Transformation`
-        
+
         :return: A :class:`ModelWrapper` containing the converted model
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         if f_infer_hw_transform is not None:
-            return self.apply_transforms(f_model, [f_infer_hw_transform])
+            save_output = f_output_dir if f_save_models else None
+            return self.apply_transforms(
+                model=f_model,
+                transform_list=[f_infer_hw_transform],
+                output_dir=save_output,
+            )
         else:
             return f_model
 
@@ -88,18 +97,21 @@ class OpTest(ABC):
 
         :param f_model_hw: Auto-populated by the :func:`OpTest.f_model_hw` fixture's return value
         :type f_model_hw: :class:`qonnx.core.modelwrapper.ModelWrapper`
-        
+
         :param f_target_fpga: Auto-populated by the :func:`OpTest.f_target_fpga` fixture's return value
         :type f_target_fpga: str
 
         :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
         :type f_output_dir: str
-        
+
         :return: A :class:`ModelWrapper` containing the specialised model
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         specialised_model: ModelWrapper = self.apply_builder_step(
-            f_model_hw, step_specialize_layers, f_output_dir, dict(fpga_part=f_target_fpga)
+            f_model_hw,
+            step_specialize_layers,
+            f_output_dir,
+            dict(fpga_part=f_target_fpga),
         )
 
         return specialised_model
@@ -108,7 +120,7 @@ class OpTest(ABC):
     def f_infer_hw_transform(self) -> Transformation:
         """The transformation to infer a hardware layer from a standard ONNX layer.
         If this fixture returns 'None', OpTest assumes to skip hardware inference.
-        
+
         :return: The :class:`Transformation` we'll apply when inferring hardware layers
                  (Default: ``None``)
         :rtype: :class:`qonnx.transformation.base.Transformation`"""
@@ -118,7 +130,7 @@ class OpTest(ABC):
     @pytest.fixture
     def f_target_fpga(self) -> str:
         """The fpga we're targeting for testing. Can be overridden by test classes.
-        
+
         :return: The name of the fpga we're targeting for testing
                  (Default: ``"xcv80-lsva4737-2MHP-e-S"``)
         :rtype: str"""
@@ -130,7 +142,7 @@ class OpTest(ABC):
         """The index of the node in the model we're focusing on. Allows for multiple
         nodes to be present, with tests that only target a specific node. Defaults to
         the first node. Can be overridden.
-        
+
         :return: The index of the node we wish to focus our tests on.
                  (Default: ``0``)
         :rtype: int"""
@@ -138,14 +150,14 @@ class OpTest(ABC):
         return 0
 
     @pytest.fixture
-    def f_input_tensors(self, f_model: ModelWrapper) -> dict[str,any]:
+    def f_input_tensors(self, f_model: ModelWrapper) -> dict[str, any]:
         """Creates the tensor(s) passed to the model, to be used by the simulation during
         testing. By default, this fixture creates a tensor with random values, but can be
         overridden by tests to pass specific values.
-        
+
         :param f_model: Auto-populated by the :func:`OpTest.f_model` fixture's return value
         :type f_model: :class:`qonnx.core.modelwrapper.ModelWrapper`
-        
+
         :return: A dictionary. Each entry in the dictionary contains an input tensor's name as its key, and the data we wish to pass to it as its value.
         :rtype: :class:`qonnx.transformation.base.Transformation`"""
 
@@ -163,7 +175,7 @@ class OpTest(ABC):
         """If this fixture is overridden to return True, the 'f_auto_saver' fixture
         will automatically save the outputs of all 'f_model' fixtures to .onnx files.
 
-        
+
         :return: Whether or not the auto-saver should save intermediate models.
                  (Default: ``False``)
         :rtype: bool"""
@@ -183,13 +195,13 @@ class OpTest(ABC):
         automatically scrapes all fixtures with names that start with 'f_model'
         (i.e. 'f_model', 'f_model_specialised') and saves their output to a .onnx file
         (if the fixtures return a ModelWrapper).
-            
+
         :param request: Auto-populated by the :func:`pytest.fixtures.FixtureRequest()` fixture's return value
         :type request: :class:`pytest.fixtures.FixtureRequest`
 
         :param f_save_models: Auto-populated by the :func:`OpTest.f_save_models` fixture's return value
         :type f_save_models: bool
-        
+
         :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
         :type f_output_dir: str"""
 
@@ -227,7 +239,7 @@ class OpTest(ABC):
         """The directory we'll save the output of our tests to. By default,
         OpTest saves to a directory called "test_output", which is created
         in the same directory as the python file containing the test.
-        
+
         :return: The output directory that all test output will be saved to.
                  (Default: ``"__file__/test_output"``)
         :rtype: str"""
@@ -240,7 +252,6 @@ class OpTest(ABC):
         fixture auto-runs before all test functions. If the directory exists,
         this fixture does nothing.
 
-        
         :param f_output_dir: Auto-populated by the :func:`OpTest.f_output_dir` fixture's return value
         :type f_output_dir: str"""
 
@@ -264,10 +275,10 @@ class OpTest(ABC):
     ) -> None:
         """Ensure the number of cycles the layer takes to run in rtlsim aligns
         with the expected number of cycles.
-        
+
         :param f_model_specialised: Auto-populated by the :func:`OpTest.f_model_specialised` fixture's return value
         :type f_model_specialised: :class:`qonnx.core.modelwrapper.ModelWrapper`
-        
+
         :param f_target_node: Auto-populated by the :func:`OpTest.f_target_node` fixture's return value
         :type f_target_node: int
 
@@ -322,11 +333,11 @@ class OpTest(ABC):
         :param opset: The opset of the generated model. Defaults to 17.
                       (Default: ``17``)
         :type opset: int, optional
-        
+
         :param name: The name of the generated model.
                      (Default: ``"OpTest_Graph"``)
         :type name: str, optional
-        
+
         :return: A :class:`ModelWrapper` containing the generated model
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
@@ -373,18 +384,27 @@ class OpTest(ABC):
         self,
         model: ModelWrapper,
         transform_list: List[Transformation] | List[List[Transformation]],
-        validate: bool = False,
         input_tensors: dict = None,
         tolerance: float = 1e-5,
+        output_dir: str = None,
     ) -> ModelWrapper:
         """Applies a list of QONNX transformations to a given model.
-        
+
         If 'validate' is enabled, the function compares the model's output pre and
         post-transformation. 'transform_list' can accept either a list of transforms,
         or a nested list of transforms. This affects how model validation is performed.
         Regular transform-lists are validated after every transform. Nested transform-
         lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
         be validated between 3-4, and after 5.
+
+        If an 'output_dir' is provided, the model will be saved to that directory after
+        ANY transform is applied.
+
+        .. warning::
+            As of 11/06/2025, validation has stopped working. I'm unsure what commit caused
+            this. When the ONNX runtime is used to execute the model, the exception "Rounding
+            error is too high to match set QONNX datatype (INT8) for input xxxxx", where
+            "xxxxxx" is a six digit alphanumeric string.
 
         :param model: The :class:`ModelWrapper` we'll apply our transform list to
         :type model: :class:`qonnx.core.modelwrapper.ModelWrapper`
@@ -393,44 +413,59 @@ class OpTest(ABC):
             we'll apply to the model
         :type transform_list: List(Transformation) or List(List(Transformation))
 
-        :param validate: Whether or not we validate between certain transforms.
-            (Default: ``False``)
-        :type validate: bool
-
         :param input_tensors: The dictionary containing the names of tensors (key)
-            and their inputs as numpy arrays (value) which we'd use to validate our model
+            and their inputs as numpy arrays (value) which we'd use to validate our model.
+            Providing an input dictionary enables model validation.
             (Default: ``None``)
         :type input_tensors: dict
-        
+
         :param tolerance: The acceptable tolerance that model outputs can differ during validation.
             (Default: ``1e-5``)
         :type tolerance: float
-        
+
+        :param output_dir: The acceptable tolerance that model outputs can differ during validation.
+            (Default: ``1e-5``)
+        :type output_dir: float
+
         :return: A :class:`ModelWrapper` containing the transformed model
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
-        if validate:
+        if input_tensors is not None:
             # Generate reference model output to compare our transformed output to.
             out_name = model.graph.output[0].name
             ref_output = oxe.execute_onnx(model, input_tensors)[out_name]
 
-        for transform in transform_list:
-            
+        for index, transform in enumerate(transform_list):
+
             if isinstance(transform, list):
                 # If 'transform' is a list, we apply each sub-transform in the list, then validate.
-                for i in transform:
+                for subindex, i in enumerate(transform):
                     model = model.transform(i)
+                    if output_dir is not None:
+                        model.save(
+                            os.path.join(
+                                output_dir,
+                                str(index + subindex) + "_" + i.__class__.__name__,
+                            )
+                        )
             else:
                 # If 'transform' is an single transform, we validate between each transform.
                 model = model.transform(transform)
+                if output_dir is not None:
+                    model.save(
+                        os.path.join(
+                            output_dir,
+                            str(index) + "_" + transform.__class__.__name__,
+                        )
+                    )
 
-            if validate:
+            if input_tensors is not None:
                 # Compare the transformed model's output to the reference output.
                 t_output = oxe.execute_onnx(model, input_tensors)[out_name]
                 if not np.allclose(ref_output, t_output, atol=tolerance):
                     raise RuntimeError(
-                        f"Transformation step {transform} failed:\n" +
-                        f"expected {ref_output=} but got {t_output=}"
+                        f"Transformation step {transform} failed:\n"
+                        + f"expected {ref_output=} but got {t_output=}"
                     )
 
         return model
@@ -453,11 +488,11 @@ class OpTest(ABC):
         :param step: A list (or nested list) containing each :class:`Transformation` we'll
             apply to the model
         :type step: callable
-        
+
         :param output_dir: The directory that the builder step will use, if the step
             involves saving intermediate models
         :type output_dir: str
-        
+
         :param cfg_settings: A dictionary containing named parameters to pass to the step's
             :class:`finn.builder.build_dataflow_config.DataFlowBuildConfig`
         :type cfg_settings: dict, optional
