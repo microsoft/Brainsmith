@@ -9,7 +9,6 @@ import pytest
 import onnx
 import finn.core.onnx_exec as oxe
 from op_test import OpTest
-from op_test import OpTest
 from onnx import TensorProto, OperatorSetIdProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
@@ -383,54 +382,57 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 Below is an example of a test constructed using the OpTest class.
 """
 
+
 class TestLayerNorm(OpTest):
 
     # These fixtures are parametrised, meaning if a test uses them
     # (or uses a fixture that uses them) multiple versions of that
     # test will be available, one for every combination of parameter.
-    
-    @pytest.fixture(params=[1,2,4])
-    def simd(self, request):
+
+    @pytest.fixture(params=[1, 2, 4])
+    def f_simd(self, request):
         return request.param
 
     @pytest.fixture(params=["INT8", "INT9"])
-    def idt(self, request):
+    def f_idt(self, request):
         return request.param
 
     @pytest.fixture(params=[(1, 128, 384), (1, 12, 12, 128)])
-    def ifm_dim(self, request):
+    def f_ifm_dim(self, request):
         return request.param
 
     # The f_model fixture is used to describe the initial state of
     # our test model, before other steps are applied (conversion to
     # hardware, specialisation, etc.)
     @pytest.fixture
-    def f_model(self, simd, idt, ifm_dim)->ModelWrapper:
+    def f_model(self, f_simd, f_idt, f_ifm_dim) -> ModelWrapper:
 
         odt = "FLOAT32"
-        model:ModelWrapper = self.create_model(
-            inputs = [
-                (dict(name='X', elem_type=TensorProto.FLOAT, shape=ifm_dim), idt),
+        model: ModelWrapper = self.create_model(
+            inputs=[
+                (dict(name="X", elem_type=TensorProto.FLOAT, shape=f_ifm_dim), f_idt),
             ],
-            inits = [
-                dict(tensor=np.ones(ifm_dim[-1]), name="Scale"),
-                dict(tensor=np.zeros(ifm_dim[-1]), name="Bias"),
+            inits=[
+                dict(tensor=np.ones(f_ifm_dim[-1]), name="Scale"),
+                dict(tensor=np.zeros(f_ifm_dim[-1]), name="Bias"),
             ],
-            outputs= [
-                (dict(name='Y', elem_type=TensorProto.FLOAT, shape=ifm_dim), odt),
+            outputs=[
+                (dict(name="Y", elem_type=TensorProto.FLOAT, shape=f_ifm_dim), odt),
             ],
-            nodes= [
-                dict(op_type="LayerNormalization",
-                    inputs=['X', 'Scale', 'Bias'],
-                    outputs=['Y'],
-                    SIMD=simd,
+            nodes=[
+                dict(
+                    op_type="LayerNormalization",
+                    inputs=["X", "Scale", "Bias"],
+                    outputs=["Y"],
+                    SIMD=f_simd,
                     preferred_impl_style="hls",
-                    ifm_dim=ifm_dim,
-                    NumChannels=ifm_dim[-1],
+                    ifm_dim=f_ifm_dim,
+                    NumChannels=f_ifm_dim[-1],
                     epsilon=1e-05,
-                    inputDataType=idt,
-                    outputDataType=odt,),
-            ]
+                    inputDataType=f_idt,
+                    outputDataType=odt,
+                ),
+            ],
         )
         return self.apply_transforms(model, [ExpandNorms()])
 
@@ -445,5 +447,5 @@ class TestLayerNorm(OpTest):
     # (which evaluates to false), so that each model step can
     # have its output saved.
     @pytest.fixture
-    def f_save_intermediate_models(self):
+    def f_save_models(self):
         return True

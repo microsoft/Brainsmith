@@ -34,7 +34,7 @@ fixture.
 
 <a id="op_test.OpTest.f_model_hw"></a>
 
-#### f_model_hw(f_model: ModelWrapper, f_infer_hw_transform: Transformation) → ModelWrapper
+#### f_model_hw(f_model: ModelWrapper, f_infer_hw_transform: Transformation, f_save_models: bool, f_output_dir: str) → ModelWrapper
 
 Converts all ONNX layers of a specific type to hardware layers,
 using a given inference function. If that function does not exist
@@ -174,9 +174,13 @@ this fixture does nothing.
 * **Parameters:**
   **f_output_dir** (*str*) – Auto-populated by the [`OpTest.f_output_dir()`](#op_test.OpTest.f_output_dir) fixture’s return value
 
+<a id="op_test.OpTest.f_exec_mode"></a>
+
+#### f_exec_mode(request) → str
+
 <a id="op_test.OpTest.test_cycles"></a>
 
-#### test_cycles(f_model_specialised: ModelWrapper, f_target_node: int, exec_mode: str) → None
+#### test_cycles(f_model_specialised: ModelWrapper, f_target_node: int, f_exec_mode: str) → None
 
 Ensure the number of cycles the layer takes to run in rtlsim aligns
 with the expected number of cycles.
@@ -184,7 +188,7 @@ with the expected number of cycles.
 * **Parameters:**
   * **f_model_specialised** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_specialised()`](#op_test.OpTest.f_model_specialised) fixture’s return value
   * **f_target_node** (*int*) – Auto-populated by the [`OpTest.f_target_node()`](#op_test.OpTest.f_target_node) fixture’s return value
-  * **exec_mode** (*str*) – Auto-populated by OpTest’s exec_mode PyTest parameter.
+  * **f_exec_mode** (*str*) – Auto-populated by OpTest’s f_exec_mode PyTest parameter.
     These are defined at the top of OpTest’s class definition.
 
 <a id="op_test.OpTest.create_model"></a>
@@ -216,7 +220,7 @@ additional boilerplate code.
 
 <a id="op_test.OpTest.apply_transforms"></a>
 
-#### apply_transforms(model: ModelWrapper, transform_list: List[Transformation] | List[List[Transformation]], validate: bool = False, input_tensors: dict | None = None, tolerance: float = 1e-05) → ModelWrapper
+#### apply_transforms(model: ModelWrapper, transform_list: List[Transformation] | List[List[Transformation]], input_tensors: dict | None = None, tolerance: float = 1e-05, output_dir: str | None = None) → ModelWrapper
 
 Applies a list of QONNX transformations to a given model.
 
@@ -227,16 +231,26 @@ Regular transform-lists are validated after every transform. Nested transform-
 lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
 be validated between 3-4, and after 5.
 
+If an ‘output_dir’ is provided, the model will be saved to that directory after
+ANY transform is applied.
+
+#### WARNING
+As of 11/06/2025, validation has stopped working. I’m unsure what commit caused
+this. When the ONNX runtime is used to execute the model, the exception “Rounding
+error is too high to match set QONNX datatype (INT8) for input xxxxx”, where
+“xxxxxx” is a six digit alphanumeric string.
+
 * **Parameters:**
   * **model** (`qonnx.core.modelwrapper.ModelWrapper`) – The `ModelWrapper` we’ll apply our transform list to
   * **transform_list** (*List* *(**Transformation* *) or* *List* *(**List* *(**Transformation* *)* *)*) – A list (or nested list) containing each `Transformation`
     we’ll apply to the model
-  * **validate** (*bool*) – Whether or not we validate between certain transforms.
-    (Default: `False`)
   * **input_tensors** (*dict*) – The dictionary containing the names of tensors (key)
-    and their inputs as numpy arrays (value) which we’d use to validate our model
+    and their inputs as numpy arrays (value) which we’d use to validate our model.
+    Providing an input dictionary enables model validation.
     (Default: `None`)
   * **tolerance** (*float*) – The acceptable tolerance that model outputs can differ during validation.
+    (Default: `1e-5`)
+  * **output_dir** (*float*) – The acceptable tolerance that model outputs can differ during validation.
     (Default: `1e-5`)
 * **Returns:**
   A `ModelWrapper` containing the transformed model
@@ -264,7 +278,3 @@ dictionary, with the name of each parameter as its key.
   A `ModelWrapper` containing the transformed model
 * **Return type:**
   `qonnx.core.modelwrapper.ModelWrapper`
-
-<a id="op_test.OpTest.pytestmark"></a>
-
-#### pytestmark *= [Mark(name='parametrize', args=('exec_mode', ['cppsim', 'rtlsim']), kwargs={})]*
