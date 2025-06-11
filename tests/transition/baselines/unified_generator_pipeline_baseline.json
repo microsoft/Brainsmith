@@ -1,0 +1,35 @@
+{
+  "generation": {
+    "success": true,
+    "errors": [],
+    "warnings": [],
+    "generated_files": [
+      "thresholding_axi_hwcustomop.py",
+      "thresholding_axi_rtlbackend.py",
+      "test_thresholding_axi.py"
+    ],
+    "file_sizes": {
+      "thresholding_axi_hwcustomop.py": 7457,
+      "thresholding_axi_rtlbackend.py": 7916,
+      "test_thresholding_axi.py": 15348
+    },
+    "dataflow_model_interfaces": 4
+  },
+  "file_samples": {
+    "thresholding_axi_hwcustomop.py": {
+      "preview": "############################################################################\n# Copyright (c) Microsoft Corporation.\n# Licensed under the MIT License.\n#\n# AUTO-GENERATED: AutoThresholdingAxiHWCustomOp for thresholding_axi\n# Generated: 2025-06-11T05:27:50.327474\n# Generator: Unified HWKG with Interface-Wise Dataflow Modeling\n#\n# DATAFLOW-MODEL-POWERED HARDWARE COMPONENT\n# This HWCustomOp uses DataflowModel for mathematical foundation.\n# All performance calculations are mathematically derived, not placeholders.\n############################################################################\n\nimport numpy as np\nfrom typing import Dict, Any, List, Optional\n\n# Import unified dataflow components\nfrom brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp\nfrom brainsmith.dataflow.rtl_integration import create_interface_metadata\nfrom brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType\n\n# Try to import FINN components (optional for development)\ntry:\n    from qonnx.core",
+      "full_hash": "41b25de6437c9e1e5e3268ecb758bd7b556524d2acaa494c61818e7ffe96363f",
+      "size": 7457
+    },
+    "thresholding_axi_rtlbackend.py": {
+      "preview": "############################################################################\n# Copyright (c) Microsoft Corporation.\n# Licensed under the MIT License.\n#\n# AUTO-GENERATED: AutoThresholdingAxiRTLBackendRTLBackend for thresholding_axi\n# Generated: 2025-06-11T05:27:50.333630\n# Generator: Unified HWKG with Interface-Wise Dataflow Modeling\n#\n# DATAFLOW-MODEL-POWERED RTL BACKEND\n# This RTLBackend uses DataflowModel for interface configuration and\n# RTL parameter generation with mathematical foundation.\n############################################################################\n\nimport os\nimport numpy as np\nfrom typing import Dict, Any, List, Optional\n\n# Import unified dataflow components\nfrom brainsmith.dataflow.core.auto_rtl_backend import AutoRTLBackend\nfrom brainsmith.dataflow.core.dataflow_interface import DataflowInterfaceType\n\n# Try to import FINN components (optional for development)\ntry:\n    from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend\n    from qonnx.core.datatype imp",
+      "full_hash": "ba7a3ffec1cc6c20c7a844bfa86c77adf20b218843331f0ea2b12c255323e0de",
+      "size": 7916
+    },
+    "test_thresholding_axi.py": {
+      "preview": "############################################################################\n# Copyright (c) Microsoft Corporation.\n# Licensed under the MIT License.\n#\n# AUTO-GENERATED: Test Suite for thresholding_axi\n# Generated: 2025-06-11T05:27:50.339806\n# Generator: Unified HWKG with Interface-Wise Dataflow Modeling\n#\n# COMPREHENSIVE TEST SUITE\n# Tests DataflowModel mathematical correctness and unified HWKG integration.\n############################################################################\n\nimport pytest\nimport numpy as np\nfrom typing import Dict, Any, List, Optional\nfrom pathlib import Path\nimport tempfile\nimport os\n\n# Import the generated classes\nfrom .thresholding_axi_hwcustomop import AutoThresholdingAxiHWCustomOp, create_thresholding_axi_hwcustomop\nfrom .thresholding_axi_rtlbackend import AutoThresholdingAxiRTLBackendRTLBackend, create_thresholding_axi_rtlbackend\n\n# Import dataflow components for testing\nfrom brainsmith.dataflow.core.dataflow_model import DataflowModel\nfrom brainsmith.d",
+      "full_hash": "c3cef455b46e1eeb6e0ad0d4ba0328708676fb116aabba807de4c9fb79492d26",
+      "size": 15348
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "direct_attributes": [
+    "bdim_metadata",
+    "block_dims_metadata",
+    "chunking_strategies",
+    "class_name",
+    "compiler_data",
+    "dataflow_interfaces",
+    "generation_timestamp",
+    "has_enhanced_bdim",
+    "interfaces",
+    "kernel_complexity",
+    "kernel_name",
+    "kernel_type",
+    "metadata",
+    "name",
+    "parameters",
+    "parsing_warnings",
+    "pragma_sophistication_level",
+    "pragmas",
+    "resource_estimation_required",
+    "rtl_parameters",
+    "source_file",
+    "stream_dims_metadata",
+    "tensor_dims_metadata",
+    "verification_required",
+    "weight_interfaces_count"
+  ],
+  "callable_methods": [
+    "add_parsing_warning"
+  ],
+  "property_types": {
+    "bdim_metadata": "NoneType",
+    "block_dims_metadata": "dict",
+    "chunking_strategies": "dict",
+    "class_name": "str",
+    "compiler_data": "dict",
+    "dataflow_interfaces": "list",
+    "generation_timestamp": "str",
+    "has_enhanced_bdim": "bool",
+    "interfaces": "dict",
+    "kernel_complexity": "str",
+    "kernel_name": "str",
+    "kernel_type": "str",
+    "metadata": "dict",
+    "name": "str",
+    "parameters": "list",
+    "parsing_warnings": "list",
+    "pragma_sophistication_level": "str",
+    "pragmas": "list",
+    "resource_estimation_required": "bool",
+    "rtl_parameters": "list",
+    "source_file": "PosixPath",
+    "stream_dims_metadata": "dict",
+    "tensor_dims_metadata": "dict",
+    "verification_required": "bool",
+    "weight_interfaces_count": "int"
+  },
+  "interface_structure": {
+    "ap": {
+      "attributes": [
+        "metadata",
+        "name",
+        "ports",
+        "type",
+        "validation_result",
+        "wrapper_name"
+      ],
+      "port_count": 2
+    },
+    "s_axis": {
+      "attributes": [
+        "metadata",
+        "name",
+        "ports",
+        "type",
+        "validation_result",
+        "wrapper_name"
+      ],
+      "port_count": 3
+    },
+    "m_axis": {
+      "attributes": [
+        "metadata",
+        "name",
+        "ports",
+        "type",
+        "validation_result",
+        "wrapper_name"
+      ],
+      "port_count": 3
+    },
+    "s_axilite": {
+      "attributes": [
+        "metadata",
+        "name",
+        "ports",
+        "type",
+        "validation_result",
+        "wrapper_name"
+      ],
+      "port_count": 17
+    }
+  }
+}

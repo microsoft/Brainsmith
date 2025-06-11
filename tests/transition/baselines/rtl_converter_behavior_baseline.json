@@ -1,0 +1,98 @@
+{
+  "thresholding_axi.sv": {
+    "success": true,
+    "errors": [],
+    "warnings": [],
+    "hw_kernel_usage": {
+      "accessed_properties": [
+        "interfaces",
+        "name",
+        "parsing_warnings",
+        "pragma_sophistication_level",
+        "pragmas",
+        "source_file"
+      ],
+      "method_calls": []
+    },
+    "dataflow_model": {
+      "interface_count": 4,
+      "interfaces": {
+        "ap": {
+          "type": "config",
+          "tensor_dims": [
+            128
+          ],
+          "block_dims": [
+            128
+          ],
+          "stream_dims": [
+            1
+          ],
+          "dtype_info": {
+            "base_type": "UINT",
+            "bitwidth": 1
+          }
+        },
+        "s_axis": {
+          "type": "input",
+          "tensor_dims": [
+            7
+          ],
+          "block_dims": [
+            7
+          ],
+          "stream_dims": [
+            1
+          ],
+          "dtype_info": {
+            "base_type": "UINT",
+            "bitwidth": 7
+          }
+        },
+        "m_axis": {
+          "type": "output",
+          "tensor_dims": [
+            7
+          ],
+          "block_dims": [
+            7
+          ],
+          "stream_dims": [
+            1
+          ],
+          "dtype_info": {
+            "base_type": "UINT",
+            "bitwidth": 7
+          }
+        },
+        "s_axilite": {
+          "type": "config",
+          "tensor_dims": [
+            31
+          ],
+          "block_dims": [
+            31
+          ],
+          "stream_dims": [
+            1
+          ],
+          "dtype_info": {
+            "base_type": "UINT",
+            "bitwidth": 31
+          }
+        }
+      },
+      "parameters": {
+        "kernel_name": "thresholding_axi",
+        "source_file": "/home/tafk/dev/brainsmith-2/examples/thresholding/thresholding_axi.sv",
+        "pragma_level": "simple",
+        "conversion_warnings": []
+      },
+      "computation_graph": {
+        "input_count": 1,
+        "output_count": 1,
+        "weight_count": 0
+      }
+    }
+  }
+}
