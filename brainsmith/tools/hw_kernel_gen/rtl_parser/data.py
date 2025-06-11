@@ -727,7 +727,7 @@ class TDimPragma(BDimPragma):
 
 @dataclass
 class HWKernel:
-    """Unified hardware kernel representation with optional BDIM pragma support.
+    """Hardware kernel representation with optional BDIM pragma support.
     
     This structure holds the consolidated information extracted from an RTL file,
     focusing on a single target module (often specified by a pragma).
@@ -740,7 +740,7 @@ class HWKernel:
         pragmas: List of Brainsmith pragmas found
         metadata: Optional dictionary for additional info (e.g., source file)
         
-        # Unified fields for enhanced functionality
+        # Enhanced fields for additional functionality
         class_name: Python class name derived from module name
         source_file: Path to source RTL file
         compiler_data: Compiler configuration data
@@ -754,7 +754,7 @@ class HWKernel:
     pragmas: List[Pragma] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    # Unified fields for enhanced functionality
+    # Enhanced fields for additional functionality
     class_name: str = field(init=False)
     source_file: Optional[Any] = None  # Path object
     compiler_data: Dict[str, Any] = field(default_factory=dict)

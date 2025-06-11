@@ -17,7 +17,7 @@ Key Components:
     - Data Structures: Core data models for parsed information
 
 Example Usage:
-    from brainsmith.tools.hw_kernel_gen_unified.rtl_parser import RTLParser
+    from brainsmith.tools.hw_kernel_gen.rtl_parser import RTLParser
 """
 
 from typing import Dict, List, Any
@@ -56,17 +56,17 @@ __all__ = [
 
 def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
     """
-    Parse RTL file and return unified HWKernel with enhanced features.
+    Parse RTL file and return HWKernel with enhanced features.
     
-    This function provides the interface expected by the unified CLI,
-    returning a HWKernel with all unified features enabled.
+    This function provides the interface expected by the CLI,
+    returning a HWKernel with all enhanced features enabled.
     
     Args:
         rtl_file: Path to SystemVerilog RTL file or Path object
         advanced_pragmas: Enable enhanced BDIM pragma processing
         
     Returns:
-        HWKernel: Unified kernel object with enhanced functionality
+        HWKernel: Kernel object with enhanced functionality
         
     Raises:
         RTLParsingError: If RTL parsing fails
@@ -86,11 +86,11 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
         # Create RTL parser instance
         parser = RTLParser(debug=advanced_pragmas)
         
-        # Parse the RTL file - this now returns the unified HWKernel directly
+        # Parse the RTL file - this now returns the HWKernel directly
         hw_kernel = parser.parse_file(str(rtl_file))
         
-        # Enhance the kernel with unified features
-        _enhance_hw_kernel_for_unified_mode(hw_kernel, rtl_file, advanced_pragmas)
+        # Enhance the kernel with additional features
+        _enhance_hw_kernel_for_enhanced_mode(hw_kernel, rtl_file, advanced_pragmas)
         
         logger.info(f"Successfully parsed RTL file {rtl_file} → HWKernel '{hw_kernel.name}'")
         return hw_kernel
@@ -102,9 +102,9 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
         raise RTLParsingError(f"RTL parsing failed for {rtl_file}: {e}") from e
 
 
-def _enhance_hw_kernel_for_unified_mode(hw_kernel, source_file, advanced_pragmas: bool):
+def _enhance_hw_kernel_for_enhanced_mode(hw_kernel, source_file, advanced_pragmas: bool):
     """
-    Enhance HWKernel with unified features and metadata.
+    Enhance HWKernel with additional features and metadata.
     
     Args:
         hw_kernel: HWKernel object to enhance (modified in place)
@@ -116,7 +116,7 @@ def _enhance_hw_kernel_for_unified_mode(hw_kernel, source_file, advanced_pragmas
     
     logger = logging.getLogger(__name__)
     
-    # Set unified fields
+    # Set enhanced fields
     hw_kernel.source_file = Path(source_file)
     hw_kernel.pragma_sophistication_level = "advanced" if advanced_pragmas else "simple"
     hw_kernel.compiler_data = {}  # Will be populated by CLI
@@ -127,7 +127,7 @@ def _enhance_hw_kernel_for_unified_mode(hw_kernel, source_file, advanced_pragmas
         hw_kernel.bdim_metadata = bdim_metadata
         hw_kernel.parsing_warnings.extend(warnings)
     
-    logger.debug(f"Enhanced HWKernel '{hw_kernel.name}' with unified features (level: {hw_kernel.pragma_sophistication_level})")
+    logger.debug(f"Enhanced HWKernel '{hw_kernel.name}' with additional features (level: {hw_kernel.pragma_sophistication_level})")
 
 
 

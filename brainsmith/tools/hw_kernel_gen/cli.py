@@ -1,9 +1,9 @@
 """
-Unified command-line interface for HWKG.
+Command-line interface for HWKG.
 
 Simple by default, powerful when needed. Based on hw_kernel_gen_simple CLI
 with enhancements for complexity levels and feature flags.
-Follows HWKG Axiom 10: Unified Architecture Principle.
+Follows HWKG Axiom 10: Architecture Principle.
 """
 
 import argparse
@@ -11,18 +11,18 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .config import UnifiedConfig
+from .config import Config
 from .data import GenerationResult
 from .rtl_parser import parse_rtl_file, HWKernel
-from .generators import UnifiedHWCustomOpGenerator, UnifiedRTLBackendGenerator, UnifiedTestSuiteGenerator
+from .generators import HWCustomOpGenerator, RTLBackendGenerator, TestSuiteGenerator
 from .errors import HWKGError, CompilerDataError
 
 
-def create_hw_kernel(config: UnifiedConfig) -> HWKernel:
+def create_hw_kernel(config: Config) -> HWKernel:
     """
     Create HWKernel from RTL file and compiler data.
     
-    Uses unified parser with optional BDIM enhancement,
+    Uses RTL parser with optional BDIM enhancement,
     maintaining error resilience and simple-by-default philosophy.
     """
     # Parse RTL file with appropriate sophistication level
@@ -74,7 +74,7 @@ def create_hw_kernel(config: UnifiedConfig) -> HWKernel:
     return hw_kernel
 
 
-def generate_all(hw_kernel: HWKernel, config: UnifiedConfig) -> GenerationResult:
+def generate_all(hw_kernel: HWKernel, config: Config) -> GenerationResult:
     """
     Generate all output files with optional multi-phase execution.
     
@@ -95,12 +95,12 @@ def generate_all(hw_kernel: HWKernel, config: UnifiedConfig) -> GenerationResult
         return _generate_simple_mode(hw_kernel, config, result)
 
 
-def _generate_simple_mode(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
+def _generate_simple_mode(hw_kernel: HWKernel, config: Config, result: GenerationResult) -> GenerationResult:
     """Simple mode generation - identical to hw_kernel_gen_simple experience."""
     generators = [
-        UnifiedHWCustomOpGenerator(config.template_dir),
-        UnifiedRTLBackendGenerator(config.template_dir),
-        UnifiedTestSuiteGenerator(config.template_dir)
+        HWCustomOpGenerator(config.template_dir),
+        RTLBackendGenerator(config.template_dir),
+        TestSuiteGenerator(config.template_dir)
     ]
     
     for generator in generators:
@@ -123,7 +123,7 @@ def _generate_simple_mode(hw_kernel: HWKernel, config: UnifiedConfig, result: Ge
     return result
 
 
-def _generate_multi_phase(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
+def _generate_multi_phase(hw_kernel: HWKernel, config: Config, result: GenerationResult) -> GenerationResult:
     """
     Multi-phase generation with debugging stops.
     
@@ -166,7 +166,7 @@ def _generate_multi_phase(hw_kernel: HWKernel, config: UnifiedConfig, result: Ge
     return result
 
 
-def _build_dataflow_model(hw_kernel: HWKernel, config: UnifiedConfig):
+def _build_dataflow_model(hw_kernel: HWKernel, config: Config):
     """Build dataflow model from interfaces."""
     if config.debug:
         print(f"Building dataflow model with {len(hw_kernel.dataflow_interfaces)} interfaces")
@@ -174,23 +174,23 @@ def _build_dataflow_model(hw_kernel: HWKernel, config: UnifiedConfig):
             print("Using enhanced BDIM chunking strategies")
 
 
-def _generate_hw_custom_op(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_hw_custom_op(hw_kernel: HWKernel, config: Config, result: GenerationResult):
     """Generate HWCustomOp in multi-phase mode."""
-    generator = UnifiedHWCustomOpGenerator(config.template_dir)
+    generator = HWCustomOpGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_rtl_backend(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_rtl_backend(hw_kernel: HWKernel, config: Config, result: GenerationResult):
     """Generate RTLBackend in multi-phase mode."""
-    generator = UnifiedRTLBackendGenerator(config.template_dir)
+    generator = RTLBackendGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_test_suite(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_test_suite(hw_kernel: HWKernel, config: Config, result: GenerationResult):
     """Generate test suite in multi-phase mode."""
-    generator = UnifiedTestSuiteGenerator(config.template_dir)
+    generator = TestSuiteGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)
     result.add_generated_file(output_file)
 
@@ -204,26 +204,26 @@ def _generate_class_name(module_name: str) -> str:
 
 def main():
     """
-    Main CLI entry point for unified HWKG.
+    Main CLI entry point for HW Kernel Generator.
     
     Simple by default, powerful when needed.
     Maintains hw_kernel_gen_simple UX while enabling advanced features.
     """
     parser = argparse.ArgumentParser(
-        description="Unified Hardware Kernel Generator - Simple by default, powerful when needed",
+        description="Hardware Kernel Generator - Simple by default, powerful when needed",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Simple mode (identical to hw_kernel_gen_simple)
-  python -m brainsmith.tools.hw_kernel_gen_unified thresholding.sv compiler_data.py -o output/
+  python -m brainsmith.tools.hw_kernel_gen thresholding.sv compiler_data.py -o output/
   
   # Advanced mode (enhanced BDIM pragma processing)
-  python -m brainsmith.tools.hw_kernel_gen_unified thresholding.sv compiler_data.py -o output/ --advanced-pragmas
+  python -m brainsmith.tools.hw_kernel_gen thresholding.sv compiler_data.py -o output/ --advanced-pragmas
   
   # Expert mode (multi-phase execution with debugging)
-  python -m brainsmith.tools.hw_kernel_gen_unified thresholding.sv compiler_data.py -o output/ --advanced-pragmas --multi-phase --debug
+  python -m brainsmith.tools.hw_kernel_gen thresholding.sv compiler_data.py -o output/ --advanced-pragmas --multi-phase --debug
 
-This unified HWKG eliminates dual-architecture complexity while preserving all functionality.
+This HWKG eliminates dual-architecture complexity while preserving all functionality.
 Based on hw_kernel_gen_simple foundation with optional BDIM sophistication.
 Follows Interface-Wise Dataflow Modeling axioms for consistent terminology.
         """
@@ -282,10 +282,10 @@ Follows Interface-Wise Dataflow Modeling axioms for consistent terminology.
     
     try:
         # Create configuration
-        config = UnifiedConfig.from_args(args)
+        config = Config.from_args(args)
         
         if config.debug:
-            print("=== Unified Hardware Kernel Generator ===")
+            print("=== Hardware Kernel Generator ===")
             print(f"RTL file: {config.rtl_file}")
             print(f"Compiler data: {config.compiler_data_file}")
             print(f"Output directory: {config.output_dir}")

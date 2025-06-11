@@ -1,7 +1,7 @@
 """
-Unified Hardware Kernel Generator (HWKG)
+Hardware Kernel Generator (HWKG)
 
-A unified implementation that combines the best of hw_kernel_gen and hw_kernel_gen_simple:
+A implementation that combines the best of hw_kernel_gen and hw_kernel_gen_simple:
 - Simple by default, powerful when needed
 - Enhanced with optional BDIM pragma sophistication 
 - Based on hw_kernel_gen_simple foundation with selective enhancements
@@ -17,8 +17,8 @@ Key Features:
 
 from .data import GenerationResult
 from .rtl_parser.data import HWKernel
-from .config import UnifiedConfig
+from .config import Config
 from .cli import main
 
 __version__ = "1.0.0"
-__all__ = ["HWKernel", "GenerationResult", "UnifiedConfig", "main"]
+__all__ = ["HWKernel", "GenerationResult", "Config", "main"]

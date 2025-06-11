@@ -1,5 +1,5 @@
 """
-Unified HWCustomOp generator with optional BDIM sophistication.
+HWCustomOp generator with optional BDIM sophistication.
 
 Based on hw_kernel_gen_simple generator pattern with enhanced template
 context for advanced BDIM pragma processing when enabled.
@@ -10,9 +10,9 @@ from .base import GeneratorBase
 from ..rtl_parser.data import HWKernel
 
 
-class UnifiedHWCustomOpGenerator(GeneratorBase):
+class HWCustomOpGenerator(GeneratorBase):
     """
-    Unified HWCustomOp generator with optional BDIM sophistication.
+    HWCustomOp generator with optional BDIM sophistication.
     
     Generates HWCustomOp Python classes using the enhanced template context
     that supports both simple mode (identical to hw_kernel_gen_simple) and

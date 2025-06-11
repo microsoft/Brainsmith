@@ -1,5 +1,5 @@
 """
-Error handling for unified HWKG.
+Error handling for HW Kernel Generator.
 
 Based on hw_kernel_gen_simple error handling with structured hierarchy
 following HWKG Axiom 7: Hierarchical Error Handling.
@@ -7,7 +7,7 @@ following HWKG Axiom 7: Hierarchical Error Handling.
 
 
 class HWKGError(Exception):
-    """Base exception for all HWKG unified errors."""
+    """Base exception for all HWKG errors."""
     pass
 
 

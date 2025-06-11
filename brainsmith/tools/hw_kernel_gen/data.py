@@ -1,7 +1,7 @@
 """
-Enhanced data structures for unified HWKG.
+Enhanced data structures for HWKG.
 
-Based on unified HWKernel from RTL parser with enhanced GenerationResult
+Based on HWKernel from RTL parser with enhanced GenerationResult
 for tracking generation status and results.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 @dataclass  
 class GenerationResult:
     """
-    Result of unified code generation.
+    Result of code generation.
     
     Identical to hw_kernel_gen_simple GenerationResult with additional
     tracking for advanced pragma processing.

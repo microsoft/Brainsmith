@@ -1,5 +1,5 @@
 """
-Unified test suite generator.
+Test suite generator.
 
 Based on hw_kernel_gen_simple pattern with template compatibility
 for test suite generation.
@@ -10,8 +10,8 @@ from .base import GeneratorBase
 from ..rtl_parser.data import HWKernel
 
 
-class UnifiedTestSuiteGenerator(GeneratorBase):
-    """Unified test suite generator for comprehensive validation."""
+class TestSuiteGenerator(GeneratorBase):
+    """Test suite generator for comprehensive validation."""
     
     def __init__(self, template_dir: Path = None):
         super().__init__('test_suite.py.j2', template_dir)

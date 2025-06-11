@@ -1,5 +1,5 @@
 """
-Enhanced configuration for unified HWKG.
+Enhanced configuration for HWKG.
 
 Based on hw_kernel_gen_simple configuration with additional complexity level controls
 following HWKG Axiom 8: Configuration Layering.
@@ -13,9 +13,9 @@ from .errors import ConfigurationError
 
 
 @dataclass
-class UnifiedConfig:
+class Config:
     """
-    Configuration for unified HWKG with complexity levels.
+    Configuration for HWKG with complexity levels.
     
     Based on hw_kernel_gen_simple Config class with enhancements for
     advanced pragma processing and multi-phase execution support.
@@ -262,7 +262,7 @@ class UnifiedConfig:
         return estimates
     
     @classmethod
-    def from_args(cls, args) -> 'UnifiedConfig':
+    def from_args(cls, args) -> 'Config':
         """Create config from CLI arguments."""
         return cls(
             rtl_file=Path(args.rtl_file),
@@ -277,7 +277,7 @@ class UnifiedConfig:
     
     @classmethod
     def for_use_case(cls, rtl_file: Path, compiler_data_file: Path, output_dir: Path, 
-                     use_case: str, **overrides) -> 'UnifiedConfig':
+                     use_case: str, **overrides) -> 'Config':
         """
         Create configuration optimized for specific use cases.
         
@@ -363,7 +363,7 @@ class UnifiedConfig:
         
         config_data = {
             'version': '1.0',
-            'unified_hwkg_config': {
+            'hwkg_config': {
                 'complexity_level': self.complexity_level,
                 'feature_flags': {
                     'advanced_pragmas': self.advanced_pragmas,
@@ -389,7 +389,7 @@ class UnifiedConfig:
     
     @classmethod
     def import_config(cls, config_file: Path, rtl_file: Path, compiler_data_file: Path, 
-                     output_dir: Path) -> 'UnifiedConfig':
+                     output_dir: Path) -> 'Config':
         """
         Import configuration from file and apply to new files.
         
@@ -400,10 +400,10 @@ class UnifiedConfig:
         with open(config_file, 'r') as f:
             config_data = json.load(f)
         
-        if 'unified_hwkg_config' not in config_data:
+        if 'hwkg_config' not in config_data:
             raise ConfigurationError(f"Invalid configuration file format: {config_file}")
         
-        hwkg_config = config_data['unified_hwkg_config']
+        hwkg_config = config_data['hwkg_config']
         feature_flags = hwkg_config.get('feature_flags', {})
         execution_options = hwkg_config.get('execution_options', {})
         

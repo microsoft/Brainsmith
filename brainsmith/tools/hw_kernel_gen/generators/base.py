@@ -1,5 +1,5 @@
 """
-Enhanced base class for unified generators.
+Enhanced base class for HW Kernel Generator.
 
 Based on hw_kernel_gen_simple GeneratorBase with enhancements for
 optional BDIM sophistication while maintaining template compatibility.
@@ -17,7 +17,7 @@ from ..errors import TemplateError, GenerationError
 
 class GeneratorBase(ABC):
     """
-    Enhanced base class for all unified HWKG generators.
+    Enhanced base class for all HWKG generators.
     
     Based on hw_kernel_gen_simple GeneratorBase with enhancements for
     optional BDIM pragma processing while maintaining template compatibility
@@ -38,16 +38,16 @@ class GeneratorBase(ABC):
         if template_dir and template_dir.exists():
             loader = jinja2.FileSystemLoader(template_dir)
         else:
-            # Use unified templates first, fallback to original HWKG templates
-            unified_template_path = Path(__file__).parent.parent / "templates"
-            original_template_path = Path(__file__).parent.parent.parent / "hw_kernel_gen" / "templates"
+            # Use current templates first, fallback to legacy templates if needed
+            current_template_path = Path(__file__).parent.parent / "templates"
+            legacy_template_path = Path(__file__).parent.parent.parent / "hw_kernel_gen_legacy" / "templates"
             
-            if unified_template_path.exists():
-                loader = jinja2.FileSystemLoader(unified_template_path)
-            elif original_template_path.exists():
-                loader = jinja2.FileSystemLoader(original_template_path)
+            if current_template_path.exists():
+                loader = jinja2.FileSystemLoader(current_template_path)
+            elif legacy_template_path.exists():
+                loader = jinja2.FileSystemLoader(legacy_template_path)
             else:
-                raise TemplateError(f"Template directory not found: tried {unified_template_path} and {original_template_path}")
+                raise TemplateError(f"Template directory not found: tried {current_template_path} and {legacy_template_path}")
         
         env = jinja2.Environment(
             loader=loader,
@@ -57,14 +57,14 @@ class GeneratorBase(ABC):
         return env
     
     def generate(self, hw_kernel: HWKernel, output_dir: Path) -> Path:
-        """Generate output file for the given unified hardware kernel."""
+        """Generate output file for the given hardware kernel."""
         try:
             template = self.template_env.get_template(self.template_name)
             
             # Build template context with enhanced capabilities
             context = self._get_template_context(hw_kernel)
             
-            # Render template with unified context
+            # Render template with context
             content = template.render(
                 hw_kernel=hw_kernel, 
                 **context
@@ -87,7 +87,7 @@ class GeneratorBase(ABC):
     
     def _get_template_context(self, hw_kernel: HWKernel) -> dict:
         """
-        Get enhanced template context for unified HWKG.
+        Get enhanced template context for HWKG.
         
         Following HWKG Axiom 6: Metadata-Driven Generation.
         Provides both simple and advanced context based on sophistication level.
@@ -160,7 +160,7 @@ class GeneratorBase(ABC):
         interface_list = interfaces.values() if hasattr(interfaces, 'values') else interfaces
         
         for iface in interface_list:
-            # Handle Interface objects from unified HWKernel
+            # Handle Interface objects from HWKernel
             if hasattr(iface, 'type') and hasattr(iface, 'name'):
                 # Interface object from RTL parser
                 interface_type = iface.type.value if hasattr(iface.type, 'value') else str(iface.type)

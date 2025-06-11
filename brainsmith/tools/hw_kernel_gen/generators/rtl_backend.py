@@ -1,5 +1,5 @@
 """
-Unified RTL backend generator.
+RTL backend generator.
 
 Based on hw_kernel_gen_simple pattern with template compatibility
 for RTL backend component generation.
@@ -10,8 +10,8 @@ from .base import GeneratorBase
 from ..rtl_parser.data import HWKernel
 
 
-class UnifiedRTLBackendGenerator(GeneratorBase):
-    """Unified RTL backend generator for FINN integration."""
+class RTLBackendGenerator(GeneratorBase):
+    """RTL backend generator for FINN integration."""
     
     def __init__(self, template_dir: Path = None):
         super().__init__('rtl_backend.py.j2', template_dir)
