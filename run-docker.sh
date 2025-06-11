@@ -58,6 +58,10 @@ elif [ "$1" = "e2e" ]; then
   gecho "Running Brainsmith end-to-end validation test"
   DOCKER_CMD="cd demos/bert && make single_layer "
   DOCKER_INTERACTIVE=""
+elif [ "$1" = "e2e-bert-large" ]; then
+  gecho "Running Brainsmith end-to-end BERT-LARGE validation test"
+  DOCKER_CMD="cd demos/bert && make bert_large_single_layer "
+  DOCKER_INTERACTIVE=""
 else
   gecho "Running Brainsmith docker container with passed arguments"
   DOCKER_CMD="$@"
