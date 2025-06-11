@@ -65,12 +65,43 @@ export BSMITH_DOCKER_BUILD_FLAGS="${BSMITH_DOCKER_BUILD_FLAGS:-}"
 export BSMITH_DOCKER_FLAGS="${BSMITH_DOCKER_FLAGS:-}"
 
 # Print migration warning
-yecho "   NOTICE: You're using the legacy run-docker-new.sh wrapper"
+yecho "   NOTICE: You're using the legacy run-docker.sh wrapper"
 yecho "   For better performance and persistent containers, consider upgrading to:"
 yecho "   • 'smithy daemon' - Start persistent container in background"
 yecho "   • 'smithy exec <command>' - Run commands in persistent container"
 yecho "   • 'smithy start' - Interactive shell in persistent container"
 echo
+
+# Pre-process arguments to handle new test types through smithy
+handle_new_commands() {
+    case "$1" in
+        "bert-large-biweekly")
+            gecho "Running BERT Large biweekly test via smithy"
+            yecho "   INFO: Converting to smithy-based execution for better performance"
+            "$SMITHY_PATH" daemon >/dev/null 2>&1 || {
+                recho "Failed to start smithy daemon"
+                exit 1
+            }
+            "$SMITHY_PATH" exec "cd demos/bert && make bert_large_single_layer"
+            "$SMITHY_PATH" stop
+            exit $?
+            ;;
+        "e2e-bert-large")
+            gecho "Running BERT Large end-to-end test via smithy"
+            yecho "   INFO: Converting to smithy-based execution for better performance"
+            "$SMITHY_PATH" daemon >/dev/null 2>&1 || {
+                recho "Failed to start smithy daemon"
+                exit 1
+            }
+            "$SMITHY_PATH" exec "cd demos/bert && make bert_large_single_layer"
+            "$SMITHY_PATH" stop
+            exit $?
+            ;;
+    esac
+}
+
+# Check if we should handle this command specially
+handle_new_commands "$1"
 
 # Build Docker image if needed (using smithy's build logic)
 if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then

@@ -7,6 +7,8 @@ on:
     branches: [ develop ]
   schedule:
     - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
+    - cron: '0 0 * * 1'  # Monday at 00:00 UTC
+    - cron: '0 0 * * 4'  # Thursday at 00:00 UTC
 
 env:
   DOCKER_BUILDKIT: 1
@@ -84,9 +86,12 @@ jobs:
       - name: Setup and cleanup
         run: |
           echo "=== Pre-build cleanup ==="
-          sudo docker system prune -af
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          # Clean Docker resources (requires docker group membership, no sudo needed)
+          docker container prune -f || true
+          docker image prune -f || true
+          docker volume prune -f || true
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "Note: System cleanup handled by CI infrastructure"
 
       - name: Build and test Docker image
         run: |
@@ -127,9 +132,15 @@ jobs:
             ~/.docker/
           retention-days: 3
 
-      - name: Cleanup
+      - name: Cleanup Docker artifacts
         if: always()
-        run: ./smithy cleanup || true
+        run: |
+          ./smithy cleanup || true
+          # Clean up Docker artifacts immediately
+          docker container prune -f
+          docker image prune -f
+          docker volume prune -f
+          docker builder prune -f
 
   # End-to-end test with dependency fetching and compilation
   e2e-test:
@@ -148,14 +159,17 @@ jobs:
       - name: Setup environment
         run: |
           echo "=== Environment Setup ==="
-          sudo docker system prune -af
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          # Clean Docker resources (requires docker group membership, no sudo needed)
+          docker container prune -f || true
+          docker image prune -f || true
+          docker volume prune -f || true
           
           echo "=== Environment Debug Info ==="
           echo "Working directory: $(pwd)"
           echo "User: $(whoami)"
           echo "Expected container: ${{ needs.validate-environment.outputs.container-name }}"
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "Note: System cleanup handled by CI infrastructure"
 
       - name: Build and start container with comprehensive logging
         run: |
@@ -301,3 +315,75 @@ jobs:
         run: |
           ./smithy stop || true
           ./smithy cleanup || true
+          # Clean up Docker artifacts immediately
+          docker container prune -f
+          docker image prune -f
+          docker volume prune -f
+          docker builder prune -f
+
+  # BERT Large biweekly testing using smithy
+  bert-large-biweekly:
+    if: github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 0 * * 4')
+    runs-on: pre-release
+    timeout-minutes: 1440 # 24-hour timeout for biweekly tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup environment
+        run: |
+          echo "=== Environment Setup ==="
+          # Clean Docker resources (requires docker group membership, no sudo needed)
+          docker container prune -f || true
+          docker image prune -f || true
+          docker volume prune -f || true
+          echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "Note: System cleanup handled by CI infrastructure"
+
+      - name: Run BERT Large tests with smithy
+        run: |
+          chmod +x smithy
+          
+          echo "=== Starting smithy daemon for BERT Large testing ==="
+          ./smithy daemon
+          
+          echo "=== Running BERT Large single layer test ==="
+          ./smithy exec "cd demos/bert && make bert_large_single_layer" || {
+            echo "ERROR: BERT Large test failed"
+            echo "=== Container logs ==="
+            ./smithy logs --tail 100
+            exit 1
+          }
+        env:
+          BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./smithy stop || true
+          ./smithy cleanup || true
+          # Clean up Docker artifacts immediately
+          docker container prune -f
+          docker image prune -f
+          docker volume prune -f
+          docker builder prune -f
+
+  # Final cleanup job - runs regardless of other job success/failure
+  cleanup:
+    if: always()
+    needs: [validate-environment, docker-build-and-test, e2e-test, full-test-suite]
+    runs-on: pre-release
+    steps:
+      - name: Final system cleanup
+        run: |
+          # Cleanup of Docker resources (requires docker group membership)
+          docker system prune -a -f --volumes || true
+          # Clean up workspace files (GitHub Actions handles this automatically)
+          rm -rf ${{ github.workspace }}/* 2>/dev/null || true
+          rm -rf ${{ github.workspace }}/.* 2>/dev/null || true
+          # Note: System temp cleanup handled by CI infrastructure
+          echo "Final cleanup completed - CI infrastructure will handle system cleanup"
