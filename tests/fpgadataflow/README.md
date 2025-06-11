@@ -178,6 +178,14 @@ this fixture does nothing.
 
 #### f_exec_mode(request) → str
 
+Parameterised fixture. Provides the exec mode parameter (“cppsim or rtlsim”)
+
+* **Returns:**
+  The exec mode
+  (Default: `"cppsim"` or `"rtlsim"`)
+* **Return type:**
+  str
+
 <a id="op_test.OpTest.test_cycles"></a>
 
 #### test_cycles(f_model_specialised: ModelWrapper, f_target_node: int, f_exec_mode: str) → None
