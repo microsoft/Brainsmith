@@ -83,6 +83,7 @@ class OpTest(ABC):
                 output_dir=save_output,
             )
         else:
+            warn("skipped f_model_hw step, as no f_infer_hw_transform was provided.")
             return f_model
 
     @pytest.fixture()
