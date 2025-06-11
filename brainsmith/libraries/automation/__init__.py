@@ -30,19 +30,7 @@ Example Usage:
     ])
 """
 
-# Import registry system
-from .registry import (
-    AutomationRegistry,
-    AutomationType,
-    AutomationToolInfo,
-    get_automation_registry,
-    discover_all_automation_components,
-    get_automation_component,
-    find_components_by_type,
-    list_available_automation_components,
-    refresh_automation_registry
-)
-
+# Import core automation functions
 from .sweep import (
     parameter_sweep,
     find_best,
@@ -56,24 +44,13 @@ from .batch import (
 __version__ = "2.0.0"  # North Star simplification version
 __author__ = "BrainSmith Development Team"
 
-# Export essential functions and registry
+# Export essential functions only (NO REGISTRY)
 __all__ = [
     # Core automation functions
     'parameter_sweep',   # Core parameter exploration
-    'batch_process',     # Core batch processing
+    'batch_process',     # Core batch processing  
     'find_best',         # Result optimization
     'aggregate_stats',   # Statistical analysis
-    
-    # Registry system
-    'AutomationRegistry',
-    'AutomationType',
-    'AutomationToolInfo',
-    'get_automation_registry',
-    'discover_all_automation_components',
-    'get_automation_component',
-    'find_components_by_type',
-    'list_available_automation_components',
-    'refresh_automation_registry'
 ]
 
 # Initialize logging

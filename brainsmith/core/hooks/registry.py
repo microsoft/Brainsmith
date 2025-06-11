@@ -116,39 +116,6 @@ class HooksRegistry(BaseRegistry[PluginInfo]):
         self._log_debug(f"Discovered {len(discovered)} hook plugins")
         return discovered
 
-    def discover_plugins(self, rescan: bool = False) -> Dict[str, PluginInfo]:
-        """
-        Discover all available plugin classes.
-        
-        Args:
-            rescan: Force rescan even if cache exists
-            
-        Returns:
-            Dictionary mapping plugin names to PluginInfo objects
-        """
-        if self.plugin_cache and not rescan:
-            return self.plugin_cache
-        
-        discovered = {}
-        
-        # Discover plugins in the plugins directory
-        plugins_discovered = self._discover_plugins_directory()
-        discovered.update(plugins_discovered)
-        
-        # Discover contrib plugins
-        contrib_discovered = self._discover_contrib_plugins()
-        discovered.update(contrib_discovered)
-        
-        # Check which plugins are currently installed
-        installed_plugins = self.plugin_manager.list_plugins()
-        for plugin_info in discovered.values():
-            plugin_info.installed = plugin_info.name in installed_plugins
-        
-        # Cache the results
-        self.plugin_cache = discovered
-        
-        self._log_info(f"Discovered {len(discovered)} hook plugins")
-        return discovered
     
     def discover_handlers(self, rescan: bool = False) -> Dict[str, HandlerInfo]:
         """
@@ -328,7 +295,7 @@ class HooksRegistry(BaseRegistry[PluginInfo]):
     
     def get_plugin(self, plugin_name: str) -> Optional[PluginInfo]:
         """Get a specific plugin by name."""
-        plugins = self.discover_plugins()
+        plugins = self.discover_components()
         return plugins.get(plugin_name)
     
     def get_handler(self, handler_name: str) -> Optional[HandlerInfo]:
@@ -409,7 +376,7 @@ class HooksRegistry(BaseRegistry[PluginInfo]):
 
     def find_plugins_by_type(self, plugin_type: PluginType) -> List[PluginInfo]:
         """Find plugins by type."""
-        plugins = self.discover_plugins()
+        plugins = self.discover_components()
         matches = []
         
         for plugin in plugins.values():
@@ -431,7 +398,7 @@ class HooksRegistry(BaseRegistry[PluginInfo]):
     
     def list_available_plugins(self) -> List[str]:
         """Get list of available plugin names."""
-        plugins = self.discover_plugins()
+        plugins = self.discover_components()
         return list(plugins.keys())
     
     def list_installed_plugins(self) -> List[str]:
@@ -570,7 +537,7 @@ def discover_all_plugins(rescan: bool = False) -> Dict[str, PluginInfo]:
         Dictionary mapping plugin names to PluginInfo objects
     """
     registry = get_hooks_registry()
-    return registry.discover_plugins(rescan)
+    return registry.discover_components(rescan)
 
 
 def discover_all_handlers(rescan: bool = False) -> Dict[str, HandlerInfo]:
