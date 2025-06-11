@@ -11,8 +11,9 @@ from unittest.mock import Mock, patch
 
 # Import components to test
 try:
-    from brainsmith.analysis import (
-        expose_analysis_data,
+    from brainsmith.data import (
+        collect_dse_metrics,
+        export_for_analysis,
         register_analyzer,
         get_registered_analyzers,
         get_raw_data,

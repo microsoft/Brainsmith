@@ -1,30 +1,50 @@
 """
-Brainsmith Blueprint System - Week 3 Implementation
+Simplified Blueprint System - North Star Aligned Implementation
 
-Comprehensive blueprint system that leverages the Week 2 library structure
-to provide blueprint-driven design space exploration.
+Provides simple functions for working with blueprint YAML files,
+following the North Star axioms:
+- Functions Over Frameworks
+- Simplicity Over Sophistication 
+- Focus Over Feature Creep
 """
 
-from .core import Blueprint, BlueprintLoader, BlueprintValidator
+from .functions import (
+    load_blueprint_yaml,
+    validate_blueprint_yaml,
+    get_build_steps,
+    get_objectives,
+    get_constraints,
+    get_kernels,
+    get_transforms,
+    create_simple_blueprint,
+    save_blueprint_yaml
+)
 
-# Convenience functions
+# Backward compatibility aliases
 def load_blueprint(path: str):
-    """Load a blueprint from file."""
-    loader = BlueprintLoader()
-    return loader.load(path)
+    """Load a blueprint from file (backward compatibility)."""
+    return load_blueprint_yaml(path)
 
-def validate_blueprint(blueprint):
-    """Validate a blueprint."""
-    validator = BlueprintValidator()
-    return validator.validate(blueprint)
+def validate_blueprint(blueprint_data):
+    """Validate a blueprint (backward compatibility)."""
+    return validate_blueprint_yaml(blueprint_data)
 
 __all__ = [
-    'Blueprint',
-    'BlueprintLoader',
-    'BlueprintValidator', 
+    # Primary simplified functions
+    'load_blueprint_yaml',
+    'validate_blueprint_yaml', 
+    'get_build_steps',
+    'get_objectives',
+    'get_constraints',
+    'get_kernels',
+    'get_transforms',
+    'create_simple_blueprint',
+    'save_blueprint_yaml',
+    
+    # Backward compatibility
     'load_blueprint',
     'validate_blueprint'
 ]
 
 # Version info
-__version__ = "1.0.0"  # Week 3 implementation
+__version__ = "2.0.0"  # Simplified implementation aligned with North Star axioms

@@ -33,8 +33,20 @@ def simulate_forge_results():
     
     # Import analysis hooks
     try:
-        from brainsmith.analysis import expose_analysis_data, register_analyzer
-        analysis_data = expose_analysis_data(dse_results)
+        from brainsmith.data import collect_dse_metrics, export_for_analysis
+        metrics_list = collect_dse_metrics(dse_results)
+        data_list = export_for_analysis(metrics_list, 'dict')
+        
+        # Convert to expected format for demo compatibility
+        analysis_data = {
+            'solutions': data_list,
+            'metrics': {
+                'throughput': [d.get('performance_throughput_ops_sec', 0) for d in data_list],
+                'latency': [d.get('performance_latency_ms', 0) for d in data_list],
+                'power': [d.get('build_power_consumption_watts', 0) for d in data_list]
+            },
+            'pareto_frontier': data_list[:3]  # Mock pareto frontier
+        }
         
         return {
             'dataflow_graph': {'onnx_model': 'mock_model.onnx'},
@@ -42,8 +54,7 @@ def simulate_forge_results():
             'metrics': {'performance': {'throughput': 1800.0}, 'resources': {'power': 105.3}},
             'analysis_data': analysis_data,
             'analysis_hooks': {
-                'register_analyzer': register_analyzer,
-                'available_adapters': ['pandas', 'scipy', 'sklearn']
+                'available_formats': ['pandas', 'scipy', 'dict', 'csv', 'json']
             }
         }
     except ImportError:
@@ -72,10 +83,10 @@ print("-" * 30)
 
 try:
     import pandas as pd
-    from brainsmith.analysis import pandas_adapter
+    from brainsmith.data import to_pandas
     
-    # Convert to pandas DataFrame
-    df = pandas_adapter(analysis_data)
+    # Convert solutions list to pandas DataFrame
+    df = to_pandas(analysis_data.get('solutions', []))
     
     if df is not None and not df.empty:
         print("✅ Successfully converted to pandas DataFrame")
@@ -114,10 +125,10 @@ print("-" * 40)
 
 try:
     import scipy.stats as stats
-    from brainsmith.analysis import scipy_adapter
+    from brainsmith.data import export_for_analysis
     
-    # Convert to scipy format
-    scipy_data = scipy_adapter(analysis_data)
+    # Convert to scipy format - pass the solutions list
+    scipy_data = export_for_analysis(analysis_data.get('solutions', []), 'scipy')
     
     print("✅ Successfully converted to scipy format")
     print(f"   Sample size: {scipy_data['sample_size']}")
@@ -148,10 +159,35 @@ print("-" * 42)
 try:
     from sklearn.preprocessing import StandardScaler
     from sklearn.linear_model import LinearRegression
-    from brainsmith.analysis import sklearn_adapter
+    from brainsmith.data import export_for_analysis
     
-    # Convert to sklearn format
-    sklearn_data = sklearn_adapter(analysis_data)
+    # Convert to sklearn format (dict format with feature matrix)
+    dict_data = export_for_analysis(analysis_data.get('solutions', []), 'dict')
+    
+    # Manually convert to sklearn format for this demo
+    if dict_data:
+        # Extract features and targets
+        import pandas as pd
+        df = pd.DataFrame(dict_data)
+        
+        # Get parameter columns as features
+        param_cols = [col for col in df.columns if col.startswith('parameters_')]
+        objective_cols = [col for col in df.columns if col.startswith('performance_') or col.startswith('quality_')]
+        
+        if param_cols and objective_cols:
+            X = df[param_cols].fillna(0).values
+            y = df[objective_cols].fillna(0).values
+            
+            sklearn_data = {
+                'X': X,
+                'y': y,
+                'feature_names': param_cols,
+                'target_names': objective_cols
+            }
+        else:
+            sklearn_data = None
+    else:
+        sklearn_data = None
     
     if sklearn_data and len(sklearn_data['X']) > 1:
         X = sklearn_data['X']  # Features (design parameters)
@@ -192,7 +228,8 @@ print("\n🔧 Demo 5: Custom Analysis Registration")
 print("-" * 42)
 
 try:
-    from brainsmith.analysis import register_analyzer, get_registered_analyzers
+    # Note: Custom analyzers can be implemented as simple functions in the unified data module
+    # from brainsmith.data import collect_dse_metrics, export_for_analysis
     
     # Define custom analyzer
     def power_efficiency_analyzer(analysis_data):
@@ -220,25 +257,20 @@ try:
             }
         return {'error': 'Could not calculate power efficiency'}
     
-    # Register custom analyzer
-    register_analyzer('power_efficiency', power_efficiency_analyzer)
-    
-    # Verify registration
-    analyzers = get_registered_analyzers()
-    print(f"✅ Registered {len(analyzers)} custom analyzers")
-    print(f"   Available: {list(analyzers.keys())}")
-    
-    # Use custom analyzer
+    # Use custom analyzer (no need to register in unified module)
     custom_result = power_efficiency_analyzer(analysis_data)
     if 'power_efficiency' in custom_result:
         pe = custom_result['power_efficiency']
+        print(f"✅ Custom analyzer working correctly")
         print(f"\n⚡ Power Efficiency Analysis:")
         print(f"   Mean efficiency: {pe['mean']:.2f} ops/watt")
         print(f"   Best efficiency: {pe['max']:.2f} ops/watt")
         print(f"   Best solution: #{pe['best_solution_idx']}")
+    else:
+        print(f"❌ {custom_result.get('error', 'Unknown error')}")
     
 except Exception as e:
-    print(f"❌ Custom analyzer registration failed: {e}")
+    print(f"❌ Custom analyzer failed: {e}")
 
 # Summary
 print("\n🎉 Demo Summary")

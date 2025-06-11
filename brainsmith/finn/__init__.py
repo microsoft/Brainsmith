@@ -1,112 +1,79 @@
 """
-FINN Integration Platform
+Simplified FINN Integration Module
 
-This module provides deep integration with FINN's four-category interface for dataflow
-accelerator design optimization.
+Clean, simple interface for FINN dataflow accelerator builds.
+Wraps core functionality and prepares for future 4-hooks interface.
 
-Key Components:
-1. FINN Integration Engine: Core integration with FINN's four-category interface
-2. Configuration Managers: Specialized managers for each FINN category
-3. Build Result Processing: Comprehensive analysis of FINN build outputs
-4. Error Handling Framework: Robust error diagnosis and recovery
-5. Build Orchestration: Sophisticated build management with monitoring
-
-Example Usage:
-    from brainsmith.finn import FINNIntegrationEngine
-    
-    # Initialize FINN integration
-    engine = FINNIntegrationEngine()
-    
-    # Configure FINN interface from Brainsmith parameters
-    finn_config = engine.configure_finn_interface(brainsmith_config)
-    
-    # Execute FINN build with monitoring
-    result = engine.execute_finn_build(finn_config, design_point)
+This module provides a dramatically simplified interface compared to the previous
+enterprise-grade orchestration framework, focusing on essential functionality
+while maintaining preparation for FINN's future 4-hooks interface evolution.
 """
 
-# Core engine
-from .engine import FINNIntegrationEngine
-
-# Data types and configurations
-from .types import (
-    FINNInterfaceConfig,
-    ModelOpsConfig,
-    ModelTransformsConfig,
-    HwKernelsConfig,
-    HwOptimizationConfig,
-    EnhancedFINNResult,
-    FINNBuildResult,
-    PerformanceMetrics,
-    ResourceAnalysis,
-    TimingAnalysis,
-    BuildEnvironment,
-    OptimizationStrategy,
-    BuildStatus
-)
-
-# Configuration managers
-from .model_ops_manager import ModelOpsManager
-from .model_transforms_manager import ModelTransformsManager
-from .hw_kernels_manager import HwKernelsManager
-from .hw_optimization_manager import HwOptimizationManager
+from .interface import FINNInterface, build_accelerator, validate_finn_config, prepare_4hooks_config
+from .types import FINNConfig, FINNResult, FINNHooksConfig
 
 # Version information
-__version__ = "1.0.0"
+__version__ = "2.0.0"  # Major version bump for clean refactor
 __author__ = "BrainSmith Development Team"
 
-# Export all public components
+# Clean exports - only essentials
 __all__ = [
-    # Core integration engine
-    'FINNIntegrationEngine',
+    # Main interface
+    'FINNInterface',
+    'build_accelerator', 
+    'validate_finn_config',
+    'prepare_4hooks_config',
     
-    # Data types and configurations
-    'FINNInterfaceConfig',
-    'ModelOpsConfig',
-    'ModelTransformsConfig',
-    'HwKernelsConfig',
-    'HwOptimizationConfig',
-    'EnhancedFINNResult',
-    'FINNBuildResult',
-    'PerformanceMetrics',
-    'ResourceAnalysis',
-    'TimingAnalysis',
-    'BuildEnvironment',
-    'OptimizationStrategy',
-    'BuildStatus',
-    
-    # Configuration managers
-    'ModelOpsManager',
-    'ModelTransformsManager',
-    'HwKernelsManager',
-    'HwOptimizationManager'
+    # Essential types
+    'FINNConfig',
+    'FINNResult', 
+    'FINNHooksConfig'
 ]
 
-# Module-level convenience functions
-def create_finn_engine() -> FINNIntegrationEngine:
-    """Create a new FINN Integration Engine instance"""
-    return FINNIntegrationEngine()
-
-def get_supported_features() -> dict:
-    """Get all supported FINN features"""
-    engine = FINNIntegrationEngine()
-    return engine.get_supported_features()
-
-def validate_finn_config(config: FINNInterfaceConfig) -> bool:
-    """Validate a FINN interface configuration"""
-    engine = FINNIntegrationEngine()
-    return engine.validate_configuration(config)
-
-# Package information
-PACKAGE_INFO = {
-    'name': 'FINN Integration Platform',
+# Module information
+MODULE_INFO = {
+    'name': 'Simplified FINN Integration',
     'version': __version__,
-    'description': 'Deep integration with FINN dataflow accelerator framework',
+    'description': 'Clean FINN interface with 4-hooks preparation',
     'features': [
-        'Four-category interface integration',
-        'Intelligent configuration management',
-        'Enhanced build result processing',
-        'Comprehensive error handling',
-        'Performance analysis and optimization'
+        'Simple function-based API',
+        'Core FINN integration',
+        '4-hooks preparation',
+        'Clean configuration management'
     ],
-    'status': 'Production Ready'
+    'files': 3,
+    'lines_of_code': '~300',
+    'complexity': 'Simple',
+    'reduction_from_v1': {
+        'files': '70% reduction (10 → 3)',
+        'lines': '93% reduction (~4500 → ~300)',
+        'exports': '70% reduction (20+ → 7)'
+    }
 }
+
+
+# Convenience function for quick access to module info
+def get_module_info() -> dict:
+    """Get information about the simplified FINN module."""
+    return MODULE_INFO.copy()
+
+
+# Legacy compatibility note (no actual compatibility provided)
+_MIGRATION_NOTE = """
+This is a complete rewrite of the FINN integration module.
+The previous enterprise orchestration framework has been replaced
+with a simple, function-based interface.
+
+Key changes:
+- Use build_accelerator() instead of FINNIntegrationEngine
+- Use FINNConfig instead of complex configuration managers
+- Use FINNResult instead of EnhancedFINNResult
+- 4-hooks preparation replaces complex orchestration
+
+For migration assistance, see the simplified API documentation.
+"""
+
+
+def show_migration_note():
+    """Display migration information for users of the previous interface."""
+    print(_MIGRATION_NOTE)

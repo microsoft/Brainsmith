@@ -13,6 +13,16 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Import hooks for optimization event logging
+try:
+    from ..hooks import log_optimization_event, log_strategy_decision, log_dse_event
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+    log_optimization_event = lambda *args, **kwargs: None
+    log_strategy_decision = lambda *args, **kwargs: None
+    log_dse_event = lambda *args, **kwargs: None
+
 
 def forge(
     model_path: str,
@@ -59,11 +69,19 @@ def forge(
     if is_hw_graph:
         # Input is already Dataflow Graph, skip to HW optimization
         logger.info("Hardware graph mode: Skipping to HW optimization")
+        if HOOKS_AVAILABLE:
+            log_strategy_decision('hw_optimization_only', 'Input is already a dataflow graph')
+            log_dse_event('hw_optimization_start', {'mode': 'hw_graph'})
+        
         dataflow_graph = _load_dataflow_graph(model_path)
         dse_results = _run_hw_optimization_dse(dataflow_graph, dse_config)
     else:
         # Standard flow: Model -> DSE -> Dataflow Graph
         logger.info("Standard mode: Running full model-to-hardware DSE")
+        if HOOKS_AVAILABLE:
+            log_strategy_decision('full_dse', 'Standard model-to-hardware flow')
+            log_dse_event('full_dse_start', {'mode': 'model_to_hw'})
+        
         dse_results = _run_full_dse(model_path, dse_config)
         dataflow_graph = dse_results.get('best_result', {}).get('dataflow_graph')
     
@@ -82,6 +100,18 @@ def forge(
     if output_dir:
         _save_forge_results(results, output_dir)
     
+    # Log optimization completion
+    if HOOKS_AVAILABLE:
+        log_dse_event('optimization_complete', {
+            'dataflow_graph_generated': dataflow_graph is not None,
+            'dataflow_core_generated': dataflow_core is not None,
+            'output_saved': output_dir is not None
+        })
+        log_optimization_event('optimization_end', {
+            'success': True,
+            'duration_info': 'completed_successfully'
+        })
+    
     logger.info("Forge process completed successfully")
     return results
 
@@ -99,8 +129,8 @@ def validate_blueprint(blueprint_path: str) -> tuple[bool, list[str]]:
     logger.info(f"Validating blueprint: {blueprint_path}")
     
     try:
-        blueprint = _load_and_validate_blueprint(blueprint_path)
-        logger.info(f"Blueprint validation successful: {blueprint.name if hasattr(blueprint, 'name') else 'unnamed'}")
+        blueprint_data = _load_and_validate_blueprint(blueprint_path)
+        logger.info(f"Blueprint validation successful: {blueprint_data.get('name', 'unnamed')}")
         return True, []
     except Exception as e:
         error_msg = f"Blueprint validation failed: {str(e)}"
@@ -143,18 +173,20 @@ def _validate_inputs(model_path: str, blueprint_path: str, objectives: Dict, con
 
 
 def _load_and_validate_blueprint(blueprint_path: str):
-    """Load and validate blueprint - throw hard error if invalid."""
+    """Load and validate blueprint using simplified functions."""
     try:
-        from ..blueprints.base import Blueprint
-        blueprint = Blueprint.from_yaml_file(Path(blueprint_path))
+        from ..blueprints.functions import load_blueprint_yaml, validate_blueprint_yaml
+        
+        # Load blueprint as simple dictionary
+        blueprint_data = load_blueprint_yaml(blueprint_path)
         
         # Validate blueprint configuration
-        is_valid, errors = blueprint.validate_library_config()
+        is_valid, errors = validate_blueprint_yaml(blueprint_data)
         if not is_valid:
             raise ValueError(f"Blueprint validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
         
-        logger.info(f"Successfully loaded blueprint: {blueprint.name if hasattr(blueprint, 'name') else 'unnamed'}")
-        return blueprint
+        logger.info(f"Successfully loaded blueprint: {blueprint_data.get('name', 'unnamed')}")
+        return blueprint_data
         
     except ImportError:
         raise RuntimeError("Blueprint system not available. Cannot proceed without valid blueprint.")
@@ -164,60 +196,55 @@ def _load_and_validate_blueprint(blueprint_path: str):
         raise ValueError(f"Failed to load blueprint '{blueprint_path}': {str(e)}")
 
 
-def _setup_dse_configuration(blueprint, objectives, constraints, target_device):
-    """Setup comprehensive DSE configuration."""
+def _setup_dse_configuration(blueprint_data, objectives, constraints, target_device):
+    """Setup comprehensive DSE configuration using simplified blueprint data."""
     try:
         from ..dse.interface import DSEConfiguration, DSEObjective, OptimizationObjective
+        from ..blueprints.functions import get_objectives, get_constraints
         
-        # Extract design space from blueprint
-        design_space = blueprint.get_design_space()
+        # Use simple blueprint functions to extract configuration
+        blueprint_objectives = get_objectives(blueprint_data)
+        blueprint_constraints = get_constraints(blueprint_data)
         
-        # Setup objectives
+        # Setup objectives (use provided objectives or blueprint defaults)
         dse_objectives = []
-        if objectives:
-            for obj_name, obj_config in objectives.items():
-                direction = OptimizationObjective.MAXIMIZE if obj_config['direction'] == 'maximize' else OptimizationObjective.MINIMIZE
-                weight = obj_config.get('weight', 1.0)
-                target = obj_config.get('target', None)
-                
-                dse_objectives.append(DSEObjective(
-                    name=obj_name,
-                    direction=direction,
-                    weight=weight,
-                    target_value=target
-                ))
-        else:
-            # Default objectives
-            dse_objectives = [
-                DSEObjective('throughput', OptimizationObjective.MAXIMIZE, weight=1.0),
-                DSEObjective('latency', OptimizationObjective.MINIMIZE, weight=0.8)
-            ]
+        final_objectives = objectives or blueprint_objectives
         
-        # Setup constraints  
-        dse_constraints = constraints.copy() if constraints else {}
+        for obj_name, obj_config in final_objectives.items():
+            direction = OptimizationObjective.MAXIMIZE if obj_config['direction'] == 'maximize' else OptimizationObjective.MINIMIZE
+            weight = obj_config.get('weight', 1.0)
+            target = obj_config.get('target', None)
+            
+            dse_objectives.append(DSEObjective(
+                name=obj_name,
+                direction=direction,
+                weight=weight,
+                target_value=target
+            ))
+        
+        # Setup constraints (merge provided constraints with blueprint defaults)
+        dse_constraints = blueprint_constraints.copy()
+        if constraints:
+            dse_constraints.update(constraints)
         if target_device:
             dse_constraints['target_device'] = target_device
-            
-        # Add default constraints if not specified
-        if 'max_luts' not in dse_constraints:
-            dse_constraints['max_luts'] = 0.8
-        if 'max_dsps' not in dse_constraints:
-            dse_constraints['max_dsps'] = 0.8
         
         return DSEConfiguration(
-            design_space=design_space,
+            design_space={},  # Simplified - no complex design space
             objectives=dse_objectives,
             constraints=dse_constraints,
-            blueprint=blueprint
+            blueprint=blueprint_data
         )
     except ImportError:
         # Fallback configuration for when DSE system not available
         logger.warning("DSE system not available, using fallback configuration")
+        from ..blueprints.functions import get_objectives, get_constraints
+        
         return {
-            'design_space': blueprint.get_design_space() if hasattr(blueprint, 'get_design_space') else {},
-            'objectives': objectives or {'throughput': {'direction': 'maximize'}},
-            'constraints': constraints or {},
-            'blueprint': blueprint,
+            'design_space': {},
+            'objectives': objectives or get_objectives(blueprint_data),
+            'constraints': constraints or get_constraints(blueprint_data),
+            'blueprint': blueprint_data,
             'fallback_mode': True
         }
 
@@ -284,22 +311,31 @@ def _load_dataflow_graph(model_path: str):
 def _generate_dataflow_core(dataflow_graph, dse_config):
     """Generate complete stitched IP design from Dataflow Graph."""
     try:
-        from ..finn.orchestration import FINNBuildOrchestrator
+        from ..finn import build_accelerator
         
         logger.info("Generating Dataflow Core (stitched IP design)")
         
-        orchestrator = FINNBuildOrchestrator(dse_config)
+        # Extract blueprint configuration from DSE config
+        blueprint_config = {}
+        if hasattr(dse_config, 'blueprint'):
+            # DSE config object with blueprint attribute
+            blueprint_config = dse_config.blueprint
+        elif isinstance(dse_config, dict) and 'blueprint' in dse_config:
+            # Dictionary-based config with blueprint
+            blueprint_config = dse_config['blueprint']
         
-        # Generate IP core with synthesis
-        core_results = orchestrator.generate_ip_core(
-            dataflow_graph=dataflow_graph,
-            generate_bitstream=True,
-            run_synthesis=True,
-            generate_drivers=True
+        # Set output directory
+        output_dir = dse_config.get('output_dir', './output') if isinstance(dse_config, dict) else './output'
+        
+        # Use simplified FINN interface for build
+        finn_result = build_accelerator(
+            model_path=str(dataflow_graph),  # Convert dataflow_graph to path representation
+            blueprint_config=blueprint_config,
+            output_dir=output_dir
         )
         
         logger.info("Dataflow Core generation completed")
-        return core_results
+        return finn_result.to_dict() if hasattr(finn_result, 'to_dict') else finn_result
         
     except ImportError:
         logger.warning("FINN orchestration not available, using fallback core generation")

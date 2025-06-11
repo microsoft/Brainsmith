@@ -1,80 +1,58 @@
 """
 BrainSmith Simple Automation Helpers
 
-Provides simple utilities for common automation patterns in FPGA design space exploration.
-Instead of complex workflow orchestration, these helpers make it easy to run forge() 
-multiple times with different parameters or configurations.
+Provides simple utilities for running forge() multiple times with different
+parameters or configurations. Focused on practical automation patterns.
 
 Key Philosophy:
-- Simple helpers that leverage existing forge() function
-- No enterprise workflow orchestration
-- Focus on practical automation patterns users actually need
-- Minimal complexity, maximum utility
+- Thin helpers around forge() function
+- No enterprise orchestration complexity  
+- Simple function calls for common automation needs
+- Optional parallelization for performance
 
 Example Usage:
-    from brainsmith.automation import parameter_sweep, batch_process
+    from brainsmith.automation import parameter_sweep, batch_process, find_best
     
-    # Parameter sweep
+    # Parameter exploration
     results = parameter_sweep(
         "model.onnx", 
         "blueprint.yaml",
         {'pe_count': [4, 8, 16], 'simd_width': [2, 4, 8]}
     )
     
+    # Find optimal configuration
+    best = find_best(results, metric='throughput', maximize=True)
+    
     # Batch processing
-    results = batch_process([
+    batch_results = batch_process([
         ("model1.onnx", "blueprint1.yaml"),
         ("model2.onnx", "blueprint2.yaml")
     ])
 """
 
-from .parameter_sweep import (
+from .sweep import (
     parameter_sweep,
-    grid_search,
-    random_search
+    find_best,
+    aggregate_stats
 )
 
-from .batch_processing import (
-    batch_process,
-    multi_objective_runs,
-    configuration_sweep
+from .batch import (
+    batch_process
 )
 
-from .utils import (
-    aggregate_results,
-    find_best_result,
-    find_top_results,
-    save_automation_results,
-    load_automation_results,
-    compare_automation_runs
-)
-
-__version__ = "0.1.0"
+__version__ = "2.0.0"  # North Star simplification version
 __author__ = "BrainSmith Development Team"
 
-# Export simple automation helpers
+# Export 4 essential functions only
 __all__ = [
-    # Parameter exploration
-    'parameter_sweep',
-    'grid_search', 
-    'random_search',
-    
-    # Batch processing
-    'batch_process',
-    'multi_objective_runs',
-    'configuration_sweep',
-    
-    # Result analysis
-    'aggregate_results',
-    'find_best_result',
-    'find_top_results',
-    'save_automation_results',
-    'load_automation_results',
-    'compare_automation_runs'
+    'parameter_sweep',   # Core parameter exploration
+    'batch_process',     # Core batch processing
+    'find_best',         # Result optimization
+    'aggregate_stats'    # Statistical analysis
 ]
 
 # Initialize logging
 import logging
 logger = logging.getLogger(__name__)
 logger.info(f"BrainSmith Simple Automation v{__version__} initialized")
-logger.info("Available helpers: parameter_sweep, batch_process, result aggregation")
+logger.info("Available functions: parameter_sweep, batch_process, find_best, aggregate_stats")

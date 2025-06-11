@@ -1,0 +1,21 @@
+FPGA Data Report
+================
+
+Generated at: 2025-06-10T22:29:16.101742
+
+Summary
+=======
+- Total configurations: 3
+- Successful builds: 3
+- Success rate: 100.0%
+
+Performance Summary
+===================
+- Average throughput: 2566.7 ops/sec
+- Best throughput: 4200.0 ops/sec
+- Worst throughput: 1000.0 ops/sec
+
+Resource Summary
+================
+- Average LUT utilization: 66.7%
+- Peak LUT utilization: 85.0%

@@ -1,330 +1,245 @@
 """
-Core data types for Automation Hooks Framework.
+Essential Types for Extensible Optimization Hooks
+
+Simple types with clear extension points for future capabilities.
+This module provides the foundational types for the hooks system while
+maintaining clean interfaces for sophisticated extensions.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Protocol
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from abc import ABC, abstractmethod
 
-class StrategyType(Enum):
-    """Optimization strategy types"""
-    GENETIC_ALGORITHM = "genetic_algorithm"
-    SIMULATED_ANNEALING = "simulated_annealing"
-    PARTICLE_SWARM = "particle_swarm"
-    GRADIENT_DESCENT = "gradient_descent"
-    RANDOM_SEARCH = "random_search"
-    BAYESIAN_OPTIMIZATION = "bayesian_optimization"
-    MULTI_OBJECTIVE = "multi_objective"
-    HYBRID = "hybrid"
-
-class ProblemComplexity(Enum):
-    """Problem complexity levels"""
-    SIMPLE = "simple"
-    MODERATE = "moderate"
-    COMPLEX = "complex"
-    VERY_COMPLEX = "very_complex"
-
-class ParameterChangeType(Enum):
-    """Types of parameter changes"""
-    INITIALIZATION = "initialization"
-    EXPLORATION = "exploration"
-    EXPLOITATION = "exploitation"
-    REFINEMENT = "refinement"
-    CORRECTION = "correction"
 
 @dataclass
-class ProblemContext:
-    """Context information for optimization problem"""
-    model_info: Dict[str, Any] = field(default_factory=dict)
-    targets: Dict[str, float] = field(default_factory=dict)
-    constraints: Dict[str, float] = field(default_factory=dict)
-    platform: Dict[str, Any] = field(default_factory=dict)
-    problem_size: int = 0
-    complexity_indicators: Dict[str, float] = field(default_factory=dict)
+class OptimizationEvent:
+    """
+    Core optimization event with extension support.
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'model_info': self.model_info,
-            'targets': self.targets,
-            'constraints': self.constraints,
-            'platform': self.platform,
-            'problem_size': self.problem_size,
-            'complexity_indicators': self.complexity_indicators
-        }
-
-@dataclass
-class ProblemCharacteristics:
-    """Comprehensive problem characteristics"""
-    model_size: int = 0
-    model_complexity: float = 0.0
-    operator_diversity: float = 0.0
-    performance_targets: Dict[str, float] = field(default_factory=dict)
-    constraint_tightness: float = 0.0
-    multi_objective_complexity: float = 0.0
-    available_resources: Dict[str, float] = field(default_factory=dict)
-    resource_pressure: float = 0.0
-    design_space_size: int = 0
-    variable_types: Dict[str, int] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'model_size': self.model_size,
-            'model_complexity': self.model_complexity,
-            'operator_diversity': self.operator_diversity,
-            'performance_targets': self.performance_targets,
-            'constraint_tightness': self.constraint_tightness,
-            'multi_objective_complexity': self.multi_objective_complexity,
-            'available_resources': self.available_resources,
-            'resource_pressure': self.resource_pressure,
-            'design_space_size': self.design_space_size,
-            'variable_types': self.variable_types
-        }
-
-@dataclass
-class StrategyDecisionRecord:
-    """Record of strategy selection decision"""
+    Future extensions can add additional fields or processing
+    without breaking the core interface.
+    """
     timestamp: datetime
-    problem_context: ProblemContext
-    selected_strategy: str
-    selection_rationale: str
-    problem_characteristics: ProblemCharacteristics
-    available_alternatives: List[str] = field(default_factory=list)
-    confidence_score: float = 0.0
-    decision_id: str = ""
+    event_type: str
+    data: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary (extension point for serialization)."""
         return {
             'timestamp': self.timestamp.isoformat(),
-            'problem_context': self.problem_context.to_dict(),
-            'selected_strategy': self.selected_strategy,
-            'selection_rationale': self.selection_rationale,
-            'problem_characteristics': self.problem_characteristics.to_dict(),
-            'available_alternatives': self.available_alternatives,
-            'confidence_score': self.confidence_score,
-            'decision_id': self.decision_id
+            'event_type': self.event_type,
+            'data': self.data,
+            'metadata': self.metadata
         }
-
-@dataclass
-class PerformanceMetrics:
-    """Performance metrics for strategy outcomes"""
-    throughput: float = 0.0
-    latency: float = 0.0
-    power: float = 0.0
-    area: float = 0.0
-    efficiency: float = 0.0
-    convergence_time: float = 0.0
-    solution_quality: float = 0.0
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'throughput': self.throughput,
-            'latency': self.latency,
-            'power': self.power,
-            'area': self.area,
-            'efficiency': self.efficiency,
-            'convergence_time': self.convergence_time,
-            'solution_quality': self.solution_quality
-        }
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'OptimizationEvent':
+        """Create from dictionary (extension point for deserialization)."""
+        return cls(
+            timestamp=datetime.fromisoformat(data['timestamp']),
+            event_type=data['event_type'],
+            data=data['data'],
+            metadata=data.get('metadata', {})
+        )
+    
+    def get_value(self, key: str, default: Any = None) -> Any:
+        """Get value from data or metadata."""
+        return self.data.get(key, self.metadata.get(key, default))
+    
+    def add_metadata(self, key: str, value: Any) -> None:
+        """Add metadata (extension point)."""
+        self.metadata[key] = value
+
+
+class EventHandler(ABC):
+    """
+    Abstract event handler interface (strong extension point).
+    
+    Future capabilities can implement this interface:
+    - StatisticalAnalysisHandler
+    - MLStrategyHandler  
+    - DatabasePersistenceHandler
+    - MetricsAggregationHandler
+    """
+    
+    @abstractmethod
+    def handle_event(self, event: OptimizationEvent) -> None:
+        """Handle optimization event."""
+        pass
+    
+    def should_handle(self, event: OptimizationEvent) -> bool:
+        """Filter events (extension point)."""
+        return True
+    
+    def initialize(self) -> None:
+        """Initialize handler (extension point)."""
+        pass
+    
+    def cleanup(self) -> None:
+        """Cleanup handler (extension point)."""
+        pass
+    
+    def get_name(self) -> str:
+        """Get handler name for identification."""
+        return self.__class__.__name__
+
 
 @dataclass
-class StrategyOutcomeRecord:
-    """Record of strategy execution outcome"""
+class SimpleMetric:
+    """
+    Basic performance metric (extensible for future metric types).
+    """
+    name: str
+    value: float
     timestamp: datetime
-    strategy_id: str
-    performance_metrics: PerformanceMetrics
-    optimization_success: bool = False
-    convergence_metrics: Dict[str, float] = field(default_factory=dict)
-    quality_metrics: Dict[str, float] = field(default_factory=dict)
-    execution_time: float = 0.0
+    tags: Dict[str, str] = field(default_factory=dict)
+    unit: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            'name': self.name,
+            'value': self.value,
             'timestamp': self.timestamp.isoformat(),
-            'strategy_id': self.strategy_id,
-            'performance_metrics': self.performance_metrics.to_dict(),
-            'optimization_success': self.optimization_success,
-            'convergence_metrics': self.convergence_metrics,
-            'quality_metrics': self.quality_metrics,
-            'execution_time': self.execution_time
+            'tags': self.tags,
+            'unit': self.unit
         }
-
-@dataclass
-class EffectivenessReport:
-    """Strategy effectiveness analysis report"""
-    success_rates: Dict[str, float] = field(default_factory=dict)
-    performance_comparison: Dict[str, Dict[str, float]] = field(default_factory=dict)
-    context_sensitivity: Dict[str, float] = field(default_factory=dict)
-    recommendations: List[str] = field(default_factory=list)
-    confidence_intervals: Dict[str, tuple] = field(default_factory=dict)
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'success_rates': self.success_rates,
-            'performance_comparison': self.performance_comparison,
-            'context_sensitivity': self.context_sensitivity,
-            'recommendations': self.recommendations,
-            'confidence_intervals': {k: list(v) for k, v in self.confidence_intervals.items()}
-        }
+    @classmethod
+    def from_event(cls, event: OptimizationEvent) -> Optional['SimpleMetric']:
+        """Create metric from performance event."""
+        if event.event_type == 'performance_metric':
+            return cls(
+                name=event.data.get('metric', 'unknown'),
+                value=event.data.get('value', 0.0),
+                timestamp=event.timestamp,
+                tags=event.data.get('context', {}),
+                unit=event.metadata.get('unit')
+            )
+        return None
+
 
 @dataclass
-class ParameterChangeRecord:
-    """Record of parameter changes during optimization"""
+class ParameterChange:
+    """Simple parameter change record."""
+    parameter: str
+    old_value: Any
+    new_value: Any
     timestamp: datetime
-    parameter_changes: Dict[str, Any]
-    change_context: Dict[str, Any] = field(default_factory=dict)
-    change_magnitude: float = 0.0
-    change_type: ParameterChangeType = ParameterChangeType.EXPLORATION
-    iteration_number: int = 0
+    change_magnitude: Optional[float] = None
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'timestamp': self.timestamp.isoformat(),
-            'parameter_changes': self.parameter_changes,
-            'change_context': self.change_context,
-            'change_magnitude': self.change_magnitude,
-            'change_type': self.change_type.value,
-            'iteration_number': self.iteration_number
-        }
+    @classmethod
+    def from_event(cls, event: OptimizationEvent) -> Optional['ParameterChange']:
+        """Create parameter change from event."""
+        if event.event_type == 'parameter_change':
+            return cls(
+                parameter=event.data.get('parameter', 'unknown'),
+                old_value=event.data.get('old_value'),
+                new_value=event.data.get('new_value'),
+                timestamp=event.timestamp,
+                change_magnitude=event.data.get('change_magnitude')
+            )
+        return None
 
-@dataclass
-class ImpactMeasurement:
-    """Measurement of parameter impact"""
-    magnitude: float = 0.0
-    direction: str = "neutral"  # positive, negative, neutral
-    confidence: float = 0.0
-    statistical_significance: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'magnitude': self.magnitude,
-            'direction': self.direction,
-            'confidence': self.confidence,
-            'statistical_significance': self.statistical_significance
-        }
 
-@dataclass
-class InteractionEffect:
-    """Parameter interaction effect"""
-    parameters: List[str] = field(default_factory=list)
-    strength: float = 0.0
-    type: str = "synergistic"  # synergistic, antagonistic, neutral
-    confidence: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'parameters': self.parameters,
-            'strength': self.strength,
-            'type': self.type,
-            'confidence': self.confidence
-        }
+# Extension point: Custom event types
+EventTypeRegistry = Dict[str, Dict[str, Any]]  # Future: Event schemas
 
-@dataclass
-class ImpactAnalysis:
-    """Comprehensive impact analysis"""
-    direct_impact: Dict[str, ImpactMeasurement] = field(default_factory=dict)
-    interaction_effects: List[InteractionEffect] = field(default_factory=list)
-    sensitivity_coefficients: Dict[str, float] = field(default_factory=dict)
-    statistical_significance: Dict[str, float] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'direct_impact': {k: v.to_dict() for k, v in self.direct_impact.items()},
-            'interaction_effects': [e.to_dict() for e in self.interaction_effects],
-            'sensitivity_coefficients': self.sensitivity_coefficients,
-            'statistical_significance': self.statistical_significance
-        }
 
-@dataclass
-class SensitivityInsight:
-    """Insight from sensitivity analysis"""
-    type: str = ""
-    parameter: str = ""
-    parameters: List[str] = field(default_factory=list)
-    impact_magnitude: float = 0.0
-    interaction_strength: float = 0.0
-    recommendation: str = ""
-    confidence: float = 0.0
+# Extension point: Plugin interface  
+class HooksPlugin(Protocol):
+    """Protocol for hooks plugins (future extension point)."""
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'type': self.type,
-            'parameter': self.parameter,
-            'parameters': self.parameters,
-            'impact_magnitude': self.impact_magnitude,
-            'interaction_strength': self.interaction_strength,
-            'recommendation': self.recommendation,
-            'confidence': self.confidence
-        }
+    def install(self) -> None:
+        """Install plugin."""
+        ...
+    
+    def uninstall(self) -> None:
+        """Uninstall plugin."""
+        ...
+    
+    def get_handlers(self) -> List[EventHandler]:
+        """Get plugin event handlers."""
+        ...
+    
+    def get_name(self) -> str:
+        """Get plugin name."""
+        ...
 
-@dataclass
-class SensitivityData:
-    """Sensitivity analysis data collection"""
-    parameters: List[str] = field(default_factory=list)
-    measurements: List[ParameterChangeRecord] = field(default_factory=list)
-    impacts: List[ImpactAnalysis] = field(default_factory=list)
-    insights: List[SensitivityInsight] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'parameters': self.parameters,
-            'measurements': [m.to_dict() for m in self.measurements],
-            'impacts': [i.to_dict() for i in self.impacts],
-            'insights': [i.to_dict() for i in self.insights]
-        }
 
-@dataclass
-class DesignSpaceCharacteristics:
-    """Design space characteristics"""
-    dimensionality: int = 0
-    variable_types: Dict[str, int] = field(default_factory=dict)
-    space_size: int = 0
-    constraint_density: float = 0.0
-    linearity_measure: float = 0.0
-    separability_measure: float = 0.0
+# Extension point: Event filters and processors
+class EventFilter(ABC):
+    """Abstract event filter for sophisticated event processing."""
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'dimensionality': self.dimensionality,
-            'variable_types': self.variable_types,
-            'space_size': self.space_size,
-            'constraint_density': self.constraint_density,
-            'linearity_measure': self.linearity_measure,
-            'separability_measure': self.separability_measure
-        }
+    @abstractmethod
+    def should_process(self, event: OptimizationEvent) -> bool:
+        """Determine if event should be processed."""
+        pass
 
-@dataclass
-class ObjectiveCharacteristics:
-    """Objective function characteristics"""
-    num_objectives: int = 1
-    conflicting_objectives: bool = False
-    objective_scales: Dict[str, float] = field(default_factory=dict)
-    noise_level: float = 0.0
-    evaluation_cost: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'num_objectives': self.num_objectives,
-            'conflicting_objectives': self.conflicting_objectives,
-            'objective_scales': self.objective_scales,
-            'noise_level': self.noise_level,
-            'evaluation_cost': self.evaluation_cost
-        }
 
-@dataclass
-class ProblemType:
-    """Classified problem type"""
-    type_name: str = ""
-    complexity: ProblemComplexity = ProblemComplexity.MODERATE
-    confidence: float = 0.0
-    explanation: str = ""
-    recommended_strategies: List[str] = field(default_factory=list)
+class EventProcessor(ABC):
+    """Abstract event processor for complex event analysis."""
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'type_name': self.type_name,
-            'complexity': self.complexity.value,
-            'confidence': self.confidence,
-            'explanation': self.explanation,
-            'recommended_strategies': self.recommended_strategies
+    @abstractmethod
+    def process_event(self, event: OptimizationEvent) -> Optional[Dict[str, Any]]:
+        """Process event and return analysis results."""
+        pass
+
+
+# Common event types (extensible)
+class EventTypes:
+    """Common event type constants (extensible)."""
+    
+    PARAMETER_CHANGE = "parameter_change"
+    PERFORMANCE_METRIC = "performance_metric"
+    STRATEGY_DECISION = "strategy_decision"
+    DSE_EVENT = "dse_event"
+    OPTIMIZATION_START = "optimization_start"
+    OPTIMIZATION_END = "optimization_end"
+    ERROR_EVENT = "error_event"
+    
+    # Extension point: Custom event types can be added here
+    @classmethod
+    def register_custom_type(cls, type_name: str) -> None:
+        """Register custom event type."""
+        setattr(cls, type_name.upper(), type_name)
+
+
+# Helper functions for creating common events
+def create_parameter_event(parameter: str, old_value: Any, new_value: Any) -> OptimizationEvent:
+    """Create parameter change event."""
+    return OptimizationEvent(
+        timestamp=datetime.now(),
+        event_type=EventTypes.PARAMETER_CHANGE,
+        data={
+            'parameter': parameter,
+            'old_value': old_value,
+            'new_value': new_value
         }
+    )
+
+
+def create_metric_event(metric_name: str, value: float, context: Optional[Dict] = None) -> OptimizationEvent:
+    """Create performance metric event."""
+    return OptimizationEvent(
+        timestamp=datetime.now(),
+        event_type=EventTypes.PERFORMANCE_METRIC,
+        data={
+            'metric': metric_name,
+            'value': value,
+            'context': context or {}
+        }
+    )
+
+
+def create_strategy_event(strategy: str, rationale: str = "") -> OptimizationEvent:
+    """Create strategy decision event."""
+    return OptimizationEvent(
+        timestamp=datetime.now(),
+        event_type=EventTypes.STRATEGY_DECISION,
+        data={
+            'strategy': strategy,
+            'rationale': rationale
+        }
+    )

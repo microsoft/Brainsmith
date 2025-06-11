@@ -1,0 +1,28 @@
+name: "bert_simple"
+build_steps:
+  - "common.cleanup"
+  - "transformer.qonnx_to_finn"
+  - "transformer.streamlining"
+  - "step_create_dataflow_partition"
+  - "step_target_fps_parallelization"
+  - "step_hw_codegen"
+  - "step_create_stitched_ip"
+objectives:
+  throughput:
+    direction: "maximize"
+    weight: 1.0
+  latency:
+    direction: "minimize"
+    weight: 0.8
+constraints:
+  max_luts: 0.8
+  max_dsps: 0.8
+  max_brams: 0.8
+kernels:
+  - "StreamingDatawidthConverter"
+  - "MatrixVectorActivation"
+  - "VectorVectorActivation"
+transforms:
+  - "InferShapes"
+  - "FoldConstants"
+  - "InferDataTypes"

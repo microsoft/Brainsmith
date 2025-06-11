@@ -1,293 +1,215 @@
 """
-Core data types and structures for FINN Integration Engine.
+Essential FINN Types for Simplified Interface
+
+This module contains only the essential data types needed for the simplified
+FINN interface, removing enterprise complexity while maintaining functionality.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 
-class OptimizationStrategy(Enum):
-    """Optimization strategy types"""
-    THROUGHPUT = "throughput"
-    LATENCY = "latency"
-    AREA = "area"
-    POWER = "power"
-    BALANCED = "balanced"
-
-class BuildStatus(Enum):
-    """FINN build status"""
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 @dataclass
-class ModelOpsConfig:
-    """Model operations configuration for FINN"""
-    supported_ops: List[str] = field(default_factory=list)
-    custom_ops: Dict[str, Any] = field(default_factory=dict)
-    frontend_cleanup: List[str] = field(default_factory=list)
-    preprocessing_steps: List[str] = field(default_factory=list)
-    validation_rules: Dict[str, Any] = field(default_factory=dict)
+class FINNConfig:
+    """Simplified FINN configuration."""
     
-    def to_dict(self) -> Dict[str, Any]:
+    # Core FINN parameters
+    target_device: str = "U250"
+    target_fps: int = 1000
+    clock_period: float = 3.33
+    shell_flow: str = "vivado_zynq"
+    output_dir: str = "./output"
+    
+    # Build configuration
+    mvau_wwidth_max: int = 36
+    enable_synthesis: bool = True
+    enable_bitstream: bool = False
+    
+    def to_core_dict(self) -> Dict[str, Any]:
+        """Convert to core interface format."""
         return {
-            'supported_ops': self.supported_ops,
-            'custom_ops': self.custom_ops,
-            'frontend_cleanup': self.frontend_cleanup,
-            'preprocessing_steps': self.preprocessing_steps,
-            'validation_rules': self.validation_rules
-        }
-    
-    def copy(self) -> 'ModelOpsConfig':
-        return ModelOpsConfig(
-            supported_ops=self.supported_ops.copy(),
-            custom_ops=self.custom_ops.copy(),
-            frontend_cleanup=self.frontend_cleanup.copy(),
-            preprocessing_steps=self.preprocessing_steps.copy(),
-            validation_rules=self.validation_rules.copy()
-        )
-
-@dataclass
-class ModelTransformsConfig:
-    """Model transforms configuration for FINN"""
-    transforms_sequence: List[str] = field(default_factory=list)
-    optimization_level: str = "standard"
-    target_platform: str = "zynq"
-    quantization_config: Dict[str, Any] = field(default_factory=dict)
-    graph_optimizations: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'transforms_sequence': self.transforms_sequence,
-            'optimization_level': self.optimization_level,
-            'target_platform': self.target_platform,
-            'quantization_config': self.quantization_config,
-            'graph_optimizations': self.graph_optimizations
-        }
-    
-    def copy(self) -> 'ModelTransformsConfig':
-        return ModelTransformsConfig(
-            transforms_sequence=self.transforms_sequence.copy(),
-            optimization_level=self.optimization_level,
-            target_platform=self.target_platform,
-            quantization_config=self.quantization_config.copy(),
-            graph_optimizations=self.graph_optimizations.copy()
-        )
-
-@dataclass
-class HwKernelsConfig:
-    """Hardware kernels configuration for FINN"""
-    kernel_selection_plan: Dict[str, str] = field(default_factory=dict)
-    custom_kernels: Dict[str, Any] = field(default_factory=dict)
-    folding_config: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    resource_sharing: Dict[str, Any] = field(default_factory=dict)
-    memory_config: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'kernel_selection_plan': self.kernel_selection_plan,
-            'custom_kernels': self.custom_kernels,
-            'folding_config': self.folding_config,
-            'resource_sharing': self.resource_sharing,
-            'memory_config': self.memory_config
-        }
-    
-    def copy(self) -> 'HwKernelsConfig':
-        return HwKernelsConfig(
-            kernel_selection_plan=self.kernel_selection_plan.copy(),
-            custom_kernels=self.custom_kernels.copy(),
-            folding_config=self.folding_config.copy(),
-            resource_sharing=self.resource_sharing.copy(),
-            memory_config=self.memory_config.copy()
-        )
-
-@dataclass
-class HwOptimizationConfig:
-    """Hardware optimization configuration for FINN"""
-    optimization_strategy: str = "balanced"
-    performance_targets: Dict[str, float] = field(default_factory=dict)
-    power_constraints: Dict[str, float] = field(default_factory=dict)
-    timing_constraints: Dict[str, float] = field(default_factory=dict)
-    resource_constraints: Dict[str, float] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'optimization_strategy': self.optimization_strategy,
-            'performance_targets': self.performance_targets,
-            'power_constraints': self.power_constraints,
-            'timing_constraints': self.timing_constraints,
-            'resource_constraints': self.resource_constraints
-        }
-    
-    def copy(self) -> 'HwOptimizationConfig':
-        return HwOptimizationConfig(
-            optimization_strategy=self.optimization_strategy,
-            performance_targets=self.performance_targets.copy(),
-            power_constraints=self.power_constraints.copy(),
-            timing_constraints=self.timing_constraints.copy(),
-            resource_constraints=self.resource_constraints.copy()
-        )
-
-@dataclass
-class FINNInterfaceConfig:
-    """Complete FINN interface configuration across all four categories"""
-    model_ops: ModelOpsConfig = field(default_factory=ModelOpsConfig)
-    model_transforms: ModelTransformsConfig = field(default_factory=ModelTransformsConfig)
-    hw_kernels: HwKernelsConfig = field(default_factory=HwKernelsConfig)
-    hw_optimization: HwOptimizationConfig = field(default_factory=HwOptimizationConfig)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for FINN consumption"""
-        return {
-            'model_ops': self.model_ops.to_dict(),
-            'model_transforms': self.model_transforms.to_dict(),
-            'hw_kernels': self.hw_kernels.to_dict(),
-            'hw_optimization': self.hw_optimization.to_dict(),
-            'metadata': self.metadata
-        }
-    
-    def copy(self) -> 'FINNInterfaceConfig':
-        """Create deep copy of configuration"""
-        return FINNInterfaceConfig(
-            model_ops=self.model_ops.copy(),
-            model_transforms=self.model_transforms.copy(),
-            hw_kernels=self.hw_kernels.copy(),
-            hw_optimization=self.hw_optimization.copy(),
-            metadata=self.metadata.copy()
-        )
-
-@dataclass
-class PerformanceMetrics:
-    """Performance metrics from FINN build"""
-    throughput: float = 0.0
-    latency: float = 0.0
-    power: float = 0.0
-    efficiency: float = 0.0
-    clock_frequency: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'throughput': self.throughput,
-            'latency': self.latency,
-            'power': self.power,
-            'efficiency': self.efficiency,
-            'clock_frequency': self.clock_frequency
-        }
-
-@dataclass
-class ResourceAnalysis:
-    """Resource utilization analysis"""
-    lut_usage: Dict[str, float] = field(default_factory=dict)
-    dsp_usage: Dict[str, float] = field(default_factory=dict)
-    bram_usage: Dict[str, float] = field(default_factory=dict)
-    ff_usage: Dict[str, float] = field(default_factory=dict)
-    global_utilization: Dict[str, float] = field(default_factory=dict)
-    bottlenecks: List[str] = field(default_factory=list)
-    optimization_suggestions: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'lut_usage': self.lut_usage,
-            'dsp_usage': self.dsp_usage,
-            'bram_usage': self.bram_usage,
-            'ff_usage': self.ff_usage,
-            'global_utilization': self.global_utilization,
-            'bottlenecks': self.bottlenecks,
-            'optimization_suggestions': self.optimization_suggestions
-        }
-
-@dataclass
-class TimingAnalysis:
-    """Timing analysis results"""
-    critical_paths: List[Dict[str, Any]] = field(default_factory=list)
-    timing_margins: Dict[str, float] = field(default_factory=dict)
-    timing_bottlenecks: List[str] = field(default_factory=list)
-    optimization_suggestions: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'critical_paths': self.critical_paths,
-            'timing_margins': self.timing_margins,
-            'timing_bottlenecks': self.timing_bottlenecks,
-            'optimization_suggestions': self.optimization_suggestions
-        }
-
-@dataclass
-class BuildEnvironment:
-    """FINN build environment configuration"""
-    finn_root: str = ""
-    vivado_path: str = ""
-    target_device: str = "xc7z020clg400-1"
-    clock_period: float = 10.0
-    build_dir: str = ""
-    temp_dir: str = ""
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'finn_root': self.finn_root,
-            'vivado_path': self.vivado_path,
             'target_device': self.target_device,
+            'target_fps': self.target_fps,
             'clock_period': self.clock_period,
-            'build_dir': self.build_dir,
-            'temp_dir': self.temp_dir
+            'shell_flow': self.shell_flow,
+            'mvau_wwidth_max': self.mvau_wwidth_max,
+            'enable_synthesis': self.enable_synthesis,
+            'enable_bitstream': self.enable_bitstream
         }
-
-@dataclass
-class FINNBuildResult:
-    """Result from FINN build execution"""
-    status: BuildStatus = BuildStatus.PENDING
-    success: bool = False
-    build_time: float = 0.0
-    output_dir: str = ""
-    log_files: List[str] = field(default_factory=list)
-    synthesis_reports: List[str] = field(default_factory=list)
-    timing_reports: List[str] = field(default_factory=list)
-    error_message: str = ""
-    warnings: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
         return {
-            'status': self.status.value if hasattr(self.status, 'value') else str(self.status),
-            'success': self.success,
-            'build_time': self.build_time,
+            'target_device': self.target_device,
+            'target_fps': self.target_fps,
+            'clock_period': self.clock_period,
+            'shell_flow': self.shell_flow,
             'output_dir': self.output_dir,
-            'log_files': self.log_files,
-            'synthesis_reports': self.synthesis_reports,
-            'timing_reports': self.timing_reports,
-            'error_message': self.error_message,
-            'warnings': self.warnings
+            'mvau_wwidth_max': self.mvau_wwidth_max,
+            'enable_synthesis': self.enable_synthesis,
+            'enable_bitstream': self.enable_bitstream
         }
 
+
 @dataclass
-class EnhancedFINNResult:
-    """Enhanced FINN build result with comprehensive analysis"""
-    original_result: FINNBuildResult
-    performance_metrics: PerformanceMetrics = field(default_factory=PerformanceMetrics)
-    resource_analysis: ResourceAnalysis = field(default_factory=ResourceAnalysis)
-    timing_analysis: TimingAnalysis = field(default_factory=TimingAnalysis)
-    quality_metrics: Dict[str, float] = field(default_factory=dict)
-    optimization_opportunities: List[str] = field(default_factory=list)
-    enhanced_timestamp: datetime = field(default_factory=datetime.now)
+class FINNResult:
+    """Simplified FINN build result."""
     
-    @property
-    def success(self) -> bool:
-        return self.original_result.success
+    # Core result information
+    success: bool
+    model_path: str
+    output_dir: str
     
-    @property
-    def build_time(self) -> float:
-        return self.original_result.build_time
+    # Build metrics
+    performance_metrics: Dict[str, float] = field(default_factory=dict)
+    resource_usage: Dict[str, int] = field(default_factory=dict)
+    build_time: float = 0.0
+    
+    # Error handling
+    error_message: Optional[str] = None
+    warnings: list[str] = field(default_factory=list)
+    
+    # Build artifacts
+    rtl_files: list[str] = field(default_factory=list)
+    hls_files: list[str] = field(default_factory=list)
+    
+    @classmethod
+    def from_core_result(cls, core_result: Dict[str, Any]) -> 'FINNResult':
+        """Convert from core interface result."""
+        return cls(
+            success=core_result.get('success', False),
+            model_path=core_result.get('model_path', ''),
+            output_dir=core_result.get('output_dir', ''),
+            performance_metrics=core_result.get('performance_metrics', {}),
+            resource_usage=core_result.get('resource_usage', {}),
+            build_time=core_result.get('build_time', 0.0),
+            error_message=core_result.get('error'),
+            warnings=core_result.get('warnings', []),
+            rtl_files=core_result.get('rtl_files', []),
+            hls_files=core_result.get('hls_files', [])
+        )
     
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
         return {
-            'original_result': self.original_result.to_dict(),
-            'performance_metrics': self.performance_metrics.to_dict(),
-            'resource_analysis': self.resource_analysis.to_dict(),
-            'timing_analysis': self.timing_analysis.to_dict(),
-            'quality_metrics': self.quality_metrics,
-            'optimization_opportunities': self.optimization_opportunities,
-            'enhanced_timestamp': self.enhanced_timestamp.isoformat()
+            'success': self.success,
+            'model_path': self.model_path,
+            'output_dir': self.output_dir,
+            'performance_metrics': self.performance_metrics,
+            'resource_usage': self.resource_usage,
+            'build_time': self.build_time,
+            'error_message': self.error_message,
+            'warnings': self.warnings,
+            'rtl_files': self.rtl_files,
+            'hls_files': self.hls_files
+        }
+    
+    @property
+    def throughput_fps(self) -> float:
+        """Get throughput in FPS."""
+        return self.performance_metrics.get('throughput_fps', 0.0)
+    
+    @property
+    def latency_cycles(self) -> int:
+        """Get latency in cycles."""
+        return int(self.performance_metrics.get('latency_cycles', 0))
+    
+    @property
+    def lut_count(self) -> int:
+        """Get LUT count."""
+        return self.resource_usage.get('lut_count', 0)
+    
+    @property
+    def dsp_count(self) -> int:
+        """Get DSP count."""
+        return self.resource_usage.get('dsp_count', 0)
+
+
+@dataclass
+class FINNHooksConfig:
+    """4-hooks preparation configuration for future FINN interface."""
+    
+    # Future hook enablement flags
+    preprocessing_enabled: bool = True
+    transformation_enabled: bool = True  
+    optimization_enabled: bool = True
+    generation_enabled: bool = True
+    
+    # Hook-specific configurations
+    preprocessing_params: Dict[str, Any] = field(default_factory=dict)
+    transformation_params: Dict[str, Any] = field(default_factory=dict)
+    optimization_params: Dict[str, Any] = field(default_factory=dict)
+    generation_params: Dict[str, Any] = field(default_factory=dict)
+    
+    def prepare_config(self, design_point: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Prepare configuration for future 4-hooks interface.
+        
+        This method creates a structured configuration that will be compatible
+        with FINN's future 4-hooks interface when it becomes available.
+        """
+        return {
+            'preprocessing': {
+                'enabled': self.preprocessing_enabled,
+                'params': {
+                    **self.preprocessing_params,
+                    **design_point.get('preprocessing', {})
+                }
+            },
+            'transformation': {
+                'enabled': self.transformation_enabled,
+                'params': {
+                    **self.transformation_params,
+                    **design_point.get('transforms', {}),
+                    **design_point.get('transformation', {})
+                }
+            },
+            'optimization': {
+                'enabled': self.optimization_enabled, 
+                'params': {
+                    **self.optimization_params,
+                    **design_point.get('hw_optimization', {}),
+                    **design_point.get('optimization', {})
+                }
+            },
+            'generation': {
+                'enabled': self.generation_enabled,
+                'params': {
+                    **self.generation_params,
+                    **design_point.get('generation', {}),
+                    **design_point.get('codegen', {})
+                }
+            }
+        }
+    
+    def is_4hooks_ready(self) -> bool:
+        """Check if ready for 4-hooks interface."""
+        # Always False until FINN implements the 4-hooks interface
+        return False
+    
+    def get_enabled_hooks(self) -> list[str]:
+        """Get list of enabled hooks."""
+        enabled = []
+        if self.preprocessing_enabled:
+            enabled.append('preprocessing')
+        if self.transformation_enabled:
+            enabled.append('transformation')
+        if self.optimization_enabled:
+            enabled.append('optimization')
+        if self.generation_enabled:
+            enabled.append('generation')
+        return enabled
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            'preprocessing_enabled': self.preprocessing_enabled,
+            'transformation_enabled': self.transformation_enabled,
+            'optimization_enabled': self.optimization_enabled,
+            'generation_enabled': self.generation_enabled,
+            'preprocessing_params': self.preprocessing_params,
+            'transformation_params': self.transformation_params,
+            'optimization_params': self.optimization_params,
+            'generation_params': self.generation_params
         }

@@ -1,9 +1,8 @@
 """
-FINN interface supporting existing DataflowBuildConfig + future 4-hook placeholder.
+Essential FINN Interface for BrainSmith Core
 
-This module provides a clean transition path from the current DataflowBuildConfig
-workflow to the future 4-hook FINN interface while maintaining full compatibility
-with existing functionality.
+Provides clean FINN integration with preparation for 4-hooks transition.
+Focuses on practical FINN interfacing without complex abstraction layers.
 """
 
 from dataclasses import dataclass
@@ -12,418 +11,231 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
-class FINNHooksPlaceholder:
-    """
-    Placeholder for future 4-hook FINN interface.
+class FINNHooks:
+    """Preparation structure for future 4-hooks FINN interface."""
     
-    This serves as a structured placeholder to ensure clean transition
-    when the 4-hook interface becomes available. All hook definitions
-    are currently None and will be replaced with actual implementations.
-    """
-    
-    # Placeholder hook definitions (will be replaced with actual 4-hook interface)
+    # Future hook placeholders
     preprocessing_hook: Optional[Any] = None
     transformation_hook: Optional[Any] = None
     optimization_hook: Optional[Any] = None
     generation_hook: Optional[Any] = None
     
-    # Configuration for future interface
-    hook_config: Dict[str, Any] = None
-    
-    def __post_init__(self):
-        """Initialize hook configuration if not provided."""
-        if self.hook_config is None:
-            self.hook_config = {}
-        
-        logger.debug("FINNHooksPlaceholder initialized - 4-hook interface not yet available")
-    
     def is_available(self) -> bool:
-        """
-        Check if 4-hook interface is available.
-        
-        Returns:
-            False - Always False until 4-hook interface is implemented
-        """
-        return False
+        """Check if 4-hooks interface is available."""
+        return False  # Always False until implemented
     
-    def prepare_for_future_interface(self, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Prepare configuration structure for future 4-hook interface.
-        
-        This method creates the configuration structure that will be used
-        when the 4-hook interface becomes available.
-        
-        Args:
-            design_point: Complete design point specification
-            
-        Returns:
-            Structured configuration for future 4-hook interface
-        """
-        future_config = {
-            'preprocessing_config': design_point.get('preprocessing', {}),
-            'transformation_config': design_point.get('transforms', {}),
-            'optimization_config': design_point.get('hw_optimization', {}),
-            'generation_config': design_point.get('generation', {})
+    def prepare_config(self, design_point: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare configuration for future 4-hooks interface."""
+        return {
+            'preprocessing': design_point.get('preprocessing', {}),
+            'transformation': design_point.get('transforms', {}),
+            'optimization': design_point.get('hw_optimization', {}),
+            'generation': design_point.get('generation', {})
         }
-        
-        logger.debug(f"Prepared configuration for future 4-hook interface: {list(future_config.keys())}")
-        return future_config
-    
-    def validate_hook_config(self) -> tuple[bool, list[str]]:
-        """
-        Validate hook configuration for future interface.
-        
-        Returns:
-            Tuple of (is_valid, error_list)
-        """
-        errors = []
-        
-        # Validate that hook config is properly structured
-        if not isinstance(self.hook_config, dict):
-            errors.append("Hook config must be a dictionary")
-        
-        # Additional validation can be added here for future interface
-        
-        return len(errors) == 0, errors
 
 
 class FINNInterface:
-    """
-    FINN integration layer supporting both legacy and future interfaces.
+    """Clean FINN integration with 4-hooks preparation."""
     
-    Maintains support for current DataflowBuildConfig while preparing for
-    the upcoming 4-hook interface. Provides clean transition path with
-    no disruption to existing workflows.
-    """
+    def __init__(self, config: Dict[str, Any] = None):
+        """Initialize FINN interface."""
+        self.config = config or {}
+        self.hooks = FINNHooks()
+        
+        logger.info("FINNInterface initialized with legacy DataflowBuildConfig support")
     
-    def __init__(self, legacy_config: Dict[str, Any], future_hooks: FINNHooksPlaceholder):
+    def build_accelerator(self, model_path: str, blueprint_config: Dict[str, Any], 
+                         output_dir: str = "./output") -> Dict[str, Any]:
         """
-        Initialize FINN interface with both legacy and future support.
+        Build FPGA accelerator using FINN.
         
         Args:
-            legacy_config: Configuration for existing DataflowBuildConfig
-            future_hooks: Placeholder for future 4-hook interface
-        """
-        self.legacy_config = legacy_config or {}
-        self.future_hooks = future_hooks
-        self.use_legacy = not future_hooks.is_available()  # Always True for now
-        
-        logger.info(f"FINNInterface initialized - using legacy: {self.use_legacy}")
-        logger.debug(f"Legacy config keys: {list(self.legacy_config.keys())}")
-    
-    def generate_implementation_existing(self, model_path: str, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate RTL/HLS implementation using existing DataflowBuildConfig flow.
-        
-        This method maintains compatibility with existing FINN workflow while
-        providing structure for future 4-hook interface integration.
-        
-        Args:
-            model_path: Path to input model
-            design_point: Complete design point specification
+            model_path: Path to ONNX model
+            blueprint_config: Blueprint configuration
+            output_dir: Output directory for results
             
         Returns:
-            Generation results including RTL/HLS files and performance metrics
+            Build results with performance metrics
         """
-        logger.info(f"Generating implementation for model: {model_path}")
-        
-        if self.use_legacy:
-            return self._generate_with_legacy_interface(model_path, design_point)
-        else:
-            return self._generate_with_future_interface(model_path, design_point)
-    
-    def _generate_with_legacy_interface(self, model_path: str, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate implementation using existing legacy DataflowBuildConfig.
-        
-        This method uses the current FINN build flow that exists in the codebase
-        while providing structured output for integration with the new architecture.
-        """
-        logger.info("Using legacy DataflowBuildConfig interface")
+        logger.info(f"Building accelerator for model: {model_path}")
         
         try:
-            # Create DataflowBuildConfig from design point using existing patterns
-            build_config = self._create_legacy_build_config(design_point)
+            # Create FINN build configuration
+            finn_config = self._create_finn_config(blueprint_config, output_dir)
             
-            # Execute existing FINN build process
-            build_results = self._execute_existing_finn_build(model_path, build_config)
+            # Execute FINN build
+            build_results = self._execute_finn_build(model_path, finn_config)
             
-            # Extract and format results using existing result format
-            generation_results = {
+            # Format results
+            results = {
+                'success': True,
+                'output_dir': output_dir,
+                'model_path': model_path,
                 'rtl_files': build_results.get('rtl_files', []),
                 'hls_files': build_results.get('hls_files', []),
-                'synthesis_results': build_results.get('synthesis_results', {}),
-                'performance_metrics': self._extract_performance_metrics(build_results),
-                'resource_utilization': build_results.get('resource_utilization', {}),
-                'interface_type': 'legacy_dataflow_build_config',
-                'build_config': self._sanitize_config_for_output(build_config),
-                'status': 'success'
+                'performance_metrics': self._extract_metrics(build_results),
+                'resource_usage': build_results.get('resource_usage', {}),
+                'build_config': finn_config
             }
             
-            logger.info("Legacy FINN build completed successfully")
-            return generation_results
+            logger.info("FINN build completed successfully")
+            return results
             
         except Exception as e:
-            logger.error(f"Legacy FINN build failed: {e}")
+            logger.error(f"FINN build failed: {e}")
             return {
-                'interface_type': 'legacy_dataflow_build_config',
-                'status': 'failed',
+                'success': False,
                 'error': str(e),
-                'fallback_results': self._create_fallback_results(model_path, design_point)
+                'output_dir': output_dir,
+                'model_path': model_path,
+                'fallback_results': self._create_fallback_results()
             }
     
-    def _generate_with_future_interface(self, model_path: str, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate implementation using future 4-hook interface.
+    def _create_finn_config(self, blueprint_config: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
+        """Create FINN DataflowBuildConfig from blueprint."""
         
-        This method is a placeholder for the future 4-hook interface.
-        It prepares the configuration structure and provides hooks for
-        when the interface becomes available.
-        """
-        logger.info("Using future 4-hook interface (placeholder implementation)")
-        
-        # Prepare configuration for 4-hook interface
-        hook_config = self.future_hooks.prepare_for_future_interface(design_point)
-        
-        # Execute 4-hook workflow (placeholder implementation)
-        # This will be replaced with actual 4-hook interface when available
-        results = {
-            'preprocessing_results': self._execute_preprocessing_hook(model_path, hook_config['preprocessing_config']),
-            'transformation_results': self._execute_transformation_hook(hook_config['transformation_config']),
-            'optimization_results': self._execute_optimization_hook(hook_config['optimization_config']),
-            'generation_results': self._execute_generation_hook(hook_config['generation_config'])
+        # Map blueprint to FINN configuration
+        finn_config = {
+            # Core FINN parameters
+            'output_dir': output_dir,
+            'folding_config_file': blueprint_config.get('folding_config'),
+            'synth_clk_period_ns': blueprint_config.get('clock_period', 3.33),
+            'board': blueprint_config.get('target_device', 'U250'),
+            'shell_flow_type': blueprint_config.get('shell_flow', 'vivado_zynq'),
+            
+            # Build steps configuration
+            'steps': [
+                'step_qonnx_to_finn',
+                'step_tidy_up',
+                'step_streamline',
+                'step_convert_to_hls',
+                'step_create_dataflow_partition',
+                'step_target_fps_parallelization',
+                'step_apply_folding_config',
+                'step_generate_estimate_reports',
+                'step_hls_codegen',
+                'step_hls_ipgen',
+                'step_set_fifo_depths',
+                'step_create_stitched_ip',
+                'step_synthesize_bitfile'
+            ],
+            
+            # Performance targets
+            'target_fps': blueprint_config.get('target_fps', 1000),
+            'mvau_wwidth_max': blueprint_config.get('mvau_wwidth_max', 36),
+            
+            # Additional configuration from blueprint
+            **blueprint_config.get('finn_config', {})
         }
         
-        return {
-            'hook_results': results,
-            'interface_type': 'future_4_hook_interface',
-            'status': 'placeholder_implementation',
-            'rtl_files': results['generation_results'].get('rtl_files', []),
-            'hls_files': results['generation_results'].get('hls_files', []),
-            'performance_metrics': results['optimization_results'].get('performance_metrics', {}),
-            'resource_utilization': results['generation_results'].get('resource_utilization', {})
-        }
+        return finn_config
     
-    def _create_legacy_build_config(self, design_point: Dict[str, Any]):
-        """
-        Create DataflowBuildConfig from design point using existing configuration patterns.
+    def _execute_finn_build(self, model_path: str, finn_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute FINN build process."""
         
-        This method maps the design point specification to the existing
-        DataflowBuildConfig format used by current FINN builds.
-        """
         try:
-            # Import existing DataflowBuildConfig
+            # Try to import and use FINN
             from finn.util.fpgadataflow import DataflowBuildConfig
-            
-            # Create configuration using existing patterns
-            config_params = {
-                # Core configuration from legacy config
-                **self.legacy_config,
-                
-                # Map design point parameters to existing config format
-                **self._map_design_point_to_legacy_config(design_point)
-            }
-            
-            # Create DataflowBuildConfig with mapped parameters
-            config = DataflowBuildConfig(**config_params)
-            
-            logger.debug("Legacy DataflowBuildConfig created successfully")
-            return config
-            
-        except ImportError as e:
-            logger.warning(f"Could not import DataflowBuildConfig: {e}")
-            # Return mock config for testing/development
-            return self._create_mock_build_config(design_point)
-        except Exception as e:
-            logger.error(f"Failed to create legacy build config: {e}")
-            raise
-    
-    def _map_design_point_to_legacy_config(self, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Map design point parameters to legacy DataflowBuildConfig format.
-        
-        This method handles the translation between the new design point
-        specification and the existing FINN configuration format.
-        """
-        legacy_params = {}
-        
-        # Map kernel configuration
-        if 'kernels' in design_point:
-            legacy_params.update(self._map_kernel_params_to_legacy(design_point['kernels']))
-        
-        # Map transform configuration  
-        if 'transforms' in design_point:
-            legacy_params.update(self._map_transform_params_to_legacy(design_point['transforms']))
-        
-        # Map optimization configuration
-        if 'hw_optimization' in design_point:
-            legacy_params.update(self._map_optimization_params_to_legacy(design_point['hw_optimization']))
-        
-        # Map FINN-specific configuration
-        if 'finn_config' in design_point:
-            legacy_params.update(design_point['finn_config'])
-        
-        return legacy_params
-    
-    def _map_kernel_params_to_legacy(self, kernel_params: Dict[str, Any]) -> Dict[str, Any]:
-        """Map kernel parameters to legacy format."""
-        return {
-            'kernel_params': kernel_params,
-            # Add specific mappings for existing kernel parameters
-        }
-    
-    def _map_transform_params_to_legacy(self, transform_params: Dict[str, Any]) -> Dict[str, Any]:
-        """Map transform parameters to legacy format."""
-        return {
-            'transform_params': transform_params,
-            # Add specific mappings for existing transform parameters
-        }
-    
-    def _map_optimization_params_to_legacy(self, optim_params: Dict[str, Any]) -> Dict[str, Any]:
-        """Map optimization parameters to legacy format."""
-        return {
-            'optimization_params': optim_params,
-            # Add specific mappings for existing optimization parameters
-        }
-    
-    def _execute_existing_finn_build(self, model_path: str, build_config) -> Dict[str, Any]:
-        """
-        Execute existing FINN build process.
-        
-        This method calls the existing FINN build functionality while
-        handling any errors gracefully.
-        """
-        try:
-            # Try to use existing FINN build process
             from finn.builder.build_dataflow import build_dataflow
             
-            logger.info("Executing existing FINN build_dataflow")
-            build_results = build_dataflow(
-                model=model_path,
-                cfg=build_config
-            )
+            # Create DataflowBuildConfig
+            build_cfg = DataflowBuildConfig(**finn_config)
+            
+            # Execute build
+            build_results = build_dataflow(model=model_path, cfg=build_cfg)
             
             return build_results
             
         except ImportError:
-            logger.warning("build_dataflow not available, using mock results")
-            return self._create_mock_build_results(model_path, build_config)
+            logger.warning("FINN not available, using mock implementation")
+            return self._create_mock_results(model_path, finn_config)
+        
         except Exception as e:
-            logger.error(f"FINN build failed: {e}")
-            # Return error results for graceful handling
+            logger.error(f"FINN build execution failed: {e}")
             return {
                 'error': str(e),
-                'status': 'failed',
                 'rtl_files': [],
                 'hls_files': [],
-                'synthesis_results': {}
+                'performance_metrics': {}
             }
     
-    def _extract_performance_metrics(self, build_results: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract performance metrics from FINN build results.
+    def _extract_metrics(self, build_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract performance metrics from FINN build results."""
         
-        This method extracts performance information from existing FINN
-        build results and formats them consistently.
-        """
         if 'error' in build_results:
-            return {'error': 'Build failed, no performance metrics available'}
+            return {'error': 'Build failed'}
         
-        # Extract metrics using existing FINN result format
-        metrics = {
-            'throughput_ops_sec': build_results.get('throughput', 0),
-            'latency_ms': build_results.get('latency', 0),
-            'clock_frequency_mhz': build_results.get('clock_freq', 0),
-            'resource_efficiency': build_results.get('efficiency', 0),
-            'extraction_method': 'existing_finn_results'
-        }
-        
-        # Add any additional metrics available in build results
-        if 'performance_analysis' in build_results:
-            metrics.update(build_results['performance_analysis'])
-        
-        return metrics
-    
-    def _create_mock_build_config(self, design_point: Dict[str, Any]):
-        """Create mock build config for testing when DataflowBuildConfig not available."""
         return {
-            'mock_config': True,
-            'design_point': design_point,
-            'legacy_config': self.legacy_config
+            'throughput_fps': build_results.get('throughput_fps', 0),
+            'latency_cycles': build_results.get('latency_cycles', 0),
+            'clock_frequency_mhz': build_results.get('clock_frequency_mhz', 0),
+            'lut_count': build_results.get('lut_count', 0),
+            'dsp_count': build_results.get('dsp_count', 0),
+            'bram_count': build_results.get('bram_count', 0),
+            'estimated_power_w': build_results.get('estimated_power_w', 0)
         }
     
-    def _create_mock_build_results(self, model_path: str, build_config) -> Dict[str, Any]:
-        """Create mock build results for testing when FINN build not available."""
+    def _create_mock_results(self, model_path: str, finn_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Create mock results when FINN is not available."""
         return {
             'mock_results': True,
             'model_path': model_path,
-            'config': str(build_config),
+            'config_summary': str(finn_config),
             'rtl_files': [],
             'hls_files': [],
-            'synthesis_results': {},
-            'status': 'mock_success'
+            'performance_metrics': {
+                'throughput_fps': 1000,
+                'latency_cycles': 100,
+                'clock_frequency_mhz': 300
+            },
+            'resource_usage': {
+                'lut_count': 50000,
+                'dsp_count': 1000,
+                'bram_count': 200
+            }
         }
     
-    def _create_fallback_results(self, model_path: str, design_point: Dict[str, Any]) -> Dict[str, Any]:
-        """Create fallback results when build fails."""
+    def _create_fallback_results(self) -> Dict[str, Any]:
+        """Create fallback results for error cases."""
         return {
             'fallback': True,
-            'model_path': model_path,
-            'design_point': design_point,
-            'message': 'Build failed, fallback results provided'
-        }
-    
-    def _sanitize_config_for_output(self, config) -> Dict[str, Any]:
-        """Sanitize configuration for safe output."""
-        if hasattr(config, '__dict__'):
-            return {k: str(v) for k, v in config.__dict__.items()}
-        elif isinstance(config, dict):
-            return {k: str(v) for k, v in config.items()}
-        else:
-            return {'config': str(config)}
-    
-    # Future 4-hook interface placeholder methods
-    def _execute_preprocessing_hook(self, model_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute preprocessing hook (placeholder for future interface)."""
-        return {
-            'preprocessed_model': model_path,
-            'preprocessing_config': config,
-            'status': 'placeholder_implementation'
-        }
-    
-    def _execute_transformation_hook(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute transformation hook (placeholder for future interface).""" 
-        return {
-            'transformed_model': 'placeholder_transformed_model',
-            'transformation_config': config,
-            'status': 'placeholder_implementation'
-        }
-    
-    def _execute_optimization_hook(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute optimization hook (placeholder for future interface)."""
-        return {
-            'optimized_model': 'placeholder_optimized_model',
-            'optimization_config': config,
-            'performance_metrics': {},
-            'status': 'placeholder_implementation'
-        }
-    
-    def _execute_generation_hook(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute generation hook (placeholder for future interface)."""
-        return {
+            'message': 'FINN build failed, basic fallback provided',
             'rtl_files': [],
             'hls_files': [],
-            'resource_utilization': {},
-            'generation_config': config,
-            'status': 'placeholder_implementation'
+            'performance_metrics': {}
         }
     
-    def get_interface_status(self) -> Dict[str, Any]:
-        """Get current status of FINN interface."""
-        return {
-            'using_legacy': self.use_legacy,
-            'future_hooks_available': self.future_hooks.is_available(),
-            'legacy_config_keys': list(self.legacy_config.keys()),
-            'interface_ready': True
-        }
+    def validate_config(self, blueprint_config: Dict[str, Any]) -> tuple[bool, list[str]]:
+        """Validate blueprint configuration for FINN compatibility."""
+        errors = []
+        
+        # Check required fields
+        if 'target_device' not in blueprint_config:
+            errors.append("Missing target_device specification")
+        
+        if 'target_fps' not in blueprint_config:
+            errors.append("Missing target_fps specification")
+        
+        # Validate device support
+        supported_devices = ['U250', 'U280', 'ZCU104', 'Alveo-U250', 'Alveo-U280']
+        device = blueprint_config.get('target_device', '')
+        if device and device not in supported_devices:
+            errors.append(f"Unsupported device: {device}")
+        
+        return len(errors) == 0, errors
+    
+    def get_supported_devices(self) -> list[str]:
+        """Get list of supported FPGA devices."""
+        return ['U250', 'U280', 'ZCU104', 'Alveo-U250', 'Alveo-U280']
+    
+    def prepare_for_4hooks(self, design_point: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare configuration for future 4-hooks interface."""
+        return self.hooks.prepare_config(design_point)
+
+
+# Compatibility function for existing API
+def create_finn_interface(config: Dict[str, Any] = None) -> FINNInterface:
+    """Create FINN interface instance."""
+    return FINNInterface(config)
