@@ -19,7 +19,7 @@ env:
   NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
   BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
   GHCR_IMAGE: "ghcr.io/${{ github.repository_owner }}/brainsmith:ci-${{ github.sha }}"
-  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
 
 permissions:
   contents: read
@@ -97,6 +97,15 @@ jobs:
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Note: System cleanup handled by CI infrastructure"
 
+      - name: Check disk space
+        run: |
+          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+          echo "Available disk space: ${AVAILABLE}GB"
+          if [ $AVAILABLE -lt 20 ]; then
+            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
+            exit 1
+          fi
+
       - name: Build and test Docker image
         run: |
           chmod +x smithy
@@ -145,6 +154,23 @@ jobs:
           docker push $GHCR_IMAGE
           
           echo "Successfully pushed image: $GHCR_IMAGE"
+          
+          # Capture digest for verification
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
+          echo "Image digest: $DIGEST"
+          echo "GHCR_DIGEST=$DIGEST" >> $GITHUB_ENV
+          
+          # Save digest for other jobs
+          mkdir -p /tmp
+          echo "$DIGEST" > /tmp/image-digest.txt
+
+      - name: Upload digest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digest
+          path: /tmp/image-digest.txt
+          retention-days: 1
 
       - name: Upload build artifacts on failure
         if: failure()
@@ -191,11 +217,26 @@ jobs:
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Note: System cleanup handled by CI infrastructure"
 
+      - name: Check disk space
+        run: |
+          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+          echo "Available disk space: ${AVAILABLE}GB"
+          if [ $AVAILABLE -lt 20 ]; then
+            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
+            exit 1
+          fi
+
       - name: Login to GitHub Container Registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Pull pre-built image from GHCR
+      - name: Download and verify digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest
+          path: /tmp/
+
+      - name: Pull and verify image
         run: |
           echo "=== Pulling pre-built image from GitHub Container Registry ==="
           echo "GHCR image: $GHCR_IMAGE"
@@ -203,6 +244,18 @@ jobs:
           
           # Pull the image built by docker-build-and-test job
           docker pull $GHCR_IMAGE
+          
+          # Verify digest matches
+          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
+          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
+          
+          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
+            echo "ERROR: Image digest mismatch!"
+            echo "Expected: $EXPECTED_DIGEST"
+            echo "Actual: $ACTUAL_DIGEST"
+            exit 1
+          fi
+          echo "✓ Image digest verified: $ACTUAL_DIGEST"
           
           # Tag it with the expected local tag for smithy
           docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
@@ -326,11 +379,26 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Check disk space
+        run: |
+          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+          echo "Available disk space: ${AVAILABLE}GB"
+          if [ $AVAILABLE -lt 20 ]; then
+            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
+            exit 1
+          fi
+
       - name: Login to GitHub Container Registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Pull pre-built image from GHCR
+      - name: Download and verify digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest
+          path: /tmp/
+
+      - name: Pull and verify image
         run: |
           echo "=== Pulling pre-built image from GitHub Container Registry ==="
           echo "GHCR image: $GHCR_IMAGE"
@@ -338,6 +406,18 @@ jobs:
           
           # Pull the image built by docker-build-and-test job
           docker pull $GHCR_IMAGE
+          
+          # Verify digest matches
+          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
+          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
+          
+          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
+            echo "ERROR: Image digest mismatch!"
+            echo "Expected: $EXPECTED_DIGEST"
+            echo "Actual: $ACTUAL_DIGEST"
+            exit 1
+          fi
+          echo "✓ Image digest verified: $ACTUAL_DIGEST"
           
           # Tag it with the expected local tag for smithy
           docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
@@ -399,11 +479,26 @@ jobs:
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Note: System cleanup handled by CI infrastructure"
 
+      - name: Check disk space
+        run: |
+          AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+          echo "Available disk space: ${AVAILABLE}GB"
+          if [ $AVAILABLE -lt 20 ]; then
+            echo "ERROR: Insufficient disk space (need 20GB, have ${AVAILABLE}GB)"
+            exit 1
+          fi
+
       - name: Login to GitHub Container Registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Pull pre-built image from GHCR
+      - name: Download and verify digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest
+          path: /tmp/
+
+      - name: Pull and verify image
         run: |
           echo "=== Pulling pre-built image from GitHub Container Registry ==="
           echo "GHCR image: $GHCR_IMAGE"
@@ -411,6 +506,18 @@ jobs:
           
           # Pull the image built by docker-build-and-test job
           docker pull $GHCR_IMAGE
+          
+          # Verify digest matches
+          EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
+          ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $GHCR_IMAGE | grep -o 'sha256:[a-f0-9]*')
+          
+          if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
+            echo "ERROR: Image digest mismatch!"
+            echo "Expected: $EXPECTED_DIGEST"
+            echo "Actual: $ACTUAL_DIGEST"
+            exit 1
+          fi
+          echo "✓ Image digest verified: $ACTUAL_DIGEST"
           
           # Tag it with the expected local tag for smithy
           docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
@@ -446,15 +553,29 @@ jobs:
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:
     if: always()
-    needs: [validate-environment, docker-build-and-test, e2e-test, full-test-suite, bert-large-biweekly]
+    needs: [validate-environment]  # Only depend on first job
     runs-on: pre-release
     steps:
-      - name: Final system cleanup
+      - name: Smart cleanup based on completed jobs
         run: |
-          # Cleanup of Docker resources (requires docker group membership)
-          docker system prune -a -f --volumes || true
+          echo "=== Checking for containers to clean ==="
+          
+          # Clean any brainsmith containers
+          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}")
+          if [ -n "$CONTAINERS" ]; then
+            echo "Found containers to clean: $CONTAINERS"
+            docker rm -f $CONTAINERS || true
+          fi
+          
+          # Prune with label filter for safety
+          docker container prune -f --filter "label=ci-run=${{ github.run_id }}" || true
+          docker image prune -f --filter "label=ci-run=${{ github.run_id }}" || true
+          
+          # General cleanup
+          docker system prune -f --volumes || true
+          
           # Clean up workspace files (GitHub Actions handles this automatically)
           rm -rf ${{ github.workspace }}/* 2>/dev/null || true
           rm -rf ${{ github.workspace }}/.* 2>/dev/null || true
-          # Note: System temp cleanup handled by CI infrastructure
-          echo "Final cleanup completed - CI infrastructure will handle system cleanup"
+          
+          echo "Cleanup completed"

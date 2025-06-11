@@ -20,7 +20,8 @@ export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 # Generate unique container name based on brainsmith directory
 BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
 DOCKER_UNAME=$(id -un)
-DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
+TIMESTAMP=$(date +%s | tail -c 6)  # Last 6 digits of epoch
+DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}_${TIMESTAMP}"
 DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Debug output for container name generation (only if BSMITH_DEBUG is set)
@@ -79,6 +80,16 @@ fi
 : ${BSMITH_DOCKER_BUILD_FLAGS=""}
 : ${BSMITH_DOCKER_FLAGS=""}
 
+# Validate Docker flags for security
+validate_docker_flags() {
+    if [[ "$BSMITH_DOCKER_FLAGS" =~ "/var/run/docker.sock" ]] || \
+       [[ "$BSMITH_DOCKER_EXTRA" =~ "/var/run/docker.sock" ]]; then
+        recho "ERROR: Mounting Docker socket is not allowed for security reasons"
+        recho "This would give the container full control over the host"
+        exit 1
+    fi
+}
+
 show_help() {
     cat << EOF
 Brainsmith Container Management
@@ -100,6 +111,22 @@ Examples:
     $0 daemon && $0 exec "python script.py"    # Typical workflow
     $0 shell                                         # Interactive development
 EOF
+}
+
+# Check available disk space before operations
+check_disk_space() {
+    local required_gb="${1:-10}"  # Default 10GB
+    local available_kb=$(df "$BSMITH_DIR" | tail -1 | awk '{print $4}')
+    local available_gb=$((available_kb / 1024 / 1024))
+    
+    if [ $available_gb -lt $required_gb ]; then
+        recho "ERROR: Insufficient disk space"
+        recho "Required: ${required_gb}GB, Available: ${available_gb}GB"
+        recho "Location: $BSMITH_DIR"
+        exit 1
+    else
+        gecho "Disk space check passed: ${available_gb}GB available"
+    fi
 }
 
 # Monitor container startup via log streaming
@@ -223,6 +250,9 @@ is_container_running() {
 }
 
 build_image() {
+    # Check disk space before building (requires 15GB for builds)
+    check_disk_space 15
+    
     gecho "Building Docker image $BSMITH_DOCKER_TAG"
     
     OLD_PWD=$(pwd)
@@ -244,6 +274,16 @@ build_image() {
         $BSMITH_DOCKER_BUILD_FLAGS .
     
     cd $OLD_PWD
+}
+
+# Check for existing containers with similar names
+check_container_conflicts() {
+    local base_name="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
+    local existing=$(docker ps -a --format '{{.Names}}' | grep "^${base_name}" | wc -l)
+    if [ $existing -gt 0 ]; then
+        yecho "Found $existing existing containers with similar names"
+        yecho "Consider cleanup with: docker ps -a | grep '$base_name'"
+    fi
 }
 
 # Common container setup logic
@@ -271,6 +311,12 @@ setup_container_if_needed() {
 # Create container with the specified mode
 create_container() {
     MODE="$1"
+    
+    # Validate Docker flags for security before proceeding
+    validate_docker_flags
+    
+    # Check for container name conflicts
+    check_container_conflicts
     
     gecho "Creating new container $DOCKER_INST_NAME"
     
@@ -308,7 +354,8 @@ create_container() {
         # Only mount system files if they exist and are readable
         [ -r /etc/group ] && DOCKER_CMD+=" -v /etc/group:/etc/group:ro"
         [ -r /etc/passwd ] && DOCKER_CMD+=" -v /etc/passwd:/etc/passwd:ro"
-        [ -r /etc/shadow ] && DOCKER_CMD+=" -v /etc/shadow:/etc/shadow:ro"
+        # REMOVED: [ -r /etc/shadow ] && DOCKER_CMD+=" -v /etc/shadow:/etc/shadow:ro"
+        # Security: /etc/shadow contains password hashes and should not be mounted
         [ -d /etc/sudoers.d ] && DOCKER_CMD+=" -v /etc/sudoers.d:/etc/sudoers.d:ro"
         
         # SSH key directory mount for non-root user
