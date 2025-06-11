@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ develop ]
   schedule:
-    - cron: '0 0 * * 0'  # Sunday at 00:00 UTC
     - cron: '0 0 * * 1'  # Monday at 00:00 UTC
     - cron: '0 0 * * 4'  # Thursday at 00:00 UTC
 
@@ -19,7 +18,12 @@ env:
   BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
   NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
   BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
+  GHCR_IMAGE: "ghcr.io/${{ github.repository_owner }}/brainsmith:ci-${{ github.sha }}"
   BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   # Environment validation and setup
@@ -122,6 +126,26 @@ jobs:
           
           ./smithy stop
 
+      - name: Login to GitHub Container Registry
+        if: success()
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Tag and push to GHCR
+        if: success()
+        run: |
+          echo "=== Pushing image to GitHub Container Registry ==="
+          echo "Local image: $BSMITH_DOCKER_TAG"
+          echo "GHCR image: $GHCR_IMAGE"
+          
+          # Tag the image for GHCR
+          docker tag $BSMITH_DOCKER_TAG $GHCR_IMAGE
+          
+          # Push to GHCR
+          docker push $GHCR_IMAGE
+          
+          echo "Successfully pushed image: $GHCR_IMAGE"
+
       - name: Upload build artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -132,22 +156,20 @@ jobs:
             ~/.docker/
           retention-days: 3
 
-      - name: Cleanup Docker artifacts
+      - name: Cleanup local artifacts only
         if: always()
         run: |
           ./smithy cleanup || true
-          # Clean up Docker artifacts immediately
+          # Keep the GHCR image for other jobs to use
+          # Only clean up containers and unnamed images
           docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
 
   # End-to-end test with dependency fetching and compilation
   e2e-test:
     if: github.event_name == 'schedule' || github.event_name == 'pull_request'
     runs-on: pre-release
     timeout-minutes: 120
-    needs: validate-environment
+    needs: [validate-environment, docker-build-and-test]
     
     steps:
       - name: Checkout repository
@@ -161,8 +183,6 @@ jobs:
           echo "=== Environment Setup ==="
           # Clean Docker resources (requires docker group membership, no sudo needed)
           docker container prune -f || true
-          docker image prune -f || true
-          docker volume prune -f || true
           
           echo "=== Environment Debug Info ==="
           echo "Working directory: $(pwd)"
@@ -171,11 +191,30 @@ jobs:
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Note: System cleanup handled by CI infrastructure"
 
-      - name: Build and start container with comprehensive logging
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull pre-built image from GHCR
+        run: |
+          echo "=== Pulling pre-built image from GitHub Container Registry ==="
+          echo "GHCR image: $GHCR_IMAGE"
+          echo "Local tag: $BSMITH_DOCKER_TAG"
+          
+          # Pull the image built by docker-build-and-test job
+          docker pull $GHCR_IMAGE
+          
+          # Tag it with the expected local tag for smithy
+          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
+          
+          echo "=== Verifying image is available ==="
+          docker images | grep "microsoft/brainsmith"
+
+      - name: Start container with pre-built image
         run: |
           chmod +x smithy
           
-          echo "=== Starting daemon container (will build image automatically) ==="
+          echo "=== Starting daemon container with pre-built image ==="
           ./smithy daemon || {
             echo "ERROR: Container start failed"
             echo "=== Container status ==="
@@ -272,13 +311,14 @@ jobs:
         run: |
           ./smithy stop || true
           ./smithy cleanup || true
+          # Keep GHCR image for potential reuse
 
   # Full pytest suite (only on schedule to save resources)
   full-test-suite:
     if: github.event_name == 'schedule'
     runs-on: pre-release
     timeout-minutes: 240
-    needs: [validate-environment, e2e-test]  # Run after e2e-test passes
+    needs: [validate-environment, docker-build-and-test, e2e-test]  # Run after e2e-test passes
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -286,11 +326,30 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Build container and run comprehensive tests
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull pre-built image from GHCR
+        run: |
+          echo "=== Pulling pre-built image from GitHub Container Registry ==="
+          echo "GHCR image: $GHCR_IMAGE"
+          echo "Local tag: $BSMITH_DOCKER_TAG"
+          
+          # Pull the image built by docker-build-and-test job
+          docker pull $GHCR_IMAGE
+          
+          # Tag it with the expected local tag for smithy
+          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
+          
+          echo "=== Verifying image is available ==="
+          docker images | grep "microsoft/brainsmith"
+
+      - name: Run comprehensive tests with pre-built image
         run: |
           chmod +x smithy
           
-          echo "=== Starting container for full test suite (will build image automatically) ==="
+          echo "=== Starting container for full test suite with pre-built image ==="
           ./smithy daemon
           
           echo "=== Running full pytest suite ==="
@@ -315,17 +374,15 @@ jobs:
         run: |
           ./smithy stop || true
           ./smithy cleanup || true
-          # Clean up Docker artifacts immediately
+          # Keep GHCR image for potential reuse
           docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
 
   # BERT Large biweekly testing using smithy
   bert-large-biweekly:
     if: github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 0 * * 4')
     runs-on: pre-release
     timeout-minutes: 1440 # 24-hour timeout for biweekly tests
+    needs: [validate-environment, docker-build-and-test]
 
     steps:
       - name: Checkout repository
@@ -339,16 +396,33 @@ jobs:
           echo "=== Environment Setup ==="
           # Clean Docker resources (requires docker group membership, no sudo needed)
           docker container prune -f || true
-          docker image prune -f || true
-          docker volume prune -f || true
           echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Note: System cleanup handled by CI infrastructure"
 
-      - name: Run BERT Large tests with smithy
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull pre-built image from GHCR
+        run: |
+          echo "=== Pulling pre-built image from GitHub Container Registry ==="
+          echo "GHCR image: $GHCR_IMAGE"
+          echo "Local tag: $BSMITH_DOCKER_TAG"
+          
+          # Pull the image built by docker-build-and-test job
+          docker pull $GHCR_IMAGE
+          
+          # Tag it with the expected local tag for smithy
+          docker tag $GHCR_IMAGE $BSMITH_DOCKER_TAG
+          
+          echo "=== Verifying image is available ==="
+          docker images | grep "microsoft/brainsmith"
+
+      - name: Run BERT Large tests with pre-built image
         run: |
           chmod +x smithy
           
-          echo "=== Starting smithy daemon for BERT Large testing ==="
+          echo "=== Starting smithy daemon for BERT Large testing with pre-built image ==="
           ./smithy daemon
           
           echo "=== Running BERT Large single layer test ==="
@@ -366,16 +440,13 @@ jobs:
         run: |
           ./smithy stop || true
           ./smithy cleanup || true
-          # Clean up Docker artifacts immediately
+          # Keep GHCR image for potential reuse
           docker container prune -f
-          docker image prune -f
-          docker volume prune -f
-          docker builder prune -f
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:
     if: always()
-    needs: [validate-environment, docker-build-and-test, e2e-test, full-test-suite]
+    needs: [validate-environment, docker-build-and-test, e2e-test, full-test-suite, bert-large-biweekly]
     runs-on: pre-release
     steps:
       - name: Final system cleanup
