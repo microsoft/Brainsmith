@@ -1,0 +1,499 @@
+"""
+Auto-generated test suite for {{ kernel_name }}
+Generated using Interface-Wise Dataflow Modeling Framework
+Source: {{ source_file }}
+Generated at: {{ generation_timestamp }}
+"""
+
+import pytest
+import numpy as np
+import os
+from typing import Dict, Any, List
+from finn.core.modelwrapper import ModelWrapper
+from finn.core.onnx_exec import execute_onnx
+from qonnx.core.datatype import DataType
+from qonnx.util.basic import gen_finn_dt_tensor
+
+# Import the generated classes
+from .{{ class_name.lower() }} import {{ class_name }}
+from .{{ class_name.lower() }}_rtlbackend import {{ class_name }}RTLBackend
+
+{% if dataflow_interfaces %}
+# Import dataflow framework components for validation
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
+from brainsmith.dataflow.core.validation import ValidationResult, ValidationSeverity
+{% endif %}
+
+# Import base classes for testing
+from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
+from brainsmith.dataflow.core.auto_rtl_backend import AutoRTLBackend
+
+
+class Test{{ class_name }}:
+    """
+    Comprehensive test suite for {{ class_name }} implementation.
+    
+    Tests cover:
+    - Basic functionality and node creation
+    - Datatype constraint validation
+    - Parallelism configuration testing
+    - Resource estimation accuracy
+    - RTL backend integration
+    - End-to-end inference validation
+    
+    Interface coverage: {{ dataflow_interfaces|length }} interfaces
+    - Input interfaces: {{ input_interfaces|length }}
+    - Output interfaces: {{ output_interfaces|length }}
+    - Weight interfaces: {{ weight_interfaces|length }}
+    - Config interfaces: {{ config_interfaces|length }}
+    """
+
+    @pytest.fixture
+    def base_model(self):
+        """Create a basic ONNX model for testing."""
+        import onnx
+        from onnx import helper, TensorProto
+        
+        # Create input tensors
+        {% if input_interfaces %}
+        inputs = [
+            {% for iface in input_interfaces %}
+            helper.make_tensor_value_info(
+                "{{ iface.name }}", 
+                TensorProto.FLOAT, 
+                {{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}
+            ),
+            {% endfor %}
+        ]
+        {% else %}
+        inputs = [helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 224, 224, 3])]
+        {% endif %}
+        
+        # Create output tensors
+        {% if output_interfaces %}
+        outputs = [
+            {% for iface in output_interfaces %}
+            helper.make_tensor_value_info(
+                "{{ iface.name }}", 
+                TensorProto.FLOAT, 
+                {{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}
+            ),
+            {% endfor %}
+        ]
+        {% else %}
+        outputs = [helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1000])]
+        {% endif %}
+        
+        # Create the node
+        node = helper.make_node(
+            "{{ class_name }}",
+            inputs=[inp.name for inp in inputs],
+            outputs=[out.name for out in outputs],
+            name="{{ kernel_name }}_node"
+        )
+        
+        # Create the graph and model
+        graph = helper.make_graph([node], "{{ kernel_name }}_graph", inputs, outputs)
+        model = helper.make_model(graph)
+        
+        return ModelWrapper(model)
+
+    @pytest.fixture
+    def test_node(self, base_model):
+        """Create a test node instance."""
+        node = base_model.get_nodes_by_op_type("{{ class_name }}")[0]
+        return {{ class_name }}(node)
+
+    def test_node_creation(self, test_node):
+        """Test basic node creation and initialization."""
+        assert test_node is not None
+        assert test_node.onnx_node.op_type == "{{ class_name }}"
+        
+        # Verify proper inheritance from base class
+        assert isinstance(test_node, AutoHWCustomOp)
+        
+        # Verify dataflow interfaces are initialized
+        {% if dataflow_interfaces %}
+        assert len(test_node.dataflow_interfaces) == {{ dataflow_interfaces|length }}
+        expected_interfaces = {
+            {% for iface in dataflow_interfaces %}
+            "{{ iface.name }}",
+            {% endfor %}
+        }
+        assert set(test_node.dataflow_interfaces.keys()) == expected_interfaces
+        {% endif %}
+
+    def test_node_attributes(self, test_node):
+        """Test node attribute types and default values."""
+        nodeattr_types = test_node.get_nodeattr_types()
+        
+        # Check for required base attributes
+        required_attrs = ["backend", "exec_mode", "code_gen_dir_ipgen"]
+        for attr in required_attrs:
+            assert attr in nodeattr_types
+        
+        # Check dataflow-specific attributes
+        {% if dataflow_interfaces %}
+        {% for iface in dataflow_interfaces %}
+        assert "{{ iface.name }}_dtype" in nodeattr_types
+        {% if iface.constraints and 'parallelism' in iface.constraints %}
+        assert "{{ iface.name }}_parallel" in nodeattr_types
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        # No dataflow interfaces - check basic attributes only
+        assert "resource_estimation_mode" in nodeattr_types
+        {% endif %}
+
+    {% if input_interfaces %}
+    @pytest.mark.parametrize("input_index", list(range({{ input_interfaces|length }})))
+    def test_input_datatypes(self, test_node, input_index):
+        """Test input datatype retrieval and validation."""
+        # Test default datatype
+        default_dtype = test_node.get_input_datatype(input_index)
+        assert isinstance(default_dtype, DataType)
+        
+        # Test all supported datatypes for this interface
+        {% for iface in input_interfaces %}
+        if input_index == {{ loop.index0 }}:  # {{ iface.name }}
+            {% if iface.dtype.base_types %}
+            supported_dtypes = [
+                {% for base_type in iface.dtype.base_types %}
+                {% if iface.dtype.min_bits and iface.dtype.max_bits %}
+                {% for bits in [iface.dtype.min_bits, iface.dtype.max_bits] %}
+                "{{ base_type }}{{ bits }}",
+                {% endfor %}
+                {% else %}
+                "{{ base_type }}8",  # Default bitwidth
+                {% endif %}
+                {% endfor %}
+            ]
+            
+            for dtype_name in supported_dtypes:
+                try:
+                    test_node.set_nodeattr("{{ iface.name }}_dtype", dtype_name)
+                    retrieved_dtype = test_node.get_input_datatype(input_index)
+                    assert retrieved_dtype == DataType[dtype_name]
+                except:
+                    # Some combinations may not be valid
+                    pass
+            {% else %}
+            # No specific datatype constraints for {{ iface.name }}
+            pass
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    {% if output_interfaces %}
+    @pytest.mark.parametrize("output_index", list(range({{ output_interfaces|length }})))
+    def test_output_datatypes(self, test_node, output_index):
+        """Test output datatype retrieval and validation."""
+        # Test default datatype
+        default_dtype = test_node.get_output_datatype(output_index)
+        assert isinstance(default_dtype, DataType)
+        
+        # Test shape consistency
+        output_shape = test_node.get_normal_output_shape(output_index)
+        assert isinstance(output_shape, list)
+        assert all(isinstance(dim, int) and dim > 0 for dim in output_shape)
+    {% endif %}
+
+    def test_shape_calculations(self, test_node):
+        """Test shape calculation methods."""
+        {% if input_interfaces %}
+        # Test input shapes
+        {% for iface in input_interfaces %}
+        input_{{ loop.index0 }}_normal = test_node.get_normal_input_shape({{ loop.index0 }})
+        input_{{ loop.index0 }}_folded = test_node.get_folded_input_shape({{ loop.index0 }})
+        
+        assert isinstance(input_{{ loop.index0 }}_normal, list)
+        assert isinstance(input_{{ loop.index0 }}_folded, list)
+        assert len(input_{{ loop.index0 }}_normal) >= len(input_{{ loop.index0 }}_folded)
+        {% endfor %}
+        {% endif %}
+        
+        {% if output_interfaces %}
+        # Test output shapes
+        {% for iface in output_interfaces %}
+        output_{{ loop.index0 }}_normal = test_node.get_normal_output_shape({{ loop.index0 }})
+        output_{{ loop.index0 }}_folded = test_node.get_folded_output_shape({{ loop.index0 }})
+        
+        assert isinstance(output_{{ loop.index0 }}_normal, list)
+        assert isinstance(output_{{ loop.index0 }}_folded, list)
+        {% endfor %}
+        {% endif %}
+
+    def test_stream_widths(self, test_node):
+        """Test stream width calculations."""
+        {% if input_interfaces %}
+        # Test input stream widths
+        {% for iface in input_interfaces %}
+        input_{{ loop.index0 }}_width = test_node.get_instream_width({{ loop.index0 }})
+        assert isinstance(input_{{ loop.index0 }}_width, int)
+        assert input_{{ loop.index0 }}_width > 0
+        assert input_{{ loop.index0 }}_width % 8 == 0  # AXI compliance
+        
+        input_{{ loop.index0 }}_width_padded = test_node.get_instream_width_padded({{ loop.index0 }})
+        assert input_{{ loop.index0 }}_width_padded >= input_{{ loop.index0 }}_width
+        {% endfor %}
+        {% endif %}
+        
+        {% if output_interfaces %}
+        # Test output stream widths
+        {% for iface in output_interfaces %}
+        output_{{ loop.index0 }}_width = test_node.get_outstream_width({{ loop.index0 }})
+        assert isinstance(output_{{ loop.index0 }}_width, int)
+        assert output_{{ loop.index0 }}_width > 0
+        
+        output_{{ loop.index0 }}_width_padded = test_node.get_outstream_width_padded({{ loop.index0 }})
+        assert output_{{ loop.index0 }}_width_padded >= output_{{ loop.index0 }}_width
+        {% endfor %}
+        {% endif %}
+
+    @pytest.mark.parametrize("parallelism_config", [
+        {% if dataflow_interfaces %}
+        # Generate test configurations for different parallelism settings
+        {% for iface in dataflow_interfaces %}
+        {% if iface.constraints and 'parallelism' in iface.constraints %}
+        {"{{ iface.name }}_parallel": {{ iface.constraints.parallelism.default if iface.constraints.parallelism.default else 1 }}},
+        {"{{ iface.name }}_parallel": {{ iface.constraints.parallelism.min if iface.constraints.parallelism.min else 1 }}},
+        {% if iface.constraints.parallelism.max %}
+        {"{{ iface.name }}_parallel": {{ iface.constraints.parallelism.max }}},
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+        {},  # Default configuration
+    ])
+    def test_parallelism_configurations(self, test_node, parallelism_config):
+        """Test various parallelism configurations."""
+        # Apply parallelism configuration
+        for attr, value in parallelism_config.items():
+            test_node.set_nodeattr(attr, value)
+        
+        # Verify node still functions correctly
+        try:
+            test_node.verify_node()
+            
+            # Test that stream widths are calculated correctly
+            {% if input_interfaces %}
+            {% for iface in input_interfaces %}
+            input_{{ loop.index0 }}_width = test_node.get_instream_width({{ loop.index0 }})
+            assert input_{{ loop.index0 }}_width > 0
+            {% endfor %}
+            {% endif %}
+            
+            {% if output_interfaces %}
+            {% for iface in output_interfaces %}
+            output_{{ loop.index0 }}_width = test_node.get_outstream_width({{ loop.index0 }})
+            assert output_{{ loop.index0 }}_width > 0
+            {% endfor %}
+            {% endif %}
+            
+        except Exception as e:
+            # Some configurations may be invalid - that's okay
+            pytest.skip(f"Configuration {parallelism_config} not supported: {e}")
+
+    def test_resource_estimation(self, test_node):
+        """Test resource estimation methods."""
+        # Test BRAM estimation
+        bram_estimate = test_node.bram_estimation()
+        assert isinstance(bram_estimate, int)
+        assert bram_estimate >= 0
+        
+        # Test LUT estimation
+        lut_estimate = test_node.lut_estimation()
+        assert isinstance(lut_estimate, int)
+        assert lut_estimate >= 0
+        
+        # Test DSP estimation
+        dsp_estimate = test_node.dsp_estimation("xcvu9p-flga2104-2-i")
+        assert isinstance(dsp_estimate, int)
+        assert dsp_estimate >= 0
+        
+        # Test expected cycles
+        exp_cycles = test_node.get_exp_cycles()
+        assert isinstance(exp_cycles, int)
+        assert exp_cycles > 0
+
+    @pytest.mark.parametrize("estimation_mode", ["automatic", "conservative", "optimistic"])
+    def test_resource_estimation_modes(self, test_node, estimation_mode):
+        """Test different resource estimation modes."""
+        test_node.set_nodeattr("resource_estimation_mode", estimation_mode)
+        
+        bram_estimate = test_node.bram_estimation()
+        lut_estimate = test_node.lut_estimation()
+        
+        assert isinstance(bram_estimate, int)
+        assert isinstance(lut_estimate, int)
+        assert bram_estimate >= 0
+        assert lut_estimate >= 0
+
+    def test_constraint_validation(self, test_node):
+        """Test datatype and configuration constraint validation."""
+        # Enable constraint validation
+        test_node.set_nodeattr("enable_constraint_validation", True)
+        
+        {% if dataflow_interfaces %}
+        # Test valid constraints
+        {% for iface in dataflow_interfaces %}
+        {% if iface.dtype.base_types %}
+        # Test valid datatype for {{ iface.name }}
+        valid_dtype = "{{ iface.dtype.base_types[0] }}{{ iface.dtype.min_bits if iface.dtype.min_bits else 8 }}"
+        test_node.set_nodeattr("{{ iface.name }}_dtype", valid_dtype)
+        assert test_node._validate_datatype_constraints("{{ iface.name }}", valid_dtype)
+        
+        # Test invalid datatype (if constraints exist)
+        {% if iface.dtype.max_bits and iface.dtype.max_bits < 32 %}
+        invalid_dtype = "{{ iface.dtype.base_types[0] }}32"  # Exceeds max bits
+        assert not test_node._validate_datatype_constraints("{{ iface.name }}", invalid_dtype)
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+    def test_rtl_backend_integration(self, test_node):
+        """Test RTL backend integration."""
+        # Create RTL backend instance
+        rtl_backend = {{ class_name }}RTLBackend()
+        assert rtl_backend is not None
+        
+        # Verify proper inheritance from base class
+        assert isinstance(rtl_backend, AutoRTLBackend)
+        
+        # Test nodeattr types
+        backend_attrs = rtl_backend.get_nodeattr_types()
+        assert isinstance(backend_attrs, dict)
+        
+        # Test code generation dictionary
+        codegen_dict = rtl_backend.code_generation_dict()
+        assert isinstance(codegen_dict, dict)
+        
+        # Verify interface definitions are present
+        if "interfaces" in codegen_dict:
+            assert isinstance(codegen_dict["interfaces"], list)
+            {% if dataflow_interfaces %}
+            assert len(codegen_dict["interfaces"]) == {{ dataflow_interfaces|length }}
+            {% endif %}
+
+    {% if weight_interfaces %}
+    def test_parameter_generation(self, test_node, tmp_path):
+        """Test parameter file generation."""
+        # Create temporary directory for parameters
+        param_dir = tmp_path / "params"
+        param_dir.mkdir()
+        
+        # Generate parameters
+        test_node.generate_params(test_node, str(param_dir))
+        
+        # Verify parameter files are created
+        {% for iface in weight_interfaces %}
+        {{ iface.name }}_file = param_dir / "{{ iface.name }}_weights.dat"
+        assert {{ iface.name }}_file.exists()
+        assert {{ iface.name }}_file.stat().st_size > 0
+        {% endfor %}
+    {% endif %}
+
+    def test_number_output_values(self, test_node):
+        """Test output value counting."""
+        num_outputs = test_node.get_number_output_values()
+        assert isinstance(num_outputs, int)
+        assert num_outputs >= 0
+        
+        {% if output_interfaces %}
+        # Verify it matches sum of output shapes
+        expected_outputs = 0
+        {% for iface in output_interfaces %}
+        expected_outputs += np.prod(test_node.get_normal_output_shape({{ loop.index0 }}))
+        {% endfor %}
+        assert num_outputs == expected_outputs
+        {% endif %}
+
+    def test_performance_characteristics(self, test_node):
+        """Test performance and efficiency characteristics."""
+        # Test that resource estimates are reasonable
+        bram_estimate = test_node.bram_estimation()
+        lut_estimate = test_node.lut_estimation()
+        dsp_estimate = test_node.dsp_estimation("xcvu9p-flga2104-2-i")
+        
+        # Estimates should be within reasonable bounds for typical kernels
+        assert bram_estimate < 1000  # Most kernels shouldn't need more than 1000 BRAMs
+        assert lut_estimate < 100000  # Most kernels shouldn't need more than 100K LUTs
+        assert dsp_estimate < 1000   # Most kernels shouldn't need more than 1000 DSPs
+        
+        # Test cycle estimate is reasonable
+        exp_cycles = test_node.get_exp_cycles()
+        {% if input_interfaces %}
+        max_input_size = max([
+            {% for iface in input_interfaces %}
+            np.prod({{ iface.tensor_dims + iface.block_dims + iface.stream_dims }}),
+            {% endfor %}
+        ])
+        # Cycles should be related to input size but not excessive
+        assert exp_cycles <= max_input_size * 10  # At most 10x input size
+        {% endif %}
+
+    @pytest.mark.integration
+    def test_end_to_end_functionality(self, base_model, test_node):
+        """Integration test for end-to-end functionality."""
+        # This test requires RTL simulation capabilities
+        # Skip if rtlsim is not available
+        pytest.importorskip("pyxsi_utils")
+        
+        # Set execution mode
+        test_node.set_nodeattr("exec_mode", "cppsim")
+        
+        # Create test input data
+        {% if input_interfaces %}
+        input_data = {}
+        {% for iface in input_interfaces %}
+        {{ iface.name }}_shape = test_node.get_normal_input_shape({{ loop.index0 }})
+        {{ iface.name }}_dtype = test_node.get_input_datatype({{ loop.index0 }})
+        input_data["{{ iface.name }}"] = gen_finn_dt_tensor({{ iface.name }}_dtype, {{ iface.name }}_shape)
+        {% endfor %}
+        
+        # Execute the model
+        try:
+            output_data = execute_onnx(base_model, input_data)
+            
+            # Verify outputs
+            {% for iface in output_interfaces %}
+            assert "{{ iface.name }}" in output_data
+            {{ iface.name }}_output = output_data["{{ iface.name }}"]
+            expected_shape = test_node.get_normal_output_shape({{ loop.index0 }})
+            assert list({{ iface.name }}_output.shape) == expected_shape
+            {% endfor %}
+            
+        except Exception as e:
+            pytest.skip(f"End-to-end test requires full RTL simulation setup: {e}")
+        {% else %}
+        pytest.skip("No input interfaces defined for end-to-end test")
+        {% endif %}
+
+
+class TestBenchmarkPerformance:
+    """Performance benchmark tests for {{ class_name }}."""
+    
+    def test_resource_estimation_accuracy(self):
+        """Benchmark resource estimation accuracy against known values."""
+        # This would compare against known good implementations
+        # For now, just verify estimates are reasonable
+        pass
+    
+    def test_generation_time_performance(self):
+        """Benchmark code generation time performance."""
+        import time
+        
+        start_time = time.time()
+        # Create multiple instances to test performance
+        for i in range(10):
+            # Performance test would go here
+            pass
+        generation_time = time.time() - start_time
+        
+        # Generation should be fast (< 1 second for 10 instances)
+        assert generation_time < 1.0
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

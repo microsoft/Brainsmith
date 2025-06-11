@@ -1,0 +1,294 @@
+{#-
+RTLBackend Template for Runtime-Configurable Hardware Components
+
+This template generates RTLBackend classes that extract dimensions at runtime
+from the associated HWCustomOp's dataflow model, avoiding static hardcoded values.
+
+CRITICAL: This template generates components for future use by the FINN compiler.
+Dimensions (tensor_dims, block_dims, stream_dims) should be extracted from the dataflow model
+at runtime, not hardcoded during generation.
+-#}
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Auto-generated RTLBackend for {{ kernel_name }}
+# Generated from: {{ source_file }}
+# Generation timestamp: {{ generation_timestamp }}
+#
+# RUNTIME-CONFIGURABLE HARDWARE COMPONENT
+# This RTLBackend extracts dimensions at runtime from associated HWCustomOp.
+# Dimensions are not hardcoded during generation.
+############################################################################
+
+import os
+import numpy as np
+from typing import Dict, Any, List, Optional
+
+# FINN imports for RTLBackend integration
+from finn.backends.fpgadataflow.rtlbackend import RTLBackend
+
+{% if dataflow_interfaces %}
+# Import dataflow framework components for enhanced functionality
+from brainsmith.dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
+from brainsmith.dataflow.core.dataflow_model import DataflowModel
+{% endif %}
+
+
+class {{ class_name }}RTLBackend(RTLBackend):
+    """
+    RTL Backend for {{ kernel_name }} kernel.
+    
+    Provides RTL generation with dataflow modeling integration.
+    
+    Generated from: {{ source_file }}
+    
+    Interfaces:
+    {% for interface in dataflow_interfaces %}
+    - {{ interface.name }}: {{ interface.interface_type.value }}
+    {% endfor %}
+    """
+    
+    def __init__(self, model, dataflow_model=None):
+        """
+        Initialize RTLBackend with optional dataflow model.
+        
+        Args:
+            model: FINN model wrapper
+            dataflow_model: Optional dataflow model for enhanced generation
+        """
+        super().__init__(model)
+        
+        # Store dataflow model for enhanced RTL generation
+        self.dataflow_model = dataflow_model
+        self._associated_hwcustomop = None  # Set by FINN compiler at runtime
+        
+        # Set kernel-specific paths
+        self.kernel_name = "{{ kernel_name }}"
+        self.rtl_template_path = os.path.join(
+            os.path.dirname(__file__), 
+            "rtl", 
+            "{{ kernel_name }}_wrapper.v"
+        )
+    
+    def set_associated_hwcustomop(self, hwcustomop):
+        """
+        Set the associated HWCustomOp for runtime dimension extraction.
+        
+        This method should be called by the FINN compiler when the RTL backend
+        is associated with its corresponding HWCustomOp.
+        """
+        self._associated_hwcustomop = hwcustomop
+    
+    def get_runtime_interface_config(self, interface_name: str):
+        """
+        Get runtime configuration for an interface from the associated HWCustomOp.
+        
+        Args:
+            interface_name: Name of the interface
+            
+        Returns:
+            Dict with runtime interface configuration
+        """
+        if not self._associated_hwcustomop:
+            raise RuntimeError(
+                f"Cannot get runtime interface config for {interface_name}: "
+                f"No associated HWCustomOp available. RTL backend must be properly "
+                f"linked to its HWCustomOp by the FINN compiler."
+            )
+        
+        try:
+            return self._associated_hwcustomop.get_interface_config(interface_name)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to extract runtime interface config for {interface_name}: {e}. "
+                f"The HWCustomOp must have a valid ModelWrapper for dimension extraction."
+            )
+    
+    def get_rtl_file_list(self):
+        """
+        Get list of RTL files for this kernel.
+        
+        Returns list of RTL files needed for synthesis.
+        """
+        files = []
+        
+        # Add main kernel RTL file
+        files.append("{{ kernel_name }}.v")
+        
+        # Add any kernel-specific RTL files
+        {% if kernel_name == 'thresholding_axi' %}
+        # Example: Add memory initialization files for thresholding
+        if self.get_nodeattr("USE_AXILITE"):
+            files.append("thresholding_axi_lut.v")
+        {% endif %}
+        
+        return files
+    
+    def generate_hdl(self):
+        """
+        Generate HDL instantiation.
+        
+        Creates wrapper and instantiation code for the kernel.
+        """
+        # Get basic HDL generation from parent
+        hdl_code = super().generate_hdl()
+        
+        # Add any kernel-specific HDL customization here
+        return hdl_code
+    
+    def get_verilog_parameters(self):
+        """
+        Get Verilog parameters for instantiation.
+        
+        Returns dictionary of parameter name -> value mappings.
+        """
+        params = {}
+        
+        # Add RTL parameters from kernel specification
+        {% for param in rtl_parameters %}
+        {% if param.name not in ['PE', 'SIMD'] %}
+        params["{{ param.name }}"] = self.get_nodeattr("{{ param.name }}")
+        {% endif %}
+        {% endfor %}
+        
+        # Add dataflow-derived parameters
+        {% if dataflow_interfaces %}
+        {% for interface in input_interfaces %}
+        # Input interface parallelism
+        ipar_attr = "{{ interface.name }}_iPar"
+        if hasattr(self, 'get_nodeattr'):
+            params["{{ interface.name.upper() }}_IPAR"] = self.get_nodeattr(ipar_attr, 1)
+        {% endfor %}
+        
+        {% for interface in weight_interfaces %}
+        # Weight interface parallelism  
+        wpar_attr = "{{ interface.name }}_wPar"
+        if hasattr(self, 'get_nodeattr'):
+            params["{{ interface.name.upper() }}_WPAR"] = self.get_nodeattr(wpar_attr, 1)
+        {% endfor %}
+        {% endif %}
+        
+        return params
+    
+    def code_generation_dict(self):
+        """
+        Generate code generation dictionary for RTL templates.
+        
+        Returns dictionary with all information needed for RTL generation.
+        """
+        codegen_dict = {
+            "kernel_name": "{{ kernel_name }}",
+            "wrapper_name": f"{{ kernel_name }}_wrapper",
+            "top_module_name": "{{ kernel_name }}",
+            
+            # Basic information
+            "source_file": "{{ source_file }}",
+            "generation_timestamp": "{{ generation_timestamp }}",
+            
+            # Parameters
+            "verilog_parameters": self.get_verilog_parameters(),
+            "rtl_files": self.get_rtl_file_list(),
+            
+            {% if dataflow_interfaces %}
+            # Interface information - dimensions extracted at runtime
+            "interfaces": {
+                {% for interface in dataflow_interfaces %}
+                "{{ interface.name }}": {
+                    "type": "{{ interface.interface_type.value }}",
+                    "direction": "{% if interface.interface_type.name in ['INPUT', 'WEIGHT'] %}input{% else %}output{% endif %}",
+                    "dtype": "{{ interface.dtype.finn_type }}",
+                    # Dimensions extracted at runtime from dataflow model
+                    "runtime_extraction": True
+                },
+                {% endfor %}
+            },
+            
+            # Interface groupings for convenient access
+            "input_interfaces": {{ input_interfaces|map(attribute='name')|list }},
+            "output_interfaces": {{ output_interfaces|map(attribute='name')|list }},
+            "weight_interfaces": {{ weight_interfaces|map(attribute='name')|list }},
+            "config_interfaces": {{ config_interfaces|map(attribute='name')|list }},
+            {% endif %}
+        }
+        
+        return codegen_dict
+    
+    def generate_params(self, model, path):
+        """
+        Generate parameter files for RTL synthesis.
+        
+        Args:
+            model: FINN model wrapper
+            path: Output directory for generated files
+        """
+        os.makedirs(path, exist_ok=True)
+        
+        {% if weight_interfaces %}
+        # Generate weight files for weight interfaces
+        {% for interface in weight_interfaces %}
+        self._generate_{{ interface.name }}_weights(model, path)
+        {% endfor %}
+        {% endif %}
+        
+        # Generate main parameter file
+        self._generate_main_params(model, path)
+    
+    {% if weight_interfaces %}
+    # Weight generation methods
+    {% for interface in weight_interfaces %}
+    def _generate_{{ interface.name }}_weights(self, model, path):
+        """
+        Generate weight file for {{ interface.name }} interface.
+        
+        Args:
+            model: FINN model wrapper
+            path: Output directory
+        """
+        weight_file = os.path.join(path, "{{ interface.name }}_weights.dat")
+        
+        # TODO: Extract actual weights from model at runtime
+        # This is a placeholder implementation - dimensions should be extracted from dataflow model
+        # when the RTL backend is used by the FINN compiler
+        dummy_weights = np.random.randn(256, 256).astype(np.float32)  # Placeholder dimensions
+        
+        # Write weights in format expected by RTL
+        with open(weight_file, 'w') as f:
+            f.write(f"// Weight file for {{ interface.name }}\n")
+            f.write(f"// Generated from {{ kernel_name }}\n")
+            for i, weight in enumerate(dummy_weights.flatten()):
+                f.write(f"{i:04d}: {weight:8.6f}\n")
+        
+        print(f"Generated weight file: {weight_file}")
+    {% endfor %}
+    {% endif %}
+    
+    def _generate_main_params(self, model, path):
+        """
+        Generate main parameter file.
+        
+        Args:
+            model: FINN model wrapper  
+            path: Output directory
+        """
+        param_file = os.path.join(path, "{{ kernel_name }}_params.txt")
+        
+        with open(param_file, 'w') as f:
+            f.write("# Auto-generated parameters for {{ kernel_name }}\n")
+            f.write(f"# Source: {{ source_file }}\n") 
+            f.write(f"# Generated: {{ generation_timestamp }}\n\n")
+            
+            # Write Verilog parameters
+            params = self.get_verilog_parameters()
+            for name, value in params.items():
+                f.write(f"{name}={value}\n")
+            
+            {% if dataflow_interfaces %}
+            f.write(f"\n# Interface Information\n")
+            f.write(f"NUM_INTERFACES={{ dataflow_interfaces|length }}\n")
+            f.write(f"NUM_INPUT_INTERFACES={{ input_interfaces|length }}\n")
+            f.write(f"NUM_OUTPUT_INTERFACES={{ output_interfaces|length }}\n")
+            f.write(f"NUM_WEIGHT_INTERFACES={{ weight_interfaces|length }}\n")
+            {% endif %}
+        
+        print(f"Generated parameter file: {param_file}")
