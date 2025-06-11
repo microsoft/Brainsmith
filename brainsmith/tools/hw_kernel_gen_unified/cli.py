@@ -12,18 +12,18 @@ from pathlib import Path
 from typing import List
 
 from .config import UnifiedConfig
-from .data import UnifiedHWKernel, GenerationResult
-from .rtl_parser import parse_rtl_file
+from .data import GenerationResult
+from .rtl_parser import parse_rtl_file, HWKernel
 from .generators import UnifiedHWCustomOpGenerator, UnifiedRTLBackendGenerator, UnifiedTestSuiteGenerator
 from .errors import HWKGError, CompilerDataError
 
 
-def create_hw_kernel(config: UnifiedConfig) -> UnifiedHWKernel:
+def create_hw_kernel(config: UnifiedConfig) -> HWKernel:
     """
-    Create UnifiedHWKernel from RTL file and compiler data.
+    Create HWKernel from RTL file and compiler data.
     
-    Uses simple parser as foundation with optional BDIM enhancement,
-    maintaining error resilience from hw_kernel_gen_simple.
+    Uses unified parser with optional BDIM enhancement,
+    maintaining error resilience and simple-by-default philosophy.
     """
     # Parse RTL file with appropriate sophistication level
     if config.debug:
@@ -31,14 +31,14 @@ def create_hw_kernel(config: UnifiedConfig) -> UnifiedHWKernel:
         if config.advanced_pragmas:
             print("Advanced BDIM pragma processing enabled")
     
-    rtl_data = parse_rtl_file(config.rtl_file, advanced_pragmas=config.advanced_pragmas)
+    hw_kernel = parse_rtl_file(config.rtl_file, advanced_pragmas=config.advanced_pragmas)
     
     if config.debug:
-        print(f"Found module: {rtl_data.name}")
-        print(f"Interfaces: {len(rtl_data.interfaces)}")
-        print(f"Parameters: {len(rtl_data.rtl_parameters)}")
+        print(f"Found module: {hw_kernel.name}")
+        print(f"Interfaces: {len(hw_kernel.interfaces)}")
+        print(f"Parameters: {len(hw_kernel.parameters)}")
         print(f"Complexity level: {config.complexity_level}")
-        if rtl_data.has_enhanced_bdim:
+        if hw_kernel.has_enhanced_bdim:
             print("Enhanced BDIM metadata available")
     
     # Load compiler data (same robust logic as simple system)
@@ -65,13 +65,16 @@ def create_hw_kernel(config: UnifiedConfig) -> UnifiedHWKernel:
                 if not key.startswith('_')
             }
         
+        # Attach compiler data to the kernel
+        hw_kernel.compiler_data = compiler_data
+        
     except Exception as e:
         raise CompilerDataError(f"Failed to load compiler data: {e}") from e
     
-    return rtl_data
+    return hw_kernel
 
 
-def generate_all(hw_kernel: UnifiedHWKernel, config: UnifiedConfig) -> GenerationResult:
+def generate_all(hw_kernel: HWKernel, config: UnifiedConfig) -> GenerationResult:
     """
     Generate all output files with optional multi-phase execution.
     
@@ -92,7 +95,7 @@ def generate_all(hw_kernel: UnifiedHWKernel, config: UnifiedConfig) -> Generatio
         return _generate_simple_mode(hw_kernel, config, result)
 
 
-def _generate_simple_mode(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
+def _generate_simple_mode(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
     """Simple mode generation - identical to hw_kernel_gen_simple experience."""
     generators = [
         UnifiedHWCustomOpGenerator(config.template_dir),
@@ -120,7 +123,7 @@ def _generate_simple_mode(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, res
     return result
 
 
-def _generate_multi_phase(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
+def _generate_multi_phase(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult) -> GenerationResult:
     """
     Multi-phase generation with debugging stops.
     
@@ -163,7 +166,7 @@ def _generate_multi_phase(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, res
     return result
 
 
-def _build_dataflow_model(hw_kernel: UnifiedHWKernel, config: UnifiedConfig):
+def _build_dataflow_model(hw_kernel: HWKernel, config: UnifiedConfig):
     """Build dataflow model from interfaces."""
     if config.debug:
         print(f"Building dataflow model with {len(hw_kernel.dataflow_interfaces)} interfaces")
@@ -171,21 +174,21 @@ def _build_dataflow_model(hw_kernel: UnifiedHWKernel, config: UnifiedConfig):
             print("Using enhanced BDIM chunking strategies")
 
 
-def _generate_hw_custom_op(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_hw_custom_op(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
     """Generate HWCustomOp in multi-phase mode."""
     generator = UnifiedHWCustomOpGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_rtl_backend(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_rtl_backend(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
     """Generate RTLBackend in multi-phase mode."""
     generator = UnifiedRTLBackendGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_test_suite(hw_kernel: UnifiedHWKernel, config: UnifiedConfig, result: GenerationResult):
+def _generate_test_suite(hw_kernel: HWKernel, config: UnifiedConfig, result: GenerationResult):
     """Generate test suite in multi-phase mode."""
     generator = UnifiedTestSuiteGenerator(config.template_dir)
     output_file = generator.generate(hw_kernel, config.output_dir)

@@ -727,10 +727,11 @@ class TDimPragma(BDimPragma):
 
 @dataclass
 class HWKernel:
-    """Top-level representation of a parsed hardware kernel.
+    """Unified hardware kernel representation with optional BDIM pragma support.
     
     This structure holds the consolidated information extracted from an RTL file,
     focusing on a single target module (often specified by a pragma).
+    Supports both simple mode (basic RTL parsing) and advanced mode (with BDIM pragma processing).
     
     Attributes:
         name: Kernel (module) name
@@ -738,15 +739,182 @@ class HWKernel:
         interfaces: Dictionary of detected interfaces (e.g., AXI-Lite, AXI-Stream)
         pragmas: List of Brainsmith pragmas found
         metadata: Optional dictionary for additional info (e.g., source file)
+        
+        # Unified fields for enhanced functionality
+        class_name: Python class name derived from module name
+        source_file: Path to source RTL file
+        compiler_data: Compiler configuration data
+        bdim_metadata: Enhanced BDIM pragma metadata (optional)
+        pragma_sophistication_level: "simple" | "advanced"
+        parsing_warnings: List of warnings encountered during parsing
     """
     name: str
     parameters: List[Parameter] = field(default_factory=list)
     interfaces: Dict[str, Interface] = field(default_factory=dict)
     pragmas: List[Pragma] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # Unified fields for enhanced functionality
+    class_name: str = field(init=False)
+    source_file: Optional[Any] = None  # Path object
+    compiler_data: Dict[str, Any] = field(default_factory=dict)
+    bdim_metadata: Optional[Dict[str, Any]] = None
+    pragma_sophistication_level: str = "simple"  # simple | advanced
+    parsing_warnings: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Post-initialization processing for HWKernel."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid kernel name: {self.name}")
-        # Additional validation or processing can be added here if needed
+        
+        # Generate class name from module name
+        self.class_name = self._generate_class_name(self.name)
+    
+    def _generate_class_name(self, module_name: str) -> str:
+        """Generate Python class name from module name."""
+        # Convert snake_case or kebab-case to PascalCase
+        parts = module_name.replace('-', '_').split('_')
+        return ''.join(word.capitalize() for word in parts)
+    
+    # Properties for template compatibility and enhanced functionality
+    
+    @property
+    def kernel_name(self) -> str:
+        """Get kernel name for templates."""
+        return self.name
+    
+    @property
+    def rtl_parameters(self) -> List[Dict[str, Any]]:
+        """Get parameters in dictionary format for template compatibility."""
+        param_dicts = []
+        for param in self.parameters:
+            param_dict = {
+                'name': param.name,
+                'param_type': param.param_type,
+                'default_value': param.default_value,
+                'description': param.description,
+                'template_param_name': getattr(param, 'template_param_name', f"${param.name.upper()}$")
+            }
+            param_dicts.append(param_dict)
+        return param_dicts
+    
+    @property
+    def generation_timestamp(self) -> str:
+        """Get timestamp for templates."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
+    @property
+    def resource_estimation_required(self) -> bool:
+        """Check if resource estimation is needed."""
+        return self.compiler_data.get('enable_resource_estimation', False)
+    
+    @property
+    def verification_required(self) -> bool:
+        """Check if verification is needed."""
+        return self.compiler_data.get('enable_verification', False)
+    
+    @property
+    def weight_interfaces_count(self) -> int:
+        """Count weight interfaces for resource estimation."""
+        return len([iface for iface in self.interfaces.values() 
+                   if iface.metadata.get('is_weight', False)])
+    
+    @property
+    def kernel_complexity(self) -> str:
+        """Estimate kernel complexity for resource calculations."""
+        interface_count = len(self.interfaces)
+        param_count = len(self.parameters)
+        
+        if interface_count <= 2 and param_count <= 3:
+            return 'low'
+        elif interface_count <= 4 and param_count <= 6:
+            return 'medium'
+        else:
+            return 'high'
+    
+    @property
+    def kernel_type(self) -> str:
+        """Infer kernel type from name for resource estimation."""
+        name_lower = self.name.lower()
+        if any(term in name_lower for term in ['matmul', 'gemm', 'dot']):
+            return 'matmul'
+        elif any(term in name_lower for term in ['conv', 'convolution']):
+            return 'conv'
+        elif any(term in name_lower for term in ['threshold', 'compare']):
+            return 'threshold'
+        elif any(term in name_lower for term in ['norm', 'batch', 'layer']):
+            return 'norm'
+        else:
+            return 'generic'
+    
+    @property
+    def has_enhanced_bdim(self) -> bool:
+        """
+        Check if kernel has enhanced BDIM pragma information.
+        
+        Following Interface-Wise Dataflow Axiom 4: Pragma-to-Chunking Conversion.
+        """
+        return (self.pragma_sophistication_level == "advanced" 
+                and self.bdim_metadata is not None)
+    
+    @property
+    def dataflow_interfaces(self) -> List[Interface]:
+        """
+        Get interfaces with dataflow type classification.
+        
+        Following Interface-Wise Dataflow Axiom 3: Interface Types.
+        Returns AXI-Stream interfaces for dataflow processing.
+        """
+        return [iface for iface in self.interfaces.values() 
+                if iface.type == InterfaceType.AXI_STREAM]
+    
+    @property
+    def chunking_strategies(self) -> Dict[str, Any]:
+        """
+        Get chunking strategies from BDIM pragmas if available.
+        
+        Following Interface-Wise Dataflow Axiom 2: Core Relationship
+        tensor_dims → chunked into → num_blocks pieces of shape block_dims.
+        """
+        if self.has_enhanced_bdim:
+            return self.bdim_metadata.get('chunking_strategies', {})
+        return {}
+    
+    @property
+    def tensor_dims_metadata(self) -> Dict[str, Any]:
+        """
+        Get tensor dimension metadata from BDIM pragmas.
+        
+        Following Interface-Wise Dataflow Axiom 1: Data Hierarchy
+        Tensor → Block → Stream → Element
+        """
+        if self.has_enhanced_bdim:
+            return self.bdim_metadata.get('tensor_dims', {})
+        return {}
+    
+    @property
+    def block_dims_metadata(self) -> Dict[str, Any]:
+        """
+        Get block dimension metadata from BDIM pragmas.
+        
+        Following Interface-Wise Dataflow Axiom 2: tensor_dims → block_dims.
+        """
+        if self.has_enhanced_bdim:
+            return self.bdim_metadata.get('block_dims', {})
+        return {}
+    
+    @property
+    def stream_dims_metadata(self) -> Dict[str, Any]:
+        """
+        Get stream dimension metadata from BDIM pragmas.
+        
+        Following Interface-Wise Dataflow Axiom 2: block_dims → stream_dims.
+        """
+        if self.has_enhanced_bdim:
+            return self.bdim_metadata.get('stream_dims', {})
+        return {}
+    
+    def add_parsing_warning(self, warning: str):
+        """Add a parsing warning to track issues during generation."""
+        self.parsing_warnings.append(warning)

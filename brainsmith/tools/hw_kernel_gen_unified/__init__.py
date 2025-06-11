@@ -15,9 +15,10 @@ Key Features:
 - Optional BDIM pragma processing for advanced use cases
 """
 
-from .data import UnifiedHWKernel, GenerationResult
+from .data import GenerationResult
+from .rtl_parser.data import HWKernel
 from .config import UnifiedConfig
 from .cli import main
 
 __version__ = "1.0.0"
-__all__ = ["UnifiedHWKernel", "GenerationResult", "UnifiedConfig", "main"]
+__all__ = ["HWKernel", "GenerationResult", "UnifiedConfig", "main"]

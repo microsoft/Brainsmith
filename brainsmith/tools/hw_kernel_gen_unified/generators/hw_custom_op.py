@@ -7,7 +7,7 @@ context for advanced BDIM pragma processing when enabled.
 
 from pathlib import Path
 from .base import GeneratorBase
-from ..data import UnifiedHWKernel
+from ..rtl_parser.data import HWKernel
 
 
 class UnifiedHWCustomOpGenerator(GeneratorBase):
@@ -22,11 +22,11 @@ class UnifiedHWCustomOpGenerator(GeneratorBase):
     def __init__(self, template_dir: Path = None):
         super().__init__('hw_custom_op_slim.py.j2', template_dir)
     
-    def _get_output_filename(self, hw_kernel: UnifiedHWKernel) -> str:
+    def _get_output_filename(self, hw_kernel: HWKernel) -> str:
         """Get output filename for HWCustomOp class."""
         return f"{hw_kernel.name.lower()}_hwcustomop.py"
     
-    def _get_template_context(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _get_template_context(self, hw_kernel: HWKernel) -> dict:
         """
         Get enhanced template context for HWCustomOp generation.
         
@@ -34,6 +34,10 @@ class UnifiedHWCustomOpGenerator(GeneratorBase):
         for both simple and advanced modes.
         """
         context = super()._get_template_context(hw_kernel)
+        
+        # Enhance Interface objects with template-required attributes
+        enhanced_interfaces = self._enhance_interfaces_for_template(context['interfaces'])
+        context['interfaces'] = enhanced_interfaces
         
         # HWCustomOp-specific context enhancements
         context.update({
@@ -57,7 +61,40 @@ class UnifiedHWCustomOpGenerator(GeneratorBase):
         
         return context
     
-    def _get_kernel_verifications(self, hw_kernel: UnifiedHWKernel) -> list:
+    def _enhance_interfaces_for_template(self, interfaces: list) -> list:
+        """
+        Enhance Interface objects with attributes required by templates.
+        
+        Templates expect Interface objects to have:
+        - dataflow_type: String classification (INPUT, OUTPUT, WEIGHT, CONFIG, CONTROL)
+        - datatype_constraints: List of allowed datatypes  
+        - tensor_dims, block_dims, stream_dims: BDIM metadata (optional)
+        """
+        enhanced_interfaces = []
+        
+        for iface in interfaces:
+            # Create a copy-like object with additional attributes
+            enhanced_iface = type('EnhancedInterface', (), {})()
+            
+            # Copy all original attributes
+            for attr in dir(iface):
+                if not attr.startswith('_'):
+                    setattr(enhanced_iface, attr, getattr(iface, attr))
+            
+            # Add template-required attributes
+            enhanced_iface.dataflow_type = self._classify_interface_dataflow_type(iface)
+            enhanced_iface.datatype_constraints = self._extract_datatype_constraints(iface)
+            
+            # Add BDIM attributes with defaults
+            enhanced_iface.tensor_dims = iface.metadata.get('tensor_dims', []) if hasattr(iface, 'metadata') else []
+            enhanced_iface.block_dims = iface.metadata.get('block_dims', []) if hasattr(iface, 'metadata') else []
+            enhanced_iface.stream_dims = iface.metadata.get('stream_dims', []) if hasattr(iface, 'metadata') else []
+            
+            enhanced_interfaces.append(enhanced_iface)
+        
+        return enhanced_interfaces
+    
+    def _get_kernel_verifications(self, hw_kernel: HWKernel) -> list:
         """
         Get kernel-specific verification rules.
         
@@ -137,7 +174,7 @@ class UnifiedHWCustomOpGenerator(GeneratorBase):
             }
         ]
     
-    def _get_bdim_verifications(self, hw_kernel: UnifiedHWKernel) -> list:
+    def _get_bdim_verifications(self, hw_kernel: HWKernel) -> list:
         """
         Get BDIM-specific verification rules following Interface-Wise Dataflow axioms.
         
@@ -210,12 +247,12 @@ for iface in self.get_dataflow_interfaces():
         
         return verifications
     
-    def _get_interface_verifications(self, hw_kernel: UnifiedHWKernel) -> list:
+    def _get_interface_verifications(self, hw_kernel: HWKernel) -> list:
         """Get interface-specific verification rules."""
         verifications = []
         
         # AXI-Stream interface validations
-        axi_stream_interfaces = [iface for iface in hw_kernel.interfaces if self._get_interface_type_name(iface) == 'AXI_STREAM']
+        axi_stream_interfaces = [iface for iface in hw_kernel.interfaces.values() if self._get_interface_type_name(iface) == 'AXI_STREAM']
         
         if axi_stream_interfaces:
             verifications.append({
@@ -250,7 +287,7 @@ if self.get_weight_interface() is not None:
         
         return verifications
     
-    def _get_parallelism_verifications(self, hw_kernel: UnifiedHWKernel) -> list:
+    def _get_parallelism_verifications(self, hw_kernel: HWKernel) -> list:
         """
         Get parallelism verification rules following Axiom 5: Parallelism Parameters.
         
@@ -307,7 +344,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return verifications
     
-    def _get_resource_estimation_context(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _get_resource_estimation_context(self, hw_kernel: HWKernel) -> dict:
         """Get resource estimation context for template."""
         return {
             'complexity': hw_kernel.kernel_complexity,
@@ -317,7 +354,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
             'requires_estimation': hw_kernel.resource_estimation_required
         }
     
-    def _build_enhanced_interface_metadata(self, hw_kernel: UnifiedHWKernel) -> list:
+    def _build_enhanced_interface_metadata(self, hw_kernel: HWKernel) -> list:
         """
         Build enhanced interface metadata for BDIM-aware templates.
         
@@ -328,17 +365,17 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         """
         enhanced_interfaces = []
         
-        for iface in hw_kernel.interfaces:
+        for iface in hw_kernel.interfaces.values():
             # Base interface metadata
             interface_metadata = {
-                'name': iface.get('name', ''),
+                'name': iface.name if hasattr(iface, 'name') else iface.get('name', ''),
                 'dataflow_type': self._classify_interface_dataflow_type(iface),
                 'interface_type': self._get_interface_type_name(iface),
                 'has_chunking_strategy': False,
                 'tensor_dims': [],
                 'block_dims': [],
                 'stream_dims': [],
-                'port_count': len(iface.get('ports', [])),
+                'port_count': len(iface.ports if hasattr(iface, 'ports') else iface.get('ports', [])),
                 'is_dataflow_interface': self._is_dataflow_interface(iface)
             }
             
@@ -371,25 +408,27 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return enhanced_interfaces
     
-    def _classify_interface_dataflow_type(self, iface: dict) -> str:
+    def _classify_interface_dataflow_type(self, iface) -> str:
         """
         Classify interface dataflow type following Interface-Wise Dataflow Axiom 3.
         
         Enhanced classification with better pattern recognition.
         """
-        # Use existing dataflow_type if available
-        if 'dataflow_type' in iface:
+        # Check for existing dataflow_type
+        if hasattr(iface, 'metadata') and 'dataflow_type' in iface.metadata:
+            return iface.metadata['dataflow_type']
+        elif isinstance(iface, dict) and 'dataflow_type' in iface:
             return iface['dataflow_type']
         
         # Enhanced pattern-based classification
-        name = iface.get('name', '').lower()
+        name = (iface.name if hasattr(iface, 'name') else iface.get('name', '')).lower()
         interface_type = self._get_interface_type_name(iface)
         
-        if interface_type == 'GLOBAL_CONTROL':
+        if interface_type == 'GLOBAL':
             return 'CONTROL'
-        elif interface_type == 'AXI_LITE':
+        elif interface_type == 'AXILITE':
             return 'CONFIG'
-        elif interface_type == 'AXI_STREAM':
+        elif interface_type == 'AXISTREAM':
             # Enhanced AXI-Stream classification
             if any(pattern in name for pattern in ['weight', 'w_axis', 'param', 'kernel', 'filter']):
                 return 'WEIGHT'
@@ -402,37 +441,65 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return 'UNKNOWN'
     
-    def _get_interface_type_name(self, iface: dict) -> str:
-        """Get interface type name safely handling both dict and object types."""
-        interface_type = iface.get('type', {})
-        if hasattr(interface_type, 'name'):
-            return interface_type.name
-        elif isinstance(interface_type, dict):
-            return interface_type.get('name', 'UNKNOWN')
+    def _get_interface_type_name(self, iface) -> str:
+        """Get interface type name safely handling both dict and Interface object types."""
+        if hasattr(iface, 'type'):
+            # Interface object from RTL parser
+            if hasattr(iface.type, 'value'):
+                return iface.type.value.upper()  # Convert to uppercase for consistency
+            else:
+                return str(iface.type).upper()
+        elif isinstance(iface, dict):
+            # Dict format (legacy)
+            interface_type = iface.get('type', {})
+            if hasattr(interface_type, 'name'):
+                return interface_type.name.upper()
+            elif isinstance(interface_type, dict):
+                return interface_type.get('name', 'UNKNOWN').upper()
+            else:
+                return str(interface_type).upper()
         else:
-            return str(interface_type)
+            return 'UNKNOWN'
     
-    def _is_dataflow_interface(self, iface: dict) -> bool:
+    def _is_dataflow_interface(self, iface) -> bool:
         """Check if interface participates in dataflow (AXI-Stream)."""
-        return self._get_interface_type_name(iface) == 'AXI_STREAM'
+        return self._get_interface_type_name(iface) == 'AXISTREAM'
     
-    def _has_bdim_metadata(self, iface: dict) -> bool:
+    def _has_bdim_metadata(self, iface) -> bool:
         """Check if interface has BDIM metadata available."""
-        return any(key in iface for key in ['tensor_dims', 'block_dims', 'stream_dims', 'chunking_strategy'])
+        if hasattr(iface, 'metadata'):
+            # Interface object
+            return any(key in iface.metadata for key in ['tensor_dims', 'block_dims', 'stream_dims', 'chunking_strategy'])
+        elif isinstance(iface, dict):
+            # Dict format
+            return any(key in iface for key in ['tensor_dims', 'block_dims', 'stream_dims', 'chunking_strategy'])
+        return False
     
-    def _extract_bdim_chunking_info(self, iface: dict, hw_kernel: UnifiedHWKernel) -> dict:
+    def _extract_bdim_chunking_info(self, iface, hw_kernel: HWKernel) -> dict:
         """
         Extract BDIM chunking information from interface and kernel metadata.
         
         Following Interface-Wise Dataflow Axiom 2: Core Relationship.
         """
-        chunking_info = {
-            'tensor_dims': iface.get('tensor_dims', []),
-            'block_dims': iface.get('block_dims', []),
-            'stream_dims': iface.get('stream_dims', []),
-            'strategy_type': iface.get('chunking_strategy', 'block_based'),
-            'chunk_index': iface.get('chunk_index', 0)
-        }
+        if hasattr(iface, 'metadata'):
+            # Interface object
+            metadata = iface.metadata
+            chunking_info = {
+                'tensor_dims': metadata.get('tensor_dims', []),
+                'block_dims': metadata.get('block_dims', []),
+                'stream_dims': metadata.get('stream_dims', []),
+                'strategy_type': metadata.get('chunking_strategy', 'block_based'),
+                'chunk_index': metadata.get('chunk_index', 0)
+            }
+        else:
+            # Dict format
+            chunking_info = {
+                'tensor_dims': iface.get('tensor_dims', []),
+                'block_dims': iface.get('block_dims', []),
+                'stream_dims': iface.get('stream_dims', []),
+                'strategy_type': iface.get('chunking_strategy', 'block_based'),
+                'chunk_index': iface.get('chunk_index', 0)
+            }
         
         # Extract parallelism factors from kernel metadata
         if hw_kernel.bdim_metadata and 'parallelism' in hw_kernel.bdim_metadata:
@@ -444,7 +511,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
             }
         
         # Add layout analysis if available
-        interface_name = iface.get('name', '')
+        interface_name = iface.name if hasattr(iface, 'name') else iface.get('name', '')
         if hw_kernel.chunking_strategies and interface_name in hw_kernel.chunking_strategies:
             strategy = hw_kernel.chunking_strategies[interface_name]
             chunking_info['layout_analysis'] = {
@@ -455,7 +522,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return chunking_info
     
-    def _infer_basic_dimensions(self, iface: dict) -> dict:
+    def _infer_basic_dimensions(self, iface) -> dict:
         """
         Infer basic tensor dimensions for simple mode interfaces.
         
@@ -510,7 +577,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         else:
             return f'[{dim_count}D]'
     
-    def _extract_datatype_constraints(self, iface: dict) -> list:
+    def _extract_datatype_constraints(self, iface) -> list:
         """Extract datatype constraints for interface validation."""
         dataflow_type = self._classify_interface_dataflow_type(iface)
         
@@ -594,7 +661,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return impact
     
-    def _build_chunking_context(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _build_chunking_context(self, hw_kernel: HWKernel) -> dict:
         """
         Build chunking context for BDIM-aware template generation.
         
@@ -754,7 +821,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return bottlenecks
     
-    def _analyze_dimension_relationships(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _analyze_dimension_relationships(self, hw_kernel: HWKernel) -> dict:
         """
         Analyze dimension relationships following Axiom 2: Core Relationship.
         
@@ -796,7 +863,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return relationships
     
-    def _analyze_layout_patterns(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _analyze_layout_patterns(self, hw_kernel: HWKernel) -> dict:
         """
         Analyze layout patterns following Axiom 9: Layout-Driven Chunking.
         """
@@ -876,7 +943,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return suggestions
     
-    def _estimate_performance_characteristics(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _estimate_performance_characteristics(self, hw_kernel: HWKernel) -> dict:
         """
         Estimate performance characteristics following Axiom 7: Timing Relationships.
         
@@ -892,11 +959,11 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
             'optimization_potential': {}
         }
         
-        input_interfaces = [iface for iface in hw_kernel.interfaces if self._classify_interface_dataflow_type(iface) == 'INPUT']
-        weight_interfaces = [iface for iface in hw_kernel.interfaces if self._classify_interface_dataflow_type(iface) == 'WEIGHT']
+        input_interfaces = [iface for iface in hw_kernel.interfaces.values() if self._classify_interface_dataflow_type(iface) == 'INPUT']
+        weight_interfaces = [iface for iface in hw_kernel.interfaces.values() if self._classify_interface_dataflow_type(iface) == 'WEIGHT']
         
         for input_iface in input_interfaces:
-            interface_name = input_iface.get('name', '')
+            interface_name = input_iface.name if hasattr(input_iface, 'name') else input_iface.get('name', '')
             
             if interface_name in hw_kernel.chunking_strategies:
                 strategy = hw_kernel.chunking_strategies[interface_name]
@@ -955,7 +1022,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return bottlenecks
     
-    def _identify_optimization_opportunities(self, performance: dict, hw_kernel: UnifiedHWKernel) -> list:
+    def _identify_optimization_opportunities(self, performance: dict, hw_kernel: HWKernel) -> list:
         """Identify optimization opportunities."""
         opportunities = []
         

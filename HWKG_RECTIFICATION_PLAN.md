@@ -82,10 +82,13 @@
 - [ ] Preserve template compatibility and error resilience
 - [ ] Create detailed implementation plan (PHASE_2_2_IMPLEMENTATION_PLAN.md)
 
-#### 2.3 Legacy System Deprecation
+#### 2.3 Legacy System Deprecation 🚧 IN PROGRESS
 - [ ] Mark `hw_kernel_gen_simple` as deprecated
+- [ ] Mark `hw_kernel_gen` as deprecated  
 - [ ] Provide migration guide for existing users
 - [ ] Plan removal timeline (6-month deprecation period)
+- [ ] Add deprecation warnings to legacy CLIs
+- [ ] Update documentation to recommend unified system
 
 ### Phase 3: Dataflow Integration Strengthening (Week 4-5)
 **Goal**: Make Interface-Wise Dataflow Modeling the core foundation

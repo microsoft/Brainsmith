@@ -17,10 +17,10 @@ from pathlib import Path
 
 from tree_sitter import Parser, Node
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import HWKernel, Port, Parameter, Direction
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import InterfaceType, Interface
-from brainsmith.tools.hw_kernel_gen.rtl_parser.pragma import PragmaHandler, PragmaType, Pragma
-from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import InterfaceBuilder
+from .data import HWKernel, Port, Parameter, Direction
+from .data import InterfaceType, Interface
+from .pragma import PragmaHandler, PragmaType, Pragma
+from .interface_builder import InterfaceBuilder
 from . import grammar
 
 # Configure logger

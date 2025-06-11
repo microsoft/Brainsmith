@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 import jinja2
 
-from ..data import UnifiedHWKernel
+from ..rtl_parser.data import HWKernel
 from ..errors import TemplateError, GenerationError
 
 
@@ -38,12 +38,16 @@ class GeneratorBase(ABC):
         if template_dir and template_dir.exists():
             loader = jinja2.FileSystemLoader(template_dir)
         else:
-            # Use existing templates from the original HWKG (template compatibility)
-            template_path = Path(__file__).parent.parent.parent / "hw_kernel_gen" / "templates"
-            if template_path.exists():
-                loader = jinja2.FileSystemLoader(template_path)
+            # Use unified templates first, fallback to original HWKG templates
+            unified_template_path = Path(__file__).parent.parent / "templates"
+            original_template_path = Path(__file__).parent.parent.parent / "hw_kernel_gen" / "templates"
+            
+            if unified_template_path.exists():
+                loader = jinja2.FileSystemLoader(unified_template_path)
+            elif original_template_path.exists():
+                loader = jinja2.FileSystemLoader(original_template_path)
             else:
-                raise TemplateError(f"Template directory not found: {template_path}")
+                raise TemplateError(f"Template directory not found: tried {unified_template_path} and {original_template_path}")
         
         env = jinja2.Environment(
             loader=loader,
@@ -52,7 +56,7 @@ class GeneratorBase(ABC):
         )
         return env
     
-    def generate(self, hw_kernel: UnifiedHWKernel, output_dir: Path) -> Path:
+    def generate(self, hw_kernel: HWKernel, output_dir: Path) -> Path:
         """Generate output file for the given unified hardware kernel."""
         try:
             template = self.template_env.get_template(self.template_name)
@@ -77,11 +81,11 @@ class GeneratorBase(ABC):
             raise GenerationError(f"File generation failed: {e}") from e
     
     @abstractmethod
-    def _get_output_filename(self, hw_kernel: UnifiedHWKernel) -> str:
+    def _get_output_filename(self, hw_kernel: HWKernel) -> str:
         """Get output filename for the kernel."""
         pass
     
-    def _get_template_context(self, hw_kernel: UnifiedHWKernel) -> dict:
+    def _get_template_context(self, hw_kernel: HWKernel) -> dict:
         """
         Get enhanced template context for unified HWKG.
         
@@ -92,9 +96,9 @@ class GeneratorBase(ABC):
         context = {
             'class_name': hw_kernel.class_name,
             'kernel_name': hw_kernel.kernel_name,
-            'source_file': hw_kernel.source_file.name,
+            'source_file': str(hw_kernel.source_file) if hw_kernel.source_file else 'unknown',
             'generation_timestamp': hw_kernel.generation_timestamp,
-            'interfaces': hw_kernel.interfaces,
+            'interfaces': list(hw_kernel.interfaces.values()),  # Convert to list of Interface objects
             'rtl_parameters': hw_kernel.rtl_parameters,
             'resource_estimation_required': hw_kernel.resource_estimation_required,
             'verification_required': hw_kernel.verification_required,
@@ -122,10 +126,18 @@ class GeneratorBase(ABC):
             })
         
         # Add Interface-Wise Dataflow context following axioms
+        interface_categories = self._categorize_interfaces(hw_kernel.interfaces)
         context.update({
             'follows_dataflow_axioms': True,
-            'interface_categories': self._categorize_interfaces(hw_kernel.interfaces),
-            'complexity_level': hw_kernel.pragma_sophistication_level
+            'interface_count': len(hw_kernel.interfaces),
+            'dataflow_interface_count': len(hw_kernel.dataflow_interfaces),
+            'complexity_level': hw_kernel.pragma_sophistication_level,
+            # Add categorized interfaces for template access
+            'input_interfaces': interface_categories['input_interfaces'],
+            'output_interfaces': interface_categories['output_interfaces'],
+            'weight_interfaces': interface_categories['weight_interfaces'],
+            'config_interfaces': interface_categories['config_interfaces'],
+            'control_interfaces': interface_categories['control_interfaces']
         })
         
         return context
@@ -144,20 +156,54 @@ class GeneratorBase(ABC):
             'control_interfaces': []
         }
         
-        for iface in interfaces:
-            dataflow_type = iface.get('dataflow_type', 'UNKNOWN').upper()
-            interface_type = iface.get('type', {})
-            type_name = interface_type.get('name', '') if isinstance(interface_type, dict) else str(interface_type)
-            
-            if dataflow_type == 'INPUT':
-                categories['input_interfaces'].append(iface)
-            elif dataflow_type == 'OUTPUT':
-                categories['output_interfaces'].append(iface)
-            elif dataflow_type == 'WEIGHT':
-                categories['weight_interfaces'].append(iface)
-            elif dataflow_type == 'CONFIG' or 'AXI_LITE' in type_name:
-                categories['config_interfaces'].append(iface)
-            elif dataflow_type == 'CONTROL' or 'GLOBAL_CONTROL' in type_name:
-                categories['control_interfaces'].append(iface)
+        # Handle both dict and Interface object formats
+        interface_list = interfaces.values() if hasattr(interfaces, 'values') else interfaces
+        
+        for iface in interface_list:
+            # Handle Interface objects from unified HWKernel
+            if hasattr(iface, 'type') and hasattr(iface, 'name'):
+                # Interface object from RTL parser
+                interface_type = iface.type.value if hasattr(iface.type, 'value') else str(iface.type)
+                is_weight = iface.metadata.get('is_weight', False)
+                interface_name = iface.name.lower()
+                
+                # Determine dataflow type based on interface type and naming patterns
+                if interface_type == 'axistream':
+                    # Enhanced pattern-based classification for AXI-Stream
+                    if is_weight or any(pattern in interface_name for pattern in ['weight', 'w_axis', 'param', 'kernel', 'filter']):
+                        categories['weight_interfaces'].append(iface)
+                    elif any(pattern in interface_name for pattern in ['s_axis', 'input', 'in_', 'slave']) or interface_name.startswith('s_'):
+                        categories['input_interfaces'].append(iface)
+                    elif any(pattern in interface_name for pattern in ['m_axis', 'output', 'out_', 'master']) or interface_name.startswith('m_'):
+                        categories['output_interfaces'].append(iface)
+                    else:
+                        # Check port patterns as fallback
+                        has_tvalid = any('tvalid' in port.name.lower() for port in iface.ports.values())
+                        has_tready = any('tready' in port.name.lower() for port in iface.ports.values())
+                        
+                        if has_tvalid and not has_tready:
+                            categories['input_interfaces'].append(iface)
+                        elif has_tready and not has_tvalid:
+                            categories['output_interfaces'].append(iface)
+                        else:
+                            categories['input_interfaces'].append(iface)  # Default assumption
+                            
+                elif interface_type == 'axilite':
+                    categories['config_interfaces'].append(iface)
+                elif interface_type == 'global':
+                    categories['control_interfaces'].append(iface)
+                else:
+                    categories['control_interfaces'].append(iface)
+            else:
+                # Dict format (legacy compatibility)
+                dataflow_type = iface.get('dataflow_type', 'UNKNOWN').upper()
+                if dataflow_type == 'INPUT':
+                    categories['input_interfaces'].append(iface)
+                elif dataflow_type == 'OUTPUT':
+                    categories['output_interfaces'].append(iface)
+                elif dataflow_type == 'WEIGHT':
+                    categories['weight_interfaces'].append(iface)
+                else:
+                    categories['control_interfaces'].append(iface)
         
         return categories
