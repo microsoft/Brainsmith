@@ -263,6 +263,11 @@ class OpTest(ABC):
 
     @pytest.fixture(params=["cppsim", "rtlsim"])
     def f_exec_mode(self2, request) -> str:
+        """Parameterised fixture. Provides the exec mode parameter ("cppsim or rtlsim")
+
+        :return: The exec mode
+                 (Default: ``"cppsim"`` or ``"rtlsim"``)
+        :rtype: str"""
         return request.param
 
     ##########################################
