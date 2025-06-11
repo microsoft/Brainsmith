@@ -46,12 +46,18 @@ def get_kernel(name: str) -> KernelPackage:
         
     Raises:
         KeyError: If kernel not found (with available options)
+        FileNotFoundError: If kernel package directory not found
     """
     if name not in AVAILABLE_KERNELS:
         available = ", ".join(AVAILABLE_KERNELS.keys())
         raise KeyError(f"Kernel '{name}' not found. Available: {available}")
     
     package_dir = AVAILABLE_KERNELS[name]
+    package_path = Path(__file__).parent / package_dir
+    
+    if not package_path.exists():
+        raise FileNotFoundError(f"Kernel package directory not found: {package_path}")
+    
     return load_kernel_package(package_dir)
 
 def list_kernels() -> List[str]:
@@ -77,7 +83,7 @@ def get_kernel_files(name: str) -> Dict[str, str]:
         KeyError: If kernel not found
     """
     if name not in AVAILABLE_KERNELS:
-        available = ", ".join(AVAILABLE_KERNELS.keys())
+        available = ", ".join(sorted(AVAILABLE_KERNELS.keys()))
         raise KeyError(f"Kernel '{name}' not found. Available: {available}")
     
     package_dir = AVAILABLE_KERNELS[name]
@@ -104,20 +110,6 @@ from .functions import (
     generate_finn_config
 )
 
-# Legacy compatibility functions - redirect to new implementation
-def discover_all_kernels(additional_paths=None):
-    """Legacy function - returns kernels as dict for compatibility"""
-    kernels = {}
-    for name in list_kernels():
-        kernels[name] = get_kernel(name)
-    return kernels
-
-def get_kernel_by_name(kernel_name: str):
-    """Legacy function - redirect to get_kernel"""
-    try:
-        return get_kernel(kernel_name)
-    except KeyError:
-        return None
 
 # Import data types
 from .types import (
@@ -131,19 +123,15 @@ from .types import (
 
 # Export all public functions and types
 __all__ = [
-    # New registry functions
+    # Registry functions
     'get_kernel',
     'list_kernels',
     'get_kernel_files',
     'AVAILABLE_KERNELS',
     
-    # Legacy compatibility
-    'discover_all_kernels',
-    'get_kernel_by_name',
-    
-    # Core functions
+    # Business logic functions
     'find_compatible_kernels',
-    'optimize_kernel_parameters', 
+    'optimize_kernel_parameters',
     'select_optimal_kernel',
     'validate_kernel_package',
     'install_kernel_library',

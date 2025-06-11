@@ -69,48 +69,16 @@ def test_transforms_registry():
     return True
 
 
-def test_legacy_compatibility():
-    """Test that legacy functions still work"""
-    
-    print("\nTesting legacy compatibility functions...")
-    
-    try:
-        from brainsmith.libraries.transforms import discover_all_transforms, get_transform_by_name
-        
-        # Test discover_all_transforms (legacy)
-        transforms_dict = discover_all_transforms()
-        print(f"✅ discover_all_transforms(): {len(transforms_dict)} transforms")
-        assert len(transforms_dict) == 10
-        assert "cleanup" in transforms_dict
-        assert callable(transforms_dict["cleanup"])
-        
-        # Test get_transform_by_name (legacy)
-        transform = get_transform_by_name("streamlining")
-        print(f"✅ get_transform_by_name('streamlining'): {transform.__name__}")
-        assert transform.__name__ == "streamlining_step"
-        
-        # Test not found case
-        transform = get_transform_by_name("nonexistent")
-        assert transform is None
-        print(f"✅ get_transform_by_name('nonexistent'): None")
-        
-    except Exception as e:
-        print(f"❌ Legacy compatibility failed: {e}")
-        return False
-    
-    print("✅ Legacy compatibility verified")
-    return True
 
 
 if __name__ == "__main__":
     registry_success = test_transforms_registry()
-    compat_success = test_legacy_compatibility()
     
-    if registry_success and compat_success:
-        print("\n🎉 ALL TRANSFORMS TESTS PASSED!")
+    if registry_success:
+        print("\n🎉 TRANSFORMS TESTS PASSED - Clean API verified!")
         print("\n📊 Key improvements:")
         print("   • Simple dictionary lookup for all transforms")
         print("   • Fail-fast errors with helpful messages")
-        print("   • Backward compatibility maintained")
+        print("   • Clean API with no legacy bloat")
     
-    sys.exit(0 if (registry_success and compat_success) else 1)
+    sys.exit(0 if registry_success else 1)

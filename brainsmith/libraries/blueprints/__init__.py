@@ -41,7 +41,7 @@ def get_blueprint(name: str) -> str:
         KeyError: If blueprint not found (with available options)
     """
     if name not in AVAILABLE_BLUEPRINTS:
-        available = ", ".join(AVAILABLE_BLUEPRINTS.keys())
+        available = ", ".join(sorted(AVAILABLE_BLUEPRINTS.keys()))
         raise KeyError(f"Blueprint '{name}' not found. Available: {available}")
     
     relative_path = AVAILABLE_BLUEPRINTS[name]
@@ -84,41 +84,14 @@ def load_blueprint_yaml(name: str) -> dict:
     
     return blueprint_data
 
-# Legacy compatibility functions - redirect to new implementation
-def discover_all_blueprints(rescan=False):
-    """Legacy function - returns blueprints as dict for compatibility"""
-    blueprints = {}
-    for name in list_blueprints():
-        blueprints[name] = get_blueprint(name)
-    return blueprints
-
-def get_blueprint_by_name(blueprint_name: str):
-    """Legacy function - redirect to get_blueprint"""
-    try:
-        return get_blueprint(blueprint_name)
-    except KeyError:
-        return None
-
-def find_blueprints_by_category(category: str):
-    """Legacy function - simple category filtering"""
-    blueprints = []
-    for name, relative_path in AVAILABLE_BLUEPRINTS.items():
-        if category in relative_path:  # Simple category matching based on path
-            blueprints.append(name)
-    return blueprints
 
 # Export all public functions and types
 __all__ = [
-    # New registry functions
+    # Registry functions
     'get_blueprint',
     'list_blueprints',
     'load_blueprint_yaml',
     'AVAILABLE_BLUEPRINTS',
-    
-    # Legacy compatibility
-    'discover_all_blueprints',
-    'get_blueprint_by_name',
-    'find_blueprints_by_category',
 ]
 
 # Module metadata

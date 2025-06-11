@@ -57,49 +57,18 @@ def test_registry_performance():
         return True  # Still pass, just slower than expected
 
 
-def test_legacy_compatibility():
-    """Test that legacy functions still work"""
-    
-    print("\nTesting legacy compatibility functions...")
-    
-    try:
-        from brainsmith.libraries.kernels import discover_all_kernels, get_kernel_by_name
-        
-        # Test discover_all_kernels (legacy)
-        kernels_dict = discover_all_kernels()
-        print(f"✅ discover_all_kernels(): {list(kernels_dict.keys())}")
-        assert len(kernels_dict) == 2
-        assert "conv2d_hls" in kernels_dict
-        
-        # Test get_kernel_by_name (legacy)
-        kernel = get_kernel_by_name("matmul_rtl")
-        print(f"✅ get_kernel_by_name('matmul_rtl'): {kernel.name}")
-        assert kernel.name == "matmul_rtl"
-        
-        # Test not found case
-        kernel = get_kernel_by_name("nonexistent")
-        assert kernel is None
-        print(f"✅ get_kernel_by_name('nonexistent'): None")
-        
-    except Exception as e:
-        print(f"❌ Legacy compatibility failed: {e}")
-        return False
-    
-    print("✅ Legacy compatibility verified")
-    return True
 
 
 if __name__ == "__main__":
     perf_success = test_registry_performance()
-    compat_success = test_legacy_compatibility()
     
-    if perf_success and compat_success:
-        print("\n🎉 ALL TESTS PASSED - Kernels refactoring complete!")
+    if perf_success:
+        print("\n🎉 KERNELS TESTS PASSED - Clean API verified!")
         print("\n📊 Key improvements:")
         print("   • Eliminated 277 lines of magical discovery code")
         print("   • Fast O(1) dictionary lookups vs O(n) filesystem scanning")
         print("   • Fail-fast errors with helpful messages")
         print("   • Fully unit testable with no filesystem dependencies")
-        print("   • Backward compatibility maintained")
+        print("   • Clean API with no legacy bloat")
     
-    sys.exit(0 if (perf_success and compat_success) else 1)
+    sys.exit(0 if perf_success else 1)

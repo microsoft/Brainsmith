@@ -70,7 +70,7 @@ def get_analysis_tool(name: str) -> Union[Callable, Any]:
         KeyError: If tool not found (with available options)
     """
     if name not in AVAILABLE_ANALYSIS_TOOLS:
-        available = ", ".join(AVAILABLE_ANALYSIS_TOOLS.keys())
+        available = ", ".join(sorted(AVAILABLE_ANALYSIS_TOOLS.keys()))
         raise KeyError(f"Analysis tool '{name}' not found. Available: {available}")
     
     return AVAILABLE_ANALYSIS_TOOLS[name]
@@ -84,17 +84,6 @@ def list_analysis_tools() -> List[str]:
     """
     return list(AVAILABLE_ANALYSIS_TOOLS.keys())
 
-# Legacy compatibility functions - redirect to new implementation
-def discover_all_analysis_tools(rescan=False):
-    """Legacy function - returns tools as dict for compatibility"""
-    return AVAILABLE_ANALYSIS_TOOLS.copy()
-
-def get_analysis_tool_by_name(tool_name: str):
-    """Legacy function - redirect to get_analysis_tool"""
-    try:
-        return get_analysis_tool(tool_name)
-    except KeyError:
-        return None
 
 # Direct imports for backward compatibility
 if _ANALYSIS_AVAILABLE:
@@ -104,16 +93,12 @@ if _ANALYSIS_AVAILABLE:
 
 # Export all public functions and types
 __all__ = [
-    # New registry functions
+    # Registry functions
     'get_analysis_tool',
     'list_analysis_tools',
     'AVAILABLE_ANALYSIS_TOOLS',
     
-    # Legacy compatibility
-    'discover_all_analysis_tools',
-    'get_analysis_tool_by_name',
-    
-    # Direct tool access (preserved for backward compatibility)
+    # Direct tool access
     'roofline_analysis',
     'RooflineProfiler',
     'generate_hw_kernel',

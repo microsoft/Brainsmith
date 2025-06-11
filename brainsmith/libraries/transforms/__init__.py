@@ -101,7 +101,7 @@ def get_transform(name: str) -> Callable:
         KeyError: If transform not found (with available options)
     """
     if name not in AVAILABLE_TRANSFORMS:
-        available = ", ".join(AVAILABLE_TRANSFORMS.keys())
+        available = ", ".join(sorted(AVAILABLE_TRANSFORMS.keys()))
         raise KeyError(f"Transform '{name}' not found. Available: {available}")
     
     return AVAILABLE_TRANSFORMS[name]
@@ -115,61 +115,21 @@ def list_transforms() -> List[str]:
     """
     return list(AVAILABLE_TRANSFORMS.keys())
 
-# Legacy compatibility imports - handle missing dependencies gracefully
-if _STEPS_AVAILABLE:
-    from .steps import (
-        # Step discovery
-        get_step,
-        validate_step_sequence,
-        discover_all_steps,
-        extract_step_metadata,
-        StepMetadata
-    )
-else:
-    # Define minimal stubs for step discovery functions
-    def get_step(*args, **kwargs):
-        raise ImportError("Steps functionality not available - missing dependencies")
-    def validate_step_sequence(*args, **kwargs):
-        raise ImportError("Steps functionality not available - missing dependencies")
-    def discover_all_steps(*args, **kwargs):
-        raise ImportError("Steps functionality not available - missing dependencies")
-    def extract_step_metadata(*args, **kwargs):
-        raise ImportError("Steps functionality not available - missing dependencies")
-    
-    # Define minimal StepMetadata stub
-    class StepMetadata:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("Steps functionality not available - missing dependencies")
 
-# Legacy compatibility functions - redirect to new implementation
-def discover_all_transforms(rescan=False):
-    """Legacy function - returns transforms as dict for compatibility"""
-    return AVAILABLE_TRANSFORMS.copy()
-
-def get_transform_by_name(transform_name: str):
-    """Legacy function - redirect to get_transform"""
-    try:
-        return get_transform(transform_name)
-    except KeyError:
-        return None
 
 # Import operations module
 from . import operations
 
 # Export all public functions and types
 __all__ = [
-    # New registry functions
+    # Registry functions
     'get_transform',
     'list_transforms',
     'AVAILABLE_TRANSFORMS',
     
-    # Legacy compatibility
-    'discover_all_transforms',
-    'get_transform_by_name',
-    
-    # Step functions (preserved for backward compatibility)
+    # Transform step functions
     'cleanup_step',
-    'cleanup_advanced_step', 
+    'cleanup_advanced_step',
     'qonnx_to_finn_step',
     'streamlining_step',
     'infer_hardware_step',
@@ -178,13 +138,6 @@ __all__ = [
     'shell_metadata_handover_step',
     'remove_head_step',
     'remove_tail_step',
-    
-    # Step discovery
-    'get_step',
-    'validate_step_sequence',
-    'discover_all_steps',
-    'extract_step_metadata',
-    'StepMetadata',
     
     # Operations module
     'operations'
