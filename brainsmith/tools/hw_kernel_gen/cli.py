@@ -13,16 +13,16 @@ from typing import List
 
 from .config import Config
 from .data import GenerationResult
-from .rtl_parser import parse_rtl_file, parse_rtl_file_enhanced, HWKernel
+from .rtl_parser import parse_rtl_file, ParsedKernelData
 from .generators import HWCustomOpGenerator, RTLBackendGenerator, TestSuiteGenerator
 from .errors import HWKGError, CompilerDataError
 
 
-def create_hw_kernel(config: Config) -> HWKernel:
+def create_parsed_kernel_data(config: Config) -> ParsedKernelData:
     """
-    Create HWKernel from RTL file and compiler data.
+    Create ParsedKernelData from RTL file and compiler data.
     
-    Uses RTL parser with optional BDIM enhancement,
+    Uses RTL parser with direct ParsedKernelData generation,
     maintaining error resilience and simple-by-default philosophy.
     """
     # Parse RTL file with appropriate sophistication level
@@ -31,15 +31,13 @@ def create_hw_kernel(config: Config) -> HWKernel:
         if config.advanced_pragmas:
             print("Advanced BDIM pragma processing enabled")
     
-    hw_kernel = parse_rtl_file(config.rtl_file, advanced_pragmas=config.advanced_pragmas)
+    parsed_data = parse_rtl_file(config.rtl_file, advanced_pragmas=config.advanced_pragmas)
     
     if config.debug:
-        print(f"Found module: {hw_kernel.name}")
-        print(f"Interfaces: {len(hw_kernel.interfaces)}")
-        print(f"Parameters: {len(hw_kernel.parameters)}")
+        print(f"Found module: {parsed_data.name}")
+        print(f"Interfaces: {len(parsed_data.interfaces)}")
+        print(f"Parameters: {len(parsed_data.parameters)}")
         print(f"Complexity level: {config.complexity_level}")
-        if hw_kernel.has_enhanced_bdim:
-            print("Enhanced BDIM metadata available")
     
     # Load compiler data (same robust logic as simple system)
     if config.debug:
@@ -65,13 +63,14 @@ def create_hw_kernel(config: Config) -> HWKernel:
                 if not key.startswith('_')
             }
         
-        # Attach compiler data to the kernel
-        hw_kernel.compiler_data = compiler_data
+        # Store compiler data for generator use (ParsedKernelData doesn't need this attached)
+        if config.debug:
+            print(f"Loaded compiler data with {len(compiler_data)} entries")
         
     except Exception as e:
         raise CompilerDataError(f"Failed to load compiler data: {e}") from e
     
-    return hw_kernel
+    return parsed_data
 
 
 def _load_compiler_data(config: Config) -> dict:
@@ -156,9 +155,9 @@ def generate_all_enhanced(config: Config) -> GenerationResult:
         return result
 
 
-def generate_all(hw_kernel: HWKernel, config: Config) -> GenerationResult:
+def generate_all(parsed_data: ParsedKernelData, config: Config) -> GenerationResult:
     """
-    Legacy generation using HWKernel (maintained for backward compatibility).
+    Generation using ParsedKernelData.
     
     Simple mode: Direct generation like hw_kernel_gen_simple
     Advanced mode: Optional multi-phase execution with stop points
@@ -168,17 +167,18 @@ def generate_all(hw_kernel: HWKernel, config: Config) -> GenerationResult:
         success=True,
         complexity_level=config.complexity_level
     )
-    result.set_bdim_processing(hw_kernel.has_enhanced_bdim)
+    # Check for enhanced BDIM processing based on pragma sophistication
+    result.set_bdim_processing(len(parsed_data.pragmas) > 0)
     
     # Multi-phase execution for advanced users
     if config.multi_phase_execution:
-        return _generate_multi_phase(hw_kernel, config, result)
+        return _generate_multi_phase(parsed_data, config, result)
     else:
-        return _generate_simple_mode(hw_kernel, config, result)
+        return _generate_simple_mode(parsed_data, config, result)
 
 
-def _generate_simple_mode(hw_kernel: HWKernel, config: Config, result: GenerationResult) -> GenerationResult:
-    """Simple mode generation - identical to hw_kernel_gen_simple experience."""
+def _generate_simple_mode(parsed_data: ParsedKernelData, config: Config, result: GenerationResult) -> GenerationResult:
+    """Simple mode generation using ParsedKernelData."""
     generators = [
         HWCustomOpGenerator(config.template_dir),
         RTLBackendGenerator(config.template_dir),
@@ -187,7 +187,7 @@ def _generate_simple_mode(hw_kernel: HWKernel, config: Config, result: Generatio
     
     for generator in generators:
         try:
-            output_file = generator.generate(hw_kernel, config.output_dir)
+            output_file = generator.generate(parsed_data, config.output_dir)
             result.add_generated_file(output_file)
             
             if config.debug:
@@ -205,7 +205,7 @@ def _generate_simple_mode(hw_kernel: HWKernel, config: Config, result: Generatio
     return result
 
 
-def _generate_multi_phase(hw_kernel: HWKernel, config: Config, result: GenerationResult) -> GenerationResult:
+def _generate_multi_phase(parsed_data: ParsedKernelData, config: Config, result: GenerationResult) -> GenerationResult:
     """
     Multi-phase generation with debugging stops.
     
@@ -214,10 +214,10 @@ def _generate_multi_phase(hw_kernel: HWKernel, config: Config, result: Generatio
     phases = [
         ('parse_rtl', lambda: print("✅ RTL parsing completed")),
         ('parse_compiler_data', lambda: print("✅ Compiler data loaded")),
-        ('build_dataflow_model', lambda: _build_dataflow_model(hw_kernel, config)),
-        ('generate_hw_custom_op', lambda: _generate_hw_custom_op(hw_kernel, config, result)),
-        ('generate_rtl_backend', lambda: _generate_rtl_backend(hw_kernel, config, result)),
-        ('generate_test_suite', lambda: _generate_test_suite(hw_kernel, config, result))
+        ('build_dataflow_model', lambda: _build_dataflow_model(parsed_data, config)),
+        ('generate_hw_custom_op', lambda: _generate_hw_custom_op(parsed_data, config, result)),
+        ('generate_rtl_backend', lambda: _generate_rtl_backend(parsed_data, config, result)),
+        ('generate_test_suite', lambda: _generate_test_suite(parsed_data, config, result))
     ]
     
     for phase_name, phase_func in phases:
@@ -248,32 +248,33 @@ def _generate_multi_phase(hw_kernel: HWKernel, config: Config, result: Generatio
     return result
 
 
-def _build_dataflow_model(hw_kernel: HWKernel, config: Config):
+def _build_dataflow_model(parsed_data: ParsedKernelData, config: Config):
     """Build dataflow model from interfaces."""
     if config.debug:
-        print(f"Building dataflow model with {len(hw_kernel.dataflow_interfaces)} interfaces")
-        if hw_kernel.has_enhanced_bdim:
-            print("Using enhanced BDIM chunking strategies")
+        dataflow_interfaces = parsed_data.get_dataflow_interfaces()
+        print(f"Building dataflow model with {len(dataflow_interfaces)} interfaces")
+        if len(parsed_data.pragmas) > 0:
+            print("Using pragma-based chunking strategies")
 
 
-def _generate_hw_custom_op(hw_kernel: HWKernel, config: Config, result: GenerationResult):
+def _generate_hw_custom_op(parsed_data: ParsedKernelData, config: Config, result: GenerationResult):
     """Generate HWCustomOp in multi-phase mode."""
     generator = HWCustomOpGenerator(config.template_dir)
-    output_file = generator.generate(hw_kernel, config.output_dir)
+    output_file = generator.generate(parsed_data, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_rtl_backend(hw_kernel: HWKernel, config: Config, result: GenerationResult):
+def _generate_rtl_backend(parsed_data: ParsedKernelData, config: Config, result: GenerationResult):
     """Generate RTLBackend in multi-phase mode."""
     generator = RTLBackendGenerator(config.template_dir)
-    output_file = generator.generate(hw_kernel, config.output_dir)
+    output_file = generator.generate(parsed_data, config.output_dir)
     result.add_generated_file(output_file)
 
 
-def _generate_test_suite(hw_kernel: HWKernel, config: Config, result: GenerationResult):
+def _generate_test_suite(parsed_data: ParsedKernelData, config: Config, result: GenerationResult):
     """Generate test suite in multi-phase mode."""
     generator = TestSuiteGenerator(config.template_dir)
-    output_file = generator.generate(hw_kernel, config.output_dir)
+    output_file = generator.generate(parsed_data, config.output_dir)
     result.add_generated_file(output_file)
 
 
@@ -393,21 +394,21 @@ Follows Interface-Wise Dataflow Modeling axioms for consistent terminology.
             if config.debug:
                 print(f"⚠️  Enhanced generation failed, falling back to legacy: {e}")
             
-            # Fallback to legacy approach
-            hw_kernel = create_hw_kernel(config)
+            # Fallback to ParsedKernelData approach
+            parsed_data = create_parsed_kernel_data(config)
             
             if config.debug:
-                print(f"Created kernel: {hw_kernel.name} → {hw_kernel.class_name}")
-                print(f"Interfaces: {len(hw_kernel.interfaces)}")
-                print(f"Parameters: {len(hw_kernel.rtl_parameters)}")
-                print(f"Kernel type: {hw_kernel.kernel_type}")
-                print(f"Complexity: {hw_kernel.kernel_complexity}")
-                if hw_kernel.parsing_warnings:
-                    print(f"⚠️  Parsing warnings: {len(hw_kernel.parsing_warnings)}")
-                print("🔄 Using legacy generation pipeline")
+                print(f"Created kernel: {parsed_data.name} → {parsed_data.get_class_name()}")
+                print(f"Interfaces: {len(parsed_data.interfaces)}")
+                print(f"Parameters: {len(parsed_data.parameters)}")
+                print(f"Kernel type: {parsed_data._infer_kernel_type()}")
+                print(f"Complexity: {parsed_data._estimate_complexity()}")
+                if parsed_data.parsing_warnings:
+                    print(f"⚠️  Parsing warnings: {len(parsed_data.parsing_warnings)}")
+                print("🔄 Using ParsedKernelData generation pipeline")
                 print()
             
-            result = generate_all(hw_kernel, config)
+            result = generate_all(parsed_data, config)
         
         # Report results with enhanced information
         if result.success:

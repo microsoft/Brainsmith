@@ -16,9 +16,9 @@ Key Features:
 """
 
 from .data import GenerationResult
-from .rtl_parser.data import HWKernel
+from .rtl_parser.data import ParsedKernelData
 from .config import Config
 from .cli import main
 
 __version__ = "1.0.0"
-__all__ = ["HWKernel", "GenerationResult", "Config", "main"]
+__all__ = ["ParsedKernelData", "GenerationResult", "Config", "main"]

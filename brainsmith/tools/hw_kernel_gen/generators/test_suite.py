@@ -7,7 +7,7 @@ for test suite generation.
 
 from pathlib import Path
 from .base import GeneratorBase
-from ..rtl_parser.data import HWKernel
+from ..rtl_parser.data import ParsedKernelData
 
 
 class TestSuiteGenerator(GeneratorBase):
@@ -16,13 +16,13 @@ class TestSuiteGenerator(GeneratorBase):
     def __init__(self, template_dir: Path = None):
         super().__init__('test_suite.py.j2', template_dir)
     
-    def _get_output_filename(self, hw_kernel: HWKernel) -> str:
+    def _get_output_filename(self, parsed_data: ParsedKernelData) -> str:
         """Get output filename for test suite."""
-        return f"test_{hw_kernel.name.lower()}.py"
+        return f"test_{parsed_data.name.lower()}.py"
     
-    def _get_template_context(self, hw_kernel: HWKernel) -> dict:
+    def _get_template_context(self, parsed_data: ParsedKernelData) -> dict:
         """Get enhanced template context for test suite generation."""
-        context = super()._get_template_context(hw_kernel)
+        context = super()._get_template_context(parsed_data)
         
         # Enhance Interface objects with template-required attributes
         enhanced_interfaces = self._enhance_interfaces_for_template(context['interfaces'])

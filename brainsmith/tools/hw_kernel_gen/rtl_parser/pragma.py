@@ -18,7 +18,7 @@ from tree_sitter import Node
 
 from .data import (
     Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma, TDimPragma,
-    DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel
+    DerivedParameterPragma, WeightPragma, PragmaError, Interface, ParsedKernelData
 )
 
 # Set up logger for this module
