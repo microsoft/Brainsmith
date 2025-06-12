@@ -60,7 +60,7 @@ runs:
             COMMAND="cd tests && pytest -v integration/"
             ;;
           "python-tests")
-            COMMAND="python --version && pytest tests/"
+            COMMAND="echo 'DEBUG: After setup_env.sh:' && which python || echo 'python still not found' && ls -la /usr/bin/python* && ls -la $HOME/.local/bin/python* 2>/dev/null || echo 'no local python' && echo 'PATH='$PATH && python --version && pytest tests/"
             ;;
           *)
             echo "ERROR: Invalid test type. Allowed: e2e-bert, unit-tests, integration-tests, python-tests"
