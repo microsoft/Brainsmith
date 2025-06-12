@@ -93,6 +93,7 @@ class RTLParser:
         self.parameters: List[Parameter] = []
         self.ports: List[Port] = [] # Intermediate list of raw ports
         self.interfaces: Dict[str, Interface] = {}
+        self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
 
     def _initial_parse(self, file_path: str) -> None:
@@ -272,9 +273,21 @@ class RTLParser:
         logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
         self.interfaces = {}
 
-        # 1. Call self.interface_builder.build_interfaces(ports)
+        # 1. Call self.interface_builder.build_interface_metadata(ports, pragmas) 
         try:
-            self.interfaces, unassigned_ports = self.interface_builder.build_interfaces(self.ports)
+            self.interface_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, self.pragmas)
+            # Convert to dict for backward compatibility with validation code
+            self.interfaces = {}
+            for metadata in self.interface_metadata_list:
+                # Create temporary Interface objects for validation code
+                from .data import Interface, ValidationResult
+                temp_interface = Interface(
+                    name=metadata.name,
+                    type=metadata.interface_type,
+                    ports={},  # Empty for validation
+                    validation_result=ValidationResult(valid=True)
+                )
+                self.interfaces[metadata.name] = temp_interface
             logger.info(f"Interface analysis complete. Found {len(self.interfaces)} valid interfaces.")
         except Exception as e:
             logger.exception(f"Error during interface building for module {self.name}: {e}")
@@ -392,20 +405,16 @@ class RTLParser:
             # 3. Call Stage 3: Analyze and Validate Interfaces
             self._analyze_and_validate_interfaces()
 
-            # 4. Apply pragmas using PragmaHandler
-            self._apply_pragmas()
+            # 4. Pragmas are already applied in build_interface_metadata() - skip _apply_pragmas()
 
-            # 5. Convert interfaces Dict[str, Interface] to List[InterfaceMetadata]
-            interface_metadata_list = []
-            for interface_name, interface in self.interfaces.items():
-                metadata = self._create_interface_metadata(interface, self.pragmas)
-                interface_metadata_list.append(metadata)
+            # 5. Use already-processed InterfaceMetadata objects (pragmas already applied)
+            # No need to create new metadata - use self.interface_metadata_list directly
 
             # 6. Create KernelMetadata object
             kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(source_name),
-                interfaces=interface_metadata_list,
+                interfaces=self.interface_metadata_list,
                 parameters=self.parameters,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', [])
@@ -544,20 +553,16 @@ class RTLParser:
             # 3. Call Stage 3: Analyze and Validate Interfaces
             self._analyze_and_validate_interfaces() # Uses self.ports, self.name; sets self.interfaces
 
-            # 4. Apply pragmas using PragmaHandler
-            self._apply_pragmas()
+            # 4. Pragmas are already applied in build_interface_metadata() - skip _apply_pragmas()
 
-            # 5. Convert interfaces Dict[str, Interface] to List[InterfaceMetadata]
-            interface_metadata_list = []
-            for interface_name, interface in self.interfaces.items():
-                metadata = self._create_interface_metadata(interface, self.pragmas)
-                interface_metadata_list.append(metadata)
+            # 5. Use already-processed InterfaceMetadata objects (pragmas already applied)
+            # No need to create new metadata - use self.interface_metadata_list directly
 
             # 6. Create KernelMetadata object
             kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(file_path),
-                interfaces=interface_metadata_list,
+                interfaces=self.interface_metadata_list,
                 parameters=self.parameters,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', [])

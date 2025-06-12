@@ -32,8 +32,6 @@ from .data import (
     Port,
     PortGroup,
     Interface,
-    TemplateDatatype,
-    SimpleKernel,
     Pragma,
     ValidationResult,
 )
@@ -44,8 +42,6 @@ __all__ = [
     "RTLParser",
     "ParserError",
     "ProtocolValidator",
-    "TemplateDatatype",
-    "SimpleKernel",
     "Parameter",
     "Port",
     "PortGroup",

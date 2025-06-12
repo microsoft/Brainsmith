@@ -17,7 +17,9 @@ import logging
 from typing import List, Dict, Tuple
 
 from brainsmith.dataflow.core.interface_types import InterfaceType
-from .data import Port, Interface
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+from .data import Port, ValidationResult, Pragma, PortGroup
 from .interface_scanner import InterfaceScanner
 from .protocol_validator import ProtocolValidator
 
@@ -32,71 +34,157 @@ class InterfaceBuilder:
         self.scanner = InterfaceScanner(debug=debug)
         self.validator = ProtocolValidator(debug=debug)
 
-    def build_interfaces(self, ports: List[Port]) -> Tuple[Dict[str, Interface], List[Port]]:
+
+    def build_interface_metadata(self, ports: List[Port], pragmas: List[Pragma]) -> Tuple[List[InterfaceMetadata], List[Port]]:
         """
-        Builds all valid interfaces from a port list.
-
-        First, scans the ports to create potential PortGroups. Then, validates
-        each group against protocol rules. Valid groups are converted to
-        Interface objects.
-
+        Directly build InterfaceMetadata objects from ports using existing components.
+        
+        This method leverages the existing InterfaceScanner and ProtocolValidator
+        components to group and validate ports, then directly creates InterfaceMetadata
+        objects with pragma application.
+        
         Args:
-            ports: List of Port objects from the parsed module.
-
+            ports: List of Port objects from RTL parsing
+            pragmas: List of Pragma objects for interface customization
+            
         Returns:
-            A tuple containing:
-            - Dictionary mapping interface names (e.g., "global", "in0", "config")
-              to validated Interface objects.
-            - List of ports that were not assigned to any valid interface.
+            Tuple of (interface_metadata_list, unassigned_ports)
         """
-        identified_groups, remaining_ports_after_scan = self.scanner.scan(ports)
-        validated_interfaces: Dict[str, Interface] = {}
-        unassigned_ports: List[Port] = list(remaining_ports_after_scan) # Keep initialization
-
-        # Keep original debug logging
+        # Stage 1: Port scanning using existing InterfaceScanner
+        port_groups, unassigned_ports = self.scanner.scan(ports)
+        
         if self.debug:
-            logger.debug(f"--- Groups received by InterfaceBuilder from Scanner ---")
-            for group in identified_groups:
-                logger.debug(f"  Scanner Group: Name='{group.name}', Type='{group.interface_type.value}', Ports={list(group.ports.keys())}")
-            logger.debug(f"--- End Scanner Groups ---")
-
-        for group in identified_groups:
+            logger.debug(f"--- Port Groups from Scanner ({len(port_groups)}) ---")
+            for group in port_groups:
+                logger.debug(f"  Group: Name='{group.name}', Type='{group.interface_type.value}', Ports={list(group.ports.keys())}")
+            logger.debug(f"--- End Port Groups ---")
+        
+        # Stage 2: Protocol validation using existing ProtocolValidator
+        validated_groups = []
+        for group in port_groups:
             if self.debug:
-                 logger.debug(f"Validating group '{group.name}' with type '{group.interface_type.value}' using ProtocolValidator.")
-
+                logger.debug(f"Validating group '{group.name}' with type '{group.interface_type.value}'")
+                
             validation_result = self.validator.validate(group)
-
-            if self.debug:
-                logger.debug(f"  Validation result for '{group.name}': Is Valid={validation_result.valid}, Reason='{validation_result.message}'")
-
+            
             if validation_result.valid:
-                # Create Interface object
-                interface = Interface(
-                    name=group.name,
-                    type=group.interface_type,
-                    ports=group.ports,
-                    metadata=group.metadata,
-                    validation_result=validation_result # Store the result
-                )
-                validated_interfaces[interface.name] = interface
+                validated_groups.append(group)
                 if self.debug:
-                    logger.debug(f"Successfully validated and built interface: {interface.name} ({interface.type.value})")
+                    logger.debug(f"  Group '{group.name}' validated successfully")
             else:
-                # Add ports from the failed group back to the unassigned list
+                # Add failed group ports back to unassigned
                 unassigned_ports.extend(group.ports.values())
-                logger.warning(f"Validation failed for potential interface '{group.name}' ({group.interface_type.value}): {validation_result.message}")
                 if self.debug:
-                    logger.debug(f"Ports from failed group '{group.name}': {[p.name for p in group.ports.values()]}")
-
-        # Sort unassigned ports alphabetically by name for consistent output
+                    logger.debug(f"  Group '{group.name}' validation failed: {validation_result.message}")
+        
+        # Stage 3: Direct metadata creation with pragma application
+        metadata_list = []
+        for group in validated_groups:
+            if self.debug:
+                logger.debug(f"Creating InterfaceMetadata for group '{group.name}'")
+                
+            base_metadata = self._create_base_metadata(group)
+            final_metadata = self._apply_pragmas(base_metadata, pragmas, group)
+            metadata_list.append(final_metadata)
+            
+            if self.debug:
+                logger.debug(f"  Created InterfaceMetadata: {final_metadata.name} ({final_metadata.interface_type.value})")
+        
+        # Sort unassigned ports for consistent output
         unassigned_ports.sort(key=lambda p: p.name)
-
-        # Final debug log for unassigned ports
+        
         if self.debug:
-            logger.debug(f"--- Final Unassigned Ports ({len(unassigned_ports)}) ---")
-            for port in unassigned_ports:
-                logger.debug(f"  - {port.name}")
-            logger.debug(f"--- End Unassigned Ports ---")
+            logger.debug(f"--- Final InterfaceMetadata Results ---")
+            logger.debug(f"  Created {len(metadata_list)} InterfaceMetadata objects")
+            logger.debug(f"  {len(unassigned_ports)} unassigned ports")
+            logger.debug(f"--- End Results ---")
+        
+        return metadata_list, unassigned_ports
 
+    def _create_base_metadata(self, group: PortGroup) -> InterfaceMetadata:
+        """
+        Create base InterfaceMetadata from validated PortGroup.
+        
+        The ProtocolValidator has already determined the correct interface_type
+        and populated group.metadata with relevant information, so we can
+        directly use this validated data.
+        
+        Args:
+            group: Validated PortGroup from ProtocolValidator
+            
+        Returns:
+            InterfaceMetadata: Base metadata with empty datatypes and default chunking
+        """
+        # Interface type has been correctly determined by ProtocolValidator
+        interface_type = group.interface_type
+        
+        # Start with a default UINT8 datatype constraint (can be overridden by pragmas)
+        from brainsmith.dataflow.core.interface_metadata import DataTypeConstraint
+        allowed_datatypes = [
+            DataTypeConstraint(
+                finn_type="UINT8",
+                bit_width=8,
+                signed=False
+            )
+        ]
+        
+        # Default chunking strategy
+        chunking_strategy = DefaultChunkingStrategy()
+        
+        # Extract description from validation metadata
+        description = f"Interface {group.name} ({interface_type.value})"
+        if 'direction' in group.metadata:
+            description += f" - Direction: {group.metadata['direction'].value}"
+        
+        return InterfaceMetadata(
+            name=group.name,
+            interface_type=interface_type,
+            allowed_datatypes=allowed_datatypes,
+            chunking_strategy=chunking_strategy,
+            description=description
+        )
 
-        return validated_interfaces, unassigned_ports
+    def _apply_pragmas(self, metadata: InterfaceMetadata, pragmas: List[Pragma], group: PortGroup) -> InterfaceMetadata:
+        """
+        Apply relevant pragmas to InterfaceMetadata using existing pragma system.
+        
+        This method creates a temporary Interface object to leverage the existing
+        pragma chain-of-responsibility pattern without reimplementing the pragma
+        matching and application logic.
+        
+        Args:
+            metadata: Base InterfaceMetadata to modify
+            pragmas: List of all pragmas to consider
+            group: Original PortGroup for creating temporary Interface
+            
+        Returns:
+            InterfaceMetadata: Final metadata with all applicable pragma effects
+        """
+        # Create minimal Interface-like object for pragma compatibility
+        # This temporary object allows us to reuse the existing pragma chain-of-responsibility
+        # pattern without reimplementing the pragma matching logic
+        from .data import Interface  # Temporary import for compatibility
+        temp_interface = Interface(
+            name=group.name,
+            type=group.interface_type,
+            ports=group.ports,
+            validation_result=ValidationResult(valid=True, message="Validated"),
+            metadata=group.metadata
+        )
+        
+        # Apply pragmas using existing chain-of-responsibility pattern from pragma.py
+        # This reuses all the existing pragma logic:
+        # - InterfaceNameMatcher for name matching
+        # - DatatypePragma for DataTypeConstraint creation
+        # - BDimPragma for chunking strategy creation  
+        # - WeightPragma for interface type overrides
+        for pragma in pragmas:
+            try:
+                if pragma.applies_to_interface(temp_interface):
+                    if self.debug:
+                        logger.debug(f"  Applying {pragma.type.value} pragma to {metadata.name}")
+                    metadata = pragma.apply_to_interface_metadata(temp_interface, metadata)
+            except Exception as e:
+                logger.warning(f"Failed to apply {pragma.type.value} pragma to {metadata.name}: {e}")
+        
+        return metadata

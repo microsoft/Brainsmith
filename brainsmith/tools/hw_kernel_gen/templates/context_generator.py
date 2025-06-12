@@ -11,7 +11,10 @@ from pathlib import Path
 
 from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
-from ..rtl_parser.data import Interface, Parameter, TemplateDatatype, SimpleKernel
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from ..rtl_parser.data import Parameter
+# TODO: Need to implement TemplateDatatype, SimpleKernel or replace with proper classes
+# from ..rtl_parser.data import TemplateDatatype, SimpleKernel
 
 
 class TemplateContextGenerator:
@@ -86,7 +89,10 @@ class TemplateContextGenerator:
             "InterfaceType": InterfaceType,  # Direct enum access
             
             # Kernel object for RTL wrapper template compatibility  
-            "kernel": SimpleKernel(kernel_metadata.name, kernel_metadata.parameters),
+            "kernel": {
+                "name": kernel_metadata.name,
+                "parameters": kernel_metadata.parameters
+            },
             
             # Summary statistics
             "dataflow_model_summary": {
@@ -151,25 +157,38 @@ class TemplateContextGenerator:
         has_weights = len(self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0
         return has_weights or self._estimate_complexity(kernel_metadata) == 'high'
     
-    def _get_datatype_info(self, interface: Interface) -> TemplateDatatype:
-        """Extract datatype info from interface metadata for templates."""
-        constraints = interface.metadata.get("datatype_constraints", {})
-        base_types = constraints.get("base_types", ["UINT"])
-        min_bits = constraints.get("min_bitwidth", 8)
-        max_bits = constraints.get("max_bitwidth", 32)
-        
-        # Create template-compatible datatype object
-        return TemplateDatatype(
-            name=base_types[0],
-            value=base_types[0], 
-            finn_type=f"{base_types[0]}{min_bits}",
-            bitwidth=min_bits,
-            bit_width=min_bits,  # Template compatibility
-            signed=base_types[0] == "INT",
-            base_type=base_types[0],
-            min_bits=min_bits,
-            max_bits=max_bits
-        )
+    def _get_datatype_info(self, interface: InterfaceMetadata):
+        """Extract datatype info from InterfaceMetadata for templates."""
+        # Get the first (primary) datatype constraint
+        if interface.allowed_datatypes:
+            constraint = interface.allowed_datatypes[0]
+            base_type = "INT" if constraint.signed else "UINT"
+            
+            # Create template-compatible datatype object
+            return {
+                "name": constraint.finn_type,
+                "value": constraint.finn_type, 
+                "finn_type": constraint.finn_type,
+                "bitwidth": constraint.bit_width,
+                "bit_width": constraint.bit_width,  # Template compatibility
+                "signed": constraint.signed,
+                "base_type": base_type,
+                "min_bits": constraint.bit_width,
+                "max_bits": constraint.bit_width
+            }
+        else:
+            # Default fallback (should not happen with proper metadata)
+            return {
+                "name": "UINT8",
+                "value": "UINT8", 
+                "finn_type": "UINT8",
+                "bitwidth": 8,
+                "bit_width": 8,
+                "signed": False,
+                "base_type": "UINT",
+                "min_bits": 8,
+                "max_bits": 8
+            }
     
     def _analyze_parallelism_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Extract PE/SIMD equivalent parallelism from RTL analysis."""
@@ -194,12 +213,12 @@ class TemplateContextGenerator:
         
         # Analyze port arrays for parallel processing patterns
         for interface in kernel_metadata.interfaces:
-            if interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
+            if interface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
                 # Look for array ports indicating parallelism
                 if "[" in interface.name or "_" in interface.name:
                     parallelism["parallel_elements"].append({
                         "interface": interface.name,
-                        "type": interface.type.value,
+                        "type": interface.interface_type.value,
                         "inferred_width": 1  # TODO: Parse actual width from port declaration
                     })
         

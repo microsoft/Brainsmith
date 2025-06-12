@@ -169,8 +169,15 @@ class PragmaHandler:
 
     def _create_base_interface_metadata(self, interface: Interface) -> InterfaceMetadata:
         """Create base InterfaceMetadata from interface structure."""
-        # Extract base datatype constraints from interface ports
-        allowed_datatypes = self._extract_base_datatype_constraints(interface)
+        # Start with a default UINT8 datatype constraint (can be overridden by pragmas)
+        from brainsmith.dataflow.core.interface_metadata import DataTypeConstraint
+        allowed_datatypes = [
+            DataTypeConstraint(
+                finn_type="UINT8",
+                bit_width=8,
+                signed=False
+            )
+        ]
         
         return InterfaceMetadata(
             name=interface.name,
@@ -179,44 +186,4 @@ class PragmaHandler:
             chunking_strategy=DefaultChunkingStrategy()
         )
     
-    def _extract_base_datatype_constraints(self, interface: Interface) -> List[DataTypeConstraint]:
-        """Extract base datatype constraints from interface port information."""
-        # Get the data width from interface ports
-        data_port = None
-        if hasattr(interface, 'ports') and interface.ports:
-            data_port = next((port for port in interface.ports.values() if 'data' in port.name.lower()), None)
-        
-        if data_port and hasattr(data_port, 'width'):
-            # Parse width - could be numeric or expression like "WIDTH-1:0"
-            width_str = str(data_port.width)
-            if ':' in width_str:
-                # Handle range format like "31:0" or "WIDTH-1:0"
-                try:
-                    high_part = width_str.split(':')[0]
-                    if high_part.isdigit():
-                        bit_width = int(high_part) + 1
-                    else:
-                        # Expression like "WIDTH-1", assume reasonable default
-                        bit_width = 32
-                except:
-                    bit_width = 32
-            else:
-                # Single width value
-                try:
-                    bit_width = int(width_str)
-                except:
-                    bit_width = 32
-            
-            return [
-                DataTypeConstraint(finn_type=f"UINT{bit_width}", bit_width=bit_width, signed=False),
-                DataTypeConstraint(finn_type=f"INT{bit_width}", bit_width=bit_width, signed=True),
-            ]
-        else:
-            # Default constraints when width cannot be determined
-            return [
-                DataTypeConstraint(finn_type="UINT8", bit_width=8, signed=False),
-                DataTypeConstraint(finn_type="UINT16", bit_width=16, signed=False),
-                DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True),
-                DataTypeConstraint(finn_type="INT16", bit_width=16, signed=True),
-            ]
     

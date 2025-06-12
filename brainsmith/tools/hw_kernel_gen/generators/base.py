@@ -99,8 +99,8 @@ class GeneratorBase(ABC):
         # Add additional generator-specific context if needed
         context.update({
             'follows_dataflow_axioms': True,
-            'enhanced_bdim_available': len(parsed_data.pragmas) > 0,
-            'pragma_sophistication_level': 'advanced' if len(parsed_data.pragmas) > 0 else 'simple',
+            'enhanced_bdim_available': len(kernel_metadata.pragmas) > 0,
+            'pragma_sophistication_level': 'advanced' if len(kernel_metadata.pragmas) > 0 else 'simple',
         })
         
         return context

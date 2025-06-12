@@ -150,10 +150,16 @@ class PortGroup:
 
 @dataclass
 class Interface:
-    """Represents a fully validated and identified interface.
-
+    """DEPRECATED: Represents a fully validated and identified interface.
+    
+    This class is being phased out in favor of InterfaceMetadata for direct
+    dataflow integration. Currently maintained for pragma system compatibility.
+    
     Created by the InterfaceBuilder after a PortGroup successfully passes
     validation by the ProtocolValidator.
+    
+    TODO: Remove this class after pragma system is refactored to work with
+    InterfaceMetadata objects directly.
     """
     name: str # e.g., "global", "in0", "config"
     type: InterfaceType
@@ -268,7 +274,7 @@ class Pragma:
         to implement their specific applicability logic.
         
         Args:
-            interface: Interface to check against
+            interface: Interface to check against (temporary compatibility)
             
         Returns:
             bool: True if pragma applies to this interface, False otherwise
@@ -392,41 +398,6 @@ class DatatypePragma(Pragma, InterfaceNameMatcher):
             "max_bitwidth": max_bits
         }
 
-    def apply(self, **kwargs) -> Any:
-        """Applies the enhanced DATATYPE pragma to the specified interface."""
-        interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
-
-        if not self.parsed_data:
-            logger.warning(f"DATATYPE pragma at line {self.line_number} has no parsed_data. Skipping application.")
-            return
-
-        if interfaces is None:
-            logger.warning(f"DATATYPE pragma at line {self.line_number} requires 'interfaces' keyword argument to apply. Skipping.")
-            return
-
-        interface_name = self.parsed_data.get("interface_name")
-        if not interface_name:
-            logger.warning(f"DATATYPE pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
-            return
-
-        applied_to_interface = False
-        for iface_key, iface in interfaces.items():
-            if iface.name == interface_name or iface.name.startswith(interface_name):
-                # Store enhanced datatype constraint information
-                iface.metadata["datatype_constraints"] = {
-                    "base_types": self.parsed_data["base_types"],
-                    "min_bitwidth": self.parsed_data["min_bitwidth"],
-                    "max_bitwidth": self.parsed_data["max_bitwidth"]
-                }
-                
-                constraint_str = (f"types={self.parsed_data['base_types']}, "
-                                f"bits={self.parsed_data['min_bitwidth']}-{self.parsed_data['max_bitwidth']}")
-                
-                logger.info(f"Applied enhanced DATATYPE pragma from line {self.line_number} to interface '{iface.name}'. Constraints: {constraint_str}")
-                applied_to_interface = True
-        
-        if not applied_to_interface:
-            logger.warning(f"DATATYPE pragma from line {self.line_number} for interface '{interface_name}' did not match any existing interfaces.")
 
     def applies_to_interface(self, interface: 'Interface') -> bool:
         """Check if this DATATYPE pragma applies to the given interface."""
@@ -466,18 +437,28 @@ class DatatypePragma(Pragma, InterfaceNameMatcher):
         
         constraints = []
         for base_type in base_types:
-            # Create constraints for both min and max bit widths
-            for bits in [min_bits, max_bits]:
-                if bits >= min_bits and bits <= max_bits:
-                    constraints.append(DataTypeConstraint(
-                        finn_type=f"{base_type}{bits}",
-                        bit_width=bits,
+            # Create constraints for the bitwidth range
+            if min_bits == max_bits:
+                # Single bitwidth
+                constraints.append(DataTypeConstraint(
+                    finn_type=f"{base_type}{min_bits}",
+                    bit_width=min_bits,
+                    signed=(base_type == "INT")
+                ))
+            else:
+                # Range of bitwidths - create constraints for min and max
+                constraints.extend([
+                    DataTypeConstraint(
+                        finn_type=f"{base_type}{min_bits}",
+                        bit_width=min_bits,
                         signed=(base_type == "INT")
-                    ))
-        
-        # If min and max are the same, avoid duplicates
-        if min_bits == max_bits:
-            constraints = [c for i, c in enumerate(constraints) if i < len(base_types)]
+                    ),
+                    DataTypeConstraint(
+                        finn_type=f"{base_type}{max_bits}",
+                        bit_width=max_bits,
+                        signed=(base_type == "INT")
+                    )
+                ])
         
         return constraints
 
@@ -640,99 +621,6 @@ class BDimPragma(Pragma, InterfaceNameMatcher):
         except Exception as e:
             raise PragmaError(f"BDIM expression '{expression}' evaluation failed: {e}")
 
-    def apply(self, **kwargs) -> Any:
-        """Apply BDIM pragma to override default block dimension chunking for an interface."""
-        interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
-        parameters: Optional[Dict[str, Any]] = kwargs.get('parameters', {})
-        
-        if not self.parsed_data:
-            logger.warning(f"BDIM pragma at line {self.line_number} has no parsed_data. Skipping application.")
-            return
-            
-        if interfaces is None:
-            logger.warning(f"BDIM pragma at line {self.line_number} requires 'interfaces' keyword argument to apply. Skipping.")
-            return
-            
-        interface_name = self.parsed_data.get("interface_name")
-        if not interface_name:
-            logger.warning(f"BDIM pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
-            return
-            
-        # Find matching interface
-        target_interface = None
-        for iface in interfaces.values():
-            if iface.name == interface_name:
-                target_interface = iface
-                break
-                
-        if not target_interface:
-            logger.warning(f"BDIM pragma at line {self.line_number}: interface '{interface_name}' not found")
-            return
-        
-        pragma_format = self.parsed_data.get("format", "legacy")
-        
-        if pragma_format == "enhanced":
-            # Enhanced format: convert to chunking strategy
-            self._apply_enhanced_format(target_interface)
-        else:
-            # Legacy format: evaluate dimension expressions
-            self._apply_legacy_format(target_interface, parameters)
-    
-    def _apply_enhanced_format(self, target_interface: Interface) -> None:
-        """Apply enhanced BDIM pragma by storing chunking strategy information."""
-        try:
-            from brainsmith.tools.hw_kernel_gen.pragma_to_strategy import PragmaToStrategyConverter
-            
-            chunk_index = self.parsed_data["chunk_index"]
-            chunk_sizes = self.parsed_data["chunk_sizes"]
-            
-            # Create chunking strategy using PragmaToStrategyConverter
-            converter = PragmaToStrategyConverter()
-            chunking_strategy = converter.create_index_chunking_strategy(chunk_index, chunk_sizes)
-            
-            # Store enhanced chunking strategy information in metadata
-            target_interface.metadata["enhanced_bdim"] = {
-                "chunk_index": chunk_index,
-                "chunk_sizes": chunk_sizes,
-                "chunking_strategy_type": "index"
-            }
-            target_interface.metadata["chunking_strategy"] = chunking_strategy
-            
-            logger.info(f"Applied enhanced BDIM pragma from line {self.line_number}: {target_interface.name} "
-                       f"index={chunk_index}, sizes={chunk_sizes}")
-            
-        except ImportError:
-            logger.warning(f"Enhanced BDIM pragma at line {self.line_number}: PragmaToStrategyConverter not available. "
-                          f"Storing raw metadata only.")
-            # Fallback: store raw metadata for later processing
-            target_interface.metadata["enhanced_bdim"] = {
-                "chunk_index": self.parsed_data["chunk_index"],
-                "chunk_sizes": self.parsed_data["chunk_sizes"],
-                "chunking_strategy_type": "index"
-            }
-        except Exception as e:
-            logger.error(f"Enhanced BDIM pragma at line {self.line_number} strategy creation failed: {e}")
-    
-    def _apply_legacy_format(self, target_interface: Interface, parameters: Dict[str, Any]) -> None:
-        """Apply legacy BDIM pragma by evaluating dimension expressions."""
-        dimension_exprs = self.parsed_data.get("dimension_expressions", [])
-        
-        try:
-            evaluated_dims = []
-            for expr in dimension_exprs:
-                evaluated_dims.append(self._evaluate_expression(expr, parameters))
-            
-            # Store in metadata for later processing by TensorChunking
-            target_interface.metadata["bdim_override"] = evaluated_dims
-            target_interface.metadata["bdim_expressions"] = dimension_exprs  # Keep original expressions for debugging
-            
-            logger.info(f"Applied legacy BDIM pragma from line {self.line_number}: {target_interface.name} "
-                       f"block_dims set to {evaluated_dims} (from expressions: {dimension_exprs})")
-            
-        except PragmaError as e:
-            logger.error(f"Legacy BDIM pragma at line {self.line_number} evaluation failed: {e}")
-        except Exception as e:
-            logger.error(f"Legacy BDIM pragma at line {self.line_number} unexpected error: {e}")
 
     def applies_to_interface(self, interface: 'Interface') -> bool:
         """Check if this BDIM pragma applies to the given interface."""
@@ -772,18 +660,18 @@ class BDimPragma(Pragma, InterfaceNameMatcher):
         if pragma_format == "enhanced":
             # Enhanced format: create index-based chunking strategy
             try:
-                from brainsmith.dataflow.core.block_chunking import IndexChunkingStrategy
+                from brainsmith.dataflow.core.block_chunking import IndexBasedChunkingStrategy
                 chunk_index = self.parsed_data.get("chunk_index", -1)
                 chunk_sizes = self.parsed_data.get("chunk_sizes", [":"]) 
                 
-                return IndexChunkingStrategy(
-                    chunk_index=chunk_index,
-                    chunk_sizes=chunk_sizes
+                return IndexBasedChunkingStrategy(
+                    start_index=chunk_index,
+                    shape=chunk_sizes
                 )
             except ImportError:
                 # Fallback to DefaultChunkingStrategy if IndexChunkingStrategy not available
                 from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
-                logger.warning(f"IndexChunkingStrategy not available for BDIM pragma at line {self.line_number}. Using DefaultChunkingStrategy.")
+                logger.warning(f"IndexBasedChunkingStrategy not available for BDIM pragma at line {self.line_number}. Using DefaultChunkingStrategy.")
                 return DefaultChunkingStrategy()
         else:
             # Legacy format: use dimension expressions
@@ -876,41 +764,6 @@ class WeightPragma(Pragma, InterfaceNameMatcher):
         return {"interface_names": interface_names}
     
 
-    def apply(self, **kwargs) -> Any:
-        """Applies the WEIGHT pragma to the specified interface."""
-        interfaces: Optional[Dict[str, Interface]] = kwargs.get('interfaces')
-
-        if not self.parsed_data:
-            logger.warning(f"WEIGHT pragma at line {self.line_number} has no parsed_data. Skipping application.")
-            return
-
-        if interfaces is None:
-            logger.warning(f"WEIGHT pragma at line {self.line_number} requires 'interfaces' keyword argument to apply. Skipping.")
-            return
-
-        interface_names = self.parsed_data.get("interface_names", [])
-
-        if not interface_names:
-            logger.warning(f"WEIGHT pragma at line {self.line_number} missing 'interface_names' in parsed_data. Skipping.")
-            return
-            
-        applied_to_interface = False
-        for interface_name in interface_names:
-            for iface_key, iface in interfaces.items():
-                # Match if the interface name is exactly the one specified,
-                # or if the pragma specifies a base name and the interface is e.g. iface_name_0, iface_name_1 etc.
-                # Current InterfaceBuilder names are exact like "in0", "s_axi_control".
-                # So, exact match should be sufficient for now.
-                if iface.name == interface_name: # Consider iface.name.startswith(interface_name) if needed
-                    iface.metadata["is_weight"] = True
-                    iface.metadata["weight_type"] = ""  # Not specified in current format
-                    iface.metadata["weight_depth"] = ""  # Not specified in current format
-                    logger.info(f"Applied WEIGHT pragma from line {self.line_number} to interface '{iface.name}'. Marked as weight.")
-                    applied_to_interface = True
-                    # break # Assuming interface names are unique and we only apply to the first match.
-        
-        if not applied_to_interface:
-            logger.warning(f"WEIGHT pragma from line {self.line_number} for interfaces {interface_names} did not match any existing interfaces.")
 
     def applies_to_interface(self, interface: 'Interface') -> bool:
         """Check if this WEIGHT pragma applies to the given interface."""
@@ -937,86 +790,4 @@ class WeightPragma(Pragma, InterfaceNameMatcher):
         )
 
 
-# --- Backward Compatibility ---
-
-@dataclass
-class TDimPragma(BDimPragma):
-    """
-    Backward compatibility alias for TDIM pragma (deprecated).
-    
-    This class provides compatibility for existing TDIM pragmas while encouraging
-    migration to the new BDIM pragma terminology. All functionality is inherited
-    from BDimPragma.
-    
-    DEPRECATED: Use BDIM pragma instead. TDIM will be removed in a future version.
-    """
-    
-    def __post_init__(self):
-        super().__post_init__()
-        # Issue deprecation warning when TDIM pragma is used
-        import warnings
-        warnings.warn(
-            f"TDIM pragma at line {self.line_number} is deprecated. "
-            f"Use BDIM pragma instead for block dimension configuration. "
-            f"TDIM will be removed in a future version.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-# --- Template Compatibility Classes ---
-
-
-@dataclass
-class TemplateDatatype:
-    """Template-compatible datatype object with all expected attributes."""
-    name: str
-    value: str              # Same as name (template compatibility)
-    finn_type: str
-    bitwidth: int
-    bit_width: int          # Alias for bitwidth
-    signed: bool
-    base_type: str
-    min_bits: int
-    max_bits: int
-
-
-@dataclass
-class SimpleKernel:
-    """Minimal kernel object for RTL wrapper template compatibility."""
-    name: str
-    parameters: List[Parameter]
-
-
-# Add helper methods to Interface class for template compatibility
-def get_template_datatype(self) -> TemplateDatatype:
-    """Get template-compatible datatype info from interface metadata."""
-    constraints = self.metadata.get("datatype_constraints", {})
-    base_types = constraints.get("base_types", ["UINT"])
-    min_bits = constraints.get("min_bitwidth", 8)
-    max_bits = constraints.get("max_bitwidth", 32)
-    
-    return TemplateDatatype(
-        name=base_types[0],
-        value=base_types[0], 
-        finn_type=f"{base_types[0]}{min_bits}",
-        bitwidth=min_bits,
-        bit_width=min_bits,
-        signed=base_types[0] == "INT",
-        base_type=base_types[0],
-        min_bits=min_bits,
-        max_bits=max_bits
-    )
-
-
-def get_dimensional_info(self) -> Dict[str, List[int]]:
-    """Get dimensional information from pragma metadata."""
-    return {
-        "tensor_dims": self.metadata.get("tensor_dims", [128]),
-        "block_dims": self.metadata.get("block_dims", [128]), 
-        "stream_dims": self.metadata.get("stream_dims", [1])
-    }
-
-
-# Add helper methods to Interface class
-Interface.get_template_datatype = get_template_datatype
-Interface.get_dimensional_info = get_dimensional_info
+# Note: Helper methods for Interface class would be added here if needed
