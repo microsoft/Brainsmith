@@ -30,6 +30,7 @@ from datetime import datetime
 
 # Import unified interface types from dataflow module
 from brainsmith.dataflow.core.interface_types import InterfaceType
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -163,6 +164,53 @@ class Interface:
 
 # --- Pragma Structure ---
 
+class InterfaceNameMatcher:
+    """Mixin providing interface name matching utilities for pragma classes."""
+    
+    @staticmethod
+    def _interface_names_match(pragma_name: str, interface_name: str) -> bool:
+        """
+        Check if pragma interface name matches actual interface name.
+        
+        Supports multiple matching patterns to handle variations in interface
+        naming conventions, including AXI naming patterns.
+        
+        Args:
+            pragma_name: Interface name specified in pragma
+            interface_name: Actual interface name from RTL parsing
+            
+        Returns:
+            bool: True if names match according to any supported pattern
+            
+        Examples:
+            >>> InterfaceNameMatcher._interface_names_match("in0", "in0")
+            True
+            >>> InterfaceNameMatcher._interface_names_match("in0", "in0_V_data_V")
+            True
+            >>> InterfaceNameMatcher._interface_names_match("in0_V_data_V", "in0")
+            True
+            >>> InterfaceNameMatcher._interface_names_match("weights", "bias")
+            False
+        """
+        # Exact match
+        if pragma_name == interface_name:
+            return True
+        
+        # Prefix match (e.g., "in0" matches "in0_V_data_V")
+        if interface_name.startswith(pragma_name):
+            return True
+        
+        # Reverse prefix match (e.g., "in0_V_data_V" matches "in0")
+        if pragma_name.startswith(interface_name):
+            return True
+        
+        # Base name matching (remove common suffixes)
+        pragma_base = pragma_name.replace('_V_data_V', '').replace('_data', '')
+        interface_base = interface_name.replace('_V_data_V', '').replace('_data', '')
+        
+        return pragma_base == interface_base
+
+
 @dataclass
 class Pragma:
     """Brainsmith pragma representation.
@@ -212,6 +260,55 @@ class Pragma:
         """
         raise NotImplementedError(f"Pragma type {self.type.name} must implement apply.")
 
+    def applies_to_interface(self, interface: 'Interface') -> bool:
+        """
+        Check if this pragma applies to the given interface.
+        
+        Base implementation returns False. Subclasses should override this method
+        to implement their specific applicability logic.
+        
+        Args:
+            interface: Interface to check against
+            
+        Returns:
+            bool: True if pragma applies to this interface, False otherwise
+            
+        Examples:
+            >>> pragma = DatatypePragma(...)
+            >>> interface = Interface(name="in0", ...)
+            >>> if pragma.applies_to_interface(interface):
+            ...     # Apply pragma effects
+            ...     pass
+        """
+        return False
+
+    def apply_to_interface_metadata(self, interface: 'Interface', 
+                                  metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """
+        Apply pragma effects to InterfaceMetadata.
+        
+        Base implementation returns metadata unchanged. Subclasses should override
+        this method to implement their specific effects on interface metadata.
+        
+        This method enables a clean chain-of-responsibility pattern where each
+        pragma can modify the interface metadata independently and composably.
+        
+        Args:
+            interface: Interface this pragma applies to
+            metadata: Current InterfaceMetadata to modify
+            
+        Returns:
+            InterfaceMetadata: Modified metadata with pragma effects applied.
+                              Should return a new InterfaceMetadata instance.
+            
+        Examples:
+            >>> pragma = DatatypePragma(...)
+            >>> interface = Interface(name="in0", ...)
+            >>> base_metadata = InterfaceMetadata(...)
+            >>> updated_metadata = pragma.apply_to_interface_metadata(interface, base_metadata)
+        """
+        return metadata
+
     def __str__(self):
         return f"@brainsmith {self.type.value} " + " ".join(map(str, self.inputs))
 
@@ -253,7 +350,7 @@ class TopModulePragma(Pragma):
 
 
 @dataclass
-class DatatypePragma(Pragma):
+class DatatypePragma(Pragma, InterfaceNameMatcher):
     def __post_init__(self):
         super().__post_init__()
 
@@ -331,9 +428,62 @@ class DatatypePragma(Pragma):
         if not applied_to_interface:
             logger.warning(f"DATATYPE pragma from line {self.line_number} for interface '{interface_name}' did not match any existing interfaces.")
 
+    def applies_to_interface(self, interface: 'Interface') -> bool:
+        """Check if this DATATYPE pragma applies to the given interface."""
+        if not self.parsed_data:
+            return False
+        
+        pragma_interface_name = self.parsed_data.get('interface_name')
+        if not pragma_interface_name:
+            return False
+        
+        return self._interface_names_match(pragma_interface_name, interface.name)
+
+    def apply_to_interface_metadata(self, interface: 'Interface', 
+                                  metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply DATATYPE pragma to modify allowed datatypes."""
+        if not self.applies_to_interface(interface):
+            return metadata
+        
+        # Create new datatype constraints based on pragma
+        new_constraints = self._create_datatype_constraints()
+        
+        return InterfaceMetadata(
+            name=metadata.name,
+            interface_type=metadata.interface_type,
+            allowed_datatypes=new_constraints,
+            chunking_strategy=metadata.chunking_strategy
+        )
+
+    def _create_datatype_constraints(self) -> List[DataTypeConstraint]:
+        """Create DataTypeConstraint objects from pragma data."""
+        if not self.parsed_data:
+            return []
+        
+        base_types = self.parsed_data.get("base_types", ["UINT"])
+        min_bits = self.parsed_data.get("min_bitwidth", 8)
+        max_bits = self.parsed_data.get("max_bitwidth", 32)
+        
+        constraints = []
+        for base_type in base_types:
+            # Create constraints for both min and max bit widths
+            for bits in [min_bits, max_bits]:
+                if bits >= min_bits and bits <= max_bits:
+                    constraints.append(DataTypeConstraint(
+                        finn_type=f"{base_type}{bits}",
+                        bit_width=bits,
+                        signed=(base_type == "INT")
+                    ))
+        
+        # If min and max are the same, avoid duplicates
+        if min_bits == max_bits:
+            constraints = [c for i, c in enumerate(constraints) if i < len(base_types)]
+        
+        return constraints
+
 
 @dataclass
-class BDimPragma(Pragma):
+class BDimPragma(Pragma, InterfaceNameMatcher):
     """
     BDIM pragma for block dimension chunking strategies.
     
@@ -584,6 +734,72 @@ class BDimPragma(Pragma):
         except Exception as e:
             logger.error(f"Legacy BDIM pragma at line {self.line_number} unexpected error: {e}")
 
+    def applies_to_interface(self, interface: 'Interface') -> bool:
+        """Check if this BDIM pragma applies to the given interface."""
+        if not self.parsed_data:
+            return False
+        
+        pragma_interface_name = self.parsed_data.get('interface_name')
+        if not pragma_interface_name:
+            return False
+        
+        return self._interface_names_match(pragma_interface_name, interface.name)
+
+    def apply_to_interface_metadata(self, interface: 'Interface', 
+                                  metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply BDIM pragma to modify chunking strategy."""
+        if not self.applies_to_interface(interface):
+            return metadata
+        
+        # Create chunking strategy from pragma data
+        new_strategy = self._create_chunking_strategy()
+        
+        return InterfaceMetadata(
+            name=metadata.name,
+            interface_type=metadata.interface_type,
+            allowed_datatypes=metadata.allowed_datatypes,
+            chunking_strategy=new_strategy
+        )
+
+    def _create_chunking_strategy(self):
+        """Create chunking strategy from pragma data."""
+        if not self.parsed_data:
+            from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+            return DefaultChunkingStrategy()
+        
+        pragma_format = self.parsed_data.get("format", "legacy")
+        
+        if pragma_format == "enhanced":
+            # Enhanced format: create index-based chunking strategy
+            try:
+                from brainsmith.dataflow.core.block_chunking import IndexChunkingStrategy
+                chunk_index = self.parsed_data.get("chunk_index", -1)
+                chunk_sizes = self.parsed_data.get("chunk_sizes", [":"]) 
+                
+                return IndexChunkingStrategy(
+                    chunk_index=chunk_index,
+                    chunk_sizes=chunk_sizes
+                )
+            except ImportError:
+                # Fallback to DefaultChunkingStrategy if IndexChunkingStrategy not available
+                from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+                logger.warning(f"IndexChunkingStrategy not available for BDIM pragma at line {self.line_number}. Using DefaultChunkingStrategy.")
+                return DefaultChunkingStrategy()
+        else:
+            # Legacy format: use dimension expressions
+            try:
+                from brainsmith.dataflow.core.block_chunking import ExpressionChunkingStrategy
+                dimension_expressions = self.parsed_data.get("dimension_expressions", [])
+                
+                return ExpressionChunkingStrategy(
+                    dimension_expressions=dimension_expressions
+                )
+            except ImportError:
+                # Fallback to DefaultChunkingStrategy if ExpressionChunkingStrategy not available
+                from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+                logger.warning(f"ExpressionChunkingStrategy not available for BDIM pragma at line {self.line_number}. Using DefaultChunkingStrategy.")
+                return DefaultChunkingStrategy()
+
 
 @dataclass
 class DerivedParameterPragma(Pragma):
@@ -645,7 +861,7 @@ class DerivedParameterPragma(Pragma):
 
 
 @dataclass
-class WeightPragma(Pragma):
+class WeightPragma(Pragma, InterfaceNameMatcher):
     def __post_init__(self):
         super().__post_init__()
 
@@ -672,30 +888,53 @@ class WeightPragma(Pragma):
             logger.warning(f"WEIGHT pragma at line {self.line_number} requires 'interfaces' keyword argument to apply. Skipping.")
             return
 
-        interface_name = self.parsed_data.get("interface_name")
-        type_name = self.parsed_data.get("type_name")
-        depth = self.parsed_data.get("depth")
+        interface_names = self.parsed_data.get("interface_names", [])
 
-        if not interface_name: # type_name and depth could be empty strings if allowed, but interface_name is crucial
-            logger.warning(f"WEIGHT pragma at line {self.line_number} missing 'interface_name' in parsed_data. Skipping.")
+        if not interface_names:
+            logger.warning(f"WEIGHT pragma at line {self.line_number} missing 'interface_names' in parsed_data. Skipping.")
             return
             
         applied_to_interface = False
-        for iface_key, iface in interfaces.items():
-            # Match if the interface name is exactly the one specified,
-            # or if the pragma specifies a base name and the interface is e.g. iface_name_0, iface_name_1 etc.
-            # Current InterfaceBuilder names are exact like "in0", "s_axi_control".
-            # So, exact match should be sufficient for now.
-            if iface.name == interface_name: # Consider iface.name.startswith(interface_name) if needed
-                iface.metadata["is_weight"] = True
-                iface.metadata["weight_type"] = type_name
-                iface.metadata["weight_depth"] = depth
-                logger.info(f"Applied WEIGHT pragma from line {self.line_number} to interface '{iface.name}'. Marked as weight, type='{type_name}', depth='{depth}'.")
-                applied_to_interface = True
-                # break # Assuming interface names are unique and we only apply to the first match.
+        for interface_name in interface_names:
+            for iface_key, iface in interfaces.items():
+                # Match if the interface name is exactly the one specified,
+                # or if the pragma specifies a base name and the interface is e.g. iface_name_0, iface_name_1 etc.
+                # Current InterfaceBuilder names are exact like "in0", "s_axi_control".
+                # So, exact match should be sufficient for now.
+                if iface.name == interface_name: # Consider iface.name.startswith(interface_name) if needed
+                    iface.metadata["is_weight"] = True
+                    iface.metadata["weight_type"] = ""  # Not specified in current format
+                    iface.metadata["weight_depth"] = ""  # Not specified in current format
+                    logger.info(f"Applied WEIGHT pragma from line {self.line_number} to interface '{iface.name}'. Marked as weight.")
+                    applied_to_interface = True
+                    # break # Assuming interface names are unique and we only apply to the first match.
         
         if not applied_to_interface:
-            logger.warning(f"WEIGHT pragma from line {self.line_number} for interface '{interface_name}' did not match any existing interfaces.")
+            logger.warning(f"WEIGHT pragma from line {self.line_number} for interfaces {interface_names} did not match any existing interfaces.")
+
+    def applies_to_interface(self, interface: 'Interface') -> bool:
+        """Check if this WEIGHT pragma applies to the given interface."""
+        if not self.parsed_data:
+            return False
+        
+        interface_names = self.parsed_data.get('interface_names', [])
+        for pragma_name in interface_names:
+            if self._interface_names_match(pragma_name, interface.name):
+                return True
+        return False
+
+    def apply_to_interface_metadata(self, interface: 'Interface', 
+                                  metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply WEIGHT pragma to mark interface as weight type."""
+        if not self.applies_to_interface(interface):
+            return metadata
+        
+        return InterfaceMetadata(
+            name=metadata.name,
+            interface_type=InterfaceType.WEIGHT,  # Override type
+            allowed_datatypes=metadata.allowed_datatypes,
+            chunking_strategy=metadata.chunking_strategy
+        )
 
 
 # --- Backward Compatibility ---
@@ -724,7 +963,7 @@ class TDimPragma(BDimPragma):
             stacklevel=2
         )
 
-# --- ParsedKernelData: Main RTL Parsing Result ---
+# --- Template Compatibility Classes ---
 
 
 @dataclass
@@ -746,28 +985,6 @@ class SimpleKernel:
     """Minimal kernel object for RTL wrapper template compatibility."""
     name: str
     parameters: List[Parameter]
-
-
-@dataclass
-class ParsedKernelData:
-    """
-    Kernel data parsed from SystemVerilog RTL source.
-    
-    Simple data container with all information extracted from RTL parsing including
-    module metadata, interfaces, parameters, and pragmas. Contains only parsed data
-    without processing logic.
-    
-    Processing methods have been moved to:
-    - Template Generator: for template context generation
-    - RTL Parser: for data that should be computed during parsing
-    """
-    # Core parsed data (reusing existing RTL Parser types)
-    name: str                           # Module name
-    source_file: Path                   # Source RTL file path  
-    parameters: List[Parameter]         # SystemVerilog parameters (existing type)
-    interfaces: Dict[str, Interface]    # Validated interfaces (existing type)
-    pragmas: List[Pragma]              # Parsed pragmas (existing type)
-    parsing_warnings: List[str]        # Parser warnings
 
 
 # Add helper methods to Interface class for template compatibility

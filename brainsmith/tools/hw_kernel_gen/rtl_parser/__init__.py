@@ -32,7 +32,6 @@ from .data import (
     Port,
     PortGroup,
     Interface,
-    ParsedKernelData,
     TemplateDatatype,
     SimpleKernel,
     Pragma,
@@ -45,7 +44,6 @@ __all__ = [
     "RTLParser",
     "ParserError",
     "ProtocolValidator",
-    "ParsedKernelData",
     "TemplateDatatype",
     "SimpleKernel",
     "Parameter",
@@ -60,19 +58,19 @@ __all__ = [
 ]
 
 
-def parse_rtl_file(rtl_file, advanced_pragmas: bool = False) -> ParsedKernelData:
+def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
     """
-    Parse RTL file and return parsed kernel data.
+    Parse RTL file and return kernel metadata.
     
     This function provides a clean interface for RTL parsing that returns
-    ParsedKernelData for direct template generation and dataflow integration.
+    KernelMetadata for direct template generation and dataflow integration.
     
     Args:
         rtl_file: Path to SystemVerilog RTL file or Path object
         advanced_pragmas: Enable enhanced BDIM pragma processing (deprecated parameter)
         
     Returns:
-        ParsedKernelData: Parsed kernel data with interfaces and metadata
+        KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
         
     Raises:
         RTLParsingError: If RTL parsing fails
@@ -92,10 +90,10 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False) -> ParsedKernelData
         # Create RTL parser instance
         parser = RTLParser(debug=advanced_pragmas)
         
-        # Parse the RTL file and return ParsedKernelData directly
+        # Parse the RTL file and return KernelMetadata directly
         parsed_data = parser.parse_file(str(rtl_file))
         
-        logger.info(f"Successfully parsed RTL file {rtl_file} → ParsedKernelData '{parsed_data.name}'")
+        logger.info(f"Successfully parsed RTL file {rtl_file} → KernelMetadata '{parsed_data.name}'")
         return parsed_data
         
     except Exception as e:

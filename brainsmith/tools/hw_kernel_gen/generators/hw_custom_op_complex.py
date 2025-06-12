@@ -7,7 +7,7 @@ context for advanced BDIM pragma processing when enabled.
 
 from pathlib import Path
 from .base import GeneratorBase
-from ..rtl_parser.data import ParsedKernelData
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 
 
 class HWCustomOpGenerator(GeneratorBase):
@@ -22,11 +22,11 @@ class HWCustomOpGenerator(GeneratorBase):
     def __init__(self, template_dir: Path = None):
         super().__init__('hw_custom_op_slim.py.j2', template_dir)
     
-    def _get_output_filename(self, parsed_data: ParsedKernelData) -> str:
+    def _get_output_filename(self, parsed_data: KernelMetadata) -> str:
         """Get output filename for HWCustomOp class."""
         return f"{parsed_data.name.lower()}_hwcustomop.py"
     
-    def _get_template_context(self, parsed_data: ParsedKernelData) -> dict:
+    def _get_template_context(self, parsed_data: KernelMetadata) -> dict:
         """
         Get enhanced template context for HWCustomOp generation.
         
@@ -96,7 +96,7 @@ class HWCustomOpGenerator(GeneratorBase):
         
         return enhanced_interfaces
     
-    def _get_kernel_verifications(self, parsed_data: ParsedKernelData) -> list:
+    def _get_kernel_verifications(self, parsed_data: KernelMetadata) -> list:
         """
         Get kernel-specific verification rules.
         
@@ -194,7 +194,7 @@ class HWCustomOpGenerator(GeneratorBase):
             }
         ]
     
-    def _get_bdim_verifications(self, parsed_data: ParsedKernelData) -> list:
+    def _get_bdim_verifications(self, parsed_data: KernelMetadata) -> list:
         """
         Get BDIM-specific verification rules following Interface-Wise Dataflow axioms.
         
@@ -267,7 +267,7 @@ for iface in self.get_dataflow_interfaces():
         
         return verifications
     
-    def _get_interface_verifications(self, parsed_data: ParsedKernelData) -> list:
+    def _get_interface_verifications(self, parsed_data: KernelMetadata) -> list:
         """Get interface-specific verification rules."""
         verifications = []
         
@@ -307,7 +307,7 @@ if self.get_weight_interface() is not None:
         
         return verifications
     
-    def _get_parallelism_verifications(self, parsed_data: ParsedKernelData) -> list:
+    def _get_parallelism_verifications(self, parsed_data: KernelMetadata) -> list:
         """
         Get parallelism verification rules following Axiom 5: Parallelism Parameters.
         
@@ -364,7 +364,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return verifications
     
-    def _get_resource_estimation_context(self, parsed_data: ParsedKernelData) -> dict:
+    def _get_resource_estimation_context(self, parsed_data: KernelMetadata) -> dict:
         """Get resource estimation context for template."""
         return {
             'complexity': hw_kernel.kernel_complexity,
@@ -374,7 +374,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
             'requires_estimation': hw_kernel.resource_estimation_required
         }
     
-    def _build_enhanced_interface_metadata(self, parsed_data: ParsedKernelData) -> list:
+    def _build_enhanced_interface_metadata(self, parsed_data: KernelMetadata) -> list:
         """
         Build enhanced interface metadata for BDIM-aware templates.
         
@@ -495,7 +495,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
             return any(key in iface for key in ['tensor_dims', 'block_dims', 'stream_dims', 'chunking_strategy'])
         return False
     
-    def _extract_bdim_chunking_info(self, iface, parsed_data: ParsedKernelData) -> dict:
+    def _extract_bdim_chunking_info(self, iface, parsed_data: KernelMetadata) -> dict:
         """
         Extract BDIM chunking information from interface and kernel metadata.
         
@@ -681,7 +681,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return impact
     
-    def _build_chunking_context(self, parsed_data: ParsedKernelData) -> dict:
+    def _build_chunking_context(self, parsed_data: KernelMetadata) -> dict:
         """
         Build chunking context for BDIM-aware template generation.
         
@@ -841,7 +841,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return bottlenecks
     
-    def _analyze_dimension_relationships(self, parsed_data: ParsedKernelData) -> dict:
+    def _analyze_dimension_relationships(self, parsed_data: KernelMetadata) -> dict:
         """
         Analyze dimension relationships following Axiom 2: Core Relationship.
         
@@ -883,7 +883,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return relationships
     
-    def _analyze_layout_patterns(self, parsed_data: ParsedKernelData) -> dict:
+    def _analyze_layout_patterns(self, parsed_data: KernelMetadata) -> dict:
         """
         Analyze layout patterns following Axiom 9: Layout-Driven Chunking.
         """
@@ -963,7 +963,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return suggestions
     
-    def _estimate_performance_characteristics(self, parsed_data: ParsedKernelData) -> dict:
+    def _estimate_performance_characteristics(self, parsed_data: KernelMetadata) -> dict:
         """
         Estimate performance characteristics following Axiom 7: Timing Relationships.
         
@@ -1042,7 +1042,7 @@ if hasattr(self, 'parallelism_analysis') and hasattr(self.parallelism_analysis, 
         
         return bottlenecks
     
-    def _identify_optimization_opportunities(self, performance: dict, parsed_data: ParsedKernelData) -> list:
+    def _identify_optimization_opportunities(self, performance: dict, parsed_data: KernelMetadata) -> list:
         """Identify optimization opportunities."""
         opportunities = []
         

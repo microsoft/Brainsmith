@@ -7,7 +7,7 @@ for test suite generation.
 
 from pathlib import Path
 from .base import GeneratorBase
-from ..rtl_parser.data import ParsedKernelData
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 
 
 class TestSuiteGenerator(GeneratorBase):
@@ -16,11 +16,11 @@ class TestSuiteGenerator(GeneratorBase):
     def __init__(self, template_dir: Path = None):
         super().__init__('test_suite.py.j2', template_dir)
     
-    def _get_output_filename(self, parsed_data: ParsedKernelData) -> str:
+    def _get_output_filename(self, parsed_data: KernelMetadata) -> str:
         """Get output filename for test suite."""
         return f"test_{parsed_data.name.lower()}.py"
     
-    def _get_template_context(self, parsed_data: ParsedKernelData) -> dict:
+    def _get_template_context(self, parsed_data: KernelMetadata) -> dict:
         """Get enhanced template context for test suite generation."""
         context = super()._get_template_context(parsed_data)
         

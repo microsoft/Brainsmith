@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 import jinja2
 
-from ..rtl_parser.data import ParsedKernelData
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 from ..errors import TemplateError, GenerationError
 from ..templates.context_generator import TemplateContextGenerator
 
@@ -57,21 +57,21 @@ class GeneratorBase(ABC):
         )
         return env
     
-    def generate(self, parsed_data: ParsedKernelData, output_dir: Path) -> Path:
+    def generate(self, kernel_metadata: KernelMetadata, output_dir: Path) -> Path:
         """Generate output file for the given hardware kernel."""
         try:
             template = self.template_env.get_template(self.template_name)
             
             # Build template context with enhanced capabilities
-            context = self._get_template_context(parsed_data)
+            context = self._get_template_context(kernel_metadata)
             
             # Render template with context
             content = template.render(
-                parsed_data=parsed_data, 
+                kernel_metadata=kernel_metadata, 
                 **context
             )
             
-            output_file = output_dir / self._get_output_filename(parsed_data)
+            output_file = output_dir / self._get_output_filename(kernel_metadata)
             output_file.write_text(content)
             
             return output_file
@@ -82,19 +82,19 @@ class GeneratorBase(ABC):
             raise GenerationError(f"File generation failed: {e}") from e
     
     @abstractmethod
-    def _get_output_filename(self, parsed_data: ParsedKernelData) -> str:
+    def _get_output_filename(self, kernel_metadata: KernelMetadata) -> str:
         """Get output filename for the kernel."""
         pass
     
-    def _get_template_context(self, parsed_data: ParsedKernelData) -> dict:
+    def _get_template_context(self, kernel_metadata: KernelMetadata) -> dict:
         """
         Get enhanced template context for HWKG.
         
         Following HWKG Axiom 6: Metadata-Driven Generation.
-        Uses TemplateContextGenerator to build context from ParsedKernelData.
+        Uses TemplateContextGenerator to build context from KernelMetadata.
         """
         # Get complete template context using the context generator
-        context = TemplateContextGenerator.generate_context(parsed_data)
+        context = TemplateContextGenerator.generate_context(kernel_metadata)
         
         # Add additional generator-specific context if needed
         context.update({

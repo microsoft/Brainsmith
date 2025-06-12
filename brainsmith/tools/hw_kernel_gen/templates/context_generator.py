@@ -1,8 +1,8 @@
 """
-Template context generator for ParsedKernelData.
+Template context generator for KernelMetadata.
 
-Generates complete template context for Jinja2 templates from ParsedKernelData.
-Moved from ParsedKernelData to keep it as a simple data container.
+Generates complete template context for Jinja2 templates from KernelMetadata.
+Updated to work with the new unified KernelMetadata structure.
 """
 
 from typing import Dict, Any, List
@@ -10,40 +10,41 @@ from datetime import datetime
 from pathlib import Path
 
 from brainsmith.dataflow.core.interface_types import InterfaceType
-from ..rtl_parser.data import ParsedKernelData, Interface, Parameter, TemplateDatatype, SimpleKernel
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
+from ..rtl_parser.data import Interface, Parameter, TemplateDatatype, SimpleKernel
 
 
 class TemplateContextGenerator:
-    """Generates template context from ParsedKernelData for Jinja2 templates."""
+    """Generates template context from KernelMetadata for Jinja2 templates."""
     
     @staticmethod
-    def generate_context(parsed_data: ParsedKernelData) -> Dict[str, Any]:
+    def generate_context(kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Generate complete template context for Jinja2 templates."""
         generator = TemplateContextGenerator()
         
         # Extract parallelism and algorithm parameters from RTL analysis
-        parallelism_info = generator._analyze_parallelism_parameters(parsed_data)
-        algorithm_info = generator._infer_algorithm_parameters(parsed_data)
-        node_attrs = generator._generate_node_attributes(parsed_data, parallelism_info, algorithm_info)
+        parallelism_info = generator._analyze_parallelism_parameters(kernel_metadata)
+        algorithm_info = generator._infer_algorithm_parameters(kernel_metadata)
+        node_attrs = generator._generate_node_attributes(kernel_metadata, parallelism_info, algorithm_info)
         
         # Core kernel metadata
         context = {
-            "kernel_name": parsed_data.name,
-            "class_name": generator._get_class_name(parsed_data.name),
-            "source_file": str(parsed_data.source_file),
+            "kernel_name": kernel_metadata.name,
+            "class_name": generator._get_class_name(kernel_metadata.name),
+            "source_file": str(kernel_metadata.source_file),
             "generation_timestamp": datetime.now().isoformat(),
             
-            # All interfaces (direct reuse of existing Interface objects)
-            "interfaces": list(parsed_data.interfaces.values()),
-            "interfaces_list": list(parsed_data.interfaces.values()),  # RTL wrapper compatibility
+            # Interface metadata (new format - List[InterfaceMetadata])
+            "interface_metadata": kernel_metadata.interfaces,
+            "interfaces_list": kernel_metadata.interfaces,  # Compatibility
             
-            # Interface categorization using existing InterfaceType enum
-            "input_interfaces": generator._get_interfaces_by_type(parsed_data, InterfaceType.INPUT),
-            "output_interfaces": generator._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT),
-            "weight_interfaces": generator._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT),
-            "config_interfaces": generator._get_interfaces_by_type(parsed_data, InterfaceType.CONFIG),
-            "control_interfaces": generator._get_interfaces_by_type(parsed_data, InterfaceType.CONTROL),
-            "dataflow_interfaces": generator._get_dataflow_interfaces(parsed_data),
+            # Legacy interface categorization (will need conversion)
+            "input_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT),
+            "output_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT),
+            "weight_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT),
+            "config_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG),
+            "control_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONTROL),
+            "dataflow_interfaces": generator._get_dataflow_interfaces(kernel_metadata),
             
             # RTL parameters (direct reuse with existing template_param_name)
             "rtl_parameters": [
@@ -53,46 +54,46 @@ class TemplateContextGenerator:
                     "default_value": param.default_value or 0,
                     "template_param_name": param.template_param_name
                 }
-                for param in parsed_data.parameters
+                for param in kernel_metadata.parameters
             ],
             
             # AutoHWCustomOp-specific enhancements
             "node_attributes": node_attrs,
             "parallelism_info": parallelism_info,
             "algorithm_info": algorithm_info,
-            "datatype_mappings": generator._generate_datatype_mappings(parsed_data),
-            "shape_calculation_methods": generator._generate_shape_calculation_methods(parsed_data, parallelism_info),
-            "stream_width_methods": generator._generate_stream_width_methods(parsed_data, parallelism_info),
-            "resource_estimation_methods": generator._generate_resource_estimation_methods(parsed_data, parallelism_info),
+            "datatype_mappings": generator._generate_datatype_mappings(kernel_metadata),
+            "shape_calculation_methods": generator._generate_shape_calculation_methods(kernel_metadata, parallelism_info),
+            "stream_width_methods": generator._generate_stream_width_methods(kernel_metadata, parallelism_info),
+            "resource_estimation_methods": generator._generate_resource_estimation_methods(kernel_metadata, parallelism_info),
             
             # Template boolean flags
-            "has_inputs": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.INPUT)) > 0,
-            "has_outputs": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT)) > 0,
-            "has_weights": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)) > 0,
+            "has_inputs": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)) > 0,
+            "has_outputs": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)) > 0,
+            "has_weights": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0,
             
             # Interface counts
-            "input_interfaces_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.INPUT)),
-            "output_interfaces_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT)),
-            "weight_interfaces_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)),
+            "input_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)),
+            "output_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)),
+            "weight_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)),
             
             # Kernel analysis
-            "kernel_complexity": generator._estimate_complexity(parsed_data),
-            "kernel_type": generator._infer_kernel_type(parsed_data),
-            "resource_estimation_required": generator._requires_resource_estimation(parsed_data),
-            "verification_required": generator._requires_verification(parsed_data),
+            "kernel_complexity": generator._estimate_complexity(kernel_metadata),
+            "kernel_type": generator._infer_kernel_type(kernel_metadata),
+            "resource_estimation_required": generator._requires_resource_estimation(kernel_metadata),
+            "verification_required": generator._requires_verification(kernel_metadata),
             
             # Template enums and utilities
             "InterfaceType": InterfaceType,  # Direct enum access
             
             # Kernel object for RTL wrapper template compatibility  
-            "kernel": SimpleKernel(parsed_data.name, parsed_data.parameters),
+            "kernel": SimpleKernel(kernel_metadata.name, kernel_metadata.parameters),
             
             # Summary statistics
             "dataflow_model_summary": {
-                "num_interfaces": len(parsed_data.interfaces),
-                "input_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.INPUT)),
-                "output_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT)),
-                "weight_count": len(generator._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)),
+                "num_interfaces": len(kernel_metadata.interfaces),
+                "input_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)),
+                "output_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)),
+                "weight_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)),
             }
         }
         
@@ -104,19 +105,19 @@ class TemplateContextGenerator:
         parts = module_name.replace('-', '_').split('_')
         return ''.join(word.capitalize() for word in parts)
     
-    def _get_interfaces_by_type(self, parsed_data: ParsedKernelData, interface_type: InterfaceType) -> List[Interface]:
+    def _get_interfaces_by_type(self, kernel_metadata: KernelMetadata, interface_type: InterfaceType) -> List:
         """Get interfaces matching specific InterfaceType."""
-        return [iface for iface in parsed_data.interfaces.values() if iface.type == interface_type]
+        return [iface for iface in kernel_metadata.interfaces if iface.interface_type == interface_type]
     
-    def _get_dataflow_interfaces(self, parsed_data: ParsedKernelData) -> List[Interface]:
+    def _get_dataflow_interfaces(self, kernel_metadata: KernelMetadata) -> List:
         """Get all dataflow interfaces (INPUT, OUTPUT, WEIGHT)."""
-        return [iface for iface in parsed_data.interfaces.values() 
-                if iface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]]
+        return [iface for iface in kernel_metadata.interfaces 
+                if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]]
     
-    def _estimate_complexity(self, parsed_data: ParsedKernelData) -> str:
+    def _estimate_complexity(self, kernel_metadata: KernelMetadata) -> str:
         """Estimate kernel complexity for resource calculations."""
-        interface_count = len(parsed_data.interfaces)
-        param_count = len(parsed_data.parameters)
+        interface_count = len(kernel_metadata.interfaces)
+        param_count = len(kernel_metadata.parameters)
         
         if interface_count <= 2 and param_count <= 3:
             return 'low'
@@ -125,9 +126,9 @@ class TemplateContextGenerator:
         else:
             return 'high'
     
-    def _infer_kernel_type(self, parsed_data: ParsedKernelData) -> str:
+    def _infer_kernel_type(self, kernel_metadata: KernelMetadata) -> str:
         """Infer kernel type from name for resource estimation."""
-        name_lower = parsed_data.name.lower()
+        name_lower = kernel_metadata.name.lower()
         if any(term in name_lower for term in ['matmul', 'gemm', 'dot']):
             return 'matmul'
         elif any(term in name_lower for term in ['conv', 'convolution']):
@@ -139,16 +140,16 @@ class TemplateContextGenerator:
         else:
             return 'generic'
     
-    def _requires_resource_estimation(self, parsed_data: ParsedKernelData) -> bool:
+    def _requires_resource_estimation(self, kernel_metadata: KernelMetadata) -> bool:
         """Check if resource estimation is needed."""
         # Enable for complex kernels or when multiple interfaces exist
-        return len(parsed_data.interfaces) > 2 or self._estimate_complexity(parsed_data) != 'low'
+        return len(kernel_metadata.interfaces) > 2 or self._estimate_complexity(kernel_metadata) != 'low'
     
-    def _requires_verification(self, parsed_data: ParsedKernelData) -> bool:
+    def _requires_verification(self, kernel_metadata: KernelMetadata) -> bool:
         """Check if verification is needed."""
         # Enable for kernels with weight interfaces or high complexity
-        has_weights = len(self._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)) > 0
-        return has_weights or self._estimate_complexity(parsed_data) == 'high'
+        has_weights = len(self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0
+        return has_weights or self._estimate_complexity(kernel_metadata) == 'high'
     
     def _get_datatype_info(self, interface: Interface) -> TemplateDatatype:
         """Extract datatype info from interface metadata for templates."""
@@ -170,7 +171,7 @@ class TemplateContextGenerator:
             max_bits=max_bits
         )
     
-    def _analyze_parallelism_parameters(self, parsed_data: ParsedKernelData) -> Dict[str, Any]:
+    def _analyze_parallelism_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Extract PE/SIMD equivalent parallelism from RTL analysis."""
         parallelism = {
             "inferred_pe": 1,
@@ -181,7 +182,7 @@ class TemplateContextGenerator:
         }
         
         # Look for PE parameter directly in RTL parameters
-        for param in parsed_data.parameters:
+        for param in kernel_metadata.parameters:
             if param.name.upper() == "PE":
                 parallelism["inferred_pe"] = int(param.default_value) if param.default_value else 1
             elif param.name.upper() in ["SIMD", "WIDTH"]:
@@ -192,7 +193,7 @@ class TemplateContextGenerator:
                 parallelism["inferred_width"] = int(param.default_value) if param.default_value else 1
         
         # Analyze port arrays for parallel processing patterns
-        for interface in parsed_data.interfaces.values():
+        for interface in kernel_metadata.interfaces:
             if interface.type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
                 # Look for array ports indicating parallelism
                 if "[" in interface.name or "_" in interface.name:
@@ -204,10 +205,10 @@ class TemplateContextGenerator:
         
         return parallelism
     
-    def _infer_algorithm_parameters(self, parsed_data: ParsedKernelData) -> Dict[str, Any]:
+    def _infer_algorithm_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Extract algorithm-specific parameters from RTL analysis."""
         algorithm = {
-            "type": self._infer_kernel_type(parsed_data),
+            "type": self._infer_kernel_type(kernel_metadata),
             "parameters": {},
             "constraints": []
         }
@@ -217,7 +218,7 @@ class TemplateContextGenerator:
         
         if kernel_type == "threshold":
             # Thresholding-specific parameters
-            for param in parsed_data.parameters:
+            for param in kernel_metadata.parameters:
                 if param.name.upper() in ["N", "NUM_STEPS"]:
                     algorithm["parameters"]["numSteps"] = int(param.default_value) if param.default_value else 1
                 elif param.name.upper() in ["BIAS"]:
@@ -226,14 +227,14 @@ class TemplateContextGenerator:
                     algorithm["parameters"]["signed_input"] = bool(int(param.default_value)) if param.default_value else False
         elif kernel_type == "matmul":
             # Matrix multiplication parameters
-            for param in parsed_data.parameters:
+            for param in kernel_metadata.parameters:
                 if param.name.upper() in ["M", "ROWS"]:
                     algorithm["parameters"]["rows"] = int(param.default_value) if param.default_value else 1
                 elif param.name.upper() in ["N", "COLS"]:
                     algorithm["parameters"]["cols"] = int(param.default_value) if param.default_value else 1
         elif kernel_type == "conv":
             # Convolution parameters
-            for param in parsed_data.parameters:
+            for param in kernel_metadata.parameters:
                 if param.name.upper() in ["K", "KERNEL_SIZE"]:
                     algorithm["parameters"]["kernel_size"] = int(param.default_value) if param.default_value else 1
                 elif param.name.upper() in ["S", "STRIDE"]:
@@ -241,7 +242,7 @@ class TemplateContextGenerator:
         
         return algorithm
     
-    def _generate_node_attributes(self, parsed_data: ParsedKernelData, parallelism_info: Dict, algorithm_info: Dict) -> Dict[str, Any]:
+    def _generate_node_attributes(self, kernel_metadata: KernelMetadata, parallelism_info: Dict, algorithm_info: Dict) -> Dict[str, Any]:
         """Generate node attribute definitions for HWCustomOp."""
         node_attrs = {}
         
@@ -252,9 +253,9 @@ class TemplateContextGenerator:
             node_attrs["NumChannels"] = ("i", True, parallelism_info["inferred_channels"])
         
         # Data type specifications (will be filled at runtime)
-        input_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.INPUT)
-        output_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT)
-        weight_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)
+        input_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
+        output_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)
+        weight_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)
         
         if input_interfaces:
             node_attrs["inputDataType"] = ("s", True, "")
@@ -278,7 +279,7 @@ class TemplateContextGenerator:
         
         return node_attrs
     
-    def _generate_datatype_mappings(self, parsed_data: ParsedKernelData) -> Dict[str, Any]:
+    def _generate_datatype_mappings(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Generate datatype mapping methods for template."""
         mappings = {
             "input_methods": [],
@@ -286,7 +287,7 @@ class TemplateContextGenerator:
             "weight_methods": []
         }
         
-        input_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.INPUT)
+        input_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
         for i, interface in enumerate(input_interfaces):
             mappings["input_methods"].append({
                 "index": i,
@@ -294,7 +295,7 @@ class TemplateContextGenerator:
                 "method_body": f'return DataType[self.get_nodeattr("inputDataType")]'
             })
         
-        output_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.OUTPUT)
+        output_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)
         for i, interface in enumerate(output_interfaces):
             mappings["output_methods"].append({
                 "index": i,
@@ -302,7 +303,7 @@ class TemplateContextGenerator:
                 "method_body": f'return DataType[self.get_nodeattr("outputDataType")]'
             })
         
-        weight_interfaces = self._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT)
+        weight_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)
         if weight_interfaces:
             mappings["weight_methods"].append({
                 "method_body": 'return DataType[self.get_nodeattr("weightDataType")]'
@@ -310,7 +311,7 @@ class TemplateContextGenerator:
         
         return mappings
     
-    def _generate_shape_calculation_methods(self, parsed_data: ParsedKernelData, parallelism_info: Dict) -> Dict[str, Any]:
+    def _generate_shape_calculation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
         """Generate shape calculation methods for template."""
         methods = {
             "normal_input_shape": None,
@@ -347,7 +348,7 @@ class TemplateContextGenerator:
         
         return methods
     
-    def _generate_stream_width_methods(self, parsed_data: ParsedKernelData, parallelism_info: Dict) -> Dict[str, Any]:
+    def _generate_stream_width_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
         """Generate stream width calculation methods for template."""
         methods = {
             "instream_width": None,
@@ -368,7 +369,7 @@ class TemplateContextGenerator:
         return o_bits * pe"""
         
         # Weight stream width (if weights exist)
-        if self._get_interfaces_by_type(parsed_data, InterfaceType.WEIGHT):
+        if self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT):
             methods["weightstream_width"] = """
         pe = self.get_nodeattr("PE")
         wp = self.get_weight_datatype().bitwidth()
@@ -376,7 +377,7 @@ class TemplateContextGenerator:
         
         return methods
     
-    def _generate_resource_estimation_methods(self, parsed_data: ParsedKernelData, parallelism_info: Dict) -> Dict[str, Any]:
+    def _generate_resource_estimation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
         """Generate resource estimation methods for template."""
         methods = {
             "get_exp_cycles": None,
@@ -387,7 +388,7 @@ class TemplateContextGenerator:
         }
         
         # Cycle estimation based on kernel type
-        kernel_type = self._infer_kernel_type(parsed_data)
+        kernel_type = self._infer_kernel_type(kernel_metadata)
         if kernel_type == "threshold":
             methods["get_exp_cycles"] = "return np.prod(self.get_folded_output_shape()[:-1])"
         else:

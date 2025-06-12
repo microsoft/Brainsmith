@@ -17,9 +17,12 @@ from typing import List, Optional, Dict, Callable
 from tree_sitter import Node
 
 from .data import (
-    Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma, TDimPragma,
-    DerivedParameterPragma, WeightPragma, PragmaError, Interface, ParsedKernelData
+    Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma,
+    DerivedParameterPragma, WeightPragma, PragmaError, Interface
 )
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+from brainsmith.dataflow.core.interface_types import InterfaceType
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -36,7 +39,6 @@ class PragmaHandler:
             PragmaType.TOP_MODULE: TopModulePragma,
             PragmaType.DATATYPE: DatatypePragma,
             PragmaType.BDIM: BDimPragma,
-            PragmaType.TDIM: TDimPragma,  # Backward compatibility (deprecated)
             PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
             PragmaType.WEIGHT: WeightPragma,
         }
@@ -134,4 +136,87 @@ class PragmaHandler:
         logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
         self.pragmas = pragmas # Store the extracted pragmas in the instance
         return pragmas
+    
+    def create_interface_metadata(self, interface: Interface, pragmas: List[Pragma]) -> InterfaceMetadata:
+        """
+        Create InterfaceMetadata using pragma chain-of-responsibility pattern.
+        
+        This method creates base metadata from the interface structure, then
+        applies each relevant pragma in sequence to build the final metadata.
+        
+        Args:
+            interface: Parsed Interface object from interface builder
+            pragmas: All pragmas found in the RTL
+            
+        Returns:
+            InterfaceMetadata: Complete metadata with all pragma effects applied
+        """
+        logger.debug(f"Creating InterfaceMetadata for interface: {interface.name}")
+        
+        # Start with base metadata from interface structure
+        metadata = self._create_base_interface_metadata(interface)
+        
+        # Apply each relevant pragma in sequence
+        for pragma in pragmas:
+            try:
+                if pragma.applies_to_interface(interface):
+                    logger.debug(f"Applying {pragma.type.value} pragma to {interface.name}")
+                    metadata = pragma.apply_to_interface_metadata(interface, metadata)
+            except Exception as e:
+                logger.warning(f"Failed to apply {pragma.type.value} pragma to {interface.name}: {e}")
+        
+        return metadata
+
+    def _create_base_interface_metadata(self, interface: Interface) -> InterfaceMetadata:
+        """Create base InterfaceMetadata from interface structure."""
+        # Extract base datatype constraints from interface ports
+        allowed_datatypes = self._extract_base_datatype_constraints(interface)
+        
+        return InterfaceMetadata(
+            name=interface.name,
+            interface_type=interface.type,
+            allowed_datatypes=allowed_datatypes,
+            chunking_strategy=DefaultChunkingStrategy()
+        )
+    
+    def _extract_base_datatype_constraints(self, interface: Interface) -> List[DataTypeConstraint]:
+        """Extract base datatype constraints from interface port information."""
+        # Get the data width from interface ports
+        data_port = None
+        if hasattr(interface, 'ports') and interface.ports:
+            data_port = next((port for port in interface.ports.values() if 'data' in port.name.lower()), None)
+        
+        if data_port and hasattr(data_port, 'width'):
+            # Parse width - could be numeric or expression like "WIDTH-1:0"
+            width_str = str(data_port.width)
+            if ':' in width_str:
+                # Handle range format like "31:0" or "WIDTH-1:0"
+                try:
+                    high_part = width_str.split(':')[0]
+                    if high_part.isdigit():
+                        bit_width = int(high_part) + 1
+                    else:
+                        # Expression like "WIDTH-1", assume reasonable default
+                        bit_width = 32
+                except:
+                    bit_width = 32
+            else:
+                # Single width value
+                try:
+                    bit_width = int(width_str)
+                except:
+                    bit_width = 32
+            
+            return [
+                DataTypeConstraint(finn_type=f"UINT{bit_width}", bit_width=bit_width, signed=False),
+                DataTypeConstraint(finn_type=f"INT{bit_width}", bit_width=bit_width, signed=True),
+            ]
+        else:
+            # Default constraints when width cannot be determined
+            return [
+                DataTypeConstraint(finn_type="UINT8", bit_width=8, signed=False),
+                DataTypeConstraint(finn_type="UINT16", bit_width=16, signed=False),
+                DataTypeConstraint(finn_type="INT8", bit_width=8, signed=True),
+                DataTypeConstraint(finn_type="INT16", bit_width=16, signed=True),
+            ]
     

@@ -7,7 +7,7 @@ for HWCustomOp generation.
 
 from pathlib import Path
 from .base import GeneratorBase
-from ..rtl_parser.data import ParsedKernelData
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 
 
 class HWCustomOpGenerator(GeneratorBase):
@@ -16,6 +16,6 @@ class HWCustomOpGenerator(GeneratorBase):
     def __init__(self, template_dir: Path = None):
         super().__init__('hw_custom_op_slim.py.j2', template_dir)
     
-    def _get_output_filename(self, parsed_data: ParsedKernelData) -> str:
+    def _get_output_filename(self, kernel_metadata: KernelMetadata) -> str:
         """Get output filename for HWCustomOp class."""
-        return f"{parsed_data.name.lower()}_hwcustomop.py"
+        return f"{kernel_metadata.name.lower()}_hwcustomop.py"

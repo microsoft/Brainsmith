@@ -17,12 +17,17 @@ from pathlib import Path
 
 from tree_sitter import Parser, Node
 
-from .data import ParsedKernelData, Port, Parameter, Direction
+from .data import Port, Parameter, Direction
 from brainsmith.dataflow.core.interface_types import InterfaceType
 from .data import Interface
 from .pragma import PragmaHandler, PragmaType, Pragma
 from .interface_builder import InterfaceBuilder
 from . import grammar
+
+# New imports for KernelMetadata integration
+from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -315,6 +320,22 @@ class RTLParser:
         #     raise ParserError(error_msg)
         logger.info("Stage 3: Interface analysis and validation complete.")
 
+    def _create_interface_metadata(self, interface: Interface, pragmas: List[Pragma]) -> InterfaceMetadata:
+        """
+        Create InterfaceMetadata using the pragma handler.
+        
+        This method delegates to the pragma handler to ensure all pragma processing
+        is properly centralized and consistent.
+        
+        Args:
+            interface: Parsed Interface object from RTL analysis
+            pragmas: List of all pragmas found in the RTL
+            
+        Returns:
+            InterfaceMetadata: Complete metadata object with pragma effects applied
+        """
+        return self.pragma_handler.create_interface_metadata(interface, pragmas)
+
     def _apply_pragmas(self) -> None:
         """Apply all relevant pragmas by calling their respective apply methods.
 
@@ -345,7 +366,7 @@ class RTLParser:
 
     def parse_string(self, systemverilog_code: str, 
                     module_name: Optional[str] = None,
-                    source_name: str = "<string>") -> ParsedKernelData:
+                    source_name: str = "<string>") -> KernelMetadata:
         """Parse SystemVerilog code from string.
         
         Args:
@@ -354,7 +375,7 @@ class RTLParser:
             source_name: Name for logging/error messages (default: "<string>")
             
         Returns:
-            ParsedKernelData: Parsed kernel data with interfaces and metadata
+            KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
             
         Raises:
             SyntaxError: Invalid SystemVerilog syntax
@@ -374,20 +395,26 @@ class RTLParser:
             # 4. Apply pragmas using PragmaHandler
             self._apply_pragmas()
 
-            # 5. Create ParsedKernelData object
-            parsed_data = ParsedKernelData(
+            # 5. Convert interfaces Dict[str, Interface] to List[InterfaceMetadata]
+            interface_metadata_list = []
+            for interface_name, interface in self.interfaces.items():
+                metadata = self._create_interface_metadata(interface, self.pragmas)
+                interface_metadata_list.append(metadata)
+
+            # 6. Create KernelMetadata object
+            kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(source_name),
+                interfaces=interface_metadata_list,
                 parameters=self.parameters,
-                interfaces=self.interfaces,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', [])
             )
-            logger.info(f"ParsedKernelData object created for '{parsed_data.name}' with {len(parsed_data.parameters)} params, {len(parsed_data.interfaces)} interfaces.")
+            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params, {len(kernel_metadata.interfaces)} interfaces.")
 
-            # 6. Return ParsedKernelData
-            logger.info(f"Successfully parsed and processed module '{parsed_data.name}' from {source_name}")
-            return parsed_data
+            # 7. Return KernelMetadata
+            logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
+            return kernel_metadata
 
         except (SyntaxError, ParserError) as e:
             logger.error(f"String parsing failed for {source_name}: {e}")
@@ -396,14 +423,14 @@ class RTLParser:
             logger.exception(f"Unexpected error during string parsing: {e}")
             raise ParserError(f"Unexpected error during string parsing: {e}")
 
-    def parse(self, source: Union[str, Path]) -> ParsedKernelData:
+    def parse(self, source: Union[str, Path]) -> KernelMetadata:
         """Flexible parse method accepting string or file path.
         
         Args:
             source: Either SystemVerilog code string or path to file
             
         Returns:
-            ParsedKernelData: Parsed kernel data with interfaces and metadata
+            KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
             
         Raises:
             SyntaxError: Invalid SystemVerilog syntax
@@ -480,7 +507,7 @@ class RTLParser:
 
         logger.info("Stage 1: Initial string parsing complete.")
 
-    def parse_file(self, file_path: str) -> ParsedKernelData:
+    def parse_file(self, file_path: str) -> KernelMetadata:
         """Orchestrates the multi-stage parsing process for a SystemVerilog file.
 
         This is the main public method to parse an RTL file. It calls the
@@ -495,7 +522,7 @@ class RTLParser:
             file_path: The absolute path to the SystemVerilog file to parse.
 
         Returns:
-            A `ParsedKernelData` object containing the parsed information (name, parameters,
+            A `KernelMetadata` object containing the parsed information (name, parameters,
             interfaces, pragmas).
 
         Raises:
@@ -520,20 +547,26 @@ class RTLParser:
             # 4. Apply pragmas using PragmaHandler
             self._apply_pragmas()
 
-            # 5. Create ParsedKernelData object
-            parsed_data = ParsedKernelData(
+            # 5. Convert interfaces Dict[str, Interface] to List[InterfaceMetadata]
+            interface_metadata_list = []
+            for interface_name, interface in self.interfaces.items():
+                metadata = self._create_interface_metadata(interface, self.pragmas)
+                interface_metadata_list.append(metadata)
+
+            # 6. Create KernelMetadata object
+            kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(file_path),
+                interfaces=interface_metadata_list,
                 parameters=self.parameters,
-                interfaces=self.interfaces,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', [])
             )
-            logger.info(f"ParsedKernelData object created for '{parsed_data.name}' with {len(parsed_data.parameters)} params, {len(parsed_data.interfaces)} interfaces.")
+            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params, {len(kernel_metadata.interfaces)} interfaces.")
 
-            # 6. Return ParsedKernelData
-            logger.info(f"Successfully parsed and processed module '{parsed_data.name}' from {file_path}")
-            return parsed_data
+            # 7. Return KernelMetadata
+            logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {file_path}")
+            return kernel_metadata
 
         except (SyntaxError, ParserError) as e:
             # Log specific parser/syntax errors raised by stages
