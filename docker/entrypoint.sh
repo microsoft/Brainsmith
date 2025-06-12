@@ -35,7 +35,7 @@ emit_status "INITIALIZING"
 cd $BSMITH_DIR
 
 # First: Fetch dependencies if they don't exist (before environment setup)
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -d "$BSMITH_DIR/deps/qonnx" ]; then
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && ([ ! -d "$BSMITH_DIR/deps/qonnx" ] || [ ! -d "$BSMITH_DIR/deps/finn" ]); then
     emit_status "FETCHING_DEPENDENCIES"
     log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
     
