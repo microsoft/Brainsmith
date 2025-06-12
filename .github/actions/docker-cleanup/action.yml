@@ -1,0 +1,15 @@
+name: 'Docker Cleanup'
+description: 'Clean Docker resources'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Clean Docker resources
+      shell: bash
+      run: |
+        echo "=== Docker cleanup ==="
+        docker container prune -f || true
+        docker image prune -f || true
+        docker volume prune -f || true
+        echo "Available space after cleanup: $(df -h / | tail -1 | awk '{print $4}')"
+        echo "✓ Docker cleanup completed"

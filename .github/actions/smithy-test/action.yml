@@ -1,0 +1,105 @@
+name: 'Smithy Test'
+description: 'Run test with smithy container using predefined commands'
+inputs:
+  test-name:
+    description: 'Name of the test'
+    type: string
+    required: true
+  test-type:
+    description: 'Type of test to run'
+    type: string
+    required: true
+    # Valid options: e2e-bert, e2e-bert-large, unit-tests, integration-tests, python-tests
+  test-variant:
+    description: 'Test variant'
+    type: string
+    default: 'default'
+    # Valid options: default, clean, large, small
+  timeout-minutes:
+    description: 'Test timeout in minutes'
+    type: number
+    default: 60
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        # Validate test name
+        if ! [[ "${{ inputs.test-name }}" =~ ^[a-zA-Z0-9\ \-]+$ ]]; then
+            echo "ERROR: Invalid test name format"
+            exit 1
+        fi
+        
+        # Validate timeout
+        if [ "${{ inputs.timeout-minutes }}" -le 0 ] || [ "${{ inputs.timeout-minutes }}" -gt 1440 ]; then
+            echo "ERROR: Invalid timeout value (must be 1-1440 minutes)"
+            exit 1
+        fi
+        
+        echo "✓ Input validation passed"
+    
+    - name: Determine test command
+      shell: bash
+      id: test-cmd
+      run: |
+        case "${{ inputs.test-type }}" in
+          "e2e-bert")
+            case "${{ inputs.test-variant }}" in
+              "default") COMMAND="cd demos/bert && make clean && make" ;;
+              "large") COMMAND="cd demos/bert && make bert_large_single_layer" ;;
+              "clean") COMMAND="cd demos/bert && make clean" ;;
+              *) echo "ERROR: Invalid bert variant"; exit 1 ;;
+            esac
+            ;;
+          "unit-tests")
+            COMMAND="cd tests && pytest -v ./"
+            ;;
+          "integration-tests")
+            COMMAND="cd tests && pytest -v integration/"
+            ;;
+          "python-tests")
+            COMMAND="python --version && pytest tests/"
+            ;;
+          *)
+            echo "ERROR: Invalid test type. Allowed: e2e-bert, unit-tests, integration-tests, python-tests"
+            exit 1
+            ;;
+        esac
+        
+        echo "test-command=$COMMAND" >> $GITHUB_OUTPUT
+        echo "✓ Test command determined: $COMMAND"
+    
+    - name: Run smithy test
+      shell: bash
+      run: |
+        chmod +x smithy
+        echo "Starting smithy daemon..."
+        ./smithy daemon
+        sleep 5
+        
+        echo "Running test: ${{ inputs.test-name }}"
+        echo "Command: ${{ steps.test-cmd.outputs.test-command }}"
+        
+        # Execute predefined command with timeout
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout "${{ inputs.timeout-minutes }}m" bash -c "${{ steps.test-cmd.outputs.test-command }}"; then
+                echo "✓ ${{ inputs.test-name }} passed"
+            else
+                echo "✗ ${{ inputs.test-name }} failed"
+                ./smithy logs --tail 50
+                exit 1
+            fi
+        else
+            echo "WARNING: timeout command not available, running without timeout"
+            if bash -c "${{ steps.test-cmd.outputs.test-command }}"; then
+                echo "✓ ${{ inputs.test-name }} passed"
+            else
+                echo "✗ ${{ inputs.test-name }} failed"
+                ./smithy logs --tail 50
+                exit 1
+            fi
+        fi
+        
+        ./smithy stop || true

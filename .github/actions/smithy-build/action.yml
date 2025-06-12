@@ -1,0 +1,19 @@
+name: 'Smithy Build'
+description: 'Build and verify Docker image'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build and verify Docker image
+      shell: bash
+      run: |
+        chmod +x smithy
+        echo "=== Building Docker image ==="
+        ./smithy build
+        
+        echo "=== Verifying image was built ==="
+        docker images | grep "microsoft/brainsmith" || {
+            echo "ERROR: Docker image not found after build"
+            exit 1
+        }
+        echo "✓ Docker image built and verified successfully"

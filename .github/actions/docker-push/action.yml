@@ -1,0 +1,28 @@
+name: 'Docker Push to GHCR'
+description: 'Push Docker image to GHCR and save digest'
+inputs:
+  local-tag:
+    description: 'Local Docker tag to push'
+    type: string
+    required: true
+  ghcr-image:
+    description: 'GHCR image target'
+    type: string
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Push to GHCR
+      shell: bash
+      run: |
+        echo "=== Pushing to GHCR ==="
+        docker tag "${{ inputs.local-tag }}" "${{ inputs.ghcr-image }}"
+        docker push "${{ inputs.ghcr-image }}"
+        
+        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${{ inputs.ghcr-image }}" | grep -o 'sha256:[a-f0-9]*')
+        echo "Image digest: $DIGEST"
+        
+        mkdir -p /tmp
+        echo "$DIGEST" > /tmp/image-digest.txt
+        echo "✓ Image pushed successfully"

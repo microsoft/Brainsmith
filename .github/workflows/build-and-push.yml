@@ -20,37 +20,42 @@ jobs:
   build:
     runs-on: ${{ inputs.runner }}
     steps:
-      - name: Setup environment
-        uses: ./.github/actions/setup-and-test
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          pull-image: false  # Building image, not pulling
-          check-disk: true
-          docker-cleanup: true
-          ghcr-image: ${{ env.GHCR_IMAGE }}
-          docker-tag: ${{ env.BSMITH_DOCKER_TAG }}
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Build and verify image
-        run: .github/scripts/ci-common.sh build-verify
+      - name: Check disk space
+        uses: ./.github/actions/check-disk
+        with:
+          threshold-gb: 20
+
+      - name: Clean Docker resources
+        uses: ./.github/actions/docker-cleanup
+
+      - name: Build Docker image
+        uses: ./.github/actions/smithy-build
 
       - name: Test container functionality
         if: inputs.test-image
-        run: |
-          .github/scripts/ci-common.sh smithy-test \
-            "Basic Functionality" \
-            "echo 'Container test: SUCCESS' && python --version && ls -la \$BSMITH_DIR | head -10" \
-            5
+        uses: ./.github/actions/smithy-test
+        with:
+          test-name: "Basic Functionality"
+          test-type: "python-tests"
+          timeout-minutes: 5
 
       - name: Login to GHCR
-        run: |
-          echo "Logging in to GHCR..."
-          if ! echo "${{ secrets.github-token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null; then
-            echo "ERROR: GHCR login failed"
-            exit 1
-          fi
-          echo "✓ Login successful"
+        uses: ./.github/actions/docker-login
+        with:
+          github-token: ${{ secrets.github-token }}
+          github-actor: ${{ github.actor }}
 
       - name: Push to GHCR
-        run: .github/scripts/ci-common.sh push-ghcr
+        uses: ./.github/actions/docker-push
+        with:
+          local-tag: ${{ env.BSMITH_DOCKER_TAG }}
+          ghcr-image: ${{ env.GHCR_IMAGE }}
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -71,6 +76,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: |
-          ./smithy cleanup || true
-          docker container prune -f
+        uses: ./.github/actions/docker-cleanup

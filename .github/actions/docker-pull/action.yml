@@ -1,0 +1,47 @@
+name: 'Docker Pull and Verify'
+description: 'Pull Docker image from GHCR with digest verification'
+inputs:
+  ghcr-image:
+    description: 'GHCR image to pull'
+    type: string
+    required: true
+  local-tag:
+    description: 'Local tag to apply'
+    type: string
+    required: true
+  verify-digest:
+    description: 'Whether to verify image digest'
+    type: boolean
+    default: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Pull and tag image
+      shell: bash
+      run: |
+        echo "=== Pulling image from GitHub Container Registry ==="
+        echo "GHCR image: ${{ inputs.ghcr-image }}"
+        echo "Local tag: ${{ inputs.local-tag }}"
+        
+        docker pull "${{ inputs.ghcr-image }}"
+        
+        # Verify digest if requested and file exists
+        if [ "${{ inputs.verify-digest }}" = "true" ] && [ -f /tmp/image-digest.txt ]; then
+            EXPECTED_DIGEST=$(cat /tmp/image-digest.txt)
+            ACTUAL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${{ inputs.ghcr-image }}" | grep -o 'sha256:[a-f0-9]*')
+            
+            if [ "$EXPECTED_DIGEST" != "$ACTUAL_DIGEST" ]; then
+                echo "ERROR: Image digest mismatch!"
+                echo "Expected: $EXPECTED_DIGEST"
+                echo "Actual: $ACTUAL_DIGEST"
+                exit 1
+            fi
+            echo "✓ Image digest verified: $ACTUAL_DIGEST"
+        else
+            echo "⚠️  Digest verification skipped"
+        fi
+        
+        docker tag "${{ inputs.ghcr-image }}" "${{ inputs.local-tag }}"
+        echo "✓ Image ready for use"
+        docker images | grep "microsoft/brainsmith"

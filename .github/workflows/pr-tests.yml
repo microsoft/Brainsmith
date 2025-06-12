@@ -1,0 +1,127 @@
+name: Brainsmith CI
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+env:
+  DOCKER_BUILDKIT: 1
+  BSMITH_DOCKER_PREBUILT: "0"
+  BSMITH_DOCKER_NO_CACHE: "1"
+  BSMITH_SKIP_DEP_REPOS: "0"
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
+  BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
+  GHCR_IMAGE: "ghcr.io/${{ github.repository_owner }}/brainsmith:ci-${{ github.sha }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Environment validation and setup
+  validate-environment:
+    runs-on: pre-release
+    timeout-minutes: 10
+    outputs:
+      container-name: ${{ steps.env-check.outputs.container-name }}
+      docker-tag: ${{ steps.env-check.outputs.docker-tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Validate environment and generate outputs
+        id: env-check
+        run: |
+          echo "=== System Information ==="
+          echo "OS: $(uname -a)"
+          echo "User: $(whoami)"
+          echo "Home: $HOME"
+          echo "Working Directory: $(pwd)"
+          echo "Available Disk Space: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "Available Memory: $(free -h | grep Mem | awk '{print $7}')"
+          
+          echo "=== Docker Information ==="
+          docker --version
+          docker info --format "{{.ServerVersion}}" 2>/dev/null || echo "Docker info failed"
+          
+          echo "=== Git Information ==="
+          git log --oneline -3
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          echo "Commit: $COMMIT_HASH"
+          
+          echo "=== Environment Variables ==="
+          echo "BSMITH_DOCKER_PREBUILT=$BSMITH_DOCKER_PREBUILT"
+          echo "BSMITH_DOCKER_NO_CACHE=$BSMITH_DOCKER_NO_CACHE"
+          echo "BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
+          echo "BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
+          echo "BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
+          echo "NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
+          # Explicitly exclude GITHUB_* variables for security
+          
+          echo "=== Container Name Generation ==="
+          chmod +x smithy
+          CONTAINER_NAME="brainsmith_dev_$(whoami)_$(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
+          echo "Expected container name: $CONTAINER_NAME"
+          
+          # Set outputs for other jobs
+          echo "container-name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
+          echo "docker-tag=$BSMITH_DOCKER_TAG" >> $GITHUB_OUTPUT
+          
+          echo "=== Validation Complete ==="
+
+  # Build and push using reusable workflow
+  docker-build-and-test:
+    uses: ./.github/workflows/build-and-push.yml
+    needs: validate-environment
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # E2E test using reusable workflow
+  e2e-test:
+    uses: ./.github/workflows/run-smithy-test.yml
+    needs: [validate-environment, docker-build-and-test]
+    with:
+      test-name: "E2E BERT"
+      test-type: "e2e-bert"
+      test-variant: "default"
+      timeout-minutes: 120
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Final cleanup job - runs regardless of other job success/failure
+  cleanup:
+    if: always()
+    needs: [validate-environment]  # Only depend on first job
+    runs-on: pre-release
+    steps:
+      - name: Smart cleanup based on completed jobs
+        run: |
+          echo "=== Checking for containers to clean ==="
+          
+          # Clean any brainsmith containers
+          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}")
+          if [ -n "$CONTAINERS" ]; then
+            echo "Found containers to clean: $CONTAINERS"
+            docker rm -f $CONTAINERS || true
+          fi
+          
+          # Prune with label filter for safety
+          docker container prune -f --filter "label=ci-run=${{ github.run_id }}" || true
+          docker image prune -f --filter "label=ci-run=${{ github.run_id }}" || true
+          
+          # General cleanup
+          docker system prune -f --volumes || true
+          
+          # Clean up workspace files (GitHub Actions handles this automatically)
+          rm -rf ${{ github.workspace }}/* 2>/dev/null || true
+          rm -rf ${{ github.workspace }}/.* 2>/dev/null || true
+          
+          echo "Cleanup completed"
