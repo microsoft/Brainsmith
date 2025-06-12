@@ -699,6 +699,15 @@ class DataflowInterface:
         else:
             raise ValueError(f"Unknown chunking_mode: {chunking_mode}")
     
+    def reset_stream_dims(self) -> None:
+        """Reset stream dimensions to default (all 1s)."""
+        self.stream_dims = [1] * len(self.stream_dims)
+
+    @property
+    def default_stream_dims(self) -> List[int]:
+        """Get default stream dimensions (all 1s)."""
+        return [1] * len(self.stream_dims)
+    
     def __str__(self) -> str:
         """String representation of interface"""
         return (f"DataflowInterface(name='{self.name}', "

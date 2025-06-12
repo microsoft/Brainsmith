@@ -75,8 +75,17 @@ class {{ class_name }}(AutoHWCustomOp):
         """Define kernel-specific node attributes."""
         attrs = super().get_nodeattr_types()
         
-        # Add RTL parameters as node attributes
+        # Hardware-specific attributes from RTL analysis
         kernel_attrs = {
+            {% for attr_name, attr_spec in node_attributes.items() %}
+            {% if attr_spec|length == 3 %}
+            "{{ attr_name }}": {{ attr_spec }},
+            {% elif attr_spec|length == 4 %}
+            "{{ attr_name }}": {{ attr_spec }},
+            {% endif %}
+            {% endfor %}
+            
+            # RTL parameters as node attributes  
             {% for param in rtl_parameters %}
             "{{ param.name }}": ("i", False, {{ param.default_value or 0 }}),
             {% endfor %}
@@ -137,6 +146,35 @@ class {{ class_name }}(AutoHWCustomOp):
             {% endif %}
             {% endfor %}
         }
+    
+    # ===== Essential FINN HWCustomOp Methods =====
+    
+    {% if datatype_mappings.input_methods %}
+    {% for method in datatype_mappings.input_methods %}
+    def get_input_datatype(self, ind={{ method.index }}):
+        """Returns FINN DataType of input {{ method.index }}."""
+        from qonnx.core.datatype import DataType
+        {{ method.method_body }}
+    {% endfor %}
+    {% endif %}
+    
+    {% if datatype_mappings.output_methods %}
+    {% for method in datatype_mappings.output_methods %}
+    def get_output_datatype(self, ind={{ method.index }}):
+        """Returns FINN DataType of output {{ method.index }}."""
+        from qonnx.core.datatype import DataType
+        {{ method.method_body }}
+    {% endfor %}
+    {% endif %}
+    
+    {% if datatype_mappings.weight_methods %}
+    {% for method in datatype_mappings.weight_methods %}
+    def get_weight_datatype(self):
+        """Returns FINN DataType of weights/thresholds."""
+        from qonnx.core.datatype import DataType
+        {{ method.method_body }}
+    {% endfor %}
+    {% endif %}
     
     {% if resource_estimation_required %}
     # ===== Kernel-Specific Resource Estimation =====

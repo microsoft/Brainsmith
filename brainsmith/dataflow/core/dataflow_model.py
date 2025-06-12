@@ -52,6 +52,11 @@ class DataflowModel:
         self.parameters = parameters
         self.constraints = self._extract_constraints()
         self.computation_graph = self._build_computation_graph()
+        
+        # Performance state - calculated when parallelism is applied
+        self._current_parallelism: Optional[Dict[str, Dict[str, int]]] = None
+        self._cached_intervals: Optional[InitiationIntervals] = None
+        self._parallelism_applied = False
     
     def _organize_interfaces(self, interfaces: List[DataflowInterface]) -> Dict[str, DataflowInterface]:
         """Organize interfaces by name for easy access"""
@@ -93,10 +98,12 @@ class DataflowModel:
                 if iface.interface_type == InterfaceType.WEIGHT]
     
     
-    def calculate_initiation_intervals(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> InitiationIntervals:
+    def apply_parallelism(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> InitiationIntervals:
         """
-        Unified calculation of cII, eII, L for given parallelism parameters.
-        Handles both simple and multi-interface cases automatically.
+        Apply parallelism parameters and recalculate all performance metrics atomically.
+        
+        This is the ONLY method that modifies interface stream_dims.
+        All calculations are done consistently in one operation.
         
         Args:
             iPar: Input parallelism per input interface {interface_name: parallelism}
@@ -105,14 +112,124 @@ class DataflowModel:
         Returns:
             InitiationIntervals containing:
             - cII: Calculation Initiation Interval per input interface
-            - eII: Execution Initiation Interval per input interface  
+            - eII: Execution Initiation Interval per input interface
             - L: Inference Cycle Latency
             - bottleneck_analysis: Performance bottleneck information
         """
+        # Store parallelism configuration
+        self._current_parallelism = {"iPar": iPar.copy(), "wPar": wPar.copy()}
         
+        # Update all interface stream_dims atomically
+        self._update_all_stream_dimensions(iPar, wPar)
+        
+        # Recalculate performance metrics
+        self._cached_intervals = self._calculate_intervals_internal()
+        self._parallelism_applied = True
+        
+        return self._cached_intervals
+    
+    def calculate_initiation_intervals(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> InitiationIntervals:
+        """
+        Public API: Apply parallelism and return calculated intervals.
+        
+        This replaces the old method and ensures atomic updates.
+        """
+        return self.apply_parallelism(iPar, wPar)
+    
+    def _update_all_stream_dimensions(self, iPar: Dict[str, int], wPar: Dict[str, int]) -> None:
+        """Update stream dimensions for all interfaces atomically."""
         input_interfaces = self.input_interfaces
         weight_interfaces = self.weight_interfaces
         output_interfaces = self.output_interfaces
+        
+        # Update input interface stream dimensions
+        for input_if in input_interfaces:
+            input_parallelism = iPar.get(input_if.name, 1)
+            if len(input_if.stream_dims) > 0:
+                input_if.stream_dims[0] = input_parallelism
+        
+        # Update weight interface stream dimensions
+        for weight_if in weight_interfaces:
+            weight_parallelism = wPar.get(weight_if.name, 1)
+            if len(weight_if.stream_dims) > 0:
+                # Calculate stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
+                # Use first input interface as reference
+                if input_interfaces:
+                    input_if = input_interfaces[0]
+                    input_parallelism = iPar.get(input_if.name, 1)
+                    
+                    if (len(input_if.block_dims) > 0 and
+                        len(weight_if.block_dims) > 0 and
+                        input_if.block_dims[0] != 0):
+                        scaling_factor = (weight_if.block_dims[0] // input_if.block_dims[0]
+                                        if weight_if.block_dims[0] >= input_if.block_dims[0] else 1)
+                    else:
+                        scaling_factor = 1
+                    
+                    weight_if.stream_dims[0] = weight_parallelism * input_parallelism * scaling_factor
+                else:
+                    weight_if.stream_dims[0] = weight_parallelism
+        
+        # Update output interface stream dimensions based on bottleneck
+        if input_interfaces and output_interfaces:
+            # Find bottleneck input (highest eII)
+            bottleneck_input = self._find_bottleneck_input(input_interfaces, weight_interfaces, iPar, wPar)
+            bottleneck_parallelism = iPar.get(bottleneck_input.name, 1)
+            
+            for output_if in output_interfaces:
+                if (len(output_if.stream_dims) > 0 and
+                    len(bottleneck_input.block_dims) > 0 and
+                    len(output_if.block_dims) > 0 and
+                    bottleneck_input.block_dims[0] != 0):
+                    
+                    scaling_factor = (output_if.block_dims[0] // bottleneck_input.block_dims[0]
+                                    if output_if.block_dims[0] >= bottleneck_input.block_dims[0] else 1)
+                    output_if.stream_dims[0] = bottleneck_parallelism * scaling_factor
+    
+    def _find_bottleneck_input(self, input_interfaces: List[DataflowInterface],
+                              weight_interfaces: List[DataflowInterface],
+                              iPar: Dict[str, int], wPar: Dict[str, int]) -> DataflowInterface:
+        """Find input interface with highest execution interval (bottleneck)."""
+        max_eII = 0
+        bottleneck_input = input_interfaces[0]
+        
+        for input_if in input_interfaces:
+            input_name = input_if.name
+            input_parallelism = iPar.get(input_name, 1)
+            
+            # Calculate cII for this input
+            cII = input_if.calculate_cII()
+            
+            # Find maximum weight constraint
+            max_weight_cycles = 1
+            for weight_if in weight_interfaces:
+                weight_name = weight_if.name
+                weight_parallelism = wPar.get(weight_name, 1)
+                weight_cycles = self._calculate_weight_cycles_simple(weight_if, weight_parallelism)
+                max_weight_cycles = max(max_weight_cycles, weight_cycles)
+            
+            # Calculate eII
+            eII = cII * max_weight_cycles
+            
+            if eII > max_eII:
+                max_eII = eII
+                bottleneck_input = input_if
+        
+        return bottleneck_input
+    
+    def _calculate_weight_cycles_simple(self, weight_if: DataflowInterface, weight_parallelism: int) -> int:
+        """Calculate weight loading cycles."""
+        weight_cycles = 1
+        num_blocks = weight_if.get_num_blocks()
+        for num_block in num_blocks:
+            if weight_parallelism > 0:
+                weight_cycles *= (num_block + weight_parallelism - 1) // weight_parallelism
+        return max(weight_cycles, 1)
+    
+    def _calculate_intervals_internal(self) -> InitiationIntervals:
+        """Calculate initiation intervals using current stream_dims."""
+        input_interfaces = self.input_interfaces
+        weight_interfaces = self.weight_interfaces
         
         if not input_interfaces:
             return InitiationIntervals(cII={}, eII={}, L=1, bottleneck_analysis={})
@@ -120,66 +237,37 @@ class DataflowModel:
         cII_per_input = {}
         eII_per_input = {}
         
-        # Calculate for each input interface
+        # Calculate intervals using current stream_dims (already updated)
         for input_if in input_interfaces:
             input_name = input_if.name
-            input_parallelism = iPar.get(input_name, 1)
             
-            # Update input stream dimensions (make a copy to avoid modifying original)
-            input_if_copy = self._copy_interface_with_parallelism(input_if, input_parallelism, None)
+            # Calculate cII using current stream_dims
+            cII_per_input[input_name] = input_if.calculate_cII()
             
-            # Calculate cII for this input: cII_i = ∏(block_dims_i / stream_dims_i)
-            cII_per_input[input_name] = input_if_copy.calculate_cII()
-            
-            # Find maximum weight constraint for this input
+            # Find maximum weight constraint
             max_weight_cycles = 1
             for weight_if in weight_interfaces:
                 weight_name = weight_if.name
-                weight_parallelism = wPar.get(weight_name, 1)
-                
-                # Update weight stream dimensions relative to this input
-                # stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
-                weight_if_copy = self._copy_interface_with_weight_parallelism(
-                    weight_if, weight_parallelism, input_parallelism, input_if
-                )
-                
-                # Calculate weight cycles: ∏(tensor_dims_W / wPar)
-                weight_cycles = self._calculate_weight_cycles(weight_if_copy, weight_parallelism)
+                weight_parallelism = self._current_parallelism["wPar"].get(weight_name, 1)
+                weight_cycles = self._calculate_weight_cycles_simple(weight_if, weight_parallelism)
                 max_weight_cycles = max(max_weight_cycles, weight_cycles)
             
-            # Calculate eII for this input: eII_i = cII_i * max_weight_cycles
+            # Calculate eII
             eII_per_input[input_name] = cII_per_input[input_name] * max_weight_cycles
         
-        # Determine bottleneck and overall latency
+        # Find bottleneck and calculate L
         bottleneck_input_name = max(eII_per_input.keys(), key=lambda name: eII_per_input[name])
         bottleneck_input = self.interfaces[bottleneck_input_name]
         
-        # L = eII_bottleneck * num_blocks_bottleneck  
         num_blocks = np.prod(bottleneck_input.get_num_blocks())
         L = eII_per_input[bottleneck_input_name] * num_blocks
-        
-        # Update output stream dimensions based on bottleneck
-        bottleneck_parallelism = iPar.get(bottleneck_input_name, 1)
-        self._update_output_stream_dimensions(output_interfaces, bottleneck_input, bottleneck_parallelism)
         
         bottleneck_analysis = {
             "bottleneck_input": bottleneck_input_name,
             "bottleneck_eII": eII_per_input[bottleneck_input_name],
-            "bottleneck_cII": cII_per_input[bottleneck_input_name], 
+            "bottleneck_cII": cII_per_input[bottleneck_input_name],
             "bottleneck_num_blocks": num_blocks,
-            "bottleneck_tensor_dims": bottleneck_input.tensor_dims,
-            "bottleneck_block_dims": bottleneck_input.block_dims,
-            "bottleneck_stream_dims": bottleneck_input.stream_dims,
-            "total_cycles_breakdown": {
-                "tensor_processing_cycles": eII_per_input[bottleneck_input_name],
-                "total_tensor_blocks": num_blocks,
-                "total_inference_cycles": L
-            },
-            "interface_counts": {
-                "total_inputs": len(input_interfaces),
-                "total_outputs": len(output_interfaces),
-                "total_weights": len(weight_interfaces)
-            }
+            "total_inference_cycles": L
         }
         
         return InitiationIntervals(
@@ -189,67 +277,21 @@ class DataflowModel:
             bottleneck_analysis=bottleneck_analysis
         )
     
-    def _copy_interface_with_parallelism(self, interface: DataflowInterface, 
-                                       input_parallelism: int, 
-                                       weight_parallelism: Optional[int]) -> DataflowInterface:
-        """Create a copy of interface with updated stream dimensions"""
-        # Create a shallow copy and update stream_dims
-        new_stream_dims = interface.stream_dims.copy()
-        
-        if interface.interface_type == InterfaceType.INPUT:
-            new_stream_dims[0] = input_parallelism
-        elif interface.interface_type == InterfaceType.WEIGHT and weight_parallelism is not None:
-            new_stream_dims[0] = weight_parallelism
-        
-        # For simplicity, we'll modify the original interface's stream_dims
-        # In a production implementation, we might want true copying
-        original_stream_dims = interface.stream_dims.copy()
-        interface.stream_dims = new_stream_dims
-        
-        return interface
+    def get_current_intervals(self) -> Optional[InitiationIntervals]:
+        """Get currently cached intervals (if parallelism has been applied)."""
+        if self._parallelism_applied:
+            return self._cached_intervals
+        return None
     
-    def _copy_interface_with_weight_parallelism(self, weight_if: DataflowInterface,
-                                              weight_parallelism: int,
-                                              input_parallelism: int,
-                                              input_if: DataflowInterface) -> DataflowInterface:
-        """Create copy of weight interface with computed stream dimensions"""
-        # stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)
-        if len(input_if.block_dims) > 0 and input_if.block_dims[0] != 0:
-            scaling_factor = weight_if.block_dims[0] // input_if.block_dims[0] if weight_if.block_dims[0] >= input_if.block_dims[0] else 1
-        else:
-            scaling_factor = 1
-            
-        new_stream_dims = weight_if.stream_dims.copy()
-        new_stream_dims[0] = weight_parallelism * input_parallelism * scaling_factor
+    def reset_parallelism(self) -> None:
+        """Reset all interfaces to default stream_dims."""
+        for interface in self.interfaces.values():
+            # Reset to default stream_dims (all 1s)
+            interface.stream_dims = [1] * len(interface.stream_dims)
         
-        # Update the interface (temporary modification)
-        original_stream_dims = weight_if.stream_dims.copy()
-        weight_if.stream_dims = new_stream_dims
-        
-        return weight_if
-    
-    
-    def _calculate_weight_cycles(self, weight_if: DataflowInterface, weight_parallelism: int) -> int:
-        """Calculate weight loading cycles based on number of weight blocks to process"""
-        weight_cycles = 1
-        num_blocks = weight_if.get_num_blocks()
-        for num_block in num_blocks:
-            if weight_parallelism > 0:
-                weight_cycles *= (num_block + weight_parallelism - 1) // weight_parallelism
-        return max(weight_cycles, 1)
-    
-    def _update_output_stream_dimensions(self, output_interfaces: List[DataflowInterface],
-                                       bottleneck_input: DataflowInterface,
-                                       bottleneck_parallelism: int) -> None:
-        """Update output stream dimensions based on bottleneck input"""
-        for output_if in output_interfaces:
-            if len(output_if.stream_dims) > 0 and len(bottleneck_input.block_dims) > 0:
-                # stream_dims_O = iPar_bottleneck * (block_dims_O / block_dims_I_bottleneck)
-                if bottleneck_input.block_dims[0] != 0:
-                    scaling_factor = output_if.block_dims[0] // bottleneck_input.block_dims[0] if output_if.block_dims[0] >= bottleneck_input.block_dims[0] else 1
-                else:
-                    scaling_factor = 1
-                output_if.stream_dims[0] = bottleneck_parallelism * scaling_factor
+        self._current_parallelism = None
+        self._cached_intervals = None
+        self._parallelism_applied = False
     
     def validate_mathematical_constraints(self) -> ValidationResult:
         """
