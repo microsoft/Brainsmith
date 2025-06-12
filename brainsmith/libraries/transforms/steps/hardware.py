@@ -1,7 +1,7 @@
 """Hardware layer inference operations."""
 
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
+from brainsmith.libraries.transforms.operations.convert_to_hw_layers import *
 
 
 def infer_hardware_step(model, cfg):
@@ -30,12 +30,12 @@ def infer_hardware_step(model, cfg):
         cannot connect to the same stream twice, it needs to be
         explictly duplicated.
     """
-    model = model.transform(to_bs_hw.InferLayerNorm())
+    model = model.transform(InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
-    model = model.transform(to_bs_hw.InferShuffle())
-    #model = model.transform(to_bs_hw.InferQuantSoftmax())
-    model = model.transform(to_bs_hw.InferHWSoftmax())
+    model = model.transform(InferShuffle())
+    #model = model.transform(InferQuantSoftmax())
+    model = model.transform(InferHWSoftmax())
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model

@@ -201,13 +201,9 @@ def validate_registry_integrity(library_name: str, registry: Dict, loader_func: 
             logger.error(error_msg)
             
         except ImportError as e:
-            # Expected for transforms/analysis with missing dependencies
-            if "not available" in str(e):
-                logger.debug(f"⚠️  {library_name}.{component_name}: Missing dependencies (expected)")
-            else:
-                error_msg = f"{library_name}.{component_name}: Import error - {e}"
-                errors.append(error_msg)
-                logger.error(error_msg)
+            error_msg = f"{library_name}.{component_name}: Import error - {e}"
+            errors.append(error_msg)
+            logger.error(error_msg)
                 
         except Exception as e:
             error_msg = f"{library_name}.{component_name}: Unexpected error - {e}"

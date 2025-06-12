@@ -19,8 +19,8 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
-from brainsmith.transformation.shuffle_helpers import innerloop_moves
+from brainsmith.libraries.transforms.operations.shuffle_helpers import shuffle_perfect_loopnest_coeffs
+from brainsmith.libraries.transforms.operations.shuffle_helpers import innerloop_moves
 
 
 class InferShuffle(Transformation):

@@ -247,26 +247,22 @@ class HooksRegistry(BaseRegistry[PluginInfo]):
         """Discover built-in event handlers."""
         handlers = {}
         
-        try:
-            # Import events module to find built-in handlers
-            from . import events
-            
-            for name, obj in inspect.getmembers(events):
-                if (inspect.isclass(obj) and 
-                    issubclass(obj, EventHandler) and 
-                    obj != EventHandler):
-                    
-                    handler_info = HandlerInfo(
-                        name=name.lower().replace('handler', ''),
-                        handler_class=obj,
-                        module_path='brainsmith.core.hooks.events',
-                        description=self._extract_description(obj),
-                        event_types=self._extract_event_types(obj)
-                    )
-                    handlers[handler_info.name] = handler_info
-                    
-        except ImportError:
-            self._log_debug("Could not import events module")
+        # Import events module to find built-in handlers
+        from . import events
+        
+        for name, obj in inspect.getmembers(events):
+            if (inspect.isclass(obj) and
+                issubclass(obj, EventHandler) and
+                obj != EventHandler):
+                
+                handler_info = HandlerInfo(
+                    name=name.lower().replace('handler', ''),
+                    handler_class=obj,
+                    module_path='brainsmith.core.hooks.events',
+                    description=self._extract_description(obj),
+                    event_types=self._extract_event_types(obj)
+                )
+                handlers[handler_info.name] = handler_info
         
         return handlers
     

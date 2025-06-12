@@ -9,13 +9,7 @@ from typing import Dict, List, Any, Optional, Union
 from enum import Enum
 
 # Import key classes to re-export them
-try:
-    from .design_space import DesignPoint, DesignSpace, ParameterDefinition as DesignSpaceParameterDefinition
-except ImportError:
-    # Graceful fallback if design_space module not available
-    DesignPoint = None
-    DesignSpace = None
-    DesignSpaceParameterDefinition = None
+from .design_space import DesignPoint, DesignSpace, ParameterDefinition as DesignSpaceParameterDefinition
 
 # Type aliases for clarity
 ParameterSpace = Dict[str, List[Any]]

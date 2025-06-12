@@ -21,40 +21,16 @@ Example Usage:
 
 from typing import List, Union, Callable, Any
 
-# Import analysis tools - handle missing dependencies gracefully
-try:
-    from .profiling import roofline_analysis, RooflineProfiler
-    from .tools.gen_kernel import generate_hw_kernel
-    _ANALYSIS_AVAILABLE = True
-    
-    # Simple registry maps tool names to their functions/classes
-    AVAILABLE_ANALYSIS_TOOLS = {
-        "roofline_analysis": roofline_analysis,
-        "roofline_profiler": RooflineProfiler,
-        "generate_hw_kernel": generate_hw_kernel,
-    }
+# Direct imports - fail immediately if missing
+from .profiling import roofline_analysis, RooflineProfiler
+from .tools.gen_kernel import generate_hw_kernel
 
-except ImportError as e:
-    # Handle missing dependencies gracefully
-    _ANALYSIS_AVAILABLE = False
-    
-    # Define minimal stubs for missing functions
-    def roofline_analysis(*args, **kwargs):
-        raise ImportError(f"Analysis functionality not available: {e}")
-    
-    class RooflineProfiler:
-        def __init__(self, *args, **kwargs):
-            raise ImportError(f"Analysis functionality not available: {e}")
-    
-    def generate_hw_kernel(*args, **kwargs):
-        raise ImportError(f"Analysis functionality not available: {e}")
-    
-    # Create minimal registry with stub functions
-    AVAILABLE_ANALYSIS_TOOLS = {
-        "roofline_analysis": roofline_analysis,
-        "roofline_profiler": RooflineProfiler,
-        "generate_hw_kernel": generate_hw_kernel,
-    }
+# Registry maps tool names to their functions/classes
+AVAILABLE_ANALYSIS_TOOLS = {
+    "roofline_analysis": roofline_analysis,
+    "roofline_profiler": RooflineProfiler,
+    "generate_hw_kernel": generate_hw_kernel,
+}
 
 def get_analysis_tool(name: str) -> Union[Callable, Any]:
     """
@@ -86,10 +62,8 @@ def list_analysis_tools() -> List[str]:
 
 
 # Direct imports for backward compatibility
-if _ANALYSIS_AVAILABLE:
-    # Import everything from profiling and tools for direct access
-    from .profiling import *
-    from .tools import *
+from .profiling import *
+from .tools import *
 
 # Export all public functions and types
 __all__ = [

@@ -257,16 +257,7 @@ def _setup_dse_configuration(blueprint_data, objectives, constraints, target_dev
             blueprint_path=None  # Set to None since we have the data already
         )
     except ImportError:
-        # Fallback configuration for when DSE system not available
-        logger.warning("DSE system not available, using fallback configuration")
-        
-        return {
-            'design_space': {},
-            'objectives': objectives or blueprint_data.get('targets', {}),
-            'constraints': constraints or blueprint_data.get('constraints', {}),
-            'blueprint': blueprint_data,
-            'fallback_mode': True
-        }
+        raise RuntimeError("DSE system not available. Cannot proceed without DSE configuration.")
 
 
 def _run_full_dse(model_path: str, dse_config):
@@ -288,8 +279,7 @@ def _run_full_dse(model_path: str, dse_config):
         return results
         
     except ImportError:
-        logger.warning("DSE interface not available, using fallback DSE")
-        return _fallback_dse(model_path, dse_config)
+        raise RuntimeError("DSE interface not available. Cannot proceed without DSE system.")
 
 
 def _run_hw_optimization_dse(dataflow_graph, dse_config):
@@ -311,8 +301,7 @@ def _run_hw_optimization_dse(dataflow_graph, dse_config):
         return results
         
     except ImportError:
-        logger.warning("DSE interface not available, using fallback optimization")
-        return _fallback_hw_optimization(dataflow_graph, dse_config)
+        raise RuntimeError("DSE interface not available. Cannot proceed without DSE system.")
 
 
 def _load_dataflow_graph(model_path: str):
@@ -358,27 +347,20 @@ def _generate_dataflow_core(dataflow_graph, dse_config):
         return finn_result.to_dict() if hasattr(finn_result, 'to_dict') else finn_result
         
     except ImportError:
-        logger.warning("FINN orchestration not available, using fallback core generation")
-        return _fallback_core_generation(dataflow_graph, dse_config)
+        raise RuntimeError("FINN orchestration not available. Cannot proceed without FINN system.")
 
 
 def _assemble_results(dataflow_graph, dataflow_core, dse_results):
     """Assemble final results dictionary."""
     
-    # Import analysis hooks (optional)
-    try:
-        from ..libraries.analysis import roofline_analysis, RooflineProfiler
-        analysis_available = True
-        # Simple fallback functions for missing analysis functions
-        expose_analysis_data = lambda x: {'analysis_tools': ['roofline_analysis', 'RooflineProfiler']}
-        register_analyzer = lambda: None
-        get_raw_data = lambda: []
-    except ImportError:
-        analysis_available = False
-        # Fallback functions
-        expose_analysis_data = lambda x: {}
-        register_analyzer = lambda: None
-        get_raw_data = lambda: []
+    # Import analysis hooks - fail if not available
+    from ..libraries.analysis import roofline_analysis, RooflineProfiler
+    
+    # Analysis functions
+    expose_analysis_data = lambda x: {'analysis_tools': ['roofline_analysis', 'RooflineProfiler']}
+    register_analyzer = lambda: None
+    get_raw_data = lambda: []
+    analysis_available = True
     
     results = {
         'dataflow_graph': {

@@ -12,21 +12,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Import existing roofline functionality
-try:
-    from .roofline import roofline_analysis as _roofline_analysis
-    from .model_profiling import RooflineModel
-except ImportError:
-    _roofline_analysis = None
-    RooflineModel = None
-    logger.warning("Roofline analysis components not available")
+from .roofline import roofline_analysis as _roofline_analysis
+from .model_profiling import RooflineModel
 
 
 class RooflineProfiler:
     """High-level interface for roofline analysis."""
     
     def __init__(self):
-        if RooflineModel is None:
-            raise RuntimeError("RooflineModel not available - check profiling module imports")
         self.model = RooflineModel()
     
     def profile_model(self, model_config: Dict[str, Any], hardware_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -211,13 +204,6 @@ def roofline_analysis(model_config: Dict, hw_config: Dict, dtypes: List[int]) ->
     Returns:
         Dictionary with roofline analysis results for each data type
     """
-    if _roofline_analysis is None:
-        logger.error("Roofline analysis not available - check module imports")
-        return {
-            'error': 'Roofline analysis not available',
-            'fallback': True
-        }
-    
     logger.info(f"Running roofline analysis for model: {model_config.get('arch', 'unknown')}")
     
     try:

@@ -16,7 +16,7 @@ from typing import List, Optional, Dict, Callable
 
 from tree_sitter import Node
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import (
+from .data import (
     Pragma, PragmaType, TopModulePragma, DatatypePragma,
     DerivedParameterPragma, WeightPragma, PragmaError, Interface, HWKernel
 )

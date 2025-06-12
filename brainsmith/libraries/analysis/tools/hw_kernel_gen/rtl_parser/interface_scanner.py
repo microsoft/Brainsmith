@@ -17,8 +17,8 @@ import logging
 from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, InterfaceType, PortGroup
-from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import (
+from .data import Port, InterfaceType, PortGroup
+from .protocol_validator import (
     GLOBAL_SIGNAL_SUFFIXES,
     AXI_STREAM_SUFFIXES,
     AXI_LITE_SUFFIXES

@@ -125,12 +125,9 @@ def get_step(name: str) -> Callable:
         return steps[name]
     
     # Fallback to FINN built-in steps
-    try:
-        from finn.builder.build_dataflow_steps import __dict__ as finn_steps
-        if name in finn_steps and callable(finn_steps[name]):
-            return finn_steps[name]
-    except ImportError:
-        pass
+    from finn.builder.build_dataflow_steps import __dict__ as finn_steps
+    if name in finn_steps and callable(finn_steps[name]):
+        return finn_steps[name]
     
     raise ValueError(f"Step '{name}' not found in BrainSmith or FINN")
 

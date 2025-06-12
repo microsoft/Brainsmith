@@ -7,16 +7,8 @@ analysis and profiling capabilities. These tools complement the core
 pipeline.
 """
 
-try:
-    from .profiling import roofline_analysis, RooflineProfiler
-except ImportError:
-    roofline_analysis = None
-    RooflineProfiler = None
-
-try:
-    from .hw_kernel_gen import generate_hw_kernel
-except ImportError:
-    generate_hw_kernel = None
+from ..profiling import roofline_analysis, RooflineProfiler
+from .hw_kernel_gen import generate_hw_kernel
 
 __all__ = [
     'roofline_analysis',

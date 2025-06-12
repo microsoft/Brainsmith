@@ -16,7 +16,7 @@ presence of required signals and correct port directions. Protocol definitions
 import logging
 from typing import Dict, Set, List, Tuple
 
-from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, PortGroup, ValidationResult, InterfaceType
+from .data import Port, Direction, PortGroup, ValidationResult, InterfaceType
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md

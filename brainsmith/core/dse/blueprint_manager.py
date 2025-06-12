@@ -12,14 +12,9 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 
-# Import directly to avoid circular imports
-try:
-    from .design_space import DesignPoint
-    from .types import ParameterSpace
-except ImportError:
-    # Graceful fallback
-    DesignPoint = None
-    ParameterSpace = dict
+# Import required modules
+from .design_space import DesignPoint
+from .types import ParameterSpace
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +150,6 @@ class BlueprintManager:
         Returns:
             DesignPoint object or None if DesignPoint class not available
         """
-        if DesignPoint is None:
-            logger.warning("DesignPoint class not available - cannot create design point")
-            return None
-            
         blueprint = self.load_blueprint(blueprint_name)
         
         # Merge blueprint base config with parameter values

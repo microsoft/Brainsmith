@@ -16,13 +16,8 @@ from .types import BuildMetrics, DataSummary, MetricsList
 
 logger = logging.getLogger(__name__)
 
-# Try to import pandas for advanced export capabilities
-try:
-    import pandas as pd
-    PANDAS_AVAILABLE = True
-except ImportError:
-    PANDAS_AVAILABLE = False
-    logger.debug("Pandas not available - using basic export functions")
+# Import pandas for advanced export capabilities
+import pandas as pd
 
 
 def export_metrics(
@@ -59,7 +54,7 @@ def export_metrics(
             return _export_json(metrics_list, output_file)
         elif format.lower() == 'csv':
             return _export_csv(metrics_list, output_file)
-        elif format.lower() == 'excel' and PANDAS_AVAILABLE:
+        elif format.lower() == 'excel':
             return _export_excel(metrics_list, output_file)
         else:
             logger.error(f"Unsupported export format: {format}")
@@ -346,10 +341,6 @@ def _export_csv(metrics_list: MetricsList, output_file: Path) -> bool:
 
 def _export_excel(metrics_list: MetricsList, output_file: Path) -> bool:
     """Export metrics list to Excel format using pandas."""
-    if not PANDAS_AVAILABLE:
-        logger.error("Pandas not available for Excel export")
-        return False
-    
     try:
         # Convert to DataFrame
         rows = []

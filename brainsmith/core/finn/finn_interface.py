@@ -136,7 +136,7 @@ class FINNInterface:
         """Execute FINN build process."""
         
         try:
-            # Try to import and use FINN
+            # Import and use FINN
             from finn.util.fpgadataflow import DataflowBuildConfig
             from finn.builder.build_dataflow import build_dataflow
             
@@ -147,10 +147,6 @@ class FINNInterface:
             build_results = build_dataflow(model=model_path, cfg=build_cfg)
             
             return build_results
-            
-        except ImportError:
-            logger.warning("FINN not available, using mock implementation")
-            return self._create_mock_results(model_path, finn_config)
         
         except Exception as e:
             logger.error(f"FINN build execution failed: {e}")

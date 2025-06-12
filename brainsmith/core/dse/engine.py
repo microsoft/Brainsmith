@@ -16,36 +16,12 @@ from .helpers import generate_parameter_grid, estimate_runtime
 
 logger = logging.getLogger(__name__)
 
-# Import streamlined modules with fallbacks
-try:
-    from ...core.api import forge
-    from ...core.metrics import create_metrics
-    CORE_AVAILABLE = True
-except ImportError:
-    CORE_AVAILABLE = False
-    logger.warning("Core module not available - using fallback")
-
-try:
-    from .blueprint_functions import load_blueprint_yaml, get_build_steps, get_objectives
-    BLUEPRINTS_AVAILABLE = True
-except ImportError:
-    BLUEPRINTS_AVAILABLE = False
-    logger.warning("Blueprint functions not available - using fallback")
-
-try:
-    from ...infrastructure.hooks import log_dse_event, log_optimization_event
-    HOOKS_AVAILABLE = True
-except ImportError:
-    HOOKS_AVAILABLE = False
-    log_dse_event = lambda *args, **kwargs: None
-    log_optimization_event = lambda *args, **kwargs: None
-
-try:
-    from ...infrastructure.finn import build_accelerator
-    FINN_AVAILABLE = True
-except ImportError:
-    FINN_AVAILABLE = False
-    logger.warning("FINN interface not available - using fallback")
+# Direct imports - fail immediately if missing
+from ...core.api import forge
+from ...core.metrics import create_metrics
+from .blueprint_functions import load_blueprint_yaml, get_build_steps, get_objectives
+from ..hooks import log_dse_event, log_optimization_event
+from ..finn import build_accelerator
 
 
 def parameter_sweep(
@@ -78,10 +54,7 @@ def parameter_sweep(
         config = DSEConfiguration()
     
     # Load blueprint using simplified functions
-    if BLUEPRINTS_AVAILABLE:
-        blueprint_data = load_blueprint_yaml(blueprint_path)
-    else:
-        blueprint_data = {'name': 'fallback_blueprint'}
+    blueprint_data = load_blueprint_yaml(blueprint_path)
     
     # Generate parameter combinations
     param_combinations = generate_parameter_grid(parameters)
@@ -186,7 +159,7 @@ def batch_evaluate(
                 # Create failed result
                 results[model_path] = DSEResult(
                     parameters=parameters,
-                    metrics=create_metrics() if CORE_AVAILABLE else None,
+                    metrics=create_metrics(),
                     build_success=False,
                     build_time=0.0,
                     metadata={'error': str(e)}
@@ -423,7 +396,7 @@ def _run_sequential_sweep(
                 # Add failed result
                 failed_result = DSEResult(
                     parameters=params,
-                    metrics=create_metrics() if CORE_AVAILABLE else None,
+                    metrics=create_metrics(),
                     build_success=False,
                     build_time=0.0,
                     metadata={'error': str(e)}
@@ -470,7 +443,7 @@ def _run_parallel_sweep(
                 if config.continue_on_failure:
                     failed_result = DSEResult(
                         parameters=params,
-                        metrics=create_metrics() if CORE_AVAILABLE else None,
+                        metrics=create_metrics(),
                         build_success=False,
                         build_time=0.0,
                         metadata={'error': str(e)}
@@ -498,42 +471,24 @@ def _evaluate_single_configuration(
     start_time = time.time()
     
     try:
-        if CORE_AVAILABLE:
-            # Use simplified core API
-            forge_result = forge(
-                model_path=model_path,
-                blueprint_path=None,  # Pass blueprint data directly
-                **parameters
-            )
-            
-            # Extract metrics from forge result
-            if 'metrics' in forge_result:
-                metrics = forge_result['metrics']
-            else:
-                metrics = create_metrics()
-            
-            build_success = forge_result.get('build_success', True)
-            
-        elif FINN_AVAILABLE:
-            # Fallback to FINN interface
-            finn_result = build_accelerator(
-                model_path=model_path,
-                blueprint_config=blueprint_data,
-                **parameters
-            )
-            
-            metrics = finn_result.metrics if hasattr(finn_result, 'metrics') else create_metrics()
-            build_success = finn_result.build_success if hasattr(finn_result, 'build_success') else True
-            
+        # Use simplified core API
+        forge_result = forge(
+            model_path=model_path,
+            blueprint_path=None,  # Pass blueprint data directly
+            **parameters
+        )
+        
+        # Extract metrics from forge result
+        if 'metrics' in forge_result:
+            metrics = forge_result['metrics']
         else:
-            # Minimal fallback for testing
-            metrics = create_metrics() if CORE_AVAILABLE else None
-            build_success = True
-            logger.warning("Using fallback evaluation - no core or FINN available")
-    
+            metrics = create_metrics()
+        
+        build_success = forge_result.get('build_success', True)
+        
     except Exception as e:
         logger.error(f"Configuration evaluation failed: {e}")
-        metrics = create_metrics() if CORE_AVAILABLE else None
+        metrics = create_metrics()
         build_success = False
     
     build_time = time.time() - start_time

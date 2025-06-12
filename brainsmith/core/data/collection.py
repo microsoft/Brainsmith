@@ -16,17 +16,9 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-# Import streamlined modules with fallbacks
-try:
-    from ...infrastructure.hooks import log_data_event
-except ImportError:
-    log_data_event = lambda *args, **kwargs: None
-
-try:
-    from ...infrastructure.finn import build_accelerator
-    FINN_AVAILABLE = True
-except ImportError:
-    FINN_AVAILABLE = False
+# Import streamlined modules
+from ...infrastructure.hooks import log_data_event
+from ...infrastructure.finn import build_accelerator
 
 
 def collect_build_metrics(

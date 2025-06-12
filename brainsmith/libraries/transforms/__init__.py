@@ -21,71 +21,29 @@ Example Usage:
 
 from typing import List, Callable
 
-# Import transform step functions - handle missing dependencies gracefully
-try:
-    from .steps.cleanup import cleanup_step, cleanup_advanced_step
-    from .steps.conversion import qonnx_to_finn_step
-    from .steps.streamlining import streamlining_step
-    from .steps.hardware import infer_hardware_step
-    from .steps.optimizations import constrain_folding_and_set_pumped_compute_step
-    from .steps.validation import generate_reference_io_step
-    from .steps.metadata import shell_metadata_handover_step
-    from .steps.bert import remove_head_step, remove_tail_step
-    _STEPS_AVAILABLE = True
-    
-    # Simple registry maps transform names to their functions
-    AVAILABLE_TRANSFORMS = {
-        "cleanup": cleanup_step,
-        "cleanup_advanced": cleanup_advanced_step,
-        "qonnx_to_finn": qonnx_to_finn_step,
-        "streamlining": streamlining_step,
-        "infer_hardware": infer_hardware_step,
-        "constrain_folding_and_set_pumped_compute": constrain_folding_and_set_pumped_compute_step,
-        "generate_reference_io": generate_reference_io_step,
-        "shell_metadata_handover": shell_metadata_handover_step,
-        "remove_head": remove_head_step,
-        "remove_tail": remove_tail_step,
-    }
+# Direct imports - fail immediately if missing
+from .steps.cleanup import cleanup_step, cleanup_advanced_step
+from .steps.conversion import qonnx_to_finn_step
+from .steps.streamlining import streamlining_step
+from .steps.hardware import infer_hardware_step
+from .steps.optimizations import constrain_folding_and_set_pumped_compute_step
+from .steps.validation import generate_reference_io_step
+from .steps.metadata import shell_metadata_handover_step
+from .steps.bert import remove_head_step, remove_tail_step
 
-except ImportError as e:
-    # Handle missing dependencies (qonnx, finn, etc.) gracefully
-    _STEPS_AVAILABLE = False
-    
-    # Define minimal stubs for missing functions
-    def cleanup_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def cleanup_advanced_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def qonnx_to_finn_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def streamlining_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def infer_hardware_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def constrain_folding_and_set_pumped_compute_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def generate_reference_io_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def shell_metadata_handover_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def remove_head_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    def remove_tail_step(*args, **kwargs):
-        raise ImportError(f"Steps functionality not available: {e}")
-    
-    # Create minimal registry with stub functions
-    AVAILABLE_TRANSFORMS = {
-        "cleanup": cleanup_step,
-        "cleanup_advanced": cleanup_advanced_step,
-        "qonnx_to_finn": qonnx_to_finn_step,
-        "streamlining": streamlining_step,
-        "infer_hardware": infer_hardware_step,
-        "constrain_folding_and_set_pumped_compute": constrain_folding_and_set_pumped_compute_step,
-        "generate_reference_io": generate_reference_io_step,
-        "shell_metadata_handover": shell_metadata_handover_step,
-        "remove_head": remove_head_step,
-        "remove_tail": remove_tail_step,
-    }
+# Registry maps transform names to their functions
+AVAILABLE_TRANSFORMS = {
+    "cleanup": cleanup_step,
+    "cleanup_advanced": cleanup_advanced_step,
+    "qonnx_to_finn": qonnx_to_finn_step,
+    "streamlining": streamlining_step,
+    "infer_hardware": infer_hardware_step,
+    "constrain_folding_and_set_pumped_compute": constrain_folding_and_set_pumped_compute_step,
+    "generate_reference_io": generate_reference_io_step,
+    "shell_metadata_handover": shell_metadata_handover_step,
+    "remove_head": remove_head_step,
+    "remove_tail": remove_tail_step,
+}
 
 def get_transform(name: str) -> Callable:
     """

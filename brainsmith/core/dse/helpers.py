@@ -13,20 +13,9 @@ import math
 
 logger = logging.getLogger(__name__)
 
-# Try to import advanced sampling libraries
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-    logger.debug("NumPy not available - using basic sampling")
-
-try:
-    from scipy.stats import qmc
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    logger.debug("SciPy not available - using basic sampling")
+# Import advanced sampling libraries
+import numpy as np
+from scipy.stats import qmc
 
 
 def generate_parameter_grid(parameters: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
@@ -79,8 +68,7 @@ def create_parameter_samples(
     """
     if seed is not None:
         random.seed(seed)
-        if NUMPY_AVAILABLE:
-            np.random.seed(seed)
+        np.random.seed(seed)
     
     param_names = list(parameters.keys())
     param_values = list(parameters.values())
@@ -92,10 +80,10 @@ def create_parameter_samples(
     elif strategy == 'random':
         return _random_sampling(param_names, param_values, n_samples)
     
-    elif strategy == 'lhs' and SCIPY_AVAILABLE:
+    elif strategy == 'lhs':
         return _latin_hypercube_sampling(param_names, param_values, n_samples)
     
-    elif strategy == 'sobol' and SCIPY_AVAILABLE:
+    elif strategy == 'sobol':
         return _sobol_sampling(param_names, param_values, n_samples)
     
     else:
@@ -126,9 +114,6 @@ def _latin_hypercube_sampling(
     n_samples: int
 ) -> List[Dict[str, Any]]:
     """Latin Hypercube Sampling for better space coverage."""
-    if not SCIPY_AVAILABLE:
-        return _random_sampling(param_names, param_values, n_samples)
-    
     n_dims = len(param_names)
     sampler = qmc.LatinHypercube(d=n_dims, seed=42)
     lhs_samples = sampler.random(n=n_samples)
@@ -152,9 +137,6 @@ def _sobol_sampling(
     n_samples: int
 ) -> List[Dict[str, Any]]:
     """Sobol sequence sampling for low-discrepancy sampling."""
-    if not SCIPY_AVAILABLE:
-        return _random_sampling(param_names, param_values, n_samples)
-    
     n_dims = len(param_names)
     sampler = qmc.Sobol(d=n_dims, seed=42)
     sobol_samples = sampler.random(n=n_samples)
