@@ -6,9 +6,15 @@ case "$1" in
     "check-disk")
         # Disk space check (20GB default)
         REQUIRED="${2:-20}"
-        AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+        if ! AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//'); then
+            echo "ERROR: Failed to check disk space"
+            exit 1
+        fi
         echo "Disk space: ${AVAILABLE}GB available (need ${REQUIRED}GB)"
-        [ "$AVAILABLE" -lt "$REQUIRED" ] && exit 1
+        if [ "$AVAILABLE" -lt "$REQUIRED" ]; then
+            echo "ERROR: Insufficient disk space"
+            exit 1
+        fi
         ;;
         
     "ghcr-pull")
@@ -17,7 +23,15 @@ case "$1" in
         echo "GHCR image: $GHCR_IMAGE"
         echo "Local tag: $BSMITH_DOCKER_TAG"
         
-        echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        # Secure login with error suppression
+        echo "Attempting GHCR login..."
+        if ! echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin 2>/dev/null; then
+            echo "ERROR: Failed to authenticate with GitHub Container Registry"
+            echo "Please check GITHUB_TOKEN permissions and network connectivity"
+            exit 1
+        fi
+        echo "✓ GHCR login successful"
+        
         docker pull "$GHCR_IMAGE"
         
         # Verify digest if file exists
@@ -42,22 +56,58 @@ case "$1" in
         ;;
         
     "smithy-test")
-        # Run a test with smithy
+        # Validate inputs
+        if [ $# -lt 3 ]; then
+            echo "ERROR: Insufficient arguments for smithy-test"
+            exit 1
+        fi
+        
         TEST_NAME="$2"
         TEST_CMD="$3"
         TIMEOUT="${4:-60}"
+        
+        # Validate test name (alphanumeric, spaces, hyphens only)
+        if ! [[ "$TEST_NAME" =~ ^[a-zA-Z0-9\ \-]+$ ]]; then
+            echo "ERROR: Invalid test name format"
+            exit 1
+        fi
+        
+        # Validate timeout is a positive number
+        if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || [ "$TIMEOUT" -le 0 ]; then
+            echo "ERROR: Invalid timeout value"
+            exit 1
+        fi
+        
+        # Validate command doesn't contain dangerous patterns
+        if [[ "$TEST_CMD" =~ [;&|`$\(\)] ]]; then
+            echo "ERROR: Test command contains potentially unsafe characters"
+            echo "Blocked characters: ; & | \` \$ ( )"
+            exit 1
+        fi
         
         chmod +x smithy
         # Environment variables are inherited, including BSMITH_DOCKER_FLAGS
         ./smithy daemon
         sleep 5
         
-        if timeout "${TIMEOUT}m" ./smithy exec "$TEST_CMD"; then
-            echo "✓ $TEST_NAME passed"
+        # Check if timeout command is available
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout "${TIMEOUT}m" ./smithy exec "$TEST_CMD"; then
+                echo "✓ $TEST_NAME passed"
+            else
+                echo "✗ $TEST_NAME failed"
+                ./smithy logs --tail 50
+                exit 1
+            fi
         else
-            echo "✗ $TEST_NAME failed"
-            ./smithy logs --tail 50
-            exit 1
+            echo "WARNING: timeout command not available, running without timeout"
+            if ./smithy exec "$TEST_CMD"; then
+                echo "✓ $TEST_NAME passed"
+            else
+                echo "✗ $TEST_NAME failed"
+                ./smithy logs --tail 50
+                exit 1
+            fi
         fi
         
         ./smithy stop || true
@@ -75,6 +125,18 @@ case "$1" in
     "collect-artifacts")
         # Collect standard CI artifacts
         ARTIFACT_DIR="${2:-artifacts}"
+        
+        # Validate artifact directory path
+        if [[ "$ARTIFACT_DIR" =~ \.\./|^/ ]]; then
+            echo "ERROR: Invalid artifact directory path (path traversal detected)"
+            exit 1
+        fi
+        
+        if [[ ! "$ARTIFACT_DIR" =~ ^[a-zA-Z0-9_\-]+$ ]]; then
+            echo "ERROR: Artifact directory contains invalid characters"
+            exit 1
+        fi
+        
         mkdir -p "$ARTIFACT_DIR"
         
         echo "=== Collecting system info ==="

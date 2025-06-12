@@ -2,24 +2,78 @@
 
 ## Architecture
 
+The CI system uses **composite actions** for step-level composition and **reusable workflows** for job-level orchestration.
+
 | File | Role |
 |------|------|
-| [`ci.yml`](ci.yml) | Main workflow |
-| [`../scripts/ci-common.sh`](../scripts/ci-common.sh) | Reusable operations |
-| [`../actions/setup-and-test/action.yml`](../actions/setup-and-test/action.yml) | Common setup |
+| [`ci.yml`](ci.yml) | Main workflow orchestrator |
+| [`run-smithy-test.yml`](run-smithy-test.yml) | Test execution (uses composite action) |
+| [`build-and-push.yml`](build-and-push.yml) | Docker build and push (uses composite action) |
+| [`../actions/setup-and-test/action.yml`](../actions/setup-and-test/action.yml) | Environment setup composite action |
+| [`../scripts/ci-common.sh`](../scripts/ci-common.sh) | Shell operations |
 
-## Standard Test Job Pattern
+### Architecture Flow
+```
+ci.yml (Main Orchestrator)
+├── run-smithy-test.yml (3 test jobs)
+│   └── setup-and-test action (step-level composition)
+└── build-and-push.yml (1 build job)
+    └── setup-and-test action (step-level composition)
+```
+
+## Adding a New Test
+
+Use the reusable workflow pattern:
 
 ```yaml
-my-test:
-  runs-on: pre-release
+my-new-test:
+  uses: ./.github/workflows/run-smithy-test.yml
   needs: [validate-environment, docker-build-and-test]
-  steps:
-    - uses: ./.github/actions/setup-and-test
-    - uses: actions/download-artifact@v4
-      with: { name: image-digest, path: /tmp/ }
-    - run: .github/scripts/ci-common.sh smithy-test "Test Name" "command" timeout
+  with:
+    test-name: "My Test"
+    test-command: "make test"
+    timeout-minutes: 60
+  secrets:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+## Available Reusable Workflows
+
+### run-smithy-test.yml
+Complete test execution with setup, image pull, test run, and artifact collection.
+
+**Inputs:**
+- `test-name` (required) - Name for the test
+- `test-command` (required) - Command to execute
+- `timeout-minutes` (default: 60) - Test timeout
+- `collect-artifacts` (default: true) - Whether to collect artifacts
+- `runner` (default: pre-release) - Runner to use
+
+**Secrets:**
+- `github-token` (required) - For GHCR access
+- `docker-flags` (optional) - Additional Docker flags
+
+### build-and-push.yml
+Docker image build, test, and push to GHCR.
+
+**Inputs:**
+- `runner` (default: pre-release) - Runner to use
+- `test-image` (default: true) - Whether to test built image
+
+**Secrets:**
+- `github-token` (required) - For GHCR access
+
+## Composite Action
+
+### setup-and-test
+Environment setup composite action used by all workflows.
+
+**Inputs:**
+- `checkout` (default: true) - Whether to checkout repository
+- `check-disk` (default: true) - Whether to check disk space
+- `disk-threshold` (default: 20) - Disk space threshold in GB
+- `pull-image` (default: true) - Whether to pull image from GHCR
+- `docker-cleanup` (default: false) - Whether to clean Docker resources first
 
 ## Available Operations
 
@@ -33,23 +87,19 @@ my-test:
 | `build-verify` | Build and verify Docker image | `build-verify` |
 | `push-ghcr` | Push to registry with digest | `push-ghcr` |
 
-## Adding a New Test
+## Example Test Commands
 
-1. Copy the standard pattern above
-2. Change the job name and test command
-3. Adjust timeout as needed
-
-Example commands:
 - `"make test"`
 - `"cd demos/bert && make clean && make"`
 - `"cd tests && pytest -v ./"`
+- `"python --version && pytest tests/"`
 
-## Setup Options
+## Benefits
 
-```yaml
-- uses: ./.github/actions/setup-and-test
-  with:
-    docker-cleanup: 'true'    # Clean before start
-    check-disk: 'false'       # Skip disk check
-    pull-image: 'false'       # Don't pull (for build jobs)
-```
+- **5-line test jobs** instead of 40+ lines
+- **Native GitHub Actions** composability
+- **Single source of truth** for common patterns
+- **Easy maintenance** - update one workflow, affects all users
+- **Clear interfaces** via inputs and outputs
+
+*See [`../docs/ci-reusable-workflows-transition-plan.md`](../docs/ci-reusable-workflows-transition-plan.md) for implementation details*

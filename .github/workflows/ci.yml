@@ -61,7 +61,13 @@ jobs:
           echo "Commit: $COMMIT_HASH"
           
           echo "=== Environment Variables ==="
-          env | grep -E '^(BSMITH_|GITHUB_|NUM_DEFAULT)' | sort
+          echo "BSMITH_DOCKER_PREBUILT=$BSMITH_DOCKER_PREBUILT"
+          echo "BSMITH_DOCKER_NO_CACHE=$BSMITH_DOCKER_NO_CACHE"
+          echo "BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
+          echo "BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
+          echo "BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
+          echo "NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
+          # Explicitly exclude GITHUB_* variables for security
           
           echo "=== Container Name Generation ==="
           chmod +x smithy
@@ -74,152 +80,50 @@ jobs:
           
           echo "=== Validation Complete ==="
 
-  # Docker image build and basic functionality test
+  # Build and push using reusable workflow
   docker-build-and-test:
     if: github.event_name == 'schedule' || github.event_name == 'pull_request'
-    runs-on: pre-release
-    timeout-minutes: 60
+    uses: ./.github/workflows/build-and-push.yml
     needs: validate-environment
-    steps:
-      - uses: ./.github/actions/setup-and-test
-        with:
-          pull-image: 'false'  # We're building the image, not pulling it
-          docker-cleanup: 'true'
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and verify image
-        run: .github/scripts/ci-common.sh build-verify
-      
-      - name: Test container functionality
-        run: |
-          .github/scripts/ci-common.sh smithy-test \
-            "Basic Functionality" \
-            "echo 'Container test: SUCCESS' && python --version && ls -la \$BSMITH_DIR | head -10" \
-            5
-          
-      - name: Login to GHCR
-        if: success()
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-        
-      - name: Push to GHCR
-        if: success()
-        run: .github/scripts/ci-common.sh push-ghcr
-      
-      - name: Upload digest
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-digest
-          path: /tmp/image-digest.txt
-          retention-days: 1
-
-      - name: Upload build artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-build-logs-${{ github.run_id }}
-          path: |
-            /tmp/brainsmith*
-            ~/.docker/
-          retention-days: 3
-
-      - name: Cleanup
-        if: always()
-        run: |
-          ./smithy cleanup || true
-          docker container prune -f
-
-  # End-to-end test with dependency fetching and compilation
+  # E2E test using reusable workflow
   e2e-test:
     if: github.event_name == 'schedule' || github.event_name == 'pull_request'
-    runs-on: pre-release
-    timeout-minutes: 120
+    uses: ./.github/workflows/run-smithy-test.yml
     needs: [validate-environment, docker-build-and-test]
-    
-    steps:
-      - uses: ./.github/actions/setup-and-test
-      
-      - name: Download digest
-        uses: actions/download-artifact@v4
-        with:
-          name: image-digest
-          path: /tmp/
-      
-      - name: Run E2E test
-        run: |
-          .github/scripts/ci-common.sh smithy-test \
-            "E2E BERT" \
-            "cd demos/bert && make clean && make" \
-            30
+    with:
+      test-name: "E2E BERT"
+      test-command: "cd demos/bert && make clean && make"
+      timeout-minutes: 120
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Collect artifacts
-        if: always()
-        run: .github/scripts/ci-common.sh collect-artifacts artifacts
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-artifacts-${{ github.run_id }}
-          path: artifacts/
-          retention-days: 7
-
-  # Full pytest suite (only on schedule to save resources)
+  # Full test suite using reusable workflow
   full-test-suite:
     if: github.event_name == 'schedule'
-    runs-on: pre-release
-    timeout-minutes: 240
-    needs: [validate-environment, docker-build-and-test, e2e-test]  # Run after e2e-test passes
-    
-    steps:
-      - uses: ./.github/actions/setup-and-test
-      
-      - name: Download digest
-        uses: actions/download-artifact@v4
-        with:
-          name: image-digest
-          path: /tmp/
-      
-      - name: Run full test suite
-        run: |
-          .github/scripts/ci-common.sh smithy-test \
-            "Full Test Suite" \
-            "cd tests && timeout 180m pytest -v --tb=short ./" \
-            180
+    uses: ./.github/workflows/run-smithy-test.yml
+    needs: [validate-environment, docker-build-and-test, e2e-test]
+    with:
+      test-name: "Full Test Suite"
+      test-command: "cd tests && timeout 180m pytest -v --tb=short ./"
+      timeout-minutes: 240
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-test-results-${{ github.run_id }}
-          path: |
-            tests/
-          retention-days: 14
-
-  # BERT Large biweekly testing using smithy
+  # BERT Large test using reusable workflow
   bert-large-biweekly:
     if: github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 0 * * 4')
-    runs-on: pre-release
-    timeout-minutes: 1440 # 24-hour timeout for biweekly tests
+    uses: ./.github/workflows/run-smithy-test.yml
     needs: [validate-environment, docker-build-and-test]
-
-    steps:
-      - uses: ./.github/actions/setup-and-test
-      
-      - name: Download digest
-        uses: actions/download-artifact@v4
-        with:
-          name: image-digest
-          path: /tmp/
-      
-      - name: Run BERT Large test
-        run: |
-          .github/scripts/ci-common.sh smithy-test \
-            "BERT Large" \
-            "cd demos/bert && make bert_large_single_layer" \
-            1440
-        env:
-          BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+    with:
+      test-name: "BERT Large"
+      test-command: "cd demos/bert && make bert_large_single_layer"
+      timeout-minutes: 1440
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      docker-flags: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:

@@ -1,50 +1,72 @@
-name: 'Setup and Test'
-description: 'Common setup for all test jobs'
+name: 'Setup and Test Environment'
+description: 'Complete environment setup for CI jobs'
 inputs:
   checkout:
-    default: 'true'
+    description: 'Whether to checkout repository'
+    type: boolean
+    default: true
   check-disk:
-    default: 'true'
+    description: 'Whether to check disk space'
+    type: boolean
+    default: true
+  disk-threshold:
+    description: 'Disk space threshold in GB'
+    type: string
+    default: '20'
   pull-image:
-    default: 'true'
-  ghcr-image:
-    default: ''  # Will use env.GHCR_IMAGE if not provided
-  docker-tag:
-    default: ''  # Will use env.BSMITH_DOCKER_TAG if not provided
+    description: 'Whether to pull image from GHCR'
+    type: boolean
+    default: true
   docker-cleanup:
-    default: 'false'
+    description: 'Whether to clean Docker resources first'
+    type: boolean
+    default: false
+  ghcr-image:
+    description: 'GHCR image to pull'
+    type: string
+    required: false
+  docker-tag:
+    description: 'Local Docker tag to use'
+    type: string
+    required: false
 
 runs:
   using: 'composite'
   steps:
-    - name: Checkout
-      if: inputs.checkout == 'true'
+    - name: Checkout repository
+      if: inputs.checkout
       uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
         
-    - name: Setup
+    - name: Setup scripts and permissions
       shell: bash
-      run: |
-        chmod +x .github/scripts/ci-common.sh
-        
+      run: chmod +x .github/scripts/ci-common.sh
+    
     - name: Docker cleanup
-      if: inputs.docker-cleanup == 'true'
+      if: inputs.docker-cleanup
       shell: bash
       run: .github/scripts/ci-common.sh docker-cleanup
         
-    - name: Check disk
-      if: inputs.check-disk == 'true'
+    - name: Check disk space
+      if: inputs.check-disk
       shell: bash
-      run: .github/scripts/ci-common.sh check-disk
+      run: .github/scripts/ci-common.sh check-disk ${{ inputs.disk-threshold }}
         
-    - name: Pull image
-      if: inputs.pull-image == 'true'
+    - name: Download image digest
+      if: inputs.pull-image
+      uses: actions/download-artifact@v4
+      with:
+        name: image-digest
+        path: /tmp/
+        
+    - name: Pull image from GHCR
+      if: inputs.pull-image
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_ACTOR: ${{ github.actor }}
-        GHCR_IMAGE: ${{ inputs.ghcr-image || env.GHCR_IMAGE }}
-        BSMITH_DOCKER_TAG: ${{ inputs.docker-tag || env.BSMITH_DOCKER_TAG }}
+        GHCR_IMAGE: ${{ inputs.ghcr-image }}
+        BSMITH_DOCKER_TAG: ${{ inputs.docker-tag }}
       run: .github/scripts/ci-common.sh ghcr-pull

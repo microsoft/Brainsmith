@@ -1,0 +1,66 @@
+name: Run Smithy Test
+
+on:
+  workflow_call:
+    inputs:
+      test-name:
+        description: 'Name of the test'
+        type: string
+        required: true
+      test-command:
+        description: 'Command to execute'
+        type: string
+        required: true
+      timeout-minutes:
+        description: 'Test timeout in minutes'
+        type: number
+        default: 60
+      collect-artifacts:
+        description: 'Whether to collect artifacts'
+        type: boolean
+        default: true
+      runner:
+        description: 'Runner to use'
+        type: string
+        default: 'pre-release'
+    secrets:
+      github-token:
+        description: 'GitHub token for GHCR access'
+        required: true
+      docker-flags:
+        description: 'Additional Docker flags'
+        required: false
+
+jobs:
+  test:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Setup environment
+        uses: ./.github/actions/setup-and-test
+        with:
+          pull-image: true
+          check-disk: true
+          ghcr-image: ${{ env.GHCR_IMAGE }}
+          docker-tag: ${{ env.BSMITH_DOCKER_TAG }}
+
+      - name: Run test
+        run: |
+          .github/scripts/ci-common.sh smithy-test \
+            "${{ inputs.test-name }}" \
+            "${{ inputs.test-command }}" \
+            ${{ inputs.timeout-minutes }}
+        env:
+          BSMITH_DOCKER_FLAGS: ${{ secrets.docker-flags }}
+
+      - name: Collect artifacts
+        if: always() && inputs.collect-artifacts
+        run: .github/scripts/ci-common.sh collect-artifacts artifacts
+
+      - name: Upload artifacts
+        if: always() && inputs.collect-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.test-name }}-artifacts-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7

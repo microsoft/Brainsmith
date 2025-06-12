@@ -1,0 +1,76 @@
+name: Build and Push
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: 'Runner to use'
+        type: string
+        default: 'pre-release'
+      test-image:
+        description: 'Whether to test built image'
+        type: boolean
+        default: true
+    secrets:
+      github-token:
+        description: 'GitHub token for GHCR access'
+        required: true
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Setup environment
+        uses: ./.github/actions/setup-and-test
+        with:
+          pull-image: false  # Building image, not pulling
+          check-disk: true
+          docker-cleanup: true
+          ghcr-image: ${{ env.GHCR_IMAGE }}
+          docker-tag: ${{ env.BSMITH_DOCKER_TAG }}
+
+      - name: Build and verify image
+        run: .github/scripts/ci-common.sh build-verify
+
+      - name: Test container functionality
+        if: inputs.test-image
+        run: |
+          .github/scripts/ci-common.sh smithy-test \
+            "Basic Functionality" \
+            "echo 'Container test: SUCCESS' && python --version && ls -la \$BSMITH_DIR | head -10" \
+            5
+
+      - name: Login to GHCR
+        run: |
+          echo "Logging in to GHCR..."
+          if ! echo "${{ secrets.github-token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null; then
+            echo "ERROR: GHCR login failed"
+            exit 1
+          fi
+          echo "✓ Login successful"
+
+      - name: Push to GHCR
+        run: .github/scripts/ci-common.sh push-ghcr
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digest
+          path: /tmp/image-digest.txt
+          retention-days: 1
+
+      - name: Upload build artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-build-logs-${{ github.run_id }}
+          path: |
+            /tmp/brainsmith*
+            ~/.docker/
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./smithy cleanup || true
+          docker container prune -f
