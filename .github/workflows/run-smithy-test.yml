@@ -47,18 +47,11 @@ jobs:
         with:
           threshold-gb: 20
 
-      - name: Login to GHCR
-        uses: ./.github/actions/docker-login
+      - name: Load Docker image
+        uses: ./.github/actions/docker-load
         with:
-          github-token: ${{ secrets.github-token }}
-          github-actor: ${{ github.actor }}
-
-      - name: Pull Docker image
-        uses: ./.github/actions/docker-pull
-        with:
-          ghcr-image: ${{ env.GHCR_IMAGE }}
-          local-tag: ${{ env.BSMITH_DOCKER_TAG }}
-          verify-digest: true
+          artifact-name: brainsmith-image
+          image-tag: ${{ env.BSMITH_DOCKER_TAG }}
 
       - name: Run test
         uses: ./.github/actions/smithy-test

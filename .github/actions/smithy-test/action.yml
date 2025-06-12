@@ -71,6 +71,22 @@ runs:
         echo "test-command=$COMMAND" >> $GITHUB_OUTPUT
         echo "✓ Test command determined: $COMMAND"
     
+    - name: Configure for local image
+      shell: bash
+      run: |
+        # Ensure smithy uses locally available image
+        export BSMITH_DOCKER_PREBUILT="1"
+        echo "BSMITH_DOCKER_PREBUILT=1" >> $GITHUB_ENV
+        
+        # Verify image is available locally
+        if ! docker images | grep -q "microsoft/brainsmith"; then
+            echo "ERROR: Brainsmith image not available locally"
+            echo "Available images:"
+            docker images
+            exit 1
+        fi
+        echo "✓ Local image verified"
+    
     - name: Run smithy test
       shell: bash
       run: |

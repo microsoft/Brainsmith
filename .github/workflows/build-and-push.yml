@@ -44,24 +44,19 @@ jobs:
           test-type: "python-tests"
           timeout-minutes: 5
 
-      - name: Login to GHCR
-        uses: ./.github/actions/docker-login
+      - name: Save Docker image
+        uses: ./.github/actions/docker-save
         with:
-          github-token: ${{ secrets.github-token }}
-          github-actor: ${{ github.actor }}
+          image-tag: ${{ env.BSMITH_DOCKER_TAG }}
+          artifact-name: brainsmith-image
 
-      - name: Push to GHCR
-        uses: ./.github/actions/docker-push
-        with:
-          local-tag: ${{ env.BSMITH_DOCKER_TAG }}
-          ghcr-image: ${{ env.GHCR_IMAGE }}
-
-      - name: Upload digest
+      - name: Upload Docker image
         uses: actions/upload-artifact@v4
         with:
-          name: image-digest
-          path: /tmp/image-digest.txt
+          name: brainsmith-image
+          path: /tmp/docker-artifacts/brainsmith-image.tar.gz
           retention-days: 1
+          compression-level: 0
 
       - name: Upload build artifacts on failure
         if: failure()

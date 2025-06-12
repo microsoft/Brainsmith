@@ -14,7 +14,6 @@ env:
   BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
   NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
   BSMITH_DOCKER_TAG: "microsoft/brainsmith:scheduled-${{ github.sha }}"
-  GHCR_IMAGE: "ghcr.io/${{ github.repository_owner }}/brainsmith:scheduled-${{ github.sha }}"
   BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
 
 permissions:

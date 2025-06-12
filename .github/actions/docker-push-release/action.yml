@@ -1,0 +1,31 @@
+name: 'Docker Push Release'
+description: 'Push Docker image to GHCR for releases only'
+inputs:
+  local-tag:
+    description: 'Local Docker tag to push'
+    type: string
+    required: true
+  release-tag:
+    description: 'Release tag for GHCR'
+    type: string
+    required: true
+  github-token:
+    description: 'GitHub token for authentication'
+    type: string
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Login to GHCR
+      shell: bash
+      run: |
+        echo "${{ inputs.github-token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    
+    - name: Push release image
+      shell: bash
+      run: |
+        GHCR_TAG="ghcr.io/${{ github.repository_owner }}/brainsmith:${{ inputs.release-tag }}"
+        docker tag "${{ inputs.local-tag }}" "$GHCR_TAG"
+        docker push "$GHCR_TAG"
+        echo "✓ Released image: $GHCR_TAG"
