@@ -114,3 +114,16 @@ fi
 
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
 export PATH=$PATH:$HOME/.local/bin
+
+# Ensure python symlink exists (workaround for missing python-is-python3 symlink)
+if [ ! -L /usr/bin/python ] && [ -x /usr/bin/python3 ]; then
+    if [ -w /usr/bin ]; then
+        ln -sf /usr/bin/python3 /usr/bin/python
+        gecho "Created python -> python3 symlink"
+    else
+        # If we can't write to /usr/bin, create a local symlink and add to PATH
+        mkdir -p "$HOME/.local/bin"
+        ln -sf /usr/bin/python3 "$HOME/.local/bin/python"
+        gecho "Created local python -> python3 symlink in $HOME/.local/bin"
+    fi
+fi
