@@ -257,13 +257,6 @@ build_image() {
     OLD_PWD=$(pwd)
     cd $BSMITH_DIR
     
-    # Ensure Git submodules are initialized
-    gecho "Ensuring Git submodules are initialized..."
-    if ! git submodule update --init --recursive; then
-        recho "Failed to initialize submodules"
-        exit 1
-    fi
-    
     [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && BSMITH_DOCKER_BUILD_FLAGS+="--no-cache "
     
     docker build -f docker/Dockerfile \

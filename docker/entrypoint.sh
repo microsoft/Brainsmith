@@ -55,10 +55,10 @@ fi
 # Second: Load environment setup (now that dependencies exist)
 source /usr/local/bin/setup_env.sh
 
-# Check FINN submodule after environment is loaded (so recho function is available)
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && ([ ! -e "$BSMITH_DIR/finn/.git" ] || [ ! -f "$BSMITH_DIR/finn/setup.py" ]); then
-    recho "FINN submodule not found or not initialized"
-    recho "Please run: git submodule update --init --recursive"
+# Check FINN dependency after environment is loaded (so recho function is available)
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -f "$BSMITH_DIR/deps/finn/setup.py" ]; then
+    recho "FINN dependency not found or not fetched"
+    recho "Dependencies should be automatically fetched during container initialization"
     exit 1
 fi
 
@@ -149,10 +149,10 @@ install_packages_with_progress() {
     fi
 
     # finn
-    if [ -d "${BSMITH_DIR}/finn" ]; then
+    if [ -d "${BSMITH_DIR}/deps/finn" ]; then
         emit_status "INSTALLING_PACKAGES" "finn"
         gecho "Installing finn..."
-        if ! pip install --user -e ${BSMITH_DIR}/finn; then
+        if ! pip install --user -e ${BSMITH_DIR}/deps/finn; then
             install_success=false
             failed_packages+="finn "
         fi

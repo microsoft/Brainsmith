@@ -14,7 +14,7 @@ export PATH=$PATH:$OHMYXILINX
 # Set up key FINN environment variables
 export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
 export FINN_DEPS_DIR="${BSMITH_DIR}/deps"
-export FINN_ROOT="${BSMITH_DIR}/finn"
+export FINN_ROOT="${BSMITH_DIR}/deps/finn"
 
 # Define colors for terminal output
 YELLOW='\033[0;33m'

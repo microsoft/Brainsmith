@@ -1,4 +1,0 @@
-[submodule "finn"]
-	path = finn
-	url = https://github.com/Xilinx/finn.git
-	branch = custom/transformer
