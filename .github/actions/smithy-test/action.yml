@@ -60,7 +60,7 @@ runs:
             COMMAND="cd tests && pytest -v integration/"
             ;;
           "basic-functionality")
-            COMMAND="python -c \"import sys; import brainsmith; import finn; import qonnx; print('✓ All critical imports successful'); print(f'Python: {sys.version}'); print(f'Brainsmith: OK'); print(f'FINN: OK'); print(f'QONNX: OK')\""
+            COMMAND="python -c 'import sys; import brainsmith; import finn; import qonnx; print(\"✓ All critical imports successful\"); print(f\"Python: {sys.version}\"); print(f\"Brainsmith: OK\"); print(f\"FINN: OK\"); print(f\"QONNX: OK\")'"
             ;;
           *)
             echo "ERROR: Invalid test type. Allowed: e2e-bert, unit-tests, integration-tests, basic-functionality"
