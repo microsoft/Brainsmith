@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from qonnx.util.cleanup import cleanup
-from onnxsim import simplify
 import onnx
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None, enable_gqa=False)->torch.Tensor:
@@ -317,8 +316,4 @@ if __name__ == "__main__":
 
     new_model = onnx.load("genrec.onnx")
     cleanup(in_file="genrec.onnx", out_file="genrec_cleanedup.onnx")
-
-    #model_simplified,check = simplify(new_model)
-    #if check:
-    #    onnx.save(model_simplified, "genrec_simplified.onnx")
 
