@@ -90,9 +90,12 @@ class OpTest(ABC):
         f_model_hw: ModelWrapper,
         f_target_fpga: str,
         f_output_dir: str,
+        f_exec_mode: str,
+        f_target_node: int,
+        f_specialise_attrs: dict[str, any],
     ) -> ModelWrapper:
         """A fixture that applies layer specialisation to the 'f_model_hw'
-        fixture, then returns the resulting ModelWrapper.;
+        fixture, then returns the resulting ModelWrapper.
 
         :param f_model_hw: Auto-populated by the :func:`OpTest.f_model_hw` fixture's return value
         :type f_model_hw: :class:`qonnx.core.modelwrapper.ModelWrapper`
@@ -113,6 +116,10 @@ class OpTest(ABC):
             dict(fpga_part=f_target_fpga),
         )
 
+        # Attach the relevant attributes to the specialised model.
+        f_specialise_attrs["exec_mode"] = f_exec_mode
+        self.attach_attributes(specialised_model, f_target_node, f_specialise_attrs)
+
         return specialised_model
 
     @pytest.fixture
@@ -125,6 +132,19 @@ class OpTest(ABC):
         :rtype: :class:`qonnx.transformation.base.Transformation`"""
 
         return None
+
+    @pytest.fixture
+    def f_specialise_attrs(self) -> dict[str, any]:
+        """Returns a dictionary containing attributes (i.e. {"SIMD": 4, "idt": "INT8"})
+        that we'll attach to the target node (whose index in the graph is found in
+        f_target_node) after specialisation (in the f_model_specialised step). Meant to
+        be overridden.
+
+        :return: The dictionary of attributes we'll attach to our target node after specialisation.
+                 (Default: ``{}``)
+        :rtype: dict[str, any]"""
+
+        return {}
 
     @pytest.fixture
     def f_target_fpga(self) -> str:
@@ -167,6 +187,7 @@ class OpTest(ABC):
                 f_model.get_tensor_shape(input.name),
             )
             input_t[input.name] = input_value
+
         return input_t
 
     @pytest.fixture
@@ -298,7 +319,7 @@ class OpTest(ABC):
             assert np.isclose(exp_cycles, cycles_rtlsim, atol=10)
             assert exp_cycles != 0
 
-    def test_conv_to_hardware(self, f_model, f_model_hw, f_input_tensors):
+    def test_conv_to_hardware(self, f_model, f_model_hw, f_input_tensors) -> None:
         """Compare the outputs of 'f_model' and 'f_model_hw', when executed using
         ONNX runtime. Ensure that they are functionally identical.
 
@@ -315,11 +336,13 @@ class OpTest(ABC):
         # Generate our reference and our compared outputs
         ref_output = oxe.execute_onnx(f_model, f_input_tensors)[out_name]
         cmp_output = oxe.execute_onnx(f_model_hw, f_input_tensors)[out_name]
-        
+
         # Compare f_model_hw's output to f_model's output.
         assert np.allclose(ref_output, cmp_output, atol=1e-5)
-    
-    def test_specialise_layers(self, f_model_hw, f_model_specialised, f_input_tensors):
+
+    def test_specialise_layers(
+        self, f_model_hw, f_model_specialised, f_input_tensors
+    ) -> None:
         """Compare the outputs of 'f_model_hw' and 'f_model_specialised', when executed using
         ONNX runtime. Ensure that they are functionally identical.
 
@@ -336,10 +359,11 @@ class OpTest(ABC):
         # Generate our reference and our compared outputs
         ref_output = oxe.execute_onnx(f_model_hw, f_input_tensors)[out_name]
         cmp_output = oxe.execute_onnx(f_model_specialised, f_input_tensors)[out_name]
-        
+
+        breakpoint()
+
         # Compare f_model_specialised's output to f_model_hw's output.
         assert np.allclose(ref_output, cmp_output, atol=1e-5)
-
 
     ##########################################
     #            Helper Functions            #
@@ -369,10 +393,10 @@ class OpTest(ABC):
             The second element is the ``QONNX.core.datatype`` string that that input will be set to.
         :type outputs: List(tuple(dict, str))
 
-        :param inits: A list of dictionaries, each dictionary representing an initialiser of the model. These should named parameters of ```onnx.numpy_helper.from_array`` <https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array>`_.
+        :param inits: A list of dictionaries, each dictionary representing an initialiser of the model. These should named parameters of `onnx.numpy_helper.from_array <https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array>`_.
         :type inits: List(dict)
 
-        :param nodes: A list of dictionaries, each dictionary representing a node of the model. These should named parameters of ```onnx.numpy_helper.from_array`` <https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node>`_.
+        :param nodes: A list of dictionaries, each dictionary representing a node of the model. These should named parameters of `onnx.numpy_helper.from_array <https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node>`_.
         :type nodes: List(dict)
 
         :param opset: The opset of the generated model. Defaults to 17.
@@ -556,3 +580,36 @@ class OpTest(ABC):
         config: DataflowBuildConfig = DataflowBuildConfig(**cfg_settings)
 
         return step(model, config)
+
+    def attach_attributes(
+        self, model: ModelWrapper, target_node: int, attributes: dict[str, any]
+    ) -> None:
+        """Attach attributes to a specific node in a model
+
+        :param model: The :class:`ModelWrapper` we'll apply our node attributes to
+        :type model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param target_node: The index of the node we wish to apply our attributes to.
+        :type target_node: int
+
+        :param attributes: A directory of named attributes, i.e. {"SIMD": 4, "idt": "INT8"}
+        :type attributes: dict[str, any]"""
+
+        if attributes is not None and isinstance(attributes, dict):
+
+            # The attribute list is of type 'google.protobuf.pyext._message.RepeatedCompositeContainer'
+            # (https://googleapis.dev/python/protobuf/latest/google/protobuf/internal/containers.html#google.protobuf.internal.containers.RepeatedCompositeFieldContainer)
+            attr_list = model.graph.node[target_node].attribute
+
+            # Remove any existing attributes we're about to overwrite.
+            for attr in attr_list:
+                if attr.name in attributes:
+                    attr_list.remove(attr)
+
+            # Add all attributes to the node's attribute list
+            for attr_name, attr_val in attributes.items():
+                tmp_attr = helper.make_attribute(attr_name, attr_val)
+                attr_list.append(tmp_attr)
+
+        else:
+            TypeError("'attributes' must be of type dict.")

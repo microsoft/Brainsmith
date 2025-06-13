@@ -52,10 +52,10 @@ check if f_infer_hw_transform == ‘None’ before using this fixture.
 
 <a id="op_test.OpTest.f_model_specialised"></a>
 
-#### f_model_specialised(f_model_hw: ModelWrapper, f_target_fpga: str, f_output_dir: str) → ModelWrapper
+#### f_model_specialised(f_model_hw: ModelWrapper, f_target_fpga: str, f_output_dir: str, f_exec_mode: str, f_target_node: int, f_specialise_attrs: dict[str, any]) → ModelWrapper
 
 A fixture that applies layer specialisation to the ‘f_model_hw’
-fixture, then returns the resulting ModelWrapper.;
+fixture, then returns the resulting ModelWrapper.
 
 * **Parameters:**
   * **f_model_hw** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_hw()`](#op_test.OpTest.f_model_hw) fixture’s return value
@@ -78,6 +78,21 @@ If this fixture returns ‘None’, OpTest assumes to skip hardware inference.
   (Default: `None`)
 * **Return type:**
   `qonnx.transformation.base.Transformation`
+
+<a id="op_test.OpTest.f_specialise_attrs"></a>
+
+#### f_specialise_attrs() → dict[str, any]
+
+Returns a dictionary containing attributes (i.e. {“SIMD”: 4, “idt”: “INT8”})
+that we’ll attach to the target node (whose index in the graph is found in
+f_target_node) after specialisation (in the f_model_specialised step). Meant to
+be overridden.
+
+* **Returns:**
+  The dictionary of attributes we’ll attach to our target node after specialisation.
+  (Default: `{}`)
+* **Return type:**
+  dict[str, any]
 
 <a id="op_test.OpTest.f_target_fpga"></a>
 
@@ -201,7 +216,7 @@ with the expected number of cycles.
 
 <a id="op_test.OpTest.test_conv_to_hardware"></a>
 
-#### test_conv_to_hardware(f_model, f_model_hw, f_input_tensors)
+#### test_conv_to_hardware(f_model, f_model_hw, f_input_tensors) → None
 
 Compare the outputs of ‘f_model’ and ‘f_model_hw’, when executed using
 ONNX runtime. Ensure that they are functionally identical.
@@ -213,7 +228,7 @@ ONNX runtime. Ensure that they are functionally identical.
 
 <a id="op_test.OpTest.test_specialise_layers"></a>
 
-#### test_specialise_layers(f_model_hw, f_model_specialised, f_input_tensors)
+#### test_specialise_layers(f_model_hw, f_model_specialised, f_input_tensors) → None
 
 Compare the outputs of ‘f_model_hw’ and ‘f_model_specialised’, when executed using
 ONNX runtime. Ensure that they are functionally identical.
@@ -239,8 +254,10 @@ additional boilerplate code.
     model. These tuples have two elements: the first element in each tuple is a dictionary
     containing  any named parameters you’re passing to `onnx.helper.make_tensor_value_info()`.
     The second element is the `QONNX.core.datatype` string that that input will be set to.
-  * **inits** (*List* *(**dict* *)*) – A list of dictionaries, each dictionary representing an initialiser of the model. These should named parameters of ``onnx.numpy_helper.from_array` <[https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array](https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array)>\`_.
-  * **nodes** (*List* *(**dict* *)*) – A list of dictionaries, each dictionary representing a node of the model. These should named parameters of ``onnx.numpy_helper.from_array` <[https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node](https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node)>\`_.
+  * **inits** (*List* *(**dict* *)*) – A list of dictionaries, each dictionary representing an initialiser of the model. These should named parameters of [onnx.numpy_helper.from_array](https://onnx.ai/onnx/api/numpy_helper.html#onnx.numpy_helper.to_array).
+  * **nodes** (*List* *(**dict* *)*) – 
+
+    A list of dictionaries, each dictionary representing a node of the model. These should named parameters of [onnx.numpy_helper.from_array](https://onnx.ai/onnx/api/helper.html#onnx.helper.make_node).
   * **opset** (*int* *,* *optional*) – The opset of the generated model. Defaults to 17.
     (Default: `17`)
   * **name** (*str* *,* *optional*) – The name of the generated model.
@@ -305,3 +322,14 @@ dictionary, with the name of each parameter as its key.
   A `ModelWrapper` containing the transformed model
 * **Return type:**
   `qonnx.core.modelwrapper.ModelWrapper`
+
+<a id="op_test.OpTest.attach_attributes"></a>
+
+#### attach_attributes(model: ModelWrapper, target_node: int, attributes: dict[str, any]) → None
+
+Attach attributes to a specific node in a model
+
+* **Parameters:**
+  * **model** (`qonnx.core.modelwrapper.ModelWrapper`) – The `ModelWrapper` we’ll apply our node attributes to
+  * **target_node** (*int*) – The index of the node we wish to apply our attributes to.
+  * **attributes** (*dict* *[**str* *,* *any* *]*) – A directory of named attributes, i.e. {“SIMD”: 4, “idt”: “INT8”}
