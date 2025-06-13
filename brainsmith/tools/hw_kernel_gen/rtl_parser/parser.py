@@ -17,9 +17,9 @@ from pathlib import Path
 
 from tree_sitter import Parser, Node
 
-from .data import Port, Parameter, Direction
+from .data import Port, Parameter, Direction, PortGroup, ValidationResult
 from brainsmith.dataflow.core.interface_types import InterfaceType
-from .data import Interface
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from .pragma import PragmaHandler, PragmaType, Pragma
 from .interface_builder import InterfaceBuilder
 from . import grammar
@@ -92,7 +92,6 @@ class RTLParser:
         self.name: Optional[str] = None
         self.parameters: List[Parameter] = []
         self.ports: List[Port] = [] # Intermediate list of raw ports
-        self.interfaces: Dict[str, Interface] = {}
         self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
 
@@ -156,9 +155,8 @@ class RTLParser:
             logger.error(f"No module definitions found in {file_path}")
             raise ParserError(f"No module definition found in {file_path}")        
 
-        # 5. Extract pragmas
+        # 5. Extract pragmas  
         logger.debug("Extracting pragmas...")
-        # extracted_pragmas: List[Pragma] # No longer a local variable
         try:
             self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
         except Exception as e:
@@ -227,6 +225,11 @@ class RTLParser:
                 if param is not None: # Skips local params implicitly
                     self.parameters.append(param)
             logger.debug(f"Extracted {len(self.parameters)} parameters.")
+            
+            # Set module parameters for BDIM pragma validation
+            from .data import BDimPragma
+            BDimPragma.set_module_parameters(self.parameters)
+            logger.debug(f"Set {len(self.parameters)} module parameters for BDIM validation.")
         except Exception as e:
             logger.exception(f"Error during parameter parsing: {e}")
             raise ParserError(f"Failed during parameter parsing: {e}")
@@ -248,7 +251,7 @@ class RTLParser:
     def _analyze_and_validate_interfaces(self) -> None:
         """Performs Stage 3 of parsing: Interface building and validation.
 
-        Uses self.ports and self.name. Sets self.interfaces.
+        Uses self.ports and self.name. Sets self.interface_metadata_list.
 
         Takes the list of raw ports extracted in Stage 2 and uses the `InterfaceBuilder`
         to group them into logical interfaces (AXI-Stream, AXI-Lite, Global Control).
@@ -271,52 +274,54 @@ class RTLParser:
         if self.name is None or self.ports is None: # self.ports can be empty, but not None
              raise ParserError("Cannot analyze interfaces: _extract_kernel_components must be run first.")
         logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
-        self.interfaces = {}
 
         # 1. Call self.interface_builder.build_interface_metadata(ports, pragmas) 
         try:
-            self.interface_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, self.pragmas)
-            # Convert to dict for backward compatibility with validation code
-            self.interfaces = {}
-            for metadata in self.interface_metadata_list:
-                # Create temporary Interface objects for validation code
-                from .data import Interface, ValidationResult
-                temp_interface = Interface(
+            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, self.pragmas)
+            
+            # 2. Apply pragmas to each metadata object 
+            self.interface_metadata_list = []
+            for metadata in base_metadata_list:
+                # Apply pragmas to the existing metadata using the pragma application method we moved to parser
+                # We need to find the corresponding PortGroup for this metadata to apply pragmas properly
+                # For now, create a minimal PortGroup for pragma application
+                from .data import PortGroup
+                temp_group = PortGroup(
+                    interface_type=metadata.interface_type,
                     name=metadata.name,
-                    type=metadata.interface_type,
-                    ports={},  # Empty for validation
-                    validation_result=ValidationResult(valid=True)
+                    ports={},  # Empty for now - pragmas mainly use interface name and type
+                    metadata={}
                 )
-                self.interfaces[metadata.name] = temp_interface
-            logger.info(f"Interface analysis complete. Found {len(self.interfaces)} valid interfaces.")
+                final_metadata = self._apply_pragmas_to_metadata(metadata, self.pragmas, temp_group)
+                self.interface_metadata_list.append(final_metadata)
+            logger.info(f"Interface analysis complete. Found {len(self.interface_metadata_list)} valid interfaces.")
         except Exception as e:
             logger.exception(f"Error during interface building for module {self.name}: {e}")
             # Re-raise as ParserError to be consistent? Or let specific error propagate?
             # Let's wrap it for now. # TAFK TODO
             raise ParserError(f"Failed during interface building: {e}")
 
-        # --- Post-Analysis Validation ---
-        for interface in self.interfaces.values():
-            logger.debug(f"Interface '{interface.name}' of type '{interface.type.value}' has ports: {list(interface.ports.keys())}")
+        # --- Post-Analysis Validation on InterfaceMetadata objects ---
+        for metadata in self.interface_metadata_list:
+            logger.debug(f"Interface '{metadata.name}' of type '{metadata.interface_type.value}' has {len(metadata.datatype_constraints)} datatype constraints")
 
         # 2. Perform Global Control check
         has_global_control = any(
-            iface.type == InterfaceType.CONTROL for iface in self.interfaces.values()
+            metadata.interface_type == InterfaceType.CONTROL for metadata in self.interface_metadata_list
         )
         if not has_global_control:
             error_msg = f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
             logger.error(error_msg)
             raise ParserError(error_msg)
 
-
         # 3. Validate AXI-Stream interfaces directly here
         num_input_stream = len([
-            iface for iface in self.interfaces.values()
-            if iface.type in [InterfaceType.INPUT, InterfaceType.WEIGHT]
+            metadata for metadata in self.interface_metadata_list
+            if metadata.interface_type in [InterfaceType.INPUT, InterfaceType.WEIGHT]
         ])
         num_output_stream = len([
-            iface for iface in self.interfaces.values()
-            if iface.type == InterfaceType.OUTPUT
+            metadata for metadata in self.interface_metadata_list
+            if metadata.interface_type == InterfaceType.OUTPUT
         ])
         # Temporarily disable strict interface validation for testing
         # if num_input_stream == 0:
@@ -333,59 +338,54 @@ class RTLParser:
         #     raise ParserError(error_msg)
         logger.info("Stage 3: Interface analysis and validation complete.")
 
-    def _create_interface_metadata(self, interface: Interface, pragmas: List[Pragma]) -> InterfaceMetadata:
+    def _apply_pragmas_to_metadata(self, metadata: InterfaceMetadata, pragmas: List[Pragma], group: PortGroup) -> InterfaceMetadata:
         """
-        Create InterfaceMetadata using the pragma handler.
+        Apply relevant pragmas to InterfaceMetadata using the new pragma system.
         
-        This method delegates to the pragma handler to ensure all pragma processing
-        is properly centralized and consistent.
+        Uses the new InterfaceMetadata-only pragma methods for clean chain-of-responsibility
+        pattern without temporary Interface objects.
         
         Args:
-            interface: Parsed Interface object from RTL analysis
-            pragmas: List of all pragmas found in the RTL
+            metadata: Base InterfaceMetadata to modify
+            pragmas: List of all pragmas to consider
+            group: Original PortGroup (not used, kept for backward compatibility)
             
         Returns:
-            InterfaceMetadata: Complete metadata object with pragma effects applied
+            InterfaceMetadata: Final metadata with all applicable pragma effects
         """
-        return self.pragma_handler.create_interface_metadata(interface, pragmas)
+        # Apply pragmas using new chain-of-responsibility pattern
+        # Uses the new InterfaceMetadata-only methods:
+        # - applies_to_interface_metadata() for matching
+        # - apply_to_metadata() for application
+        for pragma in pragmas:
+            try:
+                if pragma.applies_to_interface_metadata(metadata):
+                    if self.debug:
+                        logger.debug(f"  Applying {pragma.type.value} pragma to {metadata.name}")
+                    metadata = pragma.apply_to_metadata(metadata)
+            except Exception as e:
+                # Import PragmaError to check for specific pragma validation errors
+                from .data import PragmaError
+                if isinstance(e, PragmaError):
+                    # Re-raise pragma validation errors - these should fail the parse
+                    logger.error(f"Pragma validation failed for {pragma.type.value} pragma on {metadata.name}: {e}")
+                    raise
+                else:
+                    # Log other exceptions as warnings but continue
+                    logger.warning(f"Failed to apply {pragma.type.value} pragma to {metadata.name}: {e}")
+        
+        return metadata
 
-    def _apply_pragmas(self) -> None:
-        """Apply all relevant pragmas by calling their respective apply methods.
 
-        Args:
-            interfaces: A dictionary of discovered interfaces.
-            hw_kernel: An optional HWKernel object that pragmas might modify or use.
-        """
-        if not self.pragmas:
-            logger.info("No pragmas found or extracted. Nothing to apply.")
-            return
 
-        logger.info(f"Applying {len(self.pragmas)} extracted pragmas.")
-        for pragma in self.pragmas:
-            if pragma.type == PragmaType.TOP_MODULE:
-                # Skip TOP_MODULE pragmas here; they are handled during module selection.
-                logger.debug(f"Skipping TOP_MODULE pragma: {pragma.type.name} at line {pragma.line_number}")
-                continue
-            elif pragma.type == PragmaType.DATATYPE or pragma.type == PragmaType.WEIGHT:
-                pragma.apply(interfaces=self.interfaces)
-            elif pragma.type == PragmaType.TDIM:
-                pragma.apply(interfaces=self.interfaces)
-            elif pragma.type == PragmaType.DERIVED_PARAMETER:
-                pragma.apply(parameters=self.parameters)
-            else:
-                logger.warning(f"Unknown pragma type '{pragma.type.name}' encountered. Skipping.")
-                continue
-        logger.info("Stage 4: Pragmas applied.")
 
-    def parse_string(self, systemverilog_code: str, 
-                    module_name: Optional[str] = None,
-                    source_name: str = "<string>") -> KernelMetadata:
-        """Parse SystemVerilog code from string.
+    def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
+        """Core SystemVerilog string parser.
         
         Args:
             systemverilog_code: SystemVerilog module source code
-            module_name: Optional target module name (auto-detect if None)
             source_name: Name for logging/error messages (default: "<string>")
+            module_name: Optional target module name (auto-detect if None)
             
         Returns:
             KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
@@ -396,21 +396,16 @@ class RTLParser:
         """
         logger.info(f"Starting string-based parsing for: {source_name}")
         try:
-            # Call internal string parsing method
+            # Stage 1: Initial parse from string
             self._initial_parse_string(systemverilog_code, source_name, module_name)
 
-            # 2. Call Stage 2: Extract Components
+            # Stage 2: Extract components
             self._extract_kernel_components()
 
-            # 3. Call Stage 3: Analyze and Validate Interfaces
+            # Stage 3: Analyze and validate interfaces (includes pragma application)
             self._analyze_and_validate_interfaces()
 
-            # 4. Pragmas are already applied in build_interface_metadata() - skip _apply_pragmas()
-
-            # 5. Use already-processed InterfaceMetadata objects (pragmas already applied)
-            # No need to create new metadata - use self.interface_metadata_list directly
-
-            # 6. Create KernelMetadata object
+            # Create and return KernelMetadata object
             kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(source_name),
@@ -420,8 +415,6 @@ class RTLParser:
                 parsing_warnings=getattr(self, 'parsing_warnings', [])
             )
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params, {len(kernel_metadata.interfaces)} interfaces.")
-
-            # 7. Return KernelMetadata
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
             return kernel_metadata
 
@@ -429,30 +422,8 @@ class RTLParser:
             logger.error(f"String parsing failed for {source_name}: {e}")
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error during string parsing: {e}")
+            logger.exception(f"Unexpected error during string parsing for {source_name}: {e}")
             raise ParserError(f"Unexpected error during string parsing: {e}")
-
-    def parse(self, source: Union[str, Path]) -> KernelMetadata:
-        """Flexible parse method accepting string or file path.
-        
-        Args:
-            source: Either SystemVerilog code string or path to file
-            
-        Returns:
-            KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
-            
-        Raises:
-            SyntaxError: Invalid SystemVerilog syntax
-            ParserError: Parser configuration or runtime error
-        """
-        # Check if source is a file path that exists
-        if isinstance(source, (str, Path)):
-            source_path = Path(source)
-            if source_path.exists() and source_path.is_file():
-                return self.parse_file(str(source_path))
-        
-        # Treat as SystemVerilog code string
-        return self.parse_string(str(source))
 
     def _initial_parse_string(self, systemverilog_code: str, 
                              source_name: str = "<string>",
@@ -517,15 +488,7 @@ class RTLParser:
         logger.info("Stage 1: Initial string parsing complete.")
 
     def parse_file(self, file_path: str) -> KernelMetadata:
-        """Orchestrates the multi-stage parsing process for a SystemVerilog file.
-
-        This is the main public method to parse an RTL file. It calls the
-        internal stage methods in sequence:
-        1. `_initial_parse`: Reads file, parses AST, selects module.
-        2. `_extract_kernel_components`: Extracts name, parameters, ports.
-        3. `_analyze_and_validate_interfaces`: Builds and validates interfaces.
-        4. `_apply_pragmas`: Applies pragmas to interfaces and parameters.
-        Finally, it constructs and returns the `ParsedKernelData` data object.
+        """Parse a SystemVerilog file by reading it and calling the core parse method.
 
         Args:
             file_path: The absolute path to the SystemVerilog file to parse.
@@ -539,54 +502,28 @@ class RTLParser:
                          ambiguity, or validation failures.
             SyntaxError: If the input file has SystemVerilog syntax errors.
             FileNotFoundError: If the input file cannot be found.
-            Exception: Catches and wraps any other unexpected errors during orchestration
-                       as a `ParserError`.
         """
-        logger.info(f"Starting full parsing orchestration for: {file_path}")
+        logger.info(f"Starting file parsing for: {file_path}")
         try:
-            # 1. Call Stage 1: Initial Parse
-            self._initial_parse(file_path) # Sets self.pragmas, self.module_node
-
-            # 2. Call Stage 2: Extract Components
-            self._extract_kernel_components() # Uses self.module_node; sets self.name, self.parameters, self.ports
-
-            # 3. Call Stage 3: Analyze and Validate Interfaces
-            self._analyze_and_validate_interfaces() # Uses self.ports, self.name; sets self.interfaces
-
-            # 4. Pragmas are already applied in build_interface_metadata() - skip _apply_pragmas()
-
-            # 5. Use already-processed InterfaceMetadata objects (pragmas already applied)
-            # No need to create new metadata - use self.interface_metadata_list directly
-
-            # 6. Create KernelMetadata object
-            kernel_metadata = KernelMetadata(
-                name=self.name,
-                source_file=Path(file_path),
-                interfaces=self.interface_metadata_list,
-                parameters=self.parameters,
-                pragmas=self.pragmas,
-                parsing_warnings=getattr(self, 'parsing_warnings', [])
-            )
-            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params, {len(kernel_metadata.interfaces)} interfaces.")
-
-            # 7. Return KernelMetadata
-            logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {file_path}")
-            return kernel_metadata
-
-        except (SyntaxError, ParserError) as e:
-            # Log specific parser/syntax errors raised by stages
-            # Error should already be logged by the stage method that raised it.
-            logger.error(f"Parsing failed for {file_path}: {e}")
-            raise # Re-raise the specific error
+            # Read file content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                systemverilog_code = f.read()
+            
+            # Delegate to core parse method
+            return self.parse(systemverilog_code, file_path)
+            
         except FileNotFoundError as e:
-            # Handle file not found specifically if not caught earlier
-            logger.error(f"File not found during parsing: {e}")
+            logger.error(f"File not found: {file_path}")
+            raise
+        except (UnicodeDecodeError, IOError) as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            raise ParserError(f"Failed to read file {file_path}: {e}")
+        except (SyntaxError, ParserError):
+            # Re-raise parsing errors as-is (already logged by parse method)
             raise
         except Exception as e:
-            # Catch any other unexpected errors during orchestration
-            logger.exception(f"An unexpected error occurred during parsing orchestration for {file_path}: {e}")
-            # Wrap in ParserError for consistent error type from this function
-            raise ParserError(f"An unexpected error occurred during parsing orchestration: {e}")
+            logger.exception(f"Unexpected error during file parsing for {file_path}: {e}")
+            raise ParserError(f"Unexpected error during file parsing: {e}")
 
     # --- Helper Functions ---
     def _find_first_error_node(self, node: Node) -> Optional[Node]:

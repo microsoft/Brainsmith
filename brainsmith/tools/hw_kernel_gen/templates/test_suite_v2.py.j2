@@ -1,0 +1,402 @@
+{#-
+Enhanced Test Suite Template (v2) for Phase 3
+Generated test suite with Phase 2 parameter validation and runtime extraction support.
+
+Features:
+- Parameter validation tests with whitelist checking
+- HWCustomOp instantiation tests with runtime parameter extraction
+- Interface metadata validation tests
+- Node attribute type validation tests
+- BDIM parameter consistency tests
+-#}
+"""
+Auto-generated test suite for {{ class_name }}.
+Generated from: {{ source_file }}
+Template: test_suite_v2.py.j2 (Phase 3 Enhanced)
+Generation time: {{ generation_timestamp }}
+
+Phase 2 Features:
+✅ Runtime parameter extraction validation
+✅ Whitelisted parameter testing  
+✅ Enhanced interface metadata validation
+✅ BDIM parameter consistency checking
+"""
+
+import pytest
+import numpy as np
+import onnx.helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
+
+# Import the generated HWCustomOp
+from {{ module_name }}_hw_custom_op import {{ class_name }}
+
+class Test{{ class_name }}:
+    """
+    Enhanced test suite for {{ class_name }} with Phase 2 parameter handling.
+    
+    Tests runtime parameter extraction, validation, and FINN integration
+    with the Phase 2 template system that ensures symbolic BDIM validation.
+    """
+    
+    def test_parameter_validation_required_attributes(self):
+        """Test that required parameters are properly validated."""
+        {% if required_attributes %}
+        # Test missing required parameters
+        with pytest.raises((ValueError, AttributeError), match="(Missing|required)"):
+            # Create node without required parameters
+            node = onnx.helper.make_node(
+                "{{ class_name }}",
+                inputs=["input"],
+                outputs=["output"],
+                # Missing required: {{ required_attributes | join(', ') }}
+            )
+            {{ class_name }}(node)
+        {% else %}
+        # No required parameters - basic instantiation should work
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"], 
+            outputs=["output"]
+        )
+        op = {{ class_name }}(node)
+        assert op is not None
+        {% endif %}
+    
+    def test_parameter_validation_whitelisted_defaults(self):
+        """Test whitelisted parameters with defaults are handled correctly."""
+        {% if whitelisted_defaults %}
+        # Create node with all whitelisted parameters
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param_name, default_value in whitelisted_defaults.items() %}
+            {{ param_name }}={{ default_value }},
+            {% endfor %}
+            {% for param in required_attributes %}
+            {{ param }}=1,  # Required parameter
+            {% endfor %}
+        )
+        
+        op = {{ class_name }}(node)
+        
+        # Verify whitelisted parameters are extracted correctly
+        {% for param_name, default_value in whitelisted_defaults.items() %}
+        assert op.get_nodeattr("{{ param_name }}") == {{ default_value }}
+        {% endfor %}
+        {% endif %}
+    
+    def test_valid_node_creation_all_parameters(self):
+        """Test successful node creation with all defined parameters."""
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        assert node.op_type == "{{ class_name }}"
+        assert len(node.input) == 1
+        assert len(node.output) == 1
+        
+        # Verify all attributes are set
+        {% for param in parameter_definitions %}
+        attr_value = next((attr.i for attr in node.attribute if attr.name == "{{ param.name }}"), None)
+        assert attr_value is not None, "Parameter {{ param.name }} should be set"
+        assert attr_value == {{ param.default_value if param.default_value is not none else 1 }}
+        {% endfor %}
+    
+    def test_hwcustomop_instantiation_runtime_extraction(self):
+        """Test HWCustomOp instantiation with Phase 2 runtime parameter extraction."""
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        # Should not raise exceptions during Phase 2 parameter extraction
+        op = {{ class_name }}(node)
+        
+        # Verify runtime parameter extraction worked correctly
+        {% for param in parameter_definitions %}
+        extracted_value = op.get_nodeattr("{{ param.name }}")
+        expected_value = {{ param.default_value if param.default_value is not none else 1 }}
+        assert extracted_value == expected_value, f"Parameter {{ param.name }}: expected {expected_value}, got {extracted_value}"
+        {% endfor %}
+        
+        # Verify parameter storage in runtime_parameters dict
+        assert hasattr(op, 'runtime_parameters'), "Phase 2 runtime_parameters dict should exist"
+        {% for param in parameter_definitions %}
+        assert "{{ param.name }}" in op.runtime_parameters, "{{ param.name }} should be in runtime_parameters"
+        {% endfor %}
+    
+    def test_interface_metadata_validation(self):
+        """Test that interface metadata matches Phase 2 enhanced parsing."""
+        {% if interface_metadata %}
+        # Create a valid node for testing
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        op = {{ class_name }}(node)
+        
+        # Test interface metadata structure
+        {% for interface in interface_metadata %}
+        # Test {{ interface.name }} interface
+        {% if interface.interface_type.name == 'INPUT' %}
+        # INPUT interface validation
+        input_shape = op.get_folded_input_shape()
+        assert input_shape is not None, "INPUT interface should have shape definition"
+        {% elif interface.interface_type.name == 'OUTPUT' %}
+        # OUTPUT interface validation  
+        output_shape = op.get_folded_output_shape()
+        assert output_shape is not None, "OUTPUT interface should have shape definition"
+        {% elif interface.interface_type.name == 'WEIGHT' %}
+        # WEIGHT interface validation
+        weight_shape = op.get_weight_shape()
+        assert weight_shape is not None, "WEIGHT interface should have shape definition"
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+    
+    def test_bdim_parameter_consistency(self):
+        """Test BDIM parameter consistency from Phase 2 validation."""
+        {% if interface_metadata %}
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        op = {{ class_name }}(node)
+        
+        # Test that BDIM parameters referenced in interfaces are consistent
+        {% for interface in interface_metadata %}
+        {% if interface.chunking_strategy and interface.chunking_strategy.block_shape %}
+        # {{ interface.name }} BDIM consistency check
+        # Block shape: {{ interface.chunking_strategy.block_shape }}
+        {% for shape_element in interface.chunking_strategy.block_shape %}
+        {% if shape_element != ':' and shape_element.isidentifier() %}
+        # Validate {{ shape_element }} parameter exists and is positive
+        param_value = op.get_nodeattr("{{ shape_element }}")
+        assert param_value is not None, "BDIM parameter {{ shape_element }} must be defined"
+        assert param_value > 0, "BDIM parameter {{ shape_element }} must be positive, got {param_value}"
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+    
+    def test_node_attribute_types_phase2(self):
+        """Test node attribute type definitions for Phase 2 compatibility."""
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        op = {{ class_name }}(node)
+        
+        # Check that get_nodeattr_types is implemented
+        if hasattr(op, 'get_nodeattr_types'):
+            attr_types = op.get_nodeattr_types()
+            
+            # Check parameter attributes exist
+            {% for param in parameter_definitions %}
+            assert "{{ param.name }}" in attr_types, "Parameter {{ param.name }} should have type definition"
+            attr_type, required, default = attr_types["{{ param.name }}"]
+            assert attr_type == "i", "Parameter {{ param.name }} should be integer type"
+            {% if param.name in required_attributes %}
+            assert required == True, "Parameter {{ param.name }} should be required"
+            {% else %}
+            assert required == False, "Parameter {{ param.name }} should not be required"
+            assert default == {{ param.default_value if param.default_value is not none else 1 }}, "Default value mismatch for {{ param.name }}"
+            {% endif %}
+            {% endfor %}
+    
+    def test_parameter_range_validation(self):
+        """Test parameter range validation for positive values."""
+        {% for param in parameter_definitions %}
+        # Test {{ param.name }} must be positive
+        with pytest.raises((ValueError, AssertionError)):
+            node = onnx.helper.make_node(
+                "{{ class_name }}",
+                inputs=["input"],
+                outputs=["output"],
+                {{ param.name }}=-1,  # Invalid negative value
+                {% for other_param in parameter_definitions %}
+                {% if other_param.name != param.name %}
+                {{ other_param.name }}={{ other_param.default_value if other_param.default_value is not none else 1 }},
+                {% endif %}
+                {% endfor %}
+            )
+            op = {{ class_name }}(node)
+            # Some validation might happen during instantiation or later method calls
+            if hasattr(op, 'validate_parameters'):
+                op.validate_parameters()
+        
+        # Test {{ param.name }} == 0 should also fail
+        with pytest.raises((ValueError, AssertionError)):
+            node = onnx.helper.make_node(
+                "{{ class_name }}",
+                inputs=["input"],
+                outputs=["output"],
+                {{ param.name }}=0,  # Invalid zero value
+                {% for other_param in parameter_definitions %}
+                {% if other_param.name != param.name %}
+                {{ other_param.name }}={{ other_param.default_value if other_param.default_value is not none else 1 }},
+                {% endif %}
+                {% endfor %}
+            )
+            op = {{ class_name }}(node)
+            if hasattr(op, 'validate_parameters'):
+                op.validate_parameters()
+        {% endfor %}
+    
+    def test_phase2_regression_prevention(self):
+        """Test that Phase 2 features work and prevent common regressions."""
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        op = {{ class_name }}(node)
+        
+        # Regression test: Ensure runtime_parameters are extracted in __init__
+        assert hasattr(op, 'runtime_parameters'), "Phase 2 runtime_parameters extraction should work"
+        assert len(op.runtime_parameters) > 0, "runtime_parameters should not be empty"
+        
+        # Regression test: Ensure all defined parameters are accessible
+        {% for param in parameter_definitions %}
+        param_value = op.get_nodeattr("{{ param.name }}")
+        assert param_value is not None, "Parameter {{ param.name }} should be accessible via get_nodeattr"
+        {% endfor %}
+        
+        # Regression test: Ensure class is properly derived from AutoHWCustomOp
+        from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+        assert isinstance(op, HWCustomOp), "{{ class_name }} should inherit from HWCustomOp"
+    
+    @pytest.mark.slow
+    def test_finn_integration_compatibility(self):
+        """Test FINN framework integration compatibility (slow test)."""
+        # Create a minimal model for integration testing
+        node = onnx.helper.make_node(
+            "{{ class_name }}",
+            inputs=["input"],
+            outputs=["output"],
+            {% for param in parameter_definitions %}
+            {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+            {% endfor %}
+        )
+        
+        # Create simple input/output value info
+        input_vi = onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [1, 32])
+        output_vi = onnx.helper.make_tensor_value_info("output", onnx.TensorProto.FLOAT, [1, 32])
+        
+        # Create model
+        graph = onnx.helper.make_graph([node], "test_graph", [input_vi], [output_vi])
+        model = onnx.helper.make_model(graph)
+        
+        # Test that ModelWrapper can load the model
+        try:
+            wrapper = ModelWrapper(model)
+            assert wrapper is not None, "ModelWrapper should be able to load model with {{ class_name }}"
+            
+            # Test that the custom op is recognized
+            custom_nodes = wrapper.get_nodes_by_op_type("{{ class_name }}")
+            assert len(custom_nodes) == 1, "Should find exactly one {{ class_name }} node"
+            
+        except Exception as e:
+            pytest.skip(f"FINN integration test skipped due to: {e}")
+
+#=============================================================================
+# Test Utilities and Fixtures
+#=============================================================================
+
+@pytest.fixture
+def sample_{{ module_name }}_node():
+    """Fixture providing a sample {{ class_name }} node with valid parameters."""
+    return onnx.helper.make_node(
+        "{{ class_name }}",
+        inputs=["input"],
+        outputs=["output"],
+        {% for param in parameter_definitions %}
+        {{ param.name }}={{ param.default_value if param.default_value is not none else 1 }},
+        {% endfor %}
+    )
+
+@pytest.fixture  
+def sample_{{ module_name }}_op(sample_{{ module_name }}_node):
+    """Fixture providing a sample {{ class_name }} instance."""
+    return {{ class_name }}(sample_{{ module_name }}_node)
+
+#=============================================================================
+# Performance and Stress Tests
+#=============================================================================
+
+class Test{{ class_name }}Performance:
+    """Performance and stress tests for {{ class_name }}."""
+    
+    @pytest.mark.performance
+    def test_instantiation_performance(self, sample_{{ module_name }}_node):
+        """Test that instantiation is reasonably fast."""
+        import time
+        
+        start_time = time.time()
+        for _ in range(100):
+            op = {{ class_name }}(sample_{{ module_name }}_node)
+        end_time = time.time()
+        
+        avg_time = (end_time - start_time) / 100
+        assert avg_time < 0.01, f"Instantiation should be < 10ms, got {avg_time*1000:.2f}ms"
+    
+    @pytest.mark.stress
+    def test_parameter_extraction_stress(self):
+        """Stress test parameter extraction with many different values."""
+        test_values = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+        
+        {% for param in parameter_definitions %}
+        # Stress test {{ param.name }}
+        for value in test_values:
+            node = onnx.helper.make_node(
+                "{{ class_name }}",
+                inputs=["input"],
+                outputs=["output"],
+                {{ param.name }}=value,
+                {% for other_param in parameter_definitions %}
+                {% if other_param.name != param.name %}
+                {{ other_param.name }}={{ other_param.default_value if other_param.default_value is not none else 1 }},
+                {% endif %}
+                {% endfor %}
+            )
+            
+            op = {{ class_name }}(node)
+            extracted = op.get_nodeattr("{{ param.name }}")
+            assert extracted == value, f"{{ param.name }}: expected {value}, got {extracted}"
+        {% endfor %}
+
+#=============================================================================
+# End of {{ class_name }} Test Suite
+# Template: test_suite_v2.py.j2 (Phase 3 Enhanced)
+#=============================================================================

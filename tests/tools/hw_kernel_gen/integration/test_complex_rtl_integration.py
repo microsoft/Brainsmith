@@ -20,10 +20,13 @@ class TestComplexRTLIntegration:
         """Test parsing of thresholding_axi.sv file if available."""
         parser = RTLParser(debug=True)
         
-        # Complex thresholding module with multiple interfaces
+        # Complex thresholding module with multiple interfaces and BDIM pragmas
         systemverilog_code = """
 // @brainsmith datatype in0_V_data_V INT 8 8  
 // @brainsmith weight weights_V_data_V
+// @brainsmith bdim in0_V_data_V [N,PE] RINDEX=0
+// @brainsmith bdim weights_V_data_V [PE] RINDEX=0
+// @brainsmith bdim out0_V_data_V [N] RINDEX=0
 module thresholding_axi #(
     parameter N = 8,
     parameter BIAS = 0,
@@ -71,12 +74,12 @@ endmodule
 """
         
         try:
-            kernel_metadata = parser.parse_string(systemverilog_code, source_name="thresholding_axi_test")
+            kernel_metadata = parser.parse(systemverilog_code, source_name="thresholding_axi_test")
             
             # Verify basic structure
             assert kernel_metadata.name == "thresholding_axi"
             assert len(kernel_metadata.parameters) == 3  # N, BIAS, PE
-            assert len(kernel_metadata.pragmas) == 2  # DATATYPE, WEIGHT
+            assert len(kernel_metadata.pragmas) == 5  # DATATYPE, WEIGHT, 3 BDIM
             assert len(kernel_metadata.interfaces) >= 4  # Control, Input, Weight, Output, Config
             
             # Verify parameter extraction
@@ -108,11 +111,30 @@ endmodule
             has_int8 = any(dt.finn_type == "INT8" and dt.signed for dt in input_interface.allowed_datatypes)
             assert has_int8, "DATATYPE pragma should apply INT8 to input interface"
             
+            # Verify BDIM pragma effects on chunking strategies
+            interfaces_with_chunking = [
+                iface for iface in kernel_metadata.interfaces 
+                if hasattr(iface.chunking_strategy, 'block_shape') and 
+                   any(param in iface.chunking_strategy.block_shape for param in ["N", "PE"])
+            ]
+            assert len(interfaces_with_chunking) >= 3, "BDIM pragmas should create block chunking strategies"
+            
+            # Verify specific chunking parameter usage
+            chunking_params_used = set()
+            for iface in kernel_metadata.interfaces:
+                if hasattr(iface.chunking_strategy, 'block_shape'):
+                    chunking_params_used.update(iface.chunking_strategy.block_shape)
+            
+            assert "N" in chunking_params_used, "N parameter should be used in block chunking"
+            assert "PE" in chunking_params_used, "PE parameter should be used in block chunking"
+            
             print(f"✅ Complex thresholding file parsed successfully:")
             print(f"  - Module: {kernel_metadata.name}")
             print(f"  - Parameters: {len(kernel_metadata.parameters)}")
             print(f"  - Interfaces: {len(kernel_metadata.interfaces)}")
             print(f"  - Pragmas: {len(kernel_metadata.pragmas)}")
+            print(f"  - Custom chunking interfaces: {len(interfaces_with_chunking)}")
+            print(f"  - Chunking params: {sorted(chunking_params_used - {':'})}")
             
         except Exception as e:
             pytest.fail(f"Complex RTL parsing failed: {e}")
@@ -122,6 +144,10 @@ endmodule
         parser = RTLParser(debug=False)
         
         systemverilog_code = """
+// @brainsmith bdim s_axis_0 [CHANNELS] RINDEX=0
+// @brainsmith bdim s_axis_1 [WIDTH] RINDEX=0
+// @brainsmith bdim m_axis_0 [CHANNELS,WIDTH] RINDEX=1
+// @brainsmith bdim m_axis_1 [:] RINDEX=0
 module multi_stream_processor #(
     parameter CHANNELS = 16,
     parameter WIDTH = 32
@@ -153,7 +179,7 @@ module multi_stream_processor #(
 endmodule
 """
         
-        kernel_metadata = parser.parse_string(systemverilog_code, source_name="multi_stream_test")
+        kernel_metadata = parser.parse(systemverilog_code, source_name="multi_stream_test")
         
         # Verify multiple streams are detected
         input_interfaces = [iface for iface in kernel_metadata.interfaces 
@@ -171,15 +197,39 @@ endmodule
         assert len(input_names) == 2, "Input interface names should be unique"
         assert len(output_names) == 2, "Output interface names should be unique"
         
+        # Verify BDIM pragma applications for different interface chunking patterns
+        chunking_strategies = {}
+        for iface in kernel_metadata.interfaces:
+            if hasattr(iface.chunking_strategy, 'block_shape'):
+                chunking_strategies[iface.name] = {
+                    'block_shape': iface.chunking_strategy.block_shape,
+                    'rindex': iface.chunking_strategy.rindex
+                }
+        
+        # Should have at least 4 interfaces with custom chunking (from BDIM pragmas)
+        assert len(chunking_strategies) >= 4, "BDIM pragmas should create chunking strategies"
+        
+        # Verify parameter usage in chunking
+        all_chunking_params = set()
+        for strategy in chunking_strategies.values():
+            all_chunking_params.update(param for param in strategy['block_shape'] if param != ":")
+        
+        assert "CHANNELS" in all_chunking_params, "CHANNELS parameter should be used in chunking"
+        assert "WIDTH" in all_chunking_params, "WIDTH parameter should be used in chunking"
+        
         print(f"✅ Multiple stream interfaces detected:")
         print(f"  - Input interfaces: {input_names}")
         print(f"  - Output interfaces: {output_names}")
+        print(f"  - Chunking strategies: {len(chunking_strategies)}")
+        print(f"  - Chunking params used: {sorted(all_chunking_params)}")
     
     def test_edge_case_interface_patterns(self):
         """Test edge cases in interface pattern recognition."""
         parser = RTLParser(debug=False)
         
         systemverilog_code = """
+// @brainsmith bdim data_in [SIZE] RINDEX=0
+// @brainsmith bdim result [:] RINDEX=0
 module edge_case_module #(
     parameter SIZE = 64
 )(
@@ -213,7 +263,7 @@ module edge_case_module #(
 endmodule
 """
         
-        kernel_metadata = parser.parse_string(systemverilog_code, source_name="edge_case_test")
+        kernel_metadata = parser.parse(systemverilog_code, source_name="edge_case_test")
         
         # Should detect some interfaces despite non-standard naming
         assert len(kernel_metadata.interfaces) >= 2, "Should detect at least control and some data interfaces"
@@ -223,10 +273,21 @@ endmodule
                             if iface.interface_type == InterfaceType.CONTROL]
         assert len(control_interfaces) >= 1, "Should detect global control interface"
         
+        # Verify BDIM pragmas work with edge case interfaces
+        edge_chunking_interfaces = [
+            iface for iface in kernel_metadata.interfaces 
+            if hasattr(iface.chunking_strategy, 'block_shape') and 
+               "SIZE" in iface.chunking_strategy.block_shape
+        ]
+        
         # Print detected interfaces for analysis
         print(f"✅ Edge case parsing completed:")
         for iface in kernel_metadata.interfaces:
-            print(f"  - {iface.name}: {iface.interface_type.value}")
+            chunking_info = ""
+            if hasattr(iface.chunking_strategy, 'block_shape'):
+                chunking_info = f" [chunking: {iface.chunking_strategy.block_shape}]"
+            print(f"  - {iface.name}: {iface.interface_type.value}{chunking_info}")
+        print(f"  - SIZE parameter used in chunking: {len(edge_chunking_interfaces)} interfaces")
     
     def test_performance_with_large_module(self):
         """Test performance with a module containing many interfaces."""
@@ -238,6 +299,12 @@ endmodule
             "    input ap_clk,",
             "    input ap_rst_n,"
         ])
+        
+        # Generate BDIM pragmas for multiple interfaces
+        bdim_pragmas = []
+        for i in range(4):  # Add pragmas for first 4 interfaces to test performance
+            bdim_pragmas.append(f"// @brainsmith bdim s_axis_{i} [NUM_CHANNELS] RINDEX=0")
+            bdim_pragmas.append(f"// @brainsmith bdim m_axis_{i} [DATA_WIDTH] RINDEX=0")
         
         # Generate multiple AXI-Stream interfaces
         for i in range(8):
@@ -258,7 +325,10 @@ endmodule
         if ports:
             ports[-1] = ports[-1].rstrip(',')
         
+        # Add pragmas to the code string after generating ports
+        
         systemverilog_code = f"""
+{chr(10).join(bdim_pragmas)}
 module large_interface_module #(
     parameter NUM_CHANNELS = 128,
     parameter DATA_WIDTH = 32,
@@ -273,7 +343,7 @@ endmodule
         import time
         start_time = time.time()
         
-        kernel_metadata = parser.parse_string(systemverilog_code, source_name="large_module_test")
+        kernel_metadata = parser.parse(systemverilog_code, source_name="large_module_test")
         
         end_time = time.time()
         parse_time = end_time - start_time
@@ -285,10 +355,23 @@ endmodule
         # Performance should be reasonable (under 2 seconds for this size)
         assert parse_time < 2.0, f"Parsing took too long: {parse_time:.2f}s"
         
+        # Verify BDIM pragmas were processed for performance test
+        chunked_interfaces = [
+            iface for iface in kernel_metadata.interfaces 
+            if hasattr(iface.chunking_strategy, 'block_shape') and 
+               any(param in iface.chunking_strategy.block_shape 
+                   for param in ["NUM_CHANNELS", "DATA_WIDTH"])
+        ]
+        
+        # Should have some chunked interfaces from the BDIM pragmas we added
+        assert len(chunked_interfaces) >= 2, "BDIM pragmas should be processed even in large modules"
+        
         print(f"✅ Large module performance test:")
         print(f"  - Interfaces detected: {len(kernel_metadata.interfaces)}")
         print(f"  - Parse time: {parse_time:.3f}s")
         print(f"  - Parameters: {len(kernel_metadata.parameters)}")
+        print(f"  - Chunked interfaces: {len(chunked_interfaces)}")
+        print(f"  - Total pragmas: {len(kernel_metadata.pragmas)}")
 
 
 if __name__ == "__main__":

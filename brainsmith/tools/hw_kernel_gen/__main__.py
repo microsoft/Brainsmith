@@ -8,7 +8,8 @@ and provides a simple-by-default, powerful-when-needed approach to hardware
 kernel generation.
 """
 
+import sys
 from .cli import main
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

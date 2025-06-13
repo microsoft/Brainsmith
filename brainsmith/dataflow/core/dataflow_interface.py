@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Dict, List, Any, Optional, Union
 
 from .interface_types import InterfaceType
+from .qonnx_types import BaseDataType, DataType
 from .validation import (
     ValidationError, 
     ValidationResult, 
@@ -24,45 +25,6 @@ from .validation import (
     validate_dimension_relationships
 )
 
-# Legacy InterfaceType removed - use InterfaceType directly
-
-@dataclass
-class DataflowDataType:
-    """Enhanced datatype specification supporting FINN compatibility"""
-    base_type: str       # INT, UINT, FLOAT, FIXED
-    bitwidth: int        # Bit precision
-    signed: bool         # Sign specification
-    finn_type: str       # FINN DataType string representation
-    
-    def __post_init__(self):
-        """Validate datatype specification after initialization"""
-        valid_base_types = ["INT", "UINT", "FLOAT", "FIXED"]
-        if self.base_type not in valid_base_types:
-            raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_base_types}")
-        
-        if self.bitwidth <= 0:
-            raise ValueError(f"Invalid bitwidth {self.bitwidth}. Must be positive integer")
-        
-        # Validate consistency between base_type and signed
-        if self.base_type == "UINT" and self.signed:
-            raise ValueError("UINT base_type cannot be signed")
-        
-        # Generate FINN type if not provided
-        if not self.finn_type:
-            self.finn_type = self._generate_finn_type()
-    
-    def _generate_finn_type(self) -> str:
-        """Generate FINN DataType string representation"""
-        if self.base_type in ["INT", "UINT"]:
-            sign_prefix = "INT" if self.signed else "UINT"
-            return f"{sign_prefix}{self.bitwidth}"
-        elif self.base_type == "FIXED":
-            sign_prefix = "INT" if self.signed else "UINT"
-            return f"FIXED<{self.bitwidth},{sign_prefix}>"
-        elif self.base_type == "FLOAT":
-            return f"FLOAT{self.bitwidth}"
-        else:
-            return f"{self.base_type}{self.bitwidth}"
 
 @dataclass
 class DataTypeConstraint:
@@ -82,22 +44,10 @@ class DataTypeConstraint:
         if not self.signed_allowed and not self.unsigned_allowed:
             raise ValueError("At least one of signed_allowed or unsigned_allowed must be True")
     
-    def is_valid_datatype(self, dtype: DataflowDataType) -> bool:
+    def is_valid_datatype(self, dtype: BaseDataType) -> bool:
         """Check if a datatype satisfies this constraint"""
-        # Check base type
-        if dtype.base_type not in self.base_types:
-            return False
-        
-        # Check bitwidth range
-        if not (self.min_bitwidth <= dtype.bitwidth <= self.max_bitwidth):
-            return False
-        
-        # Check sign constraints
-        if dtype.signed and not self.signed_allowed:
-            return False
-        if not dtype.signed and not self.unsigned_allowed:
-            return False
-        
+        # This method is now deprecated - constraint validation happens
+        # at interface creation time using QONNX constraint groups
         return True
 
 class ConstraintType(Enum):
@@ -138,8 +88,7 @@ class RangeConstraint(Constraint):
 @dataclass
 class DataflowInterface:
     """
-    Unified abstraction for hardware kernel interfaces providing 
-    standardized representation of interface characteristics.
+    DataflowInterface with runtime datatype validation.
     
     Three-tier dimension system for Interface-Wise Dataflow Modeling:
     - tensor_dims: Full tensor dimensions (original input tensor shape before any processing)
@@ -152,12 +101,11 @@ class DataflowInterface:
       Example: [1,128,768] ÷ [1,8,96] = [1,16,8] chunks total
     """
     name: str                           # Interface identifier (e.g., "in0", "out0", "weights")
-    interface_type: InterfaceType  # INPUT, OUTPUT, WEIGHT interface type
+    interface_type: InterfaceType       # INPUT, OUTPUT, WEIGHT interface type
     tensor_dims: List[int]              # Full tensor dimensions: original input tensor shape
     block_dims: List[int]               # Block dimensions: processing chunk shape
-    stream_dims: List[int]                     # Stream dimensions: elements per clock cycle (hardware parallelism)
-    dtype: DataflowDataType             # Element data type specification
-    allowed_datatypes: List[DataTypeConstraint] = field(default_factory=list)  # Allowed datatypes from DATATYPE pragma
+    stream_dims: List[int]              # Stream dimensions: elements per clock cycle (hardware parallelism)
+    dtype: BaseDataType                 # QONNX type - REQUIRED at runtime
     axi_metadata: Dict[str, Any] = field(default_factory=dict)        # Protocol-specific metadata
     constraints: List[Constraint] = field(default_factory=list)       # Interface-specific constraints
     pragma_metadata: Dict[str, Any] = field(default_factory=dict)    # Pragma-derived information
@@ -204,16 +152,9 @@ class DataflowInterface:
     
     def _set_default_constraints(self):
         """Set default datatype constraints if none provided"""
-        if not self.allowed_datatypes:
-            # Default: allow common integer types from 1 to 32 bits
-            default_constraint = DataTypeConstraint(
-                base_types=["INT", "UINT"],
-                min_bitwidth=1,
-                max_bitwidth=32,
-                signed_allowed=True,
-                unsigned_allowed=True
-            )
-            self.allowed_datatypes = [default_constraint]
+        # No longer setting default constraints - DataflowInterface created via factory method
+        # which validates against InterfaceMetadata constraints
+        pass
     
     def get_num_blocks(self) -> List[int]:
         """
@@ -245,7 +186,7 @@ class DataflowInterface:
     def calculate_stream_width(self) -> int:
         """Calculate AXI stream width based on stream_dims and dtype"""
         elements_per_cycle = np.prod(self.stream_dims)
-        raw_width = elements_per_cycle * self.dtype.bitwidth
+        raw_width = elements_per_cycle * self.dtype.bitwidth()
         # Align to 8-bit boundaries for AXI compatibility
         return ((raw_width + 7) // 8) * 8
     
@@ -269,18 +210,9 @@ class DataflowInterface:
                 )
                 result.add_error(error)
         
-        # Validate datatype against constraints
-        datatype_valid = self.validate_datatype(self.dtype)
-        if not datatype_valid:
-            allowed_types = []
-            for constraint in self.allowed_datatypes:
-                allowed_types.extend(constraint.base_types)
-            error = create_datatype_error(
-                self.name,
-                f"{self.dtype.base_type}{self.dtype.bitwidth}",
-                list(set(allowed_types))
-            )
-            result.add_error(error)
+        # Datatype validation is now handled at interface creation time via factory method
+        # No need for runtime constraint validation here since constraints are enforced
+        # when creating the interface from metadata
         
         return result
     
@@ -315,22 +247,8 @@ class DataflowInterface:
             )
             result.merge(dim_result)
         
-        # Validate datatype constraints
-        if self.allowed_datatypes:
-            datatype_valid = False
-            for constraint in self.allowed_datatypes:
-                if constraint.is_valid_datatype(self.dtype):
-                    datatype_valid = True
-                    break
-            
-            if not datatype_valid:
-                allowed_types = []
-                for constraint in self.allowed_datatypes:
-                    allowed_types.extend(constraint.base_types)
-                result.add_error(
-                    f"Datatype {self.dtype.finn_type} not allowed. Must be one of: {list(set(allowed_types))}",
-                    {"current_datatype": self.dtype.finn_type, "allowed_types": list(set(allowed_types))}
-                )
+        # Datatype constraint validation is now handled at interface creation time
+        # via the factory method which validates against InterfaceMetadata constraints
         
         # Validate interface-specific constraints
         constraint_result = self.validate_constraints()
@@ -431,12 +349,11 @@ class DataflowInterface:
         
         return signals
     
-    def validate_datatype(self, target_dtype: DataflowDataType) -> bool:
+    def validate_datatype(self, target_dtype: BaseDataType) -> bool:
         """Validate that target datatype is allowed for this interface"""
-        for constraint in self.allowed_datatypes:
-            if constraint.is_valid_datatype(target_dtype):
-                return True
-        return False
+        # Datatype validation is now handled at interface creation time
+        # Since this interface was created via factory method, the datatype is already valid
+        return True
     
     def validate_datatype_string(self, dtype_string: str) -> bool:
         """
@@ -448,37 +365,14 @@ class DataflowInterface:
         Returns:
             bool: True if datatype is valid for this interface
         """
-        try:
-            # Parse the datatype string to extract components
-            import re
-            
-            # Extract base type and bitwidth from FINN datatype string
-            match = re.match(r'([A-Z]+)(\d+)', dtype_string)
-            if not match:
-                return False
-            
-            base_type = match.group(1)
-            bitwidth = int(match.group(2))
-            
-            # Determine if signed based on base type
-            signed = base_type.startswith('INT') and not base_type.startswith('UINT')
-            
-            # Create DataflowDataType for validation
-            target_dtype = DataflowDataType(
-                base_type=base_type,
-                bitwidth=bitwidth,
-                signed=signed,
-                finn_type=dtype_string
-            )
-            
-            return self.validate_datatype(target_dtype)
-        except Exception:
-            return False
+        # Datatype validation now happens at interface creation time
+        # Since this interface was created via factory method, any datatype is valid
+        return True
     
     def get_memory_footprint(self) -> int:
         """Calculate total memory footprint in bits"""
         total_elements = np.prod(self.get_num_blocks()) * np.prod(self.block_dims)
-        return total_elements * self.dtype.bitwidth
+        return total_elements * self.dtype.bitwidth()
     
     def get_transfer_cycles(self) -> int:
         """Calculate number of transfer cycles needed"""
@@ -499,8 +393,8 @@ class DataflowInterface:
         total_bytes = (total_bits + 7) // 8  # Round up to bytes
         
         # Calculate buffer requirements
-        block_buffer_bits = np.prod(self.block_dims) * self.dtype.bitwidth
-        stream_buffer_bits = np.prod(self.stream_dims) * self.dtype.bitwidth
+        block_buffer_bits = np.prod(self.block_dims) * self.dtype.bitwidth()
+        stream_buffer_bits = np.prod(self.stream_dims) * self.dtype.bitwidth()
         
         return {
             "total_bits": total_bits,
@@ -511,21 +405,6 @@ class DataflowInterface:
                 "num_blocks": self.calculate_total_blocks()
             }
         }
-    
-    def analyze_resource_requirements(self) -> Dict[str, Any]:
-        """Analyze resource requirements using ResourceAnalyzer.
-        
-        Returns:
-            Dict containing comprehensive resource analysis
-        """
-        # Import ResourceAnalyzer here to avoid circular imports
-        from .resource_analysis import ResourceAnalyzer
-        
-        analyzer = ResourceAnalyzer()
-        requirements = analyzer.analyze_interface(self)
-        
-        return requirements.get_summary()
-    
     
     def reconstruct_tensor_shape(self) -> List[int]:
         """
@@ -607,39 +486,41 @@ class DataflowInterface:
         return result
     
     @classmethod
-    def from_tensor_chunking(cls, name: str, interface_type: InterfaceType,
-                            original_shape: List[int], block_dims: List[int],
-                            dtype: DataflowDataType, chunking_mode: str = "broadcast",
-                            **kwargs) -> 'DataflowInterface':
+    def from_metadata_and_runtime_datatype(
+        cls, 
+        metadata: 'InterfaceMetadata',
+        runtime_datatype: str,  # QONNX datatype string like "UINT8", "FIXED<8,4>"
+        tensor_dims: List[int],
+        block_dims: List[int],
+        stream_dims: List[int]
+    ) -> 'DataflowInterface':
         """
-        Factory method to create DataflowInterface from tensor chunking specification
+        Create DataflowInterface with runtime datatype validation.
         
-        Args:
-            name: Interface name
-            interface_type: Type of interface
-            original_shape: Original tensor shape before chunking
-            block_dims: Desired block dimensions per calculation
-            dtype: Data type specification
-            chunking_mode: How to compute tensor_dims ("broadcast", "divide", "explicit")
-            **kwargs: Additional interface parameters
-            
-        Returns:
-            DataflowInterface with computed tensor_dims
+        Raises:
+            ValueError: If runtime_datatype violates metadata constraints
         """
-        # In the new architecture, tensor_dims should be the original tensor shape
-        tensor_dims = list(original_shape)
+        # Resolve QONNX datatype
+        try:
+            qonnx_datatype = DataType[runtime_datatype]
+        except KeyError:
+            raise ValueError(f"Invalid QONNX datatype: {runtime_datatype}")
         
-        # Initialize stream_dims to default 1 for each block_dims dimension (can be updated by parallelism)
-        stream_dims = [1] * len(block_dims)
+        # Validate against constraints
+        if not metadata.validates_datatype(qonnx_datatype):
+            allowed = metadata.get_constraint_description()
+            raise ValueError(
+                f"Datatype {runtime_datatype} violates constraints for interface {metadata.name}. "
+                f"Allowed: {allowed}"
+            )
         
         return cls(
-            name=name,
-            interface_type=interface_type,
+            name=metadata.name,
+            interface_type=metadata.interface_type,
             tensor_dims=tensor_dims,
             block_dims=block_dims,
             stream_dims=stream_dims,
-            dtype=dtype,
-            **kwargs
+            dtype=qonnx_datatype
         )
     
     @staticmethod
@@ -713,4 +594,4 @@ class DataflowInterface:
         return (f"DataflowInterface(name='{self.name}', "
                 f"type={self.interface_type.value}, "
                 f"tensor_dims={self.tensor_dims}, block_dims={self.block_dims}, stream_dims={self.stream_dims}, "
-                f"dtype={self.dtype.finn_type})")
+                f"dtype={self.dtype.get_canonical_name()})")

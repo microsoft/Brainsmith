@@ -17,7 +17,7 @@ The RTL Parser extracts the kernel interfaces, parameters, and pragmas from the 
     - DATATYPE: Marks supported datatypes for an interface.
 - Module parameters to expose to the compiler and consider for design space exploration.
 
-Some additional pragmas may be necessary to support all features in the `AutoHWCustomOp`. Potenial examples include a "tensor shape" pragma to define the $tDim$ of an interface if it differs from what would be inferred from the ONNX layout (mainly useful for elementwise and tiled Kernels).
+Some additional pragmas may be necessary to support all features in the `AutoHWCustomOp`. Potenial examples include a "block shape" pragma to define the $bDim$ of an interface if it differs from what would be inferred from the ONNX layout (mainly useful for elementwise and tiled Kernels).
 
 ### *Step 2: Generate AutoHWCustomOp*
 
@@ -39,24 +39,24 @@ The following methods can be fully standardized in `AutoHWCustomOp`:
 
 Additionally, the following new methods will need to be implemented in `AutoHWCustomOp` to support the Dataflow Model:
 
-### 1. Tensor Chunking
+### 1. Block Chunking
 
-The Dataflow Model utilizes a data hierarchy oriented towards describing Dataflow architectures, while ONNX describes hidden states and weights in a single multi-dimensional layout shape. The layout of these ONNX matrices can vary significantly depending on the model, so the `AutoHWCustomOp` needs a way to map the ONNX data layout of each interface into $qDim$ and $tDim$.
+The Dataflow Model utilizes a data hierarchy oriented towards describing Dataflow architectures, while ONNX describes hidden states and weights in a single multi-dimensional layout shape. The layout of these ONNX matrices can vary significantly depending on the model, so the `AutoHWCustomOp` needs a way to map the ONNX data layout of each interface into $num_blocks$ and $bDim$.
 
-Assume that there will be a tool to determine the ONNX layout of each interface input and output of the ONNX node (NCHW, NHCW, NLC, etc.), this will be implemented at at a future date. For Input and Output interfaces, $qdim$ and $tdim$ can be determined by the following table (N is always the batch dimension):
+Assume that there will be a tool to determine the ONNX layout of each interface input and output of the ONNX node (NCHW, NHCW, NLC, etc.), this will be implemented at at a future date. For Input and Output interfaces, $num_blocks$ and $bDim$ can be determined by the following table (N is always the batch dimension):
 
-| **ONNX Layout** | **$qDim$** | **$tDim$** | **Example model types** |
-| --------------- | ---------- | ---------- | ----------------------- |
-| \[N, C]         | 1          | C          | CNN (expected)          |
-| \[N, C, H, W]   | C          | H * W      | CNN (expected)          |
-| \[N, H, W, C]   | H*W        | C          | CNN (inverted)          |
-| \[N, L, C]      | L          | L          | Transformers (expected) |
-| \[N, C, L]      | C          | C          | Transformers (inverted) |
-| \[N, L, h, d]   | L          | h*d        | Transformers MHA        |
+| **ONNX Input Shape** | **qDim**      | **num_blocks** | **$bDim$** | **Example model types** |
+| ------------- | ---------- | --- | --- | --- |
+| \[N, C]       | \[C]       | 1    | C     | CNN (expected)          |
+| \[N, C, H, W] | \[C, H, W] | C    | H * W | CNN (expected)          |
+| \[N, H, W, C] | \[H, W, C] | H*W  | C     | CNN (inverted)          |
+| \[N, L, C]    | \[L, C]    | L    | L     | Transformers (expected) |
+| \[N, C, L]    | \[C, L]    | C    | C     | Transformers (inverted) |
+| \[N, L, h, d] | \[L, h, d] | L    | h*d   | Transformers MHA        |
 
-For Weight interfaces, 1D weights (e.g. LayerNorm) will by default have $tDim$ equal to the length of the weight and $qDim$ equal to 1, while 2D weights (e.g. MVAU) will have $tDim$ equal to the first dimension and $qDim$ equal to the second dimension.
+For Weight interfaces, 1D weights (e.g. LayerNorm) will by default have $bDim$ equal to the length of the weight and $num_blocks$ equal to 1, while 2D weights (e.g. MVAU) will have $bDim$ equal to the first dimension and $num_blocks$ equal to the second dimension.
 
-Although correct for most cases, there are exceptions where the above rules do not hold (e.g. tiled kernels where tdim is a portion of one or more of dimensions, but not the full dimension). Therefore, this mapping should be overrideable via pragmas in the RTL implementation, defining $tDim$ in terms of parameters exposed to the compiler and linked to variables from the ONNX pattern by the `AutoHWCustomOp` constructor.
+Although correct for most cases, there are exceptions where the above rules do not hold (e.g. tiled kernels where bDim is a portion of one or more of dimensions, but not the full dimension). Therefore, this mapping should be overrideable via pragmas in the RTL implementation, defining $bDim$ in terms of parameters exposed to the compiler and linked to variables from the ONNX pattern by the `AutoHWCustomOp` constructor.
 
 
 ### 2. More? 

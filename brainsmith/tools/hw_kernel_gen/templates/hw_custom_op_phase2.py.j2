@@ -1,0 +1,233 @@
+{#-
+Phase 2 HWCustomOp Template with Runtime Parameter Extraction
+
+This template generates AutoHWCustomOp subclasses that:
+1. Extract runtime parameters from ONNX nodes
+2. Define static interface metadata with validated symbolic BDIM
+3. Create proper node attribute definitions
+4. Integrate seamlessly with FINN
+
+Key features:
+- All RTL parameters become ONNX node attributes
+- Runtime parameter extraction in __init__
+- Static interface metadata with symbolic BDIM shapes
+- Proper whitelist handling for default values
+-#}
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Auto-generated HWCustomOp for {{ kernel_name }}
+# Generated from: {{ source_file }}
+# Generation timestamp: {{ generation_timestamp }}
+#
+# PHASE 2: FINN INTEGRATION
+# This HWCustomOp follows FINN's standard pattern with simple constructor
+# and static interface metadata. Parameters are accessed via get_nodeattr().
+############################################################################
+
+from typing import List, Dict, Tuple, Any
+import numpy as np
+from qonnx.core.datatype import DataType
+
+from brainsmith.dataflow.core import AutoHWCustomOp
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from brainsmith.dataflow.core.qonnx_types import DatatypeConstraintGroup
+from brainsmith.dataflow.core.interface_types import InterfaceType
+from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
+
+
+class {{ class_name }}(AutoHWCustomOp):
+    """
+    Auto-generated HWCustomOp for {{ kernel_name }} kernel.
+    
+    Generated from RTL: {{ source_file }}
+    Follows FINN's standard HWCustomOp pattern with static interface metadata.
+    
+    RTL Parameters (accessed via get_nodeattr()):
+    {% for param in parameter_definitions %}
+    - {{ param.name }}: {% if param.is_whitelisted %}Optional (default={{ param.default_value }}){% else %}Required{% endif %}{% if param.description %} - {{ param.description }}{% endif %}
+    {% endfor %}
+    """
+    
+    def __init__(self, onnx_node, **kwargs):
+        """Initialize {{ class_name }} following FINN's standard pattern."""
+        super().__init__(onnx_node, **kwargs)
+        
+        # Set kernel-specific attributes
+        self.kernel_name = "{{ kernel_name }}"
+        self.rtl_source = "{{ source_file }}"
+    
+    @staticmethod
+    def get_interface_metadata() -> List[InterfaceMetadata]:
+        """
+        Return static interface metadata with validated symbolic BDIM shapes.
+        
+        All BDIM parameters have been validated during template generation
+        to ensure they reference valid module parameters.
+        """
+        return [
+            {% for interface in interface_metadata %}
+            InterfaceMetadata(
+                name="{{ interface.name }}",
+                interface_type=InterfaceType.{{ interface.interface_type.name }},
+                datatype_constraints=[
+                    {% for constraint in interface.datatype_constraints %}
+                    DatatypeConstraintGroup(
+                        base_type="{{ constraint.base_type }}",
+                        min_width={{ constraint.min_width }},
+                        max_width={{ constraint.max_width }}
+                    ),
+                    {% endfor %}
+                ],
+                {% if interface.chunking_strategy %}
+                chunking_strategy=BlockChunkingStrategy(
+                    block_shape={{ interface.chunking_strategy.block_shape | repr }},  # Validated symbolic shape
+                    rindex={{ interface.chunking_strategy.rindex }}
+                )
+                {% else %}
+                chunking_strategy=None
+                {% endif %}
+            ),
+            {% endfor %}
+        ]
+    
+    def get_nodeattr_types(self) -> Dict[str, Tuple[str, bool, Any]]:
+        """
+        Define ONNX node attributes for all RTL parameters.
+        
+        Parameters with whitelisted defaults are optional, all others are required.
+        """
+        # Start with parent class attributes
+        my_attrs = {}
+        
+        # RTL parameters as node attributes
+        {% for param in parameter_definitions %}
+        {% if param.is_whitelisted and param.default_value %}
+        my_attrs["{{ param.name }}"] = ("i", False, {{ param.default_value }})  # Optional with default
+        {% else %}
+        my_attrs["{{ param.name }}"] = ("i", True, None)  # Required parameter
+        {% endif %}
+        {% endfor %}
+        
+        # Datatype attributes for all dataflow interfaces
+        {% for interface in interface_metadata %}
+        {% if interface.interface_type.name != 'CONTROL' %}
+        my_attrs["{{ interface.name }}_dtype"] = ("s", True, "")  # Required datatype specification
+        {% endif %}
+        {% endfor %}
+        
+        # Hardware-specific attributes from RTL analysis
+        {% for attr_name, attr_spec in node_attributes.items() %}
+        {% if attr_name not in parameter_definitions|map(attribute='name')|list %}
+        my_attrs["{{ attr_name }}"] = {{ attr_spec }}
+        {% endif %}
+        {% endfor %}
+        
+        # Base HWCustomOp attributes
+        my_attrs.update({
+            "runtime_writeable_weights": ("i", False, 0, {0, 1}),
+            "numInputVectors": ("ints", False, [1]),
+        })
+        
+        # Update with parent class attributes (FINN base classes)
+        my_attrs.update(super().get_nodeattr_types())
+        return my_attrs
+    
+    # Note: Datatype methods handled by AutoHWCustomOp parent class
+    # Parent class validates datatypes against constraint groups at runtime
+    # Note: Shape calculation methods handled by AutoHWCustomOp parent class
+    # Parent class computes shapes from DataflowModel interfaces automatically
+    
+    # Note: Stream width methods handled by AutoHWCustomOp parent class
+    # Parent class calculates stream widths from datatypes and parallelism automatically
+    
+    {% if resource_estimation_required %}
+    # ===== Resource Estimation Methods =====
+    
+    # Note: Cycle calculation and memory handling done by AutoHWCustomOp parent class
+    
+    {% if resource_estimation_methods.bram_estimation %}
+    def bram_estimation(self) -> int:
+        """Estimate BRAM usage for {{ kernel_name }}."""
+        {{ resource_estimation_methods.bram_estimation|indent(8) }}
+    {% endif %}
+    
+    {% if resource_estimation_methods.lut_estimation %}
+    def lut_estimation(self) -> int:
+        """Estimate LUT usage for {{ kernel_name }}."""
+        {{ resource_estimation_methods.lut_estimation|indent(8) }}
+    {% endif %}
+    
+    {% if resource_estimation_methods.dsp_estimation %}
+    def dsp_estimation(self) -> int:
+        """Estimate DSP usage for {{ kernel_name }}."""
+        {{ resource_estimation_methods.dsp_estimation|indent(8) }}
+    {% endif %}
+    {% endif %}
+    
+    {% if verification_required %}
+    def verify_node(self):
+        """Verify kernel-specific constraints."""
+        super().verify_node()
+        
+        # Verify all required parameters are present
+        {% for param in required_attributes %}
+        if self.get_nodeattr("{{ param }}") is None:
+            raise ValueError(f"Required parameter '{{ param }}' not specified")
+        {% endfor %}
+        
+        # Additional {{ kernel_name }}-specific verification
+        # TODO: Add kernel-specific constraint checks
+    {% endif %}
+
+
+# Convenience function for FINN integration
+def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
+    """
+    Create {{ class_name }} ONNX node.
+    
+    Required parameters:
+    {% for param in required_attributes %}
+    - {{ param }}: int
+    {% endfor %}
+    
+    Required datatype specifications:
+    {% for interface in interface_metadata %}
+    {% if interface.interface_type.name != 'CONTROL' %}
+    - {{ interface.name }}_dtype: str (e.g., "UINT8", "FIXED<16,8>")
+    {% endif %}
+    {% endfor %}
+    
+    Optional parameters (with defaults):
+    {% for param_name, default_value in whitelisted_defaults.items() %}
+    - {{ param_name }}: int = {{ default_value }}
+    {% endfor %}
+    """
+    import onnx.helper
+    
+    # Validate required parameters
+    required = {{ required_attributes }}
+    missing = [p for p in required if p not in node_attrs]
+    if missing:
+        raise ValueError(f"Missing required parameters: {missing}")
+    
+    # Validate required datatypes
+    required_dtypes = [
+        {% for interface in interface_metadata %}
+        {% if interface.interface_type.name != 'CONTROL' %}
+        "{{ interface.name }}_dtype",
+        {% endif %}
+        {% endfor %}
+    ]
+    missing_dtypes = [dt for dt in required_dtypes if dt not in node_attrs]
+    if missing_dtypes:
+        raise ValueError(f"Missing required datatype specifications: {missing_dtypes}")
+    
+    return onnx.helper.make_node(
+        "{{ class_name }}",
+        inputs=inputs,
+        outputs=outputs,
+        domain="finn.custom_op.fpgadataflow",
+        **node_attrs
+    )

@@ -34,8 +34,3 @@ class GenerationError(HWKGError):
 class ConfigurationError(HWKGError):
     """Error in configuration or CLI arguments."""
     pass
-
-
-class BDimProcessingError(HWKGError):
-    """Error during advanced BDIM pragma processing."""
-    pass

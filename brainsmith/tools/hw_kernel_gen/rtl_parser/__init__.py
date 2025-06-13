@@ -31,7 +31,6 @@ from .data import (
     Parameter,
     Port,
     PortGroup,
-    Interface,
     Pragma,
     ValidationResult,
 )
@@ -45,7 +44,6 @@ __all__ = [
     "Parameter",
     "Port",
     "PortGroup",
-    "Interface",
     "InterfaceType",
     "Direction",
     "Pragma",

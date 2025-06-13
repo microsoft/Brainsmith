@@ -353,34 +353,6 @@ class DataflowModel:
         
         return bounds
     
-    def get_resource_requirements(self, parallelism_config: ParallelismConfiguration) -> Dict[str, Any]:
-        """
-        Estimate resource requirements for given parallelism configuration using ResourceAnalyzer
-        """
-        # Import ResourceAnalyzer here to avoid circular imports
-        from .resource_analysis import ResourceAnalyzer
-        
-        # Create analyzer and get comprehensive requirements
-        analyzer = ResourceAnalyzer()
-        resource_req = analyzer.analyze_model(self, parallelism_config)
-        
-        # Calculate computation cycles using current parallelism
-        intervals = self.calculate_initiation_intervals(
-            parallelism_config.iPar, 
-            parallelism_config.wPar
-        )
-        
-        # Return comprehensive resource analysis
-        return {
-            "memory_bits": resource_req.memory_bits,
-            "bandwidth_bits_per_cycle": resource_req.bandwidth_bits_per_cycle,
-            "computation_cycles": intervals.L,
-            "buffer_requirements": resource_req.buffer_requirements,
-            "compute_units": resource_req.compute_units,
-            "detailed_analysis": resource_req.get_summary(),
-            "metadata": resource_req.metadata
-        }
-    
     def optimize_parallelism(self, constraints: Dict[str, Any]) -> ParallelismConfiguration:
         """
         Find optimal parallelism configuration within given constraints
@@ -403,38 +375,3 @@ class DataflowModel:
             wPar=wPar,
             derived_stream_dims=derived_stream_dims
         )
-    
-    def calculate_resource_efficiency(self, configurations: List[ParallelismConfiguration]) -> Dict[str, Any]:
-        """
-        Compare resource efficiency across multiple parallelism configurations
-        
-        Args:
-            configurations: List of ParallelismConfiguration objects to compare
-            
-        Returns:
-            Dict containing efficiency analysis and recommendations
-        """
-        # Import ResourceAnalyzer here to avoid circular imports
-        from .resource_analysis import ResourceAnalyzer
-        
-        analyzer = ResourceAnalyzer()
-        
-        # Analyze each configuration
-        config_results = []
-        for config in configurations:
-            requirements = analyzer.analyze_model(self, config)
-            config_results.append((config, requirements))
-        
-        # Get comparison analysis
-        comparison = analyzer.compare_configurations(config_results)
-        
-        # Add model-specific context
-        comparison["model_summary"] = {
-            "num_interfaces": len(self.interfaces),
-            "input_interfaces": len(self.input_interfaces),
-            "output_interfaces": len(self.output_interfaces), 
-            "weight_interfaces": len(self.weight_interfaces),
-            "total_configurations_analyzed": len(configurations)
-        }
-        
-        return comparison

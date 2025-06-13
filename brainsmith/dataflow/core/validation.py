@@ -237,45 +237,6 @@ class Validator(ABC):
             raise ValidationException(result)
 
 
-class CompositeValidator(Validator):
-    """Validator that runs multiple validators in sequence.
-    
-    Useful for combining multiple validation rules and collecting
-    all errors and warnings in a single validation pass.
-    """
-    
-    def __init__(self, validators: List[Validator]):
-        """Initialize with list of validators to run.
-        
-        Args:
-            validators: List of validators to run in sequence
-        """
-        self.validators = validators
-    
-    def validate(self, obj: Any) -> ValidationResult:
-        """Run all validators and merge results.
-        
-        Args:
-            obj: Object to validate
-            
-        Returns:
-            ValidationResult with merged results from all validators
-        """
-        final_result = ValidationResult(True)
-        
-        for validator in self.validators:
-            try:
-                result = validator.validate(obj)
-                final_result.merge(result)
-            except Exception as e:
-                final_result.add_error(
-                    f"Validator {validator.__class__.__name__} failed with exception: {e}",
-                    {"validator": validator.__class__.__name__, "exception": str(e)}
-                )
-                
-        return final_result
-
-
 def validate_positive_integers(values: List[int], name: str) -> ValidationResult:
     """Utility function to validate that all values are positive integers.
     
@@ -357,48 +318,6 @@ def validate_dimension_relationships(tensor_dims: List[int],
                 )
     
     return result
-
-
-# Legacy functions - preserved for backward compatibility
-def create_validation_result() -> ValidationResult:
-    """Create a new validation result"""
-    return ValidationResult(True)
-
-
-def create_divisibility_error(interface_name: str, param_name: str, 
-                             value: int, divisor: int) -> ValidationError:
-    """Create a divisibility constraint error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="divisibility_constraint",
-        message=f"{param_name} ({value}) must be divisible by {divisor}",
-        severity=ValidationSeverity.ERROR,
-        context={"value": value, "divisor": divisor}
-    )
-
-
-def create_range_error(interface_name: str, param_name: str,
-                      value: int, min_val: int, max_val: int) -> ValidationError:
-    """Create a range constraint error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="range_constraint",
-        message=f"{param_name} ({value}) must be between {min_val} and {max_val}",
-        severity=ValidationSeverity.ERROR,
-        context={"value": value, "min": min_val, "max": max_val}
-    )
-
-
-def create_datatype_error(interface_name: str, datatype: str,
-                         allowed_types: List[str]) -> ValidationError:
-    """Create a datatype constraint error"""
-    return ValidationError(
-        component=f"interface.{interface_name}",
-        error_type="datatype_constraint",
-        message=f"Datatype {datatype} not allowed. Must be one of: {allowed_types}",
-        severity=ValidationSeverity.ERROR,
-        context={"datatype": datatype, "allowed": allowed_types}
-    )
 
 
 def validate_dataflow_model(model) -> ValidationResult:

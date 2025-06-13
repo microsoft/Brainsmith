@@ -18,9 +18,9 @@ from tree_sitter import Node
 
 from .data import (
     Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma,
-    DerivedParameterPragma, WeightPragma, PragmaError, Interface
+    DerivedParameterPragma, WeightPragma, PragmaError
 )
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
 from brainsmith.dataflow.core.interface_types import InterfaceType
 
@@ -137,53 +137,6 @@ class PragmaHandler:
         self.pragmas = pragmas # Store the extracted pragmas in the instance
         return pragmas
     
-    def create_interface_metadata(self, interface: Interface, pragmas: List[Pragma]) -> InterfaceMetadata:
-        """
-        Create InterfaceMetadata using pragma chain-of-responsibility pattern.
-        
-        This method creates base metadata from the interface structure, then
-        applies each relevant pragma in sequence to build the final metadata.
-        
-        Args:
-            interface: Parsed Interface object from interface builder
-            pragmas: All pragmas found in the RTL
-            
-        Returns:
-            InterfaceMetadata: Complete metadata with all pragma effects applied
-        """
-        logger.debug(f"Creating InterfaceMetadata for interface: {interface.name}")
-        
-        # Start with base metadata from interface structure
-        metadata = self._create_base_interface_metadata(interface)
-        
-        # Apply each relevant pragma in sequence
-        for pragma in pragmas:
-            try:
-                if pragma.applies_to_interface(interface):
-                    logger.debug(f"Applying {pragma.type.value} pragma to {interface.name}")
-                    metadata = pragma.apply_to_interface_metadata(interface, metadata)
-            except Exception as e:
-                logger.warning(f"Failed to apply {pragma.type.value} pragma to {interface.name}: {e}")
-        
-        return metadata
 
-    def _create_base_interface_metadata(self, interface: Interface) -> InterfaceMetadata:
-        """Create base InterfaceMetadata from interface structure."""
-        # Start with a default UINT8 datatype constraint (can be overridden by pragmas)
-        from brainsmith.dataflow.core.interface_metadata import DataTypeConstraint
-        allowed_datatypes = [
-            DataTypeConstraint(
-                finn_type="UINT8",
-                bit_width=8,
-                signed=False
-            )
-        ]
-        
-        return InterfaceMetadata(
-            name=interface.name,
-            interface_type=interface.type,
-            allowed_datatypes=allowed_datatypes,
-            chunking_strategy=DefaultChunkingStrategy()
-        )
     
     

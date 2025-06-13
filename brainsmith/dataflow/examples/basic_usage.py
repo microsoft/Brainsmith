@@ -8,9 +8,9 @@ and perform unified computational calculations with constraint support.
 from brainsmith.dataflow.core.dataflow_interface import (
     DataflowInterface,
     InterfaceType,
-    DataflowDataType,
     DataTypeConstraint
 )
+from brainsmith.dataflow.core.qonnx_types import DataType
 from brainsmith.dataflow.core.dataflow_model import DataflowModel
 from brainsmith.dataflow.core.block_chunking import TensorChunking
 
@@ -23,14 +23,9 @@ def main():
     # Step 1: Create datatype with constraint support
     print("\n1. Creating datatype with constraints...")
     
-    # Create a datatype
-    input_dtype = DataflowDataType(
-        base_type="INT",
-        bitwidth=8,
-        signed=True,
-        finn_type=""
-    )
-    print(f"   Created datatype: {input_dtype.finn_type}")
+    # Create a datatype using QONNX DataType
+    input_dtype = DataType["INT8"]
+    print(f"   Created datatype: {input_dtype.get_canonical_name()}")
     
     # Create datatype constraints
     flexible_constraint = DataTypeConstraint(
@@ -97,18 +92,18 @@ def main():
     print("\n4. Testing datatype constraint validation...")
     
     # Valid datatype
-    valid_dtype = DataflowDataType("UINT", 8, False, "")
+    valid_dtype = DataType["UINT8"]
     if input_interface.validate_datatype(valid_dtype):
-        print(f"   ✓ {valid_dtype.finn_type}: Allowed")
+        print(f"   ✓ {valid_dtype.get_canonical_name()}: Allowed")
     else:
-        print(f"   ✗ {valid_dtype.finn_type}: Not allowed")
+        print(f"   ✗ {valid_dtype.get_canonical_name()}: Not allowed")
     
     # Invalid datatype (too many bits)
-    invalid_dtype = DataflowDataType("INT", 32, True, "")
+    invalid_dtype = DataType["INT32"]
     if input_interface.validate_datatype(invalid_dtype):
-        print(f"   ✓ {invalid_dtype.finn_type}: Allowed")
+        print(f"   ✓ {invalid_dtype.get_canonical_name()}: Allowed")
     else:
-        print(f"   ✗ {invalid_dtype.finn_type}: Not allowed (exceeds max bitwidth)")
+        print(f"   ✗ {invalid_dtype.get_canonical_name()}: Not allowed (exceeds max bitwidth)")
     
     # Step 5: Create dataflow model
     print("\n5. Creating dataflow model...")

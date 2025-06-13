@@ -8,7 +8,6 @@ including base classes for auto-generated hardware operators.
 from .interface_types import InterfaceType
 from .dataflow_interface import (
     DataflowInterface,
-    DataflowDataType,
     DataTypeConstraint,
     ConstraintType,
     Constraint,
@@ -18,18 +17,12 @@ from .dataflow_interface import (
 from .dataflow_model import DataflowModel
 from .block_chunking import (
     BlockChunking,
-    TensorChunking,  # Legacy alias
-    ChunkingStrategy,
     ChunkingType,
+    BlockChunkingStrategy,
     DefaultChunkingStrategy,
-    IndexBasedChunkingStrategy,
-    FullTensorChunkingStrategy,
+    block_chunking,
     default_chunking,
-    index_chunking,
-    full_tensor_chunking,
-    last_dim_chunking,
-    spatial_chunking,
-    no_chunking,
+    get_default_block_shape,
 )
 from .validation import (
     ValidationResult,
@@ -51,7 +44,6 @@ __all__ = [
     "InterfaceType",
     # Interfaces
     "DataflowInterface",
-    "DataflowDataType",
     "DataTypeConstraint",
     "ConstraintType",
     "Constraint",
@@ -61,18 +53,12 @@ __all__ = [
     "DataflowModel",
     # Chunking
     "BlockChunking",
-    "TensorChunking",  # Legacy alias
-    "ChunkingStrategy",
     "ChunkingType",
+    "BlockChunkingStrategy",
     "DefaultChunkingStrategy",
-    "IndexBasedChunkingStrategy",
-    "FullTensorChunkingStrategy",
+    "block_chunking",
     "default_chunking",
-    "index_chunking",
-    "full_tensor_chunking",
-    "last_dim_chunking",
-    "spatial_chunking",
-    "no_chunking",
+    "get_default_block_shape",
     # Validation
     "ValidationResult",
     "ValidationSeverity",

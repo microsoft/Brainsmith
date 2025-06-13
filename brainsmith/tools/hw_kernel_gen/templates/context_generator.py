@@ -13,6 +13,12 @@ from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from ..rtl_parser.data import Parameter
+from ..parameter_config.parameter_defaults import (
+    is_parameter_whitelisted,
+    get_default_value,
+    PARAMETER_DEFAULTS
+)
+from .template_context import TemplateContext, ParameterDefinition
 # TODO: Need to implement TemplateDatatype, SimpleKernel or replace with proper classes
 # from ..rtl_parser.data import TemplateDatatype, SimpleKernel
 
@@ -23,83 +29,186 @@ class TemplateContextGenerator:
     @staticmethod
     def generate_context(kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Generate complete template context for Jinja2 templates."""
+        # First generate the enhanced TemplateContext for Phase 2
+        template_ctx = TemplateContextGenerator.generate_template_context(kernel_metadata)
+        
+        # Then convert to dictionary format for backward compatibility
+        return TemplateContextGenerator._template_context_to_dict(template_ctx)
+    
+    @staticmethod
+    def generate_template_context(kernel_metadata: KernelMetadata) -> TemplateContext:
+        """Generate enhanced TemplateContext for Phase 2 code generation."""
         generator = TemplateContextGenerator()
         
         # Extract parallelism and algorithm parameters from RTL analysis
         parallelism_info = generator._analyze_parallelism_parameters(kernel_metadata)
         algorithm_info = generator._infer_algorithm_parameters(kernel_metadata)
-        node_attrs = generator._generate_node_attributes(kernel_metadata, parallelism_info, algorithm_info)
         
-        # Core kernel metadata
+        # Create enhanced parameter definitions with whitelist info
+        parameter_definitions = []
+        whitelisted_defaults = {}
+        required_attributes = []
+        
+        for param in kernel_metadata.parameters:
+            is_whitelisted = is_parameter_whitelisted(param.name)
+            
+            # Determine if parameter is required (no default or not whitelisted)
+            has_rtl_default = param.default_value is not None
+            is_required = not has_rtl_default or not is_whitelisted
+            
+            # Get effective default value
+            if is_whitelisted and has_rtl_default:
+                default_value = int(param.default_value)
+                whitelisted_defaults[param.name] = default_value
+            elif is_whitelisted and not has_rtl_default:
+                # Use system default for whitelisted params without RTL default
+                default_value = get_default_value(param.name)
+                whitelisted_defaults[param.name] = default_value
+            else:
+                default_value = None
+                required_attributes.append(param.name)
+            
+            param_def = ParameterDefinition(
+                name=param.name,
+                param_type=param.param_type,
+                default_value=default_value,
+                description=param.description,
+                line_number=0,  # Parameter object doesn't have line_number
+                template_param_name=param.template_param_name,
+                is_whitelisted=is_whitelisted,
+                is_required=is_required
+            )
+            parameter_definitions.append(param_def)
+        
+        # Categorize interfaces
+        input_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
+        output_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)
+        weight_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)
+        config_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG)
+        control_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONTROL)
+        
+        # Create the enhanced TemplateContext
+        template_context = TemplateContext(
+            module_name=kernel_metadata.name,
+            class_name=generator._get_class_name(kernel_metadata.name),
+            source_file=kernel_metadata.source_file,
+            interface_metadata=kernel_metadata.interfaces,
+            parameter_definitions=parameter_definitions,
+            whitelisted_defaults=whitelisted_defaults,
+            required_attributes=required_attributes,
+            input_interfaces=input_interfaces,
+            output_interfaces=output_interfaces,
+            weight_interfaces=weight_interfaces,
+            config_interfaces=config_interfaces,
+            control_interfaces=control_interfaces,
+            parallelism_info=parallelism_info,
+            algorithm_info=algorithm_info,
+            node_attributes=generator._generate_node_attributes(kernel_metadata, parallelism_info, algorithm_info),
+            # Note: Datatype, shape, and stream width methods removed - handled by AutoHWCustomOp parent class
+            resource_estimation_methods=generator._generate_resource_estimation_methods(kernel_metadata, parallelism_info),
+            has_inputs=len(input_interfaces) > 0,
+            has_outputs=len(output_interfaces) > 0,
+            has_weights=len(weight_interfaces) > 0,
+            has_config=len(config_interfaces) > 0,
+            kernel_complexity=generator._estimate_complexity(kernel_metadata),
+            kernel_type=generator._infer_kernel_type(kernel_metadata)
+        )
+        
+        return template_context
+    
+    @staticmethod
+    def _template_context_to_dict(template_ctx: TemplateContext) -> Dict[str, Any]:
+        """Convert TemplateContext to dictionary format for backward compatibility."""
+        # Enhanced RTL parameters with whitelist info
+        rtl_parameters = []
+        for param in template_ctx.parameter_definitions:
+            rtl_parameters.append({
+                "name": param.name,
+                "param_type": param.param_type or "int",
+                "default_value": param.default_value if param.default_value is not None else 0,
+                "template_param_name": param.template_param_name,
+                "is_whitelisted": param.is_whitelisted,
+                "is_required": param.is_required
+            })
+        
+        # Get dataflow interfaces
+        dataflow_interfaces = [
+            iface for iface in template_ctx.interface_metadata 
+            if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]
+        ]
+        
+        # Start with the basic context
         context = {
-            "kernel_name": kernel_metadata.name,
-            "class_name": generator._get_class_name(kernel_metadata.name),
-            "source_file": str(kernel_metadata.source_file),
+            "kernel_name": template_ctx.module_name,
+            "class_name": template_ctx.class_name,
+            "source_file": str(template_ctx.source_file),
             "generation_timestamp": datetime.now().isoformat(),
             
-            # Interface metadata (new format - List[InterfaceMetadata])
-            "interface_metadata": kernel_metadata.interfaces,
-            "interfaces_list": kernel_metadata.interfaces,  # Compatibility
+            # Interface metadata
+            "interface_metadata": template_ctx.interface_metadata,
+            "interfaces_list": template_ctx.interface_metadata,  # Compatibility
             
-            # Legacy interface categorization (will need conversion)
-            "input_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT),
-            "output_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT),
-            "weight_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT),
-            "config_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG),
-            "control_interfaces": generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONTROL),
-            "dataflow_interfaces": generator._get_dataflow_interfaces(kernel_metadata),
+            # Categorized interfaces
+            "input_interfaces": template_ctx.input_interfaces,
+            "output_interfaces": template_ctx.output_interfaces,
+            "weight_interfaces": template_ctx.weight_interfaces,
+            "config_interfaces": template_ctx.config_interfaces,
+            "control_interfaces": template_ctx.control_interfaces,
+            "dataflow_interfaces": dataflow_interfaces,
             
-            # RTL parameters (direct reuse with existing template_param_name)
-            "rtl_parameters": [
-                {
-                    "name": param.name,
-                    "param_type": param.param_type or "int",
-                    "default_value": param.default_value or 0,
-                    "template_param_name": param.template_param_name
-                }
-                for param in kernel_metadata.parameters
-            ],
+            # Enhanced RTL parameters with Phase 2 info
+            "rtl_parameters": rtl_parameters,
+            "parameter_definitions": template_ctx.parameter_definitions,
+            "whitelisted_defaults": template_ctx.whitelisted_defaults,
+            "required_attributes": template_ctx.required_attributes,
             
             # AutoHWCustomOp-specific enhancements
-            "node_attributes": node_attrs,
-            "parallelism_info": parallelism_info,
-            "algorithm_info": algorithm_info,
-            "datatype_mappings": generator._generate_datatype_mappings(kernel_metadata),
-            "shape_calculation_methods": generator._generate_shape_calculation_methods(kernel_metadata, parallelism_info),
-            "stream_width_methods": generator._generate_stream_width_methods(kernel_metadata, parallelism_info),
-            "resource_estimation_methods": generator._generate_resource_estimation_methods(kernel_metadata, parallelism_info),
+            "node_attributes": template_ctx.node_attributes,
+            "parallelism_info": template_ctx.parallelism_info,
+            "algorithm_info": template_ctx.algorithm_info,
+            # Note: datatype_mappings, shape_calculation_methods, stream_width_methods removed
+            "resource_estimation_methods": template_ctx.resource_estimation_methods,
             
             # Template boolean flags
-            "has_inputs": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)) > 0,
-            "has_outputs": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)) > 0,
-            "has_weights": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0,
+            "has_inputs": template_ctx.has_inputs,
+            "has_outputs": template_ctx.has_outputs,
+            "has_weights": template_ctx.has_weights,
+            "has_config": template_ctx.has_config,
             
             # Interface counts
-            "input_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)),
-            "output_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)),
-            "weight_interfaces_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)),
+            "input_interfaces_count": len(template_ctx.input_interfaces),
+            "output_interfaces_count": len(template_ctx.output_interfaces),
+            "weight_interfaces_count": len(template_ctx.weight_interfaces),
             
             # Kernel analysis
-            "kernel_complexity": generator._estimate_complexity(kernel_metadata),
-            "kernel_type": generator._infer_kernel_type(kernel_metadata),
-            "resource_estimation_required": generator._requires_resource_estimation(kernel_metadata),
-            "verification_required": generator._requires_verification(kernel_metadata),
+            "kernel_complexity": template_ctx.kernel_complexity,
+            "kernel_type": template_ctx.kernel_type,
+            "resource_estimation_required": len(template_ctx.interface_metadata) > 2 or template_ctx.kernel_complexity != 'low',
+            "verification_required": template_ctx.has_weights or template_ctx.kernel_complexity == 'high',
             
             # Template enums and utilities
             "InterfaceType": InterfaceType,  # Direct enum access
             
             # Kernel object for RTL wrapper template compatibility  
             "kernel": {
-                "name": kernel_metadata.name,
-                "parameters": kernel_metadata.parameters
+                "name": template_ctx.module_name,
+                "parameters": [
+                    Parameter(
+                        name=p.name,
+                        param_type=p.param_type,
+                        default_value=str(p.default_value) if p.default_value is not None else None,
+                        description=p.description
+                        # Note: template_param_name is computed automatically, line_number not supported
+                    ) for p in template_ctx.parameter_definitions
+                ]
             },
             
             # Summary statistics
             "dataflow_model_summary": {
-                "num_interfaces": len(kernel_metadata.interfaces),
-                "input_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)),
-                "output_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)),
-                "weight_count": len(generator._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)),
+                "num_interfaces": len(template_ctx.interface_metadata),
+                "input_count": len(template_ctx.input_interfaces),
+                "output_count": len(template_ctx.output_interfaces),
+                "weight_count": len(template_ctx.weight_interfaces),
             }
         }
         
@@ -298,140 +407,19 @@ class TemplateContextGenerator:
         
         return node_attrs
     
-    def _generate_datatype_mappings(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
-        """Generate datatype mapping methods for template."""
-        mappings = {
-            "input_methods": [],
-            "output_methods": [],
-            "weight_methods": []
-        }
-        
-        input_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
-        for i, interface in enumerate(input_interfaces):
-            mappings["input_methods"].append({
-                "index": i,
-                "interface_name": interface.name,
-                "method_body": f'return DataType[self.get_nodeattr("inputDataType")]'
-            })
-        
-        output_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)
-        for i, interface in enumerate(output_interfaces):
-            mappings["output_methods"].append({
-                "index": i,
-                "interface_name": interface.name,
-                "method_body": f'return DataType[self.get_nodeattr("outputDataType")]'
-            })
-        
-        weight_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)
-        if weight_interfaces:
-            mappings["weight_methods"].append({
-                "method_body": 'return DataType[self.get_nodeattr("weightDataType")]'
-            })
-        
-        return mappings
+    # Note: _generate_datatype_mappings removed - handled by AutoHWCustomOp parent class
     
-    def _generate_shape_calculation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
-        """Generate shape calculation methods for template."""
-        methods = {
-            "normal_input_shape": None,
-            "normal_output_shape": None,
-            "folded_input_shape": None,
-            "folded_output_shape": None
-        }
-        
-        # Generate based on interface analysis and parallelism
-        if parallelism_info["inferred_channels"]:
-            methods["normal_input_shape"] = f"""
-        ich = self.get_nodeattr("NumChannels")
-        vecs = list(self.get_nodeattr("numInputVectors"))
-        return tuple(vecs + [ich])"""
-            
-            methods["folded_input_shape"] = f"""
-        pe = self.get_nodeattr("PE")
-        fold = self.calc_tmem()
-        vecs = list(self.get_nodeattr("numInputVectors"))
-        return tuple(vecs + [fold, pe])"""
-        else:
-            # Default simple shape calculations
-            methods["normal_input_shape"] = """
-        vecs = list(self.get_nodeattr("numInputVectors"))
-        return tuple(vecs + [1])"""
-            
-            methods["folded_input_shape"] = """
-        vecs = list(self.get_nodeattr("numInputVectors"))
-        return tuple(vecs + [1, 1])"""
-        
-        # Output shapes typically match input shapes for most operations
-        methods["normal_output_shape"] = "return self.get_normal_input_shape()"
-        methods["folded_output_shape"] = "return self.get_folded_input_shape()"
-        
-        return methods
+    # Note: _generate_shape_calculation_methods removed - handled by AutoHWCustomOp parent class
     
-    def _generate_stream_width_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
-        """Generate stream width calculation methods for template."""
-        methods = {
-            "instream_width": None,
-            "outstream_width": None,
-            "weightstream_width": None
-        }
-        
-        # Input stream width
-        methods["instream_width"] = f"""
-        i_bits = self.get_input_datatype().bitwidth()
-        pe = self.get_nodeattr("PE") if self.get_nodeattr("PE") else {parallelism_info["inferred_pe"]}
-        return i_bits * pe"""
-        
-        # Output stream width
-        methods["outstream_width"] = f"""
-        o_bits = self.get_output_datatype().bitwidth()
-        pe = self.get_nodeattr("PE") if self.get_nodeattr("PE") else {parallelism_info["inferred_pe"]}
-        return o_bits * pe"""
-        
-        # Weight stream width (if weights exist)
-        if self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT):
-            methods["weightstream_width"] = """
-        pe = self.get_nodeattr("PE")
-        wp = self.get_weight_datatype().bitwidth()
-        return pe * wp"""
-        
-        return methods
+    # Note: _generate_stream_width_methods removed - handled by AutoHWCustomOp parent class
     
     def _generate_resource_estimation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
-        """Generate resource estimation methods for template."""
+        """Generate simplified resource estimation stubs for template."""
+        # Simplified - only basic resource estimation stubs that can't be computed generically
         methods = {
-            "get_exp_cycles": None,
-            "calc_tmem": None,
-            "bram_estimation": None,
-            "lut_estimation": None,
-            "dsp_estimation": None
+            "bram_estimation": "return 1",
+            "lut_estimation": "return 2000", 
+            "dsp_estimation": "return 0"
         }
-        
-        # Cycle estimation based on kernel type
-        kernel_type = self._infer_kernel_type(kernel_metadata)
-        if kernel_type == "threshold":
-            methods["get_exp_cycles"] = "return np.prod(self.get_folded_output_shape()[:-1])"
-        else:
-            methods["get_exp_cycles"] = "return np.prod(self.get_folded_output_shape()[:-1])"
-        
-        # TMEM calculation (if channels and PE are available)
-        if parallelism_info["inferred_channels"] and parallelism_info["inferred_pe"]:
-            methods["calc_tmem"] = """
-        num_channels = self.get_nodeattr("NumChannels")
-        pe = self.get_nodeattr("PE")
-        return num_channels // pe"""
-        
-        # Resource estimation based on kernel type
-        if kernel_type == "threshold":
-            methods["bram_estimation"] = "return 1  # Minimal BRAM for thresholding"
-            methods["lut_estimation"] = "return 3000 * self.get_nodeattr('PE', 1)"
-            methods["dsp_estimation"] = "return 0  # No DSPs for thresholding"
-        elif kernel_type == "matmul":
-            methods["bram_estimation"] = "return self.get_nodeattr('PE', 1) * 2"
-            methods["lut_estimation"] = "return 5000 * self.get_nodeattr('PE', 1)"
-            methods["dsp_estimation"] = "return self.get_nodeattr('PE', 1)"
-        else:
-            methods["bram_estimation"] = "return 1"
-            methods["lut_estimation"] = "return 2000"
-            methods["dsp_estimation"] = "return 0"
-        
+        # Note: get_exp_cycles and calc_tmem handled by AutoHWCustomOp parent class
         return methods

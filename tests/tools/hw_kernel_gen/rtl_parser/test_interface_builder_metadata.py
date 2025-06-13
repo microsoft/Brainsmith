@@ -12,7 +12,7 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_builder import Interfac
 from brainsmith.tools.hw_kernel_gen.rtl_parser.data import Port, Direction, Pragma, PragmaType
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
 from brainsmith.dataflow.core.interface_types import InterfaceType
-from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
+from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy, BlockChunkingStrategy
 
 
 class TestInterfaceBuilderMetadata:
@@ -52,8 +52,14 @@ class TestInterfaceBuilderMetadata:
             assert isinstance(metadata, InterfaceMetadata)
             assert metadata.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]
             assert isinstance(metadata.allowed_datatypes, list)
-            assert len(metadata.allowed_datatypes) == 1  # Should have default UINT8 datatype
-            assert isinstance(metadata.chunking_strategy, DefaultChunkingStrategy)
+            assert len(metadata.allowed_datatypes) == 0  # Should have no default datatypes
+            # New implementation uses BlockChunkingStrategy for stream interfaces
+            if metadata.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
+                assert isinstance(metadata.chunking_strategy, BlockChunkingStrategy)
+                assert metadata.chunking_strategy.block_shape == [":", ":"]  # Default for activations
+                assert metadata.chunking_strategy.rindex == 0
+            else:
+                assert isinstance(metadata.chunking_strategy, (DefaultChunkingStrategy, BlockChunkingStrategy))
     
     def test_global_control_interface_creation(self):
         """Test creation of global control interface."""
@@ -81,7 +87,7 @@ class TestInterfaceBuilderMetadata:
         assert "<NO_PREFIX>" in metadata.name  # Global signals have no prefix
     
     def test_with_datatype_pragma(self):
-        """Test InterfaceMetadata creation with DATATYPE pragma."""
+        """Test that InterfaceBuilder does NOT apply pragmas (pragmas are applied in parser)."""
         builder = InterfaceBuilder(debug=True)
         
         # Create AXI-Stream input ports
@@ -91,7 +97,7 @@ class TestInterfaceBuilderMetadata:
             Port("s_axis_tready", Direction.OUTPUT, "1"),
         ]
         
-        # Create DATATYPE pragma
+        # Create DATATYPE pragma (should be ignored by InterfaceBuilder)
         pragma = Mock()
         pragma.type = PragmaType.DATATYPE
         pragma.applies_to_interface = Mock(return_value=True)
@@ -102,28 +108,27 @@ class TestInterfaceBuilderMetadata:
         # Call new method
         metadata_list, unassigned_ports = builder.build_interface_metadata(ports, pragmas)
         
-        # Verify pragma was applied
+        # Verify pragma was NOT applied by InterfaceBuilder
         assert len(metadata_list) == 1
-        pragma.applies_to_interface.assert_called()
-        pragma.apply_to_interface_metadata.assert_called()
+        pragma.applies_to_interface.assert_not_called()
+        pragma.apply_to_interface_metadata.assert_not_called()
         
-        # Verify metadata has datatype constraints (from mock)
+        # Verify metadata has NO datatype constraints (pragmas not applied)
         metadata = metadata_list[0]
-        assert len(metadata.allowed_datatypes) == 1
-        assert metadata.allowed_datatypes[0].finn_type == "UINT8"
+        assert len(metadata.allowed_datatypes) == 0  # No datatypes without pragma application
     
     def test_with_weight_pragma(self):
-        """Test InterfaceMetadata creation with WEIGHT pragma."""
+        """Test that InterfaceBuilder correctly detects WEIGHT interfaces by naming convention."""
         builder = InterfaceBuilder(debug=True)
         
-        # Create AXI-Stream input ports (will be changed to WEIGHT by pragma)
+        # Create AXI-Stream input ports with "weights" prefix (detected as WEIGHT by naming convention)
         ports = [
             Port("weights_tdata", Direction.INPUT, "8"),
             Port("weights_tvalid", Direction.INPUT, "1"),
             Port("weights_tready", Direction.OUTPUT, "1"),
         ]
         
-        # Create WEIGHT pragma
+        # Create WEIGHT pragma (should be ignored by InterfaceBuilder)
         pragma = Mock()
         pragma.type = PragmaType.WEIGHT
         pragma.applies_to_interface = Mock(return_value=True)
@@ -134,10 +139,11 @@ class TestInterfaceBuilderMetadata:
         # Call new method
         metadata_list, unassigned_ports = builder.build_interface_metadata(ports, pragmas)
         
-        # Verify pragma was applied
+        # Verify interface is detected as WEIGHT by naming convention, not pragma
         assert len(metadata_list) == 1
         metadata = metadata_list[0]
-        assert metadata.interface_type == InterfaceType.WEIGHT  # Should be overridden
+        assert metadata.interface_type == InterfaceType.WEIGHT  # Detected by naming convention
+        pragma.applies_to_interface.assert_not_called()  # Pragma not applied in InterfaceBuilder
     
     def test_mixed_interface_types(self):
         """Test that mixed interface types are correctly detected."""
@@ -176,7 +182,7 @@ class TestInterfaceBuilderMetadata:
         for metadata in metadata_list:
             assert isinstance(metadata, InterfaceMetadata)
             assert metadata.name  # Should have a name
-            assert metadata.allowed_datatypes  # Should have default datatypes
+            assert isinstance(metadata.allowed_datatypes, list)  # Should have datatype list (even if empty)
             assert metadata.chunking_strategy  # Should have a chunking strategy
     
     def test_unassigned_ports_handling(self):

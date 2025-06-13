@@ -84,11 +84,10 @@ class InterfaceBuilder:
                 logger.debug(f"Creating InterfaceMetadata for group '{group.name}'")
                 
             base_metadata = self._create_base_metadata(group)
-            final_metadata = self._apply_pragmas(base_metadata, pragmas, group)
-            metadata_list.append(final_metadata)
+            metadata_list.append(base_metadata)
             
             if self.debug:
-                logger.debug(f"  Created InterfaceMetadata: {final_metadata.name} ({final_metadata.interface_type.value})")
+                logger.debug(f"  Created InterfaceMetadata: {base_metadata.name} ({base_metadata.interface_type.value})")
         
         # Sort unassigned ports for consistent output
         unassigned_ports.sort(key=lambda p: p.name)
@@ -113,23 +112,30 @@ class InterfaceBuilder:
             group: Validated PortGroup from ProtocolValidator
             
         Returns:
-            InterfaceMetadata: Base metadata with empty datatypes and default chunking
+            InterfaceMetadata: Base metadata with no default datatypes and default chunking
         """
         # Interface type has been correctly determined by ProtocolValidator
         interface_type = group.interface_type
         
-        # Start with a default UINT8 datatype constraint (can be overridden by pragmas)
-        from brainsmith.dataflow.core.interface_metadata import DataTypeConstraint
-        allowed_datatypes = [
-            DataTypeConstraint(
-                finn_type="UINT8",
-                bit_width=8,
-                signed=False
-            )
-        ]
+        # Start with no default datatype constraints - these should be specified by pragmas
+        datatype_constraints = []
         
-        # Default chunking strategy
-        chunking_strategy = DefaultChunkingStrategy()
+        # Create appropriate default chunking strategy based on interface type
+        # This provides smart defaults when no BDIM pragma is specified
+        from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
+        
+        # For now, use simple defaults (will be refined based on actual tensor shape later)
+        # The actual tensor shape is not available at RTL parsing time
+        # Use only parameter names and ":" - NO magic numbers allowed
+        if interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
+            # Default for activations: process rightmost dimensions
+            chunking_strategy = BlockChunkingStrategy(block_shape=[":", ":"], rindex=0)
+        elif interface_type == InterfaceType.WEIGHT:
+            # Default for weights: use PE parameter for parameterizability
+            chunking_strategy = BlockChunkingStrategy(block_shape=["PE"], rindex=0)
+        else:
+            # Default for others: full tensor
+            chunking_strategy = BlockChunkingStrategy(block_shape=[":"], rindex=0)
         
         # Extract description from validation metadata
         description = f"Interface {group.name} ({interface_type.value})"
@@ -139,52 +145,8 @@ class InterfaceBuilder:
         return InterfaceMetadata(
             name=group.name,
             interface_type=interface_type,
-            allowed_datatypes=allowed_datatypes,
+            datatype_constraints=datatype_constraints,
             chunking_strategy=chunking_strategy,
             description=description
         )
 
-    def _apply_pragmas(self, metadata: InterfaceMetadata, pragmas: List[Pragma], group: PortGroup) -> InterfaceMetadata:
-        """
-        Apply relevant pragmas to InterfaceMetadata using existing pragma system.
-        
-        This method creates a temporary Interface object to leverage the existing
-        pragma chain-of-responsibility pattern without reimplementing the pragma
-        matching and application logic.
-        
-        Args:
-            metadata: Base InterfaceMetadata to modify
-            pragmas: List of all pragmas to consider
-            group: Original PortGroup for creating temporary Interface
-            
-        Returns:
-            InterfaceMetadata: Final metadata with all applicable pragma effects
-        """
-        # Create minimal Interface-like object for pragma compatibility
-        # This temporary object allows us to reuse the existing pragma chain-of-responsibility
-        # pattern without reimplementing the pragma matching logic
-        from .data import Interface  # Temporary import for compatibility
-        temp_interface = Interface(
-            name=group.name,
-            type=group.interface_type,
-            ports=group.ports,
-            validation_result=ValidationResult(valid=True, message="Validated"),
-            metadata=group.metadata
-        )
-        
-        # Apply pragmas using existing chain-of-responsibility pattern from pragma.py
-        # This reuses all the existing pragma logic:
-        # - InterfaceNameMatcher for name matching
-        # - DatatypePragma for DataTypeConstraint creation
-        # - BDimPragma for chunking strategy creation  
-        # - WeightPragma for interface type overrides
-        for pragma in pragmas:
-            try:
-                if pragma.applies_to_interface(temp_interface):
-                    if self.debug:
-                        logger.debug(f"  Applying {pragma.type.value} pragma to {metadata.name}")
-                    metadata = pragma.apply_to_interface_metadata(temp_interface, metadata)
-            except Exception as e:
-                logger.warning(f"Failed to apply {pragma.type.value} pragma to {metadata.name}: {e}")
-        
-        return metadata

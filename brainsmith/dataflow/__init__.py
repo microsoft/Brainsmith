@@ -11,14 +11,13 @@ __version__ = "0.1.0"
 
 # Core framework components
 from .core.interface_types import InterfaceType
-from .core.dataflow_interface import DataflowInterface, DataflowDataType
+from .core.dataflow_interface import DataflowInterface
 from .core.dataflow_model import DataflowModel, InitiationIntervals, ParallelismBounds
 from .core.validation import ValidationError, ValidationResult, ValidationSeverity
 
 __all__ = [
     "DataflowInterface",
     "InterfaceType", 
-    "DataflowDataType",
     "DataflowModel",
     "InitiationIntervals",
     "ParallelismBounds",
