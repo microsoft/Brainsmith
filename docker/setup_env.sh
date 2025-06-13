@@ -63,14 +63,13 @@ else
     gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
   else
     if [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-      # pyxsi should be built by entrypoint.sh in daemon mode
-      # In exec mode, it should already be built by the daemon
+      # pyxsi directory exists but .so not built yet
       yecho "pyxsi.so not found at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
       yecho "Some functionality may be limited. Check that Vivado is properly installed and accessible."
     else
-      recho "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
-      recho "This suggests dependencies were not fetched properly"
-      exit 1
+      # pyxsi directory doesn't exist - but this is now checked earlier in entrypoint_exec.sh
+      yecho "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
+      yecho "Some functionality may be limited."
     fi
   fi
   

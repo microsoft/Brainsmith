@@ -36,6 +36,13 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         log_info "Debug: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS, READINESS_MARKER=$READINESS_MARKER"
         exit 1
     fi
+    
+    # Since container is ready, dependencies should exist - check for pyxsi directory
+    if [ ! -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+        log_error "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
+        log_error "This suggests dependencies were not fetched properly in daemon mode"
+        exit 1
+    fi
 fi
 
 # Load environment setup (dependencies should already be fetched by main container)

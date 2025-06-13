@@ -62,11 +62,11 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -f "$BSMITH_DIR/deps/finn/setup.py"
     exit 1
 fi
 
-# Third: For daemon mode, ensure pyxsi is built during initialization
-if [ "$BSMITH_CONTAINER_MODE" = "daemon" ] && [ ! -z "${XILINX_VIVADO}" ]; then
-    if [ ! -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ] && [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+# Function to build pyxsi if needed
+build_pyxsi_if_needed() {
+    if [ ! -z "${XILINX_VIVADO}" ] && [ -d "${BSMITH_DIR}/deps/pyxsi" ] && [ ! -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
         emit_status "BUILDING_PYXSI"
-        log_info "Building pyxsi during daemon initialization"
+        log_info "Building pyxsi (Vivado available and pyxsi source exists)"
         OLDPWD=$(pwd)
         cd ${BSMITH_DIR}/deps/pyxsi || {
             emit_status "ERROR" "Failed to enter pyxsi directory"
@@ -76,13 +76,22 @@ if [ "$BSMITH_CONTAINER_MODE" = "daemon" ] && [ ! -z "${XILINX_VIVADO}" ]; then
         if make; then
             log_info "pyxsi built successfully"
         else
-            emit_status "ERROR" "Failed to build pyxsi during daemon initialization"
-            log_error "Failed to build pyxsi during daemon initialization"
+            emit_status "ERROR" "Failed to build pyxsi"
+            log_error "Failed to build pyxsi"
             exit 1
         fi
         cd $OLDPWD
+    elif [ -z "${XILINX_VIVADO}" ]; then
+        log_info "Skipping pyxsi build - Vivado not available"
+    elif [ ! -d "${BSMITH_DIR}/deps/pyxsi" ]; then
+        log_info "Skipping pyxsi build - pyxsi source not available"
+    else
+        log_info "pyxsi already built - skipping"
     fi
-fi
+}
+
+# Third: Build pyxsi if needed (both daemon and one-shot mode)
+build_pyxsi_if_needed
 
 # Smart package management with persistent state
 CACHE_FILE="/tmp/.brainsmith_packages_installed"
