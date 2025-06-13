@@ -398,7 +398,7 @@ class TestLayerNorm(OpTest):
     def f_idt(self, request):
         return request.param
 
-    @pytest.fixture(params=[(1, 128, 384), (1, 12, 12, 128)])
+    @pytest.fixture(params=[(1, 128, 384), (2, 3)])
     def f_ifm_dim(self, request):
         return request.param
 
@@ -425,7 +425,6 @@ class TestLayerNorm(OpTest):
                     op_type="LayerNormalization",
                     inputs=["X", "Scale", "Bias"],
                     outputs=["Y"],
-                    SIMD=f_simd,
                     preferred_impl_style="hls",
                     ifm_dim=f_ifm_dim,
                     NumChannels=f_ifm_dim[-1],
@@ -443,6 +442,12 @@ class TestLayerNorm(OpTest):
     @pytest.fixture
     def f_infer_hw_transform(self):
         return InferLayerNorm()
+    
+    # Overriding this method allows us to pass attributes
+    # to the model after it's been specialised.
+    @pytest.fixture
+    def f_specialise_attrs(self, f_simd) -> dict[str, any]:
+        return dict(SIMD=f_simd)
 
     # Overriding the default save_intermediate_models fixture
     # (which evaluates to false), so that each model step can
