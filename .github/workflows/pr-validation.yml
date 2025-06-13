@@ -15,7 +15,7 @@ env:
   BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
   NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
   BSMITH_DOCKER_TAG: "microsoft/brainsmith:pr-${{ github.sha }}"
-  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} -e BSMITH_SKIP_DEP_REPOS=0"
 
 permissions:
   contents: read
@@ -52,6 +52,23 @@ jobs:
               echo "ERROR: Docker image not found after build"
               exit 1
           fi
+
+      - name: Debug dependency fetching
+        uses: ./.github/actions/smithy-exec
+        with:
+          command: |
+            echo "=== Checking dependency directories ==="
+            ls -la deps/ || echo "deps directory not found"
+            echo "=== Checking environment variables ==="
+            echo "BSMITH_SKIP_DEP_REPOS: $BSMITH_SKIP_DEP_REPOS"
+            echo "=== Manually fetching dependencies if needed ==="
+            if [ ! -d "deps/pyxsi" ]; then
+              echo "Dependencies missing, running fetch manually..."
+              cd docker && ./fetch-repos.sh
+            fi
+            echo "=== Final dependency check ==="
+            ls -la deps/ || echo "Still no deps directory"
+          timeout-minutes: 30
 
       - name: Run E2E test
         uses: ./.github/actions/smithy-exec
