@@ -57,8 +57,7 @@ class OpTest(ABC):
         self,
         f_model: ModelWrapper,
         f_infer_hw_transform: Transformation,
-        f_save_models: bool,
-        f_output_dir: str,
+        f_input_tensors,
     ) -> ModelWrapper:
         """Converts all ONNX layers of a specific type to hardware layers,
         using a given inference function. If that function does not exist
@@ -76,11 +75,10 @@ class OpTest(ABC):
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
 
         if f_infer_hw_transform is not None:
-            save_output = f_output_dir if f_save_models else None
             return self.apply_transforms(
                 model=f_model,
                 transform_list=[f_infer_hw_transform],
-                output_dir=save_output,
+                input_tensors=f_input_tensors,
             )
         else:
             warn("skipped f_model_hw step, as no f_infer_hw_transform was provided.")
@@ -406,12 +404,6 @@ class OpTest(ABC):
         If an 'output_dir' is provided, the model will be saved to that directory after
         ANY transform is applied.
 
-        .. warning::
-            As of 11/06/2025, validation has stopped working. I'm unsure what commit caused
-            this. When the ONNX runtime is used to execute the model, the exception "Rounding
-            error is too high to match set QONNX datatype (INT8) for input xxxxx", where
-            "xxxxxx" is a six digit alphanumeric string.
-
         :param model: The :class:`ModelWrapper` we'll apply our transform list to
         :type model: :class:`qonnx.core.modelwrapper.ModelWrapper`
 
@@ -451,7 +443,7 @@ class OpTest(ABC):
                         model.save(
                             os.path.join(
                                 output_dir,
-                                str(index + subindex) + "_" + i.__class__.__name__,
+                                f"{str(index)}_{str(subindex)}_{i.__class__.__name__}.onnx",
                             )
                         )
             else:
@@ -461,7 +453,7 @@ class OpTest(ABC):
                     model.save(
                         os.path.join(
                             output_dir,
-                            str(index) + "_" + transform.__class__.__name__,
+                            f"{str(index)}_{transform.__class__.__name__}.onnx",
                         )
                     )
 
