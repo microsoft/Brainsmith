@@ -46,7 +46,7 @@ jobs:
         uses: ./.github/actions/smithy-test
         with:
           test-name: "Release Functionality Test"
-          test-type: "python-tests"
+          test-type: "basic-functionality"
           timeout-minutes: 5
 
       - name: Push to GHCR

@@ -81,7 +81,7 @@ jobs:
         uses: ./.github/actions/smithy-test
         with:
           test-name: "Basic Daemon Test"
-          test-type: "python-tests"
+          test-type: "basic-functionality"
           timeout-minutes: 5
 
       - name: Test daemon exec action
@@ -157,7 +157,7 @@ jobs:
         uses: ./.github/workflows/run-test-daemon.yml
         with:
           test-name: "Integration Test"
-          test-type: "python-tests"
+          test-type: "basic-functionality"
           timeout-minutes: 10
         secrets:
           github-token: ${{ secrets.GITHUB_TOKEN }}

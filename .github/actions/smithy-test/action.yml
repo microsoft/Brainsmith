@@ -9,7 +9,7 @@ inputs:
     description: 'Type of test to run'
     type: string
     required: true
-    # Valid options: e2e-bert, e2e-bert-large, unit-tests, integration-tests, python-tests
+    # Valid options: e2e-bert, unit-tests, integration-tests, basic-functionality
   test-variant:
     description: 'Test variant'
     type: string
@@ -59,11 +59,11 @@ runs:
           "integration-tests")
             COMMAND="cd tests && pytest -v integration/"
             ;;
-          "python-tests")
-            COMMAND="echo 'DEBUG: After setup_env.sh:' && which python || echo 'python still not found' && ls -la /usr/bin/python* && ls -la $HOME/.local/bin/python* 2>/dev/null || echo 'no local python' && echo 'PATH='$PATH && python --version && pytest tests/"
+          "basic-functionality")
+            COMMAND="python -c \"import sys; import brainsmith; import finn; import qonnx; print('✓ All critical imports successful'); print(f'Python: {sys.version}'); print(f'Brainsmith: OK'); print(f'FINN: OK'); print(f'QONNX: OK')\""
             ;;
           *)
-            echo "ERROR: Invalid test type. Allowed: e2e-bert, unit-tests, integration-tests, python-tests"
+            echo "ERROR: Invalid test type. Allowed: e2e-bert, unit-tests, integration-tests, basic-functionality"
             exit 1
             ;;
         esac

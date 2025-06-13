@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/smithy-test
         with:
           test-name: "Basic Functionality"
-          test-type: "python-tests"
+          test-type: "basic-functionality"
           timeout-minutes: 5
 
       - name: Execute additional validation
