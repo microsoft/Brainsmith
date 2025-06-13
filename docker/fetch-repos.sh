@@ -89,12 +89,12 @@ fetch_repo() {
     # clone repo if dir not found
     if [ ! -d "$CLONE_TO" ]; then
         echo "Cloning $REPO_DIR..."
-        # Use retry logic for git clone in CI
+        # Use retry logic for git clone in CI (but with full clone for dependency resolution)
         local attempt=1
         local max_attempts=3
         
         while [ $attempt -le $max_attempts ]; do
-            if git clone --depth 1 --single-branch $REPO_URL $CLONE_TO; then
+            if git clone $REPO_URL $CLONE_TO; then
                 echo "Successfully cloned $REPO_DIR on attempt $attempt"
                 break
             else
@@ -112,10 +112,6 @@ fetch_repo() {
             echo "ERROR: Failed to clone $REPO_DIR after $max_attempts attempts"
             return 1
         fi
-        
-        # Fetch all refs to get the specific commit
-        echo "Fetching all refs for $REPO_DIR..."
-        git -C $CLONE_TO fetch --unshallow || git -C $CLONE_TO fetch --all
     fi
     
     # verify and try to pull repo if not at correct commit
@@ -123,11 +119,9 @@ fetch_repo() {
     if [ "$CURRENT_COMMIT" != "$REPO_COMMIT" ]; then
         echo "Current commit $CURRENT_COMMIT != expected $REPO_COMMIT for $REPO_DIR"
         
-        # Try to fetch the specific commit if it doesn't exist
-        if ! git -C $CLONE_TO cat-file -e $REPO_COMMIT 2>/dev/null; then
-            echo "Fetching specific commit $REPO_COMMIT for $REPO_DIR..."
-            git -C $CLONE_TO fetch origin || git -C $CLONE_TO pull || true
-        fi
+        # Try to pull first to get latest refs
+        echo "Pulling latest changes for $REPO_DIR..."
+        git -C $CLONE_TO pull || echo "Pull failed, continuing with checkout..."
         
         # checkout the expected commit
         echo "Checking out commit $REPO_COMMIT for $REPO_DIR..."
