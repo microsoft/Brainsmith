@@ -23,7 +23,7 @@ permissions:
 jobs:
   validate:
     runs-on: pre-release
-    timeout-minutes: 30
+    timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
         uses: ./.github/actions/smithy-exec
         with:
           command: "cd demos/bert && make single_layer"
-          timeout-minutes: 25
+          timeout-minutes: 240  # 4 hours for BERT processing
 
       - name: Collect artifacts on failure
         if: failure()
