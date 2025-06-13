@@ -276,8 +276,9 @@ ANY transform is applied.
     (Default: `None`)
   * **tolerance** (*float*) – The acceptable tolerance that model outputs can differ during validation.
     (Default: `1e-5`)
-  * **output_dir** (*float*) – The acceptable tolerance that model outputs can differ during validation.
-    (Default: `1e-5`)
+  * **output_dir** (*str*) – The output directory used to save between every transformation step.
+    Providing an input directory enables intermediate model saving.
+    (Default: `None`)
 * **Returns:**
   A `ModelWrapper` containing the transformed model
 * **Return type:**
