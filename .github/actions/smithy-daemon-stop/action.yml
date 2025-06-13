@@ -1,0 +1,54 @@
+name: 'Stop Smithy Daemon'
+description: 'Stop and cleanup Smithy container'
+inputs:
+  container-name:
+    description: 'Name of container to stop (optional - will auto-detect)'
+    type: string
+    default: ''
+  collect-logs:
+    description: 'Whether to collect container logs before stopping'
+    type: boolean
+    default: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Collect logs before stopping
+      if: inputs.collect-logs == 'true'
+      shell: bash
+      run: |
+        echo "=== Collecting container logs ==="
+        if [ -x ./smithy ]; then
+          mkdir -p /tmp/smithy-logs
+          ./smithy logs > /tmp/smithy-logs/container.log 2>&1 || echo "No logs available" > /tmp/smithy-logs/container.log
+          ./smithy status > /tmp/smithy-logs/status.txt 2>&1 || echo "Status failed" > /tmp/smithy-logs/status.txt
+        fi
+    
+    - name: Stop Smithy daemon
+      shell: bash
+      run: |
+        echo "=== Stopping Smithy Daemon ==="
+        
+        if [ -x ./smithy ]; then
+          # Stop the daemon
+          ./smithy stop || {
+            echo "WARNING: Normal stop failed, attempting cleanup"
+            ./smithy cleanup || echo "Cleanup also failed"
+          }
+          echo "✓ Daemon stopped"
+        else
+          echo "WARNING: smithy script not found, attempting direct Docker cleanup"
+          # Fallback cleanup - find and stop any brainsmith containers
+          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}" || true)
+          if [ -n "$CONTAINERS" ]; then
+            echo "Found containers to clean: $CONTAINERS"
+            docker rm -f $CONTAINERS || true
+          fi
+        fi
+        
+        # Additional safety cleanup
+        echo "Performing additional Docker cleanup..."
+        docker container prune -f --filter "label=ci-run=${{ github.run_id }}" || true
+        docker image prune -f || true
+        
+        echo "✓ Cleanup completed"

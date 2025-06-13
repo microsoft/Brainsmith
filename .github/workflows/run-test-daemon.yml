@@ -1,4 +1,4 @@
-name: Run Smithy Test
+name: Run Test with Existing Daemon
 
 on:
   workflow_call:
@@ -29,11 +29,11 @@ on:
         default: 'pre-release'
     secrets:
       github-token:
-        description: 'GitHub token for GHCR access'
-        required: true
+        description: 'GitHub token for potential future use'
+        required: false
 
 jobs:
-  test:
+  test-with-daemon:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
@@ -42,16 +42,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check disk space
-        uses: ./.github/actions/check-disk
-        with:
-          threshold-gb: 20
-
-      - name: Load Docker image
-        uses: ./.github/actions/docker-load
-        with:
-          artifact-name: brainsmith-image
-          image-tag: ${{ env.BSMITH_DOCKER_TAG }}
+      - name: Verify daemon is running
+        shell: bash
+        run: |
+          echo "=== Checking for running Smithy daemon ==="
+          chmod +x smithy
+          
+          # Check if daemon is running
+          if ./smithy status | grep -q "is running"; then
+            echo "✓ Smithy daemon is running"
+            ./smithy status
+          else
+            echo "ERROR: Smithy daemon is not running"
+            echo "The daemon should have been started by the build job"
+            echo "Available containers:"
+            docker ps -a | grep brainsmith || echo "No brainsmith containers found"
+            exit 1
+          fi
 
       - name: Run test
         uses: ./.github/actions/smithy-test
@@ -65,12 +72,14 @@ jobs:
         if: always() && inputs.collect-artifacts
         uses: ./.github/actions/collect-artifacts
         with:
-          artifact-directory: artifacts
+          artifact-directory: test-artifacts
 
       - name: Upload artifacts
         if: always() && inputs.collect-artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.test-name }}-artifacts-${{ github.run_id }}
-          path: artifacts/
+          path: test-artifacts/
           retention-days: 7
+
+      # Note: Daemon intentionally NOT stopped here - may be reused by other test jobs

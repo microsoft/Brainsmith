@@ -20,30 +20,52 @@ permissions:
   packages: write
 
 jobs:
-  release-image:
-    uses: ./.github/workflows/build-and-push.yml
-    with:
-      runner: 'pre-release'
-      test-image: true
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-  
-  push-to-ghcr:
-    needs: release-image
+  release-build-and-push:
     runs-on: pre-release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Load Docker image
-        uses: ./.github/actions/docker-load
         with:
-          artifact-name: brainsmith-image
-          image-tag: ${{ env.BSMITH_DOCKER_TAG }}
-      
+          fetch-depth: 0
+
+      - name: Check disk space
+        uses: ./.github/actions/check-disk
+        with:
+          threshold-gb: 20
+
+      - name: Clean Docker resources
+        uses: ./.github/actions/docker-cleanup
+
+      - name: Start Smithy daemon (with build)
+        uses: ./.github/actions/smithy-daemon-start
+        with:
+          build-image: true
+          container-suffix: release
+
+      - name: Test container functionality
+        uses: ./.github/actions/smithy-test
+        with:
+          test-name: "Release Functionality Test"
+          test-type: "python-tests"
+          timeout-minutes: 5
+
       - name: Push to GHCR
         uses: ./.github/actions/docker-push-release
         with:
           local-tag: ${{ env.BSMITH_DOCKER_TAG }}
           release-tag: ${{ github.event.release.tag_name }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stop daemon and cleanup
+        if: always()
+        uses: ./.github/actions/smithy-daemon-stop
+        with:
+          collect-logs: true
+
+      - name: Upload release logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-logs-${{ github.run_id }}
+          path: /tmp/smithy-logs/
+          retention-days: 7

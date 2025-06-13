@@ -90,32 +90,29 @@ runs:
     - name: Run smithy test
       shell: bash
       run: |
-        chmod +x smithy
-        echo "Starting smithy daemon..."
-        ./smithy daemon
-        sleep 5
-        
-        echo "Running test: ${{ inputs.test-name }}"
+        echo "=== Running test: ${{ inputs.test-name }} ==="
+        echo "Test type: ${{ inputs.test-type }}"
+        echo "Test variant: ${{ inputs.test-variant }}"
         echo "Command: ${{ steps.test-cmd.outputs.test-command }}"
+        echo "Timeout: ${{ inputs.timeout-minutes }} minutes"
         
-        # Execute predefined command with timeout
-        if command -v timeout >/dev/null 2>&1; then
-            if timeout "${{ inputs.timeout-minutes }}m" bash -c "${{ steps.test-cmd.outputs.test-command }}"; then
-                echo "✓ ${{ inputs.test-name }} passed"
-            else
-                echo "✗ ${{ inputs.test-name }} failed"
-                ./smithy logs --tail 50
-                exit 1
-            fi
-        else
-            echo "WARNING: timeout command not available, running without timeout"
-            if bash -c "${{ steps.test-cmd.outputs.test-command }}"; then
-                echo "✓ ${{ inputs.test-name }} passed"
-            else
-                echo "✗ ${{ inputs.test-name }} failed"
-                ./smithy logs --tail 50
-                exit 1
-            fi
+        # Verify daemon is running (should be started by workflow)
+        if ! ./smithy status >/dev/null 2>&1 | grep -q "is running"; then
+            echo "ERROR: Smithy daemon is not running"
+            echo "The daemon should be started by the workflow before running tests"
+            echo "Current status:"
+            ./smithy status || echo "Status command failed"
+            exit 1
         fi
         
-        ./smithy stop || true
+        # Execute test with timeout using existing daemon
+        TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
+        
+        if timeout ${TIMEOUT_SECONDS}s ./smithy exec "${{ steps.test-cmd.outputs.test-command }}"; then
+            echo "✓ Test passed: ${{ inputs.test-name }}"
+        else
+            echo "✗ Test failed: ${{ inputs.test-name }}"
+            echo "=== Container logs (last 50 lines) ==="
+            ./smithy logs --tail 50 || echo "No logs available"
+            exit 1
+        fi

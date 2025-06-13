@@ -1,4 +1,4 @@
-name: Build and Push
+name: Build and Test with Persistent Daemon
 
 on:
   workflow_call:
@@ -13,11 +13,11 @@ on:
         default: true
     secrets:
       github-token:
-        description: 'GitHub token for GHCR access'
-        required: true
+        description: 'GitHub token for potential future use'
+        required: false
 
 jobs:
-  build:
+  build-and-test-daemon:
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout repository
@@ -33,8 +33,11 @@ jobs:
       - name: Clean Docker resources
         uses: ./.github/actions/docker-cleanup
 
-      - name: Build Docker image
-        uses: ./.github/actions/smithy-build
+      - name: Start Smithy daemon (with build)
+        uses: ./.github/actions/smithy-daemon-start
+        with:
+          build-image: true
+          container-suffix: ${{ github.run_id }}
 
       - name: Test container functionality
         if: inputs.test-image
@@ -44,30 +47,25 @@ jobs:
           test-type: "python-tests"
           timeout-minutes: 5
 
-      - name: Save Docker image
-        uses: ./.github/actions/docker-save
+      - name: Execute additional validation
+        uses: ./.github/actions/smithy-daemon-exec
         with:
-          image-tag: ${{ env.BSMITH_DOCKER_TAG }}
-          artifact-name: brainsmith-image
+          command: "echo 'Container is ready for use in subsequent jobs'"
+          timeout-minutes: 1
 
-      - name: Upload Docker image
-        uses: actions/upload-artifact@v4
+      - name: Collect artifacts on failure
+        if: failure()
+        uses: ./.github/actions/collect-artifacts
         with:
-          name: brainsmith-image
-          path: /tmp/docker-artifacts/brainsmith-image.tar.gz
-          retention-days: 1
-          compression-level: 0
+          artifact-directory: build-failure-artifacts
 
       - name: Upload build artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: docker-build-logs-${{ github.run_id }}
-          path: |
-            /tmp/brainsmith*
-            ~/.docker/
+          name: daemon-build-logs-${{ github.run_id }}
+          path: build-failure-artifacts/
           retention-days: 3
 
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/docker-cleanup
+      # Note: Daemon intentionally NOT stopped here - it will be reused by subsequent jobs
+      # The cleanup job at the end of the workflow will handle stopping it

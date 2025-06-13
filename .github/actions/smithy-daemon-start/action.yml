@@ -1,0 +1,72 @@
+name: 'Start Smithy Daemon'
+description: 'Start persistent Smithy container for workflow'
+inputs:
+  build-image:
+    description: 'Whether to build the Docker image first'
+    type: boolean
+    default: true
+  container-suffix:
+    description: 'Suffix for container name (for parallel workflows)'
+    type: string
+    default: ''
+outputs:
+  container-name:
+    description: 'Name of the started container'
+    value: ${{ steps.start-daemon.outputs.container-name }}
+  container-ready:
+    description: 'Whether container is ready for use'
+    value: ${{ steps.start-daemon.outputs.container-ready }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Start Smithy daemon
+      id: start-daemon
+      shell: bash
+      run: |
+        echo "=== Starting Smithy Daemon ==="
+        
+        # Make smithy executable
+        chmod +x smithy
+        
+        # Build image if requested
+        if [ "${{ inputs.build-image }}" = "true" ]; then
+          echo "Building Docker image..."
+          ./smithy build
+        fi
+        
+        # Generate container name with suffix for parallel workflows
+        CONTAINER_SUFFIX="${{ inputs.container-suffix }}"
+        if [ -n "$CONTAINER_SUFFIX" ]; then
+          export DOCKER_INST_NAME_SUFFIX="_${CONTAINER_SUFFIX}"
+        fi
+        
+        # Start daemon
+        echo "Starting daemon container..."
+        if ./smithy daemon; then
+          echo "✓ Daemon started successfully"
+          
+          # Wait for container to be fully ready
+          echo "Waiting for container initialization..."
+          for i in {1..60}; do
+            if ./smithy exec "echo 'Container ready'" >/dev/null 2>&1; then
+              echo "✓ Container is ready for commands"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "ERROR: Container failed to become ready within 60 seconds"
+              ./smithy logs --tail 20
+              exit 1
+            fi
+            sleep 1
+          done
+          
+          # Get container name for output
+          CONTAINER_NAME=$(./smithy status | grep "Container:" | cut -d: -f2 | xargs)
+          echo "container-name=${CONTAINER_NAME}" >> $GITHUB_OUTPUT
+          echo "container-ready=true" >> $GITHUB_OUTPUT
+          
+        else
+          echo "ERROR: Failed to start daemon"
+          exit 1
+        fi

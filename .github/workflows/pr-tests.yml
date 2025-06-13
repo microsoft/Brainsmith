@@ -75,16 +75,16 @@ jobs:
           
           echo "=== Validation Complete ==="
 
-  # Build and push using reusable workflow
+  # Build and test using persistent daemon
   docker-build-and-test:
-    uses: ./.github/workflows/build-and-push.yml
+    uses: ./.github/workflows/build-and-test-daemon.yml
     needs: validate-environment
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # E2E test using reusable workflow
+  # E2E test using existing daemon
   e2e-test:
-    uses: ./.github/workflows/run-smithy-test.yml
+    uses: ./.github/workflows/run-test-daemon.yml
     needs: [validate-environment, docker-build-and-test]
     with:
       test-name: "E2E BERT"
@@ -100,12 +100,27 @@ jobs:
     needs: [validate-environment]  # Only depend on first job
     runs-on: pre-release
     steps:
-      - name: Smart cleanup based on completed jobs
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stop Smithy daemon and cleanup
+        uses: ./.github/actions/smithy-daemon-stop
+        with:
+          collect-logs: true
+
+      - name: Upload daemon logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daemon-logs-${{ github.run_id }}
+          path: /tmp/smithy-logs/
+          retention-days: 3
+
+      - name: Additional Docker cleanup
         run: |
-          echo "=== Checking for containers to clean ==="
-          
-          # Clean any brainsmith containers
-          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}")
+          echo "=== Final Docker cleanup ==="
+          # Clean any remaining brainsmith containers
+          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}" 2>/dev/null || true)
           if [ -n "$CONTAINERS" ]; then
             echo "Found containers to clean: $CONTAINERS"
             docker rm -f $CONTAINERS || true
@@ -117,9 +132,5 @@ jobs:
           
           # General cleanup
           docker system prune -f --volumes || true
-          
-          # Clean up workspace files (GitHub Actions handles this automatically)
-          rm -rf ${{ github.workspace }}/* 2>/dev/null || true
-          rm -rf ${{ github.workspace }}/.* 2>/dev/null || true
           
           echo "Cleanup completed"

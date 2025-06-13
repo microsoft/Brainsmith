@@ -1,0 +1,167 @@
+name: Test Daemon Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-type:
+        description: 'Type of test to run'
+        required: false
+        default: 'basic'
+        type: choice
+        options:
+        - basic
+        - full
+  pull_request:
+    paths:
+      - '.github/workflows/test-daemon-workflow.yml'
+      - '.github/actions/smithy-daemon-*/**'
+      - '.github/workflows/build-and-test-daemon.yml'
+      - '.github/workflows/run-test-daemon.yml'
+
+env:
+  DOCKER_BUILDKIT: 1
+  BSMITH_DOCKER_PREBUILT: "0"
+  BSMITH_DOCKER_NO_CACHE: "1"
+  BSMITH_SKIP_DEP_REPOS: "0"
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
+  BSMITH_DOCKER_TAG: "microsoft/brainsmith:daemon-test-${{ github.sha }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
+
+permissions:
+  contents: read
+
+jobs:
+  # Test the daemon workflow components
+  test-daemon-approach:
+    runs-on: pre-release
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Environment validation
+        run: |
+          echo "=== System Information ==="
+          echo "OS: $(uname -a)"
+          echo "User: $(whoami)"
+          echo "Home: $HOME"
+          echo "Working Directory: $(pwd)"
+          echo "Available Disk Space: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "Available Memory: $(free -h | grep Mem | awk '{print $7}')"
+          
+          echo "=== Docker Information ==="
+          docker --version
+          docker info --format "{{.ServerVersion}}" 2>/dev/null || echo "Docker info failed"
+
+      - name: Check disk space
+        uses: ./.github/actions/check-disk
+        with:
+          threshold-gb: 20
+
+      - name: Clean Docker resources
+        uses: ./.github/actions/docker-cleanup
+
+      - name: Test local daemon workflow script
+        run: |
+          echo "=== Testing local daemon workflow ==="
+          chmod +x test-daemon-workflow.sh
+          ./test-daemon-workflow.sh
+
+      - name: Start Smithy daemon using action
+        uses: ./.github/actions/smithy-daemon-start
+        with:
+          build-image: true
+          container-suffix: "test"
+
+      - name: Test basic functionality with daemon
+        uses: ./.github/actions/smithy-test
+        with:
+          test-name: "Basic Daemon Test"
+          test-type: "python-tests"
+          timeout-minutes: 5
+
+      - name: Test daemon exec action
+        uses: ./.github/actions/smithy-daemon-exec
+        with:
+          command: "echo 'Direct exec test successful' && python --version"
+          timeout-minutes: 2
+
+      - name: Test working directory feature
+        uses: ./.github/actions/smithy-daemon-exec
+        with:
+          command: "pwd && ls -la"
+          working-directory: "demos"
+          timeout-minutes: 1
+
+      - name: Test daemon persistence
+        uses: ./.github/actions/smithy-daemon-exec
+        with:
+          command: "echo 'persistence-test' > /tmp/daemon-test.txt && cat /tmp/daemon-test.txt"
+          timeout-minutes: 1
+
+      - name: Verify persistence
+        uses: ./.github/actions/smithy-daemon-exec
+        with:
+          command: "cat /tmp/daemon-test.txt"
+          timeout-minutes: 1
+
+      - name: Collect test artifacts
+        if: always()
+        uses: ./.github/actions/collect-artifacts
+        with:
+          artifact-directory: daemon-test-artifacts
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daemon-test-results-${{ github.run_id }}
+          path: daemon-test-artifacts/
+          retention-days: 3
+
+      - name: Stop daemon and cleanup
+        if: always()
+        uses: ./.github/actions/smithy-daemon-stop
+        with:
+          collect-logs: true
+
+      - name: Upload daemon logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daemon-test-logs-${{ github.run_id }}
+          path: /tmp/smithy-logs/
+          retention-days: 3
+
+  # Test the full workflow integration
+  test-full-workflow:
+    if: inputs.test-type == 'full' || github.event_name == 'pull_request'
+    runs-on: pre-release
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test build-and-test-daemon workflow
+        uses: ./.github/workflows/build-and-test-daemon.yml
+        secrets:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test run-test-daemon workflow
+        uses: ./.github/workflows/run-test-daemon.yml
+        with:
+          test-name: "Integration Test"
+          test-type: "python-tests"
+          timeout-minutes: 10
+        secrets:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Final cleanup
+        if: always()
+        uses: ./.github/actions/smithy-daemon-stop

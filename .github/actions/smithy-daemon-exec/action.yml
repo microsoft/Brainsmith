@@ -1,0 +1,54 @@
+name: 'Execute in Smithy Daemon'
+description: 'Execute command in running Smithy container'
+inputs:
+  command:
+    description: 'Command to execute in container'
+    type: string
+    required: true
+  working-directory:
+    description: 'Working directory for command (relative to BSMITH_DIR)'
+    type: string
+    default: ''
+  timeout-minutes:
+    description: 'Command timeout in minutes'
+    type: number
+    default: 60
+  collect-logs-on-failure:
+    description: 'Whether to collect logs if command fails'
+    type: boolean
+    default: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Execute command in daemon
+      shell: bash
+      run: |
+        echo "=== Executing Command in Smithy Daemon ==="
+        echo "Command: ${{ inputs.command }}"
+        
+        # Build full command with working directory if specified
+        FULL_COMMAND="${{ inputs.command }}"
+        if [ -n "${{ inputs.working-directory }}" ]; then
+          FULL_COMMAND="cd ${{ inputs.working-directory }} && ${FULL_COMMAND}"
+        fi
+        
+        # Execute with timeout
+        TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
+        
+        if timeout ${TIMEOUT_SECONDS}s ./smithy exec "$FULL_COMMAND"; then
+          echo "✓ Command executed successfully"
+        else
+          EXIT_CODE=$?
+          echo "ERROR: Command failed with exit code $EXIT_CODE"
+          
+          if [ "${{ inputs.collect-logs-on-failure }}" = "true" ]; then
+            echo "=== Collecting failure logs ==="
+            mkdir -p /tmp/failure-logs
+            ./smithy logs --tail 50 > /tmp/failure-logs/container-tail.log 2>&1 || true
+            ./smithy status > /tmp/failure-logs/status.txt 2>&1 || true
+            echo "Command that failed: $FULL_COMMAND" > /tmp/failure-logs/failed-command.txt
+          fi
+          
+          exit $EXIT_CODE
+        fi
