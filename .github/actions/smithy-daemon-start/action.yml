@@ -5,10 +5,6 @@ inputs:
     description: 'Whether to build the Docker image first'
     type: boolean
     default: true
-  container-suffix:
-    description: 'Suffix for container name (for parallel workflows)'
-    type: string
-    default: ''
 outputs:
   container-name:
     description: 'Name of the started container'
@@ -35,38 +31,99 @@ runs:
           ./smithy build
         fi
         
-        # Generate container name with suffix for parallel workflows
-        CONTAINER_SUFFIX="${{ inputs.container-suffix }}"
-        if [ -n "$CONTAINER_SUFFIX" ]; then
-          export DOCKER_INST_NAME_SUFFIX="_${CONTAINER_SUFFIX}"
-        fi
+        # Debug environment before starting daemon
+        echo "DEBUG: Current environment variables:"
+        echo "DEBUG: PWD=$(pwd)"
+        echo "DEBUG: USER=$(whoami)"
         
         # Start daemon
         echo "Starting daemon container..."
         if ./smithy daemon; then
           echo "✓ Daemon started successfully"
           
+          # Debug daemon status
+          echo "DEBUG: Checking daemon status after start..."
+          ./smithy status || echo "DEBUG: Status command failed"
+          
           # Wait for container to be fully ready
           echo "Waiting for container initialization..."
           for i in {1..60}; do
+            echo "DEBUG: Attempt $i/60 - testing container readiness..."
             if ./smithy exec "echo 'Container ready'" >/dev/null 2>&1; then
               echo "✓ Container is ready for commands"
               break
             fi
             if [ $i -eq 60 ]; then
               echo "ERROR: Container failed to become ready within 60 seconds"
-              ./smithy logs --tail 20
+              echo "DEBUG: Final status check:"
+              ./smithy status || echo "DEBUG: Final status check failed"
+              echo "DEBUG: Container logs:"
+              ./smithy logs --tail 20 || echo "DEBUG: Logs command failed"
               exit 1
             fi
             sleep 1
           done
           
-          # Get container name for output
-          CONTAINER_NAME=$(./smithy status | grep "Container:" | cut -d: -f2 | xargs)
-          echo "container-name=${CONTAINER_NAME}" >> $GITHUB_OUTPUT
-          echo "container-ready=true" >> $GITHUB_OUTPUT
+          # Get container name for output - use the most direct method
+          echo "DEBUG: Getting container name for output..."
+          
+          # Method 1: Get from environment variable that smithy uses
+          CONTAINER_NAME=""
+          if [ -r ./smithy ]; then
+            # Extract the container name generation logic directly
+            BSMITH_DIR_HASH=$(echo "$PWD" | md5sum | cut -d' ' -f1 | head -c 8)
+            DOCKER_UNAME=$(id -un)
+            CONTAINER_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
+            CONTAINER_NAME="${CONTAINER_NAME,,}"
+            echo "DEBUG: Method 1 - Generated container name: '$CONTAINER_NAME'"
+          fi
+          
+          # Method 2: Try docker ps directly to get the actual running container
+          if [ -z "$CONTAINER_NAME" ]; then
+            CONTAINER_NAME=$(docker ps --filter "name=brainsmith" --format "{{.Names}}" | head -1 || echo "")
+            echo "DEBUG: Method 2 - Found container name: '$CONTAINER_NAME'"
+          fi
+          
+          # Method 3: Look for any brainsmith container (running or not)
+          if [ -z "$CONTAINER_NAME" ]; then
+            CONTAINER_NAME=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}" | head -1 || echo "")
+            echo "DEBUG: Method 3 - Found container name: '$CONTAINER_NAME'"
+          fi
+          
+          # Method 4: Try to extract from status output (with color code removal)
+          if [ -z "$CONTAINER_NAME" ]; then
+            FULL_STATUS_OUTPUT=$(./smithy status 2>&1)
+            echo "DEBUG: Full status output:"
+            echo "$FULL_STATUS_OUTPUT"
+            
+            # Remove ANSI color codes and extract container name
+            CLEAN_OUTPUT=$(echo "$FULL_STATUS_OUTPUT" | sed 's/\x1b\[[0-9;]*m//g')
+            if echo "$CLEAN_OUTPUT" | grep -q "Container .* is running"; then
+              CONTAINER_NAME=$(echo "$CLEAN_OUTPUT" | grep "Container .* is running" | sed 's/Container \(.*\) is running/\1/' | head -1)
+              echo "DEBUG: Method 4 - Found container name: '$CONTAINER_NAME'"
+            else
+              echo "DEBUG: Method 4 - No 'Container ... is running' pattern found"
+            fi
+          fi
+          
+          # Set outputs
+          if [ -n "$CONTAINER_NAME" ]; then
+            echo "DEBUG: Setting outputs with container name: '$CONTAINER_NAME'"
+            echo "container-name=${CONTAINER_NAME}" >> $GITHUB_OUTPUT
+            echo "container-ready=true" >> $GITHUB_OUTPUT
+            echo "✓ Daemon setup completed successfully"
+          else
+            echo "WARNING: Could not determine container name, but daemon is running"
+            echo "container-name=unknown" >> $GITHUB_OUTPUT
+            echo "container-ready=true" >> $GITHUB_OUTPUT
+          fi
           
         else
           echo "ERROR: Failed to start daemon"
+          echo "DEBUG: Checking what went wrong..."
+          echo "DEBUG: Docker containers:"
+          docker ps -a | grep brainsmith || echo "DEBUG: No brainsmith containers found"
+          echo "DEBUG: Recent docker logs:"
+          docker logs $(docker ps -a | grep brainsmith | head -1 | awk '{print $1}') 2>/dev/null || echo "DEBUG: No container logs available"
           exit 1
         fi
