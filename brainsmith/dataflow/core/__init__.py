@@ -16,7 +16,6 @@ from .dataflow_interface import (
 )
 from .dataflow_model import DataflowModel
 from .block_chunking import (
-    BlockChunking,
     ChunkingType,
     BlockChunkingStrategy,
     DefaultChunkingStrategy,
@@ -32,7 +31,6 @@ from .validation import (
 
 # Auto-generated base classes
 from .auto_hw_custom_op import AutoHWCustomOp
-from .auto_rtl_backend import AutoRTLBackend
 from .class_naming import (
     generate_class_name,
     generate_test_class_name,
@@ -52,7 +50,6 @@ __all__ = [
     # Model
     "DataflowModel",
     # Chunking
-    "BlockChunking",
     "ChunkingType",
     "BlockChunkingStrategy",
     "DefaultChunkingStrategy",
@@ -65,7 +62,6 @@ __all__ = [
     "validate_dataflow_model",
     # Auto-generated base classes
     "AutoHWCustomOp",
-    "AutoRTLBackend",
     # Class naming utilities
     "generate_class_name",
     "generate_test_class_name",

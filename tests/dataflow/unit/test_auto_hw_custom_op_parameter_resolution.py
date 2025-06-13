@@ -9,15 +9,42 @@ and concrete dataflow modeling.
 import pytest
 import sys
 import os
+import onnx.helper
+from typing import List
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../..'))
 
 from brainsmith.dataflow.core.auto_hw_custom_op import AutoHWCustomOp
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.interface_types import InterfaceType
-# DataflowDataType removed - using QONNX DataType directly
+from brainsmith.dataflow.core.qonnx_types import DatatypeConstraintGroup
 from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
+
+
+class MockParameterTestOp(AutoHWCustomOp):
+    """Mock AutoHWCustomOp for parameter resolution testing."""
+    
+    def __init__(self, onnx_node, interface_metadata_list):
+        self._test_interface_metadata = interface_metadata_list
+        super().__init__(onnx_node)
+    
+    def get_nodeattr_types(self):
+        """Define node attributes for testing."""
+        my_attrs = {
+            "PE": ("i", False, 8),
+            "SIMD": ("i", False, 4), 
+            "CHANNELS": ("i", False, 32),
+            "test_input_dtype": ("s", True, ""),
+            "weights_dtype": ("s", True, ""),
+            "output_dtype": ("s", True, ""),
+        }
+        my_attrs.update(super().get_enhanced_nodeattr_types())
+        return my_attrs
+    
+    def get_interface_metadata(self) -> List[InterfaceMetadata]:
+        """Return test interface metadata."""
+        return self._test_interface_metadata
 
 
 class TestParameterResolutionIntegration:
@@ -25,24 +52,26 @@ class TestParameterResolutionIntegration:
     
     def test_parameter_resolution_basic(self):
         """Test basic parameter resolution with runtime parameters."""
-        # Create metadata with symbolic BDIM pragma
-        chunking_strategy = BlockChunkingStrategy(block_shape=["PE"], rindex=0)
+        # Create metadata with symbolic BDIM pragma for last dimension
+        chunking_strategy = BlockChunkingStrategy(block_shape=[":", ":", ":", "PE"], rindex=0)
         
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        # Create AutoHWCustomOp with runtime parameters
-        runtime_parameters = {"PE": 8}
-        
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,  # Mock for testing
-            interface_metadata=[metadata],
-            runtime_parameters=runtime_parameters
+        # Create ONNX node with parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            PE=8,
+            test_input_dtype="UINT8"
         )
+        
+        auto_op = MockParameterTestOp(node, [metadata])
         
         # Check that dataflow model was created successfully
         assert auto_op.dataflow_model is not None
@@ -62,18 +91,21 @@ class TestParameterResolutionIntegration:
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        # Create AutoHWCustomOp with runtime parameters
-        runtime_parameters = {"SIMD": 4, "PE": 8}
-        
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,
-            interface_metadata=[metadata],
-            runtime_parameters=runtime_parameters
+        # Create ONNX node with parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            SIMD=4,
+            PE=8,
+            test_input_dtype="UINT8"
         )
+        
+        auto_op = MockParameterTestOp(node, [metadata])
         
         # Check resolved block_dims
         input_iface = auto_op.dataflow_model.input_interfaces[0]
@@ -86,17 +118,20 @@ class TestParameterResolutionIntegration:
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        runtime_parameters = {"PE": 16}
-        
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,
-            interface_metadata=[metadata],
-            runtime_parameters=runtime_parameters
+        # Create ONNX node with parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            PE=16,
+            test_input_dtype="UINT8"
         )
+        
+        auto_op = MockParameterTestOp(node, [metadata])
         
         # Check that ':' was resolved to tensor dimension and PE to parameter value
         input_iface = auto_op.dataflow_model.input_interfaces[0]
@@ -110,19 +145,24 @@ class TestParameterResolutionIntegration:
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        # No runtime parameters provided
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,
-            interface_metadata=[metadata]
+        # Create ONNX node with just the required datatype, PE will use default
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            test_input_dtype="UINT8"
+            # PE will use default value from get_nodeattr_types
         )
         
-        # Check that parameter was resolved to default value (1)
+        auto_op = MockParameterTestOp(node, [metadata])
+        
+        # Check that parameter was resolved to default value (8)
         input_iface = auto_op.dataflow_model.input_interfaces[0]
-        assert input_iface.block_dims == [1, 128, 128, 1]  # Last dim: PE resolved to default value 1
+        assert input_iface.block_dims == [1, 128, 128, 8]  # Last dim: PE resolved to default value 8
     
     def test_parameter_resolution_missing_parameter_error(self):
         """Test error when required parameter is missing."""
@@ -131,22 +171,23 @@ class TestParameterResolutionIntegration:
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        # Provide some runtime parameters but not the required one
-        runtime_parameters = {"SIMD": 4}  # PE is missing
+        # Create ONNX node with missing required parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            SIMD=4,  # PE is missing but needed for block_shape
+            test_input_dtype="UINT8"
+        )
         
         with pytest.raises(ValueError) as exc_info:
-            AutoHWCustomOp(
-                onnx_node=None,
-                interface_metadata=[metadata],
-                runtime_parameters=runtime_parameters
-            )
+            MockParameterTestOp(node, [metadata])
         
-        assert "Parameter 'PE' not found in runtime_parameters" in str(exc_info.value)
-        assert "Available parameters: ['SIMD']" in str(exc_info.value)
+        assert "Parameter 'PE' not found" in str(exc_info.value)
     
     def test_parameter_resolution_multiple_interfaces(self):
         """Test parameter resolution with multiple interfaces."""
@@ -155,7 +196,7 @@ class TestParameterResolutionIntegration:
         input_metadata = InterfaceMetadata(
             name="input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=input_chunking
         )
         
@@ -164,7 +205,7 @@ class TestParameterResolutionIntegration:
         weight_metadata = InterfaceMetadata(
             name="weights",
             interface_type=InterfaceType.WEIGHT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=weight_chunking
         )
         
@@ -173,17 +214,24 @@ class TestParameterResolutionIntegration:
         output_metadata = InterfaceMetadata(
             name="output",
             interface_type=InterfaceType.OUTPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=output_chunking
         )
         
-        runtime_parameters = {"PE": 8, "SIMD": 4, "CHANNELS": 32}
-        
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,
-            interface_metadata=[input_metadata, weight_metadata, output_metadata],
-            runtime_parameters=runtime_parameters
+        # Create ONNX node with all parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            PE=8,
+            SIMD=4,
+            CHANNELS=32,
+            input_dtype="UINT8",
+            weights_dtype="UINT8",
+            output_dtype="UINT8"
         )
+        
+        auto_op = MockParameterTestOp(node, [input_metadata, weight_metadata, output_metadata])
         
         # Check all interfaces have resolved block_dims
         input_iface = auto_op.dataflow_model.input_interfaces[0]
@@ -202,15 +250,20 @@ class TestParameterResolutionIntegration:
         metadata = InterfaceMetadata(
             name="test_input",
             interface_type=InterfaceType.INPUT,
-            allowed_datatypes=[DataTypeConstraint(finn_type="UINT8", bit_width=8)],
+            datatype_constraints=[DatatypeConstraintGroup("UINT", 8, 8)],
             chunking_strategy=chunking_strategy
         )
         
-        auto_op = AutoHWCustomOp(
-            onnx_node=None,
-            interface_metadata=[metadata],
-            runtime_parameters={"PE": 8}
+        # Create ONNX node with parameters
+        node = onnx.helper.make_node(
+            'MockParameterTestOp',
+            ['input'],
+            ['output'],
+            PE=8,
+            test_input_dtype="UINT8"
         )
+        
+        auto_op = MockParameterTestOp(node, [metadata])
         
         # Check that integer dimensions are preserved
         input_iface = auto_op.dataflow_model.input_interfaces[0]

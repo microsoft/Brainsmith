@@ -34,17 +34,9 @@ from typing import Dict, Any, List, Optional
 from {{ import_paths.auto_rtl_backend }} import AutoRTLBackend
 from {{ import_paths.dataflow_interface }} import DataflowInterfaceType
 
-# Try to import FINN components (optional for development)
-try:
-    from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
-    from qonnx.core.datatype import DataType
-    FINN_AVAILABLE = True
-except ImportError:
-    FINN_AVAILABLE = False
-    # Create stub base class for development
-    class RTLBackend:
-        def __init__(self):
-            pass
+# Import FINN components
+from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
+from qonnx.core.datatype import DataType
 
 
 class {{ class_name }}RTLBackend(AutoRTLBackend):

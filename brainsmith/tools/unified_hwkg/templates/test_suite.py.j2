@@ -41,14 +41,10 @@ from .{{ kernel_name }}_rtlbackend import {{ rtlbackend_class }}, create_{{ kern
 from {{ import_paths.dataflow_model }} import DataflowModel
 from brainsmith.dataflow.core.dataflow_interface import DataflowInterface, DataflowInterfaceType
 
-# Try to import FINN components for integration testing
-try:
-    from qonnx.core.modelwrapper import ModelWrapper
-    from qonnx.core.datatype import DataType
-    import onnx
-    FINN_AVAILABLE = True
-except ImportError:
-    FINN_AVAILABLE = False
+# Import FINN components for integration testing
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.core.datatype import DataType
+import onnx
 
 # Try to import test utilities
 try:
@@ -229,7 +225,6 @@ class {{ test_class_name }}:
     
     {% endfor %}
     
-    @pytest.mark.skipif(not FINN_AVAILABLE, reason="FINN not available")
     def test_finn_integration(self, hwcustomop_instance, rtlbackend_instance):
         """Test integration with FINN framework."""
         # Test HWCustomOp FINN compatibility

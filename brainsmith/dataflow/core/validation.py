@@ -320,6 +320,97 @@ def validate_dimension_relationships(tensor_dims: List[int],
     return result
 
 
+def create_validation_result(is_valid: bool = True) -> ValidationResult:
+    """Create a new ValidationResult with the specified validity.
+    
+    Args:
+        is_valid: Initial validation state
+        
+    Returns:
+        New ValidationResult instance
+    """
+    return ValidationResult(is_valid=is_valid)
+
+
+def create_divisibility_error(dimension: int, dividend: int, divisor: int, 
+                            dimension_name: str = "dimension") -> ValidationError:
+    """Create a validation error for divisibility issues.
+    
+    Args:
+        dimension: Dimension index
+        dividend: Value that should be divisible
+        divisor: Value to divide by
+        dimension_name: Name of the dimension for error context
+        
+    Returns:
+        ValidationError for divisibility issue
+    """
+    return ValidationError(
+        component="dimension_validation",
+        error_type="divisibility_error",
+        message=f"{dimension_name} {dimension}: {dividend} is not divisible by {divisor}",
+        severity=ValidationSeverity.ERROR,
+        context={
+            "dimension": dimension,
+            "dividend": dividend,
+            "divisor": divisor,
+            "dimension_name": dimension_name
+        }
+    )
+
+
+def create_range_error(value: int, min_value: int, max_value: int,
+                      value_name: str = "value") -> ValidationError:
+    """Create a validation error for range violations.
+    
+    Args:
+        value: Value that's out of range
+        min_value: Minimum allowed value
+        max_value: Maximum allowed value
+        value_name: Name of the value for error context
+        
+    Returns:
+        ValidationError for range violation
+    """
+    return ValidationError(
+        component="range_validation",
+        error_type="range_error", 
+        message=f"{value_name} {value} is outside allowed range [{min_value}, {max_value}]",
+        severity=ValidationSeverity.ERROR,
+        context={
+            "value": value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "value_name": value_name
+        }
+    )
+
+
+def create_datatype_error(datatype: str, expected_types: List[str],
+                         interface_name: str = "interface") -> ValidationError:
+    """Create a validation error for datatype mismatches.
+    
+    Args:
+        datatype: Actual datatype that was invalid
+        expected_types: List of allowed datatypes
+        interface_name: Name of the interface for error context
+        
+    Returns:
+        ValidationError for datatype mismatch
+    """
+    return ValidationError(
+        component="datatype_validation",
+        error_type="datatype_error",
+        message=f"{interface_name} datatype '{datatype}' not in allowed types: {expected_types}",
+        severity=ValidationSeverity.ERROR,
+        context={
+            "datatype": datatype,
+            "expected_types": expected_types,
+            "interface_name": interface_name
+        }
+    )
+
+
 def validate_dataflow_model(model) -> ValidationResult:
     """
     Validate a complete dataflow model.

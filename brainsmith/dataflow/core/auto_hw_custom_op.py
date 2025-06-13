@@ -86,12 +86,7 @@ class AutoHWCustomOp(HWCustomOp):
     def _create_control_interface(self, metadata: InterfaceMetadata) -> DataflowInterface:
         """Create a control interface with default properties."""
         # Use QONNX DataType for consistency
-        if FINN_AVAILABLE:
-            from qonnx.core.datatype import DataType
-            control_dtype = DataType["UINT1"]
-        else:
-            # Fallback for development without FINN
-            control_dtype = None
+        control_dtype = DataType["UINT1"]
         
         return DataflowInterface(
             name=metadata.name,
@@ -116,15 +111,22 @@ class AutoHWCustomOp(HWCustomOp):
         if not hasattr(metadata.chunking_strategy, 'block_shape'):
             return [1]
         
+        # Get tensor dimensions to properly resolve ':' placeholders
+        tensor_dims = self._get_tensor_dims_for_interface(metadata.name)
+        
         resolved = []
-        for dim in metadata.chunking_strategy.block_shape:
+        for i, dim in enumerate(metadata.chunking_strategy.block_shape):
             if isinstance(dim, str) and dim != ":":
                 param_value = self.get_nodeattr(dim)
                 if param_value is None:
                     raise ValueError(f"Parameter '{dim}' not found in node attributes")
                 resolved.append(param_value)
             elif dim == ":":
-                resolved.append(1)  # Will be resolved with tensor shape
+                # Use corresponding tensor dimension
+                if i < len(tensor_dims):
+                    resolved.append(tensor_dims[i])
+                else:
+                    resolved.append(1)  # Fallback for out-of-bounds
             else:
                 resolved.append(dim)
         
@@ -235,22 +237,32 @@ class AutoHWCustomOp(HWCustomOp):
         """
         attrs = {}
         
-        # Add parallelism configuration for input and output interfaces
-        for iface in self.dataflow_model.input_interfaces:
-            attrs[f"{iface.name}_parallel"] = ("i", False, 1)
-            
-        for iface in self.dataflow_model.output_interfaces:
-            attrs[f"{iface.name}_parallel"] = ("i", False, 1)
-                    
-        # Add datatype configuration for all interfaces
-        all_interfaces = (
-            self.dataflow_model.input_interfaces +
-            self.dataflow_model.output_interfaces +
-            self.dataflow_model.weight_interfaces
-        )
-        for iface in all_interfaces:
-            if iface.interface_type != InterfaceType.CONTROL:
-                attrs[f"{iface.name}_dtype"] = ("s", True, "")
+        # Only access dataflow_model if it exists (avoid circular dependency during init)
+        if hasattr(self, '_dataflow_model') and self._dataflow_model is not None:
+            # Add parallelism configuration for input and output interfaces
+            for iface in self.dataflow_model.input_interfaces:
+                attrs[f"{iface.name}_parallel"] = ("i", False, 1)
+                
+            for iface in self.dataflow_model.output_interfaces:
+                attrs[f"{iface.name}_parallel"] = ("i", False, 1)
+                        
+            # Add datatype configuration for all interfaces
+            all_interfaces = (
+                self.dataflow_model.input_interfaces +
+                self.dataflow_model.output_interfaces +
+                self.dataflow_model.weight_interfaces
+            )
+            for iface in all_interfaces:
+                if iface.interface_type != InterfaceType.CONTROL:
+                    attrs[f"{iface.name}_dtype"] = ("s", True, "")
+        else:
+            # During initialization, use interface metadata to generate basic attributes
+            interface_metadata = self.get_interface_metadata()
+            for metadata in interface_metadata:
+                if metadata.interface_type != InterfaceType.CONTROL:
+                    attrs[f"{metadata.name}_dtype"] = ("s", True, "")
+                if metadata.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
+                    attrs[f"{metadata.name}_parallel"] = ("i", False, 1)
             
         # Add resource estimation and validation configuration
         attrs.update({
@@ -299,7 +311,7 @@ class AutoHWCustomOp(HWCustomOp):
                 f"violates constraints. Allowed datatypes: {constraint_desc}"
             )
         
-        return DataType[configured_dtype] if FINN_AVAILABLE else configured_dtype
+        return DataType[configured_dtype]
             
     def get_output_datatype(self, ind: int = 0) -> Any:
         """Get output datatype from user-specified ONNX node attributes.
@@ -340,7 +352,7 @@ class AutoHWCustomOp(HWCustomOp):
                 f"violates constraints. Allowed datatypes: {constraint_desc}"
             )
         
-        return DataType[configured_dtype] if FINN_AVAILABLE else configured_dtype
+        return DataType[configured_dtype]
             
     def get_normal_input_shape(self, ind: int = 0) -> List[int]:
         """Get normal input shape from DataflowModel interface."""
@@ -404,11 +416,7 @@ class AutoHWCustomOp(HWCustomOp):
         # Width = datatype bits * folded elements in last dimension
         elements_per_cycle = folded_shape[-1] if folded_shape else 1
         
-        if FINN_AVAILABLE:
-            return input_dtype.bitwidth() * elements_per_cycle
-        else:
-            # Default to 8 bits for development
-            return 8 * elements_per_cycle
+        return input_dtype.bitwidth() * elements_per_cycle
             
     def get_outstream_width(self, ind: int = 0) -> int:
         """Get output stream width in bits."""
@@ -418,11 +426,7 @@ class AutoHWCustomOp(HWCustomOp):
         # Width = datatype bits * folded elements in last dimension
         elements_per_cycle = folded_shape[-1] if folded_shape else 1
         
-        if FINN_AVAILABLE:
-            return output_dtype.bitwidth() * elements_per_cycle
-        else:
-            # Default to 8 bits for development
-            return 8 * elements_per_cycle
+        return output_dtype.bitwidth() * elements_per_cycle
             
     def get_number_output_values(self) -> int:
         """Get total number of output values."""

@@ -84,6 +84,74 @@ class MockAutoHWCustomOp(AutoHWCustomOp):
         ]
 
 
+class MockAutoHWCustomOpOptionalDtypes(AutoHWCustomOp):
+    """Mock implementation with optional datatype attributes for constraint testing."""
+    
+    def get_nodeattr_types(self):
+        """Define ONNX node attributes with optional datatypes."""
+        my_attrs = {
+            "PE": ("i", False, 4),  # Optional with default
+            "VECTOR_SIZE": ("i", True, None),  # Required parameter
+            
+            # Datatype attributes are optional to test our validation logic
+            "input0_dtype": ("s", False, ""),  # Optional datatype specification
+            "output0_dtype": ("s", False, ""),  # Optional datatype specification
+            
+            # Base HWCustomOp attributes
+            "runtime_writeable_weights": ("i", False, 0, {0, 1}),
+            "numInputVectors": ("ints", False, [1]),
+        }
+        
+        # Update with parent class attributes (FINN base classes)
+        my_attrs.update(super().get_nodeattr_types())
+        return my_attrs
+    
+    @staticmethod
+    def get_interface_metadata() -> List[InterfaceMetadata]:
+        """Return test interface metadata."""
+        return [
+            InterfaceMetadata(
+                name="ap",
+                interface_type=InterfaceType.CONTROL,
+                datatype_constraints=[],
+                chunking_strategy=BlockChunkingStrategy(
+                    block_shape=[':'],
+                    rindex=0
+                )
+            ),
+            InterfaceMetadata(
+                name="input0",
+                interface_type=InterfaceType.INPUT,
+                datatype_constraints=[
+                    DatatypeConstraintGroup(
+                        base_type="FIXED",
+                        min_width=8,
+                        max_width=16
+                    ),
+                ],
+                chunking_strategy=BlockChunkingStrategy(
+                    block_shape=[':', ':'],
+                    rindex=0
+                )
+            ),
+            InterfaceMetadata(
+                name="output0",
+                interface_type=InterfaceType.OUTPUT,
+                datatype_constraints=[
+                    DatatypeConstraintGroup(
+                        base_type="FIXED",
+                        min_width=16,
+                        max_width=32
+                    ),
+                ],
+                chunking_strategy=BlockChunkingStrategy(
+                    block_shape=[':', ':'],
+                    rindex=0
+                )
+            ),
+        ]
+
+
 def create_test_node_with_attributes():
     """Create ONNX node with all required attributes for testing."""
     return onnx.helper.make_node(
@@ -174,14 +242,14 @@ class TestDatatypeValidation:
         """Test proper error when all datatypes are missing."""
         node = create_node_without_datatypes()
         
-        with pytest.raises(ValueError, match="must be specified"):
+        with pytest.raises(Exception, match="Required attribute.*unspecified"):
             MockAutoHWCustomOp(node)
     
     def test_missing_partial_datatypes_error(self):
         """Test proper error when some datatypes are missing."""
         node = create_node_with_partial_datatypes()
         
-        with pytest.raises(ValueError, match="output0_dtype.*must be specified"):
+        with pytest.raises(Exception, match="Required attribute output0_dtype unspecified"):
             MockAutoHWCustomOp(node)
     
     def test_datatype_error_message_contains_constraints(self):
@@ -189,12 +257,12 @@ class TestDatatypeValidation:
         node = create_node_without_datatypes()
         
         try:
-            MockAutoHWCustomOp(node)
+            MockAutoHWCustomOpOptionalDtypes(node)
             pytest.fail("Expected ValueError was not raised")
         except ValueError as e:
             error_msg = str(e)
             # Should mention the interface name and constraint info
-            assert "input0_dtype" in error_msg
+            assert "input0" in error_msg
             assert "FIXED" in error_msg
             assert "8" in error_msg and "16" in error_msg  # width range
 
@@ -244,7 +312,7 @@ class TestDataflowModelBuilding:
         assert len(model.interfaces) == 3  # ap, input0, output0
         
         # Verify interface names
-        interface_names = [iface.name for iface in model.interfaces]
+        interface_names = [iface.name for iface in model.interfaces.values()]
         assert 'ap' in interface_names
         assert 'input0' in interface_names
         assert 'output0' in interface_names
@@ -256,7 +324,7 @@ class TestDataflowModelBuilding:
         
         # Find the control interface
         control_interfaces = [
-            iface for iface in op._dataflow_model.interfaces 
+            iface for iface in op._dataflow_model.interfaces.values() 
             if iface.interface_type == InterfaceType.CONTROL
         ]
         
@@ -271,11 +339,11 @@ class TestDataflowModelBuilding:
         
         # Find input and output interfaces
         input_interfaces = [
-            iface for iface in op._dataflow_model.interfaces 
+            iface for iface in op._dataflow_model.interfaces.values() 
             if iface.interface_type == InterfaceType.INPUT
         ]
         output_interfaces = [
-            iface for iface in op._dataflow_model.interfaces 
+            iface for iface in op._dataflow_model.interfaces.values() 
             if iface.interface_type == InterfaceType.OUTPUT
         ]
         
@@ -288,9 +356,9 @@ class TestDataflowModelBuilding:
         assert input_iface.name == 'input0'
         assert output_iface.name == 'output0'
         
-        # Should have runtime datatypes set
-        assert input_iface.runtime_datatype is not None
-        assert output_iface.runtime_datatype is not None
+        # Should have datatypes set
+        assert input_iface.dtype is not None
+        assert output_iface.dtype is not None
 
 
 class TestInterfaceMetadata:

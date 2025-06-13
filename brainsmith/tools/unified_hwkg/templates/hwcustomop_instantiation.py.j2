@@ -34,12 +34,8 @@ from {{ import_paths.auto_hw_custom_op }} import AutoHWCustomOp
 from {{ import_paths.interface_metadata }} import create_interface_metadata
 from {{ import_paths.dataflow_interface }} import DataflowInterfaceType
 
-# Try to import FINN components (optional for development)
-try:
-    from qonnx.core.datatype import DataType
-    FINN_AVAILABLE = True
-except ImportError:
-    FINN_AVAILABLE = False
+# Import FINN components
+from qonnx.core.datatype import DataType
 
 
 class {{ class_name }}HWCustomOp(AutoHWCustomOp):
