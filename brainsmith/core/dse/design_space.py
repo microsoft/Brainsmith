@@ -162,26 +162,101 @@ class DesignSpace:
     
     @classmethod
     def from_blueprint_data(cls, blueprint_data: Dict[str, Any]) -> 'DesignSpace':
-        """Create design space from blueprint configuration."""
+        """Create design space from blueprint configuration with enhanced parameter extraction."""
         name = blueprint_data.get('name', 'blueprint_design_space')
         design_space = cls(name)
         design_space.blueprint_config = blueprint_data
         
-        # Extract parameter definitions from blueprint
-        # This would typically come from the blueprint's parameter specifications
-        params_config = blueprint_data.get('parameters', {})
-        for param_name, param_config in params_config.items():
-            param_def = ParameterDefinition(
-                name=param_name,
-                param_type=param_config.get('type', 'float'),
-                values=param_config.get('values'),
-                range_min=param_config.get('range_min'),
-                range_max=param_config.get('range_max'),
-                default=param_config.get('default')
-            )
+        # Extract parameter definitions using enhanced logic
+        parameter_definitions = design_space._extract_blueprint_parameters(blueprint_data)
+        
+        # Add all extracted parameters to design space
+        for param_name, param_def in parameter_definitions.items():
             design_space.add_parameter(param_def)
         
         return design_space
+    
+    def _extract_blueprint_parameters(self, blueprint_data: Dict[str, Any]) -> Dict[str, ParameterDefinition]:
+        """Extract all parameters from blueprint, handling nested sections."""
+        parameter_definitions = {}
+        
+        if 'parameters' in blueprint_data:
+            parameters = blueprint_data['parameters']
+            
+            for section_name, section_data in parameters.items():
+                if self._is_nested_section(section_data):
+                    # Handle nested sections like bert_config, folding_factors
+                    for param_name, param_config in section_data.items():
+                        if param_name != 'description':
+                            full_param_name = f"{section_name}.{param_name}"
+                            param_def = self._create_parameter_definition(full_param_name, param_config)
+                            parameter_definitions[full_param_name] = param_def
+                else:
+                    # Handle direct parameters
+                    param_def = self._create_parameter_definition(section_name, section_data)
+                    parameter_definitions[section_name] = param_def
+        
+        return parameter_definitions
+    
+    def _is_nested_section(self, section_data: Any) -> bool:
+        """Check if section data represents a nested parameter section."""
+        return (isinstance(section_data, dict) and
+                'description' in section_data and
+                len(section_data) > 1)
+    
+    def _create_parameter_definition(self, param_name: str, param_config: Dict[str, Any]) -> ParameterDefinition:
+        """Create parameter definition from blueprint parameter config."""
+        if not isinstance(param_config, dict):
+            # Simple value case
+            return ParameterDefinition(
+                name=param_name,
+                param_type='categorical',
+                values=[param_config],
+                default=param_config
+            )
+        
+        # Handle range-based parameters
+        if 'range' in param_config:
+            param_range = param_config['range']
+            return ParameterDefinition(
+                name=param_name,
+                param_type='categorical',  # Treat ranges as categorical for discrete values
+                values=param_range,
+                default=param_config.get('default', param_range[0] if param_range else None)
+            )
+        
+        # Handle values-based parameters
+        elif 'values' in param_config:
+            return ParameterDefinition(
+                name=param_name,
+                param_type='categorical',
+                values=param_config['values'],
+                default=param_config.get('default', param_config['values'][0] if param_config['values'] else None)
+            )
+        
+        # Handle default-only parameters
+        elif 'default' in param_config:
+            default_value = param_config['default']
+            param_type = 'boolean' if isinstance(default_value, bool) else \
+                        'integer' if isinstance(default_value, int) else \
+                        'float' if isinstance(default_value, float) else \
+                        'categorical'
+            
+            return ParameterDefinition(
+                name=param_name,
+                param_type=param_type,
+                values=[default_value] if param_type == 'categorical' else None,
+                default=default_value
+            )
+        
+        # Fallback case
+        else:
+            return ParameterDefinition(
+                name=param_name,
+                param_type='categorical',
+                values=[None],
+                default=None
+            )
     
     def validate(self) -> Tuple[bool, List[str]]:
         """Validate design space configuration."""
@@ -201,6 +276,39 @@ class DesignSpace:
                         errors.append(f"Parameter {param_name} has invalid range")
         
         return len(errors) == 0, errors
+    
+    def to_parameter_space(self) -> Dict[str, List[Any]]:
+        """Convert DesignSpace to DSE ParameterSpace format."""
+        parameter_space = {}
+        
+        for param_name, param_def in self.parameters.items():
+            if param_def.type == 'categorical' and param_def.values:
+                parameter_space[param_name] = param_def.values
+            elif param_def.type in ['integer', 'float', 'continuous']:
+                if param_def.range_min is not None and param_def.range_max is not None:
+                    # Generate range values
+                    if param_def.type == 'integer':
+                        parameter_space[param_name] = list(range(
+                            int(param_def.range_min),
+                            int(param_def.range_max) + 1
+                        ))
+                    else:
+                        # For float, use discrete steps
+                        step = (param_def.range_max - param_def.range_min) / 10
+                        values = []
+                        current = param_def.range_min
+                        while current <= param_def.range_max:
+                            values.append(current)
+                            current += step
+                        parameter_space[param_name] = values
+                else:
+                    parameter_space[param_name] = [param_def.default] if param_def.default is not None else [0]
+            elif param_def.type == 'boolean':
+                parameter_space[param_name] = [True, False]
+            else:
+                parameter_space[param_name] = [param_def.default] if param_def.default is not None else [None]
+        
+        return parameter_space
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

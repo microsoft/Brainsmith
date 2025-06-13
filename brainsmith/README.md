@@ -77,7 +77,7 @@ analysis = brainsmith.workflows.full_analysis(
 
 ```mermaid
 graph TD
-    A[User Code] --> B[forge()]
+    A[User Code] --> B["forge()"]
     B --> C[Blueprint Validation]
     B --> D[DSE Configuration] 
     B --> E[Design Space Exploration]

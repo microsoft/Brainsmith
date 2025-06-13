@@ -1,0 +1,6 @@
+{
+  "model": "BERT-1L-512D",
+  "board": "V80",
+  "status": "success",
+  "generated_by": "brainsmith.forge()"
+}

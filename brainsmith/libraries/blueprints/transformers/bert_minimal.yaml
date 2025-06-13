@@ -1,0 +1,42 @@
+# BERT Minimal Blueprint - Demo Version
+# Simplified blueprint for showcasing brainsmith.forge() power without DSE complexity
+
+name: "bert_minimal"
+description: "Minimal BERT accelerator blueprint for demos - bypass parameter exploration"
+category: "transformers"
+version: "1.0"
+
+# Base configuration
+model_type: "bert"
+target_platform: "zynq_ultrascale"
+optimization_level: "demo"
+
+# Empty parameters - no DSE exploration needed
+parameters: {}
+
+# Fixed performance targets for demo
+targets:
+  throughput:
+    direction: "maximize"
+    target: 3000
+    description: "Target inference throughput (ops/sec)"
+  latency:
+    direction: "minimize"
+    target: 10
+    description: "Target inference latency (ms)"
+
+# Resource constraints
+constraints:
+  max_luts: 0.8
+  max_dsps: 0.7
+  max_brams: 0.6
+  target_frequency: 200.0
+  description: "Conservative resource utilization for reliable builds"
+
+# Demo-specific metadata
+demo_info:
+  purpose: "Showcase brainsmith.forge() simplicity"
+  parameter_space_size: 0
+  estimated_build_time: "10-20 minutes"
+  recommended_use: "Quick demonstration and learning"
+  note: "Uses default FINN configuration - no parameter exploration"

@@ -25,6 +25,8 @@ from pathlib import Path
 AVAILABLE_BLUEPRINTS = {
     "cnn_accelerator": "basic/cnn_accelerator.yaml",
     "mobilenet_accelerator": "advanced/mobilenet_accelerator.yaml",
+    "bert_accelerator": "transformers/bert_accelerator.yaml",
+    "bert_minimal": "transformers/bert_minimal.yaml",
 }
 
 def get_blueprint(name: str) -> str:

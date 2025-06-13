@@ -17,8 +17,8 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 # Import streamlined modules
-from ...infrastructure.hooks import log_data_event
-from ...infrastructure.finn import build_accelerator
+from ..hooks import log_optimization_event
+from ..finn import build_accelerator
 
 
 def collect_build_metrics(
@@ -57,7 +57,7 @@ def collect_build_metrics(
     )
     
     # Log data collection start
-    log_data_event('data_collection_start', {
+    log_optimization_event('data_collection_start', {
         'model_path': model_path,
         'blueprint_path': blueprint_path,
         'parameters': parameters
@@ -72,7 +72,7 @@ def collect_build_metrics(
             'has_performance': False,
             'has_resources': False
         })
-        log_data_event('data_collection_complete', {
+        log_optimization_event('data_collection_complete', {
             'success': False,
             'reason': 'None build result',
             'collection_time': time.time() - start_time
@@ -101,7 +101,7 @@ def collect_build_metrics(
         })
         
         # Log successful collection
-        log_data_event('data_collection_complete', {
+        log_optimization_event('data_collection_complete', {
             'success': True,
             'collection_time': time.time() - start_time,
             'metrics_extracted': _count_extracted_metrics(metrics)
@@ -111,7 +111,7 @@ def collect_build_metrics(
         logger.error(f"Data collection failed: {e}")
         
         # Log failed collection
-        log_data_event('data_collection_failed', {
+        log_optimization_event('data_collection_failed', {
             'error': str(e),
             'collection_time': time.time() - start_time
         })
