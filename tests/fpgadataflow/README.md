@@ -34,7 +34,7 @@ fixture.
 
 <a id="op_test.OpTest.f_model_hw"></a>
 
-#### f_model_hw(f_model: ModelWrapper, f_infer_hw_transform: Transformation, f_save_models: bool, f_output_dir: str) → ModelWrapper
+#### f_model_hw(f_model: ModelWrapper, f_infer_hw_transform: Transformation, f_input_tensors) → ModelWrapper
 
 Converts all ONNX layers of a specific type to hardware layers,
 using a given inference function. If that function does not exist
@@ -196,8 +196,32 @@ with the expected number of cycles.
 * **Parameters:**
   * **f_model_specialised** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_specialised()`](#op_test.OpTest.f_model_specialised) fixture’s return value
   * **f_target_node** (*int*) – Auto-populated by the [`OpTest.f_target_node()`](#op_test.OpTest.f_target_node) fixture’s return value
-  * **f_exec_mode** (*str*) – Auto-populated by OpTest’s f_exec_mode PyTest parameter.
-    These are defined at the top of OpTest’s class definition.
+  * **f_exec_mode** (*str*) – Auto-populated by OpTest’s [`OpTest.f_exec_mode()`](#op_test.OpTest.f_exec_mode) PyTest parameter.
+    Check the fixture for all possible parameterisations.
+
+<a id="op_test.OpTest.test_conv_to_hardware"></a>
+
+#### test_conv_to_hardware(f_model, f_model_hw, f_input_tensors)
+
+Compare the outputs of ‘f_model’ and ‘f_model_hw’, when executed using
+ONNX runtime. Ensure that they are functionally identical.
+
+* **Parameters:**
+  * **f_model** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model()`](#op_test.OpTest.f_model) fixture’s return value
+  * **f_model_hw** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_hw()`](#op_test.OpTest.f_model_hw) fixture’s return value
+  * **f_input_tensors** (*dict*) – Auto-populated by the [`OpTest.f_input_tensors()`](#op_test.OpTest.f_input_tensors) fixture’s return value
+
+<a id="op_test.OpTest.test_specialise_layers"></a>
+
+#### test_specialise_layers(f_model_hw, f_model_specialised, f_input_tensors)
+
+Compare the outputs of ‘f_model_hw’ and ‘f_model_specialised’, when executed using
+ONNX runtime. Ensure that they are functionally identical.
+
+* **Parameters:**
+  * **f_model_hw** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_hw()`](#op_test.OpTest.f_model_hw) fixture’s return value
+  * **f_model_specialised** (`qonnx.core.modelwrapper.ModelWrapper`) – Auto-populated by the [`OpTest.f_model_specialised()`](#op_test.OpTest.f_model_specialised) fixture’s return value
+  * **f_input_tensors** (*dict*) – Auto-populated by the [`OpTest.f_input_tensors()`](#op_test.OpTest.f_input_tensors) fixture’s return value
 
 <a id="op_test.OpTest.create_model"></a>
 
@@ -232,8 +256,8 @@ additional boilerplate code.
 
 Applies a list of QONNX transformations to a given model.
 
-If ‘validate’ is enabled, the function compares the model’s output pre and
-post-transformation. ‘transform_list’ can accept either a list of transforms,
+If ‘input_tensors’ are provided, the function compares the model’s output pre
+and post-transformation. ‘transform_list’ can accept either a list of transforms,
 or a nested list of transforms. This affects how model validation is performed.
 Regular transform-lists are validated after every transform. Nested transform-
 lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
@@ -241,12 +265,6 @@ be validated between 3-4, and after 5.
 
 If an ‘output_dir’ is provided, the model will be saved to that directory after
 ANY transform is applied.
-
-#### WARNING
-As of 11/06/2025, validation has stopped working. I’m unsure what commit caused
-this. When the ONNX runtime is used to execute the model, the exception “Rounding
-error is too high to match set QONNX datatype (INT8) for input xxxxx”, where
-“xxxxxx” is a six digit alphanumeric string.
 
 * **Parameters:**
   * **model** (`qonnx.core.modelwrapper.ModelWrapper`) – The `ModelWrapper` we’ll apply our transform list to
