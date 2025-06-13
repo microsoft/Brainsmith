@@ -25,54 +25,18 @@ jobs:
     runs-on: pre-release
     timeout-minutes: 1440  # 24 hours
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Setup workflow
+        uses: ./.github/actions/workflow-setup
         with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Check disk space
-        uses: ./.github/actions/check-disk
-        with:
-          threshold-gb: 40
-
-      - name: Clean Docker resources
-        uses: ./.github/actions/docker-cleanup
+          disk-threshold-gb: 40
 
       - name: Build Docker image
-        run: |
-          chmod +x smithy
-          echo "=== Building Docker image ==="
-          ./smithy build
-          
-          echo "=== Verifying image was built ==="
-          if docker images | grep -q "microsoft/brainsmith"; then
-              echo "✓ Docker image built and verified successfully"
-          else
-              echo "ERROR: Docker image not found after build"
-              exit 1
-          fi
+        uses: ./.github/actions/smithy-build
 
       - name: Run BERT Large test
-        uses: ./.github/actions/smithy-exec
+        uses: ./.github/actions/run-test
         with:
-          command: "cd demos/bert && make bert_large_single_layer"
+          test-command: "cd demos/bert && make bert_large_single_layer"
           timeout-minutes: 1400
-
-      - name: Collect artifacts
-        if: always()
-        uses: ./.github/actions/collect-artifacts
-        with:
-          artifact-directory: biweekly-artifacts
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: biweekly-tests-${{ github.run_id }}
-          path: biweekly-artifacts/
-          retention-days: 14
-
-      - name: Final cleanup
-        if: always()
-        uses: ./.github/actions/docker-cleanup
+          artifact-name: biweekly-artifacts
+          artifact-retention: 14

@@ -1,0 +1,46 @@
+name: 'Run Test'
+description: 'Execute test with artifact collection'
+inputs:
+  test-command:
+    description: 'Test command to execute'
+    type: string
+    required: true
+  timeout-minutes:
+    description: 'Test timeout in minutes'
+    type: number
+    default: 60
+  artifact-name:
+    description: 'Artifact collection name'
+    type: string
+    required: true
+  artifact-retention:
+    description: 'Artifact retention days'
+    type: number
+    default: 7
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Execute test
+      uses: ./.github/actions/smithy-exec
+      with:
+        command: ${{ inputs.test-command }}
+        timeout-minutes: ${{ inputs.timeout-minutes }}
+
+    - name: Collect artifacts
+      if: always()
+      uses: ./.github/actions/collect-artifacts
+      with:
+        artifact-directory: ${{ inputs.artifact-name }}
+
+    - name: Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}-${{ github.run_id }}
+        path: ${{ inputs.artifact-name }}/
+        retention-days: ${{ inputs.artifact-retention }}
+
+    - name: Final cleanup
+      if: always()
+      uses: ./.github/actions/docker-cleanup

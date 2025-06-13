@@ -1,0 +1,24 @@
+name: 'Common Workflow Setup'
+description: 'Standard setup steps for CI workflows'
+inputs:
+  disk-threshold-gb:
+    description: 'Required disk space in GB'
+    type: number
+    default: 20
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Check disk space
+      uses: ./.github/actions/check-disk
+      with:
+        threshold-gb: ${{ inputs.disk-threshold-gb }}
+
+    - name: Clean Docker resources
+      uses: ./.github/actions/docker-cleanup
