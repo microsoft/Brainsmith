@@ -6,50 +6,57 @@ A SystemVerilog parser component for the Brainsmith Hardware Kernel Generator (H
 
 The RTL Parser analyzes SystemVerilog files to identify and validate hardware interfaces, module parameters, and special compiler directives (pragmas) needed by the Hardware Kernel Generator. It serves as the critical bridge between custom RTL implementations and the FINN compiler toolchain, enabling hardware engineers to integrate their designs into the Brainsmith ecosystem.
 
-The RTL Parser operates as the first stage in the Hardware Kernel Generator pipeline, taking SystemVerilog RTL files with embedded pragmas as input, processing and validating hardware interface information, and producing a structured `HWKernel` object containing all relevant data for subsequent wrapper template generation and compiler integration.
+The RTL Parser operates as the first stage in the Hardware Kernel Generator pipeline, taking SystemVerilog RTL files with embedded pragmas as input, processing and validating hardware interface information, and producing a structured `KernelMetadata` object containing `InterfaceMetadata` objects for subsequent wrapper template generation and compiler integration.
 
 ### Key Capabilities
 
 - **Interface Recognition**: Automatically identifies and validates AXI-Stream, AXI-Lite, and Global Control interfaces using case-insensitive suffix detection (uppercase preferred)
-- **Parameter Extraction**: Extracts module parameters while preserving bit-width expressions
-- **Pragma Processing**: Parses `@brainsmith` compiler directives for additional metadata
-- **Protocol Validation**: Ensures interfaces conform to expected signal naming and direction requirements
+- **Parameter Extraction**: Extracts module parameters while preserving bit-width expressions and validating pragma parameter references
+- **Pragma Processing**: Parses `@brainsmith` compiler directives with robust error isolation and chain-of-responsibility pattern
 - **Extensible Design**: Modular architecture supports future interface types and pragma extensions
 
 ### Integration with Hardware Kernel Generator
 
-The extracted information enables the HKG to:
-- Generate parameterized wrapper templates
-- Create FINN compiler integration files (HWCustomOp instances)
-- Perform design space exploration
-- Validate interface compatibility
+The extracted information is packaged in a `KernelMetadata` object that directly informs the generation of the FINN compiler integration files for the input Kernel. It also enforces restrictions on Interfaces and parameters (types, amounts, formatting, etc.), validating compatibility across the compilation pipeline.
 
 ## Architecture
 
-The RTL Parser follows a multi-stage pipeline architecture:
+The RTL Parser follows a multi-stage pipeline architecture with direct metadata generation:
 
 ```
-SystemVerilog File → Tree-sitter AST → Interface Scanning → Protocol Validation → HWKernel Object
+SystemVerilog File → Tree-sitter AST → Interface Scanning → Protocol Validation → Pragma Application → KernelMetadata Object
 ```
 
 ### Core Components
 
 | Component | Purpose |
 |-----------|---------|
-| **`parser.py`** | Main orchestrator and tree-sitter integration |
-| **`data.py`** | Core data structures and type definitions |
+| **`parser.py`** | Main orchestrator, tree-sitter integration, and 3-stage parsing pipeline |
+| **`data.py`** | Core data structures: `Parameter`, `Port`, `Pragma` subclasses with `InterfaceNameMatcher` |
 | **`grammar.py`** | SystemVerilog grammar loading via tree-sitter |
-| **`interface_scanner.py`** | Port grouping based on naming conventions |
-| **`protocol_validator.py`** | Interface protocol compliance validation |
-| **`interface_builder.py`** | Coordination between scanning and validation |
-| **`pragma.py`** | Pragma extraction and processing |
+| **`interface_scanner.py`** | Port grouping based on naming conventions into `PortGroup` objects |
+| **`protocol_validator.py`** | Interface protocol compliance validation for grouped ports |
+| **`interface_builder.py`** | Direct `InterfaceMetadata` creation from validated `PortGroup` objects |
+| **`pragma.py`** | `PragmaHandler` for extraction and pragma subclass instantiation |
 
 ### Processing Pipeline
 
-1. **Initial Parse**: Load and parse SystemVerilog using tree-sitter, extract pragmas, select target module
-2. **Component Extraction**: Extract module parameters and ports from the AST
-3. **Interface Analysis**: Group ports into potential interfaces and validate against protocol specifications
-4. **Pragma Application**: Apply compiler directives to modify interface and parameter metadata
+The RTL Parser follows a rigorous 3-stage pipeline:
+
+1. **Initial Parse** (`_initial_parse`): 
+   - Load and parse SystemVerilog using tree-sitter
+   - Extract `@brainsmith` pragmas from comment nodes
+   - Select target module (handles multiple modules via `TOP_MODULE` pragma)
+   
+2. **Component Extraction** (`_extract_kernel_components`):
+   - Extract module name, parameters (excluding localparams), and ports from AST
+   - Set module parameters for BDIM pragma validation
+   - Support ANSI-style port declarations only
+   
+3. **Interface Analysis & Validation** (`_analyze_and_validate_interfaces`):
+   - Use `InterfaceBuilder.build_interface_metadata()` for direct metadata creation
+   - Apply pragmas with error isolation using chain-of-responsibility pattern
+   - Validate required Global Control and AXI-Stream interfaces
 
 ## Quick Start
 
@@ -62,12 +69,20 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
 parser = RTLParser(debug=False)
 
 # Parse SystemVerilog file
-hw_kernel = parser.parse_file("path/to/module.sv")
+kernel_metadata = parser.parse_file("path/to/module.sv")
 
 # Access extracted information
-print(f"Module: {hw_kernel.name}")
-print(f"Parameters: {[p.name for p in hw_kernel.parameters]}")
-print(f"Interfaces: {list(hw_kernel.interfaces.keys())}")
+print(f"Module: {kernel_metadata.name}")
+print(f"Parameters: {[p.name for p in kernel_metadata.parameters]}")
+print(f"Interfaces: {[iface.name for iface in kernel_metadata.interfaces]}")
+print(f"Interface Types: {[iface.interface_type.value for iface in kernel_metadata.interfaces]}")
+
+# Access interface metadata details
+for iface in kernel_metadata.interfaces:
+    print(f"Interface {iface.name}:")
+    print(f"  Type: {iface.interface_type.value}")
+    print(f"  Datatype Constraints: {len(iface.datatype_constraints)}")
+    print(f"  Chunking Strategy: {type(iface.chunking_strategy).__name__}")
 ```
 
 **Note**: The RTL Parser currently supports only ANSI-style port declarations (ports declared in the module header). Non-ANSI style declarations are not supported.
@@ -183,6 +198,8 @@ Pragmas are special comments that provide additional metadata to the Hardware Ke
 // @brainsmith <pragma_type> <arguments...>
 ```
 
+The pragma system uses a chain-of-responsibility pattern with robust error isolation, meaning individual pragma failures don't break the entire parsing process.
+
 ### Supported Pragmas
 
 #### 1. Top Module Selection
@@ -193,22 +210,46 @@ Specifies which module to use when multiple modules exist in the file.
 
 #### 2. Interface Datatype Constraints
 ```systemverilog
-// @brainsmith datatype in0 8
-// @brainsmith datatype config 1 32
+// @brainsmith datatype in0 UINT 8 16
+// @brainsmith datatype weights FIXED 8 8
+// @brainsmith datatype config INT 4 12
 ```
-Restricts supported datatypes for interfaces. First form specifies fixed size, second form specifies range. *Note: This pragma handler is currently a placeholder that needs to be defined based on future HWCustomOp improvements and expansions.*
+Defines datatype constraint groups for interfaces using the new QONNX integration format:
+- `interface_name`: Target interface (supports flexible name matching)
+- `base_type`: UINT, INT, or FIXED
+- `min_width`: Minimum bit width (must be positive)
+- `max_width`: Maximum bit width (must be >= min_width)
 
-#### 3. Derived Parameters
+Creates `DatatypeConstraintGroup` objects that are added to `InterfaceMetadata.datatype_constraints`.
+
+#### 3. Block Dimension Chunking (BDIM)
 ```systemverilog
-// @brainsmith derived_parameter my_function param1 param2
+// @brainsmith bdim in0 [PE]
+// @brainsmith bdim in0 [SIMD,PE]
+// @brainsmith bdim weights [:,:,PE] RINDEX=1
+// @brainsmith bdim out0 [TILE_SIZE,:]
 ```
-Links module parameters to Python functions for complex parameter derivation. *Note: This pragma handler is currently a placeholder that needs to be defined based on future HWCustomOp improvements and expansions.*
+**NEW SIMPLIFIED FORMAT** - Defines block chunking strategies with parameter names only:
+- `interface_name`: Target interface (supports flexible name matching)  
+- `[shape]`: Block shape using parameter names and `:` (full dimension)
+- `RINDEX=n`: Optional starting index for chunking (default: 0)
+
+**IMPORTANT**: Magic numbers are explicitly forbidden - only parameter names and `:` allowed. This ensures parameterizability. Parameter names are validated against module parameters.
+
+Creates `BlockChunkingStrategy` objects replacing default chunking strategies.
 
 #### 4. Weight Interfaces
 ```systemverilog
-// @brainsmith weight in1
+// @brainsmith weight weights
+// @brainsmith weight weights bias params
 ```
-Marks an interface as carrying weight data to inform HWCustomOp generation.
+Marks interfaces as carrying weight data by changing their `InterfaceType` to `WEIGHT`. Supports multiple interface names in a single pragma.
+
+#### 5. Derived Parameters  
+```systemverilog
+// @brainsmith derived_parameter my_function param1 param2
+```
+Links module parameters to Python functions for complex parameter derivation. Adds derived parameters to the kernel metadata.
 
 ### Pragma Extensibility
 
@@ -232,12 +273,16 @@ The pragma system is designed for extensibility. New pragma types can be added b
 ### Interface Types
 
 ```python
+# Uses unified interface types from brainsmith.dataflow.core.interface_types
 class InterfaceType(Enum):
-    GLOBAL_CONTROL = "global"
-    AXI_STREAM = "axistream" 
-    AXI_LITE = "axilite"
-    UNKNOWN = "unknown"
+    INPUT = "input"          # AXI-Stream input interface
+    OUTPUT = "output"        # AXI-Stream output interface  
+    WEIGHT = "weight"        # Weight/parameter interface (AXI-Stream)
+    CONFIG = "config"        # AXI-Lite configuration interface
+    CONTROL = "control"      # Global control signals (clk, rst)
 ```
+
+**Note**: The RTL Parser has been updated to use the unified interface type system. Interface roles are inherently tied to protocols (e.g., INPUT/OUTPUT/WEIGHT are always AXI-Stream, CONFIG is always AXI-Lite, CONTROL is always global signals).
 
 ### Direction Types
 
@@ -257,38 +302,55 @@ The main parser interface:
 ```python
 class RTLParser:
     def __init__(self, grammar_path: Optional[str] = None, debug: bool = False)
-    def parse_file(self, file_path: str) -> HWKernel
+    def parse_file(self, file_path: str) -> KernelMetadata
+    def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata
 ```
 
 **Parameters:**
 - `grammar_path`: Path to tree-sitter grammar library (uses default if None)
 - `debug`: Enable detailed logging
 - `file_path`: Path to SystemVerilog file to parse
+- `systemverilog_code`: SystemVerilog source code string
+- `source_name`: Name for logging/error messages
+- `module_name`: Optional target module name
 
-**Returns:** `HWKernel` object containing all extracted information
+**Returns:** `KernelMetadata` object containing all extracted information
 
-### HWKernel Object
+### KernelMetadata Object
 
 ```python
 @dataclass
-class HWKernel:
+class KernelMetadata:
     name: str                                    # Module name
+    source_file: Path                            # Source file path
+    interfaces: List[InterfaceMetadata]          # Interface metadata objects
     parameters: List[Parameter]                  # Module parameters
-    interfaces: Dict[str, Interface]             # Validated interfaces
     pragmas: List[Pragma]                        # Found pragmas
-    metadata: Dict[str, Any]                     # Additional metadata
+    parsing_warnings: List[str]                  # Warnings during parsing
 ```
 
-### Interface Object
+### InterfaceMetadata Object
+
+```python
+@dataclass  
+class InterfaceMetadata:
+    name: str                                    # Interface name (e.g., "in0", "config")
+    interface_type: InterfaceType                # Interface type (INPUT/OUTPUT/WEIGHT/CONFIG/CONTROL)
+    datatype_constraints: List[DatatypeConstraintGroup]  # QONNX datatype constraints
+    chunking_strategy: ChunkingStrategy          # Block chunking strategy
+    description: Optional[str]                   # Optional description
+```
+
+### Parameter Object
 
 ```python
 @dataclass
-class Interface:
-    name: str                                    # Interface name (e.g., "in0", "config")
-    type: InterfaceType                          # Interface type
-    ports: Dict[str, Port]                       # Signal name to Port mapping
-    validation_result: ValidationResult          # Validation status
-    metadata: Dict[str, Any]                     # Protocol-specific metadata
+class Parameter:
+    name: str                                    # Parameter identifier
+    param_type: Optional[str]                    # Parameter datatype ("int", "type", "derived", etc.)
+    default_value: Optional[str]                 # Default value if specified
+    description: Optional[str]                   # Optional documentation
+    template_param_name: str                     # Template parameter name (computed: $NAME$)
 ```
 
 ## Dependencies
@@ -406,18 +468,63 @@ The parser automatically assigns interface names:
 - AXI-Stream: `in0`, `in1`, ... for inputs; `out0`, `out1`, ... for outputs  
 - AXI-Lite: `config` for configuration interfaces
 
+## RTL Restrictions
+
+The RTL Parser intentionally enforces strict restrictions on input RTL code to ensure compatibility with the Brainsmith Hardware Kernel Generator pipeline. These are **design requirements**, not limitations:
+
+### Interface Type Restrictions
+
+- **Approved Interface Types Only**: Only AXI-Stream, AXI-Lite, and Global Control interfaces are supported
+- **Strict Protocol Compliance**: All interfaces must conform exactly to the specified signal naming and direction requirements
+- **No Custom Interfaces**: Any interface that doesn't match the approved patterns is treated as a **hard error**
+- **Unassigned Ports Forbidden**: All module ports must be assigned to a recognized interface type
+
+### Port Naming Restrictions
+
+Signals must follow exact suffix patterns for interface recognition:
+
+- **Global Control**: Must use `*_clk`, `*_rst_n`, `*_clk2x` suffixes
+- **AXI-Stream**: Must use `*_TDATA`, `*_TVALID`, `*_TREADY`, `*_TLAST` suffixes  
+- **AXI-Lite**: Must use complete AXI-Lite suffix set (`*_AWADDR`, `*_WDATA`, etc.)
+- **Case Sensitivity**: Detection is case-insensitive, but uppercase is strongly preferred
+- **No Deviations**: Signal names that don't match these patterns will not be recognized
+
+### Module Structure Restrictions
+
+- **ANSI-Style Only**: Only ANSI-style port declarations (ports in module header) are supported
+- **Parameter Exposure**: Regular parameters are exposed as FINN parameters; localparams are allowed but not exposed
+- **Single Module Target**: Multi-module files require explicit `TOP_MODULE` pragma for disambiguation
+
+### Pragma Restrictions
+
+- **BDIM Parameter Validation**: All parameter names in BDIM pragmas must exist in the module
+- **Magic Number Prohibition**: BDIM pragmas explicitly forbid magic numbers to enforce parameterizability
+- **Datatype Constraint Format**: DATATYPE pragmas must use exact QONNX-compatible format
+- **Error Isolation**: Individual pragma errors don't halt parsing, but invalid pragmas are ignored
+
+These restrictions ensure that all RTL modules can be reliably processed by the Hardware Kernel Generator pipeline and integrated with FINN.
+
 ## Limitations and Future Work
 
-### Current Limitations
+### Current Technical Limitations
 
 - **Grammar Dependency**: Relies on pre-compiled SystemVerilog grammar
-- **Interface Coverage**: Limited to Global Control, AXI-Stream, and AXI-Lite
-- **Parameter Expressions**: Preserves but doesn't evaluate complex expressions
-- **Port Declaration Style**: Only ANSI-style port declarations are supported (ports declared in module header)
+- **Parameter Expressions**: Preserves but doesn't evaluate complex expressions  
+- **BDIM Validation**: Parameter validation occurs during pragma application, not during initial parsing
+
+### Recent Improvements (Based on Test Analysis)
+
+- **Pragma Error Isolation**: Individual pragma failures don't break the entire parsing process
+- **Direct Metadata Creation**: No longer creates temporary `Interface` objects, works directly with `InterfaceMetadata`
+- **Robust Name Matching**: `InterfaceNameMatcher` supports multiple naming patterns (exact, prefix, AXI patterns)
+- **Parameter Validation**: BDIM pragmas validate parameter names against actual module parameters
+- **QONNX Integration**: Datatype constraints use `DatatypeConstraintGroup` for QONNX compatibility
+- **Magic Number Prevention**: BDIM pragmas explicitly reject magic numbers to ensure parameterizability
 
 ### Planned Enhancements
 
 - **Dynamic Grammar Building**: Replace static grammar with build-time compilation from the open-source tree-sitter-verilog repository
+- **Non-ANSI Port Support**: Add support for non-ANSI port declaration styles
 
 ## License
 
