@@ -17,6 +17,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.double_to_single_float import DoubleToSingleFloat
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
@@ -434,7 +435,7 @@ class TestLayerNorm(OpTest):
                 ),
             ],
         )
-        return self.apply_transforms(model, [ExpandNorms()])
+        return self.apply_transforms(model, [[ExpandNorms(), DoubleToSingleFloat(), InferDataTypes()]])
 
     # Overriding this method provides OpTest with the
     # transformation it needs to convert the above model
