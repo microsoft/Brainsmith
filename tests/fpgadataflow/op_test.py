@@ -272,8 +272,6 @@ class OpTest(ABC):
     #                  Tests                 #
     ##########################################
 
-    # Ensure the number of cycles the layer takes to run in rtlsim
-    # aligns with the expected number of cycles.
     def test_cycles(
         self, f_model_specialised: ModelWrapper, f_target_node: int, f_exec_mode: str
     ) -> None:
@@ -286,8 +284,8 @@ class OpTest(ABC):
         :param f_target_node: Auto-populated by the :func:`OpTest.f_target_node` fixture's return value
         :type f_target_node: int
 
-        :param f_exec_mode: Auto-populated by OpTest's f_exec_mode PyTest parameter.
-            These are defined at the top of OpTest's class definition.
+        :param f_exec_mode: Auto-populated by OpTest's :func:`OpTest.f_exec_mode` PyTest parameter.
+            Check the fixture for all possible parameterisations.
         :type f_exec_mode: str"""
 
         if f_exec_mode == "rtlsim":
@@ -299,6 +297,49 @@ class OpTest(ABC):
             exp_cycles = exp_cycles_dict[node.name]
             assert np.isclose(exp_cycles, cycles_rtlsim, atol=10)
             assert exp_cycles != 0
+
+    def test_conv_to_hardware(self, f_model, f_model_hw, f_input_tensors):
+        """Compare the outputs of 'f_model' and 'f_model_hw', when executed using
+        ONNX runtime. Ensure that they are functionally identical.
+
+        :param f_model: Auto-populated by the :func:`OpTest.f_model` fixture's return value
+        :type f_model: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param f_model_hw: Auto-populated by the :func:`OpTest.f_model_hw` fixture's return value
+        :type f_model_hw: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param f_input_tensors: Auto-populated by the :func:`OpTest.f_input_tensors` fixture's return value
+        :type f_input_tensors: dict"""
+        out_name = f_model.graph.output[0].name
+
+        # Generate our reference and our compared outputs
+        ref_output = oxe.execute_onnx(f_model, f_input_tensors)[out_name]
+        cmp_output = oxe.execute_onnx(f_model_hw, f_input_tensors)[out_name]
+        
+        # Compare f_model_hw's output to f_model's output.
+        assert np.allclose(ref_output, cmp_output, atol=1e-5)
+    
+    def test_specialise_layers(self, f_model_hw, f_model_specialised, f_input_tensors):
+        """Compare the outputs of 'f_model_hw' and 'f_model_specialised', when executed using
+        ONNX runtime. Ensure that they are functionally identical.
+
+        :param f_model_hw: Auto-populated by the :func:`OpTest.f_model_hw` fixture's return value
+        :type f_model_hw: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param f_model_specialised: Auto-populated by the :func:`OpTest.f_model_specialised` fixture's return value
+        :type f_model_specialised: :class:`qonnx.core.modelwrapper.ModelWrapper`
+
+        :param f_input_tensors: Auto-populated by the :func:`OpTest.f_input_tensors` fixture's return value
+        :type f_input_tensors: dict"""
+        out_name = f_model_hw.graph.output[0].name
+
+        # Generate our reference and our compared outputs
+        ref_output = oxe.execute_onnx(f_model_hw, f_input_tensors)[out_name]
+        cmp_output = oxe.execute_onnx(f_model_specialised, f_input_tensors)[out_name]
+        
+        # Compare f_model_specialised's output to f_model_hw's output.
+        assert np.allclose(ref_output, cmp_output, atol=1e-5)
+
 
     ##########################################
     #            Helper Functions            #
@@ -394,8 +435,8 @@ class OpTest(ABC):
     ) -> ModelWrapper:
         """Applies a list of QONNX transformations to a given model.
 
-        If 'validate' is enabled, the function compares the model's output pre and
-        post-transformation. 'transform_list' can accept either a list of transforms,
+        If 'input_tensors' are provided, the function compares the model's output pre
+        and post-transformation. 'transform_list' can accept either a list of transforms,
         or a nested list of transforms. This affects how model validation is performed.
         Regular transform-lists are validated after every transform. Nested transform-
         lists are validated after every sub-list, so transforms [[1,2,3],[4,5]] would
