@@ -97,13 +97,14 @@ runs:
         echo "Timeout: ${{ inputs.timeout-minutes }} minutes"
         
         # Verify daemon is running (should be started by workflow)
-        if ! ./smithy status >/dev/null 2>&1 | grep -q "is running"; then
+        if ! ./smithy status 2>&1 | grep -q "is running"; then
             echo "ERROR: Smithy daemon is not running"
             echo "The daemon should be started by the workflow before running tests"
             echo "Current status:"
             ./smithy status || echo "Status command failed"
             exit 1
         fi
+        echo "✓ Daemon is running - proceeding with test"
         
         # Execute test with timeout using existing daemon
         TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
