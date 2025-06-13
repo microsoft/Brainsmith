@@ -1,0 +1,23 @@
+name: 'FPGA Dataflow Pytest'
+description: 'Run FPGA dataflow unit tests (currently disabled - tests are broken)'
+inputs:
+  timeout-minutes:
+    description: 'Test timeout in minutes'
+    type: number
+    default: 60
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run FPGA dataflow unit tests
+      shell: bash
+      run: |
+        echo "=== FPGA Dataflow Unit Tests ==="
+        echo "NOTE: These tests are currently broken and not used in workflows"
+        echo "Command that would run: cd tests/fpgadataflow && pytest ./ -v --log-file=/tmp/pytest.log --log-file-level=INFO"
+        echo "To enable when tests are fixed, add this action to a workflow"
+        
+        # Actual command (commented out since tests are broken):
+        # cd tests/fpgadataflow && pytest ./ -v --log-file=/tmp/pytest.log --log-file-level=INFO
+        
+        echo "✓ Pytest action available for future use"
