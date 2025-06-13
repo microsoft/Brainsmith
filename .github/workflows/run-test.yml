@@ -1,4 +1,4 @@
-name: Run Test with Existing Daemon
+name: Run Test
 
 on:
   workflow_call:
@@ -27,13 +27,19 @@ on:
         description: 'Runner to use'
         type: string
         default: 'pre-release'
-    secrets:
-      github-token:
-        description: 'GitHub token for potential future use'
-        required: false
+
+env:
+  DOCKER_BUILDKIT: 1
+  BSMITH_DOCKER_PREBUILT: "1"  # Use locally built image
+  BSMITH_SKIP_DEP_REPOS: "0"
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
+  BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
 
 jobs:
-  test-with-daemon:
+  test:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
@@ -42,23 +48,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify daemon is running
-        shell: bash
+      - name: Check disk space
+        uses: ./.github/actions/check-disk
+        with:
+          threshold-gb: 20
+
+      # No need for GHCR login/pull - image is already local
+      
+      - name: Verify local image exists
         run: |
-          echo "=== Checking for running Smithy daemon ==="
-          chmod +x smithy
-          
-          # Check if daemon is running
-          if ./smithy status | grep -q "is running"; then
-            echo "✓ Smithy daemon is running"
-            ./smithy status
-          else
-            echo "ERROR: Smithy daemon is not running"
-            echo "The daemon should have been started by the build job"
-            echo "Available containers:"
-            docker ps -a | grep brainsmith || echo "No brainsmith containers found"
-            exit 1
+          if ! docker images | grep -q "microsoft/brainsmith"; then
+              echo "ERROR: Brainsmith image not available locally"
+              echo "Available images:"
+              docker images
+              exit 1
           fi
+          echo "✓ Local image verified"
 
       - name: Run test
         uses: ./.github/actions/smithy-test
@@ -81,5 +86,3 @@ jobs:
           name: ${{ inputs.test-name }}-artifacts-${{ github.run_id }}
           path: test-artifacts/
           retention-days: 7
-
-      # Note: Daemon intentionally NOT stopped here - may be reused by other test jobs

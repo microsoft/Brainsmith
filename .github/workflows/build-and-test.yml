@@ -1,4 +1,4 @@
-name: Build and Test with Persistent Daemon
+name: Build and Test
 
 on:
   workflow_call:
@@ -11,47 +11,46 @@ on:
         description: 'Whether to test built image'
         type: boolean
         default: true
-    secrets:
-      github-token:
-        description: 'GitHub token for potential future use'
-        required: false
+
+env:
+  DOCKER_BUILDKIT: 1
+  BSMITH_DOCKER_PREBUILT: "0"
+  BSMITH_DOCKER_NO_CACHE: "1"
+  BSMITH_SKIP_DEP_REPOS: "0"
+  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
+  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
+  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
+  BSMITH_DOCKER_TAG: "microsoft/brainsmith:ci-${{ github.sha }}"
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} --label ci-run=${{ github.run_id }}"
 
 jobs:
-  build-and-test-daemon:
+  build-and-test:
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 180
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      
       - name: Check disk space
         uses: ./.github/actions/check-disk
         with:
           threshold-gb: 20
-
-      - name: Clean Docker resources
+      
+      - name: Clean Docker resources  
         uses: ./.github/actions/docker-cleanup
-
-      - name: Start Smithy daemon (with build)
-        uses: ./.github/actions/smithy-daemon-start
-        with:
-          build-image: true
-          container-suffix: ${{ github.run_id }}
-
-      - name: Test container functionality
+        
+      - name: Build Docker image
+        uses: ./.github/actions/smithy-build
+        
+      - name: Test basic functionality
         if: inputs.test-image
         uses: ./.github/actions/smithy-test
         with:
           test-name: "Basic Functionality"
           test-type: "basic-functionality"
           timeout-minutes: 5
-
-      - name: Execute additional validation
-        uses: ./.github/actions/smithy-daemon-exec
-        with:
-          command: "echo 'Container is ready for use in subsequent jobs'"
-          timeout-minutes: 1
 
       - name: Collect artifacts on failure
         if: failure()
@@ -63,9 +62,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: daemon-build-logs-${{ github.run_id }}
+          name: build-logs-${{ github.run_id }}
           path: build-failure-artifacts/
           retention-days: 3
-
-      # Note: Daemon intentionally NOT stopped here - it will be reused by subsequent jobs
-      # The cleanup job at the end of the workflow will handle stopping it

@@ -25,23 +25,23 @@ jobs:
   validate-environment:
     runs-on: pre-release
     timeout-minutes: 10
-    outputs:
-      container-name: ${{ steps.env-check.outputs.container-name }}
-      docker-tag: ${{ steps.env-check.outputs.docker-tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Validate environment and generate outputs
-        id: env-check
+      - name: Check disk space
+        uses: ./.github/actions/check-disk
+
+      - name: Clean Docker resources
+        uses: ./.github/actions/docker-cleanup
+
+      - name: Validate environment
         run: |
           echo "=== System Information ==="
           echo "OS: $(uname -a)"
           echo "User: $(whoami)"
-          echo "Home: $HOME"
-          echo "Working Directory: $(pwd)"
           echo "Available Disk Space: $(df -h / | tail -1 | awk '{print $4}')"
           echo "Available Memory: $(free -h | grep Mem | awk '{print $7}')"
           
@@ -51,96 +51,47 @@ jobs:
           
           echo "=== Git Information ==="
           git log --oneline -3
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "Commit: $COMMIT_HASH"
-          
-          echo "=== Environment Variables ==="
-          echo "BSMITH_DOCKER_PREBUILT=$BSMITH_DOCKER_PREBUILT"
-          echo "BSMITH_DOCKER_NO_CACHE=$BSMITH_DOCKER_NO_CACHE"
-          echo "BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
-          echo "BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
-          echo "BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
-          echo "NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
-          # Explicitly exclude GITHUB_* variables for security
-          
-          echo "=== Container Name Generation ==="
-          chmod +x smithy
-          CONTAINER_NAME="brainsmith_dev_$(whoami)_$(echo "$(pwd)" | md5sum | cut -d' ' -f1 | head -c 8)"
-          echo "Expected container name: $CONTAINER_NAME"
-          
-          # Set outputs for other jobs
-          echo "container-name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
-          echo "docker-tag=$BSMITH_DOCKER_TAG" >> $GITHUB_OUTPUT
-          
           echo "=== Validation Complete ==="
 
-  # Build and test using persistent daemon
-  docker-build-and-test:
-    uses: ./.github/workflows/build-and-test-daemon.yml
+  # Build and test - all comprehensive tests
+  comprehensive-test-suite:
+    uses: ./.github/workflows/build-and-test.yml
     needs: validate-environment
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Full test suite using existing daemon
-  full-test-suite:
-    uses: ./.github/workflows/run-test-daemon.yml
-    needs: [validate-environment, docker-build-and-test]
+  # Full unit test suite using existing image
+  full-unit-tests:
+    uses: ./.github/workflows/run-test.yml
+    needs: comprehensive-test-suite
     with:
-      test-name: "Full Test Suite"
+      test-name: "Full Unit Test Suite"
       test-type: "unit-tests"
       timeout-minutes: 240
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # BERT Large test using existing daemon
+  # BERT Large test using existing image  
   bert-large-biweekly:
-    uses: ./.github/workflows/run-test-daemon.yml
-    needs: [validate-environment, docker-build-and-test]
+    uses: ./.github/workflows/run-test.yml
+    needs: comprehensive-test-suite
     with:
       test-name: "BERT Large"
       test-type: "e2e-bert"
-      test-variant: "large"
       timeout-minutes: 1440
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Final cleanup job - runs regardless of other job success/failure
   cleanup:
     if: always()
-    needs: [validate-environment]  # Only depend on first job
+    needs: [validate-environment, comprehensive-test-suite, full-unit-tests, bert-large-biweekly]
     runs-on: pre-release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Stop Smithy daemon and cleanup
-        uses: ./.github/actions/smithy-daemon-stop
-        with:
-          collect-logs: true
+      - name: Clean Docker resources
+        uses: ./.github/actions/docker-cleanup
 
-      - name: Upload daemon logs
+      - name: Collect artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/collect-artifacts
         with:
-          name: scheduled-daemon-logs-${{ github.run_id }}
-          path: /tmp/smithy-logs/
-          retention-days: 7
-
-      - name: Additional Docker cleanup
-        run: |
-          echo "=== Final Docker cleanup ==="
-          # Clean any remaining brainsmith containers
-          CONTAINERS=$(docker ps -a --filter "name=brainsmith" --format "{{.Names}}" 2>/dev/null || true)
-          if [ -n "$CONTAINERS" ]; then
-            echo "Found containers to clean: $CONTAINERS"
-            docker rm -f $CONTAINERS || true
-          fi
-          
-          # Prune with label filter for safety
-          docker container prune -f --filter "label=ci-run=${{ github.run_id }}" || true
-          docker image prune -f --filter "label=ci-run=${{ github.run_id }}" || true
-          
-          # General cleanup
-          docker system prune -f --volumes || true
-          
-          echo "Cleanup completed"
+          artifact-name: "scheduled-test-artifacts-${{ github.run_id }}"

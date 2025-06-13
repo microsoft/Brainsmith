@@ -36,11 +36,8 @@ jobs:
       - name: Clean Docker resources
         uses: ./.github/actions/docker-cleanup
 
-      - name: Start Smithy daemon (with build)
-        uses: ./.github/actions/smithy-daemon-start
-        with:
-          build-image: true
-          container-suffix: release
+      - name: Build Docker image
+        uses: ./.github/actions/smithy-build
 
       - name: Test container functionality
         uses: ./.github/actions/smithy-test
@@ -56,16 +53,12 @@ jobs:
           release-tag: ${{ github.event.release.tag_name }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Stop daemon and cleanup
+      - name: Final cleanup
         if: always()
-        uses: ./.github/actions/smithy-daemon-stop
-        with:
-          collect-logs: true
+        uses: ./.github/actions/docker-cleanup
 
-      - name: Upload release logs
+      - name: Collect artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/collect-artifacts
         with:
-          name: release-logs-${{ github.run_id }}
-          path: /tmp/smithy-logs/
-          retention-days: 7
+          artifact-name: "release-artifacts-${{ github.run_id }}"
