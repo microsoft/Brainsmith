@@ -462,9 +462,10 @@ class OpTest(ABC):
             (Default: ``1e-5``)
         :type tolerance: float
 
-        :param output_dir: The acceptable tolerance that model outputs can differ during validation.
-            (Default: ``1e-5``)
-        :type output_dir: float
+        :param output_dir: The output directory used to save between every transformation step.
+            Providing an input directory enables intermediate model saving.
+            (Default: ``None``)
+        :type output_dir: str
 
         :return: A :class:`ModelWrapper` containing the transformed model
         :rtype: :class:`qonnx.core.modelwrapper.ModelWrapper`"""
