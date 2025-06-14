@@ -12,7 +12,7 @@ from pathlib import Path
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.parser import RTLParser
 from brainsmith.tools.hw_kernel_gen.unified_generator import UnifiedGenerator
-from brainsmith.tools.hw_kernel_gen.result_handler import ResultHandler, GenerationResult
+from brainsmith.tools.hw_kernel_gen.data import GenerationResult
 
 
 class TestPhase3EndToEnd:
@@ -200,7 +200,10 @@ endmodule
         
         # Step 2: Generate templates with Phase 3 unified generator
         generator = UnifiedGenerator()
-        generated_files = generator.generate_all(kernel_metadata)
+        result = generator.generate_and_write(kernel_metadata, write_files=False)
+        
+        assert result.is_success(), f"Generation failed: {result.errors}"
+        generated_files = result.generated_files
         
         # Verify all expected files were generated
         expected_files = {
@@ -261,15 +264,10 @@ endmodule
         assert "SIMD" in test_suite_code
         assert "DEPTH" in test_suite_code
         
-        # Step 6: Write results with ResultHandler
-        result = GenerationResult(
-            kernel_name=kernel_metadata.name,
-            source_file=rtl_file,
-            generated_files=generated_files
-        )
-        
-        handler = ResultHandler(self.output_dir)
-        kernel_dir = handler.write_result(result)
+        # Step 6: Write results with integrated approach (Phase 3/4)
+        generator_with_output = UnifiedGenerator(output_dir=self.output_dir)
+        result = generator_with_output.generate_and_write(kernel_metadata)
+        kernel_dir = result.output_directory
         
         # Verify files were written correctly
         assert kernel_dir.exists()
@@ -297,7 +295,10 @@ endmodule
         
         # Generate templates
         generator = UnifiedGenerator()
-        generated_files = generator.generate_all(kernel_metadata)
+        result = generator.generate_and_write(kernel_metadata, write_files=False)
+        
+        assert result.is_success(), f"Generation failed: {result.errors}"
+        generated_files = result.generated_files
         
         # Verify HWCustomOp handles all parameters
         hw_custom_op_code = generated_files["conv2d_hw_custom_op.py"]
@@ -335,7 +336,10 @@ endmodule
         
         # Generate templates
         generator = UnifiedGenerator()
-        generated_files = generator.generate_all(kernel_metadata)
+        result = generator.generate_and_write(kernel_metadata, write_files=False)
+        
+        assert result.is_success(), f"Generation failed: {result.errors}"
+        generated_files = result.generated_files
         
         # Verify generated code handles dual inputs correctly
         hw_custom_op_code = generated_files["elementwise_add_hw_custom_op.py"]
@@ -436,29 +440,18 @@ input wire clk;
         ]
         
         parser = RTLParser()
-        generator = UnifiedGenerator()
-        handler = ResultHandler(self.output_dir)
+        generator = UnifiedGenerator(output_dir=self.output_dir)
         
         results = []
         
-        # Process all kernels
+        # Process all kernels with integrated approach (Phase 3/4)
         for rtl_file in rtl_files:
             # Parse
             kernel_metadata = parser.parse_file(str(rtl_file))
             
-            # Generate
-            generated_files = generator.generate_all(kernel_metadata)
-            
-            # Create result
-            result = GenerationResult(
-                kernel_name=kernel_metadata.name,
-                source_file=rtl_file,
-                generated_files=generated_files
-            )
-            
-            # Write result
-            kernel_dir = handler.write_result(result)
-            results.append((kernel_metadata.name, kernel_dir))
+            # Generate and write in one step
+            result = generator.generate_and_write(kernel_metadata)
+            results.append((kernel_metadata.name, result.output_directory))
         
         # Verify all kernels were processed
         assert len(results) == 3
@@ -645,7 +638,10 @@ endmodule
         
         # Generate templates
         generator = UnifiedGenerator()
-        generated_files = generator.generate_all(kernel_metadata)
+        result = generator.generate_and_write(kernel_metadata, write_files=False)
+        
+        assert result.is_success(), f"Generation failed: {result.errors}"
+        generated_files = result.generated_files
         
         # Verify generation succeeded
         assert len(generated_files) >= 1

@@ -5,6 +5,7 @@ Provides unified data structures for the Phase 3 clean-break refactor,
 including enhanced GenerationResult with Phase 2 template integration.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GenerationResult:
     """
-    Enhanced generation result for Phase 3.
+    Enhanced generation result for Phase 3/4 integration.
     
     Contains all information about a successful (or failed) generation,
     including generated files, metadata, and any errors or warnings.
@@ -31,6 +32,7 @@ class GenerationResult:
     - Rich kernel metadata tracking (KernelMetadata)
     - Performance monitoring (generation_time_ms)
     - Enhanced file tracking (filename -> content mapping)
+    - Integrated file writing capabilities (Phase 3/4 integration)
     - Backward compatibility with legacy methods
     """
     kernel_name: str
@@ -42,6 +44,11 @@ class GenerationResult:
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     generation_time_ms: Optional[float] = None
+    
+    # File writing tracking (Phase 3/4 integration)
+    output_directory: Optional[Path] = None
+    files_written: List[Path] = field(default_factory=list)
+    metadata_files: List[Path] = field(default_factory=list)
     
     def add_error(self, error: str) -> None:
         """Add an error message and mark validation as failed."""
@@ -69,7 +76,7 @@ class GenerationResult:
     
     def get_summary(self) -> Dict[str, any]:
         """Get a summary of the generation result."""
-        return {
+        summary = {
             "kernel_name": self.kernel_name,
             "source_file": str(self.source_file),
             "success": self.is_success(),
@@ -79,6 +86,178 @@ class GenerationResult:
             "warning_count": len(self.warnings),
             "generation_time_ms": self.generation_time_ms
         }
+        
+        # Add file writing info if available
+        if self.output_directory:
+            summary.update({
+                "output_directory": str(self.output_directory),
+                "files_written": len(self.files_written),
+                "metadata_files": len(self.metadata_files)
+            })
+        
+        return summary
+    
+    # ===== File Writing Methods (Phase 3/4 Integration) =====
+    
+    def write_file(self, filename: str, content: str, output_dir: Path) -> Path:
+        """
+        Write a single generated file to the output directory.
+        
+        Args:
+            filename: Name of the file to write
+            content: Content to write to the file
+            output_dir: Directory to write the file to
+            
+        Returns:
+            Path to the written file
+            
+        Raises:
+            RuntimeError: If file writing fails
+        """
+        try:
+            file_path = output_dir / filename
+            file_path.write_text(content, encoding='utf-8')
+            self.files_written.append(file_path)
+            logger.debug(f"Wrote file for {self.kernel_name}: {file_path}")
+            return file_path
+        except Exception as e:
+            error_msg = f"Failed to write file {filename}: {e}"
+            self.add_error(error_msg)
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+    
+    def write_all_files(self, output_dir: Path) -> List[Path]:
+        """
+        Write all generated files to the output directory.
+        
+        Args:
+            output_dir: Directory to write files to
+            
+        Returns:
+            List of paths to written files
+            
+        Raises:
+            RuntimeError: If any file writing fails
+        """
+        try:
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
+            self.output_directory = output_dir
+            
+            written_files = []
+            
+            # Write all generated files
+            for filename, content in self.generated_files.items():
+                file_path = self.write_file(filename, content, output_dir)
+                written_files.append(file_path)
+            
+            # Create metadata files
+            metadata_files = self.create_metadata_files(output_dir)
+            written_files.extend(metadata_files)
+            
+            logger.info(f"Successfully wrote {len(written_files)} files for {self.kernel_name}")
+            return written_files
+            
+        except Exception as e:
+            error_msg = f"Failed to write files for {self.kernel_name}: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+    
+    def create_metadata_files(self, output_dir: Path) -> List[Path]:
+        """
+        Create generation metadata files.
+        
+        Args:
+            output_dir: Directory to write metadata files to
+            
+        Returns:
+            List of paths to created metadata files
+        """
+        metadata_files = []
+        
+        try:
+            # Create generation_metadata.json
+            metadata = {
+                "kernel_name": self.kernel_name,
+                "source_file": str(self.source_file),
+                "validation_passed": self.validation_passed,
+                "success": self.is_success(),
+                "errors": self.errors,
+                "warnings": self.warnings,
+                "generated_files": list(self.generated_files.keys()),
+                "generation_time_ms": self.generation_time_ms,
+                "summary": self.get_summary()
+            }
+            
+            # Add template context info if available
+            if self.template_context:
+                metadata["template_context"] = {
+                    "parameter_count": len(self.template_context.parameter_definitions),
+                    "interface_count": len(self.template_context.interface_metadata),
+                    "required_parameters": self.template_context.required_attributes,
+                    "whitelisted_defaults": self.template_context.whitelisted_defaults
+                }
+            
+            # Add kernel metadata info if available
+            if self.kernel_metadata:
+                metadata["kernel_metadata"] = {
+                    "parameter_count": len(self.kernel_metadata.parameters),
+                    "interface_count": len(self.kernel_metadata.interfaces),
+                    "parameter_names": [p.name for p in self.kernel_metadata.parameters]
+                }
+            
+            metadata_file = output_dir / "generation_metadata.json"
+            metadata_file.write_text(json.dumps(metadata, indent=2, default=str))
+            self.metadata_files.append(metadata_file)
+            metadata_files.append(metadata_file)
+            
+            # Create generation_summary.txt
+            summary_file = self._create_summary_file(output_dir)
+            metadata_files.append(summary_file)
+            
+        except Exception as e:
+            logger.warning(f"Failed to create metadata files for {self.kernel_name}: {e}")
+        
+        return metadata_files
+    
+    def _create_summary_file(self, output_dir: Path) -> Path:
+        """Create human-readable summary log file."""
+        summary_lines = [
+            f"Generation Summary for {self.kernel_name}",
+            "=" * 50,
+            f"Source File: {self.source_file}",
+            f"Output Directory: {output_dir}",
+            f"Success: {self.is_success()}",
+            f"Validation Passed: {self.validation_passed}",
+            f"Files Generated: {len(self.generated_files)}",
+            ""
+        ]
+        
+        if self.files_written:
+            summary_lines.append("Generated Files:")
+            for file_path in self.files_written:
+                summary_lines.append(f"  - {file_path}")
+            summary_lines.append("")
+        
+        if self.errors:
+            summary_lines.append("Errors:")
+            for error in self.errors:
+                summary_lines.append(f"  - {error}")
+            summary_lines.append("")
+        
+        if self.warnings:
+            summary_lines.append("Warnings:")
+            for warning in self.warnings:
+                summary_lines.append(f"  - {warning}")
+            summary_lines.append("")
+        
+        if self.generation_time_ms:
+            summary_lines.append(f"Generation Time: {self.generation_time_ms:.2f} ms")
+        
+        summary_file = output_dir / "generation_summary.txt"
+        summary_file.write_text("\n".join(summary_lines))
+        self.metadata_files.append(summary_file)
+        return summary_file
     
     # ===== Backward Compatibility Methods =====
     

@@ -26,7 +26,8 @@ from . import grammar
 
 # New imports for KernelMetadata integration
 from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata, DataTypeConstraint
+from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from brainsmith.dataflow.core.dataflow_interface import DataTypeConstraint
 from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
 
 # Configure logger

@@ -22,10 +22,9 @@ import warnings
 
 # Core Phase 3 components
 from .data import GenerationResult, ValidationResult, PerformanceMetrics
-from .config import Config, LegacyConfig
+from .config import Config
 from .cli import main
 from .unified_generator import UnifiedGenerator, UnifiedGeneratorError
-from .result_handler import ResultHandler
 
 # Legacy import compatibility with deprecation warnings
 def __getattr__(name):
@@ -64,6 +63,14 @@ def __getattr__(name):
         )
         raise ImportError(f"GeneratorBase was removed in Phase 3. Use UnifiedGenerator instead.")
     
+    elif name == "ResultHandler":
+        warnings.warn(
+            "ResultHandler is deprecated and removed. Use UnifiedGenerator.generate_and_write() for integrated file writing.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        raise ImportError(f"ResultHandler was removed in Phase 3/4 integration. Use UnifiedGenerator.generate_and_write() instead.")
+    
     # Unknown attribute
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
@@ -72,11 +79,9 @@ __all__ = [
     # Core Phase 3 components
     "UnifiedGenerator",
     "UnifiedGeneratorError", 
-    "ResultHandler",
     "GenerationResult",
     "ValidationResult", 
     "PerformanceMetrics",
     "Config",
-    "LegacyConfig",
     "main",
 ]

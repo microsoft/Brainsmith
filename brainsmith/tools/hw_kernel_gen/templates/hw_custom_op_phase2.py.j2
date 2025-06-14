@@ -44,10 +44,7 @@ class {{ class_name }}(AutoHWCustomOp):
     Generated from RTL: {{ source_file }}
     Follows FINN's standard HWCustomOp pattern with static interface metadata.
     
-    RTL Parameters (accessed via get_nodeattr()):
-    {% for param in parameter_definitions %}
-    - {{ param.name }}: {% if param.is_whitelisted %}Optional (default={{ param.default_value }}){% else %}Required{% endif %}{% if param.description %} - {{ param.description }}{% endif %}
-    {% endfor %}
+    RTL parameters are defined in get_nodeattr_types().
     """
     
     def __init__(self, onnx_node, **kwargs):

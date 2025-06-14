@@ -12,7 +12,6 @@ from pathlib import Path
 
 from .rtl_parser.parser import RTLParser
 from .unified_generator import UnifiedGenerator
-from .result_handler import ResultHandler, GenerationResult
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -65,8 +64,6 @@ def main():
             print(f"Template version: {args.template_version}")
             print()
         
-        start_time = time.time()
-        
         # Step 1: Parse RTL with Phase 1 validation
         if args.debug:
             print("🔍 Step 1: Parsing RTL with parameter and BDIM validation...")
@@ -80,57 +77,57 @@ def main():
             print(f"   ✅ Found {len(kernel_metadata.interfaces)} interfaces: {[i.name for i in kernel_metadata.interfaces]}")
             print()
         
-        # Step 2: Generate all templates with Phase 3 unified generator
+        # Step 2: Integrated generation and file writing
         if args.debug:
-            print("🏭 Step 2: Generating all templates with Phase 3 unified system...")
+            print("🏭 Step 2: Generating templates and writing files (integrated Phase 3/4)...")
         
-        generator = UnifiedGenerator()
-        generated_files = generator.generate_all(kernel_metadata)
+        generator = UnifiedGenerator(output_dir=args.output)
+        result = generator.generate_and_write(kernel_metadata)
         
         if args.debug:
-            print(f"   ✅ Generated {len(generated_files)} files:")
-            for filename in generated_files.keys():
+            print(f"   ✅ Generated {len(result.generated_files)} files:")
+            for filename in result.generated_files.keys():
                 print(f"      📄 {filename}")
+            if result.files_written:
+                print(f"   ✅ Written {len(result.files_written)} files to filesystem")
             print()
         
-        # Step 3: Write results with enhanced result handler
-        if args.debug:
-            print("💾 Step 3: Writing files and metadata...")
+        # Step 3: Report success
+        if result.is_success():
+            print(f"✅ Successfully generated HWCustomOp for {kernel_metadata.name}")
+            print(f"📁 Output directory: {result.output_directory}")
+            print(f"⚡ Generated {len(result.generated_files)} files in {result.generation_time_ms:.1f}ms")
+        else:
+            print(f"❌ Generation failed for {kernel_metadata.name}")
+            for error in result.errors:
+                print(f"   Error: {error}")
+            return 1
         
-        generation_time = (time.time() - start_time) * 1000  # Convert to ms
-        
-        result = GenerationResult(
-            kernel_name=kernel_metadata.name,
-            source_file=args.rtl_file,
-            generated_files=generated_files,
-            generation_time_ms=generation_time
-        )
-        
-        handler = ResultHandler(args.output)
-        kernel_dir = handler.write_result(result)
-        
-        # Step 4: Report success
-        print(f"✅ Successfully generated HWCustomOp for {kernel_metadata.name}")
-        print(f"📁 Output directory: {kernel_dir}")
-        print(f"⚡ Generated {len(generated_files)} files in {generation_time:.1f}ms")
-        
-        if args.debug:
+        if args.debug and result.is_success():
             print()
             print("Generated files:")
-            for filename in generated_files.keys():
-                file_path = kernel_dir / filename
-                if file_path.exists():
+            for file_path in result.files_written:
+                if file_path.exists() and not file_path.name.startswith('generation_'):
                     file_size = file_path.stat().st_size
-                    print(f"   📄 {filename} ({file_size:,} bytes)")
+                    print(f"   📄 {file_path.name} ({file_size:,} bytes)")
             
             print()
             print("Metadata files:")
-            metadata_file = kernel_dir / "generation_metadata.json"
-            summary_file = kernel_dir / "generation_summary.txt"
-            if metadata_file.exists():
-                print(f"   📋 generation_metadata.json ({metadata_file.stat().st_size:,} bytes)")
-            if summary_file.exists():
-                print(f"   📋 generation_summary.txt ({summary_file.stat().st_size:,} bytes)")
+            for file_path in result.metadata_files:
+                if file_path.exists():
+                    file_size = file_path.stat().st_size
+                    print(f"   📋 {file_path.name} ({file_size:,} bytes)")
+        
+        elif args.debug and not result.is_success():
+            print()
+            print("Errors encountered:")
+            for error in result.errors:
+                print(f"   ❌ {error}")
+            if result.warnings:
+                print()
+                print("Warnings:")
+                for warning in result.warnings:
+                    print(f"   ⚠️ {warning}")
         
         return 0
         

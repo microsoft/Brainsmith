@@ -117,8 +117,8 @@ class Test{{ class_name }}:
                 UnifiedGenerator(template_dir=Path("/nonexistent"))
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_hw_custom_op_success(self, mock_context_generator_class):
-        """Test successful HWCustomOp generation."""
+    def test_generate_and_write_success(self, mock_context_generator_class):
+        """Test successful generation with generate_and_write."""
         # Mock the template context generator
         mock_context_generator = Mock()
         mock_context = MockTemplateContext()
@@ -132,16 +132,18 @@ class Test{{ class_name }}:
         generator = UnifiedGenerator(template_dir=self.template_dir)
         generator.template_context_generator = mock_context_generator
         
-        result = generator.generate_hw_custom_op(self.mock_kernel_metadata)
+        # Test dry-run mode (no file writing)
+        result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
         
         assert result is not None
-        assert isinstance(result, str)
-        assert "TestHWCustomOp" in result
+        assert result.is_success()
+        assert len(result.generated_files) == 3  # hw_custom_op, rtl_wrapper, test_suite
+        assert "TestHWCustomOp" in result.generated_files["test_kernel_hw_custom_op.py"]
         mock_context_generator.generate_template_context.assert_called_once_with(self.mock_kernel_metadata)
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_hw_custom_op_template_not_found(self, mock_context_generator_class):
-        """Test HWCustomOp generation with missing template."""
+    def test_generate_and_write_template_not_found(self, mock_context_generator_class):
+        """Test generation with missing template."""
         # Remove the Phase 2 template
         phase2_template = self.template_dir / "hw_custom_op_phase2.py.j2"
         phase2_template.unlink()
@@ -154,12 +156,16 @@ class Test{{ class_name }}:
         generator = UnifiedGenerator(template_dir=self.template_dir)
         generator.template_context_generator = mock_context_generator
         
-        with pytest.raises(UnifiedGeneratorError, match="Phase 2 template not found"):
-            generator.generate_hw_custom_op(self.mock_kernel_metadata)
+        result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
+        
+        # Should fail gracefully and report errors
+        assert not result.is_success()
+        assert len(result.errors) > 0
+        assert any("Phase 2 template not found" in error for error in result.errors)
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_hw_custom_op_validation_failure(self, mock_context_generator_class):
-        """Test HWCustomOp generation with template context validation failure."""
+    def test_generate_and_write_validation_failure(self, mock_context_generator_class):
+        """Test generation with template context validation failure."""
         mock_context_generator = Mock()
         mock_context = MockTemplateContext()
         
@@ -171,33 +177,16 @@ class Test{{ class_name }}:
             generator = UnifiedGenerator(template_dir=self.template_dir)
             generator.template_context_generator = mock_context_generator
             
-            with pytest.raises(UnifiedGeneratorError, match="Template context validation failed"):
-                generator.generate_hw_custom_op(self.mock_kernel_metadata)
+            result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
+            
+            # Should fail gracefully and report validation errors
+            assert not result.is_success()
+            assert "Template context validation: Validation error" in result.errors
+    
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_rtl_wrapper_success(self, mock_context_generator_class):
-        """Test successful RTL wrapper generation."""
-        mock_context_generator = Mock()
-        mock_context = MockTemplateContext()
-        mock_context_generator.generate_template_context.return_value = mock_context
-        mock_context_generator._template_context_to_dict.return_value = {
-            'module_name': 'test_module'
-        }
-        mock_context_generator_class.return_value = mock_context_generator
-        
-        generator = UnifiedGenerator(template_dir=self.template_dir)
-        generator.template_context_generator = mock_context_generator
-        
-        result = generator.generate_rtl_wrapper(self.mock_kernel_metadata)
-        
-        assert result is not None
-        assert isinstance(result, str)
-        assert "test_module_wrapper" in result
-        mock_context_generator.generate_template_context.assert_called_once_with(self.mock_kernel_metadata)
-    
-    @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_rtl_wrapper_fallback_to_legacy(self, mock_context_generator_class):
-        """Test RTL wrapper generation falls back to legacy template."""
+    def test_generate_and_write_rtl_fallback_to_legacy(self, mock_context_generator_class):
+        """Test generation falls back to legacy RTL template."""
         # Remove v2 template but keep legacy
         v2_template = self.template_dir / "rtl_wrapper_v2.v.j2"
         v2_template.unlink()
@@ -214,60 +203,16 @@ class Test{{ class_name }}:
         generator.template_context_generator = mock_context_generator
         
         with patch('brainsmith.tools.hw_kernel_gen.unified_generator.logger') as mock_logger:
-            result = generator.generate_rtl_wrapper(self.mock_kernel_metadata)
+            result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
             
-            assert result is not None
-            assert "test_module_wrapper" in result
-            mock_logger.warning.assert_called_once()
+            assert result.is_success()
+            assert "test_module_wrapper" in result.generated_files["test_kernel_wrapper.v"]
+            mock_logger.warning.assert_called()
+    
+    
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_test_suite_success(self, mock_context_generator_class):
-        """Test successful test suite generation."""
-        mock_context_generator = Mock()
-        mock_context = MockTemplateContext()
-        mock_context_generator.generate_template_context.return_value = mock_context
-        mock_context_generator._template_context_to_dict.return_value = {
-            'class_name': 'TestHWCustomOp'
-        }
-        mock_context_generator_class.return_value = mock_context_generator
-        
-        generator = UnifiedGenerator(template_dir=self.template_dir)
-        generator.template_context_generator = mock_context_generator
-        
-        result = generator.generate_test_suite(self.mock_kernel_metadata)
-        
-        assert result is not None
-        assert isinstance(result, str)
-        assert "TestTestHWCustomOp" in result
-        mock_context_generator.generate_template_context.assert_called_once_with(self.mock_kernel_metadata)
-    
-    @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_test_suite_fallback_to_legacy(self, mock_context_generator_class):
-        """Test test suite generation falls back to legacy template."""
-        # Remove v2 template but keep legacy
-        v2_template = self.template_dir / "test_suite_v2.py.j2"
-        v2_template.unlink()
-        
-        mock_context_generator = Mock()
-        mock_context = MockTemplateContext()
-        mock_context_generator.generate_template_context.return_value = mock_context
-        mock_context_generator._template_context_to_dict.return_value = {
-            'class_name': 'TestHWCustomOp'
-        }
-        mock_context_generator_class.return_value = mock_context_generator
-        
-        generator = UnifiedGenerator(template_dir=self.template_dir)
-        generator.template_context_generator = mock_context_generator
-        
-        with patch('brainsmith.tools.hw_kernel_gen.unified_generator.logger') as mock_logger:
-            result = generator.generate_test_suite(self.mock_kernel_metadata)
-            
-            assert result is not None
-            assert "TestTestHWCustomOp" in result
-            mock_logger.warning.assert_called_once()
-    
-    @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_all_success(self, mock_context_generator_class):
+    def test_generate_and_write_all_templates(self, mock_context_generator_class):
         """Test successful generation of all artifacts."""
         mock_context_generator = Mock()
         mock_context = MockTemplateContext()
@@ -281,24 +226,24 @@ class Test{{ class_name }}:
         generator = UnifiedGenerator(template_dir=self.template_dir)
         generator.template_context_generator = mock_context_generator
         
-        results = generator.generate_all(self.mock_kernel_metadata)
+        result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
         
-        assert isinstance(results, dict)
-        assert len(results) == 3  # HWCustomOp, RTL wrapper, test suite
+        assert result.is_success()
+        assert len(result.generated_files) == 3  # HWCustomOp, RTL wrapper, test suite
         
         # Check that all expected files are generated
-        assert "test_kernel_hw_custom_op.py" in results
-        assert "test_kernel_wrapper.v" in results
-        assert "test_test_kernel.py" in results
+        assert "test_kernel_hw_custom_op.py" in result.generated_files
+        assert "test_kernel_wrapper.v" in result.generated_files
+        assert "test_test_kernel.py" in result.generated_files
         
         # Check content contains expected elements
-        assert "TestHWCustomOp" in results["test_kernel_hw_custom_op.py"]
-        assert "test_module_wrapper" in results["test_kernel_wrapper.v"]
-        assert "TestTestHWCustomOp" in results["test_test_kernel.py"]
+        assert "TestHWCustomOp" in result.generated_files["test_kernel_hw_custom_op.py"]
+        assert "test_module_wrapper" in result.generated_files["test_kernel_wrapper.v"]
+        assert "TestTestHWCustomOp" in result.generated_files["test_test_kernel.py"]
     
     @patch('brainsmith.tools.hw_kernel_gen.unified_generator.TemplateContextGenerator')
-    def test_generate_all_partial_failure(self, mock_context_generator_class):
-        """Test generate_all handles partial failures gracefully."""
+    def test_generate_and_write_partial_failure(self, mock_context_generator_class):
+        """Test generation handles partial failures gracefully."""
         # Remove RTL and test templates to simulate failures
         rtl_template = self.template_dir / "rtl_wrapper_v2.v.j2"
         rtl_template.unlink()
@@ -323,11 +268,11 @@ class Test{{ class_name }}:
         generator.template_context_generator = mock_context_generator
         
         with patch('brainsmith.tools.hw_kernel_gen.unified_generator.logger') as mock_logger:
-            results = generator.generate_all(self.mock_kernel_metadata)
+            result = generator.generate_and_write(self.mock_kernel_metadata, write_files=False)
             
             # Should still generate HWCustomOp even if others fail
-            assert len(results) == 1
-            assert "test_kernel_hw_custom_op.py" in results
+            assert len(result.generated_files) == 1
+            assert "test_kernel_hw_custom_op.py" in result.generated_files
             
             # Should have logged warnings for failures
             assert mock_logger.warning.call_count >= 2  # RTL wrapper and test suite failures
@@ -451,10 +396,12 @@ class {{ class_name }}(AutoHWCustomOp):
                 'parameter_definitions': mock_context.parameter_definitions
             }
             
-            # Should be able to generate HWCustomOp
-            hw_code = generator.generate_hw_custom_op(mock_metadata)
+            # Should be able to generate all templates
+            result = generator.generate_and_write(mock_metadata, write_files=False)
             
-            assert hw_code is not None
+            assert result.is_success()
+            assert "integration_test_hw_custom_op.py" in result.generated_files
+            hw_code = result.generated_files["integration_test_hw_custom_op.py"]
             assert "IntegrationTestHWCustomOp" in hw_code
             assert "runtime_parameters" in hw_code
     
