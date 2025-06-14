@@ -1,0 +1,161 @@
+# Transformer Base Blueprint V2
+# Base blueprint for transformer-based architectures (BERT, GPT, etc.)
+
+name: "transformer_base"
+version: "2.0"
+description: "Base blueprint for transformer architectures with common components"
+
+# Core transformer components
+nodes:
+  # Standard transformer canonical operations
+  canonical_ops:
+    available:
+      - "LayerNorm"
+      - "Softmax"
+      - "GELU"
+      - "Add"
+    exploration:
+      required:
+        - "LayerNorm"  # Essential for transformer stability
+        - "Add"       # Required for residual connections
+      optional:
+        - "Softmax"   # May use lookup table alternative
+        - "GELU"      # May use ReLU alternative
+
+  # Hardware kernel options for transformer operations
+  hw_kernels:
+    available:
+      - "MatMul":
+          - "matmul_hls"
+          - "matmul_rtl"
+      - "LayerNorm":
+          - "layernorm_custom"
+          - "layernorm_builtin"
+      - "Softmax":
+          - "softmax_hls"
+          - "softmax_lookup"
+      - "Add"
+    exploration:
+      required:
+        - "MatMul"      # Core operation for transformers
+        - "LayerNorm"   # Required for normalization
+      optional:
+        - "Softmax"     # May not be needed for all models
+      mutually_exclusive:
+        - ["matmul_hls", "matmul_rtl"]  # Choose implementation
+        - ["layernorm_custom", "layernorm_builtin"]
+        - ["softmax_hls", "softmax_lookup"]
+
+# Transform pipeline for transformers
+transforms:
+  # Model topology transformations
+  model_topology:
+    available:
+      - "cleanup"
+      - "streamlining"
+      - "aggressive_streamlining"
+      - "conservative_streamlining"
+      - "constant_folding"
+      - "remove_head"
+      - "remove_tail"
+    exploration:
+      required:
+        - "cleanup"
+      optional:
+        - "constant_folding"
+        - "remove_head"
+        - "remove_tail"
+      mutually_exclusive:
+        - ["aggressive_streamlining", "conservative_streamlining"]
+      dependencies:
+        aggressive_streamlining: ["cleanup"]
+        conservative_streamlining: ["cleanup"]
+
+  # Hardware kernel transformations
+  hw_kernel:
+    available:
+      - "target_fps_parallelization"
+      - "apply_folding_config"
+      - "minimize_bit_width"
+      - "optimize_memory_bandwidth"
+    exploration:
+      required:
+        - "target_fps_parallelization"
+        - "apply_folding_config"
+      optional:
+        - "minimize_bit_width"
+        - "optimize_memory_bandwidth"
+
+  # Hardware graph transformations
+  hw_graph:
+    available:
+      - "set_fifo_depths"
+      - "create_stitched_ip"
+      - "optimize_pipeline"
+    exploration:
+      required:
+        - "set_fifo_depths"
+        - "create_stitched_ip"
+      optional:
+        - "optimize_pipeline"
+
+# Default DSE strategies for transformers
+dse_strategies:
+  primary_strategy: "balanced_exploration"
+  strategies:
+    quick_scan:
+      description: "Fast exploration of main design choices"
+      max_evaluations: 20
+      sampling: "latin_hypercube"
+      focus_areas:
+        - "kernel_selection"
+        - "required_transforms"
+
+    balanced_exploration:
+      description: "Balanced exploration of design space"
+      max_evaluations: 50
+      sampling: "adaptive"
+      focus_areas:
+        - "kernel_selection"
+        - "transform_selection"
+
+    comprehensive:
+      description: "Thorough exploration of full design space"
+      max_evaluations: 100
+      sampling: "latin_hypercube"
+      focus_areas:
+        - "all_combinations"
+
+# Common transformer objectives
+objectives:
+  - name: "throughput"
+    direction: "maximize"
+    weight: 1.0
+    description: "Maximize inference throughput (inferences/second)"
+
+  - name: "resource_efficiency"
+    direction: "maximize"
+    weight: 0.7
+    description: "Maximize resource utilization efficiency"
+
+# Common transformer constraints
+constraints:
+  - name: "max_lut_utilization"
+    operator: "<="
+    value: 0.85
+    description: "Maximum LUT utilization"
+
+  - name: "max_dsp_utilization"
+    operator: "<="
+    value: 0.80
+    description: "Maximum DSP utilization"
+
+  - name: "max_bram_utilization"
+    operator: "<="
+    value: 0.75
+    description: "Maximum BRAM utilization"
+
+  - name: "max_power"
+    operator: "<="
+    value: 25.0
+    description: "Maximum power consumption in watts"

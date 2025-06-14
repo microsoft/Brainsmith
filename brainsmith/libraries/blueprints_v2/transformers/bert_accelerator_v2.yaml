@@ -1,0 +1,268 @@
+# BERT Accelerator Blueprint V2
+# Complete design space definition for BERT transformer acceleration
+
+name: "bert_accelerator_v2"
+version: "2.0"
+base_blueprint: "transformer_base"
+description: "BERT accelerator with full design space for 6-entrypoint FINN architecture"
+
+# Extended nodes for BERT-specific operations
+nodes:
+  # BERT-specific canonical operations (extends transformer_base)
+  canonical_ops:
+    available:
+      - "LayerNorm"
+      - "Softmax"
+      - "GELU"
+      - "Add"
+      - "MultiHeadAttention"  # BERT-specific
+      - "PositionalEncoding"  # BERT-specific
+    exploration:
+      required:
+        - "LayerNorm"
+        - "Add"
+        - "MultiHeadAttention"  # Essential for BERT
+      optional:
+        - "Softmax"
+        - "GELU"
+        - "PositionalEncoding"
+
+  # BERT hardware kernels (extends transformer_base)
+  hw_kernels:
+    available:
+      - "MatMul":
+          - "matmul_hls"
+          - "matmul_rtl"
+          - "matmul_mixed"  # BERT-specific mixed precision
+      - "LayerNorm":
+          - "layernorm_custom"
+          - "layernorm_builtin"
+      - "Softmax":
+          - "softmax_hls"
+          - "softmax_lookup"
+      - "Add"
+      - "MultiHeadAttention":  # BERT-specific
+          - "mha_optimized"
+          - "mha_standard"
+      - "Conv1D":  # For position-wise feed-forward
+          - "conv1d_hls"
+    exploration:
+      required:
+        - "MatMul"
+        - "LayerNorm"
+        - "MultiHeadAttention"
+      optional:
+        - "Softmax"
+        - "Conv1D"
+      mutually_exclusive:
+        - ["matmul_hls", "matmul_rtl", "matmul_mixed"]
+        - ["layernorm_custom", "layernorm_builtin"]
+        - ["softmax_hls", "softmax_lookup"]
+        - ["mha_optimized", "mha_standard"]
+
+# BERT-specific transform extensions
+transforms:
+  # BERT model topology transforms (extends transformer_base)
+  model_topology:
+    available:
+      - "cleanup"
+      - "streamlining" 
+      - "aggressive_streamlining"
+      - "conservative_streamlining"
+      - "constant_folding"
+      - "remove_head"
+      - "remove_tail"
+      - "bert_attention_fusion"  # BERT-specific
+      - "bert_layer_fusion"      # BERT-specific
+    exploration:
+      required:
+        - "cleanup"
+      optional:
+        - "constant_folding"
+        - "remove_head"
+        - "remove_tail"
+        - "bert_attention_fusion"
+        - "bert_layer_fusion"
+      mutually_exclusive:
+        - ["aggressive_streamlining", "conservative_streamlining"]
+      dependencies:
+        bert_attention_fusion: ["cleanup"]
+        bert_layer_fusion: ["cleanup", "streamlining"]
+
+  # BERT hardware kernel transforms (extends transformer_base)
+  hw_kernel:
+    available:
+      - "target_fps_parallelization"
+      - "apply_folding_config"
+      - "minimize_bit_width"
+      - "optimize_memory_bandwidth"
+      - "bert_attention_parallelization"  # BERT-specific
+      - "bert_sequence_optimization"      # BERT-specific
+    exploration:
+      required:
+        - "target_fps_parallelization"
+        - "apply_folding_config"
+      optional:
+        - "minimize_bit_width"
+        - "optimize_memory_bandwidth"
+        - "bert_attention_parallelization"
+        - "bert_sequence_optimization"
+
+# BERT-specific configuration files
+configuration_files:
+  folding_override: "configs/bert_folding.json"
+  platform_config: "configs/zynq_ultrascale.yaml"
+  verification_data: "data/bert_test_vectors.npz"
+  model_config: "configs/bert_base_config.json"
+
+# BERT-optimized DSE strategies
+dse_strategies:
+  primary_strategy: "bert_hierarchical"
+  strategies:
+    bert_quick_scan:
+      description: "Fast BERT design space scan"
+      max_evaluations: 30
+      sampling: "latin_hypercube"
+      focus_areas:
+        - "attention_kernels"
+        - "layer_fusion"
+
+    bert_hierarchical:
+      description: "Hierarchical BERT exploration"
+      max_evaluations: 75
+      sampling: "adaptive"
+      focus_areas:
+        - "attention_optimization"
+        - "sequence_length_scaling"
+        - "precision_optimization"
+
+    bert_comprehensive:
+      description: "Complete BERT design space exploration"
+      max_evaluations: 150
+      sampling: "pareto_guided"
+      focus_areas:
+        - "all_combinations"
+      objectives:
+        - "throughput"
+        - "latency"
+        - "power_efficiency"
+
+    bert_latency_focused:
+      description: "BERT optimization focused on low latency"
+      max_evaluations: 50
+      sampling: "adaptive"
+      focus_areas:
+        - "attention_parallelization"
+        - "pipeline_optimization"
+
+# BERT-specific objectives (extends transformer_base)
+objectives:
+  - name: "throughput"
+    direction: "maximize"
+    weight: 1.0
+    target_value: 3000.0
+    description: "Target 3000 inferences per second"
+
+  - name: "latency"
+    direction: "minimize"
+    weight: 1.2
+    target_value: 10.0
+    description: "Target sub-10ms inference latency"
+
+  - name: "resource_efficiency"
+    direction: "maximize"
+    weight: 0.8
+    description: "Maximize FPGA resource utilization efficiency"
+
+  - name: "power_efficiency"
+    direction: "maximize"
+    weight: 0.6
+    description: "Maximize performance per watt"
+
+# BERT-specific constraints (extends transformer_base)
+constraints:
+  - name: "max_lut_utilization"
+    operator: "<="
+    value: 0.85
+    description: "Maximum LUT utilization for BERT"
+
+  - name: "max_dsp_utilization"
+    operator: "<="
+    value: 0.80
+    description: "Maximum DSP utilization for BERT"
+
+  - name: "max_bram_utilization"
+    operator: "<="
+    value: 0.75
+    description: "Maximum BRAM utilization for BERT"
+
+  - name: "max_power"
+    operator: "<="
+    value: 25.0
+    description: "Maximum power consumption for BERT accelerator"
+
+  - name: "min_throughput"
+    operator: ">="
+    value: 1000.0
+    description: "Minimum required throughput"
+
+  - name: "max_latency"
+    operator: "<="
+    value: 20.0
+    description: "Maximum acceptable latency in milliseconds"
+
+  - name: "sequence_length_support"
+    operator: "<="
+    value: 512
+    description: "Maximum supported sequence length"
+
+# BERT model expectations for validation
+expected_model:
+  input_shape: [1, "sequence_length"]
+  architecture: "bert_base"
+  parameters:
+    hidden_size: 768
+    num_attention_heads: 12
+    num_hidden_layers: 12
+    intermediate_size: 3072
+    max_position_embeddings: 512
+  
+  layers:
+    - type: "embeddings"
+      name: "bert_embeddings"
+      components: ["token_embeddings", "position_embeddings", "layer_norm"]
+    
+    - type: "transformer_block"
+      name: "bert_encoder_layers"
+      count: "num_hidden_layers"
+      components:
+        - "multi_head_attention"
+        - "attention_output_dense"
+        - "attention_output_layer_norm"
+        - "intermediate_dense"
+        - "output_dense"
+        - "output_layer_norm"
+    
+    - type: "pooler"
+      name: "bert_pooler"
+      components: ["pooler_dense", "pooler_activation"]
+
+# Platform-specific settings
+platform:
+  target_device: "xczu7ev-ffvc1156-2-e"
+  board: "V80"
+  target_frequency: 200  # MHz
+  enable_zynq_ps: true
+  shell_flow_type: "vivado_zynq"
+
+# Validation and verification settings
+validation:
+  verify_functional_equivalence: true
+  performance_regression_threshold: 0.05
+  accuracy_drop_threshold: 0.01
+  test_vectors_required: true
+  
+  verification_steps:
+    - "cppsim"
+    - "rtlsim"
+    - "cosim"
