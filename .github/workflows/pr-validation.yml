@@ -25,6 +25,12 @@ jobs:
     runs-on: pre-release
     timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
       - name: Setup workflow
         uses: ./.github/actions/workflow-setup
         with:
