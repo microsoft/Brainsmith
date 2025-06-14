@@ -82,3 +82,37 @@ targets:
   throughput_fps: 30
   power_budget_w: 5.0
   accuracy_drop_max: 0.05
+
+# Enhanced kernel and transform selection for DSE
+kernels:
+  # Available kernels for CNN operations
+  available:
+    - "conv2d_hls"
+    - "matmul_rtl"
+  
+  # Optional: operation type mappings for validation
+  operation_mappings:
+    "Convolution": ["conv2d_hls"]
+    "MatMul": ["matmul_rtl"]
+
+transforms:
+  # Core transform pipeline (always applied)
+  core_pipeline:
+    - "cleanup"
+    - "qonnx_to_finn"
+    - "streamlining"
+    - "infer_hardware"
+  
+  # Optional transforms (test with/without)
+  optional:
+    - "cleanup_advanced"
+  
+  # Mutually exclusive transform groups
+  mutually_exclusive: []
+  
+  # Future: Hook-specific pipelines (prepared for 4-hooks)
+  hooks:
+    preprocessing: []
+    transformation: []
+    optimization: []
+    generation: []

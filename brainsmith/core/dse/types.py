@@ -10,6 +10,7 @@ from enum import Enum
 
 # Import key classes to re-export them
 from .design_space import DesignPoint, DesignSpace, ParameterDefinition as DesignSpaceParameterDefinition
+from .kernel_transform_selection import KernelSelection, TransformSelection
 
 # Type aliases for clarity
 ParameterSpace = Dict[str, List[Any]]
@@ -370,5 +371,8 @@ __all__ = [
     'ParameterSpaceValidation',
     
     # Re-exported from design_space module
-    'DesignPoint', 'DesignSpace', 'DesignSpaceParameterDefinition'
+    'DesignPoint', 'DesignSpace', 'DesignSpaceParameterDefinition',
+    
+    # Re-exported from kernel_transform_selection module
+    'KernelSelection', 'TransformSelection'
 ]

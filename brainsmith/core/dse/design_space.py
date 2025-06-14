@@ -9,6 +9,11 @@ from typing import Dict, List, Any, Optional, Tuple
 from enum import Enum
 import json
 import random
+from .kernel_transform_selection import (
+    KernelSelection, TransformSelection, 
+    enumerate_kernel_combinations, enumerate_transform_pipelines,
+    validate_kernel_selection, validate_transform_selection
+)
 
 
 class ParameterType(Enum):
@@ -111,6 +116,12 @@ class DesignSpace:
         self.parameters = {}  # Parameter definitions
         self.design_points = []
         self.blueprint_config = {}
+        
+        # New attributes for kernel/transform selection
+        self.kernel_selection: Optional[KernelSelection] = None
+        self.transform_selection: Optional[TransformSelection] = None
+        self.kernel_choices: List[List[str]] = []  # Generated from kernel_selection
+        self.transform_choices: List[List[str]] = []  # Generated pipeline variants
     
     def add_parameter(self, param_def: ParameterDefinition):
         """Add parameter definition."""
@@ -173,6 +184,17 @@ class DesignSpace:
         # Add all extracted parameters to design space
         for param_name, param_def in parameter_definitions.items():
             design_space.add_parameter(param_def)
+        
+        # Extract kernel and transform selections
+        kernel_selection, transform_selection = design_space._extract_kernel_transform_selections(blueprint_data)
+        design_space.kernel_selection = kernel_selection
+        design_space.transform_selection = transform_selection
+        
+        # Generate choices from selections
+        if kernel_selection:
+            design_space.kernel_choices = design_space._enumerate_kernel_choices(kernel_selection)
+        if transform_selection:
+            design_space.transform_choices = design_space._enumerate_transform_choices(transform_selection)
         
         return design_space
     
@@ -258,8 +280,94 @@ class DesignSpace:
                 default=None
             )
     
+    def _extract_kernel_transform_selections(self, blueprint_data: Dict[str, Any]) -> Tuple[Optional[KernelSelection], Optional[TransformSelection]]:
+        """Extract kernel and transform selections from blueprint."""
+        kernel_selection = None
+        transform_selection = None
+        
+        # Process kernels section
+        if 'kernels' in blueprint_data:
+            kernels_config = blueprint_data['kernels']
+            kernel_selection = KernelSelection(
+                available_kernels=kernels_config.get('available', []),
+                mutually_exclusive_groups=kernels_config.get('mutually_exclusive', []),
+                operation_mappings=kernels_config.get('operation_mappings', {})
+            )
+        
+        # Process transforms section
+        if 'transforms' in blueprint_data:
+            transforms_config = blueprint_data['transforms']
+            transform_selection = TransformSelection(
+                core_pipeline=transforms_config.get('core_pipeline', []),
+                optional_transforms=transforms_config.get('optional', []),
+                mutually_exclusive_groups=transforms_config.get('mutually_exclusive', []),
+                hooks=transforms_config.get('hooks', {})
+            )
+        
+        return kernel_selection, transform_selection
+    
+    def _enumerate_kernel_choices(self, kernel_selection: KernelSelection) -> List[List[str]]:
+        """Generate all valid kernel choice combinations."""
+        return enumerate_kernel_combinations(kernel_selection)
+    
+    def _enumerate_transform_choices(self, transform_selection: TransformSelection) -> List[List[str]]:
+        """Generate all valid transform pipeline variants."""
+        return enumerate_transform_pipelines(transform_selection)
+    
+    def _validate_kernel_availability(self, kernel_names: List[str]) -> List[str]:
+        """Validate kernels against registry and return errors."""
+        try:
+            from brainsmith.libraries.kernels import list_kernels
+            available = list_kernels()
+        except ImportError:
+            return ["Could not import kernel registry"]
+        
+        errors = []
+        for kernel in kernel_names:
+            if kernel not in available:
+                errors.append(f"Kernel '{kernel}' not found in registry. Available: {', '.join(available)}")
+        return errors
+    
+    def _validate_transform_availability(self, transform_names: List[str]) -> List[str]:
+        """Validate transforms against registry and return errors."""
+        try:
+            from brainsmith.libraries.transforms import list_transforms
+            available = list_transforms()
+        except ImportError:
+            return ["Could not import transform registry"]
+        
+        errors = []
+        for transform in transform_names:
+            if transform not in available:
+                errors.append(f"Transform '{transform}' not found in registry. Available: {', '.join(available)}")
+        return errors
+    
+    def validate_kernel_transform_selections(self) -> Tuple[bool, List[str]]:
+        """Validate kernel and transform selections against registries."""
+        errors = []
+        
+        if self.kernel_selection:
+            kernel_errors = self._validate_kernel_availability(self.kernel_selection.available_kernels)
+            errors.extend(kernel_errors)
+            
+            # Validate mutual exclusivity groups
+            for group in self.kernel_selection.mutually_exclusive_groups:
+                group_errors = self._validate_kernel_availability(group)
+                errors.extend(group_errors)
+        
+        if self.transform_selection:
+            all_transforms = (
+                self.transform_selection.core_pipeline +
+                self.transform_selection.optional_transforms +
+                [t for group in self.transform_selection.mutually_exclusive_groups for t in group]
+            )
+            transform_errors = self._validate_transform_availability(all_transforms)
+            errors.extend(transform_errors)
+        
+        return len(errors) == 0, errors
+    
     def validate(self) -> Tuple[bool, List[str]]:
-        """Validate design space configuration."""
+        """Validate design space configuration including kernel/transform selections."""
         errors = []
         
         # Check we have parameters
@@ -274,6 +382,10 @@ class DesignSpace:
                 if param_def.range_min is not None and param_def.range_max is not None:
                     if param_def.range_min >= param_def.range_max:
                         errors.append(f"Parameter {param_name} has invalid range")
+        
+        # New kernel/transform validation
+        kt_valid, kt_errors = self.validate_kernel_transform_selections()
+        errors.extend(kt_errors)
         
         return len(errors) == 0, errors
     
@@ -308,6 +420,14 @@ class DesignSpace:
             else:
                 parameter_space[param_name] = [param_def.default] if param_def.default is not None else [None]
         
+        # Add kernel choices if specified
+        if self.kernel_choices:
+            parameter_space['kernel_selection'] = self.kernel_choices
+        
+        # Add transform pipeline choices if specified  
+        if self.transform_choices:
+            parameter_space['transform_pipeline'] = self.transform_choices
+            
         return parameter_space
     
     def to_dict(self) -> Dict[str, Any]:

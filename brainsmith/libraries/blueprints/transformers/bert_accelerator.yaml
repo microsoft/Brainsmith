@@ -187,3 +187,38 @@ folding_mapping:
     elementwise_mul: 5
     softmax: 1
     layer_norm: 2
+
+# Enhanced kernel and transform selection for DSE
+kernels:
+  # Available kernels for BERT operations
+  available:
+    - "matmul_rtl"
+    - "conv2d_hls"
+  
+  # Optional: operation type mappings for validation
+  operation_mappings:
+    "MatMul": ["matmul_rtl"]
+    "Convolution": ["conv2d_hls"]
+
+transforms:
+  # Core transform pipeline (always applied)
+  core_pipeline:
+    - "cleanup"
+    - "qonnx_to_finn"
+    - "streamlining"
+  
+  # Optional transforms (test with/without)
+  optional:
+    - "remove_head"
+    - "remove_tail"
+  
+  # Mutually exclusive transform groups
+  mutually_exclusive:
+    - ["infer_hardware", "constrain_folding_and_set_pumped_compute"]
+  
+  # Future: Hook-specific pipelines (prepared for 4-hooks)
+  hooks:
+    preprocessing: []
+    transformation: []
+    optimization: []
+    generation: []
