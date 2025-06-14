@@ -1,104 +1,141 @@
-# Brainsmith CI System
+# Brainsmith CI/CD System
 
-## Overview
+## Architecture
 
-Automated testing for Brainsmith using persistent Docker containers and modular actions.
-
-## Current Workflows
-
-### PR Validation (`pr-validation.yml`)
-- **Triggers**: Pull requests, pushes to develop
-- **Runtime**: ~4 hours
-- **Tests**: BERT single layer end-to-end
-- **Disk**: 20GB required
-
-### Biweekly Tests (`biweekly-tests.yml`)  
-- **Triggers**: Monday/Thursday 00:00 UTC
-- **Runtime**: ~24 hours
-- **Tests**: BERT large model
-- **Disk**: 40GB required
-
-## Actions Available
-
-### Core Actions
-- `workflow-setup` - Standard checkout, disk check, cleanup
-- `smithy-build` - Build and verify Docker image  
-- `smithy-exec` - Execute commands in container
-- `run-test` - Execute test with artifact collection
-
-### Utility Actions
-- `check-disk` - Validate disk space
-- `docker-cleanup` - Clean container resources
-- `collect-artifacts` - Collect debugging artifacts
-- `pytest-fpgadataflow` - Unit tests (disabled - tests broken)
-
-## Adding New Workflows
-
-Standard pattern:
-
-```yaml
-jobs:
-  my-test:
-    runs-on: pre-release
-    timeout-minutes: 120
-    steps:
-      - name: Setup
-        uses: ./.github/actions/workflow-setup
-        with:
-          disk-threshold-gb: 30
-
-      - name: Build
-        uses: ./.github/actions/smithy-build
-
-      - name: Test
-        uses: ./.github/actions/run-test
-        with:
-          test-command: "cd demos/bert && make my_test"
-          timeout-minutes: 60
-          artifact-name: my-test-artifacts
-          artifact-retention: 7
+```
+.github/
+├── actions/          # 8 secure composite actions
+│   ├── check-disk/
+│   ├── collect-artifacts/
+│   ├── docker-cleanup/
+│   ├── docker-login/
+│   ├── docker-pull/
+│   ├── docker-push/
+│   ├── smithy-build/
+│   └── smithy-test/
+└── workflows/        # 5 reusable workflows
+    ├── pr-tests.yml           # Fast PR/push validation
+    ├── scheduled-tests.yml    # Comprehensive biweekly testing
+    ├── build-and-push.yml     # Docker build & push
+    ├── run-smithy-test.yml    # Test execution
 ```
 
-## Environment Variables
+## Workflows
 
-Required in workflow environment:
+### Main CI Pipeline (`pr-tests.yml`)
+Fast validation for pull requests and develop branch pushes.
+
+**Triggers**: Push to `develop`, Pull Requests
+**Runtime**: Approximately 2.5 hours
+**Jobs**:
+- `validate-environment` - System validation and setup
+- `docker-build-and-test` - Build Docker image and push to GHCR
+- `e2e-test` - Essential BERT end-to-end tests
+- `cleanup` - Resource cleanup
+
+### Scheduled Testing (`scheduled-tests.yml`)
+Comprehensive testing for complete system validation.
+
+**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)
+**Runtime**: Approximately 28 hours
+**Jobs**:
+- `validate-environment` - System validation and setup
+- `docker-build-and-test` - Build Docker image and push to GHCR
+- `full-test-suite` - Complete unit tests (240 minutes)
+- `bert-large-biweekly` - Large model tests (1440 minutes)
+- `cleanup` - Resource cleanup
+
+**Design**: Separates essential development validation from resource-intensive comprehensive testing.
+
+### Reusable Workflows
+
+These workflows provide standardized operations that are called by the main CI pipelines.
+
+#### `build-and-push.yml`
+Standardized Docker build and publish pipeline used by both main CI workflows.
+
+**Purpose**: Eliminates code duplication and ensures consistent build processes across different execution contexts.
+
+**Process**:
+- Environment validation and resource cleanup
+- Docker image build via composite actions
+- Optional container functionality testing
+- GHCR authentication and image push
+- Artifact preservation for debugging
+
+**Usage:**
 ```yaml
-env:
-  DOCKER_BUILDKIT: 1
-  BSMITH_DOCKER_PREBUILT: "0"
-  BSMITH_DOCKER_NO_CACHE: "1"
-  BSMITH_SKIP_DEP_REPOS: "0"
-  BSMITH_XILINX_VERSION: ${{ vars.BSMITH_XILINX_VERSION }}
-  BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
-  NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
-  BSMITH_DOCKER_TAG: "microsoft/brainsmith:unique-tag"
-  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }}"
+build-job:
+  uses: ./.github/workflows/build-and-push.yml
+  with:
+    runner: 'pre-release'      # Optional: specify runner
+    test-image: true           # Optional: enable container testing
+  secrets:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## Debugging Failed Tests
+#### `run-smithy-test.yml`
+Secure test execution workflow with predefined test types to prevent command injection.
 
-1. **Check logs**: Actions tab → Failed workflow → Expand failed step
-2. **Download artifacts**: Available for 7-14 days after failure
-3. **Local testing**: Use `./smithy daemon && ./smithy exec "command"`
-4. **Container issues**: Check `./smithy status` and `./smithy logs`
+**Purpose**: Provides type-safe test execution with comprehensive artifact collection and error handling.
 
-## Common Issues
+**Process**:
+- Repository checkout and environment setup
+- Docker image authentication and pull
+- Predefined test command execution with timeout protection
+- Artifact collection and upload
+- Resource cleanup
 
-- **Disk space**: Ensure runner has required space (20-40GB)
-- **Container reuse**: Build artifacts cleaned between runs automatically
-- **Timeout**: BERT tests can take hours, timeouts are generous
-- **Dependencies**: Will be fetched automatically if missing
+**Usage:**
+```yaml
+test-job:
+  uses: ./.github/workflows/run-smithy-test.yml
+  with:
+    test-name: "My Test"
+    test-type: "e2e-bert"      # Predefined types only
+    test-variant: "default"    # default | large | clean
+    timeout-minutes: 60
+    collect-artifacts: true    # Optional: artifact collection
+    runner: 'pre-release'      # Optional: specify runner
+  secrets:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
 
-## Test Commands
+**Available Test Types:**
+- `e2e-bert` - BERT end-to-end tests (variants: default, large, clean)
+- `unit-tests` - Unit test suite
+- `integration-tests` - Integration test suite
+- `python-tests` - Python environment validation
 
-Available make targets in `demos/bert/`:
-- `single_layer` - BERT single layer (used in PR validation)  
-- `bert_large_single_layer` - BERT large model (used in biweekly)
+## Composite Actions
 
-## Container Management
+### Infrastructure Actions
+- `check-disk` - Validates available disk space
+- `docker-cleanup` - Cleans Docker resources
+- `collect-artifacts` - Collects CI artifacts with path validation
 
-The CI uses persistent containers via the `smithy` script:
-- `./smithy daemon` - Start background container
-- `./smithy exec "command"` - Run command in container
-- `./smithy cleanup` - Remove container and artifacts
-- `./smithy status` - Check container state
+### Docker Actions
+- `docker-login` - GHCR authentication
+- `docker-pull` - Pull images with digest verification
+- `docker-push` - Push images with digest generation
+- `smithy-build` - Build Docker images
+
+### Test Actions
+- `smithy-test` - Execute predefined test commands
+
+## Adding New Tests
+
+Use the workflow pattern with predefined test types:
+
+```yaml
+my-new-test:
+  uses: ./.github/workflows/run-smithy-test.yml
+  needs: [validate-environment, docker-build-and-test]
+  with:
+    test-name: "Custom Test"
+    test-type: "unit-tests"
+    test-variant: "default"
+    timeout-minutes: 30
+  secrets:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```

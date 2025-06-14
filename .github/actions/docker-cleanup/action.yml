@@ -14,12 +14,4 @@ runs:
         else
             echo "No smithy script found, skipping cleanup"
         fi
-        
-        # Also clean build artifacts that may persist
-        if [ -n "$BSMITH_BUILD_DIR" ] && [ -d "$BSMITH_BUILD_DIR" ]; then
-            echo "=== Cleaning build directory ==="
-            rm -rf "$BSMITH_BUILD_DIR"/* 2>/dev/null || true
-            echo "✓ Build directory cleaned"
-        fi
-        
         echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"
