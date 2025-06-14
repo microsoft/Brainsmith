@@ -21,6 +21,15 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Clean build artifacts before test
+      shell: bash
+      run: |
+        echo "=== Cleaning build artifacts before test ==="
+        if [ -n "$BSMITH_BUILD_DIR" ] && [ -d "$BSMITH_BUILD_DIR" ]; then
+            rm -rf "$BSMITH_BUILD_DIR"/* 2>/dev/null || true
+            echo "✓ Build directory cleaned before test"
+        fi
+
     - name: Execute test
       uses: ./.github/actions/smithy-exec
       with:
