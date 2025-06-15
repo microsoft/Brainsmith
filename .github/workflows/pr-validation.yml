@@ -37,23 +37,6 @@ jobs:
         with:
           disk-threshold-gb: 20
 
-      - name: Debug dependency fetching
-        uses: ./.github/actions/smithy-exec
-        with:
-          command: |
-            echo "=== Checking dependency directories ==="
-            ls -la deps/ || echo "deps directory not found"
-            echo "=== Checking environment variables ==="
-            echo "BSMITH_SKIP_DEP_REPOS: $BSMITH_SKIP_DEP_REPOS"
-            echo "=== Manually fetching dependencies if needed ==="
-            if [ ! -d "deps/pyxsi" ]; then
-              echo "Dependencies missing, running fetch manually..."
-              cd docker && ./fetch-repos.sh
-            fi
-            echo "=== Final dependency check ==="
-            ls -la deps/ || echo "Still no deps directory"
-          timeout-minutes: 30
-
       - name: Run E2E test
         uses: ./.github/actions/run-test-with-artifacts
         with:
