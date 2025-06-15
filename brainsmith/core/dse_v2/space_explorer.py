@@ -149,7 +149,7 @@ class DesignSpaceExplorer:
     
     def explore_design_space(self, 
                            model_path: str,
-                           evaluation_function: Callable[[str, ComponentCombination], Dict[str, Any]]) -> ExplorationResults:
+                           evaluation_function: Optional[Callable[[str, ComponentCombination], Dict[str, Any]]] = None) -> ExplorationResults:
         """
         Explore the design space using the configured strategy.
         
@@ -306,7 +306,15 @@ class DesignSpaceExplorer:
         # Evaluate combination
         start_time = time.time()
         try:
-            metrics = evaluation_function(model_path, combination)
+            # Use FINN bridge if no evaluation function provided
+            if evaluation_function is None:
+                from ..finn_v2 import FINNEvaluationBridge
+                # Get blueprint config from design space
+                blueprint_config = getattr(self.design_space, 'blueprint_config', {})
+                finn_bridge = FINNEvaluationBridge(blueprint_config)
+                metrics = finn_bridge.evaluate_combination(model_path, combination)
+            else:
+                metrics = evaluation_function(model_path, combination)
             evaluation_time = time.time() - start_time
             
             result = {

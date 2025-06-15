@@ -10,6 +10,8 @@ Essential Functions: forge + 12 helpers + 3 classes for complete FPGA workflow
 
 # Primary North Star function
 from .api import forge, validate_blueprint
+from .api_v2 import forge_v2, validate_blueprint_v2
+from . import finn_v2
 from .metrics import DSEMetrics
 
 # Essential classes (3 core concepts)
