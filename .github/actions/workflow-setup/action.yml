@@ -1,0 +1,43 @@
+name: 'Workflow Setup'
+description: 'Standard initialization for CI workflows'
+inputs:
+  disk-threshold-gb:
+    description: 'Required disk space in GB'
+    type: number
+    default: 20
+  checkout-submodules:
+    description: 'Whether to checkout submodules'
+    type: boolean
+    default: true
+  checkout-fetch-depth:
+    description: 'Number of commits to fetch'
+    type: number
+    default: 0
+
+outputs:
+  setup-complete:
+    description: 'Whether setup completed successfully'
+    value: 'true'
+  docker-image-built:
+    description: 'Whether Docker image was built successfully'  
+    value: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: ${{ inputs.checkout-submodules == 'true' && 'recursive' || 'false' }}
+        fetch-depth: ${{ inputs.checkout-fetch-depth }}
+
+    - name: Check disk space
+      uses: ./.github/actions/check-disk
+      with:
+        threshold-gb: ${{ inputs.disk-threshold-gb }}
+
+    - name: Clean Docker resources
+      uses: ./.github/actions/docker-cleanup
+
+    - name: Build Docker image
+      uses: ./.github/actions/build-docker

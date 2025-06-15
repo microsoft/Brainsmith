@@ -25,22 +25,10 @@ jobs:
     runs-on: pre-release
     timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Setup workflow
+        uses: ./.github/actions/workflow-setup
         with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Check disk space
-        uses: ./.github/actions/check-disk
-        with:
-          threshold-gb: 20
-
-      - name: Clean Docker resources
-        uses: ./.github/actions/docker-cleanup
-
-      - name: Build Docker image
-        uses: ./.github/actions/build-docker
+          disk-threshold-gb: 20
 
       - name: Debug dependency fetching
         uses: ./.github/actions/smithy-exec
@@ -60,25 +48,10 @@ jobs:
           timeout-minutes: 30
 
       - name: Run E2E test
-        uses: ./.github/actions/smithy-exec
+        uses: ./.github/actions/run-test-with-artifacts
         with:
           command: "cd demos/bert && make single_layer"
-          timeout-minutes: 240  # 4 hours for BERT processing
-
-      - name: Collect artifacts on failure
-        if: failure()
-        uses: ./.github/actions/collect-artifacts
-        with:
-          artifact-directory: pr-failure-artifacts
-
-      - name: Upload artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-validation-failure-${{ github.run_id }}
-          path: pr-failure-artifacts/
+          timeout-minutes: 240
+          artifact-name: "pr-failure-artifacts"
+          collect-on: "failure"
           retention-days: 7
-
-      - name: Final cleanup
-        if: always()
-        uses: ./.github/actions/docker-cleanup
