@@ -33,7 +33,6 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         log_error "Expected marker file: $READINESS_MARKER"
         log_error "Check container logs with: docker logs <container-name>"
         log_error "Or wait for initialization to complete and try again."
-        log_info "Debug: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS, READINESS_MARKER=$READINESS_MARKER"
         exit 1
     fi
     
