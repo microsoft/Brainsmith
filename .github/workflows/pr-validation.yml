@@ -21,7 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  bert-single-layer-test:
+    name: BERT Single Layer E2E Test
     runs-on: pre-release
     timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:

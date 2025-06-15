@@ -4,138 +4,114 @@
 
 ```
 .github/
-├── actions/          # 8 secure composite actions
-│   ├── check-disk/
-│   ├── collect-artifacts/
-│   ├── docker-cleanup/
-│   ├── docker-login/
-│   ├── docker-pull/
-│   ├── docker-push/
-│   ├── smithy-build/
-│   └── smithy-test/
-└── workflows/        # 5 reusable workflows
-    ├── pr-tests.yml           # Fast PR/push validation
-    ├── scheduled-tests.yml    # Comprehensive biweekly testing
-    ├── build-and-push.yml     # Docker build & push
-    ├── run-smithy-test.yml    # Test execution
+├── actions/          # 8 modular composite actions
+│   ├── build-docker/         # Docker build with verification
+│   ├── check-disk/          # Disk space validation
+│   ├── collect-artifacts/   # Safe artifact collection
+│   ├── docker-cleanup/      # Container & build cleanup
+│   ├── run-test-with-artifacts/  # Complete test lifecycle
+│   ├── smithy-exec/         # Command execution with daemon
+│   └── workflow-setup/      # Standard initialization
+└── workflows/        # 2 focused workflows
+    ├── pr-validation.yml     # BERT Single Layer E2E Test
+    └── biweekly-tests.yml    # BERT Large Model Test
 ```
 
 ## Workflows
 
-### Main CI Pipeline (`pr-tests.yml`)
+### PR Validation (`pr-validation.yml`)
 Fast validation for pull requests and develop branch pushes.
 
-**Triggers**: Push to `develop`, Pull Requests
-**Runtime**: Approximately 2.5 hours
-**Jobs**:
-- `validate-environment` - System validation and setup
-- `docker-build-and-test` - Build Docker image and push to GHCR
-- `e2e-test` - Essential BERT end-to-end tests
-- `cleanup` - Resource cleanup
+**Triggers**: Push to `develop`, Pull Requests  
+**Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)  
+**Job**: `bert-single-layer-test` (BERT Single Layer E2E Test)
 
-### Scheduled Testing (`scheduled-tests.yml`)
-Comprehensive testing for complete system validation.
+**Steps**:
+1. Checkout repository
+2. Setup workflow (disk check, cleanup, build)
+3. Debug dependency fetching
+4. Run E2E test with artifact collection
 
-**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)
-**Runtime**: Approximately 28 hours
-**Jobs**:
-- `validate-environment` - System validation and setup
-- `docker-build-and-test` - Build Docker image and push to GHCR
-- `full-test-suite` - Complete unit tests (240 minutes)
-- `bert-large-biweekly` - Large model tests (1440 minutes)
-- `cleanup` - Resource cleanup
+### Biweekly Tests (`biweekly-tests.yml`)
+Comprehensive testing for large model validation.
 
-**Design**: Separates essential development validation from resource-intensive comprehensive testing.
+**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)  
+**Runtime**: ~24 hours  
+**Job**: `bert-large-comprehensive-test` (BERT Large Model Comprehensive Test)
 
-### Reusable Workflows
+**Steps**:
+1. Checkout repository
+2. Setup workflow (disk check, cleanup, build)
+3. Run BERT Large test with artifact collection
 
-These workflows provide standardized operations that are called by the main CI pipelines.
+## Action Architecture
 
-#### `build-and-push.yml`
-Standardized Docker build and publish pipeline used by both main CI workflows.
+### Layer 2: Composite Actions (Orchestration)
 
-**Purpose**: Eliminates code duplication and ensures consistent build processes across different execution contexts.
-
-**Process**:
-- Environment validation and resource cleanup
-- Docker image build via composite actions
-- Optional container functionality testing
-- GHCR authentication and image push
-- Artifact preservation for debugging
-
-**Usage:**
+#### `workflow-setup`
+Standard initialization for all workflows.
 ```yaml
-build-job:
-  uses: ./.github/workflows/build-and-push.yml
+- uses: ./.github/actions/workflow-setup
   with:
-    runner: 'pre-release'      # Optional: specify runner
-    test-image: true           # Optional: enable container testing
-  secrets:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+    disk-threshold-gb: 20  # or 40 for biweekly
 ```
+**Process**: Check disk → Clean Docker → Build image
 
-#### `run-smithy-test.yml`
-Secure test execution workflow with predefined test types to prevent command injection.
-
-**Purpose**: Provides type-safe test execution with comprehensive artifact collection and error handling.
-
-**Process**:
-- Repository checkout and environment setup
-- Docker image authentication and pull
-- Predefined test command execution with timeout protection
-- Artifact collection and upload
-- Resource cleanup
-
-**Usage:**
+#### `run-test-with-artifacts`
+Complete test lifecycle with conditional artifact collection.
 ```yaml
-test-job:
-  uses: ./.github/workflows/run-smithy-test.yml
+- uses: ./.github/actions/run-test-with-artifacts
   with:
-    test-name: "My Test"
-    test-type: "e2e-bert"      # Predefined types only
-    test-variant: "default"    # default | large | clean
-    timeout-minutes: 60
-    collect-artifacts: true    # Optional: artifact collection
-    runner: 'pre-release'      # Optional: specify runner
-  secrets:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+    command: "cd demos/bert && make single_layer"
+    timeout-minutes: 240
+    artifact-name: "test-results"
+    collect-on: "failure"  # or "always"
+    retention-days: 7
 ```
+**Process**: Execute test → Collect artifacts → Upload → Cleanup
 
-**Available Test Types:**
-- `e2e-bert` - BERT end-to-end tests (variants: default, large, clean)
-- `unit-tests` - Unit test suite
-- `integration-tests` - Integration test suite
-- `python-tests` - Python environment validation
+### Layer 3: Core Actions (Specific Tasks)
 
-## Composite Actions
+#### Infrastructure Actions
+- `check-disk` - Validates available disk space with configurable thresholds
+- `docker-cleanup` - Cleans containers AND persistent build directories
+- `collect-artifacts` - Collects system info, container logs, and test artifacts
 
-### Infrastructure Actions
-- `check-disk` - Validates available disk space
-- `docker-cleanup` - Cleans Docker resources
-- `collect-artifacts` - Collects CI artifacts with path validation
+#### Docker Actions  
+- `build-docker` - Builds image with verification and timing fixes
+- `smithy-exec` - Executes commands with daemon lifecycle management
 
-### Docker Actions
-- `docker-login` - GHCR authentication
-- `docker-pull` - Pull images with digest verification
-- `docker-push` - Push images with digest generation
-- `smithy-build` - Build Docker images
+## Adding New Workflows
 
-### Test Actions
-- `smithy-test` - Execute predefined test commands
-
-## Adding New Tests
-
-Use the workflow pattern with predefined test types:
+The modular architecture makes adding new workflows trivial:
 
 ```yaml
-my-new-test:
-  uses: ./.github/workflows/run-smithy-test.yml
-  needs: [validate-environment, docker-build-and-test]
-  with:
-    test-name: "Custom Test"
-    test-type: "unit-tests"
-    test-variant: "default"
-    timeout-minutes: 30
-  secrets:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+name: New Test Type
+
+on:
+  workflow_dispatch:
+
+jobs:
+  my-test:
+    runs-on: pre-release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup workflow
+        uses: ./.github/actions/workflow-setup
+        with:
+          disk-threshold-gb: 30
+
+      - name: Run my test
+        uses: ./.github/actions/run-test-with-artifacts
+        with:
+          command: "my test command"
+          timeout-minutes: 60
+          artifact-name: "my-test-results"
+          collect-on: "failure"
+          retention-days: 7
 ```

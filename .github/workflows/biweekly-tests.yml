@@ -21,7 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  bert-large-tests:
+  bert-large-comprehensive-test:
+    name: BERT Large Model Comprehensive Test
     runs-on: pre-release
     timeout-minutes: 1440  # 24 hours
     steps:
