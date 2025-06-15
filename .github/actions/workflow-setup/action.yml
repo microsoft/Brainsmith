@@ -1,18 +1,10 @@
 name: 'Workflow Setup'
-description: 'Standard initialization for CI workflows'
+description: 'Standard initialization for CI workflows (after checkout)'
 inputs:
   disk-threshold-gb:
     description: 'Required disk space in GB'
     type: number
     default: 20
-  checkout-submodules:
-    description: 'Whether to checkout submodules'
-    type: boolean
-    default: true
-  checkout-fetch-depth:
-    description: 'Number of commits to fetch'
-    type: number
-    default: 0
 
 outputs:
   setup-complete:
@@ -25,12 +17,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: ${{ inputs.checkout-submodules == 'true' && 'recursive' || 'false' }}
-        fetch-depth: ${{ inputs.checkout-fetch-depth }}
-
     - name: Check disk space
       uses: ./.github/actions/check-disk
       with:
