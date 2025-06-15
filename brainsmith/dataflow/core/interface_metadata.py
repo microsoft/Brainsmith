@@ -27,6 +27,15 @@ class InterfaceMetadata:
     default_layout: Optional[str] = None
     description: Optional[str] = None
     
+    # NEW: Optional datatype parameter mappings
+    datatype_params: Optional[Dict[str, str]] = None
+    """
+    Optional mapping of datatype properties to RTL parameters.
+    If None, defaults to {clean_interface_name}_WIDTH, {clean_interface_name}_SIGNED pattern.
+    
+    Example: {"width": "INPUT0_WIDTH", "signed": "SIGNED_INPUT0"}
+    """
+    
     def __post_init__(self):
         """Validate metadata parameters."""
         if not self.name:
@@ -65,6 +74,48 @@ class InterfaceMetadata:
             else:
                 descriptions.append(f"{group.base_type}{group.min_width}-{group.max_width}")
         return ", ".join(descriptions)
+    
+    def get_datatype_parameter_name(self, property_type: str) -> str:
+        """
+        Get RTL parameter name for a datatype property.
+        
+        Args:
+            property_type: 'width', 'signed', 'format', 'bias', 'fractional_width'
+            
+        Returns:
+            RTL parameter name (e.g., 'INPUT0_WIDTH', 'SIGNED_INPUT0')
+        """
+        if self.datatype_params and property_type in self.datatype_params:
+            return self.datatype_params[property_type]
+        
+        # Default naming convention
+        clean_name = self._get_clean_interface_name()
+        if property_type == 'width':
+            return f"{clean_name}_WIDTH"
+        elif property_type == 'signed':
+            return f"SIGNED_{clean_name}"
+        elif property_type == 'format':
+            return f"{clean_name}_FORMAT"
+        elif property_type == 'bias':
+            return f"{clean_name}_BIAS"
+        elif property_type == 'fractional_width':
+            return f"{clean_name}_FRACTIONAL_WIDTH"
+        else:
+            return f"{clean_name}_{property_type.upper()}"
+    
+    def _get_clean_interface_name(self) -> str:
+        """Extract clean name from interface for parameter generation."""
+        # Remove common prefixes/suffixes: s_axis_input0 -> INPUT0
+        clean = self.name
+        for prefix in ['s_axis_', 'm_axis_', 'axis_']:
+            if clean.startswith(prefix):
+                clean = clean[len(prefix):]
+                break
+        for suffix in ['_tdata', '_tvalid', '_tready']:
+            if clean.endswith(suffix):
+                clean = clean[:-len(suffix)]
+                break
+        return clean.upper()
 
 
 @dataclass

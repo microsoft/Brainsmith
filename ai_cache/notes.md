@@ -1,0 +1,1 @@
+1. swg in rtllib only has axi in the wrapper: not ingestible w/ HWKG

@@ -98,21 +98,19 @@ class {{ class_name }}(AutoHWCustomOp):
         # Start with parent class attributes
         my_attrs = {}
         
-        # RTL parameters as node attributes
+        # RTL parameters as node attributes (excluding datatype-linked parameters)
         {% for param in parameter_definitions %}
+        {% if param.name not in datatype_linked_params %}
         {% if param.is_whitelisted and param.default_value %}
         my_attrs["{{ param.name }}"] = ("i", False, {{ param.default_value }})  # Optional with default
         {% else %}
         my_attrs["{{ param.name }}"] = ("i", True, None)  # Required parameter
         {% endif %}
-        {% endfor %}
-        
-        # Datatype attributes for all dataflow interfaces
-        {% for interface in interface_metadata %}
-        {% if interface.interface_type.name != 'CONTROL' %}
-        my_attrs["{{ interface.name }}_dtype"] = ("s", True, "")  # Required datatype specification
         {% endif %}
         {% endfor %}
+        
+        # Note: Interface datatype parameters (width, signed, etc.) are handled by RTLBackend
+        # and are not exposed as HWCustomOp node attributes
         
         # Hardware-specific attributes from RTL analysis
         {% for attr_name, attr_spec in node_attributes.items() %}
@@ -184,17 +182,15 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     """
     Create {{ class_name }} ONNX node.
     
-    Required parameters:
+    Required algorithm parameters:
     {% for param in required_attributes %}
+    {% if param not in datatype_linked_params %}
     - {{ param }}: int
-    {% endfor %}
-    
-    Required datatype specifications:
-    {% for interface in interface_metadata %}
-    {% if interface.interface_type.name != 'CONTROL' %}
-    - {{ interface.name }}_dtype: str (e.g., "UINT8", "FIXED<16,8>")
     {% endif %}
     {% endfor %}
+    
+    Note: Interface datatype parameters (width, signed, format, etc.) are handled 
+    by the RTLBackend and should not be specified as node attributes.
     
     Optional parameters (with defaults):
     {% for param_name, default_value in whitelisted_defaults.items() %}
@@ -203,23 +199,13 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     """
     import onnx.helper
     
-    # Validate required parameters
-    required = {{ required_attributes }}
-    missing = [p for p in required if p not in node_attrs]
+    # Validate required algorithm parameters (excluding datatype-linked parameters)
+    required_algorithm_params = [p for p in {{ required_attributes }} if p not in {{ datatype_linked_params }}]
+    missing = [p for p in required_algorithm_params if p not in node_attrs]
     if missing:
-        raise ValueError(f"Missing required parameters: {missing}")
+        raise ValueError(f"Missing required algorithm parameters: {missing}")
     
-    # Validate required datatypes
-    required_dtypes = [
-        {% for interface in interface_metadata %}
-        {% if interface.interface_type.name != 'CONTROL' %}
-        "{{ interface.name }}_dtype",
-        {% endif %}
-        {% endfor %}
-    ]
-    missing_dtypes = [dt for dt in required_dtypes if dt not in node_attrs]
-    if missing_dtypes:
-        raise ValueError(f"Missing required datatype specifications: {missing_dtypes}")
+    # Note: Interface datatype parameters are handled by RTLBackend, not node attributes
     
     return onnx.helper.make_node(
         "{{ class_name }}",

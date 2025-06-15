@@ -1,0 +1,57 @@
+{
+  "kernel_name": "multi_input_add",
+  "source_file": "multi_input_test.sv",
+  "validation_passed": true,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "generated_files": [
+    "multi_input_add_hw_custom_op.py",
+    "multi_input_add_wrapper.v",
+    "test_multi_input_add.py"
+  ],
+  "generation_time_ms": null,
+  "summary": {
+    "kernel_name": "multi_input_add",
+    "source_file": "multi_input_test.sv",
+    "success": true,
+    "files_generated": 3,
+    "validation_passed": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "generation_time_ms": null,
+    "output_directory": "test_output_multi/multi_input_add",
+    "files_written": 3,
+    "metadata_files": 0
+  },
+  "template_context": {
+    "parameter_count": 8,
+    "interface_count": 4,
+    "required_parameters": [
+      "INPUT0_WIDTH",
+      "SIGNED_INPUT0",
+      "INPUT1_WIDTH",
+      "SIGNED_INPUT1",
+      "OUTPUT_WIDTH",
+      "SIGNED_OUTPUT",
+      "ALGORITHM_PARAM"
+    ],
+    "whitelisted_defaults": {
+      "PE": 1
+    }
+  },
+  "kernel_metadata": {
+    "parameter_count": 8,
+    "interface_count": 4,
+    "parameter_names": [
+      "INPUT0_WIDTH",
+      "SIGNED_INPUT0",
+      "INPUT1_WIDTH",
+      "SIGNED_INPUT1",
+      "OUTPUT_WIDTH",
+      "SIGNED_OUTPUT",
+      "ALGORITHM_PARAM",
+      "PE"
+    ]
+  }
+}

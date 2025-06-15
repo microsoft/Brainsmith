@@ -56,6 +56,7 @@ class PragmaType(Enum):
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
     WEIGHT = "weight"                  # Specify interface as a weight
     BDIM = "bdim"                      # Override block dimensions for an interface
+    DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
 
 # --- Simple Data Structures ---
 
@@ -739,6 +740,72 @@ class WeightPragma(Pragma, InterfaceNameMatcher):
             interface_type=InterfaceType.WEIGHT,  # Override type
             datatype_constraints=metadata.datatype_constraints,
             chunking_strategy=metadata.chunking_strategy
+        )
+
+
+@dataclass 
+class DatatypeParamPragma(Pragma, InterfaceNameMatcher):
+    """
+    Maps specific RTL parameters to interface datatype properties.
+    
+    Syntax: @brainsmith DATATYPE_PARAM <interface_name> <property_type> <parameter_name>
+    
+    Examples:
+    // @brainsmith DATATYPE_PARAM s_axis_input0 width INPUT0_WIDTH
+    // @brainsmith DATATYPE_PARAM s_axis_input0 signed SIGNED_INPUT0
+    // @brainsmith DATATYPE_PARAM s_axis_query width QUERY_WIDTH
+    // @brainsmith DATATYPE_PARAM s_axis_wq width WQ_WIDTH
+    """
+    
+    def _parse_inputs(self) -> Dict:
+        if len(self.inputs) != 3:
+            raise PragmaError("DATATYPE_PARAM pragma requires interface_name, property_type, parameter_name")
+        
+        interface_name = self.inputs[0]
+        property_type = self.inputs[1].lower()
+        parameter_name = self.inputs[2]
+        
+        # Validate property type
+        valid_properties = ['width', 'signed', 'format', 'bias', 'fractional_width']
+        if property_type not in valid_properties:
+            raise PragmaError(f"Invalid property_type '{property_type}'. Must be one of: {valid_properties}")
+        
+        return {
+            "interface_name": interface_name,
+            "property_type": property_type, 
+            "parameter_name": parameter_name
+        }
+    
+    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
+        """Check if this pragma applies to the given interface."""
+        if not self.parsed_data:
+            return False
+        
+        pragma_interface_name = self.parsed_data.get('interface_name')
+        if not pragma_interface_name:
+            return False
+        
+        return self._interface_names_match(pragma_interface_name, metadata.name)
+    
+    def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply DATATYPE_PARAM pragma to set datatype parameter mapping."""
+        if not self.applies_to_interface_metadata(metadata):
+            return metadata
+        
+        property_type = self.parsed_data['property_type']
+        parameter_name = self.parsed_data['parameter_name']
+        
+        # Initialize datatype_params if not set
+        current_params = metadata.datatype_params or {}
+        current_params[property_type] = parameter_name
+        
+        return InterfaceMetadata(
+            name=metadata.name,
+            interface_type=metadata.interface_type,
+            datatype_constraints=metadata.datatype_constraints,
+            chunking_strategy=metadata.chunking_strategy,
+            description=metadata.description,
+            datatype_params=current_params
         )
 
 

@@ -18,7 +18,7 @@ from tree_sitter import Node
 
 from .data import (
     Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma,
-    DerivedParameterPragma, WeightPragma, PragmaError
+    DerivedParameterPragma, WeightPragma, DatatypeParamPragma, PragmaError
 )
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
@@ -41,6 +41,7 @@ class PragmaHandler:
             PragmaType.BDIM: BDimPragma,
             PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
             PragmaType.WEIGHT: WeightPragma,
+            PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
         }
 
     def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:

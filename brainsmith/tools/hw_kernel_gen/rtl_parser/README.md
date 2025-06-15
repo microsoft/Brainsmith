@@ -19,6 +19,11 @@ The RTL Parser operates as the first stage in the Hardware Kernel Generator pipe
 
 The extracted information is packaged in a `KernelMetadata` object that directly informs the generation of the FINN compiler integration files for the input Kernel. It also enforces restrictions on Interfaces and parameters (types, amounts, formatting, etc.), validating compatibility across the compilation pipeline.
 
+The RTL Parser output enables the template generation system to:
+- Generate HWCustomOp classes with proper parameter separation (algorithm parameters exposed as node attributes, datatype parameters reserved for RTLBackend)
+- Create interface metadata with datatype parameter mappings for multi-interface support
+- Validate pragma consistency and parameter references during parsing
+
 ## Architecture
 
 The RTL Parser follows a multi-stage pipeline architecture with direct metadata generation:
@@ -200,21 +205,23 @@ Pragmas are special comments that provide additional metadata to the Hardware Ke
 
 The pragma system uses a chain-of-responsibility pattern with robust error isolation, meaning individual pragma failures don't break the entire parsing process.
 
+For a quick reference guide, see [PRAGMA_GUIDE.md](PRAGMA_GUIDE.md) in this directory.
+
 ### Supported Pragmas
 
 #### 1. Top Module Selection
 ```systemverilog
-// @brainsmith top_module my_target_module
+// @brainsmith TOP_MODULE my_target_module
 ```
 Specifies which module to use when multiple modules exist in the file.
 
 #### 2. Interface Datatype Constraints
 ```systemverilog
-// @brainsmith datatype in0 UINT 8 16
-// @brainsmith datatype weights FIXED 8 8
-// @brainsmith datatype config INT 4 12
+// @brainsmith DATATYPE in0 UINT 8 16
+// @brainsmith DATATYPE weights FIXED 8 8
+// @brainsmith DATATYPE config INT 4 12
 ```
-Defines datatype constraint groups for interfaces using the new QONNX integration format:
+Defines datatype constraint groups for interfaces using the QONNX integration format:
 - `interface_name`: Target interface (supports flexible name matching)
 - `base_type`: UINT, INT, or FIXED
 - `min_width`: Minimum bit width (must be positive)
@@ -224,12 +231,12 @@ Creates `DatatypeConstraintGroup` objects that are added to `InterfaceMetadata.d
 
 #### 3. Block Dimension Chunking (BDIM)
 ```systemverilog
-// @brainsmith bdim in0 [PE]
-// @brainsmith bdim in0 [SIMD,PE]
-// @brainsmith bdim weights [:,:,PE] RINDEX=1
-// @brainsmith bdim out0 [TILE_SIZE,:]
+// @brainsmith BDIM in0 [PE]
+// @brainsmith BDIM in0 [SIMD,PE]
+// @brainsmith BDIM weights [:,:,PE] RINDEX=1
+// @brainsmith BDIM out0 [TILE_SIZE,:]
 ```
-**NEW SIMPLIFIED FORMAT** - Defines block chunking strategies with parameter names only:
+Defines block chunking strategies with parameter names only:
 - `interface_name`: Target interface (supports flexible name matching)  
 - `[shape]`: Block shape using parameter names and `:` (full dimension)
 - `RINDEX=n`: Optional starting index for chunking (default: 0)
@@ -240,14 +247,27 @@ Creates `BlockChunkingStrategy` objects replacing default chunking strategies.
 
 #### 4. Weight Interfaces
 ```systemverilog
-// @brainsmith weight weights
-// @brainsmith weight weights bias params
+// @brainsmith WEIGHT weights
+// @brainsmith WEIGHT weights bias params
 ```
 Marks interfaces as carrying weight data by changing their `InterfaceType` to `WEIGHT`. Supports multiple interface names in a single pragma.
 
-#### 5. Derived Parameters  
+#### 5. Datatype Parameter Mapping
 ```systemverilog
-// @brainsmith derived_parameter my_function param1 param2
+// @brainsmith DATATYPE_PARAM s_axis_input0 width INPUT0_WIDTH
+// @brainsmith DATATYPE_PARAM s_axis_input0 signed SIGNED_INPUT0
+// @brainsmith DATATYPE_PARAM s_axis_query width QUERY_WIDTH
+```
+Maps interface datatype properties to specific RTL parameters for multi-interface support:
+- `interface_name`: Target interface (supports flexible name matching)
+- `property_type`: width, signed, format, bias, fractional_width
+- `parameter_name`: RTL parameter to map to
+
+This enables fine-grained control of datatype parameters across multiple interfaces of the same type. Mapped parameters are handled by the RTLBackend and excluded from HWCustomOp node attributes.
+
+#### 6. Derived Parameters  
+```systemverilog
+// @brainsmith DERIVED_PARAMETER my_function param1 param2
 ```
 Links module parameters to Python functions for complex parameter derivation. Adds derived parameters to the kernel metadata.
 
@@ -338,6 +358,7 @@ class InterfaceMetadata:
     interface_type: InterfaceType                # Interface type (INPUT/OUTPUT/WEIGHT/CONFIG/CONTROL)
     datatype_constraints: List[DatatypeConstraintGroup]  # QONNX datatype constraints
     chunking_strategy: ChunkingStrategy          # Block chunking strategy
+    datatype_params: Optional[Dict[str, str]]    # Mapping of datatype properties to RTL parameters
     description: Optional[str]                   # Optional description
 ```
 

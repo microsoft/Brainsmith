@@ -131,11 +131,32 @@ class TemplateContextGenerator:
                 "is_required": param.is_required
             })
         
-        # Get dataflow interfaces
-        dataflow_interfaces = [
-            iface for iface in template_ctx.interface_metadata 
-            if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]
-        ]
+        # Get dataflow interfaces with enhanced datatype parameter info
+        dataflow_interfaces = []
+        for iface in template_ctx.interface_metadata:
+            if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+                # Add datatype parameter generation to interface
+                interface_dict = {
+                    'name': iface.name,
+                    'interface_type': iface.interface_type,
+                    'datatype_constraints': iface.datatype_constraints,
+                    'chunking_strategy': iface.chunking_strategy,
+                    'description': iface.description,
+                    'datatype_params': iface.datatype_params,
+                    # Generate parameter names for common properties
+                    'width_param': iface.get_datatype_parameter_name('width'),
+                    'signed_param': iface.get_datatype_parameter_name('signed'),
+                    'format_param': iface.get_datatype_parameter_name('format'),
+                    'bias_param': iface.get_datatype_parameter_name('bias'),
+                    'fractional_width_param': iface.get_datatype_parameter_name('fractional_width')
+                }
+                dataflow_interfaces.append(interface_dict)
+        
+        # Collect all datatype-linked parameters to exclude from node attributes
+        datatype_linked_params = set()
+        for iface in template_ctx.interface_metadata:
+            if iface.datatype_params:
+                datatype_linked_params.update(iface.datatype_params.values())
         
         # Start with the basic context
         context = {
@@ -143,15 +164,16 @@ class TemplateContextGenerator:
             "class_name": template_ctx.class_name,
             "source_file": str(template_ctx.source_file),
             "generation_timestamp": datetime.now().isoformat(),
+            "datatype_linked_params": list(datatype_linked_params),
             
             # Interface metadata
             "interface_metadata": template_ctx.interface_metadata,
             "interfaces_list": template_ctx.interface_metadata,  # Compatibility
             
-            # Categorized interfaces
-            "input_interfaces": template_ctx.input_interfaces,
-            "output_interfaces": template_ctx.output_interfaces,
-            "weight_interfaces": template_ctx.weight_interfaces,
+            # Categorized interfaces with datatype parameter info
+            "input_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.input_interfaces),
+            "output_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.output_interfaces),
+            "weight_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.weight_interfaces),
             "config_interfaces": template_ctx.config_interfaces,
             "control_interfaces": template_ctx.control_interfaces,
             "dataflow_interfaces": dataflow_interfaces,
@@ -423,3 +445,24 @@ class TemplateContextGenerator:
         }
         # Note: get_exp_cycles and calc_tmem handled by AutoHWCustomOp parent class
         return methods
+    
+    def _enhance_interfaces_with_datatype_params(self, interfaces: List[InterfaceMetadata]) -> List[Dict[str, Any]]:
+        """Enhance interface list with datatype parameter information for templates."""
+        enhanced_interfaces = []
+        for iface in interfaces:
+            interface_dict = {
+                'name': iface.name,
+                'interface_type': iface.interface_type,
+                'datatype_constraints': iface.datatype_constraints,
+                'chunking_strategy': iface.chunking_strategy,
+                'description': iface.description,
+                'datatype_params': iface.datatype_params,
+                # Generate parameter names for common properties
+                'width_param': iface.get_datatype_parameter_name('width'),
+                'signed_param': iface.get_datatype_parameter_name('signed'),
+                'format_param': iface.get_datatype_parameter_name('format'),
+                'bias_param': iface.get_datatype_parameter_name('bias'),
+                'fractional_width_param': iface.get_datatype_parameter_name('fractional_width')
+            }
+            enhanced_interfaces.append(interface_dict)
+        return enhanced_interfaces
