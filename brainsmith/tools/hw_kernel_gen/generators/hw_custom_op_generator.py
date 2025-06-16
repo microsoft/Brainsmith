@@ -27,17 +27,4 @@ class HWCustomOpGenerator(GeneratorBase):
     template_file = "hw_custom_op_phase2.py.j2"
     output_pattern = "{kernel_name}_hw_custom_op.py"
     
-    def process_context(self, context: TemplateContext) -> Dict:
-        """
-        Process context for HWCustomOp generation.
-        
-        Uses default pass-through behavior since the Phase 2 template
-        expects the full context structure.
-        
-        Args:
-            context: Full template context
-            
-        Returns:
-            Context dictionary for template rendering
-        """
-        return self.context_to_dict(context)
+    # Using base class process_context which now properly converts TemplateContext

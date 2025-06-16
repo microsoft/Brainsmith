@@ -42,6 +42,11 @@
 // @brainsmith BDIM m_axis [C] [PE]
 // @brainsmith DATATYPE s_axis FIXED WI WI
 // @brainsmith DATATYPE m_axis FIXED O_BITS O_BITS
+// @brainsmith DATATYPE_PARAM s_axis width WI
+// @brainsmith DATATYPE_PARAM s_axis signed SIGNED
+// @brainsmith DATATYPE_PARAM s_axis format FPARG
+// @brainsmith DATATYPE_PARAM m_axis width O_BITS
+// @brainsmith DATATYPE_PARAM m_axis bias BIAS
 
 module thresholding_axi #(
 	int unsigned  N,	// output precision

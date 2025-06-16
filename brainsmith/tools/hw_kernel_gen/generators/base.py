@@ -39,9 +39,8 @@ class GeneratorBase(ABC):
         """
         Convert TemplateContext to dictionary.
         
-        Provides a consistent way to extract context data as a dictionary
-        for template rendering. This is the standard method that should be
-        used by all generators.
+        Uses the proper conversion method from TemplateContextGenerator
+        to ensure all expected template variables are present.
         
         Args:
             context: TemplateContext object
@@ -49,15 +48,20 @@ class GeneratorBase(ABC):
         Returns:
             Dictionary representation of the context
         """
-        return context.__dict__.copy()
+        # Import here to avoid circular dependency
+        from ..templates.context_generator import TemplateContextGenerator
+        
+        # Use the proper conversion method that includes kernel_name, generation_timestamp, etc.
+        return TemplateContextGenerator._template_context_to_dict(context)
     
     def process_context(self, context: TemplateContext) -> Dict:
         """
         Process template context for this generator.
         
-        Default implementation passes through the full context as a dictionary.
-        Override this method to add custom processing, transformations, or
-        additional context data specific to this generator.
+        Default implementation passes through the full context as a dictionary
+        using the proper conversion method. Override this method to add custom
+        processing, transformations, or additional context data specific to
+        this generator.
         
         Args:
             context: Full template context from TemplateContextGenerator
