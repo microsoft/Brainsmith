@@ -18,7 +18,19 @@ export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-Launch development container: `./run-docker.sh`
+Launch development container: 
+```bash
+# Start persistent container (one-time setup)
+./smithy daemon
+
+# Get instant shell access anytime  
+./smithy shell
+
+# Or execute commands quickly
+./smithy exec "python script.py"
+
+# Legacy support: ./run-docker.sh automatically redirects to smithy
+```
 
 ## Key Commands
 
@@ -27,14 +39,14 @@ Launch development container: `./run-docker.sh`
 - `python -m pytest tests/dataflow/ -v` - Test dataflow components
 - `python -m pytest tests/tools/hw_kernel_gen/ -v` - Test hardware kernel generation
 - `python -m pytest tests/dataflow/unit/test_dataflow_interface.py::TestDataflowInterface::test_creation` - Run single test
-- `./run-docker.sh e2e` - End-to-end validation
-- `./run-docker.sh pytest` - Run pytest in container
+- `./smithy exec "cd tests && pytest ./"` - Run tests in container
 
 ### BERT Demo (Primary Validation)
-- `cd demos/bert && make single_layer` - Quick single layer test (generates DCP, multi-hour build)
-- `python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json` - Generate folding config
-- `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 --run_fifo_sizing -p ./configs/l1_simd12_pe8.json` - Full compilation
-- `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False` - Skip DCP generation
+- `cd tests/end2end/bert && make single_layer` - Full validation test (generates DCP, multi-hour build)
+- Alternative quick test from `demos/bert/`:
+  - `python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json` - Generate folding config
+  - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 --run_fifo_sizing -p ./configs/l1_simd12_pe8.json` - Full compilation
+  - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False` - Skip DCP generation
 
 ### Hardware Kernel Generation
 - `python -m brainsmith.tools.hw_kernel_gen.hkg <rtl_file> <compiler_data> -o <output_dir>` - Generate RTL wrapper templates

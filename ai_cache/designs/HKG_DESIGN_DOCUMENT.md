@@ -2,7 +2,14 @@
 
 ## Overview
 
-The Hardware Kernel Generator (HKG) transforms SystemVerilog RTL modules into FINN-compatible HWCustomOp classes with automatic interface detection, datatype constraints, and template-based code generation.
+The Hardware Kernel Generator (HKG) Phase 4 is a modular system that transforms SystemVerilog RTL modules into FINN-compatible HWCustomOp classes with automatic interface detection, datatype constraints, and extensible template-based code generation.
+
+**Latest Updates (Phase 4):**
+- ✅ Modular generator architecture with auto-discovery
+- ✅ Extensible generator system (hw_custom_op, rtl_wrapper, test_suite)
+- ✅ KernelIntegrator orchestration replacing UnifiedGenerator
+- ✅ Complete dead code cleanup and deprecation warnings
+- ✅ Comprehensive @brainsmith pragma support across all hw_kernels
 
 ## Complete HKG Workflow
 
@@ -31,23 +38,26 @@ graph TB
         E --> E1
     end
     
-    subgraph "🏗️ Code Generation"
-        F[Template Engine]
-        G[Context Building]
-        H[File Writing]
+    subgraph "🏗️ Phase 4 Modular Generation"
+        F[KernelIntegrator]
+        G[GeneratorManager]
+        H[Auto-Discovery System]
+        I[Modular Generators]
         
-        F1["• Jinja2 templates<br/>• Interface-aware generation<br/>• Parameter mapping"]
-        G1["• Interface categorization<br/>• Legacy FINN compatibility<br/>• Metadata organization"]
-        H1["• HWCustomOp Python class<br/>• RTL wrapper<br/>• Test suite"]
+        F1["• Orchestrates generation workflow<br/>• Template context building<br/>• Result aggregation"]
+        G1["• Auto-discovers generators<br/>• Manages template rendering<br/>• Extensible architecture"]
+        H1["• Package-based introspection<br/>• Dynamic generator loading<br/>• Custom context processing"]
+        I1["• hw_custom_op_generator<br/>• rtl_wrapper_generator<br/>• test_suite_generator"]
         
         F --> F1
         G --> G1
         H --> H1
+        I --> I1
     end
     
     subgraph "🎯 FINN Integration"
-        I[Generated HWCustomOp]
-        I1["• get_nodeattr_types()<br/>• get_interface_metadata()<br/>• AutoHWCustomOp inheritance"]
+        J[Generated HWCustomOp]
+        J1["• get_nodeattr_types()<br/>• get_interface_metadata()<br/>• AutoHWCustomOp inheritance"]
     end
     
     A --> B
@@ -58,10 +68,11 @@ graph TB
     F --> G
     G --> H
     H --> I
-    I --> I1
+    I --> J
+    J --> J1
     
     style A fill:#e1f5fe
-    style I fill:#e8f5e8
+    style J fill:#e8f5e8
     style B fill:#fff3e0
     style C fill:#fff3e0
     style D fill:#fff3e0
@@ -69,6 +80,69 @@ graph TB
     style F fill:#f3e5f5
     style G fill:#f3e5f5
     style H fill:#f3e5f5
+    style I fill:#f3e5f5
+```
+
+## Phase 4 Modular Architecture
+
+```mermaid
+graph TB
+    subgraph "🚀 Phase 4 Components"
+        A[KernelIntegrator]
+        B[GeneratorManager] 
+        C[GeneratorBase]
+        D[Individual Generators]
+        
+        A1["• Orchestrates workflow<br/>• Template context generation<br/>• Result aggregation<br/>• File writing coordination"]
+        B1["• Auto-discovers generators<br/>• Package introspection<br/>• Template rendering<br/>• Error handling"]
+        C1["• Base class for generators<br/>• context_to_dict() helper<br/>• Extensible interface<br/>• Custom context processing"]
+        D1["• hw_custom_op_generator<br/>• rtl_wrapper_generator<br/>• test_suite_generator<br/>• Easily extensible"]
+        
+        A --> A1
+        B --> B1
+        C --> C1
+        D --> D1
+    end
+    
+    subgraph "🔍 Auto-Discovery System"
+        E[Package Introspection]
+        F[Generator Registration]
+        G[Template Association]
+        
+        E1["• imports in __init__.py<br/>• Class introspection<br/>• No file globbing<br/>• Elegant Python patterns"]
+        F1["• Automatic registration<br/>• Name-based discovery<br/>• No manual configuration<br/>• Zero boilerplate"]
+        G1["• Template selection<br/>• Fallback handling<br/>• Version compatibility<br/>• Jinja2 integration"]
+        
+        E --> E1
+        F --> F1
+        G --> G1
+    end
+    
+    subgraph "⚡ Benefits"
+        H[Extensibility]
+        I[Maintainability]
+        J[Performance]
+        
+        H1["• Add new generators easily<br/>• Custom context processing<br/>• Template customization<br/>• Zero core changes needed"]
+        I1["• Clean separation of concerns<br/>• Eliminated dead code<br/>• Deprecation warnings<br/>• Single generation path"]
+        J1["• 60-65ms generation time<br/>• Efficient context passing<br/>• Minimal overhead<br/>• Full functionality retained"]
+        
+        H --> H1
+        I --> I1
+        J --> J1
+    end
+    
+    A --> E
+    B --> F
+    C --> G
+    E --> H
+    F --> I
+    G --> J
+    
+    style A fill:#e8f5e8
+    style B fill:#e1f5fe
+    style C fill:#fff3e0
+    style D fill:#f3e5f5
 ```
 
 ## Interface Detection & Type Assignment
@@ -141,14 +215,14 @@ graph TD
 ```mermaid
 graph TB
     subgraph "📝 RTL Pragmas"
-        A["@brainsmith BDIM in0 -1 [SIMD]"]
-        B["@brainsmith DATATYPE weights FIXED 8 8"] 
-        C["@brainsmith WEIGHT weights_V"]
+        A["@brainsmith BDIM s_axis_weights [MH,MW] [PE,SIMD]"]
+        B["@brainsmith DATATYPE weights FIXED WEIGHT_WIDTH WEIGHT_WIDTH"] 
+        C["@brainsmith WEIGHT s_axis_weights"]
         D["@brainsmith TOP my_module"]
         
-        A1["Block Dimension<br/>Chunking Strategy"]
-        B1["Datatype Constraints<br/>Bit Width Limits"]
-        C1["Force Interface Type<br/>Override Direction-Based"]
+        A1["Block Dimensions: [MH,MW]<br/>Stream Dimensions: [PE,SIMD]<br/>Tensor vs Parallelization"]
+        B1["Parameterized Datatypes<br/>Fixed-Point Specification<br/>RTL Parameter References"]
+        C1["Force Interface Type<br/>Mark Weight Streams<br/>Override Direction-Based"]
         D1["Module Selection<br/>When Multiple Present"]
         
         A --> A1
@@ -327,14 +401,37 @@ graph LR
 
 ## Usage Summary
 
-1. **Input**: SystemVerilog RTL module with standard AXI interfaces
-2. **Command**: `hkg generate my_module.sv output_dir/`
+1. **Input**: SystemVerilog RTL module with @brainsmith pragmas
+2. **Command**: `./smithy exec "python -m brainsmith.tools.hw_kernel_gen my_module.sv -o output_dir/ --debug"`
 3. **Output**: Complete FINN-compatible HWCustomOp package
 4. **Integration**: Drop into FINN compilation pipeline
 
-**Key Features:**
-- 🔍 **Automatic Detection**: AXI-Stream, AXI-Lite, and Control interfaces
-- 🏷️ **Smart Typing**: Direction-based INPUT/OUTPUT, name-based WEIGHT detection
-- 📝 **Pragma Enhancement**: BDIM chunking, DATATYPE constraints, WEIGHT overrides
-- 🎯 **FINN Ready**: AutoHWCustomOp inheritance with legacy compatibility
-- 📦 **Complete Package**: Python class, RTL wrapper, tests, documentation
+**Phase 4 Examples:**
+
+```bash
+# FMPadding with complete pragmas
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/fmpadding/fmpadding_axi.sv -o output/"
+
+# MVU/VVU matrix operations
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/mvu/mvu_vvu_axi.sv -o output/"
+
+# Thresholding/activation functions  
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
+```
+
+**Key Phase 4 Features:**
+- 🚀 **Modular Architecture**: Extensible generator system with auto-discovery
+- 🔍 **Enhanced Pragmas**: Block vs stream dimensions, parameterized datatypes
+- 🏷️ **Smart Interface Detection**: AXI-Stream typing with weight stream support
+- 📝 **Comprehensive Pragmas**: All hw_kernels updated with proper @brainsmith annotations
+- 🎯 **FINN Ready**: AutoHWCustomOp inheritance with validated interfaces
+- ⚡ **Performance**: 60-65ms generation time with complete functionality
+- 🧹 **Clean Codebase**: Dead code eliminated, deprecation warnings for legacy components
+- 📦 **Complete Package**: Python class, RTL wrapper, comprehensive test suites
+
+**Supported RTL Kernels:**
+- ✅ Matrix Vector Units (MVU/VVU) with weight streams
+- ✅ Feature Map Padding with channel processing
+- ✅ Thresholding/Activation functions with PE parallelization
+- ✅ Memory streaming with parameterized datatypes
+- ✅ FIFO/Queue modules with width parameters

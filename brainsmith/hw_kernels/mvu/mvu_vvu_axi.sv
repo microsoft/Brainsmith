@@ -43,6 +43,11 @@
  *	 - Full unfolding along MH (PE=MH) results in no replay buffer instantiated
  *****************************************************************************/
 
+// @brainsmith DATATYPE s_axis_weights FIXED WEIGHT_WIDTH WEIGHT_WIDTH
+// @brainsmith DATATYPE s_axis_input FIXED ACTIVATION_WIDTH ACTIVATION_WIDTH
+// @brainsmith DATATYPE m_axis_output FIXED ACCU_WIDTH ACCU_WIDTH
+// @brainsmith WEIGHT s_axis_weights
+
 module mvu_vvu_axi #(
 	bit IS_MVU,
 	parameter COMPUTE_CORE,

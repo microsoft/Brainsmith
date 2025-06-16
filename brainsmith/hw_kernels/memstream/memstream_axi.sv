@@ -30,6 +30,8 @@
  * @author	Thomas B. Preußer <thomas.preusser@amd.com>
  */
 
+// @brainsmith DATATYPE m_axis_0 FIXED WIDTH WIDTH
+
 module memstream_axi #(
 	int unsigned  DEPTH,
 	int unsigned  WIDTH,

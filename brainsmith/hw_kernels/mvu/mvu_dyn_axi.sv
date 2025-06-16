@@ -37,6 +37,11 @@
 //
 // THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS PART OF THIS FILE AT ALL TIMES.
 
+// @brainsmith DATATYPE s_axis_input_0 FIXED ACTIVATION_WIDTH ACTIVATION_WIDTH
+// @brainsmith DATATYPE s_axis_input_1 FIXED WEIGHT_WIDTH WEIGHT_WIDTH
+// @brainsmith DATATYPE m_axis_output FIXED ACCU_WIDTH ACCU_WIDTH
+// @brainsmith WEIGHT s_axis_input_1
+
 module mvu_dyn_axi #(
     bit IS_MVU = 1,
     parameter COMPUTE_CORE,

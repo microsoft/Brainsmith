@@ -32,6 +32,9 @@
  * @author	Thomas B. Preußer <thomas.preusser@amd.com>
  *****************************************************************************/
 
+// @brainsmith DATATYPE idat FIXED WIDTH WIDTH
+// @brainsmith DATATYPE odat FIXED WIDTH WIDTH
+
 module fifo_gauge #(
 	int unsigned  WIDTH,
 	int unsigned  COUNT_WIDTH = 32

@@ -38,6 +38,11 @@
  *	- performs aligned byte address to parameter word address translation.
  *****************************************************************************/
 
+// @brainsmith BDIM s_axis [C] [PE]
+// @brainsmith BDIM m_axis [C] [PE]
+// @brainsmith DATATYPE s_axis FIXED WI WI
+// @brainsmith DATATYPE m_axis FIXED O_BITS O_BITS
+
 module thresholding_axi #(
 	int unsigned  N,	// output precision
 	int unsigned  WI,	// input precision

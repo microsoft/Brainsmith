@@ -32,6 +32,9 @@
  * @author	Thomas B. Preußer <tpreusse@amd.com>
  *****************************************************************************/
 
+// @brainsmith DATATYPE s_axis FIXED ELEM_BITS ELEM_BITS
+// @brainsmith DATATYPE m_axis FIXED ELEM_BITS ELEM_BITS
+
 module fmpadding_axi #(
 	int unsigned  XCOUNTER_BITS,
 	int unsigned  YCOUNTER_BITS,

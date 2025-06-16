@@ -1,7 +1,7 @@
 """
-Phase 3 CLI for Hardware Kernel Generator.
+Phase 4 CLI for Hardware Kernel Generator.
 
-Unified CLI using the Phase 3 infrastructure with UnifiedGenerator and ResultHandler.
+Modular CLI using the Phase 4 infrastructure with KernelIntegrator and GeneratorManager.
 Single generation path: parse RTL → generate all templates → write files → done.
 """
 
@@ -11,11 +11,11 @@ import time
 from pathlib import Path
 
 from .rtl_parser.parser import RTLParser
-from .unified_generator import UnifiedGenerator
+from .kernel_integrator import KernelIntegrator
 
 
 def create_parser() -> argparse.ArgumentParser:
-    """Create simplified argument parser for Phase 3 CLI."""
+    """Create simplified argument parser for Phase 4 CLI."""
     parser = argparse.ArgumentParser(
         description="Generate FINN-compatible HWCustomOp from SystemVerilog RTL",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -47,7 +47,7 @@ Notes:
 
 
 def main():
-    """Phase 3 main CLI entry point using UnifiedGenerator."""
+    """Phase 4 main CLI entry point using KernelIntegrator."""
     parser = create_parser()
     args = parser.parse_args()
     
@@ -58,7 +58,7 @@ def main():
     
     try:
         if args.debug:
-            print("=== Phase 3 Hardware Kernel Generator ===")
+            print("=== Phase 4 Hardware Kernel Generator ===")
             print(f"RTL file: {args.rtl_file}")
             print(f"Output directory: {args.output}")
             print(f"Template version: {args.template_version}")
@@ -79,10 +79,11 @@ def main():
         
         # Step 2: Integrated generation and file writing
         if args.debug:
-            print("🏭 Step 2: Generating templates and writing files (integrated Phase 3/4)...")
+            print("🏭 Step 2: Generating templates and writing files (integrated Phase 4)...")
         
-        generator = UnifiedGenerator(output_dir=args.output)
-        result = generator.generate_and_write(kernel_metadata)
+        # Use KernelIntegrator for Phase 4 modular generation
+        integrator = KernelIntegrator(output_dir=args.output)
+        result = integrator.generate_and_write(kernel_metadata)
         
         if args.debug:
             print(f"   ✅ Generated {len(result.generated_files)} files:")

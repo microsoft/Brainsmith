@@ -19,6 +19,7 @@ from .qonnx_types import validate_datatype_against_constraints
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from finn.util.data_packing import numpy_to_hls_code
 from qonnx.core.datatype import DataType
+from qonnx.util.basic import roundup_to_integer_multiple
 
 
 class AutoHWCustomOp(HWCustomOp):
@@ -40,6 +41,9 @@ class AutoHWCustomOp(HWCustomOp):
         
         # Initialize minimum parallelism
         self._current_parallelism = self._initialize_minimum_parallelism()
+        
+        # Initialize tensor formatter for automatic tensor formatting
+        self._tensor_formatter = DataflowTensorFormatter()
     
     @abstractmethod
     def get_interface_metadata(self) -> List[InterfaceMetadata]:
@@ -1053,3 +1057,45 @@ class AutoHWCustomOp(HWCustomOp):
             info_messages.append("Code generation paths not yet configured")
         
         return info_messages
+    
+    def make_shape_compatible_op(self, model):
+        """Create shape-compatible ONNX node using ALL DataflowModel interfaces."""
+        node = self.onnx_node
+        
+        # The ONNX node needs to handle ALL inputs (data + weights + config)
+        # and produce ALL outputs, not just use output shape
+        
+        # Get interface counts from DataflowModel
+        input_interfaces = self.dataflow_model.input_interfaces
+        output_interfaces = self.dataflow_model.output_interfaces
+        
+        # For shape inference, we need a node that takes the same inputs
+        # and produces outputs with the correct shapes
+        if len(input_interfaces) == 1:
+            # Single input operation - use Identity
+            import onnx.helper as oh
+            return oh.make_node("Identity", node.input, node.output)
+        else:
+            # Multi-input operation - use Add (handles broadcasting)
+            import onnx.helper as oh
+            return oh.make_node("Add", node.input, node.output)
+    
+    def get_weightstream_width(self, ind=0):
+        """Get weight stream width using DataflowModel weight interfaces."""
+        weight_interfaces = self.dataflow_model.weight_interfaces
+        
+        if ind >= len(weight_interfaces):
+            raise IndexError(f"Weight interface index {ind} exceeds available weight interfaces ({len(weight_interfaces)})")
+        
+        if not weight_interfaces:
+            return 0  # No weight interfaces
+        
+        weight_interface = weight_interfaces[ind]
+        return weight_interface.calculate_stream_width()
+    
+    def get_weightstream_width_padded(self, ind=0):
+        """Get padded weight stream width for AXI compliance."""
+        weight_width = self.get_weightstream_width(ind)
+        if weight_width == 0:
+            return 0
+        return roundup_to_integer_multiple(weight_width, 8)
