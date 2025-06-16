@@ -72,7 +72,7 @@ echo
 # Build Docker image if needed (using smithy's build logic)
 if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
     gecho "Building Docker image if needed..."
-    "$SMITHY_PATH" build >/dev/null 2>&1 || {
+    "$SMITHY_PATH" build || {
         recho "Failed to build Docker image"
         exit 1
     }
