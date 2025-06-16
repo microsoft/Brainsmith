@@ -17,10 +17,9 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.extract_quant_scale_zeropt import ExtractQuantScaleZeroPt
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.double_to_single_float import DoubleToSingleFloat
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
 import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
-from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
 from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
 from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
@@ -30,10 +29,8 @@ from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
-# from finn.transformation.fpgadataflow.create_dataflow_partition import (
-#     CreateDataflowPartition,
-# )
 from brainsmith.transformation.expand_norms import ExpandNorms
+from brainsmith.transformation.convert_to_hw_layers import InferLayerNorm
 
 # Debugging dependencies, to remove
 import os
@@ -48,12 +45,9 @@ from qonnx.transformation.general import (
 import finn.transformation.streamline.absorb as absorb
 import numpy as np
 
-# from finn.builder.build_dataflow_config import DataflowBuildConfig
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator as dff_gen,
 )
-# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-# from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 
 test_fpga_part = "xczu3eg-sbva484-1-e"
 target_clk_ns = 5
@@ -389,39 +383,75 @@ def test_fpga_dataflow_layernorm(impl_style, exec_mode, simd, idt, wdt, bdt, odt
 Below is an example of a test constructed using the OpTest class.
 """
 
-@pytest.mark.parametrize("simd", [1, 2, 4], ids=["SIMD1", "SIMD2", "SIMD4"])
-@pytest.mark.parametrize("idt", ["INT8", "INT9"])
-@pytest.mark.parametrize("ifm_dim", [(1, 128, 384), (1, 12, 12, 128)])
+
 class TestLayerNorm(OpTest):
 
+    # These fixtures are parametrised, meaning if a test uses them
+    # (or uses a fixture that uses them) multiple versions of that
+    # test will be available, one for every combination of parameter.
+
+    @pytest.fixture(params=[1, 2, 4])
+    def f_simd(self, request):
+        return request.param
+
+    @pytest.fixture(params=["INT8", "INT9"])
+    def f_idt(self, request):
+        return request.param
+
+    @pytest.fixture(params=[(1, 128, 384), (2, 3)])
+    def f_ifm_dim(self, request):
+        return request.param
+
+    # The f_model fixture is used to describe the initial state of
+    # our test model, before other steps are applied (conversion to
+    # hardware, specialisation, etc.)
     @pytest.fixture
-    def model(self, simd, idt, ifm_dim)->ModelWrapper:
+    def f_model(self, f_simd, f_idt, f_ifm_dim) -> ModelWrapper:
 
         odt = "FLOAT32"
-        model:ModelWrapper = self.create_model(
-            inputs = [
-                (dict(name='X', elem_type=TensorProto.FLOAT, shape=ifm_dim), idt),
+        model: ModelWrapper = self.create_model(
+            inputs=[
+                (dict(name="X", elem_type=TensorProto.FLOAT, shape=f_ifm_dim), f_idt),
             ],
-            inits = [
-                dict(tensor=np.ones(ifm_dim[-1]), name="Scale"),
-                dict(tensor=np.zeros(ifm_dim[-1]), name="Bias"),
+            inits=[
+                dict(tensor=np.ones(f_ifm_dim[-1]), name="Scale"),
+                dict(tensor=np.zeros(f_ifm_dim[-1]), name="Bias"),
             ],
-            outputs= [
-                (dict(name='Y', elem_type=TensorProto.FLOAT, shape=ifm_dim), odt),
+            outputs=[
+                (dict(name="Y", elem_type=TensorProto.FLOAT, shape=f_ifm_dim), odt),
             ],
-            nodes= [
-                dict(op_type="LayerNorm",
-                    inputs=['X', 'Scale', 'Bias'],
-                    outputs=['Y'],
-                    domain="brainsmith.custom_op.fpgadataflow",
-                    backend="fpgadataflow",
-                    SIMD=simd,
+            nodes=[
+                dict(
+                    op_type="LayerNormalization",
+                    inputs=["X", "Scale", "Bias"],
+                    outputs=["Y"],
                     preferred_impl_style="hls",
-                    ifm_dim=ifm_dim,
-                    NumChannels=ifm_dim[-1],
+                    ifm_dim=f_ifm_dim,
+                    NumChannels=f_ifm_dim[-1],
                     epsilon=1e-05,
-                    inputDataType=idt,
-                    outputDataType=odt,),
-            ]
+                    inputDataType=f_idt,
+                    outputDataType=odt,
+                ),
+            ],
         )
-        return model
+        return self.apply_transforms(model, [[ExpandNorms(), DoubleToSingleFloat(), InferDataTypes()]])
+
+    # Overriding this method provides OpTest with the
+    # transformation it needs to convert the above model
+    # to hardware layers.
+    @pytest.fixture
+    def f_infer_hw_transform(self):
+        return InferLayerNorm()
+    
+    # Overriding this method allows us to pass attributes
+    # to the model after it's been specialised.
+    @pytest.fixture
+    def f_specialise_attrs(self, f_simd) -> dict[str, any]:
+        return dict(SIMD=f_simd)
+
+    # Overriding the default save_intermediate_models fixture
+    # (which evaluates to false), so that each model step can
+    # have its output saved.
+    @pytest.fixture
+    def f_save_models(self):
+        return True
