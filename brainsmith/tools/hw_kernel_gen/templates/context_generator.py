@@ -32,8 +32,8 @@ class TemplateContextGenerator:
         # First generate the enhanced TemplateContext for Phase 2
         template_ctx = TemplateContextGenerator.generate_template_context(kernel_metadata)
         
-        # Then convert to dictionary format for backward compatibility
-        return TemplateContextGenerator._template_context_to_dict(template_ctx)
+        # Then convert to dictionary format for backward compatibility with datatype mapping extraction
+        return TemplateContextGenerator._template_context_to_dict(template_ctx, kernel_metadata)
     
     @staticmethod
     def generate_template_context(kernel_metadata: KernelMetadata) -> TemplateContext:
@@ -87,6 +87,9 @@ class TemplateContextGenerator:
         config_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG)
         control_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.CONTROL)
         
+        # Extract datatype parameter mappings
+        datatype_mappings = generator._extract_datatype_parameter_mappings(kernel_metadata)
+        
         # Create the enhanced TemplateContext
         template_context = TemplateContext(
             module_name=kernel_metadata.name,
@@ -94,6 +97,7 @@ class TemplateContextGenerator:
             source_file=kernel_metadata.source_file,
             interface_metadata=kernel_metadata.interfaces,
             parameter_definitions=parameter_definitions,
+            exposed_parameters=kernel_metadata.exposed_parameters,
             whitelisted_defaults=whitelisted_defaults,
             required_attributes=required_attributes,
             input_interfaces=input_interfaces,
@@ -111,13 +115,18 @@ class TemplateContextGenerator:
             has_weights=len(weight_interfaces) > 0,
             has_config=len(config_interfaces) > 0,
             kernel_complexity=generator._estimate_complexity(kernel_metadata),
-            kernel_type=generator._infer_kernel_type(kernel_metadata)
+            kernel_type=generator._infer_kernel_type(kernel_metadata),
+            # Add datatype parameter information
+            datatype_linked_params=datatype_mappings.get('datatype_linked_params', []),
+            datatype_param_mappings=datatype_mappings.get('datatype_param_mappings', {}),
+            interface_datatype_attributes=datatype_mappings.get('interface_datatype_attributes', []),
+            datatype_derivation_methods=datatype_mappings.get('datatype_derivation_methods', {})
         )
         
         return template_context
     
     @staticmethod
-    def _template_context_to_dict(template_ctx: TemplateContext) -> Dict[str, Any]:
+    def _template_context_to_dict(template_ctx: TemplateContext, kernel_metadata: KernelMetadata = None) -> Dict[str, Any]:
         """Convert TemplateContext to dictionary format for backward compatibility."""
         # Enhanced RTL parameters with whitelist info
         rtl_parameters = []
@@ -138,6 +147,7 @@ class TemplateContextGenerator:
                 # Add datatype parameter generation to interface
                 interface_dict = {
                     'name': iface.name,
+                    'compiler_name': iface.compiler_name,
                     'interface_type': iface.interface_type,
                     'datatype_constraints': iface.datatype_constraints,
                     'chunking_strategy': iface.chunking_strategy,
@@ -152,11 +162,27 @@ class TemplateContextGenerator:
                 }
                 dataflow_interfaces.append(interface_dict)
         
+        # Use datatype information from TemplateContext if available, otherwise extract from kernel_metadata
+        datatype_mappings = {}
+        if hasattr(template_ctx, 'datatype_linked_params'):
+            # Use datatype information from TemplateContext
+            datatype_mappings = {
+                'datatype_linked_params': template_ctx.datatype_linked_params,
+                'datatype_param_mappings': template_ctx.datatype_param_mappings,
+                'interface_datatype_attributes': template_ctx.interface_datatype_attributes,
+                'datatype_derivation_methods': template_ctx.datatype_derivation_methods
+            }
+        elif kernel_metadata:
+            # Fallback: extract from kernel_metadata 
+            datatype_mappings = TemplateContextGenerator._extract_datatype_parameter_mappings(kernel_metadata)
+        
         # Collect all datatype-linked parameters to exclude from node attributes
-        datatype_linked_params = set()
-        for iface in template_ctx.interface_metadata:
-            if iface.datatype_params:
-                datatype_linked_params.update(iface.datatype_params.values())
+        datatype_linked_params = set(datatype_mappings.get('datatype_linked_params', []))
+        if not datatype_linked_params:
+            # Fallback: extract from interface metadata
+            for iface in template_ctx.interface_metadata:
+                if hasattr(iface, 'datatype_params') and iface.datatype_params:
+                    datatype_linked_params.update(iface.datatype_params.values())
         
         # Start with the basic context
         context = {
@@ -174,13 +200,14 @@ class TemplateContextGenerator:
             "input_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.input_interfaces),
             "output_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.output_interfaces),
             "weight_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.weight_interfaces),
-            "config_interfaces": template_ctx.config_interfaces,
-            "control_interfaces": template_ctx.control_interfaces,
+            "config_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.config_interfaces),
+            "control_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.control_interfaces),
             "dataflow_interfaces": dataflow_interfaces,
             
             # Enhanced RTL parameters with Phase 2 info
             "rtl_parameters": rtl_parameters,
             "parameter_definitions": template_ctx.parameter_definitions,
+            "exposed_parameters": template_ctx.exposed_parameters,
             "whitelisted_defaults": template_ctx.whitelisted_defaults,
             "required_attributes": template_ctx.required_attributes,
             
@@ -233,6 +260,9 @@ class TemplateContextGenerator:
                 "weight_count": len(template_ctx.weight_interfaces),
             }
         }
+        
+        # Add datatype parameter mappings to context
+        context.update(datatype_mappings)
         
         return context
     
@@ -402,17 +432,9 @@ class TemplateContextGenerator:
         if parallelism_info["inferred_channels"]:
             node_attrs["NumChannels"] = ("i", True, parallelism_info["inferred_channels"])
         
-        # Data type specifications (will be filled at runtime)
-        input_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
-        output_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.OUTPUT)
-        weight_interfaces = self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)
-        
-        if input_interfaces:
-            node_attrs["inputDataType"] = ("s", True, "")
-        if output_interfaces:
-            node_attrs["outputDataType"] = ("s", True, "")
-        if weight_interfaces:
-            node_attrs["weightDataType"] = ("s", True, "")
+        # Data type specifications now handled by interface-specific datatype attributes
+        # (e.g., input0DataType, output0DataType) based on compiler_name for consistency
+        # Generic inputDataType/outputDataType/weightDataType removed to avoid redundancy
         
         # Algorithm-specific parameters
         for param_name, param_value in algorithm_info["parameters"].items():
@@ -452,6 +474,7 @@ class TemplateContextGenerator:
         for iface in interfaces:
             interface_dict = {
                 'name': iface.name,
+                'compiler_name': iface.compiler_name,
                 'interface_type': iface.interface_type,
                 'datatype_constraints': iface.datatype_constraints,
                 'chunking_strategy': iface.chunking_strategy,
@@ -466,3 +489,121 @@ class TemplateContextGenerator:
             }
             enhanced_interfaces.append(interface_dict)
         return enhanced_interfaces
+    
+    @staticmethod
+    def _extract_datatype_parameter_mappings(kernel_metadata: KernelMetadata) -> Dict[str, Any]:
+        """
+        Extract datatype parameter mappings from DATATYPE_PARAM pragmas.
+        
+        Returns:
+            Dictionary with datatype parameter mapping information for templates:
+            - datatype_linked_params: List of parameter names that are datatype-linked
+            - datatype_param_mappings: Dict mapping interface names to parameter mappings
+            - interface_datatype_attributes: List of interface datatype attribute definitions
+            - datatype_derivation_methods: Dict of methods to generate for RTLBackend
+        """
+        datatype_linked_params = set()
+        datatype_param_mappings = {}
+        interface_datatype_attributes = []
+        datatype_derivation_methods = {}
+        
+        # Extract from interface metadata (populated by pragma processing)
+        for interface in kernel_metadata.interfaces:
+            if hasattr(interface, 'datatype_params') and interface.datatype_params:
+                # Collect all datatype-linked parameter names
+                datatype_linked_params.update(interface.datatype_params.values())
+                
+                # Store interface-to-parameter mappings
+                datatype_param_mappings[interface.name] = interface.datatype_params
+                
+                # Generate datatype derivation methods for RTLBackend
+                for property_type, parameter_name in interface.datatype_params.items():
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        parameter_name, interface.name, property_type
+                    )
+                    datatype_derivation_methods[parameter_name] = derivation_method
+                
+                # Generate interface datatype attribute for AutoHWCustomOp
+                if interface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+                    # Use compiler_name for consistent naming (e.g., input0DataType instead of s_axis_input0DataType)
+                    compiler_name = getattr(interface, 'compiler_name', interface.name)
+                    datatype_attr_name = f"{compiler_name}DataType"
+                    default_datatype = "INT8"  # Default fallback
+                    
+                    interface_datatype_attributes.append({
+                        'name': datatype_attr_name,
+                        'interface_name': interface.name,
+                        'compiler_name': compiler_name,
+                        'interface_type': interface.interface_type.value,
+                        'default_datatype': default_datatype,
+                        'attr_spec': ("s", False, default_datatype)
+                    })
+        
+        return {
+            'datatype_linked_params': list(datatype_linked_params),
+            'datatype_param_mappings': datatype_param_mappings,
+            'interface_datatype_attributes': interface_datatype_attributes,
+            'datatype_derivation_methods': datatype_derivation_methods
+        }
+    
+    @staticmethod
+    def _generate_datatype_derivation_method(parameter_name: str, interface_name: str, property_type: str) -> str:
+        """
+        Generate Python code for datatype derivation method in RTLBackend.
+        
+        Args:
+            parameter_name: RTL parameter name (e.g., 'WI')
+            interface_name: Interface name (e.g., 's_axis')
+            property_type: Property type ('width', 'signed', 'format', 'bias', 'fractional_width')
+            
+        Returns:
+            Python code string for the derivation method
+        """
+        datatype_attr_name = f"{interface_name}DataType"
+        
+        if property_type == 'width':
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype width.\"\"\"
+        interface_dt = self.get_nodeattr("{datatype_attr_name}")
+        return DataType[interface_dt].bitwidth()"""
+        
+        elif property_type == 'signed':
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype signedness.\"\"\"
+        interface_dt = self.get_nodeattr("{datatype_attr_name}")
+        return 1 if DataType[interface_dt].signed() else 0"""
+        
+        elif property_type == 'format':
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype format.\"\"\"
+        interface_dt = self.get_nodeattr("{datatype_attr_name}")
+        # Format mapping: floating-point vs fixed-point
+        return 1 if 'FLOAT' in interface_dt else 0"""
+        
+        elif property_type == 'bias':
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype bias.\"\"\"
+        # Default bias value - could be extended with datatype-specific logic
+        return 0"""
+        
+        elif property_type == 'fractional_width':
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype fractional width.\"\"\"
+        interface_dt = self.get_nodeattr("{datatype_attr_name}")
+        # Extract fractional width for fixed-point datatypes
+        if hasattr(DataType[interface_dt], 'fractional_width'):
+            return DataType[interface_dt].fractional_width()
+        return 0"""
+        
+        else:
+            # Fallback for unknown property types
+            return f"""
+    def _derive_{parameter_name}(self):
+        \"\"\"Derive {parameter_name} from {interface_name} datatype (property: {property_type}).\"\"\"
+        # TODO: Implement derivation for property type '{property_type}'
+        return 1"""

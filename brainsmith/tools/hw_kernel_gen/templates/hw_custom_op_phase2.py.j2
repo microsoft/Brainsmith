@@ -98,9 +98,9 @@ class {{ class_name }}(AutoHWCustomOp):
         # Start with parent class attributes
         my_attrs = {}
         
-        # RTL parameters as node attributes (excluding datatype-linked parameters)
+        # RTL parameters as node attributes (only exposed parameters)
         {% for param in parameter_definitions %}
-        {% if param.name not in datatype_linked_params %}
+        {% if param.name in exposed_parameters %}
         {% if param.is_whitelisted and param.default_value %}
         my_attrs["{{ param.name }}"] = ("i", False, {{ param.default_value }})  # Optional with default
         {% else %}
@@ -109,8 +109,10 @@ class {{ class_name }}(AutoHWCustomOp):
         {% endif %}
         {% endfor %}
         
-        # Note: Interface datatype parameters (width, signed, etc.) are handled by RTLBackend
-        # and are not exposed as HWCustomOp node attributes
+        # Interface datatype attributes (high-level datatype specification)
+        {% for interface_attr in interface_datatype_attributes %}
+        my_attrs["{{ interface_attr.name }}"] = {{ interface_attr.attr_spec }}  # {{ interface_attr.interface_type }} interface datatype
+        {% endfor %}
         
         # Hardware-specific attributes from RTL analysis
         {% for attr_name, attr_spec in node_attributes.items() %}
@@ -244,13 +246,18 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     
     Required algorithm parameters:
     {% for param in required_attributes %}
-    {% if param not in datatype_linked_params %}
+    {% if param in exposed_parameters %}
     - {{ param }}: int
     {% endif %}
     {% endfor %}
     
-    Note: Interface datatype parameters (width, signed, format, etc.) are handled 
-    by the RTLBackend and should not be specified as node attributes.
+    Interface datatype attributes:
+    {% for interface_attr in interface_datatype_attributes %}
+    - {{ interface_attr.name }}: str = "{{ interface_attr.default_datatype }}"  # {{ interface_attr.interface_type }} interface datatype
+    {% endfor %}
+    
+    Note: RTL-level parameters (width, signed, format, etc.) are automatically derived 
+    from interface datatypes by the RTLBackend and should not be specified directly.
     
     Optional parameters (with defaults):
     {% for param_name, default_value in whitelisted_defaults.items() %}
@@ -259,8 +266,8 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     """
     import onnx.helper
     
-    # Validate required algorithm parameters (excluding datatype-linked parameters)
-    required_algorithm_params = [p for p in {{ required_attributes }} if p not in {{ datatype_linked_params }}]
+    # Validate required algorithm parameters (only exposed parameters)
+    required_algorithm_params = [p for p in {{ required_attributes }} if p in {{ exposed_parameters }}]
     missing = [p for p in required_algorithm_params if p not in node_attrs]
     if missing:
         raise ValueError(f"Missing required algorithm parameters: {missing}")

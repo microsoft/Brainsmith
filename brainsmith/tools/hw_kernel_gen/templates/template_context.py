@@ -49,6 +49,7 @@ class TemplateContext:
     
     # Enhanced parameter definitions
     parameter_definitions: List[ParameterDefinition]  # All module parameters
+    exposed_parameters: List[str] = field(default_factory=list)  # Parameters that should be nodeattr
     whitelisted_defaults: Dict[str, int] = field(default_factory=dict)  # Default values for whitelisted params
     required_attributes: List[str] = field(default_factory=list)  # Parameters without defaults
     
@@ -77,6 +78,12 @@ class TemplateContext:
     # Note: datatype_mappings, shape_calculation_methods, stream_width_methods removed
     # These are now handled by AutoHWCustomOp parent class automatically
     resource_estimation_methods: Dict[str, Any] = field(default_factory=dict)
+    
+    # Datatype parameter information for new architecture
+    datatype_linked_params: List[str] = field(default_factory=list)
+    datatype_param_mappings: Dict[str, Dict[str, str]] = field(default_factory=dict)  
+    interface_datatype_attributes: List[Dict[str, Any]] = field(default_factory=list)
+    datatype_derivation_methods: Dict[str, str] = field(default_factory=dict)
     
     # Template flags
     has_inputs: bool = False

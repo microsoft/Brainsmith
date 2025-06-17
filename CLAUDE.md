@@ -8,15 +8,7 @@ Brainsmith is an open-source platform for FPGA AI accelerators developed collabo
 
 ## Development Environment
 
-**Docker-based development is required.** Set these environment variables before starting:
-
-```bash
-export BSMITH_ROOT="~/brainsmith"
-export BSMITH_BUILD_DIR="~/builds/brainsmith"
-export BSMITH_XILINX_PATH="/tools/Xilinx"
-export BSMITH_XILINX_VERSION="2024.2"
-export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
-```
+**Docker-based development is required.** The container automatically sets FINN environment variables and Xilinx tool paths.
 
 Launch development container: 
 ```bash
@@ -42,11 +34,21 @@ Launch development container:
 - `./smithy exec "cd tests && pytest ./"` - Run tests in container
 
 ### BERT Demo (Primary Validation)
-- `cd tests/end2end/bert && make single_layer` - Full validation test (generates DCP, multi-hour build)
-- Alternative quick test from `demos/bert/`:
-  - `python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json` - Generate folding config
-  - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 --run_fifo_sizing -p ./configs/l1_simd12_pe8.json` - Full compilation
-  - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False` - Skip DCP generation
+From `demos/bert/`:
+
+**Make targets:**
+- `make single_layer` (or `make l1_simd12_pe8`) - Primary single-layer validation (multi-hour build)
+- `make folding_three_layers` (or `make l3_simd24_pe16`) - 3-layer test
+- `make max_folding_three_layers` (or `make l3_simd48_pe32`) - Max folding 3-layer
+- `make small_folding_three_layers` (or `make l3_simd12_pe8`) - Small folding 3-layer
+- `make bert_large_single_layer` (or `make bert_large_l1_simd16_pe8`) - BERT Large test
+
+**Manual quick test:**
+```bash
+python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
+python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 --run_fifo_sizing -p ./configs/l1_simd12_pe8.json
+python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False  # Skip DCP generation
+```
 
 ### Hardware Kernel Generation
 - `python -m brainsmith.tools.hw_kernel_gen.hkg <rtl_file> <compiler_data> -o <output_dir>` - Generate RTL wrapper templates

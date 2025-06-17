@@ -1,0 +1,191 @@
+{
+  "name": "test_corrected_format",
+  "source_file": "test_corrected_pragma_format.sv",
+  "parameters": [
+    {
+      "name": "INPUT0_WIDTH",
+      "param_type": null,
+      "default_value": "8",
+      "description": null
+    },
+    {
+      "name": "SIGNED_INPUT0",
+      "param_type": null,
+      "default_value": "0",
+      "description": null
+    },
+    {
+      "name": "OUTPUT0_WIDTH",
+      "param_type": null,
+      "default_value": "8",
+      "description": null
+    },
+    {
+      "name": "INPUT0_BDIM",
+      "param_type": null,
+      "default_value": "16",
+      "description": null
+    },
+    {
+      "name": "INPUT0_SDIM",
+      "param_type": null,
+      "default_value": "4",
+      "description": null
+    },
+    {
+      "name": "C",
+      "param_type": null,
+      "default_value": "64",
+      "description": null
+    },
+    {
+      "name": "PE",
+      "param_type": null,
+      "default_value": "4",
+      "description": null
+    }
+  ],
+  "exposed_parameters": [
+    "C",
+    "PE"
+  ],
+  "interfaces": [
+    {
+      "name": "ap",
+      "interface_type": "control",
+      "description": "Interface ap (control)",
+      "datatype_constraints": [],
+      "chunking_strategy": {
+        "type": "BlockChunkingStrategy",
+        "block_shape": [
+          ":"
+        ],
+        "rindex": 0
+      },
+      "parameter_linkage": {
+        "bdim_param_default": "ap_BDIM",
+        "sdim_param_default": "ap_SDIM"
+      }
+    },
+    {
+      "name": "s_axis_input0",
+      "interface_type": "input",
+      "description": "Interface s_axis_input0 (input) - Direction: input",
+      "datatype_constraints": [],
+      "chunking_strategy": {
+        "type": "BlockChunkingStrategy",
+        "block_shape": [
+          "C",
+          "PE"
+        ],
+        "rindex": 0
+      },
+      "parameter_linkage": {
+        "datatype_params": {
+          "width": "INPUT0_WIDTH",
+          "signed": "SIGNED_INPUT0"
+        },
+        "bdim_param_default": "s_axis_input0_BDIM",
+        "sdim_param_default": "s_axis_input0_SDIM"
+      }
+    },
+    {
+      "name": "m_axis_output0",
+      "interface_type": "output",
+      "description": "Interface m_axis_output0 (output) - Direction: output",
+      "datatype_constraints": [],
+      "chunking_strategy": {
+        "type": "BlockChunkingStrategy",
+        "block_shape": [
+          ":",
+          ":"
+        ],
+        "rindex": 0
+      },
+      "parameter_linkage": {
+        "datatype_params": {
+          "width": "OUTPUT0_WIDTH",
+          "signed": "SIGNED_m_axis_output0"
+        },
+        "bdim_param_default": "m_axis_output0_BDIM",
+        "sdim_param_default": "m_axis_output0_SDIM"
+      }
+    }
+  ],
+  "pragmas": [
+    {
+      "type": "bdim",
+      "line_number": 3,
+      "inputs": [
+        "s_axis_input0",
+        "INPUT0_BDIM",
+        "SHAPE=[C,PE]",
+        "RINDEX=0"
+      ],
+      "parsed_data": {
+        "interface_name": "s_axis_input0",
+        "param_name": "INPUT0_BDIM",
+        "block_shape": [
+          "C",
+          "PE"
+        ],
+        "rindex": 0
+      }
+    },
+    {
+      "type": "sdim",
+      "line_number": 4,
+      "inputs": [
+        "s_axis_input0",
+        "INPUT0_SDIM"
+      ],
+      "parsed_data": {
+        "interface_name": "s_axis_input0",
+        "param_name": "INPUT0_SDIM"
+      }
+    },
+    {
+      "type": "datatype_param",
+      "line_number": 5,
+      "inputs": [
+        "s_axis_input0",
+        "width",
+        "INPUT0_WIDTH"
+      ],
+      "parsed_data": {
+        "interface_name": "s_axis_input0",
+        "property_type": "width",
+        "parameter_name": "INPUT0_WIDTH"
+      }
+    },
+    {
+      "type": "datatype_param",
+      "line_number": 6,
+      "inputs": [
+        "s_axis_input0",
+        "signed",
+        "SIGNED_INPUT0"
+      ],
+      "parsed_data": {
+        "interface_name": "s_axis_input0",
+        "property_type": "signed",
+        "parameter_name": "SIGNED_INPUT0"
+      }
+    },
+    {
+      "type": "datatype_param",
+      "line_number": 7,
+      "inputs": [
+        "m_axis_output0",
+        "width",
+        "OUTPUT0_WIDTH"
+      ],
+      "parsed_data": {
+        "interface_name": "m_axis_output0",
+        "property_type": "width",
+        "parameter_name": "OUTPUT0_WIDTH"
+      }
+    }
+  ],
+  "parsing_warnings": []
+}

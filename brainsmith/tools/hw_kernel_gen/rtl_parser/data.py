@@ -56,6 +56,7 @@ class PragmaType(Enum):
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
     WEIGHT = "weight"                  # Specify interface as a weight
     BDIM = "bdim"                      # Override block dimensions for an interface
+    SDIM = "sdim"                      # Override stream dimensions for an interface
     DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
 
 # --- Simple Data Structures ---
@@ -149,53 +150,6 @@ class PortGroup:
 # Interface class has been removed - use InterfaceMetadata instead
 
 # --- Pragma Structure ---
-
-class InterfaceNameMatcher:
-    """Mixin providing interface name matching utilities for pragma classes."""
-    
-    @staticmethod
-    def _interface_names_match(pragma_name: str, interface_name: str) -> bool:
-        """
-        Check if pragma interface name matches actual interface name.
-        
-        Supports multiple matching patterns to handle variations in interface
-        naming conventions, including AXI naming patterns.
-        
-        Args:
-            pragma_name: Interface name specified in pragma
-            interface_name: Actual interface name from RTL parsing
-            
-        Returns:
-            bool: True if names match according to any supported pattern
-            
-        Examples:
-            >>> InterfaceNameMatcher._interface_names_match("in0", "in0")
-            True
-            >>> InterfaceNameMatcher._interface_names_match("in0", "in0_V_data_V")
-            True
-            >>> InterfaceNameMatcher._interface_names_match("in0_V_data_V", "in0")
-            True
-            >>> InterfaceNameMatcher._interface_names_match("weights", "bias")
-            False
-        """
-        # Exact match
-        if pragma_name == interface_name:
-            return True
-        
-        # Prefix match (e.g., "in0" matches "in0_V_data_V")
-        if interface_name.startswith(pragma_name):
-            return True
-        
-        # Reverse prefix match (e.g., "in0_V_data_V" matches "in0")
-        if pragma_name.startswith(interface_name):
-            return True
-        
-        # Base name matching (remove common suffixes)
-        pragma_base = pragma_name.replace('_V_data_V', '').replace('_data', '')
-        interface_base = interface_name.replace('_V_data_V', '').replace('_data', '')
-        
-        return pragma_base == interface_base
-
 
 @dataclass
 class Pragma:
@@ -331,6 +285,83 @@ class Pragma:
     def __str__(self):
         return f"@brainsmith {self.type.value} " + " ".join(map(str, self.inputs))
 
+# --- Interface Pragma Base Class ---
+
+@dataclass
+class InterfacePragma(Pragma):
+    """Base class for pragmas that modify interface metadata.
+    
+    This class provides common functionality for pragmas that target specific
+    interfaces, including interface name matching and base application logic.
+    """
+    
+    def _interface_names_match(self, pragma_name: str, interface_name: str) -> bool:
+        """
+        Check if pragma interface name matches actual interface name.
+        
+        Uses exact string matching for precise interface targeting.
+        
+        Args:
+            pragma_name: Interface name specified in pragma
+            interface_name: Actual interface name from RTL parsing
+            
+        Returns:
+            bool: True if names match exactly
+            
+        Examples:
+            >>> pragma._interface_names_match("s_axis", "s_axis")
+            True
+            >>> pragma._interface_names_match("s_axis", "m_axis")
+            False
+        """
+        return pragma_name == interface_name
+
+    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
+        """
+        Check if this pragma applies to the given interface metadata.
+        
+        Base implementation uses interface name matching. Subclasses can override
+        for more complex matching logic.
+        
+        Args:
+            metadata: InterfaceMetadata to check against
+            
+        Returns:
+            bool: True if pragma applies to this interface, False otherwise
+        """
+        if not self.parsed_data:
+            logger.debug(f"{self.type.value} pragma has no parsed_data")
+            return False
+        
+        pragma_interface_name = self.parsed_data.get('interface_name')
+        if not pragma_interface_name:
+            logger.debug(f"{self.type.value} pragma has no interface_name in parsed_data")
+            return False
+        
+        match_result = self._interface_names_match(pragma_interface_name, metadata.name)
+        logger.debug(f"{self.type.value} pragma interface matching: '{pragma_interface_name}' <-> '{metadata.name}' = {match_result}")
+        return match_result
+
+    def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """
+        Apply pragma effects to InterfaceMetadata.
+        
+        Base implementation returns metadata unchanged. Subclasses must override
+        this method to implement their specific effects.
+        
+        Args:
+            metadata: Current InterfaceMetadata to modify
+            
+        Returns:
+            InterfaceMetadata: Modified metadata with pragma effects applied
+        """
+        if not self.applies_to_interface_metadata(metadata):
+            return metadata
+        
+        # Subclasses must override this method
+        raise NotImplementedError(f"{self.__class__.__name__} must implement apply_to_metadata()")
+
+
 # --- Pragma Subclasses ---
 
 @dataclass
@@ -369,7 +400,7 @@ class TopModulePragma(Pragma):
 
 
 @dataclass
-class DatatypePragma(Pragma, InterfaceNameMatcher):
+class DatatypePragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
 
@@ -416,16 +447,6 @@ class DatatypePragma(Pragma, InterfaceNameMatcher):
         }
 
 
-    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
-        """Check if this DATATYPE pragma applies to the given interface metadata."""
-        if not self.parsed_data:
-            return False
-        
-        pragma_interface_name = self.parsed_data.get('interface_name')
-        if not pragma_interface_name:
-            return False
-        
-        return self._interface_names_match(pragma_interface_name, metadata.name)
 
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply DATATYPE pragma to modify datatype constraints."""
@@ -439,12 +460,7 @@ class DatatypePragma(Pragma, InterfaceNameMatcher):
         existing_constraints = getattr(metadata, 'datatype_constraints', [])
         new_constraints = existing_constraints + [new_constraint_group]
         
-        return InterfaceMetadata(
-            name=metadata.name,
-            interface_type=metadata.interface_type,
-            datatype_constraints=new_constraints,
-            chunking_strategy=metadata.chunking_strategy
-        )
+        return metadata.update_attributes(datatype_constraints=new_constraints)
 
     def _create_constraint_group(self) -> DatatypeConstraintGroup:
         """Create DatatypeConstraintGroup from pragma data."""
@@ -460,26 +476,28 @@ class DatatypePragma(Pragma, InterfaceNameMatcher):
 
 
 @dataclass
-class BDimPragma(Pragma, InterfaceNameMatcher):
+class BDimPragma(InterfacePragma):
     """
     BDIM pragma for block dimension chunking strategies.
     
     New simplified format:
-    @brainsmith bdim <interface_name> [<shape>] [RINDEX=<n>]
+    @brainsmith bdim <interface_name> <param_name> [SHAPE=<shape>] [RINDEX=<n>]
     
-    IMPORTANT: Only parameter names and ":" are allowed in shapes - NO magic numbers!
-    This ensures parameterizability which is a key design goal.
+    IMPORTANT: 
+    - Only allowed on INPUT or WEIGHT interfaces (not OUTPUT or CONTROL)
+    - Only parameter names and ":" are allowed in shapes - NO magic numbers!
+    - This ensures parameterizability which is a key design goal.
     
     Examples:
-    - @brainsmith bdim in0 [PE]              # PE parameter, RINDEX=0 (default)
-    - @brainsmith bdim in0 [SIMD,PE]         # SIMD,PE parameters, RINDEX=0
-    - @brainsmith bdim in0 [:,:] RINDEX=1    # Full dimensions, starting from RINDEX=1
-    - @brainsmith bdim in0 [PE,:]            # PE parameter and full dimension
-    - @brainsmith bdim weights [TILE_SIZE]   # TILE_SIZE parameter
+    - @brainsmith bdim in0 IN0_BDIM SHAPE=[PE]              # PE parameter, RINDEX=0 (default)
+    - @brainsmith bdim in0 IN0_BDIM SHAPE=[SIMD,PE]         # SIMD,PE parameters, RINDEX=0
+    - @brainsmith bdim in0 IN0_BDIM SHAPE=[:,:] RINDEX=1    # Full dimensions, starting from RINDEX=1
+    - @brainsmith bdim weights WGT_BDIM SHAPE=[TILE_SIZE]   # TILE_SIZE parameter
     
-    Invalid (magic numbers not allowed):
-    - @brainsmith bdim in0 [16]              # ERROR: Magic number 16
-    - @brainsmith bdim in0 [8,4]             # ERROR: Magic numbers 8,4
+    Invalid examples:
+    - @brainsmith bdim output0 OUT_BDIM      # ERROR: Cannot use on OUTPUT interface
+    - @brainsmith bdim in0 IN0_BDIM SHAPE=[16]   # ERROR: Magic number 16
+    - @brainsmith bdim in0 IN0_BDIM SHAPE=[8,4]  # ERROR: Magic numbers 8,4
     """
     
     def __post_init__(self):
@@ -529,88 +547,95 @@ class BDimPragma(Pragma, InterfaceNameMatcher):
         """
         Parse new BDIM pragma format.
         
-        Format: @brainsmith bdim <interface_name> [<shape>] [RINDEX=<n>]
+        Format: @brainsmith BDIM <interface_name> <param_name> [SHAPE=<shape>] [RINDEX=<n>]
         
         Returns:
-            Dict with parsed data including interface name, block shape, and rindex
+            Dict with parsed data including interface name, parameter name, optional shape, and rindex
         """
         logger.debug(f"Parsing BDIM pragma: {self.inputs} at line {self.line_number}")
         
         if len(self.inputs) < 2:
-            raise PragmaError("BDIM pragma requires interface name and block shape")
+            raise PragmaError("BDIM pragma requires interface name and parameter name")
         
         interface_name = self.inputs[0]
+        param_name = self.inputs[1]
         
         # Validate interface name
         if not interface_name.replace('_', '').replace('V', '').isalnum():
             raise PragmaError(f"BDIM pragma interface name '{interface_name}' contains invalid characters")
         
-        # Parse block shape [shape1,shape2,...]
-        if len(self.inputs) < 2 or not (self.inputs[1].startswith('[') and self.inputs[1].endswith(']')):
-            raise PragmaError("BDIM pragma requires block shape in [shape1,shape2,...] format")
+        # Validate parameter name
+        if not param_name.isidentifier():
+            raise PragmaError(f"BDIM pragma parameter name '{param_name}' is not a valid identifier")
         
-        shape_str = self.inputs[1][1:-1].strip()
-        if not shape_str:
-            raise PragmaError("BDIM pragma block shape cannot be empty")
-        
-        # Parse shape elements - only allow ':' and parameter names (NO magic numbers)
-        block_shape = []
-        
-        for element in shape_str.split(','):
-            element = element.strip()
-            if element == ':':
-                block_shape.append(':')
-            elif element.isdigit():
-                raise PragmaError(f"Magic numbers not allowed in BDIM pragma shape. Use parameter names instead of '{element}'.")
-            elif element.isidentifier():
-                # Parameter name - defer validation until apply phase when parameters are available
-                block_shape.append(element)
-            else:
-                raise PragmaError(f"Invalid shape element '{element}'. Must be ':' (full dimension) or parameter name.")
-        
-        # Parse optional RINDEX
+        # Parse optional arguments
+        block_shape = None
         rindex = 0
-        if len(self.inputs) > 2:
-            rindex_str = self.inputs[2]
-            if rindex_str.startswith('RINDEX='):
+        
+        for i in range(2, len(self.inputs)):
+            arg = self.inputs[i]
+            
+            if arg.startswith('SHAPE='):
+                # Parse shape specification
+                shape_spec = arg[6:]  # Remove 'SHAPE='
+                if not (shape_spec.startswith('[') and shape_spec.endswith(']')):
+                    raise PragmaError("BDIM pragma SHAPE must be in [shape1,shape2,...] format")
+                
+                shape_str = shape_spec[1:-1].strip()
+                if not shape_str:
+                    raise PragmaError("BDIM pragma SHAPE cannot be empty")
+                
+                # Parse shape elements - only allow ':' and parameter names (NO magic numbers)
+                block_shape = []
+                for element in shape_str.split(','):
+                    element = element.strip()
+                    if element == ':':
+                        block_shape.append(':')
+                    elif element.isdigit():
+                        raise PragmaError(f"Magic numbers not allowed in BDIM pragma SHAPE. Use parameter names instead of '{element}'.")
+                    elif element.isidentifier():
+                        # Parameter name - defer validation until apply phase when parameters are available
+                        block_shape.append(element)
+                    else:
+                        raise PragmaError(f"Invalid shape element '{element}'. Must be ':' (full dimension) or parameter name.")
+            
+            elif arg.startswith('RINDEX='):
+                # Parse RINDEX
                 try:
-                    rindex = int(rindex_str[7:])
+                    rindex = int(arg[7:])
                     if rindex < 0:
                         raise PragmaError(f"RINDEX must be non-negative, got {rindex}")
                 except ValueError:
-                    raise PragmaError(f"Invalid RINDEX value: {rindex_str}")
+                    raise PragmaError(f"Invalid RINDEX value: {arg}")
+            
             else:
-                raise PragmaError(f"Unknown parameter '{rindex_str}'. Expected 'RINDEX=n'")
+                raise PragmaError(f"Unknown BDIM pragma parameter '{arg}'. Expected 'SHAPE=[...]' or 'RINDEX=n'")
         
         return {
             "interface_name": interface_name,
+            "param_name": param_name,
             "block_shape": block_shape,
             "rindex": rindex
         }
     
 
 
-    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
-        """Check if this BDIM pragma applies to the given interface metadata."""
-        if not self.parsed_data:
-            logger.debug(f"BDIM pragma has no parsed_data")
-            return False
-        
-        pragma_interface_name = self.parsed_data.get('interface_name')
-        if not pragma_interface_name:
-            logger.debug(f"BDIM pragma has no interface_name in parsed_data")
-            return False
-        
-        match_result = self._interface_names_match(pragma_interface_name, metadata.name)
-        logger.debug(f"BDIM pragma interface matching: '{pragma_interface_name}' <-> '{metadata.name}' = {match_result}")
-        return match_result
 
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
-        """Apply BDIM pragma to modify chunking strategy."""
+        """Apply BDIM pragma to modify chunking strategy and set parameter linkage."""
         logger.debug(f"Attempting to apply BDIM pragma to interface '{metadata.name}'")
         if not self.applies_to_interface_metadata(metadata):
             logger.debug(f"BDIM pragma does not apply to interface '{metadata.name}'")
             return metadata
+        
+        # Validate that BDIM pragma is only applied to INPUT or WEIGHT interfaces
+        from brainsmith.dataflow.core.interface_types import InterfaceType
+        if metadata.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+            error_msg = (f"BDIM pragma at line {self.line_number} cannot be applied to "
+                        f"interface '{metadata.name}' of type '{metadata.interface_type.value}'. "
+                        f"BDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
+            logger.error(f"BDIM interface type validation failed: {error_msg}")
+            raise PragmaError(error_msg)
         
         logger.debug(f"BDIM pragma applying to interface '{metadata.name}' - validating parameters")
         # Validate parameters now that module parameters are available
@@ -618,13 +643,21 @@ class BDimPragma(Pragma, InterfaceNameMatcher):
         
         # Create chunking strategy from pragma data
         new_strategy = self._create_chunking_strategy()
+        
+        # Create shape parameters dict if shape was specified
+        shape_params = None
+        if self.parsed_data.get("block_shape") is not None:
+            shape_params = {
+                "shape": self.parsed_data.get("block_shape"),
+                "rindex": self.parsed_data.get("rindex", 0)
+            }
+        
         logger.debug(f"BDIM pragma successfully applied to interface '{metadata.name}'")
         
-        return InterfaceMetadata(
-            name=metadata.name,
-            interface_type=metadata.interface_type,
-            datatype_constraints=metadata.datatype_constraints,
-            chunking_strategy=new_strategy
+        return metadata.update_attributes(
+            chunking_strategy=new_strategy,
+            bdim_param=self.parsed_data.get("param_name"),
+            shape_params=shape_params
         )
 
     def _create_chunking_strategy(self):
@@ -642,6 +675,127 @@ class BDimPragma(Pragma, InterfaceNameMatcher):
         return BlockChunkingStrategy(
             block_shape=block_shape,
             rindex=rindex
+        )
+
+
+@dataclass
+class SDimPragma(InterfacePragma):
+    """
+    SDIM pragma for linking stream dimension parameters.
+    
+    Format: @brainsmith SDIM <interface_name> <param_name>
+    
+    This pragma links an interface to its stream dimension RTL parameter.
+    The stream shape is inferred from the corresponding BDIM configuration.
+    
+    IMPORTANT: Only allowed on INPUT or WEIGHT interfaces (not OUTPUT or CONTROL)
+    
+    Examples:
+    - @brainsmith SDIM s_axis_input0 INPUT0_SDIM
+    - @brainsmith SDIM weights_V WEIGHTS_STREAM_SIZE
+    
+    Invalid examples:
+    - @brainsmith SDIM m_axis_output0 OUTPUT0_SDIM  # ERROR: Cannot use on OUTPUT interface
+    """
+    
+    def __post_init__(self):
+        super().__post_init__()
+    
+    # Class variable to store module parameters for validation (not a dataclass field)
+    _module_parameters = {}
+    
+    @classmethod
+    def set_module_parameters(cls, parameters: List['Parameter']) -> None:
+        """Set module parameters for SDIM pragma validation."""
+        cls._module_parameters = {p.name: p for p in parameters}
+    
+    def _get_module_parameters(self) -> Dict[str, 'Parameter']:
+        """Get module parameters for validation."""
+        return self._module_parameters
+    
+    def _validate_parameter(self) -> None:
+        """Validate that the parameter name exists in module parameters."""
+        logger.debug(f"SDIM pragma parameter validation starting")
+        if not self.parsed_data:
+            logger.debug(f"SDIM pragma has no parsed_data, skipping validation")
+            return
+        
+        param_name = self.parsed_data.get("param_name")
+        if not param_name:
+            logger.debug(f"SDIM pragma has no param_name, skipping validation")
+            return
+            
+        module_parameters = self._get_module_parameters()
+        param_names = set(module_parameters.keys())
+        
+        logger.debug(f"SDIM pragma validating parameter: '{param_name}'")
+        logger.debug(f"Available module parameters: {sorted(param_names)}")
+        
+        if param_name not in param_names:
+            error_msg = (f"SDIM pragma at line {self.line_number} references unknown parameter '{param_name}'. "
+                       f"Available parameters: {sorted(param_names) if param_names else 'none'}")
+            logger.error(f"SDIM parameter validation failed: {error_msg}")
+            raise PragmaError(error_msg)
+        else:
+            logger.debug(f"SDIM pragma parameter '{param_name}' validated successfully")
+        
+        logger.debug(f"SDIM pragma parameter validation completed successfully")
+
+    def _parse_inputs(self) -> Dict:
+        """
+        Parse SDIM pragma format.
+        
+        Format: @brainsmith SDIM <interface_name> <param_name>
+        
+        Returns:
+            Dict with parsed data including interface name and parameter name
+        """
+        logger.debug(f"Parsing SDIM pragma: {self.inputs} at line {self.line_number}")
+        
+        if len(self.inputs) != 2:
+            raise PragmaError("SDIM pragma requires exactly two arguments: interface name and parameter name")
+        
+        interface_name = self.inputs[0]
+        param_name = self.inputs[1]
+        
+        # Validate interface name
+        if not interface_name.replace('_', '').replace('V', '').isalnum():
+            raise PragmaError(f"SDIM pragma interface name '{interface_name}' contains invalid characters")
+        
+        # Validate parameter name
+        if not param_name.isidentifier():
+            raise PragmaError(f"SDIM pragma parameter name '{param_name}' is not a valid identifier")
+        
+        return {
+            "interface_name": interface_name,
+            "param_name": param_name
+        }
+
+
+    def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply SDIM pragma to set stream dimension parameter linkage."""
+        logger.debug(f"Attempting to apply SDIM pragma to interface '{metadata.name}'")
+        if not self.applies_to_interface_metadata(metadata):
+            logger.debug(f"SDIM pragma does not apply to interface '{metadata.name}'")
+            return metadata
+        
+        # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
+        from brainsmith.dataflow.core.interface_types import InterfaceType
+        if metadata.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+            error_msg = (f"SDIM pragma at line {self.line_number} cannot be applied to "
+                        f"interface '{metadata.name}' of type '{metadata.interface_type.value}'. "
+                        f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
+            logger.error(f"SDIM interface type validation failed: {error_msg}")
+            raise PragmaError(error_msg)
+        
+        logger.debug(f"SDIM pragma applying to interface '{metadata.name}' - validating parameter")
+        # Validate parameter now that module parameters are available
+        self._validate_parameter()
+        
+        logger.debug(f"SDIM pragma successfully applied to interface '{metadata.name}'")
+        
+        return metadata.update_attributes(
+            sdim_param=self.parsed_data.get("param_name")
         )
 
 
@@ -705,7 +859,7 @@ class DerivedParameterPragma(Pragma):
 
 
 @dataclass
-class WeightPragma(Pragma, InterfaceNameMatcher):
+class WeightPragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
 
@@ -735,16 +889,13 @@ class WeightPragma(Pragma, InterfaceNameMatcher):
         if not self.applies_to_interface_metadata(metadata):
             return metadata
         
-        return InterfaceMetadata(
-            name=metadata.name,
-            interface_type=InterfaceType.WEIGHT,  # Override type
-            datatype_constraints=metadata.datatype_constraints,
-            chunking_strategy=metadata.chunking_strategy
+        return metadata.update_attributes(
+            interface_type=InterfaceType.WEIGHT  # Override type
         )
 
 
 @dataclass 
-class DatatypeParamPragma(Pragma, InterfaceNameMatcher):
+class DatatypeParamPragma(InterfacePragma):
     """
     Maps specific RTL parameters to interface datatype properties.
     
@@ -776,16 +927,6 @@ class DatatypeParamPragma(Pragma, InterfaceNameMatcher):
             "parameter_name": parameter_name
         }
     
-    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
-        """Check if this pragma applies to the given interface."""
-        if not self.parsed_data:
-            return False
-        
-        pragma_interface_name = self.parsed_data.get('interface_name')
-        if not pragma_interface_name:
-            return False
-        
-        return self._interface_names_match(pragma_interface_name, metadata.name)
     
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply DATATYPE_PARAM pragma to set datatype parameter mapping."""
@@ -799,12 +940,7 @@ class DatatypeParamPragma(Pragma, InterfaceNameMatcher):
         current_params = metadata.datatype_params or {}
         current_params[property_type] = parameter_name
         
-        return InterfaceMetadata(
-            name=metadata.name,
-            interface_type=metadata.interface_type,
-            datatype_constraints=metadata.datatype_constraints,
-            chunking_strategy=metadata.chunking_strategy,
-            description=metadata.description,
+        return metadata.update_attributes(
             datatype_params=current_params
         )
 

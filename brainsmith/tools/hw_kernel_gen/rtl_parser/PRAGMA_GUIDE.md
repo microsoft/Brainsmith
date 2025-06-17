@@ -45,14 +45,25 @@ Mark input interfaces as weight interfaces.
 ```
 
 ### BDIM
-Override block dimensions for interface chunking.
+Link interface to block dimension parameter with optional shape specification.
 ```systemverilog
-// @brainsmith BDIM input0 [PE] RINDEX=0
-// @brainsmith BDIM weights [TILE_SIZE,:]
+// @brainsmith BDIM s_axis_input0 INPUT0_BDIM
+// @brainsmith BDIM weights_V WEIGHTS_BLOCK_SIZE SHAPE=[C,PE] RINDEX=0
+// @brainsmith BDIM out0 OUTPUT0_BDIM SHAPE=[TILE_SIZE,:] RINDEX=1
 ```
-**Format**: `BDIM <interface_name> [<shape>] [RINDEX=<n>]`
+**Format**: `BDIM <interface_name> <param_name> [SHAPE=<shape>] [RINDEX=<n>]`
 
-**Notes**: Use parameter names (not magic numbers) in shapes.
+**Notes**: Parameter name is mandatory. SHAPE and RINDEX are optional. Use parameter names (not magic numbers) in shapes.
+
+### SDIM
+Link interface to stream dimension parameter.
+```systemverilog
+// @brainsmith SDIM s_axis_input0 INPUT0_SDIM
+// @brainsmith SDIM weights_V WEIGHTS_STREAM_SIZE
+```
+**Format**: `SDIM <interface_name> <param_name>`
+
+**Notes**: Stream shape is inferred from BDIM configuration.
 
 ## Multi-Interface Example
 
@@ -91,10 +102,10 @@ module elementwise_add #(
 ## Default Parameter Naming
 
 Without pragmas, interfaces get automatic parameter names:
-- `s_axis_input0` → `INPUT0_WIDTH`, `SIGNED_INPUT0`
-- `s_axis_input1` → `INPUT1_WIDTH`, `SIGNED_INPUT1`
-- `m_axis_output0` → `OUTPUT0_WIDTH`, `SIGNED_OUTPUT0`
-- `weights_V` → `WEIGHTS_WIDTH`, `SIGNED_WEIGHTS`
+- `s_axis_input0` → `INPUT0_WIDTH`, `SIGNED_INPUT0`, `INPUT0_BDIM`, `INPUT0_SDIM`
+- `s_axis_input1` → `INPUT1_WIDTH`, `SIGNED_INPUT1`, `INPUT1_BDIM`, `INPUT1_SDIM`
+- `m_axis_output0` → `OUTPUT0_WIDTH`, `SIGNED_OUTPUT0`, `OUTPUT0_BDIM`, `OUTPUT0_SDIM`
+- `weights_V` → `WEIGHTS_WIDTH`, `SIGNED_WEIGHTS`, `WEIGHTS_BDIM`, `WEIGHTS_SDIM`
 
 ## Interface Name Matching
 

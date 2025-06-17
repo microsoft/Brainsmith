@@ -78,6 +78,20 @@ class KernelMetadata:
     - Templates decide which parameters to expose
     """
     
+    exposed_parameters: List[str]
+    """
+    Names of parameters that should be exposed as FINN node attributes.
+    
+    Reason: After pragma application, some parameters are linked to interfaces
+    (BDIM, SDIM, datatype) and should not be exposed as nodeattr. This list
+    contains only the remaining parameters that need explicit node attributes.
+    
+    Use:
+    - Template generation for get_nodeattr_types()
+    - Filter out parameters that are linked to interface metadata
+    - Ensure only truly configurable parameters become nodeattr
+    """
+    
     # === Pragma Information ===
     
     pragmas: List[Pragma]

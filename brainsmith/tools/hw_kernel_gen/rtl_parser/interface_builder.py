@@ -33,6 +33,15 @@ class InterfaceBuilder:
         self.debug = debug
         self.scanner = InterfaceScanner(debug=debug)
         self.validator = ProtocolValidator(debug=debug)
+        
+        # Initialize counters for interface naming
+        self._interface_counters = {
+            InterfaceType.INPUT: 0,
+            InterfaceType.OUTPUT: 0,
+            InterfaceType.WEIGHT: 0,
+            InterfaceType.CONFIG: 0,
+            InterfaceType.CONTROL: 0
+        }
 
 
     def build_interface_metadata(self, ports: List[Port], pragmas: List[Pragma]) -> Tuple[List[InterfaceMetadata], List[Port]]:
@@ -98,11 +107,23 @@ class InterfaceBuilder:
             logger.debug(f"  {len(unassigned_ports)} unassigned ports")
             logger.debug(f"--- End Results ---")
         
+        # Log interface name sanitization summary
+        summary = []
+        for interface_type, count in self._interface_counters.items():
+            if count > 0:
+                if interface_type == InterfaceType.CONTROL:
+                    summary.append(f"{count} CONTROL (global)")
+                else:
+                    summary.append(f"{count} {interface_type.value.upper()}")
+        
+        if summary:
+            logger.info(f"Interface name sanitization complete: {', '.join(summary)}")
+        
         return metadata_list, unassigned_ports
 
     def _create_base_metadata(self, group: PortGroup) -> InterfaceMetadata:
         """
-        Create base InterfaceMetadata from validated PortGroup.
+        Create base InterfaceMetadata from validated PortGroup with automatic parameter detection.
         
         The ProtocolValidator has already determined the correct interface_type
         and populated group.metadata with relevant information, so we can
@@ -112,7 +133,7 @@ class InterfaceBuilder:
             group: Validated PortGroup from ProtocolValidator
             
         Returns:
-            InterfaceMetadata: Base metadata with no default datatypes and default chunking
+            InterfaceMetadata: Base metadata with automatic parameter linkage
         """
         # Interface type has been correctly determined by ProtocolValidator
         interface_type = group.interface_type
@@ -142,11 +163,57 @@ class InterfaceBuilder:
         if 'direction' in group.metadata:
             description += f" - Direction: {group.metadata['direction'].value}"
         
+        # Automatic parameter detection - only for dataflow interfaces
+        datatype_params = None
+        bdim_param = None
+        sdim_param = None
+        
+        if interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+            # Auto-detect parameter names using actual interface name directly
+            # Users can name signals with any prefix they want
+            interface_name = group.name
+            
+            # Only set if parameters follow the standard pattern
+            # This will be validated in build_interface_metadata
+            datatype_params = {
+                "width": f"{interface_name}_WIDTH",
+                "signed": f"SIGNED_{interface_name}"
+            }
+            bdim_param = f"{interface_name}_BDIM"
+            sdim_param = f"{interface_name}_SDIM"
+        
+        # Assign standardized compiler_name based on interface type and discovery order
+        if interface_type == InterfaceType.CONTROL:
+            compiler_name = 'global'
+        elif interface_type == InterfaceType.INPUT:
+            compiler_name = f'input{self._interface_counters[InterfaceType.INPUT]}'
+            self._interface_counters[InterfaceType.INPUT] += 1
+        elif interface_type == InterfaceType.OUTPUT:
+            compiler_name = f'output{self._interface_counters[InterfaceType.OUTPUT]}'
+            self._interface_counters[InterfaceType.OUTPUT] += 1
+        elif interface_type == InterfaceType.WEIGHT:
+            compiler_name = f'weight{self._interface_counters[InterfaceType.WEIGHT]}'
+            self._interface_counters[InterfaceType.WEIGHT] += 1
+        elif interface_type == InterfaceType.CONFIG:
+            compiler_name = f'config{self._interface_counters[InterfaceType.CONFIG]}'
+            self._interface_counters[InterfaceType.CONFIG] += 1
+        else:
+            logger.warning(f"Unknown interface type '{interface_type}' for interface '{group.name}', using name as compiler_name")
+            compiler_name = group.name
+        
+        logger.debug(f"Assigned compiler_name '{compiler_name}' to {interface_type.value} interface '{group.name}'")
+        
         return InterfaceMetadata(
             name=group.name,
             interface_type=interface_type,
+            compiler_name=compiler_name,
             datatype_constraints=datatype_constraints,
             chunking_strategy=chunking_strategy,
-            description=description
+            description=description,
+            datatype_params=datatype_params,
+            bdim_param=bdim_param,
+            sdim_param=sdim_param
         )
+    
+    
 

@@ -22,18 +22,54 @@ class InterfaceMetadata:
     """
     name: str
     interface_type: InterfaceType
+    compiler_name: Optional[str] = None
+    """
+    Standardized compiler name for consistent code generation.
+    
+    Format based on interface type and discovery order:
+    - CONTROL: 'global'
+    - INPUT: 'input0', 'input1', 'input2', ...
+    - WEIGHT: 'weight0', 'weight1', 'weight2', ...
+    - OUTPUT: 'output0', 'output1', 'output2', ...
+    
+    Used for consistent variable naming in generated AutoHWCustomOp and AutoRTLBackend.
+    """
     datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
     chunking_strategy: Any = field(default_factory=default_chunking)  # Can be BlockChunkingStrategy or DefaultChunkingStrategy
     default_layout: Optional[str] = None
     description: Optional[str] = None
     
-    # NEW: Optional datatype parameter mappings
+    # Parameter linkage mappings
     datatype_params: Optional[Dict[str, str]] = None
     """
     Optional mapping of datatype properties to RTL parameters.
     If None, defaults to {clean_interface_name}_WIDTH, {clean_interface_name}_SIGNED pattern.
     
     Example: {"width": "INPUT0_WIDTH", "signed": "SIGNED_INPUT0"}
+    """
+    
+    bdim_param: Optional[str] = None
+    """
+    RTL parameter name for block dimensions.
+    If None, defaults to {clean_interface_name}_BDIM pattern.
+    
+    Example: "INPUT0_BDIM", "WEIGHTS_BDIM"
+    """
+    
+    sdim_param: Optional[str] = None
+    """
+    RTL parameter name for stream dimensions.
+    If None, defaults to {clean_interface_name}_SDIM pattern.
+    
+    Example: "INPUT0_SDIM", "WEIGHTS_SDIM"
+    """
+    
+    shape_params: Optional[Dict[str, Any]] = None
+    """
+    Optional shape specification parameters from BDIM pragma.
+    Contains 'shape' (List[str]) and 'rindex' (int) if specified.
+    
+    Example: {"shape": ["C", "PE"], "rindex": 0}
     """
     
     def __post_init__(self):
@@ -56,6 +92,117 @@ class InterfaceMetadata:
         if not self.datatype_constraints:
             return True  # No constraints = allow anything
         return validate_datatype_against_constraints(datatype, self.datatype_constraints)
+    
+    def validate_parameters(self, module_param_names: set) -> List[str]:
+        """
+        Validate that expected parameters exist in the module.
+        
+        This method checks if the interface's expected parameters (BDIM, SDIM, 
+        datatype parameters) actually exist in the RTL module's parameter list.
+        
+        Args:
+            module_param_names: Set of parameter names from the RTL module
+            
+        Returns:
+            List of warning messages for missing parameters
+        """
+        warnings = []
+        
+        # Skip non-dataflow interfaces
+        if self.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+            return warnings
+        
+        # Check BDIM parameter
+        bdim_param = self.get_bdim_parameter_name()
+        if bdim_param not in module_param_names:
+            warnings.append(
+                f"Interface '{self.name}' expects BDIM parameter '{bdim_param}' "
+                f"but it was not found in module parameters. "
+                f"Use @brainsmith BDIM pragma if different parameter name is used."
+            )
+        
+        # Check SDIM parameter
+        sdim_param = self.get_sdim_parameter_name()
+        if sdim_param not in module_param_names:
+            warnings.append(
+                f"Interface '{self.name}' expects SDIM parameter '{sdim_param}' "
+                f"but it was not found in module parameters. "
+                f"Use @brainsmith SDIM pragma if different parameter name is used."
+            )
+        
+        # Check datatype parameters
+        if self.datatype_params:
+            for prop_type, param_name in self.datatype_params.items():
+                if param_name not in module_param_names:
+                    warnings.append(
+                        f"Interface '{self.name}' expects {prop_type} parameter '{param_name}' "
+                        f"but it was not found in module parameters. "
+                        f"Use @brainsmith DATATYPE_PARAM pragma if different parameter name is used."
+                    )
+        else:
+            # Check essential datatype parameters even if datatype_params is None
+            # (at least width parameter for dataflow interfaces)
+            width_param = self.get_datatype_parameter_name('width')
+            if width_param not in module_param_names:
+                warnings.append(
+                    f"Interface '{self.name}' expects width parameter '{width_param}' "
+                    f"but it was not found in module parameters. "
+                    f"Use @brainsmith DATATYPE_PARAM pragma if different parameter name is used."
+                )
+        
+        # Check shape parameters reference valid module parameters
+        if self.shape_params:
+            shape = self.shape_params.get('shape', [])
+            for shape_element in shape:
+                if shape_element != ':' and shape_element not in module_param_names:
+                    warnings.append(
+                        f"Interface '{self.name}' BDIM shape references parameter '{shape_element}' "
+                        f"that was not found in module parameters."
+                    )
+        
+        return warnings
+    
+    def update_attributes(self, **kwargs) -> 'InterfaceMetadata':
+        """
+        Create a new InterfaceMetadata instance with updated attributes.
+        
+        This method provides a clean way to update specific fields while preserving
+        all other attributes. Any field not specified in kwargs will retain its
+        current value.
+        
+        Args:
+            **kwargs: Keyword arguments for fields to update
+            
+        Returns:
+            InterfaceMetadata: New instance with updated attributes
+            
+        Example:
+            >>> metadata = InterfaceMetadata(name="in0", interface_type=InterfaceType.INPUT)
+            >>> updated = metadata.update_attributes(
+            ...     datatype_constraints=[new_constraint],
+            ...     bdim_param="IN0_BDIM"
+            ... )
+        """
+        # Get current values as a dict
+        current_values = {
+            'name': self.name,
+            'interface_type': self.interface_type,
+            'compiler_name': self.compiler_name,
+            'datatype_constraints': self.datatype_constraints,
+            'chunking_strategy': self.chunking_strategy,
+            'default_layout': self.default_layout,
+            'description': self.description,
+            'datatype_params': self.datatype_params,
+            'bdim_param': self.bdim_param,
+            'sdim_param': self.sdim_param,
+            'shape_params': self.shape_params
+        }
+        
+        # Update with provided kwargs
+        current_values.update(kwargs)
+        
+        # Create and return new instance
+        return InterfaceMetadata(**current_values)
     
     def get_constraint_description(self) -> str:
         """
@@ -83,39 +230,71 @@ class InterfaceMetadata:
             property_type: 'width', 'signed', 'format', 'bias', 'fractional_width'
             
         Returns:
-            RTL parameter name (e.g., 'INPUT0_WIDTH', 'SIGNED_INPUT0')
+            RTL parameter name (e.g., 'potato_WIDTH', 'SIGNED_potato')
         """
         if self.datatype_params and property_type in self.datatype_params:
             return self.datatype_params[property_type]
         
-        # Default naming convention
-        clean_name = self._get_clean_interface_name()
+        # Default naming convention: use actual interface name directly
         if property_type == 'width':
-            return f"{clean_name}_WIDTH"
+            return f"{self.name}_WIDTH"
         elif property_type == 'signed':
-            return f"SIGNED_{clean_name}"
+            return f"SIGNED_{self.name}"
         elif property_type == 'format':
-            return f"{clean_name}_FORMAT"
+            return f"{self.name}_FORMAT"
         elif property_type == 'bias':
-            return f"{clean_name}_BIAS"
+            return f"{self.name}_BIAS"
         elif property_type == 'fractional_width':
-            return f"{clean_name}_FRACTIONAL_WIDTH"
+            return f"{self.name}_FRACTIONAL_WIDTH"
         else:
-            return f"{clean_name}_{property_type.upper()}"
+            return f"{self.name}_{property_type.upper()}"
     
-    def _get_clean_interface_name(self) -> str:
-        """Extract clean name from interface for parameter generation."""
-        # Remove common prefixes/suffixes: s_axis_input0 -> INPUT0
-        clean = self.name
-        for prefix in ['s_axis_', 'm_axis_', 'axis_']:
-            if clean.startswith(prefix):
-                clean = clean[len(prefix):]
-                break
-        for suffix in ['_tdata', '_tvalid', '_tready']:
-            if clean.endswith(suffix):
-                clean = clean[:-len(suffix)]
-                break
-        return clean.upper()
+    def get_bdim_parameter_name(self) -> str:
+        """
+        Get RTL parameter name for block dimensions.
+        
+        Returns:
+            RTL parameter name (e.g., 'potato_BDIM', 'weights_V_BDIM')
+        """
+        if self.bdim_param:
+            return self.bdim_param
+        
+        # Default naming convention: use actual interface name directly
+        return f"{self.name}_BDIM"
+    
+    def get_sdim_parameter_name(self) -> str:
+        """
+        Get RTL parameter name for stream dimensions.
+        
+        Returns:
+            RTL parameter name (e.g., 'potato_SDIM', 'weights_V_SDIM')
+        """
+        if self.sdim_param:
+            return self.sdim_param
+        
+        # Default naming convention: use actual interface name directly
+        return f"{self.name}_SDIM"
+    
+    def has_shape_linkage(self) -> bool:
+        """
+        Check if interface has complete shape/size parameter linkage.
+        
+        Returns:
+            bool: True if both BDIM and SDIM parameters are available
+        """
+        return bool(self.bdim_param or self._has_default_bdim_param()) and \
+               bool(self.sdim_param or self._has_default_sdim_param())
+    
+    def _has_default_bdim_param(self) -> bool:
+        """Check if interface follows default BDIM parameter naming."""
+        # This will be validated during interface building
+        return True  # Assume available for now
+    
+    def _has_default_sdim_param(self) -> bool:
+        """Check if interface follows default SDIM parameter naming."""
+        # This will be validated during interface building
+        return True  # Assume available for now
+    
 
 
 @dataclass

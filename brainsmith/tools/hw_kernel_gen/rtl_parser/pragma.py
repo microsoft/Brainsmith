@@ -17,7 +17,7 @@ from typing import List, Optional, Dict, Callable
 from tree_sitter import Node
 
 from .data import (
-    Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma,
+    Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma, SDimPragma,
     DerivedParameterPragma, WeightPragma, DatatypeParamPragma, PragmaError
 )
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
@@ -39,6 +39,7 @@ class PragmaHandler:
             PragmaType.TOP_MODULE: TopModulePragma,
             PragmaType.DATATYPE: DatatypePragma,
             PragmaType.BDIM: BDimPragma,
+            PragmaType.SDIM: SDimPragma,
             PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
             PragmaType.WEIGHT: WeightPragma,
             PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
@@ -137,7 +138,100 @@ class PragmaHandler:
         logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
         self.pragmas = pragmas # Store the extracted pragmas in the instance
         return pragmas
-    
 
-    
+    def get_interface_pragmas(self) -> List['InterfacePragma']:
+        """Get all interface-related pragmas.
+        
+        Returns:
+            List of InterfacePragma instances
+        """
+        from .data import InterfacePragma
+        return [pragma for pragma in self.pragmas if isinstance(pragma, InterfacePragma)]
+
+    def get_pragmas_by_type(self, pragma_type: PragmaType) -> List[Pragma]:
+        """Get all pragmas of a specific type.
+        
+        Args:
+            pragma_type: The PragmaType to filter by
+            
+        Returns:
+            List of Pragma instances of the specified type
+        """
+        return [pragma for pragma in self.pragmas if pragma.type == pragma_type]
+
+    def apply_interface_pragmas(self, metadata_list: List[InterfaceMetadata], 
+                              module_parameters: Optional[List] = None) -> tuple[List[InterfaceMetadata], List[str]]:
+        """Apply all interface pragmas to a list of InterfaceMetadata.
+        
+        This method applies all interface pragmas in sequence using a clean
+        chain-of-responsibility pattern.
+        
+        Args:
+            metadata_list: List of InterfaceMetadata to process
+            module_parameters: Optional list of module parameters for pragma validation
+            
+        Returns:
+            Tuple of (updated_metadata_list, linked_parameters)
+            - updated_metadata_list: List of InterfaceMetadata with all applicable pragmas applied
+            - linked_parameters: List of parameter names that were linked to interfaces
+        """
+        interface_pragmas = self.get_interface_pragmas()
+        linked_parameters = []
+        
+        if not interface_pragmas:
+            logger.debug("No interface pragmas found, returning metadata unchanged")
+            return metadata_list, linked_parameters
+        
+        # Set module parameters for BDIM and SDIM pragmas if provided
+        if module_parameters is not None:
+            from .data import BDimPragma, SDimPragma
+            BDimPragma.set_module_parameters(module_parameters)
+            SDimPragma.set_module_parameters(module_parameters)
+            logger.debug(f"Set {len(module_parameters)} module parameters for pragma validation")
+        
+        logger.debug(f"Applying {len(interface_pragmas)} interface pragmas to {len(metadata_list)} interfaces")
+        
+        # Track parameters that are linked by pragmas
+        from .data import BDimPragma, SDimPragma, DatatypeParamPragma
+        
+        result_metadata = []
+        for metadata in metadata_list:
+            current_metadata = metadata
+            
+            # Apply each interface pragma in sequence
+            for pragma in interface_pragmas:
+                try:
+                    if pragma.applies_to_interface_metadata(current_metadata):
+                        logger.debug(f"Applying {pragma.type.value} pragma to interface '{current_metadata.name}'")
+                        current_metadata = pragma.apply_to_metadata(current_metadata)
+                        
+                        # Track linked parameters
+                        if isinstance(pragma, BDimPragma):
+                            param_name = pragma.parsed_data.get("param_name")
+                            if param_name and param_name not in linked_parameters:
+                                linked_parameters.append(param_name)
+                        elif isinstance(pragma, SDimPragma):
+                            param_name = pragma.parsed_data.get("param_name")
+                            if param_name and param_name not in linked_parameters:
+                                linked_parameters.append(param_name)
+                        elif isinstance(pragma, DatatypeParamPragma):
+                            param_name = pragma.parsed_data.get("parameter_name")
+                            if param_name and param_name not in linked_parameters:
+                                linked_parameters.append(param_name)
+                                
+                except Exception as e:
+                    # Re-raise validation errors (PragmaError) as they indicate invalid pragma usage
+                    from .data import PragmaError
+                    if isinstance(e, PragmaError):
+                        logger.error(f"Pragma validation failed: {e}")
+                        raise
+                    else:
+                        logger.error(f"Failed to apply {pragma.type.value} pragma to interface '{current_metadata.name}': {e}")
+                        # Continue with other pragmas for non-validation errors
+            
+            result_metadata.append(current_metadata)
+        
+        logger.debug(f"Applied interface pragmas to {len(result_metadata)} interfaces")
+        logger.debug(f"Linked parameters: {linked_parameters}")
+        return result_metadata, linked_parameters
     

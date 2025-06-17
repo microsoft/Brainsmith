@@ -95,51 +95,51 @@ class RTLParser:
         self.ports: List[Port] = [] # Intermediate list of raw ports
         self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
+        self.exposed_parameters: List[str] = []  # Parameters that need nodeattr exposure
 
-    def _initial_parse(self, file_path: str) -> None:
-        """Performs Stage 1 of parsing: Initial AST generation and module selection.
+    def _initial_parse(self, source: str, source_name: str = "<string>", 
+                      is_file: bool = True, target_module: Optional[str] = None) -> None:
+        """Unified Stage 1 parsing: Initial AST generation and module selection.
 
         Sets self.tree, self.pragmas, and self.module_node.
 
-        Reads the source file, parses it into an Abstract Syntax Tree (AST) using
-        tree-sitter, checks for basic syntax errors, finds all module definitions,
-        extracts `@brainsmith` pragmas, and selects the target module node based on
-        the number of modules found and the presence of a `TOP_MODULE` pragma.
+        Parses SystemVerilog source (from file or string) into an Abstract Syntax Tree (AST)
+        using tree-sitter, checks for basic syntax errors, finds all module definitions,
+        extracts `@brainsmith` pragmas, and selects the target module node.
 
         Args:
-            file_path: The absolute path to the SystemVerilog file to parse.
-
-        Returns:
-            Tuple[List[Pragma], Node]: A tuple containing:
-                - pragmas (List[Pragma]): A list of extracted Pragma objects.
-                - module_node (Node): The tree-sitter Node representing the selected target module.
-            `self.tree` is also set as an instance variable.
+            source: File path (if is_file=True) or SystemVerilog source code string
+            source_name: Name for logging/error messages (file path or "<string>")
+            is_file: If True, treat source as file path; if False, treat as source code
+            target_module: Optional specific module name to target
 
         Raises:
-            ParserError: If the file cannot be read, core parsing fails, no modules are found,
-                         pragma extraction fails, or module selection logic fails (e.g., ambiguity).
-            SyntaxError: If the input file contains SystemVerilog syntax errors detected by tree-sitter.
-            FileNotFoundError: (Propagated) If the input file does not exist.
+            ParserError: If parsing fails, no modules found, or module selection fails
+            SyntaxError: If SystemVerilog syntax errors detected by tree-sitter
+            FileNotFoundError: (Propagated) If file does not exist
         """
-        logger.info(f"Stage 1: Initial parsing for {file_path}")
+        logger.info(f"Stage 1: Initial parsing for {source_name}")
         self.tree = None # Reset state
         self.pragmas = []
         self.module_node = None
 
-        # 1. Read file
-        try:
-            with open(file_path, 'r') as f:
-                source = f.read()
-        except Exception as e:
-            logger.exception(f"Failed to read file {file_path}: {e}")
-            raise ParserError(f"Failed to read file {file_path}: {e}")
+        # 1. Get source content
+        if is_file:
+            try:
+                with open(source, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                logger.exception(f"Failed to read file {source}: {e}")
+                raise ParserError(f"Failed to read file {source}: {e}")
+        else:
+            content = source
         
         # 2. Parse using self.parser
         try:
-            self.tree = self.parser.parse(bytes(source, 'utf8'))
+            self.tree = self.parser.parse(bytes(content, 'utf8'))
         except Exception as e:
-            logger.exception(f"Tree-sitter parsing failed for {file_path}: {e}")
-            raise ParserError(f"Core parsing failed for {file_path}: {e}")
+            logger.exception(f"Tree-sitter parsing failed for {source_name}: {e}")
+            raise ParserError(f"Core parsing failed for {source_name}: {e}")
 
         # 3. Check syntax
         if self.tree.root_node.has_error:
@@ -147,28 +147,27 @@ class RTLParser:
             line = error_node.start_point[0] + 1 if error_node else 'unknown'
             col = error_node.start_point[1] + 1 if error_node else 'unknown'
             error_msg = f"Invalid SystemVerilog syntax near line {line}, column {col}."
-            logger.error(f"Syntax error in {file_path} near line {line}:{col}")
+            logger.error(f"Syntax error in {source_name} near line {line}:{col}")
             raise SyntaxError(error_msg)
 
         # 4. Find module nodes
         module_nodes = self._find_module_nodes(self.tree.root_node)
         if not module_nodes:
-            logger.error(f"No module definitions found in {file_path}")
-            raise ParserError(f"No module definition found in {file_path}")        
+            logger.error(f"No module definitions found in {source_name}")
+            raise ParserError(f"No module definition found in {source_name}")        
 
         # 5. Extract pragmas  
         logger.debug("Extracting pragmas...")
         try:
             self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
         except Exception as e:
-            logger.exception(f"Error during pragma extraction in {file_path}: {e}")
+            logger.exception(f"Error during pragma extraction in {source_name}: {e}")
             raise ParserError(f"Failed during pragma extraction: {e}")
         logger.debug(f"Found {len(self.pragmas)} potential pragmas.")
 
         # 6. Select target module
-        selected_module_node: Node
         try:
-            self.module_node = self._select_target_module(module_nodes, self.pragmas, file_path)
+            self.module_node = self._select_target_module(module_nodes, self.pragmas, source_name, target_module)
             logger.info(f"Selected target module node: {self.module_node.type}") # Log basic info
         except ParserError as e:
             logger.error(e) # Log the specific error from selection logic
@@ -226,11 +225,6 @@ class RTLParser:
                 if param is not None: # Skips local params implicitly
                     self.parameters.append(param)
             logger.debug(f"Extracted {len(self.parameters)} parameters.")
-            
-            # Set module parameters for BDIM pragma validation
-            from .data import BDimPragma
-            BDimPragma.set_module_parameters(self.parameters)
-            logger.debug(f"Set {len(self.parameters)} module parameters for BDIM validation.")
         except Exception as e:
             logger.exception(f"Error during parameter parsing: {e}")
             raise ParserError(f"Failed during parameter parsing: {e}")
@@ -276,109 +270,93 @@ class RTLParser:
              raise ParserError("Cannot analyze interfaces: _extract_kernel_components must be run first.")
         logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
 
-        # 1. Call self.interface_builder.build_interface_metadata(ports, pragmas) 
+        # 1. Build base interfaces using InterfaceBuilder (pure AST-based)
         try:
-            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, self.pragmas)
+            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, [])
+            logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
             
-            # 2. Apply pragmas to each metadata object 
-            self.interface_metadata_list = []
-            for metadata in base_metadata_list:
-                # Apply pragmas to the existing metadata using the pragma application method we moved to parser
-                # We need to find the corresponding PortGroup for this metadata to apply pragmas properly
-                # For now, create a minimal PortGroup for pragma application
-                from .data import PortGroup
-                temp_group = PortGroup(
-                    interface_type=metadata.interface_type,
-                    name=metadata.name,
-                    ports={},  # Empty for now - pragmas mainly use interface name and type
-                    metadata={}
-                )
-                final_metadata = self._apply_pragmas_to_metadata(metadata, self.pragmas, temp_group)
-                self.interface_metadata_list.append(final_metadata)
-            logger.info(f"Interface analysis complete. Found {len(self.interface_metadata_list)} valid interfaces.")
+            # 2. Initialize exposed parameters (all parameters before pragma linking)
+            self.exposed_parameters = [p.name for p in self.parameters]
+            logger.debug(f"Initialized {len(self.exposed_parameters)} exposed parameters: {self.exposed_parameters}")
+            
+            # 3. Apply all interface pragmas in one sweep 
+            self.interface_metadata_list, linked_parameters = self.pragma_handler.apply_interface_pragmas(base_metadata_list, self.parameters)
+            logger.info(f"Applied interface pragmas to {len(self.interface_metadata_list)} interfaces")
+            
+            # 4. Remove linked parameters from exposed parameters
+            for param_name in linked_parameters:
+                if param_name in self.exposed_parameters:
+                    self.exposed_parameters.remove(param_name)
+                    logger.debug(f"Removed linked parameter '{param_name}' from exposed parameters")
+            logger.info(f"Remaining exposed parameters: {len(self.exposed_parameters)} ({self.exposed_parameters})")
+            
+            # 5. Interface name sanitization (assign compiler_name)
+            self._sanitize_interface_names()
+            
+            # 6. Comprehensive validation
+            self._validate_interface_metadata(self.interface_metadata_list, self.parameters)
+            
         except Exception as e:
             logger.exception(f"Error during interface building for module {self.name}: {e}")
-            # Re-raise as ParserError to be consistent? Or let specific error propagate?
-            # Let's wrap it for now. # TAFK TODO
             raise ParserError(f"Failed during interface building: {e}")
 
-        # --- Post-Analysis Validation on InterfaceMetadata objects ---
-        for metadata in self.interface_metadata_list:
+        logger.info("Stage 3: Interface analysis and validation complete.")
+
+
+    def _validate_interface_metadata(self, metadata_list: List[InterfaceMetadata], 
+                                   module_parameters: List[Parameter]) -> None:
+        """Comprehensive validation of interface metadata after pragma application.
+        
+        Validates that all interfaces have proper configuration and that all
+        required parameters exist in the module.
+        
+        Args:
+            metadata_list: List of InterfaceMetadata to validate
+            module_parameters: List of module Parameter objects
+            
+        Raises:
+            ParserError: If validation fails
+        """
+        logger.info("Starting comprehensive interface metadata validation")
+        
+        param_names = {p.name for p in module_parameters}
+        
+        # 1. Log interface summary
+        for metadata in metadata_list:
             logger.debug(f"Interface '{metadata.name}' of type '{metadata.interface_type.value}' has {len(metadata.datatype_constraints)} datatype constraints")
 
-        # 2. Perform Global Control check
+        # 2. Validate Global Control interface exists
         has_global_control = any(
-            metadata.interface_type == InterfaceType.CONTROL for metadata in self.interface_metadata_list
+            metadata.interface_type == InterfaceType.CONTROL for metadata in metadata_list
         )
         if not has_global_control:
             error_msg = f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
             logger.error(error_msg)
             raise ParserError(error_msg)
 
-        # 3. Validate AXI-Stream interfaces directly here
+        # 3. Validate AXI-Stream interfaces exist
         num_input_stream = len([
-            metadata for metadata in self.interface_metadata_list
+            metadata for metadata in metadata_list
             if metadata.interface_type in [InterfaceType.INPUT, InterfaceType.WEIGHT]
         ])
         num_output_stream = len([
-            metadata for metadata in self.interface_metadata_list
+            metadata for metadata in metadata_list
             if metadata.interface_type == InterfaceType.OUTPUT
         ])
-        # Temporarily disable strict interface validation for testing
+        # TODO: Re-enable strict interface validation when needed
         # if num_input_stream == 0:
         #     raise ParserError("No input AXI-Stream interface found. At least one is required.")
         # if num_output_stream == 0:
         #     raise ParserError("No output AXI-Stream interface found. At least one is required.")
         logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs.")
 
-        # 4. Perform Unassigned Ports check (temporarily disabled for testing)
-        # if unassigned_ports:
-        #     unassigned_names = [p.name for p in unassigned_ports]
-        #     error_msg = f"Module '{self.name}' has {len(unassigned_ports)} ports not assigned to any standard interface: {unassigned_names}"
-        #     logger.error(error_msg)
-        #     raise ParserError(error_msg)
-        logger.info("Stage 3: Interface analysis and validation complete.")
+        # 4. Validate interface parameters using self-referential validation
+        for metadata in metadata_list:
+            warnings = metadata.validate_parameters(param_names)
+            for warning in warnings:
+                logger.warning(warning)
 
-    def _apply_pragmas_to_metadata(self, metadata: InterfaceMetadata, pragmas: List[Pragma], group: PortGroup) -> InterfaceMetadata:
-        """
-        Apply relevant pragmas to InterfaceMetadata using the new pragma system.
-        
-        Uses the new InterfaceMetadata-only pragma methods for clean chain-of-responsibility
-        pattern without temporary Interface objects.
-        
-        Args:
-            metadata: Base InterfaceMetadata to modify
-            pragmas: List of all pragmas to consider
-            group: Original PortGroup (not used, kept for backward compatibility)
-            
-        Returns:
-            InterfaceMetadata: Final metadata with all applicable pragma effects
-        """
-        # Apply pragmas using new chain-of-responsibility pattern
-        # Uses the new InterfaceMetadata-only methods:
-        # - applies_to_interface_metadata() for matching
-        # - apply_to_metadata() for application
-        for pragma in pragmas:
-            try:
-                if pragma.applies_to_interface_metadata(metadata):
-                    if self.debug:
-                        logger.debug(f"  Applying {pragma.type.value} pragma to {metadata.name}")
-                    metadata = pragma.apply_to_metadata(metadata)
-            except Exception as e:
-                # Import PragmaError to check for specific pragma validation errors
-                from .data import PragmaError
-                if isinstance(e, PragmaError):
-                    # Re-raise pragma validation errors - these should fail the parse
-                    logger.error(f"Pragma validation failed for {pragma.type.value} pragma on {metadata.name}: {e}")
-                    raise
-                else:
-                    # Log other exceptions as warnings but continue
-                    logger.warning(f"Failed to apply {pragma.type.value} pragma to {metadata.name}: {e}")
-        
-        return metadata
-
-
-
+        logger.info("Interface metadata validation complete")
 
     def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
         """Core SystemVerilog string parser.
@@ -398,7 +376,7 @@ class RTLParser:
         logger.info(f"Starting string-based parsing for: {source_name}")
         try:
             # Stage 1: Initial parse from string
-            self._initial_parse_string(systemverilog_code, source_name, module_name)
+            self._initial_parse(systemverilog_code, source_name, is_file=False, target_module=module_name)
 
             # Stage 2: Extract components
             self._extract_kernel_components()
@@ -412,10 +390,11 @@ class RTLParser:
                 source_file=Path(source_name),
                 interfaces=self.interface_metadata_list,
                 parameters=self.parameters,
+                exposed_parameters=self.exposed_parameters,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', [])
             )
-            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params, {len(kernel_metadata.interfaces)} interfaces.")
+            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
             return kernel_metadata
 
@@ -426,67 +405,6 @@ class RTLParser:
             logger.exception(f"Unexpected error during string parsing for {source_name}: {e}")
             raise ParserError(f"Unexpected error during string parsing: {e}")
 
-    def _initial_parse_string(self, systemverilog_code: str, 
-                             source_name: str = "<string>",
-                             target_module: Optional[str] = None) -> None:
-        """Performs Stage 1 of parsing from string: Initial AST generation and module selection.
-
-        Sets self.tree, self.pragmas, and self.module_node.
-
-        Args:
-            systemverilog_code: SystemVerilog source code string
-            source_name: Name for logging/error messages 
-            target_module: Optional specific module name to target
-
-        Raises:
-            ParserError: If core parsing fails, no modules are found,
-                         pragma extraction fails, or module selection logic fails.
-            SyntaxError: If the input code contains SystemVerilog syntax errors.
-        """
-        logger.info(f"Stage 1: Initial string parsing for {source_name}")
-        self.tree = None  # Reset state
-        self.pragmas = []
-        self.module_node = None
-
-        # 1. Parse using self.parser
-        try:
-            self.tree = self.parser.parse(bytes(systemverilog_code, 'utf8'))
-        except Exception as e:
-            logger.exception(f"Tree-sitter parsing failed for {source_name}: {e}")
-            raise ParserError(f"Core parsing failed for {source_name}: {e}")
-
-        # 2. Check syntax
-        if self.tree.root_node.has_error:
-            error_node = self._find_first_error_node(self.tree.root_node)
-            line = error_node.start_point[0] + 1 if error_node else 'unknown'
-            col = error_node.start_point[1] + 1 if error_node else 'unknown'
-            error_msg = f"Invalid SystemVerilog syntax near line {line}, column {col}."
-            logger.error(f"Syntax error in {source_name} near line {line}:{col}")
-            raise SyntaxError(error_msg)
-
-        # 3. Find module nodes
-        module_nodes = self._find_module_nodes(self.tree.root_node)
-        if not module_nodes:
-            logger.error(f"No module definitions found in {source_name}")
-            raise ParserError(f"No module definition found in {source_name}")
-
-        # 4. Extract pragmas
-        try:
-            self.pragmas = self.pragma_handler.extract_pragmas(self.tree.root_node)
-            logger.debug(f"Extracted {len(self.pragmas)} pragma(s)")
-        except Exception as e:
-            logger.exception(f"Pragma extraction failed for {source_name}: {e}")
-            raise ParserError(f"Pragma extraction failed for {source_name}: {e}")
-
-        # 5. Select the target module
-        try:
-            self.module_node = self._select_target_module(module_nodes, self.pragmas, source_name, target_module)
-            logger.info(f"Selected module node: {self.module_node.children[1].text.decode('utf8')}")
-        except Exception as e:
-            logger.exception(f"Module selection failed for {source_name}: {e}")
-            raise ParserError(f"Module selection failed for {source_name}: {e}")
-
-        logger.info("Stage 1: Initial string parsing complete.")
 
     def parse_file(self, file_path: str) -> KernelMetadata:
         """Parse a SystemVerilog file by reading it and calling the core parse method.

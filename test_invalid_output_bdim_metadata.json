@@ -1,0 +1,73 @@
+{
+  "name": "test_invalid_output_bdim",
+  "source_file": "test_invalid_output_bdim.sv",
+  "parameters": [
+    {
+      "name": "OUTPUT0_BDIM",
+      "param_type": null,
+      "default_value": "8",
+      "description": null
+    }
+  ],
+  "exposed_parameters": [
+    "OUTPUT0_BDIM"
+  ],
+  "interfaces": [
+    {
+      "name": "ap",
+      "interface_type": "control",
+      "description": "Interface ap (control)",
+      "datatype_constraints": [],
+      "chunking_strategy": {
+        "type": "BlockChunkingStrategy",
+        "block_shape": [
+          ":"
+        ],
+        "rindex": 0
+      },
+      "parameter_linkage": {
+        "bdim_param_default": "ap_BDIM",
+        "sdim_param_default": "ap_SDIM"
+      }
+    },
+    {
+      "name": "m_axis_output0",
+      "interface_type": "output",
+      "description": "Interface m_axis_output0 (output) - Direction: output",
+      "datatype_constraints": [],
+      "chunking_strategy": {
+        "type": "BlockChunkingStrategy",
+        "block_shape": [
+          ":",
+          ":"
+        ],
+        "rindex": 0
+      },
+      "parameter_linkage": {
+        "datatype_params": {
+          "width": "m_axis_output0_WIDTH",
+          "signed": "SIGNED_m_axis_output0"
+        },
+        "bdim_param": "m_axis_output0_BDIM",
+        "sdim_param": "m_axis_output0_SDIM"
+      }
+    }
+  ],
+  "pragmas": [
+    {
+      "type": "bdim",
+      "line_number": 3,
+      "inputs": [
+        "m_axis_output0",
+        "OUTPUT0_BDIM"
+      ],
+      "parsed_data": {
+        "interface_name": "m_axis_output0",
+        "param_name": "OUTPUT0_BDIM",
+        "block_shape": null,
+        "rindex": 0
+      }
+    }
+  ],
+  "parsing_warnings": []
+}

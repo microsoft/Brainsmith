@@ -12,6 +12,7 @@ from .manager import GeneratorManager
 from .hw_custom_op_generator import HWCustomOpGenerator
 from .rtl_wrapper_generator import RTLWrapperGenerator
 from .test_suite_generator import TestSuiteGenerator
+from .rtl_backend_generator import RTLBackendGenerator
 
 __all__ = [
     "GeneratorBase",
@@ -19,4 +20,5 @@ __all__ = [
     "HWCustomOpGenerator",
     "RTLWrapperGenerator", 
     "TestSuiteGenerator",
+    "RTLBackendGenerator",
 ]

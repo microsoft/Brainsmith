@@ -1,0 +1,13 @@
+Generation Summary for test_new_format
+==================================================
+Source File: test_new_pragma_format.sv
+Output Directory: example_output/test_new_format/test_new_format
+Success: True
+Validation Passed: True
+Files Generated: 4
+
+Generated Files:
+  - example_output/test_new_format/test_new_format/test_new_format_hw_custom_op.py
+  - example_output/test_new_format/test_new_format/test_new_format_rtl.py
+  - example_output/test_new_format/test_new_format/test_new_format_wrapper.v
+  - example_output/test_new_format/test_new_format/test_test_new_format.py
