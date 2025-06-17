@@ -1,0 +1,70 @@
+name: 'Run Test with Artifacts'
+description: 'Execute test with comprehensive artifact collection and cleanup'
+inputs:
+  command:
+    description: 'Test command to execute'
+    type: string
+    required: true
+  timeout-minutes:
+    description: 'Test timeout in minutes'
+    type: number
+    default: 60
+  artifact-name:
+    description: 'Name for artifact collection'
+    type: string
+    required: true
+  collect-on:
+    description: 'When to collect artifacts: failure, always'
+    type: string
+    default: 'failure'
+  retention-days:
+    description: 'Artifact retention period in days'
+    type: number
+    default: 7
+
+outputs:
+  test-result:
+    description: 'Test result: success or failure'
+    value: ${{ steps.test-execution.outcome }}
+  artifacts-collected:
+    description: 'Whether artifacts were collected'
+    value: ${{ steps.collect-artifacts.outputs.collected || 'false' }}
+  artifact-url:
+    description: 'URL to uploaded artifacts'
+    value: ${{ steps.upload-artifacts.outputs.artifact-url || '' }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Execute test
+      id: test-execution
+      uses: ./.github/actions/smithy-exec
+      with:
+        command: ${{ inputs.command }}
+        timeout-minutes: ${{ inputs.timeout-minutes }}
+
+    - name: Collect artifacts
+      id: collect-artifacts
+      if: |
+        always() && 
+        (inputs.collect-on == 'always' || 
+         (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
+      uses: ./.github/actions/collect-artifacts
+      with:
+        artifact-directory: ${{ inputs.artifact-name }}
+
+    - name: Upload artifacts
+      id: upload-artifacts
+      if: |
+        always() && 
+        (inputs.collect-on == 'always' || 
+         (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}-${{ github.run_id }}
+        path: ${{ inputs.artifact-name }}/
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Final cleanup
+      if: always()
+      uses: ./.github/actions/docker-cleanup
