@@ -267,16 +267,51 @@ This enables fine-grained control of datatype parameters across multiple interfa
 
 #### 6. Derived Parameters  
 ```systemverilog
-// @brainsmith DERIVED_PARAMETER my_function param1 param2
+// @brainsmith DERIVED_PARAMETER SIMD self.get_input_datatype().bitwidth()
+// @brainsmith DERIVED_PARAMETER MEM_DEPTH self.calc_wmem()
+// @brainsmith DERIVED_PARAMETER LATENCY self.get_nodeattr("parallelism_factor") * 2 + 3
 ```
-Links module parameters to Python functions for complex parameter derivation. Adds derived parameters to the kernel metadata.
+Computes parameter values from Python expressions instead of exposing them as node attributes:
+- `parameter_name`: RTL parameter to compute
+- `python_expression`: Python expression evaluated in HWCustomOp/RTLBackend context
+
+Derived parameters are calculated dynamically and not exposed in the node attribute interface.
+
+#### 7. Parameter Aliasing
+```systemverilog
+// @brainsmith ALIAS PE parallelism_factor
+// @brainsmith ALIAS C num_channels
+// @brainsmith ALIAS FOLD folding_factor
+```
+Exposes RTL parameters with user-friendly names in the Python API:
+- `rtl_parameter`: Original RTL parameter name
+- `nodeattr_name`: User-facing name in HWCustomOp node attributes
+
+This allows hardware engineers to use domain-specific names while providing clean APIs to ML practitioners.
+
+### Parameter Pragma Hierarchy
+
+The system follows a clear parameter handling hierarchy:
+
+1. **Parameter Pragmas** (highest priority)
+   - ALIAS: Exposes parameters with custom names
+   - DERIVED_PARAMETER: Computes parameters from expressions
+   
+2. **Interface Pragmas** (medium priority)
+   - DATATYPE_PARAM: Links datatype properties to parameters
+   - BDIM/SDIM: Links dimension parameters
+   
+3. **Automatic Detection** (lowest priority)
+   - Auto-detects parameters following naming conventions
+
+Only parameters not handled by higher-priority mechanisms remain exposed.
 
 ### Pragma Extensibility
 
 The pragma system is designed for extensibility. New pragma types can be added by:
 
 1. Adding the pragma type to `PragmaType` enum in `data.py`
-2. Creating a new pragma subclass inheriting from `Pragma`
+2. Creating a new pragma subclass inheriting from `Pragma` (or `ParameterPragma` for parameter-affecting pragmas)
 3. Implementing `_parse_inputs()` and `apply()` methods
 4. Registering the pragma constructor in `PragmaHandler`
 
@@ -345,8 +380,18 @@ class KernelMetadata:
     source_file: Path                            # Source file path
     interfaces: List[InterfaceMetadata]          # Interface metadata objects
     parameters: List[Parameter]                  # Module parameters
+    exposed_parameters: List[str]                # Parameters exposed as node attributes
     pragmas: List[Pragma]                        # Found pragmas
     parsing_warnings: List[str]                  # Warnings during parsing
+    parameter_pragma_data: Dict[str, Any]        # Data from ALIAS and DERIVED_PARAMETER pragmas
+```
+
+The `parameter_pragma_data` field contains:
+```python
+{
+    "aliases": {"rtl_param": "nodeattr_name", ...},
+    "derived": {"param_name": "python_expression", ...}
+}
 ```
 
 ### InterfaceMetadata Object
@@ -354,11 +399,15 @@ class KernelMetadata:
 ```python
 @dataclass  
 class InterfaceMetadata:
-    name: str                                    # Interface name (e.g., "in0", "config")
+    name: str                                    # Original RTL interface name
     interface_type: InterfaceType                # Interface type (INPUT/OUTPUT/WEIGHT/CONFIG/CONTROL)
+    compiler_name: str                           # Standardized name for compiler (e.g., "input0", "output0")
     datatype_constraints: List[DatatypeConstraintGroup]  # QONNX datatype constraints
     chunking_strategy: ChunkingStrategy          # Block chunking strategy
     datatype_params: Optional[Dict[str, str]]    # Mapping of datatype properties to RTL parameters
+    bdim_param: Optional[str]                    # BDIM parameter name
+    sdim_param: Optional[str]                    # SDIM parameter name
+    shape_params: Optional[Dict[str, Any]]       # Shape configuration from BDIM pragma
     description: Optional[str]                   # Optional description
 ```
 
@@ -403,8 +452,14 @@ The parser provides comprehensive error reporting with specific guidance for com
 - Invalid pragma syntax
 - Missing required arguments
 - Conflicting pragma specifications
+- ALIAS validation errors (name conflicts)
 
-All errors include line numbers and specific guidance for resolution.
+### Parameter Warnings
+- Missing expected parameters (e.g., `interface_WIDTH`, `interface_SIGNED`)
+- Parameter collision (multiple interfaces linking same parameter)
+- Non-conforming parameter names
+
+All errors include line numbers and specific guidance for resolution. Warnings are non-fatal and guide users toward best practices.
 
 ## Development Guide
 
@@ -484,10 +539,29 @@ For proper interface recognition, signals must follow these conventions. The par
 
 ### Interface Naming
 
-The parser automatically assigns interface names:
-- Global Control: Uses signal names directly
-- AXI-Stream: `in0`, `in1`, ... for inputs; `out0`, `out1`, ... for outputs  
-- AXI-Lite: `config` for configuration interfaces
+The parser uses a two-tier naming system:
+
+1. **Original Interface Names**: Preserved from RTL (e.g., `s_axis_input0`, `weights_V`)
+2. **Compiler Names**: Standardized names for FINN integration:
+   - Global Control: `global`
+   - AXI-Stream Inputs: `input0`, `input1`, ...
+   - AXI-Stream Outputs: `output0`, `output1`, ...
+   - AXI-Stream Weights: `weight0`, `weight1`, ...
+   - AXI-Lite: `config0`, `config1`, ...
+
+### Parameter Naming Conventions
+
+The parser enforces consistent parameter naming patterns:
+
+- **Width**: `{interface}_WIDTH`
+- **Signed**: `{interface}_SIGNED` (NOT `SIGNED_{interface}`)
+- **BDIM**: `{interface}_BDIM`
+- **SDIM**: `{interface}_SDIM`
+
+Parameters not following these conventions will:
+1. Generate warnings during validation
+2. Remain exposed (not auto-linked to interfaces)
+3. Require explicit pragma linkage
 
 ## RTL Restrictions
 

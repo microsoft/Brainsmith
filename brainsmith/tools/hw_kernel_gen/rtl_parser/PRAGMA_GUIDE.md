@@ -65,6 +65,34 @@ Link interface to stream dimension parameter.
 
 **Notes**: Stream shape is inferred from BDIM configuration.
 
+### ALIAS
+Expose RTL parameters with user-friendly names in the Python API.
+```systemverilog
+// @brainsmith ALIAS PE parallelism_factor
+// @brainsmith ALIAS C num_channels
+// @brainsmith ALIAS FOLD folding_factor
+```
+**Format**: `ALIAS <rtl_parameter> <nodeattr_name>`
+
+**Notes**: 
+- RTL parameter must exist and be exposed
+- Node attribute name must not conflict with other parameters
+- Allows hardware-specific names in RTL with clean Python API
+
+### DERIVED_PARAMETER
+Compute parameter values from Python expressions instead of exposing them.
+```systemverilog
+// @brainsmith DERIVED_PARAMETER SIMD self.get_input_datatype().bitwidth()
+// @brainsmith DERIVED_PARAMETER MEM_DEPTH self.calc_wmem()
+// @brainsmith DERIVED_PARAMETER LATENCY self.get_nodeattr("parallelism_factor") * 2 + 3
+```
+**Format**: `DERIVED_PARAMETER <parameter_name> <python_expression>`
+
+**Notes**:
+- Parameter is computed in HWCustomOp/RTLBackend context
+- Can reference other parameters via `self.get_nodeattr()`
+- Not exposed as node attributes
+
 ## Multi-Interface Example
 
 For modules with multiple interfaces of the same type:
@@ -99,13 +127,39 @@ module elementwise_add #(
 );
 ```
 
-## Default Parameter Naming
+## Parameter Naming Conventions
 
-Without pragmas, interfaces get automatic parameter names:
-- `s_axis_input0` → `INPUT0_WIDTH`, `SIGNED_INPUT0`, `INPUT0_BDIM`, `INPUT0_SDIM`
-- `s_axis_input1` → `INPUT1_WIDTH`, `SIGNED_INPUT1`, `INPUT1_BDIM`, `INPUT1_SDIM`
-- `m_axis_output0` → `OUTPUT0_WIDTH`, `SIGNED_OUTPUT0`, `OUTPUT0_BDIM`, `OUTPUT0_SDIM`
-- `weights_V` → `WEIGHTS_WIDTH`, `SIGNED_WEIGHTS`, `WEIGHTS_BDIM`, `WEIGHTS_SDIM`
+### Automatic Parameter Detection
+
+The parser automatically detects parameters following consistent naming patterns:
+
+**Required Pattern**: `{interface}_{property}`
+
+- `s_axis_input0_WIDTH` ✓
+- `s_axis_input0_SIGNED` ✓
+- `SIGNED_s_axis_input0` ✗ (generates warning)
+
+### Default Parameter Names
+
+For common interface names:
+- `s_axis_input0` → `s_axis_input0_WIDTH`, `s_axis_input0_SIGNED`, `s_axis_input0_BDIM`, `s_axis_input0_SDIM`
+- `m_axis_output0` → `m_axis_output0_WIDTH`, `m_axis_output0_SIGNED`, `m_axis_output0_BDIM`, `m_axis_output0_SDIM`
+- `weights_V` → `weights_V_WIDTH`, `weights_V_SIGNED`, `weights_V_BDIM`, `weights_V_SDIM`
+
+### Parameter Handling Hierarchy
+
+1. **Parameter Pragmas** (highest priority)
+   - ALIAS: Custom node attribute names
+   - DERIVED_PARAMETER: Computed values
+
+2. **Interface Pragmas** (medium priority)
+   - DATATYPE_PARAM: Explicit linkage
+   - BDIM/SDIM: Dimension linkage
+
+3. **Auto-detection** (lowest priority)
+   - Parameters following naming conventions
+
+Only parameters not handled by higher-priority mechanisms remain exposed as node attributes.
 
 ## Interface Name Matching
 
@@ -117,21 +171,86 @@ Pragmas support flexible interface name matching:
 ## Best Practices
 
 1. **Use parameter names**: Always reference RTL parameters, not magic numbers
-2. **Be specific**: Use full interface names to avoid ambiguity
-3. **Document purpose**: Add comments explaining pragma usage
-4. **Test coverage**: Verify pragmas work with your specific RTL patterns
+2. **Follow naming conventions**: Use `{interface}_{property}` pattern for auto-detection
+3. **Be specific**: Use full interface names to avoid ambiguity
+4. **Document purpose**: Add comments explaining pragma usage
+5. **Use ALIAS for clean APIs**: Hide hardware-specific names behind user-friendly aliases
+6. **Test coverage**: Verify pragmas work with your specific RTL patterns
 
-## Generated HWCustomOp
+## Common Patterns
 
-Pragmas control parameter names in generated HWCustomOp classes:
+### Clean API with ALIAS
+```systemverilog
+// Hardware uses PE, software sees parallelism_factor
+// @brainsmith ALIAS PE parallelism_factor
+parameter PE = 16,
+```
 
+### Multi-Interface Modules
+```systemverilog
+// Each interface gets its own parameters
+// @brainsmith DATATYPE_PARAM input0 width input0_WIDTH
+// @brainsmith DATATYPE_PARAM input1 width input1_WIDTH
+```
+
+### Computed Parameters
+```systemverilog
+// SIMD computed from input datatype
+// @brainsmith DERIVED_PARAMETER SIMD self.get_input_datatype().bitwidth()
+parameter SIMD = 8,  // Will be overridden
+```
+
+## Generated Code Examples
+
+### HWCustomOp with ALIAS
 ```python
 def get_nodeattr_types(self):
     my_attrs = {}
-    # Generated from DATATYPE_PARAM pragmas
-    my_attrs["INPUT0_WIDTH"] = ("i", True, 8)
-    my_attrs["SIGNED_INPUT0"] = ("i", False, 0, {0, 1})
-    my_attrs["INPUT1_WIDTH"] = ("i", True, 8) 
-    my_attrs["SIGNED_INPUT1"] = ("i", False, 0, {0, 1})
-    # ...
+    # ALIAS pragmas create user-friendly names
+    my_attrs["parallelism_factor"] = ("i", True, 16)
+    my_attrs["num_channels"] = ("i", True, 64)
+    my_attrs["folding_factor"] = ("i", True, 4)
+    # Exposed parameters without aliases
+    my_attrs["CONFIG_WIDTH"] = ("i", True, 32)
+    return my_attrs
 ```
+
+### RTLBackend with All Pragma Types
+```python
+def prepare_codegen_rtl_values(self):
+    code_gen_dict = {}
+    
+    # ALIAS parameters (from node attributes)
+    code_gen_dict["$PE$"] = [str(self.get_nodeattr("parallelism_factor"))]
+    code_gen_dict["$C$"] = [str(self.get_nodeattr("num_channels"))]
+    
+    # DERIVED parameters (computed)
+    code_gen_dict["$SIMD$"] = [str(self.get_input_datatype().bitwidth())]
+    code_gen_dict["$MEM_DEPTH$"] = [str(self.calc_wmem())]
+    
+    # Auto-detected interface parameters
+    code_gen_dict["$S_AXIS_WIDTH$"] = [str(self.get_input_datatype().bitwidth())]
+    code_gen_dict["$S_AXIS_SIGNED$"] = [str(int(self.get_input_datatype().signed()))]
+    
+    return code_gen_dict
+```
+
+## Troubleshooting
+
+### Warning: Parameter not found
+```
+WARNING: Interface 'weights_V' expects signed parameter 'weights_V_SIGNED' but it was not found
+```
+**Solution**: Either add the missing parameter or use DATATYPE_PARAM pragma
+
+### Warning: ALIAS parameter not exposed
+```
+WARNING: ALIAS pragma at line 5: Parameter 'PE' is not in exposed parameters list
+```
+**Solution**: Check if parameter is already linked via interface pragmas or auto-detection
+
+### Warning: Parameter linked by multiple interfaces
+```
+WARNING: Parameter 'SHARED_WIDTH' is linked by multiple interfaces: 'input0' and 'input1'
+```
+**Solution**: Use interface-specific parameters or DATATYPE_PARAM pragmas

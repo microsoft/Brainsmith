@@ -58,6 +58,7 @@ class PragmaType(Enum):
     BDIM = "bdim"                      # Override block dimensions for an interface
     SDIM = "sdim"                      # Override stream dimensions for an interface
     DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
+    ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
 
 # --- Simple Data Structures ---
 
@@ -799,63 +800,135 @@ class SDimPragma(InterfacePragma):
         )
 
 
+# --- Parameter Pragma Base Class ---
+
 @dataclass
-class DerivedParameterPragma(Pragma):
+class ParameterPragma(Pragma):
+    """Base class for pragmas that modify parameter handling.
+    
+    This class provides common functionality for pragmas that affect how
+    parameters are exposed or processed, such as ALIAS and DERIVED_PARAMETER.
+    """
+    
+    def applies_to_parameter(self, param_name: str) -> bool:
+        """
+        Check if this pragma applies to the given parameter.
+        
+        Base implementation returns False. Subclasses should override this method
+        to implement their specific applicability logic.
+        
+        Args:
+            param_name: Parameter name to check against
+            
+        Returns:
+            bool: True if pragma applies to this parameter, False otherwise
+        """
+        return False
+
+
+@dataclass
+class DerivedParameterPragma(ParameterPragma):
+    """
+    Refactored DERIVED_PARAMETER pragma that assigns parameters to Python expressions.
+    
+    Format: @brainsmith DERIVED_PARAMETER <rtl_param> <python_expression>
+    
+    This pragma prevents a parameter from being exposed as a node attribute and
+    instead assigns it to a Python expression or function call in the RTLBackend.
+    
+    Examples:
+    - @brainsmith DERIVED_PARAMETER SIMD self.get_input_datatype().bitwidth()
+    - @brainsmith DERIVED_PARAMETER MEM_SIZE self.calc_wmem()
+    """
+    
     def __post_init__(self):
         super().__post_init__()
 
     def _parse_inputs(self) -> Dict:
-        """Handles DERIVED_PARAMETER pragma: @brainsmith DERIVED_PARAMETER <python_function_name> <param_name_0> [<param_name_1> ...]"""
+        """Parse DERIVED_PARAMETER pragma: @brainsmith DERIVED_PARAMETER <rtl_param> <python_expression>"""
         logger.debug(f"Parsing DERIVED_PARAMETER pragma: {self.inputs} at line {self.line_number}")
         if len(self.inputs) < 2:
-            raise PragmaError(f"DERIVED_PARAMETER pragma at line {self.line_number} requires at least two arguments: <python_function_name> <param_name_0> [...]. Got: {self.inputs}")
+            raise PragmaError(f"DERIVED_PARAMETER pragma at line {self.line_number} requires parameter name and Python expression. Got: {self.inputs}")
         
-        python_function_name = self.inputs[0]
-        param_names = self.inputs[1:]
-        return {"python_function_name": python_function_name, "param_names": param_names}
+        param_name = self.inputs[0]
+        # Join remaining inputs as the Python expression (allows spaces)
+        python_expression = " ".join(self.inputs[1:])
+        
+        # Validate parameter name
+        if not param_name.isidentifier():
+            raise PragmaError(f"DERIVED_PARAMETER pragma parameter name '{param_name}' is not a valid identifier")
+        
+        return {"param_name": param_name, "python_expression": python_expression}
+    
+    def applies_to_parameter(self, param_name: str) -> bool:
+        """Check if this pragma applies to the given parameter."""
+        return self.parsed_data.get("param_name") == param_name
 
-    def apply(self, **kwargs) -> Any:
-        """Applies the DERIVED_PARAMETER pragma by adding a new parameter to the HWKernel."""
-        hw_kernel: Optional[HWKernel] = kwargs.get('hw_kernel')
-        if not hw_kernel:
-            logger.warning(f"DERIVED_PARAMETER pragma at line {self.line_number}: hw_kernel not provided. Cannot apply.")
-            return
 
-        param_name = self.parsed_data.get("param_name")
-        param_value = self.parsed_data.get("param_value")
 
-        if not param_name or param_value is None: # Check param_value is not None explicitly
-            logger.warning(f"DERIVED_PARAMETER pragma at line {self.line_number}: Missing param_name or param_value in parsed_data. Cannot apply. Data: {self.parsed_data}")
-            return
-
-        # Check if a parameter with the same name already exists from the module definition (non-derived)
-        existing_module_param = next((p for p in hw_kernel.parameters if p.name == param_name and p.param_type != "derived"), None)
-        if existing_module_param:
-            logger.error(f"DERIVED_PARAMETER pragma at line {self.line_number}: Parameter '{param_name}' already exists in the module definition with type '{existing_module_param.param_type}'. Derived parameters cannot override module parameters. Skipping.")
-            return
-
-        # Check if this derived parameter (by name) has already been added by another pragma
-        existing_derived_param = next((p for p in hw_kernel.parameters if p.name == param_name and p.param_type == "derived"), None)
-        if existing_derived_param:
-            if existing_derived_param.default_value == param_value:
-                logger.info(f"DERIVED_PARAMETER pragma at line {self.line_number}: Parameter '{param_name}' with value '{param_value}' (type: derived) already added by a previous pragma. Skipping duplicate.")
-            else:
-                logger.error(f"DERIVED_PARAMETER pragma at line {self.line_number}: Parameter '{param_name}' (type: derived) already added by a previous pragma with a different value ('{existing_derived_param.default_value}' vs '{param_value}'). Conflicting pragmas. Skipping.")
-            return
-
-        try:
-            new_param = Parameter(
-                name=param_name,
-                param_type="derived",  # Mark this parameter as 'derived'
-                default_value=param_value
-            )
-            hw_kernel.parameters.append(new_param)
-            logger.info(f"Applied DERIVED_PARAMETER pragma from line {self.line_number}: Added parameter '{param_name}' = '{param_value}' (type: derived) to HWKernel '{hw_kernel.name}'.")
-        except ValueError as e:  # Catch potential errors from Parameter constructor (e.g., invalid name)
-            logger.error(f"DERIVED_PARAMETER pragma at line {self.line_number}: Error creating Parameter object for '{param_name}': {e}. Skipping.")
-            # Optionally, re-raise as PragmaError to halt processing if critical
-            # raise PragmaError(f"Error creating derived parameter '{param_name}': {e}") from e
-        return # Explicitly return None or Any relevant data if needed in future
+@dataclass
+class AliasPragma(ParameterPragma):
+    """
+    ALIAS pragma for exposing RTL parameters with different names in nodeattr.
+    
+    Format: @brainsmith ALIAS <rtl_param> <nodeattr_name>
+    
+    This pragma allows an RTL parameter to be exposed as a node attribute with
+    a different name, improving the API for users.
+    
+    Examples:
+    - @brainsmith ALIAS PE parallelism_factor
+    - @brainsmith ALIAS C num_channels
+    
+    Validation:
+    - The nodeattr_name cannot match any existing module parameter name
+    """
+    
+    def __post_init__(self):
+        super().__post_init__()
+    
+    def _parse_inputs(self) -> Dict:
+        """Parse ALIAS pragma: @brainsmith ALIAS <rtl_param> <nodeattr_name>"""
+        logger.debug(f"Parsing ALIAS pragma: {self.inputs} at line {self.line_number}")
+        if len(self.inputs) != 2:
+            raise PragmaError(f"ALIAS pragma at line {self.line_number} requires exactly 2 arguments: <rtl_param> <nodeattr_name>. Got: {self.inputs}")
+        
+        rtl_param = self.inputs[0]
+        nodeattr_name = self.inputs[1]
+        
+        # Validate both names are valid identifiers
+        if not rtl_param.isidentifier():
+            raise PragmaError(f"ALIAS pragma RTL parameter name '{rtl_param}' is not a valid identifier")
+        if not nodeattr_name.isidentifier():
+            raise PragmaError(f"ALIAS pragma nodeattr name '{nodeattr_name}' is not a valid identifier")
+        
+        return {"rtl_param": rtl_param, "nodeattr_name": nodeattr_name}
+    
+    def applies_to_parameter(self, param_name: str) -> bool:
+        """Check if this pragma applies to the given parameter."""
+        return self.parsed_data.get("rtl_param") == param_name
+    
+    def validate_against_parameters(self, all_parameters: List[Parameter]) -> None:
+        """
+        Validate that the nodeattr_name doesn't conflict with existing parameters.
+        
+        Args:
+            all_parameters: List of all module parameters
+            
+        Raises:
+            PragmaError: If nodeattr_name matches an existing parameter name
+        """
+        nodeattr_name = self.parsed_data.get("nodeattr_name")
+        rtl_param = self.parsed_data.get("rtl_param")
+        
+        # Check if nodeattr_name conflicts with any other parameter
+        for param in all_parameters:
+            if param.name == nodeattr_name and param.name != rtl_param:
+                raise PragmaError(
+                    f"ALIAS pragma at line {self.line_number}: nodeattr name '{nodeattr_name}' "
+                    f"conflicts with existing parameter '{param.name}'. "
+                    f"Choose a different alias name."
+                )
 
 
 @dataclass
@@ -936,12 +1009,43 @@ class DatatypeParamPragma(InterfacePragma):
         property_type = self.parsed_data['property_type']
         parameter_name = self.parsed_data['parameter_name']
         
-        # Initialize datatype_params if not set
-        current_params = metadata.datatype_params or {}
-        current_params[property_type] = parameter_name
+        # Import DatatypeMetadata
+        from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
         
-        return metadata.update_attributes(
-            datatype_params=current_params
+        # Get or create DatatypeMetadata
+        if metadata.datatype_metadata is None:
+            # Create new DatatypeMetadata with interface name
+            # For now, we'll create with just width and update it
+            if property_type == 'width':
+                new_dt = DatatypeMetadata(name=metadata.name, width=parameter_name)
+            else:
+                # Need a width parameter first - use default naming
+                new_dt = DatatypeMetadata(
+                    name=metadata.name, 
+                    width=f"{metadata.name}_WIDTH",
+                    **{property_type: parameter_name}
+                )
+            metadata = metadata.update_attributes(datatype_metadata=new_dt)
+        else:
+            # Update existing DatatypeMetadata
+            updated_dt_metadata = metadata.datatype_metadata.update(**{property_type: parameter_name})
+            metadata = metadata.update_attributes(datatype_metadata=updated_dt_metadata)
+        
+        return metadata
+    
+    def create_standalone_datatype(self) -> 'DatatypeMetadata':
+        """Create a standalone DatatypeMetadata for internal mechanisms."""
+        from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+        
+        interface_name = self.parsed_data['interface_name']
+        property_type = self.parsed_data['property_type']
+        parameter_name = self.parsed_data['parameter_name']
+        
+        # Create datatype with only the specified property
+        return DatatypeMetadata(
+            name=interface_name,
+            **{property_type: parameter_name},
+            description=f"Internal datatype binding from pragma at line {self.line_number}"
         )
 
 

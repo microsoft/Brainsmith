@@ -8,8 +8,9 @@ The RTL parser creates this directly, and templates use it without conversion.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Any
 from .interface_metadata import InterfaceMetadata
+from .datatype_metadata import DatatypeMetadata
 from ...tools.hw_kernel_gen.rtl_parser.data import Parameter, Pragma
 
 
@@ -119,6 +120,42 @@ class KernelMetadata:
     - Include as comments in generated code
     - Log during generation process
     - Help developers understand parsing decisions
+    """
+    
+    parameter_pragma_data: Dict[str, Any] = field(default_factory=dict)
+    """
+    Data from parameter pragmas (ALIAS and DERIVED_PARAMETER).
+    
+    Structure:
+    {
+        "aliases": {"rtl_param": "nodeattr_name", ...},
+        "derived": {"param_name": "python_expression", ...}
+    }
+    
+    Reason: Parameter pragmas affect how parameters are exposed and handled
+    in the generated RTLBackend.
+    
+    Use:
+    - ALIAS: Maps RTL parameter names to different nodeattr names
+    - DERIVED: Parameters assigned via Python expressions instead of nodeattr
+    - Template generation for prepare_codegen_rtl_values()
+    """
+    
+    internal_datatypes: List[DatatypeMetadata] = field(default_factory=list)
+    """
+    Datatype metadata for internal kernel mechanisms (accumulator, threshold, etc.).
+    
+    These are created from DATATYPE_PARAM pragmas that don't match any interface name.
+    They enable documentation and construction of internal computation datatypes.
+    
+    Example:
+    - DatatypeMetadata(name="accumulator", datatype_params={"width": "ACC_WIDTH", "signed": "ACC_SIGNED"})
+    - DatatypeMetadata(name="threshold", datatype_params={"width": "THRESH_WIDTH"})
+    
+    Use:
+    - Documentation of internal precision requirements
+    - Future datatype inference and validation
+    - Template generation for internal datatype handling
     """
     
     def get_class_name(self) -> str:

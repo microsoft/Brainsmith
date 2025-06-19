@@ -101,10 +101,11 @@ class {{ class_name }}(AutoHWCustomOp):
         # RTL parameters as node attributes (only exposed parameters)
         {% for param in parameter_definitions %}
         {% if param.name in exposed_parameters %}
+        {%- set nodeattr_name = parameter_aliases.get(param.name, param.name) %}
         {% if param.is_whitelisted and param.default_value %}
-        my_attrs["{{ param.name }}"] = ("i", False, {{ param.default_value }})  # Optional with default
+        my_attrs["{{ nodeattr_name }}"] = ("i", False, {{ param.default_value }})  # Optional with default{% if nodeattr_name != param.name %} (aliased from {{ param.name }}){% endif %}
         {% else %}
-        my_attrs["{{ param.name }}"] = ("i", True, None)  # Required parameter
+        my_attrs["{{ nodeattr_name }}"] = ("i", True, None)  # Required parameter{% if nodeattr_name != param.name %} (aliased from {{ param.name }}){% endif %}
         {% endif %}
         {% endif %}
         {% endfor %}
@@ -112,6 +113,11 @@ class {{ class_name }}(AutoHWCustomOp):
         # Interface datatype attributes (high-level datatype specification)
         {% for interface_attr in interface_datatype_attributes %}
         my_attrs["{{ interface_attr.name }}"] = {{ interface_attr.attr_spec }}  # {{ interface_attr.interface_type }} interface datatype
+        {% endfor %}
+        
+        # Internal datatype attributes (e.g., thresholdDataType, accumulatorDataType)
+        {% for dt in internal_datatypes %}
+        my_attrs["{{ dt.name }}DataType"] = ("s", False, "UINT8")  # Internal {{ dt.name }} datatype
         {% endfor %}
         
         # Hardware-specific attributes from RTL analysis

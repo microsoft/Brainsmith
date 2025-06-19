@@ -22,6 +22,7 @@ from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from .pragma import PragmaHandler, PragmaType, Pragma
 from .interface_builder import InterfaceBuilder
+from .parameter_linker import ParameterLinker
 from . import grammar
 
 # New imports for KernelMetadata integration
@@ -54,7 +55,8 @@ class RTLParser:
         parser: tree-sitter Parser instance
         debug: Enable debug output
     """
-    def __init__(self, grammar_path: Optional[str] = None, debug: bool = False):
+    def __init__(self, grammar_path: Optional[str] = None, debug: bool = False,
+                 auto_link_parameters: bool = True):
         """Initializes the RTLParser.
 
         Loads the tree-sitter SystemVerilog grammar and initializes the parser
@@ -64,12 +66,15 @@ class RTLParser:
             grammar_path: Optional path to the compiled tree-sitter grammar library.
                           If None, uses the default path configured in grammar.py.
             debug: If True, enables detailed debug logging.
+            auto_link_parameters: If True, enables automatic parameter linking based
+                                on naming conventions. Default is True.
 
         Raises:
             FileNotFoundError: If the grammar library cannot be found or loaded.
             RuntimeError: For other unexpected errors during grammar loading.
         """
         self.debug = debug
+        self.auto_link_parameters = auto_link_parameters
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
         try:
@@ -96,6 +101,7 @@ class RTLParser:
         self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
         self.exposed_parameters: List[str] = []  # Parameters that need nodeattr exposure
+        self.parameter_pragma_data: Dict[str, Any] = {}  # Data from parameter pragmas (aliases, derived)
 
     def _initial_parse(self, source: str, source_name: str = "<string>", 
                       is_file: bool = True, target_module: Optional[str] = None) -> None:
@@ -225,6 +231,10 @@ class RTLParser:
                 if param is not None: # Skips local params implicitly
                     self.parameters.append(param)
             logger.debug(f"Extracted {len(self.parameters)} parameters.")
+            
+            # Initialize exposed parameters - all parameters are initially exposed
+            self.exposed_parameters = [p.name for p in self.parameters]
+            logger.debug(f"Initialized {len(self.exposed_parameters)} exposed parameters: {self.exposed_parameters}")
         except Exception as e:
             logger.exception(f"Error during parameter parsing: {e}")
             raise ParserError(f"Failed during parameter parsing: {e}")
@@ -270,30 +280,36 @@ class RTLParser:
              raise ParserError("Cannot analyze interfaces: _extract_kernel_components must be run first.")
         logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
 
-        # 1. Build base interfaces using InterfaceBuilder (pure AST-based)
         try:
-            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(self.ports, [])
+            # 1. Apply parameter pragmas FIRST (highest priority)
+            self.exposed_parameters, self.parameter_pragma_data = self.pragma_handler.apply_parameter_pragmas(
+                self.exposed_parameters, self.parameters
+            )
+            logger.info(f"Applied parameter pragmas. Remaining exposed: {len(self.exposed_parameters)}")
+            
+            # 2. Build base interfaces using InterfaceBuilder
+            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
+                self.ports, []
+            )
             logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
             
-            # 2. Initialize exposed parameters (all parameters before pragma linking)
-            self.exposed_parameters = [p.name for p in self.parameters]
-            logger.debug(f"Initialized {len(self.exposed_parameters)} exposed parameters: {self.exposed_parameters}")
-            
-            # 3. Apply all interface pragmas in one sweep 
-            self.interface_metadata_list, linked_parameters = self.pragma_handler.apply_interface_pragmas(base_metadata_list, self.parameters)
+            # 3. Apply interface pragmas
+            self.interface_metadata_list = self.pragma_handler.apply_interface_pragmas(
+                base_metadata_list, self.parameters
+            )
             logger.info(f"Applied interface pragmas to {len(self.interface_metadata_list)} interfaces")
             
-            # 4. Remove linked parameters from exposed parameters
-            for param_name in linked_parameters:
-                if param_name in self.exposed_parameters:
-                    self.exposed_parameters.remove(param_name)
-                    logger.debug(f"Removed linked parameter '{param_name}' from exposed parameters")
-            logger.info(f"Remaining exposed parameters: {len(self.exposed_parameters)} ({self.exposed_parameters})")
+            # 4. Apply unified auto-linking for interfaces if enabled
+            if self.auto_link_parameters:
+                self._apply_interface_auto_linking()
             
-            # 5. Interface name sanitization (assign compiler_name)
-            self._sanitize_interface_names()
+            # 5. Extract all parameters referenced by interfaces and remove from exposed
+            self._remove_interface_linked_parameters()
+            logger.info(f"Final exposed parameters: {len(self.exposed_parameters)} ({self.exposed_parameters})")
             
-            # 6. Comprehensive validation
+            # 6. Interface name sanitization is now done in InterfaceBuilder
+            
+            # 7. Comprehensive validation
             self._validate_interface_metadata(self.interface_metadata_list, self.parameters)
             
         except Exception as e:
@@ -301,7 +317,130 @@ class RTLParser:
             raise ParserError(f"Failed during interface building: {e}")
 
         logger.info("Stage 3: Interface analysis and validation complete.")
+    
+    def _apply_interface_auto_linking(self) -> None:
+        """Apply auto-linking to interface datatypes based on naming conventions.
+        
+        This unified stage runs after interfaces are created but before removing
+        linked parameters. It updates interface metadata with auto-detected
+        datatype parameters and BDIM/SDIM parameters.
+        """
+        logger.debug("Applying unified interface auto-linking")
+        linker = ParameterLinker(enable_interface_linking=True, enable_internal_linking=False)
+        
+        for interface in self.interface_metadata_list:
+            # Only auto-link streaming interfaces
+            if interface.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+                continue
+            
+            # Skip if already has datatype metadata (from pragma)
+            if interface.datatype_metadata:
+                continue
+            
+            # Try to auto-link datatype parameters
+            auto_linked_dt = linker.link_interface_parameters(interface.name, self.parameters)
+            if auto_linked_dt:
+                interface.datatype_metadata = auto_linked_dt
+                logger.info(f"Auto-linked datatype parameters for interface '{interface.name}'")
+            else:
+                # Create default datatype metadata
+                from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+                interface.datatype_metadata = DatatypeMetadata(
+                    name=interface.name,
+                    width=f"{interface.name}_WIDTH",
+                    signed=f"{interface.name}_SIGNED"
+                )
+                logger.debug(f"Created default datatype metadata for interface '{interface.name}'")
+            
+            # Always set default BDIM/SDIM parameters if not already set
+            if not interface.bdim_param:
+                interface.bdim_param = f"{interface.name}_BDIM"
+            if not interface.sdim_param:
+                interface.sdim_param = f"{interface.name}_SDIM"
+    
+    def _remove_interface_linked_parameters(self) -> None:
+        """Remove parameters that are linked to interfaces from exposed_parameters.
+        
+        This method inspects all InterfaceMetadata objects to find which parameters
+        they reference (through datatype_params, bdim_param, sdim_param) and removes
+        those from the exposed_parameters list. It also detects and warns about
+        collisions where multiple interfaces reference the same parameter.
+        """
+        linked_params = {}  # Track which interface links which parameter
+        
+        # Collect all parameters referenced by interfaces
+        for interface in self.interface_metadata_list:
+            interface_params = []
+            
+            # Check datatype parameters
+            if interface.datatype_metadata:
+                interface_params.extend(interface.datatype_metadata.get_all_parameters())
+                        
+            # Check BDIM parameter
+            if interface.bdim_param:
+                interface_params.append(interface.bdim_param)
+                
+            # Check SDIM parameter  
+            if interface.sdim_param:
+                interface_params.append(interface.sdim_param)
+            
+            # Track which interface links each parameter
+            for param_name in interface_params:
+                if param_name in linked_params:
+                    # Collision detected
+                    logger.warning(
+                        f"Parameter '{param_name}' is linked by multiple interfaces: "
+                        f"'{linked_params[param_name]}' and '{interface.name}'. "
+                        f"This may cause issues in generated code."
+                    )
+                else:
+                    linked_params[param_name] = interface.name
+        
+        # Remove linked parameters from exposed list
+        for param_name in linked_params:
+            if param_name in self.exposed_parameters:
+                self.exposed_parameters.remove(param_name)
+                logger.debug(
+                    f"Removed parameter '{param_name}' from exposed parameters "
+                    f"(linked to interface '{linked_params[param_name]}')"
+                )
 
+    def _remove_internal_linked_parameters(self, internal_datatypes: List['DatatypeMetadata']) -> None:
+        """Remove parameters that are linked to internal datatypes from exposed_parameters.
+        
+        This method tracks which parameters are already claimed by pragma-defined internal
+        datatypes so that auto-linking doesn't create duplicates. It removes those parameters
+        from the exposed_parameters list.
+        
+        Args:
+            internal_datatypes: List of DatatypeMetadata for internal datatypes (pragma-defined)
+        """
+        linked_params = {}  # Track which internal datatype links which parameter
+        
+        # Collect all parameters referenced by internal datatypes
+        for dt_metadata in internal_datatypes:
+            for param_name in dt_metadata.get_all_parameters():
+                if param_name in linked_params:
+                    # Collision detected - multiple internal datatypes claim same parameter
+                    logger.warning(
+                        f"Parameter '{param_name}' is linked by multiple internal datatypes: "
+                        f"'{linked_params[param_name]}' and '{dt_metadata.name}'. "
+                        f"This may cause issues in generated code."
+                    )
+                else:
+                    linked_params[param_name] = dt_metadata.name
+        
+        # Remove linked parameters from exposed list
+        for param_name in linked_params:
+            if param_name in self.exposed_parameters:
+                self.exposed_parameters.remove(param_name)
+                logger.debug(
+                    f"Removed parameter '{param_name}' from exposed parameters "
+                    f"(linked to internal datatype '{linked_params[param_name]}')"
+                )
+        
+        # Store linked params for auto-linker exclusion
+        self._internal_linked_parameters = set(linked_params.keys())
 
     def _validate_interface_metadata(self, metadata_list: List[InterfaceMetadata], 
                                    module_parameters: List[Parameter]) -> None:
@@ -384,6 +523,40 @@ class RTLParser:
             # Stage 3: Analyze and validate interfaces (includes pragma application)
             self._analyze_and_validate_interfaces()
 
+            # Collect internal datatype pragmas
+            interface_names = [metadata.name for metadata in self.interface_metadata_list]
+            pragma_internal_datatypes = self.pragma_handler.collect_internal_datatype_pragmas(interface_names)
+            
+            # Remove pragma-linked parameters from exposed list to prevent auto-linking duplicates
+            self._remove_internal_linked_parameters(pragma_internal_datatypes)
+            
+            # Stage 3.5: Auto-link internal parameters if enabled (AFTER pragma processing)
+            auto_linked_internals = []
+            if self.auto_link_parameters:
+                logger.debug("Running automatic parameter linking")
+                linker = ParameterLinker(
+                    enable_interface_linking=True,  # Used by InterfaceBuilder
+                    enable_internal_linking=True
+                )
+                # Exclude interface names and already pragma-linked parameters
+                exclude_prefixes = interface_names.copy()
+                exclude_parameters = getattr(self, '_internal_linked_parameters', set())
+                
+                auto_linked_internals = linker.link_internal_parameters(
+                    self.parameters, 
+                    exclude_prefixes=exclude_prefixes,
+                    exclude_parameters=exclude_parameters
+                )
+                if auto_linked_internals:
+                    logger.info(f"Auto-linked {len(auto_linked_internals)} internal datatypes")
+                
+                # Remove auto-linked parameters from exposed list
+                self._remove_internal_linked_parameters(auto_linked_internals)
+            
+            # Combine pragma-defined and auto-linked internal datatypes (no merging needed)
+            internal_datatypes = pragma_internal_datatypes + auto_linked_internals
+            logger.debug(f"Total internal datatypes: {len(internal_datatypes)} ({len(pragma_internal_datatypes)} pragma + {len(auto_linked_internals)} auto-linked)")
+
             # Create and return KernelMetadata object
             kernel_metadata = KernelMetadata(
                 name=self.name,
@@ -392,7 +565,9 @@ class RTLParser:
                 parameters=self.parameters,
                 exposed_parameters=self.exposed_parameters,
                 pragmas=self.pragmas,
-                parsing_warnings=getattr(self, 'parsing_warnings', [])
+                parsing_warnings=getattr(self, 'parsing_warnings', []),
+                parameter_pragma_data=self.parameter_pragma_data,
+                internal_datatypes=internal_datatypes
             )
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")

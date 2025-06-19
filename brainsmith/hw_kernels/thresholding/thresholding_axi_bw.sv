@@ -38,25 +38,20 @@
  *	- performs aligned byte address to parameter word address translation.
  *****************************************************************************/
 
-// @brainsmith BDIM s_axis [C] [in0_SDIM]
-// @brainsmith DATATYPE s_axis FIXED INPUT0_WIDTH INPUT0_WIDTH
-// @brainsmith DATATYPE m_axis FIXED O_BITS O_BITS
-// @brainsmith DATATYPE_PARAM s_axis width INPUT0_WIDTH
-// @brainsmith DATATYPE_PARAM s_axis signed SIGNED
-// @brainsmith DATATYPE_PARAM s_axis format FPARG
-// @brainsmith DATATYPE_PARAM m_axis width O_BITS
-// @brainsmith DATATYPE_PARAM m_axis bias BIAS
+// @brainsmith DATATYPE input FIXED 1 32
+// @brainsmith DATATYPE output FIXED 1 32
+// @brainsmith DATATYPE_PARAM threshold width T_WIDTH
 
 module thresholding_axi #(
-	int unsigned  OUTPUT0_WIDTH,	// output precision
-	int unsigned  INPUT0_WIDTH,	// input precision
-	int unsigned  WT,	// threshold precision
-	int unsigned  C = 1,	// Channels
-	int unsigned  in0_SDIM = 1,	// Processing Parallelism, requires C = k*in0_SDIM
+	int unsigned  input_WIDTH,    // input precision
+	int unsigned  output_WIDTH,   // output precision
+	int unsigned  T_WIDTH,        // threshold precision
+	int unsigned  input_BDIM = 1, // Channels
+	int unsigned  input_SDIM = 1, // Processing Parallelism, requires input BDIM % SDIM = 0
 
-	bit  SIGNED = 1,	// signed inputs
-	bit  FPARG  = 0,	// floating-point inputs: [sign] | exponent | mantissa
-	int  BIAS   = 0,	// offsetting the output [0, 2^OUTPUT0_WIDTH-1] -> [BIAS, 2^OUTPUT0_WIDTH-1 + BIAS]
+	bit  input_SIGNED = 1,	// signed inputs
+	bit  input_FPARG  = 0,	// floating-point inputs: [sign] | exponent | mantissa
+	int  output_BIAS  = 0,	// offsetting the output [0, 2^out_WIDTH-1] -> [BIAS, 2^out_WIDTH-1 + BIAS]
 
 	// Initial Thresholds
 	parameter  THRESHOLDS_PATH = "",
@@ -68,11 +63,11 @@ module thresholding_axi #(
 	int unsigned  DEPTH_TRIGGER_BRAM = 0,	// if non-zero, local mems of this depth or more go into BRAM
 	bit  DEEP_PIPELINE = 0,
 
-	localparam int unsigned  CF = C/in0_SDIM,	// Channel Fold
-	localparam int unsigned  ADDR_BITS = $clog2(CF) + $clog2(in0_SDIM) + OUTPUT0_WIDTH + 2,
+	localparam int unsigned  CF = in_BDIM/in_SDIM,	// Channel Fold
+	localparam int unsigned  ADDR_BITS = $clog2(CF) + $clog2(in_SDIM) + out_WIDTH + 2,
 	localparam int unsigned  O_BITS = BIAS >= 0?
-		/* unsigned */ $clog2(2**OUTPUT0_WIDTH+BIAS) :
-		/* signed */ 1+$clog2(-BIAS >= 2**(OUTPUT0_WIDTH-1)? -BIAS : 2**OUTPUT0_WIDTH+BIAS)
+		/* unsigned */ $clog2(2**out_WIDTH+BIAS) :
+		/* signed */ 1+$clog2(-BIAS >= 2**(out_WIDTH-1)? -BIAS : 2**out_WIDTH+BIAS)
 )(
 	//- Global Control ------------------
 	input	logic  ap_clk,
@@ -104,14 +99,14 @@ module thresholding_axi #(
 	output	logic [ 1:0]  s_axilite_RRESP,
 
 	//- AXI Stream - Input --------------
-	output	logic  s_axis_tready,
-	input	logic  s_axis_tvalid,
-	input	logic [((in0_SDIM*INPUT0_WIDTH+7)/8)*8-1:0]  s_axis_tdata,
+	output	logic  input_tready,
+	input	logic  input_tvalid,
+	input	logic [((in_SDIM*in_WIDTH+7)/8)*8-1:0]  input_tdata,
 
 	//- AXI Stream - Output -------------
-	input	logic  m_axis_tready,
-	output	logic  m_axis_tvalid,
-	output	logic [((in0_SDIM*O_BITS+7)/8)*8-1:0]  m_axis_tdata
+	input	logic  output_tready,
+	output	logic  output_tvalid,
+	output	logic [((in_SDIM*O_BITS+7)/8)*8-1:0]  output_tdata
 );
 
 	//-----------------------------------------------------------------------
@@ -119,13 +114,13 @@ module thresholding_axi #(
 	uwire  cfg_en;
 	uwire  cfg_we;
 	uwire [ADDR_BITS-3:0]  cfg_a;
-	uwire [WT       -1:0]  cfg_d;
+	uwire [T_WIDTH       -1:0]  cfg_d;
 	uwire  cfg_rack;
-	uwire [WT       -1:0]  cfg_q;
+	uwire [T_WIDTH       -1:0]  cfg_q;
 
 	if(USE_AXILITE) begin
 		uwire [ADDR_BITS-1:0]  cfg_a0;
-		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(WT)) axi (
+		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(T_WIDTH)) axi (
 			.aclk(ap_clk), .aresetn(ap_rst_n),
 
 			.awready(s_axilite_AWREADY), .awvalid(s_axilite_AWVALID), .awaddr(s_axilite_AWADDR), .awprot('x),
@@ -154,10 +149,10 @@ module thresholding_axi #(
 
 	//-----------------------------------------------------------------------
 	// Cast Inputs into Threshold Data Type
-	uwire [in0_SDIM-1:0][WT-1:0]  idat;
-	for(genvar  pe = 0; pe < in0_SDIM; pe++) begin
-		if(WT == INPUT0_WIDTH) begin : genCopy
-			assign	idat[pe] = s_axis_tdata[pe*INPUT0_WIDTH+:INPUT0_WIDTH];
+	uwire [in_SDIM-1:0][T_WIDTH-1:0]  idat;
+	for(genvar  pe = 0; pe < in_SDIM; pe++) begin
+		if(T_WIDTH == in_WIDTH) begin : genCopy
+			assign	idat[pe] = input_tdata[pe*in_WIDTH+:in_WIDTH];
 		end : genCopy
 		else begin
 			initial begin
@@ -167,18 +162,18 @@ module thresholding_axi #(
 				end
 			end
 
-			if(WT > INPUT0_WIDTH) begin : genWiden
-				assign	idat[pe] = { {(WT-INPUT0_WIDTH){SIGNED? s_axis_tdata[(pe+1)*INPUT0_WIDTH-1] : 1'b0}}, s_axis_tdata[pe*INPUT0_WIDTH+:INPUT0_WIDTH] };
+			if(T_WIDTH > in_WIDTH) begin : genWiden
+				assign	idat[pe] = { {(T_WIDTH-in_WIDTH){in_SIGNED? input_tdata[(pe+1)*in_WIDTH-1] : 1'b0}}, input_tdata[pe*in_WIDTH+:in_WIDTH] };
 			end : genWiden
 			else begin : genNarrow
 				// Saturate for clipping inputs
-				if(!SIGNED) begin
-					assign	idat[pe] = |s_axis_tdata[pe*INPUT0_WIDTH+WT+:INPUT0_WIDTH-WT]? '1 : s_axis_tdata[pe*INPUT0_WIDTH+:WT];
+				if(!in_SIGNED) begin
+					assign	idat[pe] = |input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH]? '1 : input_tdata[pe*in_WIDTH+:T_WIDTH];
 				end
 				else begin
 					assign	idat[pe] =
-						(s_axis_tdata[pe*INPUT0_WIDTH+WT+:INPUT0_WIDTH-WT] == '1) || (s_axis_tdata[pe*INPUT0_WIDTH+WT+:INPUT0_WIDTH-WT] == '0)? s_axis_tdata[pe*INPUT0_WIDTH+:WT] :
-						{s_axis_tdata[(pe+1)*INPUT0_WIDTH-1], {(WT-1){!s_axis_tdata[(pe+1)*INPUT0_WIDTH-1]}}};
+						(input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH] == '1) || (input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH] == '0)? input_tdata[pe*in_WIDTH+:T_WIDTH] :
+						{input_tdata[(pe+1)*in_WIDTH-1], {(T_WIDTH-1){!input_tdata[(pe+1)*in_WIDTH-1]}}};
 				end
 			end : genNarrow
 		end
@@ -187,8 +182,8 @@ module thresholding_axi #(
 	//-----------------------------------------------------------------------
 	// Kernel Implementation
 	thresholding #(
-		.OUTPUT0_WIDTH(OUTPUT0_WIDTH), .K(WT), .C(C), .in0_SDIM(in0_SDIM),
-		.SIGNED(SIGNED), .FPARG(FPARG), .BIAS(BIAS),
+		.out_WIDTH(out_WIDTH), .K(T_WIDTH), .in_BDIM(in_BDIM), .in_SDIM(in_SDIM),
+		.in_SIGNED(in_SIGNED), .FPARG(FPARG), .BIAS(BIAS),
 		.THRESHOLDS_PATH(THRESHOLDS_PATH), .USE_CONFIG(USE_AXILITE),
 		.DEPTH_TRIGGER_URAM(DEPTH_TRIGGER_URAM), .DEPTH_TRIGGER_BRAM(DEPTH_TRIGGER_BRAM),
 		.DEEP_PIPELINE(DEEP_PIPELINE)
@@ -198,11 +193,11 @@ module thresholding_axi #(
 		.cfg_en, .cfg_we, .cfg_a, .cfg_d,
 		.cfg_rack, .cfg_q,
 
-		.irdy(s_axis_tready), .ivld(s_axis_tvalid), .idat,
-		.ordy(m_axis_tready), .ovld(m_axis_tvalid), .odat(m_axis_tdata[in0_SDIM*O_BITS-1:0])
+		.irdy(input_tready), .ivld(input_tvalid), .idat,
+		.ordy(output_tready), .ovld(output_tvalid), .odat(output_tdata[in_SDIM*O_BITS-1:0])
 	);
-	if($bits(m_axis_tdata) > in0_SDIM*O_BITS) begin : genPadOut
-		assign	m_axis_tdata[$left(m_axis_tdata):in0_SDIM*O_BITS] = '0;
+	if($bits(output_tdata) > in_SDIM*O_BITS) begin : genPadOut
+		assign	output_tdata[$left(output_tdata):in_SDIM*O_BITS] = '0;
 	end : genPadOut
 
 endmodule : thresholding_axi

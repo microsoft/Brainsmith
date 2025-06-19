@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 from .interface_types import InterfaceType
 from .block_chunking import default_chunking
 from .qonnx_types import DatatypeConstraintGroup, validate_datatype_against_constraints, BaseDataType
+from .datatype_metadata import DatatypeMetadata
 
 
 @dataclass
@@ -40,12 +41,12 @@ class InterfaceMetadata:
     description: Optional[str] = None
     
     # Parameter linkage mappings
-    datatype_params: Optional[Dict[str, str]] = None
+    datatype_metadata: Optional[DatatypeMetadata] = None
     """
-    Optional mapping of datatype properties to RTL parameters.
-    If None, defaults to {clean_interface_name}_WIDTH, {clean_interface_name}_SIGNED pattern.
+    Optional datatype metadata binding RTL parameters to QONNX datatype properties.
+    If None, defaults will be created based on interface name patterns.
     
-    Example: {"width": "INPUT0_WIDTH", "signed": "SIGNED_INPUT0"}
+    Example: DatatypeMetadata(name="in0", datatype_params={"width": "INPUT0_WIDTH", "signed": "SIGNED_INPUT0"})
     """
     
     bdim_param: Optional[str] = None
@@ -130,24 +131,19 @@ class InterfaceMetadata:
                 f"Use @brainsmith SDIM pragma if different parameter name is used."
             )
         
-        # Check datatype parameters
-        if self.datatype_params:
-            for prop_type, param_name in self.datatype_params.items():
-                if param_name not in module_param_names:
-                    warnings.append(
-                        f"Interface '{self.name}' expects {prop_type} parameter '{param_name}' "
-                        f"but it was not found in module parameters. "
-                        f"Use @brainsmith DATATYPE_PARAM pragma if different parameter name is used."
-                    )
-        else:
-            # Check essential datatype parameters even if datatype_params is None
-            # (at least width parameter for dataflow interfaces)
-            width_param = self.get_datatype_parameter_name('width')
-            if width_param not in module_param_names:
+        # Check datatype parameters - validate DatatypeMetadata exists and has width
+        if not self.datatype_metadata:
+            # No datatype metadata at all - this is a warning for dataflow interfaces
+            warnings.append(
+                f"Interface '{self.name}' has no datatype metadata. "
+                f"Use @brainsmith DATATYPE_PARAM pragma to specify parameter mappings."
+            )
+        elif self.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+            # For streaming interfaces, width is required
+            if not self.datatype_metadata.width:
                 warnings.append(
-                    f"Interface '{self.name}' expects width parameter '{width_param}' "
-                    f"but it was not found in module parameters. "
-                    f"Use @brainsmith DATATYPE_PARAM pragma if different parameter name is used."
+                    f"Interface '{self.name}' datatype has no width parameter specified. "
+                    f"Streaming interfaces require a width parameter for data formatting."
                 )
         
         # Check shape parameters reference valid module parameters
@@ -192,7 +188,7 @@ class InterfaceMetadata:
             'chunking_strategy': self.chunking_strategy,
             'default_layout': self.default_layout,
             'description': self.description,
-            'datatype_params': self.datatype_params,
+            'datatype_metadata': self.datatype_metadata,
             'bdim_param': self.bdim_param,
             'sdim_param': self.sdim_param,
             'shape_params': self.shape_params
@@ -232,20 +228,38 @@ class InterfaceMetadata:
         Returns:
             RTL parameter name (e.g., 'potato_WIDTH', 'SIGNED_potato')
         """
-        if self.datatype_params and property_type in self.datatype_params:
-            return self.datatype_params[property_type]
+        if self.datatype_metadata:
+            # Get from explicit attributes
+            if property_type == 'width':
+                return self.datatype_metadata.width
+            elif property_type == 'signed' and self.datatype_metadata.signed:
+                return self.datatype_metadata.signed
+            elif property_type == 'format' and self.datatype_metadata.format:
+                return self.datatype_metadata.format
+            elif property_type == 'bias' and self.datatype_metadata.bias:
+                return self.datatype_metadata.bias
+            elif property_type == 'fractional_width' and self.datatype_metadata.fractional_width:
+                return self.datatype_metadata.fractional_width
+            elif property_type == 'exponent_width' and self.datatype_metadata.exponent_width:
+                return self.datatype_metadata.exponent_width
+            elif property_type == 'mantissa_width' and self.datatype_metadata.mantissa_width:
+                return self.datatype_metadata.mantissa_width
         
-        # Default naming convention: use actual interface name directly
+        # Default naming convention: use consistent suffix pattern
         if property_type == 'width':
             return f"{self.name}_WIDTH"
         elif property_type == 'signed':
-            return f"SIGNED_{self.name}"
+            return f"{self.name}_SIGNED"  # Changed from SIGNED_{self.name} for consistency
         elif property_type == 'format':
             return f"{self.name}_FORMAT"
         elif property_type == 'bias':
             return f"{self.name}_BIAS"
         elif property_type == 'fractional_width':
             return f"{self.name}_FRACTIONAL_WIDTH"
+        elif property_type == 'exponent_width':
+            return f"{self.name}_EXPONENT_WIDTH"
+        elif property_type == 'mantissa_width':
+            return f"{self.name}_MANTISSA_WIDTH"
         else:
             return f"{self.name}_{property_type.upper()}"
     

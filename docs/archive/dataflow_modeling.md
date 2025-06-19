@@ -38,6 +38,8 @@ For a fully instantiated kernel, each input interface has a set of parameters th
 | $stream_dims$  | Stream Dimensions | Shape of the stream passed through the interface each clock cycle         |
 | $dtype$ | Data Type         | Data type of each element streamed through the interface                  |
 
+Additionally, we assert $num_blocks = tensor_dims / block_dims$
+
 When discussing multiple interfaces, each variable is subscripted as $tensor_dims_{I|W|O,i}$ for the $i^{th}$ interface of type Input, Weight, or Output, respectively.
 
 ## Computational Model
@@ -53,7 +55,7 @@ When implementing a Kernel, the Dataflow Model abstracts the kernel's implementa
 Although the number of interfaces in a kernel is constant, the parameters of each interface are defined at runtime. The $tensor_dims$, $block_dims$, and $dtype$ parameters are defined based on the ONNX pattern of the target model, while the $stream_dims$ (stream dimensions) is determined based on the results of the compiler's DSE. The compiler explores this design space via *Parllelism Paramaters*:
 
 - **$iPar$**: Input parallelism. This corresponds to *SIMD* in the previous parallelism model. $1 \leq iPar \leq block_dims_I$.
-- **$wPar$**: Weight parallelism. This corresponds to *PE* in the previous parallelism model. $1 \leq wPar \leq tensor_dims_W$.
+- **$wPar$**: Weight parallelism. This corresponds to *PE* in the previous parallelism model. $1 \leq wPar \leq num_blocks_W$.
 
 Unlike the interface parameters which merely describe the Kernel, the parallelism parameters are used in final code generation to define the architecture of the kernel instance.
 
@@ -71,21 +73,21 @@ For a simple kernel with only one of each interface type, the Dataflow Model def
 - $stream_dims_W = wPar * iPar * (block_dims_W / block_dims_I)$
 - $stream_dims_O = stream_dims_I * (block_dims_O / block_dims_I)$
 - $cII = \prod(block_dims_I / stream_dims_I)$
-- $eII = cII * \prod(tensor_dims_W / wPar)$
-- $L = eII * \prod(tensor_dims_I)$
+- $eII = cII * \prod(num_blocks_W / wPar)$
+- $L = eII * \prod(num_blocks_I)$
 
 ### Arbitary number of interfaces
 
 For a kernel with multiple Input interfaces, there exists a different $iPar$ for each $i \in X$ Inputs:
 
 - $stream_dims_{I,i} = iPar_i$
-- $cII_i = * \prod(block_dims_{I,i} / stream_dims_{I,i})$
+- $cII_i = \prod(block_dims_{I,i} / stream_dims_{I,i})$
 
 For a kernel with multiple Weight interfaces, there exists a different $wPar$ for each $j \in Y$ Weights. For each combination of Input $i$ and Weight $j$, $stream_dims_W$ and $eII$ are calculated and set to the bottleneck calculation:
 
 - $stream_dims_{W,j} = \max_i^X{(wPar_j * iPar_i * (block_dims_{W,j} / block_dims_{I,i}))}$
-- $eII_i = cII_i * \max_j^Y{(\prod(tensor_dims_{W,j} / wPar_j))}$
-- $L = \max_i^X{(eII_i)}$
+- $eII_i = cII_i * \max_j^Y{(\prod(num_blocks_{W,j} / wPar_j))}$
+- $L = \max_i^X{(eII_i) * \prod(num_blocks_i)}$
 
 For a kernel with multiple Inputs, the projected $stream_dims_O$ for each $k \in Z$ Outputs is calculated based on the Input $b$ with the largest execution initiation interval ($b = \arg\max_i^X{(eII_i)}$):
 

@@ -88,11 +88,15 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         # Algorithm parameters from node attributes
 {% for param in parameter_definitions %}
     {% if param.name in exposed_parameters %}
-        code_gen_dict["${{ param.name.upper() }}$"] = [str(self.get_nodeattr("{{ param.name }}"))]
+        {%- set nodeattr_name = parameter_aliases.get(param.name, param.name) %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self.get_nodeattr("{{ nodeattr_name }}"))]{% if nodeattr_name != param.name %}  # Aliased from {{ nodeattr_name }}{% endif %}
+    {% elif param.name in derived_parameters %}
+        # Derived parameter - computed from expression
+        code_gen_dict["${{ param.name.upper() }}$"] = [str({{ derived_parameters[param.name] }})]
     {% endif %}
 {% endfor %}
         
-        # Linked parameters from interface metadata (BDIM, SDIM, datatype)
+        # BDIM/SDIM parameter linkage (from interface metadata)
         interface_metadata = self.get_interface_metadata()
         for interface in interface_metadata:
             # BDIM parameter linkage
@@ -106,68 +110,12 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
                 sdim_value = self.get_nodeattr(interface.sdim_param) if interface.sdim_param in {{ exposed_parameters }} else None
                 if sdim_value is not None:
                     code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
-            
-            # Datatype parameter linkage
-            if hasattr(interface, 'datatype_params') and interface.datatype_params:
-                # Get interface-specific datatype using compiler_name (e.g., input0DataType, output0DataType)
-                compiler_name = getattr(interface, 'compiler_name', interface.name)
-                datatype_attr_name = f"{compiler_name}DataType"
-                
-                for prop_type, param_name in interface.datatype_params.items():
-                    if prop_type == 'width':
-                        # Get width from interface-specific datatype attribute
-                        interface_dt = self.get_nodeattr(datatype_attr_name)
-                        if interface_dt:
-                            from qonnx.core.datatype import DataType
-                            code_gen_dict[f"${param_name.upper()}$"] = [str(DataType[interface_dt].bitwidth())]
-                    elif prop_type == 'signed':
-                        # Get signed from interface-specific datatype attribute
-                        interface_dt = self.get_nodeattr(datatype_attr_name)
-                        if interface_dt:
-                            from qonnx.core.datatype import DataType
-                            code_gen_dict[f"${param_name.upper()}$"] = [str(1 if DataType[interface_dt].signed() else 0)]
         
-        # Legacy datatype-linked parameters (for backward compatibility)
-{% for param_name in datatype_linked_params %}
-    {% if param_name == "WI" %}
-        # Input width from input datatype
-        code_gen_dict["$WI$"] = [str(self.get_input_datatype().bitwidth())]
-    {% elif param_name == "SIGNED" %}
-        # Input signedness
-        code_gen_dict["$SIGNED$"] = [str(1 if self.get_input_datatype().signed() else 0)]
-    {% elif param_name == "FPARG" %}
-        # Floating point argument (0=integer, 1=float)
-        code_gen_dict["$FPARG$"] = [str(0 if self.get_input_datatype().is_integer() else 1)]
-    {% elif param_name == "O_BITS" %}
-        # Output bits calculation depends on operation specifics
-        output_bitwidth = self.get_output_datatype().bitwidth()
-        code_gen_dict["$O_BITS$"] = [str(output_bitwidth)]
-    {% elif param_name == "BIAS" %}
-        # Bias value if available from attributes
-        bias = self.get_nodeattr("bias") if hasattr(self, "get_nodeattr") and "bias" in [attr for attr in dir(self) if "nodeattr" in attr] else 0
-        code_gen_dict["$BIAS$"] = [str(bias)]
-    {% elif param_name == "WT" or param_name == "WEIGHT_WIDTH" %}
-        # Weight width from weight interface (if exists)
-        weight_interfaces = [iface for iface in self.get_input_interfaces() if "weight" in iface.name.lower()]
-        if weight_interfaces:
-            code_gen_dict["$WT$"] = [str(self.get_input_datatype(len(self.get_input_interfaces()) - len(weight_interfaces)).bitwidth())]
-        else:
-            code_gen_dict["$WT$"] = ["8"]  # Default weight width
-    {% elif param_name == "PE" %}
-        # Processing elements
-        pe = self.get_nodeattr("PE") if "PE" in str(self.get_nodeattr_types()) else 1
-        code_gen_dict["$PE$"] = [str(pe)]
-    {% elif param_name == "C" or param_name == "CHANNELS" %}
-        # Number of channels
-        channels = self.get_nodeattr("NumChannels") if "NumChannels" in str(self.get_nodeattr_types()) else 1
-        code_gen_dict["$C$"] = [str(channels)]
-    {% elif param_name == "N" %}
-        # Output precision
-        code_gen_dict["$N$"] = [str(self.get_output_datatype().bitwidth())]
-    {% else %}
-        # Generic datatype-linked parameter
-        code_gen_dict["${{ param_name.upper() }}$"] = [str(self.get_nodeattr("{{ param_name }}") if "{{ param_name }}" in str(self.get_nodeattr_types()) else 1)]
-    {% endif %}
+        # Datatype parameter assignments (generated at template time)
+        from qonnx.core.datatype import DataType
+{% for assignment in datatype_parameter_assignments %}
+        # {{ assignment.comment }}
+        code_gen_dict["{{ assignment.template_var }}"] = [{{ assignment.source }}]
 {% endfor %}
         
         return code_gen_dict

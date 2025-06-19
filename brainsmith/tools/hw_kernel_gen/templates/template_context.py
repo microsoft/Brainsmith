@@ -11,6 +11,7 @@ from pathlib import Path
 
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.interface_types import InterfaceType
+from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
 from ..rtl_parser.data import Parameter
 
 
@@ -84,6 +85,15 @@ class TemplateContext:
     datatype_param_mappings: Dict[str, Dict[str, str]] = field(default_factory=dict)  
     interface_datatype_attributes: List[Dict[str, Any]] = field(default_factory=list)
     datatype_derivation_methods: Dict[str, str] = field(default_factory=dict)
+    
+    # Internal datatype metadata from kernel
+    internal_datatypes: List['DatatypeMetadata'] = field(default_factory=list)
+    
+    # Template-time parameter assignments (replaces runtime logic)
+    datatype_parameter_assignments: List[Dict[str, str]] = field(default_factory=list)
+    
+    # Parameter pragma data (ALIAS and DERIVED_PARAMETER)
+    parameter_pragma_data: Dict[str, Any] = field(default_factory=dict)
     
     # Template flags
     has_inputs: bool = False
