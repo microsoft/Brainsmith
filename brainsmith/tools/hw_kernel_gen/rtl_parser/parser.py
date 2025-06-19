@@ -100,7 +100,6 @@ class RTLParser:
         self.ports: List[Port] = [] # Intermediate list of raw ports
         self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
-        self.exposed_parameters: List[str] = []  # Parameters that need nodeattr exposure
         self.parameter_pragma_data: Dict[str, Any] = {}  # Data from parameter pragmas (aliases, derived)
 
     def _initial_parse(self, source: str, source_name: str = "<string>", 
@@ -231,10 +230,6 @@ class RTLParser:
                 if param is not None: # Skips local params implicitly
                     self.parameters.append(param)
             logger.debug(f"Extracted {len(self.parameters)} parameters.")
-            
-            # Initialize exposed parameters - all parameters are initially exposed
-            self.exposed_parameters = [p.name for p in self.parameters]
-            logger.debug(f"Initialized {len(self.exposed_parameters)} exposed parameters: {self.exposed_parameters}")
         except Exception as e:
             logger.exception(f"Error during parameter parsing: {e}")
             raise ParserError(f"Failed during parameter parsing: {e}")
@@ -253,159 +248,7 @@ class RTLParser:
             raise ParserError(f"Failed during port parsing: {e}")
         logger.info("Stage 2: Component extraction complete.")
 
-    def _analyze_and_validate_interfaces(self) -> None:
-        """Performs Stage 3 of parsing: Interface building and validation.
-
-        Uses self.ports and self.name. Sets self.interface_metadata_list.
-
-        Takes the list of raw ports extracted in Stage 2 and uses the `InterfaceBuilder`
-        to group them into logical interfaces (AXI-Stream, AXI-Lite, Global Control).
-        It then performs critical validation checks:
-        1. Ensures a Global Control interface (`ap_clk`, `ap_rst_n`) exists.
-        2. Ensures at least one AXI-Stream interface exists.
-        3. Ensures no ports were left unassigned to a standard interface.
-
-        Args:
-            ports: The list of Port objects extracted in Stage 2.
-            kernel_name: The name of the kernel module (used for error messages).
-
-        Returns:
-            A dictionary mapping interface names (str) to validated Interface objects.
-
-        Raises:
-            ParserError: If self.name or self.ports are not set, if the interface building 
-                         process fails, or if any of the post-analysis validation checks fail.
-        """
-        if self.name is None or self.ports is None: # self.ports can be empty, but not None
-             raise ParserError("Cannot analyze interfaces: _extract_kernel_components must be run first.")
-        logger.info(f"Stage 3: Analyzing and validating interfaces for module {self.name}")
-
-        try:
-            # 1. Apply parameter pragmas FIRST (highest priority)
-            self.exposed_parameters, self.parameter_pragma_data = self.pragma_handler.apply_parameter_pragmas(
-                self.exposed_parameters, self.parameters
-            )
-            logger.info(f"Applied parameter pragmas. Remaining exposed: {len(self.exposed_parameters)}")
-            
-            # 2. Build base interfaces using InterfaceBuilder
-            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
-                self.ports, []
-            )
-            logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
-            
-            # 3. Apply interface pragmas
-            self.interface_metadata_list = self.pragma_handler.apply_interface_pragmas(
-                base_metadata_list, self.parameters
-            )
-            logger.info(f"Applied interface pragmas to {len(self.interface_metadata_list)} interfaces")
-            
-            # 4. Apply unified auto-linking for interfaces if enabled
-            if self.auto_link_parameters:
-                self._apply_interface_auto_linking()
-            
-            # 5. Extract all parameters referenced by interfaces and remove from exposed
-            self._remove_interface_linked_parameters()
-            logger.info(f"Final exposed parameters: {len(self.exposed_parameters)} ({self.exposed_parameters})")
-            
-            # 6. Interface name sanitization is now done in InterfaceBuilder
-            
-            # 7. Comprehensive validation
-            self._validate_interface_metadata(self.interface_metadata_list, self.parameters)
-            
-        except Exception as e:
-            logger.exception(f"Error during interface building for module {self.name}: {e}")
-            raise ParserError(f"Failed during interface building: {e}")
-
-        logger.info("Stage 3: Interface analysis and validation complete.")
-    
-    def _apply_interface_auto_linking(self) -> None:
-        """Apply auto-linking to interface datatypes based on naming conventions.
-        
-        This unified stage runs after interfaces are created but before removing
-        linked parameters. It updates interface metadata with auto-detected
-        datatype parameters and BDIM/SDIM parameters.
-        """
-        logger.debug("Applying unified interface auto-linking")
-        linker = ParameterLinker(enable_interface_linking=True, enable_internal_linking=False)
-        
-        for interface in self.interface_metadata_list:
-            # Only auto-link streaming interfaces
-            if interface.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-                continue
-            
-            # Skip if already has datatype metadata (from pragma)
-            if interface.datatype_metadata:
-                continue
-            
-            # Try to auto-link datatype parameters
-            auto_linked_dt = linker.link_interface_parameters(interface.name, self.parameters)
-            if auto_linked_dt:
-                interface.datatype_metadata = auto_linked_dt
-                logger.info(f"Auto-linked datatype parameters for interface '{interface.name}'")
-            else:
-                # Create default datatype metadata
-                from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
-                interface.datatype_metadata = DatatypeMetadata(
-                    name=interface.name,
-                    width=f"{interface.name}_WIDTH",
-                    signed=f"{interface.name}_SIGNED"
-                )
-                logger.debug(f"Created default datatype metadata for interface '{interface.name}'")
-            
-            # Always set default BDIM/SDIM parameters if not already set
-            if not interface.bdim_param:
-                interface.bdim_param = f"{interface.name}_BDIM"
-            if not interface.sdim_param:
-                interface.sdim_param = f"{interface.name}_SDIM"
-    
-    def _remove_interface_linked_parameters(self) -> None:
-        """Remove parameters that are linked to interfaces from exposed_parameters.
-        
-        This method inspects all InterfaceMetadata objects to find which parameters
-        they reference (through datatype_params, bdim_param, sdim_param) and removes
-        those from the exposed_parameters list. It also detects and warns about
-        collisions where multiple interfaces reference the same parameter.
-        """
-        linked_params = {}  # Track which interface links which parameter
-        
-        # Collect all parameters referenced by interfaces
-        for interface in self.interface_metadata_list:
-            interface_params = []
-            
-            # Check datatype parameters
-            if interface.datatype_metadata:
-                interface_params.extend(interface.datatype_metadata.get_all_parameters())
-                        
-            # Check BDIM parameter
-            if interface.bdim_param:
-                interface_params.append(interface.bdim_param)
-                
-            # Check SDIM parameter  
-            if interface.sdim_param:
-                interface_params.append(interface.sdim_param)
-            
-            # Track which interface links each parameter
-            for param_name in interface_params:
-                if param_name in linked_params:
-                    # Collision detected
-                    logger.warning(
-                        f"Parameter '{param_name}' is linked by multiple interfaces: "
-                        f"'{linked_params[param_name]}' and '{interface.name}'. "
-                        f"This may cause issues in generated code."
-                    )
-                else:
-                    linked_params[param_name] = interface.name
-        
-        # Remove linked parameters from exposed list
-        for param_name in linked_params:
-            if param_name in self.exposed_parameters:
-                self.exposed_parameters.remove(param_name)
-                logger.debug(
-                    f"Removed parameter '{param_name}' from exposed parameters "
-                    f"(linked to interface '{linked_params[param_name]}')"
-                )
-
-    def _remove_internal_linked_parameters(self, internal_datatypes: List['DatatypeMetadata']) -> None:
+    def _remove_internal_linked_parameters(self, exposed_parameters: List[str], internal_datatypes: List['DatatypeMetadata']) -> List[str]:
         """Remove parameters that are linked to internal datatypes from exposed_parameters.
         
         This method tracks which parameters are already claimed by pragma-defined internal
@@ -413,7 +256,11 @@ class RTLParser:
         from the exposed_parameters list.
         
         Args:
+            exposed_parameters: List of exposed parameter names
             internal_datatypes: List of DatatypeMetadata for internal datatypes (pragma-defined)
+            
+        Returns:
+            Updated exposed_parameters list
         """
         linked_params = {}  # Track which internal datatype links which parameter
         
@@ -432,8 +279,8 @@ class RTLParser:
         
         # Remove linked parameters from exposed list
         for param_name in linked_params:
-            if param_name in self.exposed_parameters:
-                self.exposed_parameters.remove(param_name)
+            if param_name in exposed_parameters:
+                exposed_parameters.remove(param_name)
                 logger.debug(
                     f"Removed parameter '{param_name}' from exposed parameters "
                     f"(linked to internal datatype '{linked_params[param_name]}')"
@@ -441,61 +288,8 @@ class RTLParser:
         
         # Store linked params for auto-linker exclusion
         self._internal_linked_parameters = set(linked_params.keys())
-
-    def _validate_interface_metadata(self, metadata_list: List[InterfaceMetadata], 
-                                   module_parameters: List[Parameter]) -> None:
-        """Comprehensive validation of interface metadata after pragma application.
         
-        Validates that all interfaces have proper configuration and that all
-        required parameters exist in the module.
-        
-        Args:
-            metadata_list: List of InterfaceMetadata to validate
-            module_parameters: List of module Parameter objects
-            
-        Raises:
-            ParserError: If validation fails
-        """
-        logger.info("Starting comprehensive interface metadata validation")
-        
-        param_names = {p.name for p in module_parameters}
-        
-        # 1. Log interface summary
-        for metadata in metadata_list:
-            logger.debug(f"Interface '{metadata.name}' of type '{metadata.interface_type.value}' has {len(metadata.datatype_constraints)} datatype constraints")
-
-        # 2. Validate Global Control interface exists
-        has_global_control = any(
-            metadata.interface_type == InterfaceType.CONTROL for metadata in metadata_list
-        )
-        if not has_global_control:
-            error_msg = f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
-            logger.error(error_msg)
-            raise ParserError(error_msg)
-
-        # 3. Validate AXI-Stream interfaces exist
-        num_input_stream = len([
-            metadata for metadata in metadata_list
-            if metadata.interface_type in [InterfaceType.INPUT, InterfaceType.WEIGHT]
-        ])
-        num_output_stream = len([
-            metadata for metadata in metadata_list
-            if metadata.interface_type == InterfaceType.OUTPUT
-        ])
-        # TODO: Re-enable strict interface validation when needed
-        # if num_input_stream == 0:
-        #     raise ParserError("No input AXI-Stream interface found. At least one is required.")
-        # if num_output_stream == 0:
-        #     raise ParserError("No output AXI-Stream interface found. At least one is required.")
-        logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs.")
-
-        # 4. Validate interface parameters using self-referential validation
-        for metadata in metadata_list:
-            warnings = metadata.validate_parameters(param_names)
-            for warning in warnings:
-                logger.warning(warning)
-
-        logger.info("Interface metadata validation complete")
+        return exposed_parameters
 
     def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
         """Core SystemVerilog string parser.
@@ -519,10 +313,14 @@ class RTLParser:
 
             # Stage 2: Extract components
             self._extract_kernel_components()
+            
+            # Initialize exposed parameters - all parameters are initially exposed
+            exposed_parameters = [p.name for p in self.parameters]
+            logger.debug(f"Initialized {len(exposed_parameters)} exposed parameters: {exposed_parameters}")
 
             # Stage 3: Build initial InterfaceMetadata objects (without pragma application)
             base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
-                self.ports, []
+                self.ports
             )
             logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
 
@@ -532,7 +330,7 @@ class RTLParser:
                 source_file=Path(source_name),
                 interfaces=base_metadata_list,
                 parameters=self.parameters,
-                exposed_parameters=self.exposed_parameters.copy(),  # Will be modified by pragmas
+                exposed_parameters=exposed_parameters,
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', []),
                 parameter_pragma_data={"aliases": {}, "derived": {}},
@@ -546,7 +344,10 @@ class RTLParser:
             self._apply_autolinking_to_kernel(kernel_metadata)
             
             # Stage 7: Validate the complete KernelMetadata
-            self._validate_kernel_metadata(kernel_metadata)
+            try:
+                kernel_metadata.validate_comprehensive()
+            except ValueError as e:
+                raise ParserError(str(e))
             
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
@@ -1285,40 +1086,3 @@ class RTLParser:
                     if param_name in kernel_metadata.exposed_parameters:
                         kernel_metadata.exposed_parameters.remove(param_name)
 
-    def _validate_kernel_metadata(self, kernel_metadata: KernelMetadata) -> None:
-        """Validate the complete KernelMetadata object."""
-        logger.info("Starting comprehensive kernel metadata validation")
-        
-        param_names = {p.name for p in kernel_metadata.parameters}
-        
-        # 1. Log interface summary
-        for metadata in kernel_metadata.interfaces:
-            logger.debug(f"Interface '{metadata.name}' of type '{metadata.interface_type.value}' has {len(metadata.datatype_constraints or [])} datatype constraints")
-
-        # 2. Validate Global Control interface exists
-        has_global_control = any(
-            metadata.interface_type.value == 'control' for metadata in kernel_metadata.interfaces
-        )
-        if not has_global_control:
-            error_msg = f"Module '{kernel_metadata.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
-            logger.error(error_msg)
-            raise ParserError(error_msg)
-
-        # 3. Validate AXI-Stream interfaces exist
-        num_input_stream = len([
-            metadata for metadata in kernel_metadata.interfaces
-            if metadata.interface_type.value in ['input', 'weight']
-        ])
-        num_output_stream = len([
-            metadata for metadata in kernel_metadata.interfaces
-            if metadata.interface_type.value == 'output'
-        ])
-        logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs.")
-
-        # 4. Validate interface parameters using self-referential validation
-        for metadata in kernel_metadata.interfaces:
-            warnings = metadata.validate_parameters(param_names)
-            for warning in warnings:
-                logger.warning(warning)
-
-        logger.info("Kernel metadata validation complete")

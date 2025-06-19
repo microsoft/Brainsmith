@@ -14,7 +14,7 @@ and the identified hardware interfaces (Global Control, AXI-Stream, AXI-Lite).
 
 Includes:
 - Enums for Port Direction and Interface Type.
-- Dataclasses for Parameter, Port, Pragma, ValidationResult, PortGroup, and HWKernel.
+- Dataclasses for Parameter, Port, Pragma, ValidationResult, PortGroup, etc.
 
 Each class uses Python's dataclass decorator for clean initialization and
 representation, along with type hints for better IDE support and runtime
@@ -200,20 +200,6 @@ class Pragma:
             kernel: KernelMetadata object to modify
         """
         raise NotImplementedError(f"Pragma type {self.type.name} must implement apply_to_kernel.")
-    
-    def apply(self, **kwargs) -> Any:
-        """
-        DEPRECATED: Use apply_to_kernel instead.
-        
-        Abstract method to apply the pragma's effects.
-        Subclasses must implement this method and can return any relevant data.
-        
-        Args:
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments. Subclasses will expect specific
-                      keys like 'interfaces', 'parameters', 'hw_kernel'.
-        """
-        raise NotImplementedError(f"Pragma type {self.type.name} must implement apply.")
 
     def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
         """
@@ -237,30 +223,6 @@ class Pragma:
         """
         return False
 
-    def applies_to_interface(self, interface) -> bool:
-        """
-        DEPRECATED: Use applies_to_interface_metadata instead.
-        
-        Check if this pragma applies to the given interface.
-        This method is deprecated and will be removed in a future version.
-        Use applies_to_interface_metadata() for new code.
-        """
-        import warnings
-        warnings.warn(
-            "applies_to_interface() is deprecated. Use applies_to_interface_metadata() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        # Create temporary InterfaceMetadata for backward compatibility
-        from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-        temp_metadata = InterfaceMetadata(
-            name=interface.name,
-            interface_type=interface.type,
-            datatype_constraints=[],
-            chunking_strategy=None
-        )
-        return self.applies_to_interface_metadata(temp_metadata)
-
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """
         Apply pragma effects to InterfaceMetadata.
@@ -280,22 +242,6 @@ class Pragma:
         """
         return metadata
 
-    def apply_to_interface_metadata(self, interface, 
-                                  metadata: InterfaceMetadata) -> InterfaceMetadata:
-        """
-        DEPRECATED: Use apply_to_metadata instead.
-        
-        Apply pragma effects to InterfaceMetadata with Interface compatibility.
-        This method is deprecated and will be removed in a future version.
-        Use apply_to_metadata() for new code.
-        """
-        import warnings
-        warnings.warn(
-            "apply_to_interface_metadata() is deprecated. Use apply_to_metadata() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        return self.apply_to_metadata(metadata)
 
     def __str__(self):
         return f"@brainsmith {self.type.value} " + " ".join(map(str, self.inputs))
@@ -310,59 +256,60 @@ class InterfacePragma(Pragma):
     interfaces, including interface name matching and base application logic.
     """
     
-    def _interface_names_match(self, pragma_name: str, interface_name: str) -> bool:
+    def apply_to_interface_by_name(self, interface_name: str, kernel: 'KernelMetadata') -> bool:
         """
-        Check if pragma interface name matches actual interface name.
+        Find interface by name in KernelMetadata and apply pragma if found.
         
-        Uses exact string matching for precise interface targeting.
+        This method centralizes the interface-finding logic that was previously
+        duplicated across all interface pragma subclasses.
         
         Args:
-            pragma_name: Interface name specified in pragma
-            interface_name: Actual interface name from RTL parsing
+            interface_name: Name of target interface
+            kernel: KernelMetadata containing interfaces
             
         Returns:
-            bool: True if names match exactly
-            
-        Examples:
-            >>> pragma._interface_names_match("s_axis", "s_axis")
-            True
-            >>> pragma._interface_names_match("s_axis", "m_axis")
-            False
+            bool: True if interface was found and pragma applied, False otherwise
         """
-        return pragma_name == interface_name
-
-    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
+        # Find the target interface
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                # Apply pragma-specific logic via apply_to_metadata
+                updated_metadata = self.apply_to_metadata(interface)
+                
+                # Update the interface in the kernel with the modified metadata
+                # Since InterfaceMetadata objects are mutable, we update in place
+                interface.datatype_constraints = updated_metadata.datatype_constraints
+                interface.chunking_strategy = updated_metadata.chunking_strategy
+                interface.datatype_metadata = updated_metadata.datatype_metadata
+                interface.bdim_param = updated_metadata.bdim_param
+                interface.sdim_param = updated_metadata.sdim_param
+                interface.shape_params = updated_metadata.shape_params
+                interface.interface_type = updated_metadata.interface_type
+                interface.description = updated_metadata.description
+                
+                logger.debug(f"Applied {self.type.value} pragma to interface '{interface_name}'")
+                return True
+        
+        logger.warning(f"{self.type.value} pragma target interface '{interface_name}' not found")
+        return False
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """
-        Check if this pragma applies to the given interface metadata.
+        Apply interface pragma to kernel metadata.
         
-        Base implementation uses interface name matching. Subclasses can override
-        for more complex matching logic.
-        
-        Args:
-            metadata: InterfaceMetadata to check against
-            
-        Returns:
-            bool: True if pragma applies to this interface, False otherwise
+        Default implementation handles single interface pragmas.
+        Subclasses can override for more complex behavior (e.g., WeightPragma
+        for multiple interfaces, DatatypeParamPragma for internal datatypes).
         """
-        if not self.parsed_data:
-            logger.debug(f"{self.type.value} pragma has no parsed_data")
-            return False
-        
-        pragma_interface_name = self.parsed_data.get('interface_name')
-        if not pragma_interface_name:
-            logger.debug(f"{self.type.value} pragma has no interface_name in parsed_data")
-            return False
-        
-        match_result = self._interface_names_match(pragma_interface_name, metadata.name)
-        logger.debug(f"{self.type.value} pragma interface matching: '{pragma_interface_name}' <-> '{metadata.name}' = {match_result}")
-        return match_result
+        interface_name = self.parsed_data.get("interface_name")
+        if interface_name:
+            self.apply_to_interface_by_name(interface_name, kernel)
 
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """
         Apply pragma effects to InterfaceMetadata.
         
-        Base implementation returns metadata unchanged. Subclasses must override
-        this method to implement their specific effects.
+        Subclasses must override this method to implement their specific effects.
         
         Args:
             metadata: Current InterfaceMetadata to modify
@@ -370,9 +317,6 @@ class InterfacePragma(Pragma):
         Returns:
             InterfaceMetadata: Modified metadata with pragma effects applied
         """
-        if not self.applies_to_interface_metadata(metadata):
-            return metadata
-        
         # Subclasses must override this method
         raise NotImplementedError(f"{self.__class__.__name__} must implement apply_to_metadata()")
 
@@ -397,28 +341,6 @@ class TopModulePragma(Pragma):
         # By the time we have KernelMetadata, the module has already been selected
         # This is a no-op but included for completeness
         logger.debug(f"TOP_MODULE pragma already processed during module selection")
-    
-    def apply(self, **kwargs) -> Any:
-        """Applies the TOP_MODULE pragma."""
-        hw_kernel: Optional[HWKernel] = kwargs.get('hw_kernel')
-        # The primary effect of TOP_MODULE (identifying the main module) is typically
-        # handled by the Parser when it first processes the list of all pragmas
-        # to find the target module name before full HWKernel construction.
-        if hw_kernel and self.parsed_data.get("module_name"):
-            current_kernel_name = hw_kernel.name
-            new_kernel_name = self.parsed_data["module_name"]
-            if current_kernel_name and current_kernel_name != new_kernel_name:
-                logger.warning(
-                    f"TOP_MODULE pragma at line {self.line_number} trying to change HWKernel name "
-                    f"from '{current_kernel_name}' to '{new_kernel_name}'. This might be an issue "
-                    f"if the kernel was already identified differently. Sticking to '{new_kernel_name}'."
-                )
-            hw_kernel.name = new_kernel_name
-            logger.info(f"TOP_MODULE pragma applied: HWKernel name set to '{hw_kernel.name}' based on pragma at line {self.line_number}.")
-        elif not hw_kernel and self.parsed_data.get("module_name"):
-            logger.debug(f"TOP_MODULE pragma at line {self.line_number} processed. Module name '{self.parsed_data.get('module_name')}' is available. HWKernel object not provided for immediate update.")
-        else:
-            logger.debug(f"TOP_MODULE pragma at line {self.line_number} processed. No module name in parsed_data or no HWKernel provided.")
 
 
 @dataclass
@@ -468,36 +390,13 @@ class DatatypePragma(InterfacePragma):
             "max_width": max_bits
         }
 
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
-        """Apply DATATYPE pragma to kernel metadata."""
-        interface_name = self.parsed_data.get("interface_name")
-        
-        # Find the target interface
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                # Create new datatype constraint group
-                new_constraint_group = self._create_constraint_group()
-                
-                # Add to existing constraints
-                if interface.datatype_constraints is None:
-                    interface.datatype_constraints = []
-                interface.datatype_constraints.append(new_constraint_group)
-                
-                logger.debug(f"Applied DATATYPE pragma to interface '{interface_name}'")
-                return
-        
-        logger.warning(f"DATATYPE pragma target interface '{interface_name}' not found")
-
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply DATATYPE pragma to modify datatype constraints."""
-        if not self.applies_to_interface_metadata(metadata):
-            return metadata
-        
         # Create new datatype constraint group based on pragma
         new_constraint_group = self._create_constraint_group()
         
         # Combine with existing constraints (pragma adds to constraints, doesn't replace)
-        existing_constraints = getattr(metadata, 'datatype_constraints', [])
+        existing_constraints = getattr(metadata, 'datatype_constraints', []) or []
         new_constraints = existing_constraints + [new_constraint_group]
         
         return metadata.update_attributes(datatype_constraints=new_constraints)
@@ -664,9 +563,6 @@ class BDimPragma(InterfacePragma):
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply BDIM pragma to modify chunking strategy and set parameter linkage."""
         logger.debug(f"Attempting to apply BDIM pragma to interface '{metadata.name}'")
-        if not self.applies_to_interface_metadata(metadata):
-            logger.debug(f"BDIM pragma does not apply to interface '{metadata.name}'")
-            return metadata
         
         # Validate that BDIM pragma is only applied to INPUT or WEIGHT interfaces
         from brainsmith.dataflow.core.interface_types import InterfaceType
@@ -716,25 +612,6 @@ class BDimPragma(InterfacePragma):
             block_shape=block_shape,
             rindex=rindex
         )
-
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
-        """Apply BDIM pragma to kernel metadata."""
-        interface_name = self.parsed_data.get("interface_name")
-        
-        # Find the target interface
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                # Create new chunking strategy
-                new_strategy = self._create_chunking_strategy()
-                
-                # Update interface
-                interface.chunking_strategy = new_strategy
-                interface.bdim_param = self.parsed_data.get("param_name")
-                
-                logger.debug(f"Applied BDIM pragma to interface '{interface_name}'")
-                return
-        
-        logger.warning(f"BDIM pragma target interface '{interface_name}' not found")
 
 
 @dataclass
@@ -857,29 +734,21 @@ class SDimPragma(InterfacePragma):
             sdim_param=self.parsed_data.get("param_name")
         )
 
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
-        """Apply SDIM pragma to kernel metadata."""
-        interface_name = self.parsed_data.get("interface_name")
+    def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+        """Apply SDIM pragma to set stream dimension parameter."""
+        # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
+        from brainsmith.dataflow.core.interface_types import InterfaceType
+        if metadata.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+            error_msg = (f"SDIM pragma at line {self.line_number} cannot be applied to "
+                        f"interface '{metadata.name}' of type '{metadata.interface_type.value}'. "
+                        f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
+            logger.error(f"SDIM interface type validation failed: {error_msg}")
+            raise PragmaError(error_msg)
         
-        # Find the target interface
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
-                from brainsmith.dataflow.core.interface_types import InterfaceType
-                if interface.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
-                    error_msg = (f"SDIM pragma at line {self.line_number} cannot be applied to "
-                                f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
-                                f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
-                    logger.error(f"SDIM interface type validation failed: {error_msg}")
-                    raise PragmaError(error_msg)
-                
-                # Update interface
-                interface.sdim_param = self.parsed_data.get("param_name")
-                
-                logger.debug(f"Applied SDIM pragma to interface '{interface_name}'")
-                return
-        
-        logger.warning(f"SDIM pragma target interface '{interface_name}' not found")
+        # Update interface with SDIM parameter
+        return metadata.update_attributes(
+            sdim_param=self.parsed_data.get("param_name")
+        )
 
 
 # --- Parameter Pragma Base Class ---
@@ -1077,33 +946,18 @@ class WeightPragma(InterfacePragma):
         interface_names = self.inputs
         return {"interface_names": interface_names}
 
-    def applies_to_interface_metadata(self, metadata: InterfaceMetadata) -> bool:
-        """Check if this WEIGHT pragma applies to the given interface metadata."""
-        if not self.parsed_data:
-            return False
-        
-        interface_names = self.parsed_data.get('interface_names', [])
-        for pragma_name in interface_names:
-            if self._interface_names_match(pragma_name, metadata.name):
-                return True
-        return False
 
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply WEIGHT pragma to kernel metadata."""
         interface_names = self.parsed_data.get("interface_names", [])
         
-        # Update interface types
-        for interface in kernel.interfaces:
-            if interface.name in interface_names:
-                from brainsmith.dataflow.core.interface_types import InterfaceType
-                interface.interface_type = InterfaceType.WEIGHT
-                logger.debug(f"Applied WEIGHT pragma to interface '{interface.name}'")
+        # WeightPragma handles multiple interfaces, so we apply to each one
+        for interface_name in interface_names:
+            self.apply_to_interface_by_name(interface_name, kernel)
     
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply WEIGHT pragma to mark interface as weight type."""
-        if not self.applies_to_interface_metadata(metadata):
-            return metadata
-        
+        from brainsmith.dataflow.core.interface_types import InterfaceType
         return metadata.update_attributes(
             interface_type=InterfaceType.WEIGHT  # Override type
         )
@@ -1145,9 +999,6 @@ class DatatypeParamPragma(InterfacePragma):
     
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply DATATYPE_PARAM pragma to set datatype parameter mapping."""
-        if not self.applies_to_interface_metadata(metadata):
-            return metadata
-        
         property_type = self.parsed_data['property_type']
         parameter_name = self.parsed_data['parameter_name']
         
@@ -1181,24 +1032,12 @@ class DatatypeParamPragma(InterfacePragma):
         property_type = self.parsed_data.get("property_type")
         parameter_name = self.parsed_data.get("parameter_name")
         
-        # Try to find interface first
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
-                
-                # Create or update interface datatype metadata
-                if interface.datatype_metadata is None:
-                    interface.datatype_metadata = DatatypeMetadata(name=interface_name)
-                
-                # Update the specific property
-                setattr(interface.datatype_metadata, property_type, parameter_name)
-                
-                # Remove parameter from exposed list
-                if parameter_name in kernel.exposed_parameters:
-                    kernel.exposed_parameters.remove(parameter_name)
-                
-                logger.debug(f"Applied DATATYPE_PARAM pragma to interface '{interface_name}': {property_type}={parameter_name}")
-                return
+        # Try to apply to interface first using unified method
+        if self.apply_to_interface_by_name(interface_name, kernel):
+            # Successfully applied to interface, also remove from exposed parameters
+            if parameter_name in kernel.exposed_parameters:
+                kernel.exposed_parameters.remove(parameter_name)
+            return
         
         # If interface not found, this might be an internal datatype
         # Add to internal datatypes

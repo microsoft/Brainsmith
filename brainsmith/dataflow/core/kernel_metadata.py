@@ -9,9 +9,12 @@ The RTL parser creates this directly, and templates use it without conversion.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict, Any
+import logging
 from .interface_metadata import InterfaceMetadata
 from .datatype_metadata import DatatypeMetadata
 from ...tools.hw_kernel_gen.rtl_parser.data import Parameter, Pragma
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -178,6 +181,7 @@ class KernelMetadata:
             List of validation error messages (empty if valid)
         """
         errors = []
+        warnings = []
         
         if not self.name:
             errors.append("Kernel name is required")
@@ -193,5 +197,72 @@ class KernelMetadata:
             errors.append("Kernel must have at least one input interface")
         if not has_output:
             errors.append("Kernel must have at least one output interface")
+        
+        # Validate Global Control interface exists
+        has_global_control = any(
+            iface.interface_type.value == 'control' for iface in self.interfaces
+        )
+        if not has_global_control:
+            errors.append(f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)")
+        
+        # Get parameter names for validation
+        param_names = {p.name for p in self.parameters}
+        
+        # Validate interface parameters
+        for interface in self.interfaces:
+            interface_warnings = interface.validate_parameters(param_names)
+            warnings.extend(interface_warnings)
+        
+        # Add warnings to parsing_warnings if any
+        if warnings:
+            self.parsing_warnings.extend(warnings)
                 
         return errors
+    
+    def validate_comprehensive(self) -> None:
+        """
+        Perform comprehensive validation with detailed logging.
+        
+        This method performs the same validation as validate() but includes
+        detailed logging of the validation process and raises an exception
+        if validation fails.
+        
+        Raises:
+            ValueError: If validation fails with critical errors
+        """
+        logger.info("Starting comprehensive kernel metadata validation")
+        
+        # Log interface summary
+        for interface in self.interfaces:
+            logger.debug(
+                f"Interface '{interface.name}' of type '{interface.interface_type.value}' "
+                f"has {len(interface.datatype_constraints or [])} datatype constraints"
+            )
+        
+        # Count interface types
+        num_input_stream = len([
+            iface for iface in self.interfaces
+            if iface.interface_type.value in ['input', 'weight']
+        ])
+        num_output_stream = len([
+            iface for iface in self.interfaces
+            if iface.interface_type.value == 'output'
+        ])
+        logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs")
+        
+        # Perform validation
+        errors = self.validate()
+        
+        # Log any warnings that were added
+        if self.parsing_warnings:
+            for warning in self.parsing_warnings:
+                logger.warning(warning)
+        
+        # Raise exception if there are errors
+        if errors:
+            error_msg = f"Kernel metadata validation failed with {len(errors)} errors:\n"
+            error_msg += "\n".join(f"  - {error}" for error in errors)
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        logger.info("Kernel metadata validation complete")

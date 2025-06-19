@@ -19,7 +19,7 @@ from typing import List, Dict, Tuple
 from brainsmith.dataflow.core.interface_types import InterfaceType
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
-from .data import Port, ValidationResult, Pragma, PortGroup
+from .data import Port, ValidationResult, PortGroup
 from .interface_scanner import InterfaceScanner
 from .protocol_validator import ProtocolValidator
 
@@ -44,17 +44,16 @@ class InterfaceBuilder:
         }
 
 
-    def build_interface_metadata(self, ports: List[Port], pragmas: List[Pragma]) -> Tuple[List[InterfaceMetadata], List[Port]]:
+    def build_interface_metadata(self, ports: List[Port]) -> Tuple[List[InterfaceMetadata], List[Port]]:
         """
         Directly build InterfaceMetadata objects from ports using existing components.
         
         This method leverages the existing InterfaceScanner and ProtocolValidator
         components to group and validate ports, then directly creates InterfaceMetadata
-        objects with pragma application.
+        objects.
         
         Args:
             ports: List of Port objects from RTL parsing
-            pragmas: List of Pragma objects for interface customization
             
         Returns:
             Tuple of (interface_metadata_list, unassigned_ports)
@@ -138,9 +137,6 @@ class InterfaceBuilder:
         # Interface type has been correctly determined by ProtocolValidator
         interface_type = group.interface_type
         
-        # Start with no default datatype constraints - these should be specified by pragmas
-        datatype_constraints = []
-        
         # Create appropriate default chunking strategy based on interface type
         # This provides smart defaults when no BDIM pragma is specified
         from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
@@ -194,7 +190,6 @@ class InterfaceBuilder:
             name=group.name,
             interface_type=interface_type,
             compiler_name=compiler_name,
-            datatype_constraints=datatype_constraints,
             chunking_strategy=chunking_strategy,
             description=description,
             datatype_metadata=None,  # Will be set by pragma application in parser
