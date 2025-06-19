@@ -514,61 +514,40 @@ class RTLParser:
         """
         logger.info(f"Starting string-based parsing for: {source_name}")
         try:
-            # Stage 1: Initial parse from string
+            # Stage 1: Parse AST
             self._initial_parse(systemverilog_code, source_name, is_file=False, target_module=module_name)
 
             # Stage 2: Extract components
             self._extract_kernel_components()
 
-            # Stage 3: Analyze and validate interfaces (includes pragma application)
-            self._analyze_and_validate_interfaces()
+            # Stage 3: Build initial InterfaceMetadata objects (without pragma application)
+            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
+                self.ports, []
+            )
+            logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
 
-            # Collect internal datatype pragmas
-            interface_names = [metadata.name for metadata in self.interface_metadata_list]
-            pragma_internal_datatypes = self.pragma_handler.collect_internal_datatype_pragmas(interface_names)
-            
-            # Remove pragma-linked parameters from exposed list to prevent auto-linking duplicates
-            self._remove_internal_linked_parameters(pragma_internal_datatypes)
-            
-            # Stage 3.5: Auto-link internal parameters if enabled (AFTER pragma processing)
-            auto_linked_internals = []
-            if self.auto_link_parameters:
-                logger.debug("Running automatic parameter linking")
-                linker = ParameterLinker(
-                    enable_interface_linking=True,  # Used by InterfaceBuilder
-                    enable_internal_linking=True
-                )
-                # Exclude interface names and already pragma-linked parameters
-                exclude_prefixes = interface_names.copy()
-                exclude_parameters = getattr(self, '_internal_linked_parameters', set())
-                
-                auto_linked_internals = linker.link_internal_parameters(
-                    self.parameters, 
-                    exclude_prefixes=exclude_prefixes,
-                    exclude_parameters=exclude_parameters
-                )
-                if auto_linked_internals:
-                    logger.info(f"Auto-linked {len(auto_linked_internals)} internal datatypes")
-                
-                # Remove auto-linked parameters from exposed list
-                self._remove_internal_linked_parameters(auto_linked_internals)
-            
-            # Combine pragma-defined and auto-linked internal datatypes (no merging needed)
-            internal_datatypes = pragma_internal_datatypes + auto_linked_internals
-            logger.debug(f"Total internal datatypes: {len(internal_datatypes)} ({len(pragma_internal_datatypes)} pragma + {len(auto_linked_internals)} auto-linked)")
-
-            # Create and return KernelMetadata object
+            # Stage 4: Build KernelMetadata with initial data
             kernel_metadata = KernelMetadata(
                 name=self.name,
                 source_file=Path(source_name),
-                interfaces=self.interface_metadata_list,
+                interfaces=base_metadata_list,
                 parameters=self.parameters,
-                exposed_parameters=self.exposed_parameters,
+                exposed_parameters=self.exposed_parameters.copy(),  # Will be modified by pragmas
                 pragmas=self.pragmas,
                 parsing_warnings=getattr(self, 'parsing_warnings', []),
-                parameter_pragma_data=self.parameter_pragma_data,
-                internal_datatypes=internal_datatypes
+                parameter_pragma_data={"aliases": {}, "derived": {}},
+                internal_datatypes=[]
             )
+
+            # Stage 5: Apply ALL pragmas to KernelMetadata
+            self._apply_pragmas_to_kernel(kernel_metadata)
+            
+            # Stage 6: Auto-linking with remaining parameters
+            self._apply_autolinking_to_kernel(kernel_metadata)
+            
+            # Stage 7: Validate the complete KernelMetadata
+            self._validate_kernel_metadata(kernel_metadata)
+            
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
             return kernel_metadata
@@ -1221,3 +1200,125 @@ class RTLParser:
             # This path should ideally not be reached if logic above is correct
             logger.error(f"Failed to extract parameter details from node: {param_decl_node.text.decode()}")
             return None
+
+    def _apply_pragmas_to_kernel(self, kernel_metadata: KernelMetadata) -> None:
+        """Apply all pragmas to kernel metadata in a single pass."""
+        logger.info(f"Applying {len(kernel_metadata.pragmas)} pragmas to kernel metadata")
+        
+        for pragma in kernel_metadata.pragmas:
+            try:
+                pragma.apply_to_kernel(kernel_metadata)
+            except Exception as e:
+                logger.warning(f"Failed to apply pragma {pragma.type.value} at line {pragma.line_number}: {e}")
+        
+        logger.info(f"Pragma application complete. Exposed parameters: {len(kernel_metadata.exposed_parameters)}")
+
+    def _apply_autolinking_to_kernel(self, kernel_metadata: KernelMetadata) -> None:
+        """Apply auto-linking to kernel metadata."""
+        if not self.auto_link_parameters:
+            return
+        
+        logger.debug("Applying auto-linking to kernel metadata")
+        
+        # Apply interface auto-linking
+        linker = ParameterLinker(enable_interface_linking=True, enable_internal_linking=False)
+        
+        for interface in kernel_metadata.interfaces:
+            # Only auto-link streaming interfaces that don't already have datatype metadata
+            if (interface.interface_type.value in ['input', 'output', 'weight'] and 
+                interface.datatype_metadata is None):
+                
+                auto_linked_dt = linker.link_interface_parameters(interface.name, kernel_metadata.parameters)
+                if auto_linked_dt:
+                    interface.datatype_metadata = auto_linked_dt
+                    logger.info(f"Auto-linked datatype parameters for interface '{interface.name}'")
+                    
+                    # Remove linked parameters from exposed list
+                    for param_name in auto_linked_dt.get_all_parameters():
+                        if param_name in kernel_metadata.exposed_parameters:
+                            kernel_metadata.exposed_parameters.remove(param_name)
+                else:
+                    # Create default datatype metadata
+                    from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+                    interface.datatype_metadata = DatatypeMetadata(
+                        name=interface.name,
+                        width=f"{interface.name}_WIDTH",
+                        signed=f"{interface.name}_SIGNED"
+                    )
+                    logger.debug(f"Created default datatype metadata for interface '{interface.name}'")
+                
+                # Always set default BDIM/SDIM parameters if not already set
+                if not interface.bdim_param:
+                    interface.bdim_param = f"{interface.name}_BDIM"
+                if not interface.sdim_param:
+                    interface.sdim_param = f"{interface.name}_SDIM"
+        
+        # Apply internal auto-linking
+        linker = ParameterLinker(enable_interface_linking=False, enable_internal_linking=True)
+        
+        # Get interface names and already-linked parameters for exclusion
+        interface_names = [iface.name for iface in kernel_metadata.interfaces]
+        exclude_parameters = set()
+        
+        # Collect parameters already linked by pragmas (from internal datatypes)
+        for dt in kernel_metadata.internal_datatypes:
+            exclude_parameters.update(dt.get_all_parameters())
+        
+        # Collect parameters already linked by interface datatypes
+        for interface in kernel_metadata.interfaces:
+            if interface.datatype_metadata:
+                exclude_parameters.update(interface.datatype_metadata.get_all_parameters())
+        
+        auto_linked_internals = linker.link_internal_parameters(
+            kernel_metadata.parameters,
+            exclude_prefixes=interface_names,
+            exclude_parameters=exclude_parameters
+        )
+        
+        if auto_linked_internals:
+            kernel_metadata.internal_datatypes.extend(auto_linked_internals)
+            logger.info(f"Auto-linked {len(auto_linked_internals)} internal datatypes")
+            
+            # Remove auto-linked parameters from exposed list
+            for dt in auto_linked_internals:
+                for param_name in dt.get_all_parameters():
+                    if param_name in kernel_metadata.exposed_parameters:
+                        kernel_metadata.exposed_parameters.remove(param_name)
+
+    def _validate_kernel_metadata(self, kernel_metadata: KernelMetadata) -> None:
+        """Validate the complete KernelMetadata object."""
+        logger.info("Starting comprehensive kernel metadata validation")
+        
+        param_names = {p.name for p in kernel_metadata.parameters}
+        
+        # 1. Log interface summary
+        for metadata in kernel_metadata.interfaces:
+            logger.debug(f"Interface '{metadata.name}' of type '{metadata.interface_type.value}' has {len(metadata.datatype_constraints or [])} datatype constraints")
+
+        # 2. Validate Global Control interface exists
+        has_global_control = any(
+            metadata.interface_type.value == 'control' for metadata in kernel_metadata.interfaces
+        )
+        if not has_global_control:
+            error_msg = f"Module '{kernel_metadata.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)."
+            logger.error(error_msg)
+            raise ParserError(error_msg)
+
+        # 3. Validate AXI-Stream interfaces exist
+        num_input_stream = len([
+            metadata for metadata in kernel_metadata.interfaces
+            if metadata.interface_type.value in ['input', 'weight']
+        ])
+        num_output_stream = len([
+            metadata for metadata in kernel_metadata.interfaces
+            if metadata.interface_type.value == 'output'
+        ])
+        logger.info(f"Validated AXI-Stream interfaces: {num_input_stream} inputs, {num_output_stream} outputs.")
+
+        # 4. Validate interface parameters using self-referential validation
+        for metadata in kernel_metadata.interfaces:
+            warnings = metadata.validate_parameters(param_names)
+            for warning in warnings:
+                logger.warning(warning)
+
+        logger.info("Kernel metadata validation complete")

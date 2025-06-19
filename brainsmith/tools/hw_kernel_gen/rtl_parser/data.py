@@ -189,8 +189,22 @@ class Pragma:
         """
         raise NotImplementedError(f"Pragma type {self.type.name} must implement _parse_inputs.")
 
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """
+        Apply this pragma to kernel metadata.
+        
+        Subclasses must implement this method to modify the kernel metadata
+        as appropriate for their pragma type.
+        
+        Args:
+            kernel: KernelMetadata object to modify
+        """
+        raise NotImplementedError(f"Pragma type {self.type.name} must implement apply_to_kernel.")
+    
     def apply(self, **kwargs) -> Any:
         """
+        DEPRECATED: Use apply_to_kernel instead.
+        
         Abstract method to apply the pragma's effects.
         Subclasses must implement this method and can return any relevant data.
         
@@ -377,6 +391,13 @@ class TopModulePragma(Pragma):
             raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
         return {"module_name": self.inputs[0]}
 
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply TOP_MODULE pragma to kernel metadata."""
+        # TOP_MODULE is handled during parsing to select the correct module
+        # By the time we have KernelMetadata, the module has already been selected
+        # This is a no-op but included for completeness
+        logger.debug(f"TOP_MODULE pragma already processed during module selection")
+    
     def apply(self, **kwargs) -> Any:
         """Applies the TOP_MODULE pragma."""
         hw_kernel: Optional[HWKernel] = kwargs.get('hw_kernel')
@@ -447,7 +468,25 @@ class DatatypePragma(InterfacePragma):
             "max_width": max_bits
         }
 
-
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply DATATYPE pragma to kernel metadata."""
+        interface_name = self.parsed_data.get("interface_name")
+        
+        # Find the target interface
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                # Create new datatype constraint group
+                new_constraint_group = self._create_constraint_group()
+                
+                # Add to existing constraints
+                if interface.datatype_constraints is None:
+                    interface.datatype_constraints = []
+                interface.datatype_constraints.append(new_constraint_group)
+                
+                logger.debug(f"Applied DATATYPE pragma to interface '{interface_name}'")
+                return
+        
+        logger.warning(f"DATATYPE pragma target interface '{interface_name}' not found")
 
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply DATATYPE pragma to modify datatype constraints."""
@@ -678,6 +717,25 @@ class BDimPragma(InterfacePragma):
             rindex=rindex
         )
 
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply BDIM pragma to kernel metadata."""
+        interface_name = self.parsed_data.get("interface_name")
+        
+        # Find the target interface
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                # Create new chunking strategy
+                new_strategy = self._create_chunking_strategy()
+                
+                # Update interface
+                interface.chunking_strategy = new_strategy
+                interface.bdim_param = self.parsed_data.get("param_name")
+                
+                logger.debug(f"Applied BDIM pragma to interface '{interface_name}'")
+                return
+        
+        logger.warning(f"BDIM pragma target interface '{interface_name}' not found")
+
 
 @dataclass
 class SDimPragma(InterfacePragma):
@@ -799,6 +857,30 @@ class SDimPragma(InterfacePragma):
             sdim_param=self.parsed_data.get("param_name")
         )
 
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply SDIM pragma to kernel metadata."""
+        interface_name = self.parsed_data.get("interface_name")
+        
+        # Find the target interface
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
+                from brainsmith.dataflow.core.interface_types import InterfaceType
+                if interface.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+                    error_msg = (f"SDIM pragma at line {self.line_number} cannot be applied to "
+                                f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
+                                f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
+                    logger.error(f"SDIM interface type validation failed: {error_msg}")
+                    raise PragmaError(error_msg)
+                
+                # Update interface
+                interface.sdim_param = self.parsed_data.get("param_name")
+                
+                logger.debug(f"Applied SDIM pragma to interface '{interface_name}'")
+                return
+        
+        logger.warning(f"SDIM pragma target interface '{interface_name}' not found")
+
 
 # --- Parameter Pragma Base Class ---
 
@@ -809,6 +891,14 @@ class ParameterPragma(Pragma):
     This class provides common functionality for pragmas that affect how
     parameters are exposed or processed, such as ALIAS and DERIVED_PARAMETER.
     """
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply parameter pragma to kernel metadata.
+        
+        Base implementation for parameter pragmas.
+        Subclasses should override this method.
+        """
+        raise NotImplementedError(f"ParameterPragma subclass {self.__class__.__name__} must implement apply_to_kernel.")
     
     def applies_to_parameter(self, param_name: str) -> bool:
         """
@@ -863,6 +953,25 @@ class DerivedParameterPragma(ParameterPragma):
     def applies_to_parameter(self, param_name: str) -> bool:
         """Check if this pragma applies to the given parameter."""
         return self.parsed_data.get("param_name") == param_name
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply DERIVED_PARAMETER pragma to kernel metadata."""
+        param_name = self.parsed_data.get("param_name")
+        python_expression = self.parsed_data.get("python_expression")
+        
+        # Remove from exposed parameters
+        if param_name in kernel.exposed_parameters:
+            kernel.exposed_parameters.remove(param_name)
+        
+        # Add to parameter pragma data
+        if kernel.parameter_pragma_data is None:
+            kernel.parameter_pragma_data = {"aliases": {}, "derived": {}}
+        if "derived" not in kernel.parameter_pragma_data:
+            kernel.parameter_pragma_data["derived"] = {}
+        
+        kernel.parameter_pragma_data["derived"][param_name] = python_expression
+        
+        logger.debug(f"Applied DERIVED_PARAMETER pragma: {param_name} -> {python_expression}")
 
 
 
@@ -907,6 +1016,28 @@ class AliasPragma(ParameterPragma):
     def applies_to_parameter(self, param_name: str) -> bool:
         """Check if this pragma applies to the given parameter."""
         return self.parsed_data.get("rtl_param") == param_name
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply ALIAS pragma to kernel metadata."""
+        rtl_param = self.parsed_data.get("rtl_param")
+        nodeattr_name = self.parsed_data.get("nodeattr_name")
+        
+        # Validate against other parameters
+        self.validate_against_parameters(kernel.parameters)
+        
+        # Remove from exposed parameters (it will be exposed with the alias name)
+        if rtl_param in kernel.exposed_parameters:
+            kernel.exposed_parameters.remove(rtl_param)
+        
+        # Add to parameter pragma data
+        if kernel.parameter_pragma_data is None:
+            kernel.parameter_pragma_data = {"aliases": {}, "derived": {}}
+        if "aliases" not in kernel.parameter_pragma_data:
+            kernel.parameter_pragma_data["aliases"] = {}
+        
+        kernel.parameter_pragma_data["aliases"][rtl_param] = nodeattr_name
+        
+        logger.debug(f"Applied ALIAS pragma: {rtl_param} -> {nodeattr_name}")
     
     def validate_against_parameters(self, all_parameters: List[Parameter]) -> None:
         """
@@ -957,6 +1088,17 @@ class WeightPragma(InterfacePragma):
                 return True
         return False
 
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply WEIGHT pragma to kernel metadata."""
+        interface_names = self.parsed_data.get("interface_names", [])
+        
+        # Update interface types
+        for interface in kernel.interfaces:
+            if interface.name in interface_names:
+                from brainsmith.dataflow.core.interface_types import InterfaceType
+                interface.interface_type = InterfaceType.WEIGHT
+                logger.debug(f"Applied WEIGHT pragma to interface '{interface.name}'")
+    
     def apply_to_metadata(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
         """Apply WEIGHT pragma to mark interface as weight type."""
         if not self.applies_to_interface_metadata(metadata):
@@ -1032,6 +1174,58 @@ class DatatypeParamPragma(InterfacePragma):
             metadata = metadata.update_attributes(datatype_metadata=updated_dt_metadata)
         
         return metadata
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply DATATYPE_PARAM pragma to kernel metadata."""
+        interface_name = self.parsed_data.get("interface_name")
+        property_type = self.parsed_data.get("property_type")
+        parameter_name = self.parsed_data.get("parameter_name")
+        
+        # Try to find interface first
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+                
+                # Create or update interface datatype metadata
+                if interface.datatype_metadata is None:
+                    interface.datatype_metadata = DatatypeMetadata(name=interface_name)
+                
+                # Update the specific property
+                setattr(interface.datatype_metadata, property_type, parameter_name)
+                
+                # Remove parameter from exposed list
+                if parameter_name in kernel.exposed_parameters:
+                    kernel.exposed_parameters.remove(parameter_name)
+                
+                logger.debug(f"Applied DATATYPE_PARAM pragma to interface '{interface_name}': {property_type}={parameter_name}")
+                return
+        
+        # If interface not found, this might be an internal datatype
+        # Add to internal datatypes
+        internal_dt = self.create_standalone_datatype()
+        
+        if kernel.internal_datatypes is None:
+            kernel.internal_datatypes = []
+        
+        # Check if we already have this datatype and merge
+        existing_dt = None
+        for dt in kernel.internal_datatypes:
+            if dt.name == interface_name:
+                existing_dt = dt
+                break
+        
+        if existing_dt:
+            # Update existing datatype
+            setattr(existing_dt, property_type, parameter_name)
+        else:
+            # Add new internal datatype
+            kernel.internal_datatypes.append(internal_dt)
+        
+        # Remove parameter from exposed list
+        if parameter_name in kernel.exposed_parameters:
+            kernel.exposed_parameters.remove(parameter_name)
+        
+        logger.debug(f"Applied DATATYPE_PARAM pragma to internal datatype '{interface_name}': {property_type}={parameter_name}")
     
     def create_standalone_datatype(self) -> 'DatatypeMetadata':
         """Create a standalone DatatypeMetadata for internal mechanisms."""
