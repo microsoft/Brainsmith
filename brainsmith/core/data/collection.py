@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Import streamlined modules
 from ..hooks import log_optimization_event
-from ..finn import build_accelerator
+from ..finn import FINNEvaluationBridge as build_accelerator
 
 
 def collect_build_metrics(

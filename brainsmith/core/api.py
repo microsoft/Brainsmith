@@ -1,23 +1,409 @@
 """
-Simplified BrainSmith Core API - Single `forge` Function
+Clean Blueprint API - The future of BrainSmith
 
-This module provides the main Python API for BrainSmith,
-implementing a single unified `forge` function that serves as
-the core toolchain for FPGA accelerator design space exploration.
+This module provides the forge() function with no legacy baggage,
+designed for Blueprint design space exploration with real FINN integration.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 import logging
-import json
+import time
+
+from .blueprint import DesignSpaceDefinition, load_blueprint
+from .dse.space_explorer import DesignSpaceExplorer, ExplorationConfig
+from .finn import FINNEvaluationBridge
 
 logger = logging.getLogger(__name__)
 
-# Import hooks for optimization event logging (now unified in core)
-from .hooks import log_optimization_event, log_strategy_decision, log_dse_event
-
 
 def forge(
+    model_path: str,
+    blueprint_path: str,
+    objectives: Optional[Dict[str, Any]] = None,
+    constraints: Optional[Dict[str, Any]] = None,
+    target_device: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    dse_config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Clean Blueprint API - The future of BrainSmith.
+    
+    No legacy baggage, no backward compatibility, just the best system we can build.
+    
+    Args:
+        model_path: Path to ONNX model
+        blueprint_path: Path to Blueprint YAML
+        objectives: Optimization objectives (override blueprint defaults)
+        constraints: Resource constraints (override blueprint defaults)
+        target_device: Target FPGA device
+        output_dir: Output directory for results
+        dse_config: DSE strategy configuration
+        
+    Returns:
+        Clean results dictionary with:
+        - best_design: Optimal design point found
+        - pareto_frontier: Multi-objective optimization results
+        - exploration_summary: DSE execution statistics
+        - build_artifacts: FINN build outputs (if successful)
+    """
+    start_time = time.time()
+    logger.info(f"Starting forge with model: {model_path}, blueprint: {blueprint_path}")
+    
+    try:
+        # 1. Load and validate Blueprint (strict validation)
+        logger.info("Loading Blueprint with strict validation")
+        design_space = _load_blueprint_strict(blueprint_path)
+        
+        # 2. Override blueprint objectives/constraints if provided
+        if objectives or constraints:
+            design_space = _apply_overrides(design_space, objectives, constraints, target_device)
+        
+        # 3. Create DSE configuration
+        exploration_config = _create_exploration_config(dse_config, output_dir)
+        
+        # 4. Create design space explorer with FINN integration
+        logger.info("Creating DesignSpaceExplorer with real FINN integration")
+        explorer = DesignSpaceExplorer(design_space, exploration_config)
+        
+        # 5. Execute design space exploration with real FINN evaluations
+        logger.info("Starting design space exploration with real FINN builds")
+        exploration_results = explorer.explore_design_space(model_path)
+        
+        # 6. Generate clean, well-structured results
+        results = _format_clean_results(exploration_results, start_time)
+        
+        # 7. Save results if output directory specified
+        if output_dir:
+            _save_results(results, output_dir)
+        
+        logger.info(f"forge completed successfully in {time.time() - start_time:.2f}s")
+        return results
+        
+    except Exception as e:
+        error_time = time.time() - start_time
+        logger.error(f"forge failed after {error_time:.2f}s: {e}")
+        
+        # Return clean error response
+        return {
+            'success': False,
+            'error': str(e),
+            'execution_time': error_time,
+            'best_design': None,
+            'pareto_frontier': [],
+            'exploration_summary': {
+                'total_evaluations': 0,
+                'successful_evaluations': 0,
+                'error_message': str(e)
+            }
+        }
+
+
+def validate_blueprint(blueprint_path: str) -> tuple[bool, List[str]]:
+    """
+    Validate Blueprint V2 configuration with strict checking.
+    
+    Args:
+        blueprint_path: Path to Blueprint V2 YAML file
+        
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    logger.info(f"Validating Blueprint: {blueprint_path}")
+    
+    try:
+        design_space = _load_blueprint_strict(blueprint_path)
+        
+        # Additional strict validations
+        errors = []
+        
+        # Check for required objectives
+        if not design_space.objectives:
+            errors.append("Blueprint must define optimization objectives")
+        
+        # Check for design space completeness
+        total_components = (
+            len(design_space.nodes.canonical_ops.available) +
+            len(design_space.nodes.hw_kernels.available) +
+            len(design_space.transforms.model_topology.available)
+        )
+        
+        if total_components == 0:
+            errors.append("Blueprint must define at least some design space components")
+        
+        # Check DSE strategy compatibility
+        if design_space.dse_strategies and design_space.dse_strategies.primary_strategy:
+            strategy_errors = _validate_strategy_compatibility(design_space)
+            errors.extend(strategy_errors)
+        
+        is_valid = len(errors) == 0
+        if is_valid:
+            logger.info("Blueprint validation successful")
+        else:
+            logger.warning(f"Blueprint validation found {len(errors)} issues")
+        
+        return is_valid, errors
+        
+    except Exception as e:
+        error_msg = f"Blueprint validation failed: {str(e)}"
+        logger.error(error_msg)
+        return False, [error_msg]
+
+
+def _load_blueprint_strict(blueprint_path: str) -> DesignSpaceDefinition:
+    """Load Blueprint with strict validation - no compromises."""
+    
+    # Validate file exists and is readable
+    if not Path(blueprint_path).exists():
+        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
+    
+    if not blueprint_path.lower().endswith(('.yaml', '.yml')):
+        raise ValueError(f"Blueprint must be YAML format, got: {blueprint_path}")
+    
+    try:
+        # Load using Blueprint parser
+        design_space = load_blueprint(blueprint_path)
+        
+        # Strict validation
+        _validate_blueprint_strict(design_space)
+        
+        logger.info(f"Successfully loaded Blueprint: {design_space.name}")
+        return design_space
+        
+    except Exception as e:
+        raise ValueError(f"Failed to load Blueprint '{blueprint_path}': {str(e)}")
+
+
+def _validate_blueprint_strict(design_space: DesignSpaceDefinition) -> None:
+    """Strict validation with clear error messages."""
+    
+    errors = []
+    
+    # Validate basic structure
+    if not design_space.name:
+        errors.append("Blueprint must have a name")
+    
+    # Validate design space content
+    if not design_space.nodes:
+        errors.append("Blueprint must define nodes design space")
+    
+    if not design_space.transforms:
+        errors.append("Blueprint must define transforms design space")
+    
+    # Validate objectives for DSE
+    if not design_space.objectives:
+        errors.append("Blueprint must define optimization objectives for DSE")
+    
+    # Validate DSE strategies
+    if design_space.dse_strategies:
+        if not design_space.dse_strategies.primary_strategy:
+            errors.append("Blueprint must specify primary DSE strategy")
+        
+        if not design_space.dse_strategies.strategies:
+            errors.append("Blueprint must define at least one DSE strategy")
+    
+    if errors:
+        error_msg = "Blueprint validation failed:\n" + "\n".join(f"  - {error}" for error in errors)
+        raise ValueError(error_msg)
+
+
+def _apply_overrides(design_space: DesignSpaceDefinition, 
+                    objectives: Optional[Dict[str, Any]], 
+                    constraints: Optional[Dict[str, Any]],
+                    target_device: Optional[str]) -> DesignSpaceDefinition:
+    """Apply runtime overrides to design space."""
+    
+    # Create a copy to avoid modifying original
+    import copy
+    modified_space = copy.deepcopy(design_space)
+    
+    # Override objectives
+    if objectives:
+        logger.info(f"Applying objective overrides: {objectives}")
+        # Convert dict to Objective objects and replace
+        from .blueprint import Objective
+        modified_space.objectives = [
+            Objective(name=name, **config) for name, config in objectives.items()
+        ]
+    
+    # Override constraints
+    if constraints:
+        logger.info(f"Applying constraint overrides: {constraints}")
+        # Merge with existing constraints
+        if not modified_space.constraints:
+            modified_space.constraints = []
+        
+        from .blueprint import Constraint
+        for name, value in constraints.items():
+            constraint = Constraint(name=name, value=value)
+            modified_space.constraints.append(constraint)
+    
+    # Override target device
+    if target_device:
+        logger.info(f"Setting target device: {target_device}")
+        # Add as constraint
+        from .blueprint import Constraint
+        device_constraint = Constraint(name="target_device", value=target_device)
+        if not modified_space.constraints:
+            modified_space.constraints = []
+        modified_space.constraints.append(device_constraint)
+    
+    return modified_space
+
+
+def _create_exploration_config(dse_config: Optional[Dict[str, Any]], 
+                             output_dir: Optional[str]) -> ExplorationConfig:
+    """Create exploration configuration."""
+    
+    config_params = {
+        'max_evaluations': 50,  # Reasonable default for real FINN builds
+        'parallel_evaluations': 1,  # Conservative for FINN resource usage
+        'enable_caching': True,
+        'early_termination_patience': 10,
+        'checkpoint_frequency': 5
+    }
+    
+    # Apply user overrides
+    if dse_config:
+        config_params.update(dse_config)
+    
+    # Set cache directory
+    if output_dir:
+        config_params['cache_directory'] = str(Path(output_dir) / "dse_cache")
+    
+    logger.info(f"Created exploration config: max_evaluations={config_params['max_evaluations']}")
+    return ExplorationConfig(**config_params)
+
+
+def _validate_strategy_compatibility(design_space: DesignSpaceDefinition) -> List[str]:
+    """Validate strategy compatibility with blueprint."""
+    
+    errors = []
+    
+    # Check if primary strategy exists
+    primary_strategy = design_space.dse_strategies.primary_strategy
+    available_strategies = list(design_space.dse_strategies.strategies.keys())
+    
+    if primary_strategy not in available_strategies:
+        errors.append(f"Primary strategy '{primary_strategy}' not found in defined strategies")
+    
+    # Check strategy-objective compatibility
+    for strategy_name, strategy_config in design_space.dse_strategies.strategies.items():
+        if hasattr(strategy_config, 'objectives'):
+            strategy_objectives = strategy_config.objectives
+            blueprint_objectives = [obj.name for obj in design_space.objectives]
+            
+            for obj_name in strategy_objectives:
+                if obj_name not in blueprint_objectives:
+                    errors.append(f"Strategy '{strategy_name}' references undefined objective '{obj_name}'")
+    
+    return errors
+
+
+def _format_clean_results(exploration_results, start_time: float) -> Dict[str, Any]:
+    """Generate clean, well-structured results."""
+    
+    execution_time = time.time() - start_time
+    
+    return {
+        'success': True,
+        'execution_time': execution_time,
+        
+        # Best design point found
+        'best_design': {
+            'combination': exploration_results.best_combination.to_dict() if exploration_results.best_combination else None,
+            'score': exploration_results.best_score,
+            'metrics': _extract_best_metrics(exploration_results)
+        },
+        
+        # Multi-objective optimization results
+        'pareto_frontier': [
+            {
+                'combination': combo.to_dict(),
+                'metrics': _extract_combination_metrics(combo, exploration_results.performance_data)
+            }
+            for combo in exploration_results.pareto_frontier
+        ],
+        
+        # DSE execution statistics
+        'exploration_summary': {
+            'total_evaluations': len(exploration_results.all_combinations),
+            'successful_evaluations': len([r for r in exploration_results.performance_data if r.get('success', False)]),
+            'pareto_frontier_size': len(exploration_results.pareto_frontier),
+            'execution_time': execution_time,
+            'strategy_metadata': exploration_results.strategy_metadata
+        },
+        
+        # Build artifacts (if available)
+        'build_artifacts': exploration_results.execution_stats,
+        
+        # Raw exploration data for advanced analysis
+        'raw_data': {
+            'all_combinations': [combo.to_dict() for combo in exploration_results.all_combinations],
+            'performance_data': exploration_results.performance_data,
+            'exploration_summary': exploration_results.exploration_summary
+        }
+    }
+
+
+def _extract_best_metrics(exploration_results) -> Dict[str, Any]:
+    """Extract metrics for best design."""
+    if not exploration_results.performance_data:
+        return {}
+    
+    # Find best performing result
+    successful_results = [r for r in exploration_results.performance_data if r.get('success', False)]
+    if not successful_results:
+        return {}
+    
+    best_result = max(successful_results, key=lambda x: x.get('primary_metric', 0))
+    return best_result.get('metrics', {})
+
+
+def _extract_combination_metrics(combination, performance_data: List[Dict]) -> Dict[str, Any]:
+    """Extract metrics for specific combination."""
+    for result in performance_data:
+        if result.get('combination') == combination:
+            return result.get('metrics', {})
+    return {}
+
+
+def _save_results(results: Dict[str, Any], output_dir: str) -> None:
+    """Save forge results to output directory."""
+    
+    try:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Save main results
+        import json
+        with open(output_path / "forge_results.json", 'w') as f:
+            json.dump(results, f, indent=2, default=str)
+        
+        # Save summary
+        summary = {
+            'success': results['success'],
+            'execution_time': results['execution_time'],
+            'total_evaluations': results['exploration_summary']['total_evaluations'],
+            'best_score': results['best_design']['score'],
+            'pareto_frontier_size': len(results['pareto_frontier'])
+        }
+        
+        with open(output_path / "forge_summary.json", 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        logger.info(f"forge results saved to: {output_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to save forge results: {e}")
+
+
+# V1 Compatibility Layer - Temporary wrappers for migration
+import warnings
+from typing import Union
+
+
+def forge_v1_compat(
     model_path: str,
     blueprint_path: str,
     objectives: Dict[str, Any] = None,
@@ -28,514 +414,174 @@ def forge(
     output_dir: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Core BrainSmith toolchain: DSE on input model to produce Dataflow Core.
+    V1-compatible wrapper around forge() with deprecation warning.
+    
+    This function provides backward compatibility for V1 API calls while
+    migrating the codebase to V2. IMPORTANT: V1 blueprint format is no longer
+    supported - blueprints must be in V2 format.
     
     Args:
-        model_path: Path to pre-quantized ONNX model
-        blueprint_path: Path to blueprint YAML (design space specification)
-        objectives: Target objectives (latency/throughput requirements)
-        constraints: Hardware resource budgets, optimization priorities
-        target_device: Target FPGA device specification
-        is_hw_graph: If True, input is already a Dataflow Graph, skip to HW optimization
-        build_core: If False, exit after Dataflow Graph generation
-        output_dir: Optional output directory for results
+        model_path: Path to ONNX model
+        blueprint_path: Path to blueprint YAML (MUST be V2 format)
+        objectives: Target objectives (V1 format)
+        constraints: Hardware constraints (V1 format)
+        target_device: Target FPGA device
+        is_hw_graph: IGNORED - V2 auto-detects hardware graphs
+        build_core: IGNORED - V2 always builds complete accelerator
+        output_dir: Output directory for results
         
     Returns:
-        Dict containing:
-        - dataflow_graph: ONNX graph of HWCustomOps describing Dataflow Core
-        - dataflow_core: Stitched IP design (if build_core=True)
-        - metrics: Performance and resource utilization metrics
-        - analysis: DSE analysis and recommendations
+        Dict in V1 result format for compatibility
+        
+    Raises:
+        ValueError: If blueprint is not in V2 format
     """
-    logger.info(f"Starting forge with model: {model_path}, blueprint: {blueprint_path}")
+    warnings.warn(
+        "forge_v1_compat() V1 API is deprecated and will be removed. Use forge() instead. "
+        "IMPORTANT: V1 blueprint format is no longer supported - blueprints must be manually "
+        "converted to V2 format. See V1_TO_V2_BREAKING_CHANGES.md for migration guide.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     
-    # 1. Input validation
-    _validate_inputs(model_path, blueprint_path, objectives, constraints)
-    
-    # 2. Load and validate blueprint (hard error)
-    blueprint = _load_and_validate_blueprint(blueprint_path)
-    
-    # 3. Setup DSE configuration
-    dse_config = _setup_dse_configuration(blueprint, objectives, constraints, target_device, blueprint_path)
-    
-    # 4. Branch based on is_hw_graph flag
+    # Log ignored parameters
     if is_hw_graph:
-        # Input is already Dataflow Graph, skip to HW optimization
-        logger.info("Hardware graph mode: Skipping to HW optimization")
-        log_strategy_decision('hw_optimization_only', 'Input is already a dataflow graph')
-        log_dse_event('hw_optimization_start', {'mode': 'hw_graph'})
-        
-        dataflow_graph = _load_dataflow_graph(model_path)
-        dse_results = _run_hw_optimization_dse(dataflow_graph, dse_config)
-    else:
-        # Standard flow: Model -> DSE -> Dataflow Graph
-        logger.info("Standard mode: Running full model-to-hardware DSE")
-        log_strategy_decision('full_dse', 'Standard model-to-hardware flow')
-        log_dse_event('full_dse_start', {'mode': 'model_to_hw'})
-        
-        # Check for empty parameter space (demo mode)
-        if not dse_config.parameter_space:
-            logger.info("Empty parameter space detected - bypassing DSE for simple demo")
-            dse_results = {
-                'best_result': {'dataflow_graph': f"Mock dataflow graph for {model_path}"},
-                'all_results': [],
-                'pareto_results': [],
-                'optimization_summary': {
-                    'total_evaluations': 0,
-                    'best_score': 0.0,
-                    'convergence_info': 'Bypassed - using default configuration'
-                }
-            }
-            dataflow_graph = dse_results['best_result']['dataflow_graph']
-        else:
-            dse_results = _run_full_dse(model_path, dse_config)
-            # Handle both dict and object results
-            if hasattr(dse_results, 'best_result'):
-                dataflow_graph = dse_results.best_result.get('dataflow_graph') if dse_results.best_result else None
-            else:
-                dataflow_graph = dse_results.get('best_result', {}).get('dataflow_graph')
-    
-    # 5. Generate Dataflow Core if requested
-    dataflow_core = None
-    if build_core and dataflow_graph:
-        logger.info("Generating Dataflow Core (stitched IP design)")
-        dataflow_core = _generate_dataflow_core(dataflow_graph, dse_config)
-    elif not build_core:
-        logger.info("Checkpoint mode: Exiting after Dataflow Graph generation")
-    
-    # 6. Prepare results
-    results = _assemble_results(dataflow_graph, dataflow_core, dse_results)
-    
-    # 7. Save results if output directory specified
-    if output_dir:
-        _save_forge_results(results, output_dir)
-    
-    # Log optimization completion
-    log_dse_event('optimization_complete', {
-        'dataflow_graph_generated': dataflow_graph is not None,
-        'dataflow_core_generated': dataflow_core is not None,
-        'output_saved': output_dir is not None
-    })
-    log_optimization_event('optimization_end', {
-        'success': True,
-        'duration_info': 'completed_successfully'
-    })
-    
-    logger.info("Forge process completed successfully")
-    return results
-
-
-def validate_blueprint(blueprint_path: str) -> tuple[bool, list[str]]:
-    """
-    Validate blueprint configuration - hard error if invalid.
-    
-    Args:
-        blueprint_path: Path to blueprint YAML file
-        
-    Returns:
-        Tuple of (is_valid, list_of_errors)
-    """
-    logger.info(f"Validating blueprint: {blueprint_path}")
+        logger.info("V1 parameter 'is_hw_graph' ignored - V2 auto-detects hardware graphs")
+    if not build_core:
+        logger.info("V1 parameter 'build_core=False' ignored - V2 always builds complete accelerator")
     
     try:
-        blueprint_data = _load_and_validate_blueprint(blueprint_path)
-        logger.info(f"Blueprint validation successful: {blueprint_data.get('name', 'unnamed')}")
-        return True, []
-    except Exception as e:
-        error_msg = f"Blueprint validation failed: {str(e)}"
-        logger.error(error_msg)
-        return False, [error_msg]
-
-
-# Helper function implementations
-
-def _validate_inputs(model_path: str, blueprint_path: str, objectives: Dict, constraints: Dict):
-    """Validate all input parameters with descriptive error messages."""
-    if not Path(model_path).exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    if not Path(blueprint_path).exists():
-        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-    
-    if not model_path.lower().endswith('.onnx'):
-        raise ValueError(f"Model must be ONNX format, got: {model_path}")
-    
-    if not blueprint_path.lower().endswith(('.yaml', '.yml')):
-        raise ValueError(f"Blueprint must be YAML format, got: {blueprint_path}")
-    
-    # Validate objectives format
-    if objectives:
-        for obj_name, obj_config in objectives.items():
-            if not isinstance(obj_config, dict):
-                raise ValueError(f"Objective '{obj_name}' must be a dictionary")
-            if 'direction' not in obj_config:
-                raise ValueError(f"Objective '{obj_name}' missing 'direction' field")
-            if obj_config['direction'] not in ['maximize', 'minimize']:
-                raise ValueError(f"Objective '{obj_name}' direction must be 'maximize' or 'minimize'")
-    
-    # Validate constraints format  
-    if constraints:
-        numeric_constraints = ['max_luts', 'max_dsps', 'max_brams', 'max_power', 'target_frequency']
-        for key, value in constraints.items():
-            if key in numeric_constraints and not isinstance(value, (int, float)):
-                raise ValueError(f"Constraint '{key}' must be numeric, got {type(value)}")
-
-
-def _load_and_validate_blueprint(blueprint_path: str):
-    """Load and validate blueprint using new blueprint manager."""
-    try:
-        from .dse.blueprint_manager import BlueprintManager
-        import yaml
-        
-        blueprint_name = Path(blueprint_path).stem
-        
-        # Always try direct file loading first for test compatibility
-        if Path(blueprint_path).exists():
-            with open(blueprint_path, 'r') as f:
-                blueprint_data = yaml.safe_load(f)
-            
-            # Basic validation - ensure it's a dict with required structure
-            if not isinstance(blueprint_data, dict):
-                raise ValueError("Blueprint must be a YAML dictionary")
-            
-            # Set up blueprint manager with the directory containing the blueprint
-            blueprint_dir = str(Path(blueprint_path).parent)
-            manager = BlueprintManager([blueprint_dir])
-            
-            # Try advanced validation if manager is available
-            try:
-                # Create a temporary design point for validation
-                temp_design_point = {'parameters': {}}
-                is_valid, errors = manager.validate_design_point(blueprint_name, temp_design_point)
-                if not is_valid and len(errors) > 1:  # Only fail if multiple serious errors
-                    logger.warning(f"Blueprint validation warnings: {errors}")
-            except Exception as e:
-                # Don't fail on validation errors during testing
-                logger.debug(f"Blueprint validation skipped: {e}")
-            
-            logger.info(f"Successfully loaded blueprint: {blueprint_data.get('name', 'unnamed')}")
-            return blueprint_data
-        else:
-            raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-        
-    except ImportError:
-        raise RuntimeError("Blueprint system not available. Cannot proceed without valid blueprint.")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-    except Exception as e:
-        raise ValueError(f"Failed to load blueprint '{blueprint_path}': {str(e)}")
-
-
-def _setup_dse_configuration(blueprint_data, objectives, constraints, target_device, blueprint_path=None):
-    """Setup comprehensive DSE configuration using enhanced DesignSpace."""
-    try:
-        from .dse.interface import DSEInterface
-        from .dse.types import DSEConfiguration, DSEObjective, OptimizationObjective
-        from .dse.design_space import DesignSpace
-        
-        # Create design space directly from blueprint
-        design_space = DesignSpace.from_blueprint_data(blueprint_data)
-        
-        # Validate design space
-        is_valid, errors = design_space.validate()
-        if not is_valid:
-            logger.warning(f"Design space validation issues: {errors}")
-        
-        # Convert to parameter space format for DSE
-        parameter_space = design_space.to_parameter_space()
-        
-        # Extract objectives and constraints from blueprint data
-        blueprint_objectives = blueprint_data.get('targets', {})
-        blueprint_constraints = blueprint_data.get('constraints', {})
-        
-        # Setup objectives (use provided objectives or blueprint defaults)
-        dse_objectives = []
-        final_objectives = objectives or blueprint_objectives
-        
-        for obj_name, obj_config in final_objectives.items():
-            if isinstance(obj_config, dict):
-                direction = OptimizationObjective.MAXIMIZE if obj_config.get('direction', 'maximize') == 'maximize' else OptimizationObjective.MINIMIZE
-                weight = obj_config.get('weight', 1.0)
-                target = obj_config.get('target', None)
-            else:
-                # Simple value case
-                direction = OptimizationObjective.MAXIMIZE
-                weight = 1.0
-                target = obj_config
-            
-            dse_objectives.append(DSEObjective(
-                name=obj_name,
-                direction=direction,
-                weight=weight,
-                target_value=target
-            ))
-        
-        # Setup constraints (merge provided constraints with blueprint defaults)
-        dse_constraints = blueprint_constraints.copy()
-        if constraints:
-            dse_constraints.update(constraints)
-        if target_device:
-            dse_constraints['target_device'] = target_device
-        
-        logger.info(f"DSE configuration created with {len(parameter_space)} parameters")
-        
-        return DSEConfiguration(
-            parameter_space=parameter_space,  # NOW POPULATED FROM BLUEPRINT!
-            objectives=dse_objectives,
-            constraints=dse_constraints,
-            blueprint_path=blueprint_path
-        )
-    except ImportError:
-        raise RuntimeError("DSE system not available. Cannot proceed without DSE configuration.")
-
-
-def _run_full_dse(model_path: str, dse_config):
-    """Execute full model-to-hardware DSE pipeline."""
-    try:
-        from .dse.interface import DSEInterface
-        
-        logger.info("Starting full DSE: Model analysis -> Transformation -> Kernel mapping -> HW optimization")
-        
-        dse_engine = DSEInterface(dse_config)
-        
-        # Execute complete pipeline
-        results = dse_engine.explore_design_space(
+        # V1 blueprints are no longer supported - require V2 format
+        # Call V2 implementation (now named forge) directly with V2 blueprint
+        v2_result = forge(
             model_path=model_path,
-            stages=['analysis', 'transformation', 'kernel_mapping', 'hw_optimization']
-        )
-        
-        logger.info(f"DSE completed: {len(results.results) if hasattr(results, 'results') else 0} design points evaluated")
-        return results
-        
-    except ImportError:
-        raise RuntimeError("DSE interface not available. Cannot proceed without DSE system.")
-
-
-def _run_hw_optimization_dse(dataflow_graph, dse_config):
-    """Execute hardware optimization DSE on existing Dataflow Graph."""
-    try:
-        from .dse.interface import DSEInterface
-        
-        logger.info("Starting HW optimization DSE on existing Dataflow Graph")
-        
-        dse_engine = DSEInterface(dse_config)
-        
-        # Execute only HW optimization stage
-        results = dse_engine.optimize_dataflow_graph(
-            dataflow_graph=dataflow_graph,
-            stages=['hw_optimization']
-        )
-        
-        logger.info(f"HW optimization completed: {len(results.results) if hasattr(results, 'results') else 0} configurations evaluated")
-        return results
-        
-    except ImportError:
-        raise RuntimeError("DSE interface not available. Cannot proceed without DSE system.")
-
-
-def _load_dataflow_graph(model_path: str):
-    """Load existing Dataflow Graph from ONNX file."""
-    try:
-        import onnx
-        model = onnx.load(model_path)
-        logger.info(f"Loaded Dataflow Graph with {len(model.graph.node)} nodes")
-        return model
-    except ImportError:
-        raise RuntimeError("ONNX library not available for loading Dataflow Graph")
-    except Exception as e:
-        raise ValueError(f"Failed to load Dataflow Graph from {model_path}: {str(e)}")
-
-
-def _generate_dataflow_core(dataflow_graph, dse_config):
-    """Generate complete stitched IP design from Dataflow Graph."""
-    try:
-        from .finn import build_accelerator
-        
-        logger.info("Generating Dataflow Core (stitched IP design)")
-        
-        # Extract blueprint configuration from DSE config
-        blueprint_config = {}
-        if hasattr(dse_config, 'blueprint'):
-            # DSE config object with blueprint attribute
-            blueprint_config = dse_config.blueprint
-        elif isinstance(dse_config, dict) and 'blueprint' in dse_config:
-            # Dictionary-based config with blueprint
-            blueprint_config = dse_config['blueprint']
-        
-        # Set output directory
-        output_dir = dse_config.get('output_dir', './output') if isinstance(dse_config, dict) else './output'
-        
-        # Use simplified FINN interface for build
-        finn_result = build_accelerator(
-            model_path=str(dataflow_graph),  # Convert dataflow_graph to path representation
-            blueprint_config=blueprint_config,
+            blueprint_path=blueprint_path,
+            objectives=objectives,
+            constraints=constraints,
+            target_device=target_device,
             output_dir=output_dir
         )
         
-        logger.info("Dataflow Core generation completed")
-        return finn_result.to_dict() if hasattr(finn_result, 'to_dict') else finn_result
-        
-    except ImportError:
-        raise RuntimeError("FINN orchestration not available. Cannot proceed without FINN system.")
-
-
-def _assemble_results(dataflow_graph, dataflow_core, dse_results):
-    """Assemble final results dictionary."""
-    
-    # Import analysis hooks - fail if not available
-    from ..libraries.analysis import roofline_analysis, RooflineProfiler
-    
-    # Analysis functions
-    expose_analysis_data = lambda x: {'analysis_tools': ['roofline_analysis', 'RooflineProfiler']}
-    register_analyzer = lambda: None
-    get_raw_data = lambda: []
-    analysis_available = True
-    
-    results = {
-        'dataflow_graph': {
-            'onnx_model': dataflow_graph,
-            'metadata': {
-                'kernel_mapping': getattr(dse_results, 'kernel_mapping', {}) if hasattr(dse_results, 'kernel_mapping') else {},
-                'resource_estimates': getattr(dse_results, 'resource_estimates', {}) if hasattr(dse_results, 'resource_estimates') else {},
-                'performance_estimates': getattr(dse_results, 'performance_estimates', {}) if hasattr(dse_results, 'performance_estimates') else {}
-            }
-        },
-        'dataflow_core': dataflow_core,
-        'dse_results': {
-            'best_configuration': getattr(dse_results, 'best_result', {}) if hasattr(dse_results, 'best_result') else {},
-            'pareto_frontier': getattr(dse_results, 'pareto_points', []) if hasattr(dse_results, 'pareto_points') else [],
-            'exploration_history': getattr(dse_results, 'results', []) if hasattr(dse_results, 'results') else [],
-            'convergence_metrics': getattr(dse_results, 'convergence', {}) if hasattr(dse_results, 'convergence') else {}
-        },
-        'metrics': _extract_metrics(dse_results),
-        'analysis': _generate_analysis(dse_results),
-        
-        # NEW: Analysis hooks for external tools
-        'analysis_data': expose_analysis_data(getattr(dse_results, 'results', [])),
-        'analysis_hooks': {
-            'register_analyzer': register_analyzer,
-            'get_raw_data': lambda: get_raw_data(getattr(dse_results, 'results', [])),
-            'available_adapters': ['pandas', 'scipy', 'sklearn'] if analysis_available else []
-        }
-    }
-    
-    return results
-
-
-def _extract_metrics(dse_results):
-    """Extract performance and resource metrics from DSE results."""
-    if hasattr(dse_results, 'best_result') and dse_results.best_result:
-        best_result = dse_results.best_result
-        return {
-            'performance': {
-                'throughput_ops_sec': getattr(best_result, 'throughput', 0.0),
-                'latency_ms': getattr(best_result, 'latency', 0.0),
-                'frequency_mhz': getattr(best_result, 'frequency', 0.0)
-            },
-            'resources': {
-                'lut_utilization': getattr(best_result, 'lut_util', 0.0),
-                'dsp_utilization': getattr(best_result, 'dsp_util', 0.0),
-                'bram_utilization': getattr(best_result, 'bram_util', 0.0),
-                'power_consumption_w': getattr(best_result, 'power', 0.0)
-            }
-        }
-    else:
-        return {
-            'performance': {'throughput_ops_sec': 0.0, 'latency_ms': 0.0, 'frequency_mhz': 0.0},
-            'resources': {'lut_utilization': 0.0, 'dsp_utilization': 0.0, 'bram_utilization': 0.0, 'power_consumption_w': 0.0}
-        }
-
-
-def _generate_analysis(dse_results):
-    """Generate analysis and recommendations from DSE results."""
-    num_results = len(getattr(dse_results, 'results', []))
-    
-    return {
-        'design_space_coverage': min(1.0, num_results / 100.0),  # Estimate based on results count
-        'optimization_quality': 0.8 if num_results > 10 else 0.5,  # Simple quality metric
-        'recommendations': [
-            "Consider increasing evaluation budget for better optimization",
-            "Review resource constraints for feasibility",
-            "Validate blueprint configuration for completeness"
-        ],
-        'warnings': [] if num_results > 0 else ["No valid design points found - check constraints"]
-    }
-
-
-def _save_forge_results(results: Dict[str, Any], output_dir: str):
-    """Save forge results to output directory."""
-    try:
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save main results as JSON
-        results_copy = results.copy()
-        # Remove ONNX model for JSON serialization
-        if 'dataflow_graph' in results_copy and 'onnx_model' in results_copy['dataflow_graph']:
-            results_copy['dataflow_graph']['onnx_model'] = str(results_copy['dataflow_graph']['onnx_model'])
-        
-        with open(output_path / "forge_results.json", 'w') as f:
-            json.dump(results_copy, f, indent=2, default=str)
-        
-        # Save ONNX model separately if available
-        if results.get('dataflow_graph', {}).get('onnx_model'):
-            try:
-                import onnx
-                onnx.save(results['dataflow_graph']['onnx_model'], str(output_path / "dataflow_graph.onnx"))
-            except ImportError:
-                logger.warning("ONNX library not available, skipping ONNX model save")
-        
-        logger.info(f"Forge results saved to: {output_path}")
+        # Convert V2 result to V1 format
+        return _convert_result_v2_to_v1(v2_result)
         
     except Exception as e:
-        logger.error(f"Failed to save forge results: {e}")
+        logger.error(f"V1 compatibility wrapper failed: {e}")
+        # Return V1-style error result
+        return {
+            'dataflow_graph': None,
+            'dataflow_core': None,
+            'dse_results': {
+                'best_configuration': {},
+                'pareto_frontier': [],
+                'exploration_history': []
+            },
+            'metrics': {
+                'performance': {'throughput_ops_sec': 0.0, 'latency_ms': 0.0},
+                'resources': {'lut_utilization': 0.0, 'dsp_utilization': 0.0}
+            },
+            'analysis': {'error': str(e)},
+            'success': False
+        }
 
 
-# Fallback implementations for when components are not available
-
-def _fallback_dse(model_path: str, dse_config):
-    """Fallback DSE when full DSE system not available."""
-    logger.warning("Using fallback DSE implementation")
+def validate_blueprint_v1_compat(blueprint_path: str) -> tuple[bool, list[str]]:
+    """
+    V1-compatible wrapper around validate_blueprint().
     
-    class FallbackResult:
-        def __init__(self):
-            self.results = []
-            self.best_result = {
-                'dataflow_graph': None,
-                'throughput': 100.0,
-                'latency': 10.0,
-                'lut_util': 0.5,
-                'dsp_util': 0.6
+    IMPORTANT: V1 blueprint format is no longer supported - blueprints must be in V2 format.
+    
+    Args:
+        blueprint_path: Path to blueprint YAML file (MUST be V2 format)
+        
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+        
+    Raises:
+        ValueError: If blueprint is not in V2 format
+    """
+    warnings.warn(
+        "validate_blueprint_v1_compat() V1 API is deprecated. Use validate_blueprint() instead. "
+        "IMPORTANT: V1 blueprint format is no longer supported - blueprints must be manually "
+        "converted to V2 format.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    # Only V2 validation is supported
+    return validate_blueprint(blueprint_path)
+
+
+
+def _convert_result_v2_to_v1(v2_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert V2 result structure to V1 format."""
+    
+    # Handle error cases
+    if not v2_result.get('success', True):
+        return {
+            'dataflow_graph': None,
+            'dataflow_core': None,
+            'dse_results': {
+                'best_configuration': {},
+                'pareto_frontier': [],
+                'exploration_history': []
+            },
+            'metrics': {
+                'performance': {'throughput_ops_sec': 0.0, 'latency_ms': 0.0},
+                'resources': {'lut_utilization': 0.0, 'dsp_utilization': 0.0}
+            },
+            'analysis': {'error': v2_result.get('error', 'Unknown error')},
+            'success': False
+        }
+    
+    # Extract best design metrics
+    best_design = v2_result.get('best_design', {})
+    best_metrics = best_design.get('metrics', {})
+    
+    # Convert to V1 structure
+    v1_result = {
+        'dataflow_graph': {
+            'onnx_model': best_design.get('combination', {}),
+            'metadata': {
+                'kernel_mapping': best_metrics.get('kernel_mapping', {}),
+                'resource_estimates': best_metrics.get('resources', {}),
+                'performance_estimates': best_metrics.get('performance', {})
             }
+        },
+        'dataflow_core': v2_result.get('build_artifacts', {}),
+        'dse_results': {
+            'best_configuration': best_design,
+            'pareto_frontier': v2_result.get('pareto_frontier', []),
+            'exploration_history': v2_result.get('raw_data', {}).get('all_combinations', []),
+            'convergence_metrics': v2_result.get('exploration_summary', {})
+        },
+        'metrics': _extract_v1_metrics(best_metrics),
+        'analysis': v2_result.get('exploration_summary', {}),
+        
+        # V1 analysis hooks (simplified)
+        'analysis_data': {'analysis_tools': ['v2_compatibility_layer']},
+        'analysis_hooks': {
+            'register_analyzer': lambda: None,
+            'get_raw_data': lambda: v2_result.get('raw_data', {}),
+            'available_adapters': ['v2_bridge']
+        }
+    }
     
-    return FallbackResult()
+    return v1_result
 
 
-def _fallback_hw_optimization(dataflow_graph, dse_config):
-    """Fallback HW optimization when DSE system not available."""
-    logger.warning("Using fallback HW optimization")
-    
-    class FallbackOptimization:
-        def __init__(self):
-            self.results = []
-            self.best_result = {
-                'dataflow_graph': dataflow_graph,
-                'throughput': 150.0,
-                'latency': 8.0,
-                'frequency': 200.0
-            }
-    
-    return FallbackOptimization()
-
-
-def _fallback_core_generation(dataflow_graph, dse_config):
-    """Fallback core generation when FINN orchestration not available."""
-    logger.warning("Using fallback core generation")
-    
+def _extract_v1_metrics(v2_metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract V1-style metrics from V2 metrics."""
     return {
-        'ip_files': [],
-        'synthesis_results': {'status': 'fallback_mode'},
-        'driver_code': {},
-        'bitstream': None,
-        'fallback': True
+        'performance': {
+            'throughput_ops_sec': v2_metrics.get('throughput_ops_sec', v2_metrics.get('throughput', 0.0)),
+            'latency_ms': v2_metrics.get('latency_ms', v2_metrics.get('latency', 0.0)),
+            'frequency_mhz': v2_metrics.get('frequency_mhz', v2_metrics.get('frequency', 0.0))
+        },
+        'resources': {
+            'lut_utilization': v2_metrics.get('lut_utilization', v2_metrics.get('lut_util', 0.0)),
+            'dsp_utilization': v2_metrics.get('dsp_utilization', v2_metrics.get('dsp_util', 0.0)),
+            'bram_utilization': v2_metrics.get('bram_utilization', v2_metrics.get('bram_util', 0.0)),
+            'power_consumption_w': v2_metrics.get('power_consumption_w', v2_metrics.get('power', 0.0))
+        }
     }

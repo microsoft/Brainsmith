@@ -37,7 +37,7 @@ def batch_process(
             ("model3.onnx", "blueprint3.yaml")
         ])
     """
-    from ..core.api import forge
+    from ...core.api import forge
     
     total_pairs = len(model_blueprint_pairs)
     logger.info(f"Starting batch processing: {total_pairs} model/blueprint pairs")

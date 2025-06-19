@@ -1,0 +1,186 @@
+build_configuration:
+  auto_fifo_depths: true
+  enable_verification: false
+  generate_dcp: false
+  run_fifo_sizing: false
+  save_intermediate_models: false
+category: transformers
+constraints:
+- name: max_build_time
+  operator: <=
+  value: 15.0
+- name: max_lut_utilization
+  operator: <=
+  value: 0.5
+- name: max_dsp_utilization
+  operator: <=
+  value: 0.7
+- name: max_bram_utilization
+  operator: <=
+  value: 0.6
+description: BERT accelerator blueprint - ultra_small mode (96D, 1L)
+dse_strategies:
+  primary_strategy: ultra_fast
+  strategies:
+    balanced:
+      description: Balanced exploration for standard configurations
+      focus_areas:
+      - performance
+      - resources
+      max_evaluations: 10
+      sampling: random
+    comprehensive:
+      description: Comprehensive exploration for production
+      focus_areas:
+      - performance
+      - resources
+      - power
+      max_evaluations: 50
+      sampling: adaptive
+    ultra_fast:
+      description: Ultra-fast validation with minimal exploration
+      focus_areas: []
+      max_evaluations: 1
+      sampling: grid
+expected_model:
+  architecture: bert_ultra_small
+  estimated_build_time: 5-15 minutes
+  estimated_size: ~2MB
+  input_shape:
+  - 1
+  - 32
+  parameters:
+    hidden_size: 96
+    intermediate_size: 384
+    max_position_embeddings: 32
+    num_attention_heads: 3
+    num_hidden_layers: 1
+legacy_finn: true
+legacy_postproc:
+- step_measure_rtlsim_performance
+- step_set_fifo_depths
+- step_create_stitched_ip
+legacy_preproc:
+- cleanup_step
+- remove_head_step
+- remove_tail_step
+- qonnx_to_finn_step
+- streamlining_step
+- infer_hardware_step
+model_configuration:
+  bitwidth: 8
+  hidden_size: 96
+  intermediate_size: 384
+  max_position_embeddings: 32
+  num_attention_heads: 3
+  num_hidden_layers: 1
+  vocab_size: 30522
+name: bert_demo_ultra_small
+nodes:
+  canonical_ops:
+    available:
+    - LayerNorm
+    - Add
+    - MultiHeadAttention
+    - MatMul
+    - Softmax
+    - GELU
+    - Dropout
+    - Embedding
+    exploration:
+      required:
+      - LayerNorm
+      - Add
+      - MultiHeadAttention
+      - MatMul
+  hw_kernels:
+    available:
+    - MatMul:
+      - matmul_hls
+      - matmul_dsp
+    - LayerNorm:
+      - layernorm_hls
+    - Add
+    - Softmax:
+      - softmax_hls
+    exploration:
+      required:
+      - MatMul
+      - LayerNorm
+objectives:
+- direction: maximize
+  name: functionality
+  target_value: 1.0
+  weight: 1.0
+- direction: maximize
+  name: performance
+  target_value: 1000.0
+  weight: 0.8
+- direction: maximize
+  name: resource_efficiency
+  target_value: 0.8
+  weight: 0.6
+platform:
+  board: V80
+  enable_zynq_ps: true
+  shell_flow_type: vivado_zynq
+  target_device: xczu7ev-ffvc1156-2-e
+  target_frequency: 100
+runtime_adaptations:
+  standard_mode:
+    description: Standard configuration for production use
+  ultra_small_mode:
+    build_overrides:
+      run_fifo_sizing: false
+      save_intermediate_models: false
+    constraint_overrides:
+      max_build_time: 15.0
+      max_lut_utilization: 0.5
+    description: Optimizations applied when --ultra-small flag is used
+    dse_overrides:
+      primary_strategy: ultra_fast
+    model_overrides:
+      hidden_size: 96
+      intermediate_size: 384
+      max_position_embeddings: 32
+      num_attention_heads: 3
+      num_hidden_layers: 1
+    platform_overrides:
+      target_frequency: 100
+test_configuration:
+  expected_build_phases:
+  - Model preparation (legacy_preproc)
+  - Standard FINN pipeline
+  - Performance & integration (legacy_postproc)
+  expected_functions_generated: 14-17
+  purpose: Unified BERT demo blueprint with configurable step ordering
+  supported_modes:
+  - ultra_small
+  - standard
+  - custom
+transforms:
+  hw_kernel:
+    available:
+    - apply_folding_config
+    - target_fps_parallelization
+    - minimize_bit_width
+    exploration:
+      required:
+      - apply_folding_config
+  model_topology:
+    available:
+    - cleanup
+    - streamlining
+    - remove_head
+    - remove_tail
+    - generate_reference_io
+    exploration:
+      required:
+      - cleanup
+      - streamlining
+validation:
+  accuracy_drop_threshold: 0.02
+  performance_regression_threshold: 0.95
+  test_vectors_required: false
+  verify_functional_equivalence: false
+version: '2.0'

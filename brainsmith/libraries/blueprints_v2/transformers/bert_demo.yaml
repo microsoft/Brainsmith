@@ -1,0 +1,225 @@
+# BERT Demo Unified Blueprint V2
+# Configurable BERT accelerator blueprint with runtime model dimension updates
+# Supports both ultra-small and standard configurations through dynamic updates
+
+name: "bert_demo"
+version: "2.0"
+description: "Unified BERT accelerator blueprint with configurable model dimensions"
+category: "transformers"
+
+# Enable legacy FINN interface for compatibility with current system
+legacy_finn: true
+
+# Custom step ordering for legacy FINN interface
+legacy_preproc:
+  - "cleanup_step"
+  - "remove_head_step"
+  - "remove_tail_step"
+  - "qonnx_to_finn_step"
+  - "streamlining_step"
+  - "infer_hardware_step"
+
+legacy_postproc:
+  - "step_measure_rtlsim_performance"
+  - "step_set_fifo_depths"
+  - "step_create_stitched_ip"
+
+# Default model configuration (will be updated at runtime)
+model_configuration:
+  hidden_size: 384              # Default standard size, updated by demo
+  num_hidden_layers: 3          # Default standard layers, updated by demo
+  num_attention_heads: 12       # Default standard heads, updated by demo
+  intermediate_size: 1536       # Default standard intermediate, updated by demo
+  max_position_embeddings: 128  # Default sequence length, updated by demo
+  vocab_size: 30522            # Standard BERT vocabulary
+  bitwidth: 8                  # Quantization bit width, updated by demo
+  
+# Complete BERT operations support
+nodes:
+  # All canonical operations for BERT
+  canonical_ops:
+    available:
+      - "LayerNorm"
+      - "Add"
+      - "MultiHeadAttention"
+      - "MatMul"
+      - "Softmax"
+      - "GELU"
+      - "Dropout"
+      - "Embedding"
+    exploration:
+      required:
+        - "LayerNorm"
+        - "Add"
+        - "MultiHeadAttention"
+        - "MatMul"
+
+  # Hardware kernel implementations
+  hw_kernels:
+    available:
+      - "MatMul":
+          - "matmul_hls"
+          - "matmul_dsp"
+      - "LayerNorm":
+          - "layernorm_hls"
+      - "Add"
+      - "Softmax":
+          - "softmax_hls"
+    exploration:
+      required:
+        - "MatMul"
+        - "LayerNorm"
+
+# Comprehensive transforms for flexibility
+transforms:
+  # Model topology transforms
+  model_topology:
+    available:
+      - "cleanup"
+      - "streamlining"
+      - "remove_head"
+      - "remove_tail"
+      - "generate_reference_io"
+    exploration:
+      required:
+        - "cleanup"
+        - "streamlining"
+
+  # Hardware optimizations
+  hw_kernel:
+    available:
+      - "apply_folding_config"
+      - "target_fps_parallelization"
+      - "minimize_bit_width"
+    exploration:
+      required:
+        - "apply_folding_config"
+
+# Configurable build settings (updated by demo based on model size)
+build_configuration:
+  run_fifo_sizing: true         # Will be disabled for ultra-small mode
+  generate_dcp: false           # Skip DCP synthesis by default
+  enable_verification: false    # Skip verification for speed
+  auto_fifo_depths: true       # Use automatic FIFO depths
+  save_intermediate_models: true  # Save for debugging
+
+# Adaptive DSE strategies
+dse_strategies:
+  primary_strategy: "balanced"  # Will be updated to "ultra_fast" for ultra-small
+  strategies:
+    ultra_fast:
+      description: "Ultra-fast validation with minimal exploration"
+      max_evaluations: 1
+      sampling: "grid"
+      focus_areas: []
+    
+    balanced:
+      description: "Balanced exploration for standard configurations"
+      max_evaluations: 10
+      sampling: "random"
+      focus_areas: ["performance", "resources"]
+    
+    comprehensive:
+      description: "Comprehensive exploration for production"
+      max_evaluations: 50
+      sampling: "adaptive"
+      focus_areas: ["performance", "resources", "power"]
+
+# Multi-objective optimization
+objectives:
+  - name: "functionality"
+    direction: "maximize"
+    weight: 1.0
+    target_value: 1.0
+  
+  - name: "performance"
+    direction: "maximize"
+    weight: 0.8
+    target_value: 1000.0  # Target operations/second
+  
+  - name: "resource_efficiency"
+    direction: "maximize"
+    weight: 0.6
+    target_value: 0.8
+
+# Adaptive constraints (updated based on model size)
+constraints:
+  - name: "max_build_time"
+    operator: "<="
+    value: 60.0             # Will be reduced for ultra-small
+
+  - name: "max_lut_utilization"
+    operator: "<="
+    value: 0.80             # Will be relaxed for ultra-small
+
+  - name: "max_dsp_utilization"
+    operator: "<="
+    value: 0.70             # Will be relaxed for ultra-small
+
+  - name: "max_bram_utilization"
+    operator: "<="
+    value: 0.60
+
+# Platform settings (configurable)
+platform:
+  target_device: "xczu7ev-ffvc1156-2-e"  # Will be updated by demo
+  board: "V80"                           # Will be updated by demo
+  target_frequency: 200                  # Will be adjusted for ultra-small
+  enable_zynq_ps: true
+  shell_flow_type: "vivado_zynq"
+
+# Validation settings
+validation:
+  verify_functional_equivalence: false
+  performance_regression_threshold: 0.95
+  accuracy_drop_threshold: 0.02
+  test_vectors_required: false
+
+# Template for expected model characteristics (updated at runtime)
+expected_model:
+  input_shape: [1, 128]         # Will be updated based on sequence length
+  architecture: "bert_standard" # Will be updated to "bert_ultra_small" if needed
+  parameters:
+    hidden_size: 384            # Updated at runtime
+    num_attention_heads: 12     # Updated at runtime
+    num_hidden_layers: 3        # Updated at runtime
+    intermediate_size: 1536     # Updated at runtime
+    max_position_embeddings: 128 # Updated at runtime
+    
+  estimated_size: "~50MB"       # Updated based on actual model size
+  estimated_build_time: "30-60 minutes"  # Updated for ultra-small
+
+# Runtime configuration metadata
+runtime_adaptations:
+  ultra_small_mode:
+    description: "Optimizations applied when --ultra-small flag is used"
+    model_overrides:
+      hidden_size: 96
+      num_hidden_layers: 1
+      num_attention_heads: 3
+      intermediate_size: 384
+      max_position_embeddings: 32
+    build_overrides:
+      run_fifo_sizing: false
+      save_intermediate_models: false
+    constraint_overrides:
+      max_build_time: 15.0
+      max_lut_utilization: 0.50
+    dse_overrides:
+      primary_strategy: "ultra_fast"
+    platform_overrides:
+      target_frequency: 100
+
+  standard_mode:
+    description: "Standard configuration for production use"
+    # Uses default values from above sections
+
+# Testing and validation metadata
+test_configuration:
+  purpose: "Unified BERT demo blueprint with configurable step ordering"
+  supported_modes: ["ultra_small", "standard", "custom"]
+  expected_functions_generated: 14-17  # Updated for new step sequence
+  expected_build_phases:
+    - "Model preparation (legacy_preproc)"
+    - "Standard FINN pipeline" 
+    - "Performance & integration (legacy_postproc)"

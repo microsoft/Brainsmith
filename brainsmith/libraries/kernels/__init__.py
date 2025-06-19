@@ -30,7 +30,6 @@ from typing import List, Dict
 
 # Simple registry maps kernel names to their package directories
 AVAILABLE_KERNELS = {
-    "conv2d_hls": "conv2d_hls",
     "matmul_rtl": "matmul_rtl",
 }
 

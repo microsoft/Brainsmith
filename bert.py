@@ -31,8 +31,8 @@ import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import brainsmith.transformation.convert_to_hw_layers as to_bs_hw
-from brainsmith.transformation.expand_norms import ExpandNorms
+import brainsmith.libraries.transforms.operations.convert_to_hw_layers as to_bs_hw
+from brainsmith.libraries.transforms.operations.expand_norms import ExpandNorms
 
 # Included for getting reference IO from model with head/tail removed
 import finn.core.onnx_exec as oxe

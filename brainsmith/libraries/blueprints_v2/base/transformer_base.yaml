@@ -1,161 +1,127 @@
 # Transformer Base Blueprint V2
-# Base blueprint for transformer-based architectures (BERT, GPT, etc.)
+# Base configuration for all transformer-based accelerators
 
 name: "transformer_base"
 version: "2.0"
-description: "Base blueprint for transformer architectures with common components"
+description: "Base blueprint for transformer architecture accelerators"
+category: "transformers"
 
-# Core transformer components
+# Default nodes for transformer models
 nodes:
-  # Standard transformer canonical operations
+  # Standard canonical operations for transformers
   canonical_ops:
     available:
       - "LayerNorm"
+      - "Add" 
+      - "MultiHeadAttention"
+      - "MatMul"
       - "Softmax"
-      - "GELU"
-      - "Add"
+      - "Dropout"
     exploration:
       required:
-        - "LayerNorm"  # Essential for transformer stability
-        - "Add"       # Required for residual connections
-      optional:
-        - "Softmax"   # May use lookup table alternative
-        - "GELU"      # May use ReLU alternative
+        - "LayerNorm"
+        - "Add"
+        - "MultiHeadAttention"
+        - "MatMul"
 
-  # Hardware kernel options for transformer operations
+  # Hardware kernel mappings for transformers
   hw_kernels:
     available:
       - "MatMul":
           - "matmul_hls"
           - "matmul_rtl"
       - "LayerNorm":
-          - "layernorm_custom"
-          - "layernorm_builtin"
+          - "layernorm_hls"
+      - "Add":
+          - "add_hls"
       - "Softmax":
           - "softmax_hls"
-          - "softmax_lookup"
-      - "Add"
     exploration:
       required:
-        - "MatMul"      # Core operation for transformers
-        - "LayerNorm"   # Required for normalization
-      optional:
-        - "Softmax"     # May not be needed for all models
-      mutually_exclusive:
-        - ["matmul_hls", "matmul_rtl"]  # Choose implementation
-        - ["layernorm_custom", "layernorm_builtin"]
-        - ["softmax_hls", "softmax_lookup"]
+        - "MatMul"
+        - "LayerNorm"
 
-# Transform pipeline for transformers
+# Default transforms for transformer models
 transforms:
   # Model topology transformations
   model_topology:
     available:
       - "cleanup"
       - "streamlining"
-      - "aggressive_streamlining"
-      - "conservative_streamlining"
-      - "constant_folding"
-      - "remove_head"
-      - "remove_tail"
+      - "normalize_ops"
     exploration:
       required:
         - "cleanup"
-      optional:
-        - "constant_folding"
-        - "remove_head"
-        - "remove_tail"
-      mutually_exclusive:
-        - ["aggressive_streamlining", "conservative_streamlining"]
-      dependencies:
-        aggressive_streamlining: ["cleanup"]
-        conservative_streamlining: ["cleanup"]
 
   # Hardware kernel transformations
   hw_kernel:
     available:
-      - "target_fps_parallelization"
       - "apply_folding_config"
-      - "minimize_bit_width"
-      - "optimize_memory_bandwidth"
+      - "optimize_parallelization"
     exploration:
       required:
-        - "target_fps_parallelization"
         - "apply_folding_config"
-      optional:
-        - "minimize_bit_width"
-        - "optimize_memory_bandwidth"
-
-  # Hardware graph transformations
-  hw_graph:
-    available:
-      - "set_fifo_depths"
-      - "create_stitched_ip"
-      - "optimize_pipeline"
-    exploration:
-      required:
-        - "set_fifo_depths"
-        - "create_stitched_ip"
-      optional:
-        - "optimize_pipeline"
 
 # Default DSE strategies for transformers
 dse_strategies:
-  primary_strategy: "balanced_exploration"
+  primary_strategy: "balanced"
   strategies:
-    quick_scan:
-      description: "Fast exploration of main design choices"
-      max_evaluations: 20
-      sampling: "latin_hypercube"
-      focus_areas:
-        - "kernel_selection"
-        - "required_transforms"
+    balanced:
+      description: "Balanced exploration of performance and resource usage"
+      max_evaluations: 10
+      sampling: "grid"
+      focus_areas: ["throughput", "latency"]
 
-    balanced_exploration:
-      description: "Balanced exploration of design space"
-      max_evaluations: 50
-      sampling: "adaptive"
-      focus_areas:
-        - "kernel_selection"
-        - "transform_selection"
-
-    comprehensive:
-      description: "Thorough exploration of full design space"
-      max_evaluations: 100
-      sampling: "latin_hypercube"
-      focus_areas:
-        - "all_combinations"
-
-# Common transformer objectives
+# Default objectives for transformer models
 objectives:
   - name: "throughput"
     direction: "maximize"
-    weight: 1.0
-    description: "Maximize inference throughput (inferences/second)"
+    weight: 0.6
+    target_value: 1000.0
+    description: "Target inference throughput (ops/sec)"
 
-  - name: "resource_efficiency"
-    direction: "maximize"
-    weight: 0.7
-    description: "Maximize resource utilization efficiency"
+  - name: "latency"
+    direction: "minimize" 
+    weight: 0.4
+    target_value: 10.0
+    description: "Target inference latency (ms)"
 
-# Common transformer constraints
+# Default constraints for transformer models
 constraints:
   - name: "max_lut_utilization"
     operator: "<="
-    value: 0.85
+    value: 0.80
     description: "Maximum LUT utilization"
 
   - name: "max_dsp_utilization"
     operator: "<="
-    value: 0.80
+    value: 0.70
     description: "Maximum DSP utilization"
 
   - name: "max_bram_utilization"
     operator: "<="
-    value: 0.75
+    value: 0.60
     description: "Maximum BRAM utilization"
 
-  - name: "max_power"
-    operator: "<="
-    value: 25.0
-    description: "Maximum power consumption in watts"
+# Default platform settings
+platform:
+  target_device: "xczu7ev-ffvc1156-2-e"
+  board: "V80"
+  target_frequency: 200
+  enable_zynq_ps: true
+  shell_flow_type: "vivado_zynq"
+
+# Default validation settings
+validation:
+  verify_functional_equivalence: true
+  performance_regression_threshold: 0.1
+  accuracy_drop_threshold: 0.05
+  test_vectors_required: true
+
+# Default build configuration
+build_configuration:
+  run_fifo_sizing: true
+  generate_dcp: true
+  enable_verification: true
+  auto_fifo_depths: false
+  save_intermediate_models: true

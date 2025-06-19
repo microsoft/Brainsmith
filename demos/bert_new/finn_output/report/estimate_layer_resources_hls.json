@@ -1,0 +1,74 @@
+{
+  "DuplicateStreams_hls_0": {
+    "BRAM_18K": "0",
+    "FF": "16",
+    "LUT": "68",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "0"
+  },
+  "ElementwiseMul_hls_0": {
+    "BRAM_18K": "0",
+    "FF": "51",
+    "LUT": "71",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "1"
+  },
+  "ElementwiseMul_hls_1": {
+    "BRAM_18K": "0",
+    "FF": "51",
+    "LUT": "71",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "1"
+  },
+  "ElementwiseMul_hls_2": {
+    "BRAM_18K": "0",
+    "FF": "16",
+    "LUT": "65",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "1"
+  },
+  "ElementwiseAdd_hls_0": {
+    "BRAM_18K": "0",
+    "FF": "1",
+    "LUT": "0",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "0"
+  },
+  "DuplicateStreams_hls_1": {
+    "BRAM_18K": "0",
+    "FF": "16",
+    "LUT": "66",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "0"
+  },
+  "ElementwiseMul_hls_3": {
+    "BRAM_18K": "0",
+    "FF": "51",
+    "LUT": "71",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "1"
+  },
+  "ElementwiseMul_hls_4": {
+    "BRAM_18K": "0",
+    "FF": "16",
+    "LUT": "65",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "1"
+  },
+  "ElementwiseAdd_hls_1": {
+    "BRAM_18K": "0",
+    "FF": "1",
+    "LUT": "0",
+    "DSP48E": 0,
+    "URAM": "0",
+    "DSP": "0"
+  }
+}

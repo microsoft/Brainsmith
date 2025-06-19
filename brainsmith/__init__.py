@@ -18,10 +18,25 @@ North Star Promise: result = brainsmith.forge('model.onnx', 'blueprint.yaml')
 from .dependencies import check_installation
 check_installation()
 
+# === 🔧 CUSTOM OPERATORS REGISTRATION ===
+# Register custom operators with QONNX using modern entry points approach
+# Import kernels to ensure they register themselves with QONNX
+try:
+    # Import all kernel modules to trigger @register_op decorators
+    from .libraries.kernels.layernorm import layernorm
+    from .libraries.kernels.softmax import hwsoftmax
+    from .libraries.kernels.shuffle import shuffle
+    from .libraries.kernels.crop import crop
+    import logging
+    logging.getLogger(__name__).info("BrainSmith custom operators registered successfully")
+except ImportError as e:
+    import logging
+    logging.getLogger(__name__).warning(f"Some custom operators not available: {e}")
+
 # === 🎯 CORE DSE (5-minute success) ===
 from .core.api import forge, validate_blueprint
-from .core.dse.design_space import DesignSpace
-from .core.dse.interface import DSEInterface
+from .core.dse.combination_generator import ComponentCombination as DesignSpace
+from .core.dse.space_explorer import DesignSpaceExplorer as DSEInterface
 from .core.metrics import DSEMetrics
 
 # === ⚡ AUTOMATION (15-minute success) ===
@@ -43,8 +58,8 @@ from .core.data import (
 )
 
 # === 🔧 ADVANCED BUILDING (1-hour success) ===
-from .core.finn import build_accelerator      # FINN integration
-from .core.dse import sample_design_space     # Advanced sampling
+from .core.finn import FINNEvaluationBridge as build_accelerator      # FINN integration
+from .core.dse.combination_generator import generate_component_combinations as sample_design_space     # Sampling
 
 # === 🔌 EXTENSIBILITY (contributor-focused) ===
 from .core.registry import BaseRegistry, ComponentInfo

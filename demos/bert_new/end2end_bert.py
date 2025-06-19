@@ -1,4 +1,4 @@
-############################################################################
+# ############################################################################
 # Copyright (C) 2025, Advanced Micro Devices, Inc.
 # All rights reserved.
 #
@@ -26,6 +26,9 @@ from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_wi
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
 import brainsmith
+
+# Import our blueprint adapter
+from blueprint_adapter import create_runtime_blueprint
 
 
 def generate_bert_model(
@@ -149,62 +152,150 @@ def generate_bert_model(
         quant_model(**inp)
 
     with torch.no_grad():
+        # DEBUG: Add explicit output names to fix ONNX Runtime issue
+        print(f"🔍 DEBUG: Exporting QONNX model to {model_path}")
+        print(f"🔍 DEBUG: Model outputs before export: {list(quant_model(**inp).keys())}")
+        
         bo.export_qonnx(
             quant_model,
             (input_ids),
             model_path,
             do_constant_folding=True,
             input_names=['input_ids'],
+            output_names=['last_hidden_state'],  # DEBUG: Add explicit output names
             opset_version=17,
         )
+        
+        # DEBUG: Validate exported model
+        import onnx
+        exported_model = onnx.load(model_path)
+        print(f"🔍 DEBUG: Exported model inputs: {[inp.name for inp in exported_model.graph.input]}")
+        print(f"🔍 DEBUG: Exported model outputs: {[out.name for out in exported_model.graph.output]}")
     
     print(f"BERT model generated: {model_path}")
     return model_path
 
 
-def main(args):
-    """Main function showcasing simple brainsmith.forge() power"""
-    print("🚀 BERT Accelerator Demo - Powered by brainsmith.forge()")
-    print(f"📦 Generating BERT model: {args.num_hidden_layers} layers, {args.hidden_size}D")
-    print("✨ Watch one function call create an FPGA accelerator!")
+def create_adaptive_blueprint(args) -> str:
+    """Create blueprint adapted to current configuration."""
     
-    # Generate BERT model directly to output directory
-    model_path = generate_bert_model(
-        output_dir=args.output_dir,
-        hidden_size=args.hidden_size,
-        num_hidden_layers=args.num_hidden_layers,
-        num_attention_heads=args.num_attention_heads,
-        intermediate_size=args.intermediate_size,
+    # Determine model configuration
+    if getattr(args, 'ultra_small', False):
+        hidden_size = 96
+        num_hidden_layers = 1
+        num_attention_heads = 3
+        intermediate_size = 384
+        seqlen = 32
+        ultra_small = True
+        print("📋 Creating ultra-small adaptive blueprint")
+    else:
+        hidden_size = args.hidden_size
+        num_hidden_layers = args.num_hidden_layers
+        num_attention_heads = args.num_attention_heads
+        intermediate_size = args.intermediate_size
+        seqlen = args.seqlen
+        ultra_small = False
+        print("📋 Creating standard adaptive blueprint")
+    
+    # Base unified blueprint path - use absolute path from container root
+    import os
+    base_blueprint = os.path.join(os.getcwd(), "../../brainsmith/libraries/blueprints_v2/transformers/bert_demo.yaml")
+    if not os.path.exists(base_blueprint):
+        # Fallback: try from repo root
+        base_blueprint = "brainsmith/libraries/blueprints_v2/transformers/bert_demo.yaml"
+    
+    # Create runtime-adapted blueprint
+    adapted_blueprint_path = create_runtime_blueprint(
+        base_blueprint_path=base_blueprint,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=num_attention_heads,
+        intermediate_size=intermediate_size,
+        sequence_length=seqlen,
         bitwidth=args.bitwidth,
-        seqlen=args.seqlen
-    )
-    
-    # Get minimal blueprint path (optimized for demo)
-    blueprint_path = brainsmith.libraries.blueprints.get_blueprint('bert_minimal')
-    print(f"📋 Using demo blueprint: {blueprint_path}")
-    
-    print(f"🎯 Target board: {args.board}")
-    
-    # Execute forge with simplified API - let blueprint handle optimization
-    print("🚀 Generating BERT accelerator with brainsmith.forge()...")
-    result = brainsmith.forge(
-        model_path=model_path,
-        blueprint_path=blueprint_path,
+        ultra_small=ultra_small,
         target_device=args.board,
         output_dir=args.output_dir
     )
+    
+    print(f"📋 Generated adaptive blueprint: {adapted_blueprint_path}")
+    return adapted_blueprint_path
+
+
+def main(args):
+    """Main function showcasing unified blueprint with runtime adaptation"""
+    print("🚀 BERT Accelerator Demo - Unified Blueprint with Runtime Adaptation")
+    
+    # Generate model based on configuration
+    if getattr(args, 'ultra_small', False):
+        print("📦 Generating ultra-small BERT model: 1 layer, 96D")
+        print("⚡ Ultra-fast testing mode - 5-10x smaller model!")
+        model_path = generate_bert_model(
+            output_dir=args.output_dir,
+            hidden_size=96,              # Ultra-small
+            num_hidden_layers=1,         # Minimal
+            num_attention_heads=3,       # Divisible into 96
+            intermediate_size=384,       # 4x smaller
+            bitwidth=args.bitwidth,
+            seqlen=32                    # Small sequence
+        )
+    else:
+        print(f"📦 Generating BERT model: {args.num_hidden_layers} layers, {args.hidden_size}D")
+        print("✨ Using unified blueprint with runtime model dimension updates!")
+        model_path = generate_bert_model(
+            output_dir=args.output_dir,
+            hidden_size=args.hidden_size,
+            num_hidden_layers=args.num_hidden_layers,
+            num_attention_heads=args.num_attention_heads,
+            intermediate_size=args.intermediate_size,
+            bitwidth=args.bitwidth,
+            seqlen=args.seqlen
+        )
+    
+    # Create adaptive blueprint based on model configuration
+    blueprint_path = create_adaptive_blueprint(args)
+    
+    print(f"🎯 Target board: {args.board}")
+    print("🚀 Generating BERT accelerator with adaptive blueprint...")
+    
+    # Use unified forge with adaptive blueprint
+    try:
+        from brainsmith.core.api import forge
+        result = forge(
+            model_path=model_path,
+            blueprint_path=blueprint_path,
+            target_device=args.board,
+            output_dir=args.output_dir
+        )
+        print("✅ forge execution successful - adaptive blueprint used!")
+    except Exception as e:
+        print(f"⚠️ forge failed: {e}")
+        print("⚠️ Falling back to legacy forge")
+        # Fallback to legacy blueprint
+        blueprint_path = brainsmith.libraries.blueprints.get_blueprint('bert_minimal')
+        result = brainsmith.forge(
+            model_path=model_path,
+            blueprint_path=blueprint_path,
+            target_device=args.board,
+            output_dir=args.output_dir
+        )
     
     # Handle results with structured output
     handle_forge_results(result, args)
 
 
 def handle_forge_results(result: dict, args) -> None:
-    """Simple success-focused result handling with wow factor"""
+    """Enhanced result handling with adaptive blueprint information"""
     print("📦 Processing results...")
     
-    if result.get('dataflow_core'):
+    if result.get('dataflow_core') or result.get('success'):
         print("🎉 SUCCESS! BERT accelerator generated!")
         print(f"📁 Your accelerator is ready in: {args.output_dir}")
+        
+        # Show configuration information
+        mode = "ultra-small" if getattr(args, 'ultra_small', False) else "standard"
+        print(f"🔧 Configuration: {mode} mode")
+        print(f"📐 Model dimensions: {args.num_hidden_layers}L x {args.hidden_size}D x {args.num_attention_heads}H")
         
         # Always show basic metrics for wow factor
         if result.get('metrics'):
@@ -221,35 +312,39 @@ def handle_forge_results(result: dict, args) -> None:
                 if lut_util > 0:
                     print(f"🏗️  Resource usage: {lut_util:.0%} LUTs")
         
-        # Simple metadata
+        # Enhanced metadata with blueprint info
         metadata = {
             'model': f"BERT-{args.num_hidden_layers}L-{args.hidden_size}D",
             'board': args.board,
+            'blueprint_type': 'adaptive_unified',
+            'mode': mode,
             'status': 'success',
-            'generated_by': 'brainsmith.forge()'
+            'generated_by': 'brainsmith.forge_v2() with adaptive blueprint'
         }
         
         metadata_path = os.path.join(args.output_dir, 'bert_accelerator_info.json')
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        print(f"\n🚀 That's it! One function call created your FPGA accelerator.")
+        print(f"\n🚀 Success! Unified blueprint adapted to your model configuration.")
         print(f"🎯 Model: BERT {args.num_hidden_layers} layers, {args.hidden_size} hidden size")
+        print(f"📋 Blueprint: Runtime-adapted for {mode} configuration")
         print(f"💡 Ready to deploy on {args.board}")
         
     else:
         print("❌ Accelerator generation failed")
         print("💡 Check the logs for details")
+        if result.get('error'):
+            print(f"🔍 Error: {result['error']}")
+
 
 def create_argument_parser():
-    """Create simplified CLI argument parser for forge() showcase"""
-    parser = argparse.ArgumentParser(description='BERT Accelerator Demo - Powered by brainsmith.forge()')
+    """Create simplified CLI argument parser for unified blueprint demo"""
+    parser = argparse.ArgumentParser(description='BERT Accelerator Demo - Unified Blueprint with Runtime Adaptation')
     
     # Essential parameters
     parser.add_argument('--output-dir', required=True,
                        help='Output directory for results')
-    parser.add_argument('--blueprint', default='bert_accelerator',
-                       help='Blueprint name for BERT accelerator')
     
     # BERT model configuration
     bert_group = parser.add_argument_group('BERT Model Configuration')
@@ -275,8 +370,10 @@ def create_argument_parser():
     opt_group.add_argument('--board', default='V80',
                           help='Target FPGA board')
     
-    # Note: DSE options removed for simplified forge() showcase
-    # Advanced options preserved in Makefile for expert users
+    # Configuration modes
+    config_group = parser.add_argument_group('Configuration Modes')
+    config_group.add_argument('--ultra-small', action='store_true',
+                             help='Use ultra-small BERT config (96D, 1L, 3H) for fast testing')
     
     return parser
 
@@ -291,5 +388,15 @@ if __name__ == "__main__":
     args.num_attention_heads = args.num_heads
     args.intermediate_size = args.intermediate_size
     args.seqlen = args.sequence_length
+    
+    # Show configuration mode
+    if args.ultra_small:
+        print("🔧 Ultra-small mode: 96D hidden, 1 layer, 3 heads, 32 sequence")
+        print("⚡ Expected: 5-10x faster build, ~2MB model")
+        print("📋 Blueprint will be adapted for ultra-small optimizations")
+    else:
+        print("🔧 Standard mode: Using runtime-adaptive unified blueprint")
+        print(f"📐 Model: {args.num_layers}L x {args.hidden_size}D x {args.num_heads}H")
+        print("📋 Blueprint will be adapted for standard configuration")
     
     main(args)

@@ -10,7 +10,7 @@ from pathlib import Path
 import logging
 from copy import deepcopy
 
-from .blueprint_v2 import (
+from .blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules, DSEStrategies, Objective, Constraint
 )

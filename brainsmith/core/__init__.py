@@ -10,13 +10,12 @@ Essential Functions: forge + 12 helpers + 3 classes for complete FPGA workflow
 
 # Primary North Star function
 from .api import forge, validate_blueprint
-from .api_v2 import forge_v2, validate_blueprint_v2
-from . import finn_v2
+from . import finn
 from .metrics import DSEMetrics
 
-# Essential classes (3 core concepts)
-from .dse.design_space import DesignSpace
-from .dse.interface import DSEInterface
+# Essential classes (3 core concepts) - V2 migration
+from .dse.combination_generator import ComponentCombination as DesignSpace  # Design space representation
+from .dse.space_explorer import DesignSpaceExplorer as DSEInterface  # DSE interface
 
 # North Star Helper Functions (12 essential functions)
 # 1-4: Automation helpers
@@ -33,8 +32,8 @@ from .hooks import (
     register_event_handler
 )
 
-# 8: FINN accelerator building
-from .finn import build_accelerator
+# 8: FINN accelerator building - V2 migration
+from .finn import FINNEvaluationBridge as build_accelerator  # FINN accelerator building
 
 # 9-11: Data management and analysis
 from .data import (
@@ -42,8 +41,8 @@ from .data import (
     export_metrics as export_results
 )
 
-# 12: Design space management
-from .dse import sample_design_space
+# 12: Design space management - V2 migration
+from .dse.combination_generator import generate_component_combinations as sample_design_space  # Design space management
 
 # Registry infrastructure (for advanced users)
 from .registry import BaseRegistry, ComponentInfo

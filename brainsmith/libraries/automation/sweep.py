@@ -43,7 +43,7 @@ def parameter_sweep(
             }
         )
     """
-    from ..core.api import forge
+    from ...core.api import forge
     from ..hooks import track_parameter
     
     # Generate parameter combinations

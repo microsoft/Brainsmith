@@ -1,0 +1,148 @@
+# BERT Ultra-Small Standalone Blueprint V2
+# Ultra-minimal BERT configuration for fast testing with finn_v2 architecture
+# Standalone version without inheritance to avoid dependency issues
+
+name: "bert_ultra_small_standalone_v2"
+version: "2.0"
+description: "Ultra-small BERT accelerator for fast testing - 5-10x smaller than standard - standalone"
+category: "transformers"
+
+# Ultra-minimal model configuration for maximum speed
+model_configuration:
+  hidden_size: 96              # 5x smaller than typical 384-512
+  num_hidden_layers: 1         # Minimal layers
+  num_attention_heads: 3       # Divisible into hidden_size (96/3=32)
+  intermediate_size: 384       # 4x smaller than typical 1536
+  max_position_embeddings: 32  # 4x smaller sequence length
+  vocab_size: 1000            # Minimal vocabulary
+  
+# All required nodes for ultra-small BERT operations
+nodes:
+  # Minimal canonical operations
+  canonical_ops:
+    available:
+      - "LayerNorm"
+      - "Add"
+      - "MultiHeadAttention"
+      - "MatMul"
+      - "Softmax"
+    exploration:
+      required:
+        - "LayerNorm"
+        - "Add"
+        - "MultiHeadAttention"
+
+  # Minimal hardware kernels  
+  hw_kernels:
+    available:
+      - "MatMul":
+          - "matmul_hls"
+      - "LayerNorm":
+          - "layernorm_hls"
+      - "Add"
+    exploration:
+      required:
+        - "MatMul"
+        - "LayerNorm"
+
+# Minimal transforms for speed
+transforms:
+  # Basic topology transforms only
+  model_topology:
+    available:
+      - "cleanup"
+      - "streamlining"
+    exploration:
+      required:
+        - "cleanup"
+
+  # Minimal hardware optimizations
+  hw_kernel:
+    available:
+      - "apply_folding_config"
+    exploration:
+      required:
+        - "apply_folding_config"
+
+# Fast build configuration - skip expensive steps
+build_configuration:
+  run_fifo_sizing: false        # Major speedup - skip FIFO sizing
+  generate_dcp: false           # Skip DCP synthesis 
+  enable_verification: false    # Skip verification for speed
+  auto_fifo_depths: true       # Use automatic minimal FIFO depths
+  save_intermediate_models: false  # Skip intermediate saves
+
+# Ultra-small DSE strategies
+dse_strategies:
+  primary_strategy: "ultra_fast"
+  strategies:
+    ultra_fast:
+      description: "Ultra-fast validation with minimal exploration"
+      max_evaluations: 1        # Single evaluation for speed
+      sampling: "grid"
+      focus_areas: []
+
+# Minimal objectives for testing
+objectives:
+  - name: "functionality"
+    direction: "maximize"
+    weight: 1.0
+    target_value: 1.0
+
+# Relaxed constraints for fast builds
+constraints:
+  - name: "max_build_time"
+    operator: "<="
+    value: 15.0
+
+  - name: "max_lut_utilization"
+    operator: "<="
+    value: 0.50
+
+  - name: "max_dsp_utilization"
+    operator: "<="
+    value: 0.40
+
+# Platform settings optimized for speed
+platform:
+  target_device: "xczu7ev-ffvc1156-2-e"
+  board: "V80"
+  target_frequency: 100         # Conservative 100 MHz for fast builds
+  enable_zynq_ps: true
+  shell_flow_type: "vivado_zynq"
+
+# Fast validation settings
+validation:
+  verify_functional_equivalence: false  # Skip for speed
+  performance_regression_threshold: 1.0 # Relaxed
+  accuracy_drop_threshold: 1.0         # Relaxed
+  test_vectors_required: false         # Skip for speed
+
+# Expected ultra-small model characteristics
+expected_model:
+  input_shape: [1, 32]          # Small sequence length
+  architecture: "bert_ultra_small"
+  parameters:
+    hidden_size: 96
+    num_attention_heads: 3
+    num_hidden_layers: 1
+    intermediate_size: 384
+    max_position_embeddings: 32
+    
+  estimated_size: "~2MB"       # Estimated model size
+  estimated_build_time: "5-15 minutes"
+
+# Testing and validation metadata
+test_configuration:
+  purpose: "Validate function-based finn_v2 architecture"
+  expected_functions_generated: 8-12
+  expected_build_phases:
+    - "Model preparation"
+    - "Topology transforms" 
+    - "Hardware inference"
+    - "Folding configuration"
+    - "IP generation"
+  skip_phases:
+    - "FIFO sizing"
+    - "DCP generation"
+    - "Performance verification"
