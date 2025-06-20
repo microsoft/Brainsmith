@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for test_kernel_e2e
 # Generated from: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
-# Generation timestamp: 2025-06-20T07:35:12.766341
+# Generation timestamp: 2025-06-20T16:07:42.440181
 #
 # PHASE 2: FINN INTEGRATION
 # This HWCustomOp follows FINN's standard pattern with simple constructor
@@ -61,7 +61,7 @@ class TestKernelE2e(AutoHWCustomOp):
                     ),
                 ],
                 chunking_strategy=BlockChunkingStrategy(
-                    block_shape=[':', ':'],  # Validated symbolic shape
+                    block_shape=[':'],  # Validated symbolic shape
                     rindex=0
                 )
             ),
@@ -76,8 +76,8 @@ class TestKernelE2e(AutoHWCustomOp):
                     ),
                 ],
                 chunking_strategy=BlockChunkingStrategy(
-                    block_shape=['PE'],  # Validated symbolic shape
-                    rindex=0
+                    block_shape=[':', ':'],  # Validated symbolic shape
+                    rindex=1
                 )
             ),
             InterfaceMetadata(
@@ -222,8 +222,6 @@ def make_test_kernel_e2e_node(inputs, outputs, **node_attrs):
     from interface datatypes by the RTLBackend and should not be specified directly.
     
     Optional parameters (with defaults):
-    - PE: int = 4
-    - SIMD: int = 8
     - MEM_DEPTH: int = 1024
     """
     import onnx.helper

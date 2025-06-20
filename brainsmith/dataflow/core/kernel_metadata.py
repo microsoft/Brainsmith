@@ -8,11 +8,14 @@ The RTL parser creates this directly, and templates use it without conversion.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 from .interface_metadata import InterfaceMetadata
 from .datatype_metadata import DatatypeMetadata
-from ...tools.hw_kernel_gen.rtl_parser.data import Parameter, Pragma
+
+if TYPE_CHECKING:
+    from ...tools.hw_kernel_gen.rtl_parser.data import Parameter
+    from ...tools.hw_kernel_gen.rtl_parser.pragmas import Pragma
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +72,7 @@ class KernelMetadata:
     
     # === RTL Parameters ===
     
-    parameters: List[Parameter]
+    parameters: List['Parameter']
     """
     SystemVerilog parameters from the RTL module.
     
@@ -98,7 +101,7 @@ class KernelMetadata:
     
     # === Pragma Information ===
     
-    pragmas: List[Pragma]
+    pragmas: List['Pragma']
     """
     All @brainsmith pragmas found in the RTL source.
     

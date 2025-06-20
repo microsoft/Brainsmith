@@ -8,11 +8,10 @@
 // @brainsmith datatype m_axis_output UINT 8 32
 // @brainsmith datatype s_axis_weights FIXED 8 16
 // @brainsmith weight s_axis_weights
-// @brainsmith bdim s_axis_input INPUT_BDIM SHAPE=[PE,SIMD]
+// @brainsmith bdim s_axis_input INPUT_BDIM SHAPE=[:]
 // @brainsmith sdim s_axis_input INPUT_SDIM
-// @brainsmith bdim s_axis_weights WEIGHT_BDIM SHAPE=[PE,SIMD] RINDEX=1
+// @brainsmith bdim s_axis_weights WEIGHT_BDIM SHAPE=[:,:] RINDEX=1
 // @brainsmith alias PE num_engines
-// @brainsmith alias SIMD simd_width
 // @brainsmith derived_parameter MEM_DEPTH self.calc_memory_depth()
 // @brainsmith datatype_param s_axis_input width INPUT_WIDTH
 // @brainsmith datatype_param s_axis_weights width WEIGHT_WIDTH
@@ -22,8 +21,6 @@
 // @brainsmith datatype_param threshold width THRESH_WIDTH
 
 module test_kernel_e2e #(
-    parameter int PE = 4,
-    parameter int SIMD = 8,
     parameter int INPUT_WIDTH = 8,
     parameter int WEIGHT_WIDTH = 8,
     parameter int WEIGHT_SIGNED = 1,

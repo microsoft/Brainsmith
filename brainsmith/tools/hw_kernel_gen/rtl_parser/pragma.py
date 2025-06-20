@@ -16,10 +16,11 @@ from typing import List, Optional, Dict, Callable, Any, Tuple
 
 from tree_sitter import Node
 
-from .data import (
-    Pragma, PragmaType, TopModulePragma, DatatypePragma, BDimPragma, SDimPragma,
-    DerivedParameterPragma, WeightPragma, DatatypeParamPragma, AliasPragma, 
-    ParameterPragma, PragmaError
+from .data import PragmaType
+from .pragmas import (
+    Pragma, PragmaError, InterfacePragma,
+    TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
+    AliasPragma, DerivedParameterPragma, BDimPragma, SDimPragma
 )
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
@@ -141,23 +142,6 @@ class PragmaHandler:
         logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
         self.pragmas = pragmas # Store the extracted pragmas in the instance
         return pragmas
-
-    def get_interface_pragmas(self) -> List['InterfacePragma']:
-        """Get all interface-related pragmas.
-        
-        Returns:
-            List of InterfacePragma instances
-        """
-        from .data import InterfacePragma
-        return [pragma for pragma in self.pragmas if isinstance(pragma, InterfacePragma)]
-
-    def get_parameter_pragmas(self) -> List['ParameterPragma']:
-        """Get all parameter-related pragmas.
-        
-        Returns:
-            List of ParameterPragma instances
-        """
-        return [pragma for pragma in self.pragmas if isinstance(pragma, ParameterPragma)]
 
     def get_pragmas_by_type(self, pragma_type: PragmaType) -> List[Pragma]:
         """Get all pragmas of a specific type.

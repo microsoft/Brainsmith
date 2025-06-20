@@ -14,11 +14,14 @@ parameters with the same prefix are grouped together.
 
 import re
 import logging
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
 
 from .data import Parameter
 from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+
+if TYPE_CHECKING:
+    from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -189,54 +192,94 @@ class ParameterLinker:
         """
         return set(datatype_metadata.get_all_parameters())
     
-    def merge_with_pragma_datatypes(self, auto_linked: List[DatatypeMetadata],
-                                   pragma_defined: List[DatatypeMetadata]) -> List[DatatypeMetadata]:
-        """
-        Merge auto-linked datatypes with pragma-defined ones.
+    def apply_to_kernel_metadata(self, kernel_metadata: 'KernelMetadata') -> None:
+        """Apply all parameter linking to kernel metadata.
         
-        Pragma-defined datatypes take precedence. If a pragma defines a property
-        for a datatype, it overrides the auto-linked value.
+        This method handles:
+        - Interface parameter linking for streaming interfaces
+        - Creating default datatype metadata when needed
+        - Setting default BDIM/SDIM parameters
+        - Internal parameter linking
+        - Managing the exposed parameters list
         
         Args:
-            auto_linked: List of auto-linked DatatypeMetadata
-            pragma_defined: List of pragma-defined DatatypeMetadata
-            
-        Returns:
-            Merged list of DatatypeMetadata
+            kernel_metadata: KernelMetadata to modify in place
         """
-        # Index auto-linked by name
-        auto_linked_dict = {dt.name: dt for dt in auto_linked}
+        logger.debug("Applying parameter linking to kernel metadata")
         
-        # Index pragma-defined by name
-        pragma_dict = {dt.name: dt for dt in pragma_defined}
+        # Apply interface auto-linking
+        if self.enable_interface_linking:
+            for interface in kernel_metadata.interfaces:
+                # Auto-link all eligible streaming interfaces
+                if interface.interface_type.value in ['input', 'output', 'weight']:
+                    
+                    auto_linked_dt = self.link_interface_parameters(
+                        interface.name, kernel_metadata.parameters
+                    )
+                    
+                    if interface.datatype_metadata is None:
+                        # No existing metadata - use auto-linked or create default
+                        if auto_linked_dt:
+                            interface.datatype_metadata = auto_linked_dt
+                            logger.info(f"Auto-linked datatype parameters for interface '{interface.name}'")
+                        else:
+                            # No auto-linkable parameters found - create minimal metadata
+                            interface.datatype_metadata = DatatypeMetadata(name=interface.name)
+                            logger.debug(f"No datatype parameters found for interface '{interface.name}' - using minimal metadata")
+                    elif auto_linked_dt:
+                        # Merge auto-linked with existing metadata (auto-link fills gaps)
+                        existing = interface.datatype_metadata
+                        merged = existing.update(
+                            width=existing.width or auto_linked_dt.width,
+                            signed=existing.signed or auto_linked_dt.signed,
+                            format=existing.format or auto_linked_dt.format,
+                            bias=existing.bias or auto_linked_dt.bias,
+                            fractional_width=existing.fractional_width or auto_linked_dt.fractional_width,
+                            exponent_width=existing.exponent_width or auto_linked_dt.exponent_width,
+                            mantissa_width=existing.mantissa_width or auto_linked_dt.mantissa_width
+                        )
+                        interface.datatype_metadata = merged
+                        logger.info(f"Merged auto-linked parameters with existing metadata for interface '{interface.name}'")
+                    
+                    # Remove linked parameters from exposed list
+                    if interface.datatype_metadata:
+                        for param_name in interface.datatype_metadata.get_all_parameters():
+                            if param_name in kernel_metadata.exposed_parameters:
+                                kernel_metadata.exposed_parameters.remove(param_name)
+                    
+                    # Always set default BDIM/SDIM parameters if not already set
+                    if not interface.bdim_param:
+                        interface.bdim_param = f"{interface.name}_BDIM"
+                    if not interface.sdim_param:
+                        interface.sdim_param = f"{interface.name}_SDIM"
         
-        # Merge
-        merged = {}
-        
-        # Start with auto-linked
-        for name, auto_dt in auto_linked_dict.items():
-            if name in pragma_dict:
-                # Pragma exists - merge properties (pragma wins)
-                pragma_dt = pragma_dict[name]
-                merged[name] = DatatypeMetadata(
-                    name=name,
-                    width=pragma_dt.width or auto_dt.width,  # Pragma overrides if set
-                    signed=pragma_dt.signed if pragma_dt.signed is not None else auto_dt.signed,
-                    format=pragma_dt.format if pragma_dt.format is not None else auto_dt.format,
-                    bias=pragma_dt.bias if pragma_dt.bias is not None else auto_dt.bias,
-                    fractional_width=pragma_dt.fractional_width if pragma_dt.fractional_width is not None else auto_dt.fractional_width,
-                    exponent_width=pragma_dt.exponent_width if pragma_dt.exponent_width is not None else auto_dt.exponent_width,
-                    mantissa_width=pragma_dt.mantissa_width if pragma_dt.mantissa_width is not None else auto_dt.mantissa_width,
-                    description=pragma_dt.description or auto_dt.description
-                )
-                logger.debug(f"Merged auto-linked and pragma-defined datatype '{name}'")
-            else:
-                # No pragma - keep auto-linked
-                merged[name] = auto_dt
-        
-        # Add pragma-only datatypes
-        for name, pragma_dt in pragma_dict.items():
-            if name not in merged:
-                merged[name] = pragma_dt
-        
-        return list(merged.values())
+        # Apply internal auto-linking
+        if self.enable_internal_linking:
+            # Get interface names and already-linked parameters for exclusion
+            interface_names = [iface.name for iface in kernel_metadata.interfaces]
+            exclude_parameters = set()
+            
+            # Collect parameters already linked by pragmas
+            for dt in kernel_metadata.internal_datatypes:
+                exclude_parameters.update(dt.get_all_parameters())
+            
+            # Collect parameters already linked by interface datatypes
+            for interface in kernel_metadata.interfaces:
+                if interface.datatype_metadata:
+                    exclude_parameters.update(interface.datatype_metadata.get_all_parameters())
+            
+            auto_linked_internals = self.link_internal_parameters(
+                kernel_metadata.parameters,
+                exclude_prefixes=interface_names,
+                exclude_parameters=exclude_parameters
+            )
+            
+            if auto_linked_internals:
+                kernel_metadata.internal_datatypes.extend(auto_linked_internals)
+                logger.info(f"Auto-linked {len(auto_linked_internals)} internal datatypes")
+                
+                # Remove auto-linked parameters from exposed list
+                for dt in auto_linked_internals:
+                    for param_name in dt.get_all_parameters():
+                        if param_name in kernel_metadata.exposed_parameters:
+                            kernel_metadata.exposed_parameters.remove(param_name)

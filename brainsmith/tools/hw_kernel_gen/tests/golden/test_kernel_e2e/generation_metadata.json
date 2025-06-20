@@ -25,7 +25,7 @@
     "metadata_files": 0
   },
   "template_context": {
-    "parameter_count": 14,
+    "parameter_count": 12,
     "interface_count": 5,
     "required_parameters": [
       "INPUT_WIDTH",
@@ -41,17 +41,13 @@
       "ACTIVATION_TYPE"
     ],
     "whitelisted_defaults": {
-      "PE": 4,
-      "SIMD": 8,
       "MEM_DEPTH": 1024
     }
   },
   "kernel_metadata": {
-    "parameter_count": 14,
+    "parameter_count": 12,
     "interface_count": 5,
     "parameter_names": [
-      "PE",
-      "SIMD",
       "INPUT_WIDTH",
       "WEIGHT_WIDTH",
       "WEIGHT_SIGNED",

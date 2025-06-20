@@ -31,9 +31,10 @@ from .data import (
     Parameter,
     Port,
     PortGroup,
-    Pragma,
     ValidationResult,
+    PragmaType,
 )
+from .pragmas import Pragma
 from .parser import RTLParser, ParserError
 from .protocol_validator import ProtocolValidator
 
