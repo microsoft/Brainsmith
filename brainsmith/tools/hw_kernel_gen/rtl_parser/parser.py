@@ -10,9 +10,9 @@ This module implements the main RTL parser using tree-sitter to parse
 SystemVerilog files and extract module interfaces, parameters, and pragmas.
 """
 
-import collections
+from collections import deque
 import logging
-from typing import Optional, List, Tuple, Dict, Union
+from typing import Optional, List, Tuple, Dict, Union, Any
 from pathlib import Path
 
 from tree_sitter import Parser, Node
@@ -27,9 +27,6 @@ from . import grammar
 
 # New imports for KernelMetadata integration
 from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.dataflow_interface import DataTypeConstraint
-from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -98,9 +95,7 @@ class RTLParser:
         self.name: Optional[str] = None
         self.parameters: List[Parameter] = []
         self.ports: List[Port] = [] # Intermediate list of raw ports
-        self.interface_metadata_list: List[InterfaceMetadata] = []  # Store direct metadata
         self.parsing_warnings: List[str] = []
-        self.parameter_pragma_data: Dict[str, Any] = {}  # Data from parameter pragmas (aliases, derived)
 
     def _initial_parse(self, source: str, source_name: str = "<string>", 
                       is_file: bool = True, target_module: Optional[str] = None) -> None:
@@ -248,48 +243,6 @@ class RTLParser:
             raise ParserError(f"Failed during port parsing: {e}")
         logger.info("Stage 2: Component extraction complete.")
 
-    def _remove_internal_linked_parameters(self, exposed_parameters: List[str], internal_datatypes: List['DatatypeMetadata']) -> List[str]:
-        """Remove parameters that are linked to internal datatypes from exposed_parameters.
-        
-        This method tracks which parameters are already claimed by pragma-defined internal
-        datatypes so that auto-linking doesn't create duplicates. It removes those parameters
-        from the exposed_parameters list.
-        
-        Args:
-            exposed_parameters: List of exposed parameter names
-            internal_datatypes: List of DatatypeMetadata for internal datatypes (pragma-defined)
-            
-        Returns:
-            Updated exposed_parameters list
-        """
-        linked_params = {}  # Track which internal datatype links which parameter
-        
-        # Collect all parameters referenced by internal datatypes
-        for dt_metadata in internal_datatypes:
-            for param_name in dt_metadata.get_all_parameters():
-                if param_name in linked_params:
-                    # Collision detected - multiple internal datatypes claim same parameter
-                    logger.warning(
-                        f"Parameter '{param_name}' is linked by multiple internal datatypes: "
-                        f"'{linked_params[param_name]}' and '{dt_metadata.name}'. "
-                        f"This may cause issues in generated code."
-                    )
-                else:
-                    linked_params[param_name] = dt_metadata.name
-        
-        # Remove linked parameters from exposed list
-        for param_name in linked_params:
-            if param_name in exposed_parameters:
-                exposed_parameters.remove(param_name)
-                logger.debug(
-                    f"Removed parameter '{param_name}' from exposed parameters "
-                    f"(linked to internal datatype '{linked_params[param_name]}')"
-                )
-        
-        # Store linked params for auto-linker exclusion
-        self._internal_linked_parameters = set(linked_params.keys())
-        
-        return exposed_parameters
 
     def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
         """Core SystemVerilog string parser.
@@ -422,7 +375,7 @@ class RTLParser:
     def _find_module_nodes(self, root: Node) -> List[Node]:
         """Finds all top-level 'module_declaration' nodes in the AST."""
         module_nodes = []
-        queue = collections.deque([root])
+        queue = deque([root])
         while queue:
             node = queue.popleft()
             if node.type == "module_declaration":

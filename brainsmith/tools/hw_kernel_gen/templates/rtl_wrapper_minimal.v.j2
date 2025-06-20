@@ -26,7 +26,7 @@ module {{ kernel_name }}_wrapper #(
 {#- Input interfaces -#}
 {% for interface in input_interfaces %}
 {{ "\n" if loop.first else "" }}    // {{ interface.name }}: INPUT interface
-    input wire [{{ interface.name }}_TDATA_WIDTH-1:0] {{ interface.name }}_TDATA,
+    input wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.name }}_TDATA,
     input wire {{ interface.name }}_TVALID,
     output wire {{ interface.name }}_TREADY{% if not loop.last or output_interfaces|length + weight_interfaces|length + config_interfaces|length > 0 %},{% endif %}
 {% endfor %}
@@ -34,7 +34,7 @@ module {{ kernel_name }}_wrapper #(
 {#- Output interfaces -#}
 {% for interface in output_interfaces %}
 {{ "\n" if loop.first else "" }}    // {{ interface.name }}: OUTPUT interface
-    output wire [{{ interface.name }}_TDATA_WIDTH-1:0] {{ interface.name }}_TDATA,
+    output wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.name }}_TDATA,
     output wire {{ interface.name }}_TVALID,
     input wire {{ interface.name }}_TREADY{% if not loop.last or weight_interfaces|length + config_interfaces|length > 0 %},{% endif %}
 {% endfor %}
@@ -42,7 +42,7 @@ module {{ kernel_name }}_wrapper #(
 {#- Weight interfaces -#}
 {% for interface in weight_interfaces %}
 {{ "\n" if loop.first else "" }}    // {{ interface.name }}: WEIGHT interface
-    input wire [{{ interface.name }}_TDATA_WIDTH-1:0] {{ interface.name }}_TDATA,
+    input wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.name }}_TDATA,
     input wire {{ interface.name }}_TVALID,
     output wire {{ interface.name }}_TREADY{% if not loop.last or config_interfaces|length > 0 %},{% endif %}
 {% endfor %}

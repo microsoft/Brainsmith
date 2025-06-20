@@ -1,0 +1,13 @@
+Generation Summary for test_kernel_e2e
+==================================================
+Source File: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
+Output Directory: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e
+Success: True
+Validation Passed: True
+Files Generated: 4
+
+Generated Files:
+  - /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e/test_kernel_e2e_hw_custom_op.py
+  - /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e/test_kernel_e2e_rtl.py
+  - /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e/test_kernel_e2e_wrapper.v
+  - /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e/test_test_kernel_e2e.py

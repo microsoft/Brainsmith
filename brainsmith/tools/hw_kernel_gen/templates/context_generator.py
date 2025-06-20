@@ -281,6 +281,22 @@ class TemplateContextGenerator:
         # Add template-time parameter assignments to context
         context["datatype_parameter_assignments"] = template_ctx.datatype_parameter_assignments
         
+        # Add CONFIG interface detection for axilite_config nodeattr
+        if kernel_metadata:
+            config_interfaces_list = TemplateContextGenerator()._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG)
+            context["has_config_interface"] = len(config_interfaces_list) > 0
+            if config_interfaces_list:
+                # Use the first CONFIG interface name (typically there's only one)
+                context["config_interface_name"] = config_interfaces_list[0].name
+            else:
+                context["config_interface_name"] = None
+        else:
+            # Fallback: extract from template_ctx interfaces
+            config_interfaces_list = [iface for iface in template_ctx.interface_metadata 
+                                    if iface.interface_type == InterfaceType.CONFIG]
+            context["has_config_interface"] = len(config_interfaces_list) > 0
+            context["config_interface_name"] = config_interfaces_list[0].name if config_interfaces_list else None
+        
         return context
     
     def _get_class_name(self, module_name: str) -> str:

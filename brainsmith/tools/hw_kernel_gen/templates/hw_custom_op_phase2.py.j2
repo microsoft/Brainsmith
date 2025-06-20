@@ -58,13 +58,15 @@ class {{ class_name }}(AutoHWCustomOp):
     @staticmethod
     def get_interface_metadata() -> List[InterfaceMetadata]:
         """
-        Return static interface metadata with validated symbolic BDIM shapes.
+        Return static interface metadata for dataflow interfaces (AXI-Stream only).
         
+        Control and configuration interfaces are handled separately and not included here.
         All BDIM parameters have been validated during template generation
         to ensure they reference valid module parameters.
         """
         return [
             {% for interface in interface_metadata %}
+            {% if interface.interface_type.name in ['INPUT', 'OUTPUT', 'WEIGHT'] %}
             InterfaceMetadata(
                 name="{{ interface.name }}",
                 interface_type=InterfaceType.{{ interface.interface_type.name }},
@@ -86,6 +88,7 @@ class {{ class_name }}(AutoHWCustomOp):
                 chunking_strategy=None
                 {% endif %}
             ),
+            {% endif %}
             {% endfor %}
         ]
     
@@ -101,11 +104,13 @@ class {{ class_name }}(AutoHWCustomOp):
         # RTL parameters as node attributes (only exposed parameters)
         {% for param in parameter_definitions %}
         {% if param.name in exposed_parameters %}
-        {%- set nodeattr_name = parameter_aliases.get(param.name, param.name) %}
+        {% set nodeattr_name = parameter_aliases.get(param.name, param.name) %}
         {% if param.is_whitelisted and param.default_value %}
         my_attrs["{{ nodeattr_name }}"] = ("i", False, {{ param.default_value }})  # Optional with default{% if nodeattr_name != param.name %} (aliased from {{ param.name }}){% endif %}
+
         {% else %}
         my_attrs["{{ nodeattr_name }}"] = ("i", True, None)  # Required parameter{% if nodeattr_name != param.name %} (aliased from {{ param.name }}){% endif %}
+
         {% endif %}
         {% endif %}
         {% endfor %}

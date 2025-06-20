@@ -1,0 +1,70 @@
+{
+  "kernel_name": "test_kernel_e2e",
+  "source_file": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv",
+  "validation_passed": true,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "generated_files": [
+    "test_kernel_e2e_hw_custom_op.py",
+    "test_kernel_e2e_rtl.py",
+    "test_kernel_e2e_wrapper.v",
+    "test_test_kernel_e2e.py"
+  ],
+  "generation_time_ms": null,
+  "summary": {
+    "kernel_name": "test_kernel_e2e",
+    "source_file": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv",
+    "success": true,
+    "files_generated": 4,
+    "validation_passed": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "generation_time_ms": null,
+    "output_directory": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/output/test_kernel_e2e",
+    "files_written": 4,
+    "metadata_files": 0
+  },
+  "template_context": {
+    "parameter_count": 14,
+    "interface_count": 5,
+    "required_parameters": [
+      "INPUT_WIDTH",
+      "WEIGHT_WIDTH",
+      "WEIGHT_SIGNED",
+      "OUTPUT_WIDTH",
+      "ACC_WIDTH",
+      "ACC_SIGNED",
+      "THRESH_WIDTH",
+      "INPUT_BDIM",
+      "INPUT_SDIM",
+      "WEIGHT_BDIM",
+      "ACTIVATION_TYPE"
+    ],
+    "whitelisted_defaults": {
+      "PE": 4,
+      "SIMD": 8,
+      "MEM_DEPTH": 1024
+    }
+  },
+  "kernel_metadata": {
+    "parameter_count": 14,
+    "interface_count": 5,
+    "parameter_names": [
+      "PE",
+      "SIMD",
+      "INPUT_WIDTH",
+      "WEIGHT_WIDTH",
+      "WEIGHT_SIGNED",
+      "OUTPUT_WIDTH",
+      "ACC_WIDTH",
+      "ACC_SIGNED",
+      "THRESH_WIDTH",
+      "INPUT_BDIM",
+      "INPUT_SDIM",
+      "WEIGHT_BDIM",
+      "MEM_DEPTH",
+      "ACTIVATION_TYPE"
+    ]
+  }
+}

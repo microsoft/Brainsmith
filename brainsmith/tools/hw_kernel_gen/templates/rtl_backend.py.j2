@@ -61,6 +61,11 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
     {% endif %}
 {% endfor %}
         
+        {% if has_config_interface %}
+        # Standardized AXI-Lite configuration support
+        my_attrs["axilite_config"] = ("i", False, 1, {0, 1})
+        {% endif %}
+        
         # Merge with parent class attributes
 {% if base_kernel_class %}
         my_attrs.update({{ base_kernel_class }}.get_nodeattr_types(self))
@@ -90,9 +95,11 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
     {% if param.name in exposed_parameters %}
         {%- set nodeattr_name = parameter_aliases.get(param.name, param.name) %}
         code_gen_dict["${{ param.name.upper() }}$"] = [str(self.get_nodeattr("{{ nodeattr_name }}"))]{% if nodeattr_name != param.name %}  # Aliased from {{ nodeattr_name }}{% endif %}
+
     {% elif param.name in derived_parameters %}
         # Derived parameter - computed from expression
         code_gen_dict["${{ param.name.upper() }}$"] = [str({{ derived_parameters[param.name] }})]
+
     {% endif %}
 {% endfor %}
         
@@ -117,6 +124,16 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         # {{ assignment.comment }}
         code_gen_dict["{{ assignment.template_var }}"] = [{{ assignment.source }}]
 {% endfor %}
+        
+        # Stream width parameters from DataflowModel
+        dataflow_model = self.get_dataflow_model()
+        if dataflow_model:
+            for iface_name, iface in dataflow_model.interfaces.items():
+                # Calculate stream width for this interface
+                stream_width = iface.calculate_stream_width()
+                # Generate template variable using original interface name (uppercase)
+                template_var = f"${iface.name.upper()}_STREAM_WIDTH$"
+                code_gen_dict[template_var] = [str(stream_width)]
         
         return code_gen_dict
     
@@ -177,6 +194,15 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         # TODO: Implement operation-specific DSP estimation
         # For now, use base class estimate
         return super().dsp_estimation(fpgapart)
+    
+    {% if has_config_interface %}
+    def get_verilog_top_module_intf_names(self):
+        """Override to add AXI-Lite interface when configuration is enabled."""
+        intf_names = super().get_verilog_top_module_intf_names()
+        if self.get_nodeattr("axilite_config") == 1:
+            intf_names["axilite"] = ["{{ config_interface_name }}"]
+        return intf_names
+    {% endif %}
 {% if has_implementation_styles %}
     
     def select_impl_style(self):

@@ -51,7 +51,7 @@ module thresholding_axi #(
 
 	bit  input_SIGNED = 1,	// signed inputs
 	bit  input_FPARG  = 0,	// floating-point inputs: [sign] | exponent | mantissa
-	int  output_BIAS  = 0,	// offsetting the output [0, 2^out_WIDTH-1] -> [BIAS, 2^out_WIDTH-1 + BIAS]
+	int  output_BIAS  = 0,	// offsetting the output [0, 2^output_WIDTH-1] -> [output_BIAS, 2^output_WIDTH-1 + output_BIAS]
 
 	// Initial Thresholds
 	parameter  THRESHOLDS_PATH = "",
@@ -63,11 +63,11 @@ module thresholding_axi #(
 	int unsigned  DEPTH_TRIGGER_BRAM = 0,	// if non-zero, local mems of this depth or more go into BRAM
 	bit  DEEP_PIPELINE = 0,
 
-	localparam int unsigned  CF = in_BDIM/in_SDIM,	// Channel Fold
-	localparam int unsigned  ADDR_BITS = $clog2(CF) + $clog2(in_SDIM) + out_WIDTH + 2,
-	localparam int unsigned  O_BITS = BIAS >= 0?
-		/* unsigned */ $clog2(2**out_WIDTH+BIAS) :
-		/* signed */ 1+$clog2(-BIAS >= 2**(out_WIDTH-1)? -BIAS : 2**out_WIDTH+BIAS)
+	localparam int unsigned  CF = input_BDIM/input_SDIM,	// Channel Fold
+	localparam int unsigned  ADDR_BITS = $clog2(CF) + $clog2(input_SDIM) + output_WIDTH + 2,
+	localparam int unsigned  O_BITS = output_BIAS >= 0?
+		/* unsigned */ $clog2(2**output_WIDTH+output_BIAS) :
+		/* signed */ 1+$clog2(-output_BIAS >= 2**(output_WIDTH-1)? -output_BIAS : 2**output_WIDTH+output_BIAS)
 )(
 	//- Global Control ------------------
 	input	logic  ap_clk,
@@ -101,12 +101,12 @@ module thresholding_axi #(
 	//- AXI Stream - Input --------------
 	output	logic  input_tready,
 	input	logic  input_tvalid,
-	input	logic [((in_SDIM*in_WIDTH+7)/8)*8-1:0]  input_tdata,
+	input	logic [((input_SDIM*input_WIDTH+7)/8)*8-1:0]  input_tdata,
 
 	//- AXI Stream - Output -------------
 	input	logic  output_tready,
 	output	logic  output_tvalid,
-	output	logic [((in_SDIM*O_BITS+7)/8)*8-1:0]  output_tdata
+	output	logic [((input_SDIM*O_BITS+7)/8)*8-1:0]  output_tdata
 );
 
 	//-----------------------------------------------------------------------
@@ -149,31 +149,31 @@ module thresholding_axi #(
 
 	//-----------------------------------------------------------------------
 	// Cast Inputs into Threshold Data Type
-	uwire [in_SDIM-1:0][T_WIDTH-1:0]  idat;
-	for(genvar  pe = 0; pe < in_SDIM; pe++) begin
-		if(T_WIDTH == in_WIDTH) begin : genCopy
-			assign	idat[pe] = input_tdata[pe*in_WIDTH+:in_WIDTH];
+	uwire [input_SDIM-1:0][T_WIDTH-1:0]  idat;
+	for(genvar  pe = 0; pe < input_SDIM; pe++) begin
+		if(T_WIDTH == input_WIDTH) begin : genCopy
+			assign	idat[pe] = input_tdata[pe*input_WIDTH+:input_WIDTH];
 		end : genCopy
 		else begin
 			initial begin
-				if(FPARG) begin
+				if(input_FPARG) begin
 					$error("%m: Can't cast floating-point type.");
 					$finish;
 				end
 			end
 
-			if(T_WIDTH > in_WIDTH) begin : genWiden
-				assign	idat[pe] = { {(T_WIDTH-in_WIDTH){in_SIGNED? input_tdata[(pe+1)*in_WIDTH-1] : 1'b0}}, input_tdata[pe*in_WIDTH+:in_WIDTH] };
+			if(T_WIDTH > input_WIDTH) begin : genWiden
+				assign	idat[pe] = { {(T_WIDTH-input_WIDTH){input_SIGNED? input_tdata[(pe+1)*input_WIDTH-1] : 1'b0}}, input_tdata[pe*input_WIDTH+:input_WIDTH] };
 			end : genWiden
 			else begin : genNarrow
 				// Saturate for clipping inputs
-				if(!in_SIGNED) begin
-					assign	idat[pe] = |input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH]? '1 : input_tdata[pe*in_WIDTH+:T_WIDTH];
+				if(!input_SIGNED) begin
+					assign	idat[pe] = |input_tdata[pe*input_WIDTH+T_WIDTH+:input_WIDTH-T_WIDTH]? '1 : input_tdata[pe*input_WIDTH+:T_WIDTH];
 				end
 				else begin
 					assign	idat[pe] =
-						(input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH] == '1) || (input_tdata[pe*in_WIDTH+T_WIDTH+:in_WIDTH-T_WIDTH] == '0)? input_tdata[pe*in_WIDTH+:T_WIDTH] :
-						{input_tdata[(pe+1)*in_WIDTH-1], {(T_WIDTH-1){!input_tdata[(pe+1)*in_WIDTH-1]}}};
+						(input_tdata[pe*input_WIDTH+T_WIDTH+:input_WIDTH-T_WIDTH] == '1) || (input_tdata[pe*input_WIDTH+T_WIDTH+:input_WIDTH-T_WIDTH] == '0)? input_tdata[pe*input_WIDTH+:T_WIDTH] :
+						{input_tdata[(pe+1)*input_WIDTH-1], {(T_WIDTH-1){!input_tdata[(pe+1)*input_WIDTH-1]}}};
 				end
 			end : genNarrow
 		end
@@ -182,8 +182,8 @@ module thresholding_axi #(
 	//-----------------------------------------------------------------------
 	// Kernel Implementation
 	thresholding #(
-		.out_WIDTH(out_WIDTH), .K(T_WIDTH), .in_BDIM(in_BDIM), .in_SDIM(in_SDIM),
-		.in_SIGNED(in_SIGNED), .FPARG(FPARG), .BIAS(BIAS),
+		.output_WIDTH(output_WIDTH), .K(T_WIDTH), .input_BDIM(input_BDIM), .input_SDIM(input_SDIM),
+		.input_SIGNED(input_SIGNED), .input_FPARG(input_FPARG), .output_BIAS(output_BIAS),
 		.THRESHOLDS_PATH(THRESHOLDS_PATH), .USE_CONFIG(USE_AXILITE),
 		.DEPTH_TRIGGER_URAM(DEPTH_TRIGGER_URAM), .DEPTH_TRIGGER_BRAM(DEPTH_TRIGGER_BRAM),
 		.DEEP_PIPELINE(DEEP_PIPELINE)
@@ -194,10 +194,10 @@ module thresholding_axi #(
 		.cfg_rack, .cfg_q,
 
 		.irdy(input_tready), .ivld(input_tvalid), .idat,
-		.ordy(output_tready), .ovld(output_tvalid), .odat(output_tdata[in_SDIM*O_BITS-1:0])
+		.ordy(output_tready), .ovld(output_tvalid), .odat(output_tdata[input_SDIM*O_BITS-1:0])
 	);
-	if($bits(output_tdata) > in_SDIM*O_BITS) begin : genPadOut
-		assign	output_tdata[$left(output_tdata):in_SDIM*O_BITS] = '0;
+	if($bits(output_tdata) > input_SDIM*O_BITS) begin : genPadOut
+		assign	output_tdata[$left(output_tdata):input_SDIM*O_BITS] = '0;
 	end : genPadOut
 
 endmodule : thresholding_axi
