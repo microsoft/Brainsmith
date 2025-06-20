@@ -91,7 +91,6 @@ def make_single_hwsoftmax_modelwrapper(impl_style="hls", simd=1, idt=DataType["U
         input_data_type=idt.name,
         simd=simd,
         preferred_impl_style=impl_style,
-        rtlsim_backend="pyxsi",
         rtlsim_trace="hwsoftmax_debug_trace.wdb",
     )
     graph = helper.make_graph(
