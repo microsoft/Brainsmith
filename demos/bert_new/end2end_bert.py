@@ -180,22 +180,12 @@ def create_adaptive_blueprint(args) -> str:
     """Create blueprint adapted to current configuration."""
     
     # Determine model configuration
-    if getattr(args, 'ultra_small', False):
-        hidden_size = 96
-        num_hidden_layers = 1
-        num_attention_heads = 3
-        intermediate_size = 384
-        seqlen = 32
-        ultra_small = True
-        print("📋 Creating ultra-small adaptive blueprint")
-    else:
-        hidden_size = args.hidden_size
-        num_hidden_layers = args.num_hidden_layers
-        num_attention_heads = args.num_attention_heads
-        intermediate_size = args.intermediate_size
-        seqlen = args.seqlen
-        ultra_small = False
-        print("📋 Creating standard adaptive blueprint")
+    hidden_size = args.hidden_size
+    num_hidden_layers = args.num_hidden_layers
+    num_attention_heads = args.num_attention_heads
+    intermediate_size = args.intermediate_size
+    seqlen = args.seqlen
+    print("📋 Creating standard adaptive blueprint")
     
     # Base unified blueprint path - use absolute path from container root
     import os
@@ -213,7 +203,6 @@ def create_adaptive_blueprint(args) -> str:
         intermediate_size=intermediate_size,
         sequence_length=seqlen,
         bitwidth=args.bitwidth,
-        ultra_small=ultra_small,
         target_device=args.board,
         output_dir=args.output_dir
     )
@@ -227,30 +216,17 @@ def main(args):
     print("🚀 BERT Accelerator Demo - Unified Blueprint with Runtime Adaptation")
     
     # Generate model based on configuration
-    if getattr(args, 'ultra_small', False):
-        print("📦 Generating ultra-small BERT model: 1 layer, 96D")
-        print("⚡ Ultra-fast testing mode - 5-10x smaller model!")
-        model_path = generate_bert_model(
-            output_dir=args.output_dir,
-            hidden_size=96,              # Ultra-small
-            num_hidden_layers=1,         # Minimal
-            num_attention_heads=3,       # Divisible into 96
-            intermediate_size=384,       # 4x smaller
-            bitwidth=args.bitwidth,
-            seqlen=32                    # Small sequence
-        )
-    else:
-        print(f"📦 Generating BERT model: {args.num_hidden_layers} layers, {args.hidden_size}D")
-        print("✨ Using unified blueprint with runtime model dimension updates!")
-        model_path = generate_bert_model(
-            output_dir=args.output_dir,
-            hidden_size=args.hidden_size,
-            num_hidden_layers=args.num_hidden_layers,
-            num_attention_heads=args.num_attention_heads,
-            intermediate_size=args.intermediate_size,
-            bitwidth=args.bitwidth,
-            seqlen=args.seqlen
-        )
+    print(f"📦 Generating BERT model: {args.num_hidden_layers} layers, {args.hidden_size}D")
+    print("✨ Using unified blueprint with runtime model dimension updates!")
+    model_path = generate_bert_model(
+        output_dir=args.output_dir,
+        hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_hidden_layers,
+        num_attention_heads=args.num_attention_heads,
+        intermediate_size=args.intermediate_size,
+        bitwidth=args.bitwidth,
+        seqlen=args.seqlen
+    )
     
     # Create adaptive blueprint based on model configuration
     blueprint_path = create_adaptive_blueprint(args)
@@ -269,16 +245,11 @@ def main(args):
         )
         print("✅ forge execution successful - adaptive blueprint used!")
     except Exception as e:
-        print(f"⚠️ forge failed: {e}")
-        print("⚠️ Falling back to legacy forge")
-        # Fallback to legacy blueprint
-        blueprint_path = brainsmith.libraries.blueprints.get_blueprint('bert_minimal')
-        result = brainsmith.forge(
-            model_path=model_path,
-            blueprint_path=blueprint_path,
-            target_device=args.board,
-            output_dir=args.output_dir
-        )
+        print(f"❌ forge failed with error: {e}")
+        print("💡 To use legacy forge, run with --legacy flag")
+        import traceback
+        traceback.print_exc()
+        result = {'status': 'failed', 'error': str(e)}
     
     # Handle results with structured output
     handle_forge_results(result, args)
@@ -293,8 +264,6 @@ def handle_forge_results(result: dict, args) -> None:
         print(f"📁 Your accelerator is ready in: {args.output_dir}")
         
         # Show configuration information
-        mode = "ultra-small" if getattr(args, 'ultra_small', False) else "standard"
-        print(f"🔧 Configuration: {mode} mode")
         print(f"📐 Model dimensions: {args.num_hidden_layers}L x {args.hidden_size}D x {args.num_attention_heads}H")
         
         # Always show basic metrics for wow factor
@@ -317,7 +286,6 @@ def handle_forge_results(result: dict, args) -> None:
             'model': f"BERT-{args.num_hidden_layers}L-{args.hidden_size}D",
             'board': args.board,
             'blueprint_type': 'adaptive_unified',
-            'mode': mode,
             'status': 'success',
             'generated_by': 'brainsmith.forge_v2() with adaptive blueprint'
         }
@@ -328,7 +296,6 @@ def handle_forge_results(result: dict, args) -> None:
         
         print(f"\n🚀 Success! Unified blueprint adapted to your model configuration.")
         print(f"🎯 Model: BERT {args.num_hidden_layers} layers, {args.hidden_size} hidden size")
-        print(f"📋 Blueprint: Runtime-adapted for {mode} configuration")
         print(f"💡 Ready to deploy on {args.board}")
         
     else:
@@ -370,11 +337,6 @@ def create_argument_parser():
     opt_group.add_argument('--board', default='V80',
                           help='Target FPGA board')
     
-    # Configuration modes
-    config_group = parser.add_argument_group('Configuration Modes')
-    config_group.add_argument('--ultra-small', action='store_true',
-                             help='Use ultra-small BERT config (96D, 1L, 3H) for fast testing')
-    
     return parser
 
 
@@ -389,14 +351,8 @@ if __name__ == "__main__":
     args.intermediate_size = args.intermediate_size
     args.seqlen = args.sequence_length
     
-    # Show configuration mode
-    if args.ultra_small:
-        print("🔧 Ultra-small mode: 96D hidden, 1 layer, 3 heads, 32 sequence")
-        print("⚡ Expected: 5-10x faster build, ~2MB model")
-        print("📋 Blueprint will be adapted for ultra-small optimizations")
-    else:
-        print("🔧 Standard mode: Using runtime-adaptive unified blueprint")
-        print(f"📐 Model: {args.num_layers}L x {args.hidden_size}D x {args.num_heads}H")
-        print("📋 Blueprint will be adapted for standard configuration")
-    
+    print("🔧 Using runtime-adaptive unified blueprint")
+    print(f"📐 Model: {args.num_layers}L x {args.hidden_size}D x {args.num_heads}H")
+    print("📋 Blueprint will be adapted for standard configuration")
+
     main(args)

@@ -23,7 +23,7 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
     def get_nodeattr_types(self):
         my_attrs = {}
         my_attrs.update(HWSoftmax.get_nodeattr_types(self))
-        my_attrs.update(BS_HLSBackend.get_nodeattr_types(self))
+        my_attrs.update(HLSBackend.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
@@ -207,3 +207,10 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
+    
+    def ipgen_extra_includes(self):
+        """Add kernel-specific include paths."""
+        import os
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        return f"-I{kernel_dir} -I{utils_dir}"

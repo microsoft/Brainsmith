@@ -43,7 +43,6 @@ class BlueprintAdapter:
             intermediate_size: Feed-forward intermediate size
             sequence_length: Maximum sequence length
             bitwidth: Quantization bit width
-            ultra_small: Whether to use ultra-small optimizations
             target_device: Target FPGA device
             
         Returns:
@@ -70,11 +69,8 @@ class BlueprintAdapter:
         expected['parameters']['intermediate_size'] = intermediate_size
         expected['parameters']['max_position_embeddings'] = sequence_length
         
-        # Apply ultra-small optimizations if requested
-        if ultra_small:
-            self._apply_ultra_small_optimizations(adapted)
-        else:
-            self._apply_standard_optimizations(adapted)
+        # Apply optimizations
+        self._apply_standard_optimizations(adapted)
         
         # Update platform settings
         adapted['platform']['board'] = target_device
@@ -83,36 +79,6 @@ class BlueprintAdapter:
         self._update_metadata(adapted, ultra_small, hidden_size, num_hidden_layers)
         
         return adapted
-    
-    def _apply_ultra_small_optimizations(self, blueprint: Dict[str, Any]) -> None:
-        """Apply optimizations for ultra-small models."""
-        # Use ultra-small runtime adaptations from blueprint
-        ultra_small_config = blueprint.get('runtime_adaptations', {}).get('ultra_small_mode', {})
-        
-        # Update build configuration for speed
-        build_config = blueprint['build_configuration']
-        build_overrides = ultra_small_config.get('build_overrides', {})
-        build_config.update(build_overrides)
-        
-        # Update constraints for ultra-small
-        constraint_overrides = ultra_small_config.get('constraint_overrides', {})
-        for constraint in blueprint['constraints']:
-            constraint_name = constraint['name']
-            if constraint_name in constraint_overrides:
-                constraint['value'] = constraint_overrides[constraint_name]
-        
-        # Update DSE strategy
-        dse_overrides = ultra_small_config.get('dse_overrides', {})
-        blueprint['dse_strategies'].update(dse_overrides)
-        
-        # Update platform settings
-        platform_overrides = ultra_small_config.get('platform_overrides', {})
-        blueprint['platform'].update(platform_overrides)
-        
-        # Update expected characteristics
-        blueprint['expected_model']['architecture'] = "bert_ultra_small"
-        blueprint['expected_model']['estimated_size'] = "~2MB"
-        blueprint['expected_model']['estimated_build_time'] = "5-15 minutes"
     
     def _apply_standard_optimizations(self, blueprint: Dict[str, Any]) -> None:
         """Apply optimizations for standard models."""

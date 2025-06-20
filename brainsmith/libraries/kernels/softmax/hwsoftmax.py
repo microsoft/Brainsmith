@@ -14,12 +14,11 @@ from qonnx.core.datatype import DataType
 from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from qonnx.custom_op.registry import register_op
 
 
 @register_op(domain="brainsmith.libraries.kernels.softmax", op_type="HWSoftmax")
-class HWSoftmax(HWCustomOp, HLSBackend):
+class HWSoftmax(HWCustomOp):
     """Abstraction layer for HW implementation of VectorVectorActivation layers."""
 
     def __init__(self, onnx_node, **kwargs):
@@ -36,22 +35,6 @@ class HWSoftmax(HWCustomOp, HLSBackend):
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
 
-    # Abstract HLS methods - must be implemented for HLSBackend compatibility
-    def global_includes(self):
-        """Global includes for HLS code generation"""
-        pass
-    
-    def defines(self, var):
-        """Define commands for HLS code generation"""
-        pass
-    
-    def docompute(self):
-        """Computational part of HLS code generation"""
-        pass
-    
-    def blackboxfunction(self):
-        """Blackbox function for HLS IP generation"""
-        pass
 
     def get_normal_input_shape(self, ind=0):
         return self.get_nodeattr("ifm_dim")

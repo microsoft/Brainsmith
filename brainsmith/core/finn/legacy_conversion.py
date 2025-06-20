@@ -66,21 +66,63 @@ class LegacyConversionLayer:
             # Extract FINN configuration parameters from blueprint
             finn_params = self._build_finn_config_params(blueprint_config)
             
-            # Create DataflowBuildConfig with real FINN
-            dataflow_config = DataflowBuildConfig(
-                steps=step_functions,
-                output_dir=finn_params.get('output_dir', './finn_output'),
-                synth_clk_period_ns=finn_params.get('synth_clk_period_ns', 5.0),  # 200 MHz default
-                target_fps=finn_params.get('target_fps', None),
-                folding_config_file=finn_params.get('folding_config_file', None),
-                generate_outputs=[DataflowOutputType.STITCHED_IP],  # Default output
-                board=finn_params.get('board', None),
-                auto_fifo_depths=finn_params.get('auto_fifo_depths', True),
-                verify_steps=finn_params.get('verify_steps', []),
-                save_intermediate_models=finn_params.get('save_intermediate_models', True)
+            # Import enum types for conversion
+            from finn.builder.build_dataflow_config import (
+                AutoFIFOSizingMethod, ShellFlowType, VerificationStepType,
+                VitisOptStrategyCfg, LargeFIFOMemStyle
             )
             
+            # Convert enum string values to proper enum types
+            enum_conversions = self._convert_finn_enums(finn_params, {
+                'generate_outputs': DataflowOutputType,
+                'verify_steps': VerificationStepType,
+                'shell_flow_type': ShellFlowType,
+                'auto_fifo_strategy': AutoFIFOSizingMethod,
+                'large_fifo_mem_style': LargeFIFOMemStyle,
+                'vitis_opt_strategy': VitisOptStrategyCfg
+            })
+            
+            # Create DataflowBuildConfig with all parameters
+            # Start with required parameters
+            config_params = {
+                'steps': step_functions,
+                'output_dir': finn_params.get('output_dir', './finn_output'),
+                'synth_clk_period_ns': finn_params.get('synth_clk_period_ns', 5.0),
+                'generate_outputs': enum_conversions.get('generate_outputs', [DataflowOutputType.STITCHED_IP])
+            }
+            
+            # Add all optional parameters from finn_params
+            optional_params = [
+                'specialize_layers_config_file', 'folding_config_file', 'target_fps',
+                'folding_two_pass_relaxation', 'verify_steps', 'verify_input_npy',
+                'verify_expected_output_npy', 'verify_save_full_context',
+                'verify_save_rtlsim_waveforms', 'verification_atol', 'stitched_ip_gen_dcp',
+                'signature', 'mvau_wwidth_max', 'standalone_thresholds', 'minimize_bit_width',
+                'board', 'shell_flow_type', 'fpga_part', 'auto_fifo_depths',
+                'split_large_fifos', 'auto_fifo_strategy', 'large_fifo_mem_style',
+                'fifosim_input_throttle', 'fifosim_n_inferences', 'fifosim_save_waveform',
+                'hls_clk_period_ns', 'default_swg_exception', 'vitis_platform',
+                'vitis_floorplan_file', 'vitis_opt_strategy', 'save_intermediate_models',
+                'enable_hw_debug', 'enable_build_pdb_debug', 'verbose', 'start_step',
+                'stop_step', 'max_multithreshold_bit_width', 'rtlsim_batch_size',
+                'rtlsim_use_vivado_comps'
+            ]
+            
+            for param in optional_params:
+                if param in finn_params:
+                    # Use enum conversion if available, otherwise use raw value
+                    if param in enum_conversions:
+                        config_params[param] = enum_conversions[param]
+                    else:
+                        config_params[param] = finn_params[param]
+            
+            dataflow_config = DataflowBuildConfig(**config_params)
+            
             logger.info(f"Created DataflowBuildConfig with {len(step_functions)} blueprint-configured steps")
+            if dataflow_config.stop_step:
+                logger.info(f"DataflowBuildConfig stop_step: {dataflow_config.stop_step}")
+            if dataflow_config.start_step:
+                logger.info(f"DataflowBuildConfig start_step: {dataflow_config.start_step}")
             return dataflow_config
             
         except ImportError as e:
@@ -306,14 +348,64 @@ class LegacyConversionLayer:
             # Save intermediate models
             if 'save_intermediate_models' in build_config:
                 params['save_intermediate_models'] = build_config['save_intermediate_models']
+            
+            # Extract stop_step and start_step
+            if 'stop_step' in build_config:
+                params['stop_step'] = build_config['stop_step']
+                logger.info(f"Found stop_step in blueprint: {build_config['stop_step']}")
+            
+            if 'start_step' in build_config:
+                params['start_step'] = build_config['start_step']
+                logger.info(f"Found start_step in blueprint: {build_config['start_step']}")
         
         # Extract output directory
         params['output_dir'] = blueprint_config.get('output_dir', './finn_output')
+        
+        # Also check for stop_step/start_step at top level (for backward compatibility)
+        if 'stop_step' in blueprint_config and 'stop_step' not in params:
+            params['stop_step'] = blueprint_config['stop_step']
+            logger.info(f"Found stop_step at blueprint top level: {blueprint_config['stop_step']}")
+        
+        if 'start_step' in blueprint_config and 'start_step' not in params:
+            params['start_step'] = blueprint_config['start_step']
+            logger.info(f"Found start_step at blueprint top level: {blueprint_config['start_step']}")
         
         # Default safe values
         params.setdefault('synth_clk_period_ns', 5.0)  # 200 MHz
         params.setdefault('auto_fifo_depths', True)
         params.setdefault('save_intermediate_models', True)
+        
+        # Process finn_config section - direct DataflowBuildConfig overrides
+        if 'finn_config' in blueprint_config:
+            finn_config = blueprint_config['finn_config']
+            logger.info(f"Found finn_config section with {len(finn_config)} parameters")
+            
+            # Process each parameter with type conversion where needed
+            for key, value in finn_config.items():
+                # Handle enum conversions
+                if key == 'generate_outputs' and isinstance(value, list):
+                    # Keep as list - will be converted to enums in DataflowBuildConfig
+                    params[key] = value
+                elif key == 'verify_steps' and isinstance(value, list):
+                    # Keep as list - will be converted to enums in DataflowBuildConfig
+                    params[key] = value
+                elif key == 'shell_flow_type' and isinstance(value, str):
+                    # Keep as string - will be converted to enum in DataflowBuildConfig
+                    params[key] = value
+                elif key == 'auto_fifo_strategy' and isinstance(value, str):
+                    # Keep as string - will be converted to enum in DataflowBuildConfig
+                    params[key] = value
+                elif key == 'large_fifo_mem_style' and isinstance(value, str):
+                    # Keep as string - will be converted to enum in DataflowBuildConfig
+                    params[key] = value
+                elif key == 'vitis_opt_strategy' and isinstance(value, str):
+                    # Keep as string - will be converted to enum in DataflowBuildConfig
+                    params[key] = value
+                else:
+                    # Direct pass-through for all other parameters
+                    params[key] = value
+                
+                logger.debug(f"  finn_config override: {key} = {value}")
         
         logger.debug(f"Extracted FINN parameters: {params}")
         return params
@@ -332,6 +424,50 @@ class LegacyConversionLayer:
         }
         
         return board_mappings.get(platform_name, platform_name)
+    
+    def _convert_finn_enums(self, finn_params: Dict[str, Any], enum_mappings: Dict[str, type]) -> Dict[str, Any]:
+        """
+        Convert string values to FINN enum types.
+        
+        Args:
+            finn_params: Parameters dictionary with potential enum strings
+            enum_mappings: Mapping of parameter names to enum types
+            
+        Returns:
+            Dictionary with converted enum values
+        """
+        converted = {}
+        
+        for param_name, enum_type in enum_mappings.items():
+            if param_name in finn_params:
+                value = finn_params[param_name]
+                
+                if param_name in ['generate_outputs', 'verify_steps'] and isinstance(value, list):
+                    # Handle list of enum values
+                    converted_list = []
+                    for item in value:
+                        if isinstance(item, str):
+                            try:
+                                # Try to convert string to enum
+                                converted_list.append(enum_type[item])
+                            except KeyError:
+                                logger.warning(f"Unknown {param_name} value: {item}, using as-is")
+                                converted_list.append(item)
+                        else:
+                            converted_list.append(item)
+                    converted[param_name] = converted_list
+                elif isinstance(value, str):
+                    # Handle single enum value
+                    try:
+                        converted[param_name] = enum_type[value]
+                    except KeyError:
+                        logger.warning(f"Unknown {param_name} value: {value}, using as-is")
+                        converted[param_name] = value
+                else:
+                    # Non-string value, pass through
+                    converted[param_name] = value
+        
+        return converted
 
 
 # Convenience function for external usage

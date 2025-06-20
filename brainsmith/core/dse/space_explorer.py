@@ -565,7 +565,13 @@ class DesignSpaceExplorer:
     def _get_cached_result(self, combination: ComponentCombination) -> Optional[Dict[str, Any]]:
         """Get cached evaluation result for combination."""
         cache_key = self._generate_cache_key(combination)
-        return self.evaluation_cache.get(cache_key)
+        cached = self.evaluation_cache.get(cache_key)
+        if cached:
+            # Add combination back to cached result
+            result = cached.copy()
+            result['combination'] = combination
+            return result
+        return None
     
     def _cache_result(self, combination: ComponentCombination, result: Dict[str, Any]):
         """Cache evaluation result."""

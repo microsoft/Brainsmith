@@ -13,13 +13,12 @@ import warnings
 import textwrap
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from qonnx.custom_op.registry import register_op
 
 # TODO: Explain any shape assumptions -- TAFK
 
 @register_op(domain="brainsmith.libraries.kernels.layernorm", op_type="LayerNorm")
-class LayerNorm(HWCustomOp, HLSBackend):
+class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""
 
     def __init__(self, onnx_node, **kwargs):

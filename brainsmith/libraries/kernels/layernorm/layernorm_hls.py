@@ -203,3 +203,10 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
         self.set_nodeattr("executable_path", builder.executable_path)
+    
+    def ipgen_extra_includes(self):
+        """Add kernel-specific include paths."""
+        import os
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        return f"-I{kernel_dir} -I{utils_dir}"

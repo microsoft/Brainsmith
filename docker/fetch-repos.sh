@@ -30,7 +30,7 @@ PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
 QONNX_COMMIT="custom/brainsmith"
-FINN_COMMIT="custom/transformer"
+FINN_COMMIT="custom/brainsmith-patch"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="95edaa0bdc8e639e39b1164466278c59df4877be"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"

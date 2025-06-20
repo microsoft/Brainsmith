@@ -103,6 +103,39 @@ build_configuration:
   auto_fifo_depths: true       # Use automatic FIFO depths
   save_intermediate_models: true  # Save for debugging
 
+# Direct FINN configuration using new finn_config system
+# These parameters directly control FINN's DataflowBuildConfig
+finn_config:
+  # Stop at RTL performance measurement (before FIFO sizing)
+  # This skips the time-consuming FIFO sizing step for faster iteration
+  stop_step: "step_measure_rtlsim_performance"
+  
+  # Performance and optimization settings
+  synth_clk_period_ns: 5.0      # 200MHz default clock
+  target_fps: 1000              # Target inference performance
+  
+  # Build outputs
+  generate_outputs: ["STITCHED_IP", "ESTIMATE_REPORTS"]
+  
+  # Enable intermediate model saving for debugging
+  save_intermediate_models: true
+  
+  # FIFO configuration
+  auto_fifo_depths: true
+  auto_fifo_strategy: "LARGEFIFO_RTLSIM"
+  
+  # Verification settings (disabled for speed by default)
+  verify_steps: []              # Can be enabled as needed
+  
+  # Optimization settings
+  minimize_bit_width: true
+  standalone_thresholds: false
+  mvau_wwidth_max: 36          # Default PE stream width
+  
+  # Debug settings
+  verbose: false               # Set to true for detailed output
+  enable_hw_debug: false       # No hardware debug by default
+
 # Adaptive DSE strategies
 dse_strategies:
   primary_strategy: "balanced"  # Will be updated to "ultra_fast" for ultra-small
@@ -209,6 +242,12 @@ runtime_adaptations:
       primary_strategy: "ultra_fast"
     platform_overrides:
       target_frequency: 100
+    finn_config_overrides:
+      # Faster build for ultra-small models
+      synth_clk_period_ns: 10.0    # 100MHz for ultra-small
+      target_fps: 500              # Lower target for small models
+      save_intermediate_models: false  # Speed up by not saving
+      verbose: false               # Less output for quick builds
 
   standard_mode:
     description: "Standard configuration for production use"

@@ -218,7 +218,9 @@ class Shuffle_hls(Shuffle, HLSBackend):
                 template = template.replace(key, code_gen_line)
             f.write(template)
 
-    def code_generation_ipgen(self, model, fpgapart, clk):
-        """Generates c++ code and tcl script for ip generation."""
-        # Use HLSBackend's implementation for IP generation
-        super().code_generation_ipgen(model, fpgapart, clk)
+    def ipgen_extra_includes(self):
+        """Add kernel-specific include paths."""
+        import os
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        return f"-I{kernel_dir} -I{utils_dir}"
