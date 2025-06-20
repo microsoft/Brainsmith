@@ -4,7 +4,7 @@ Brainsmith Libraries Package
 Collection of specialized libraries for AI/ML hardware acceleration:
 - analysis: Analysis tools and profiling capabilities
 - automation: Batch processing and parameter sweep automation
-- blueprints: Hardware accelerator blueprint library
+- blueprints_v2: Hardware accelerator blueprint library (v2)
 - kernels: Hardware kernel implementations and registry
 - operators: Custom ONNX operators and future Canonical Op objects
 - transforms: Model transformation operations and steps
@@ -13,7 +13,7 @@ Collection of specialized libraries for AI/ML hardware acceleration:
 # Import submodule registries for unified access
 from . import analysis
 from . import automation  
-from . import blueprints
+from . import blueprints_v2
 from . import kernels
 from . import operators
 from . import transforms
@@ -21,7 +21,7 @@ from . import transforms
 __all__ = [
     "analysis",
     "automation", 
-    "blueprints",
+    "blueprints_v2",
     "kernels",
     "operators",
     "transforms"

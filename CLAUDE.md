@@ -10,7 +10,16 @@ Brainsmith is an open-source platform for FPGA AI accelerators developed collabo
 
 **Docker-based development is required.** 
 
-Launch development container:
+### Environment Setup
+```bash
+export BSMITH_ROOT="~/brainsmith"
+export BSMITH_BUILD_DIR="~/builds/brainsmith"
+export BSMITH_XILINX_PATH="/tools/Xilinx"
+export BSMITH_XILINX_VERSION="2024.2"
+export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+```
+
+### Container Management
 ```bash
 # Start persistent container (one-time setup)
 ./smithy daemon
@@ -18,8 +27,16 @@ Launch development container:
 # Get instant shell access anytime  
 ./smithy shell
 
-# Or execute commands quickly
+# Execute commands quickly
 ./smithy exec "python script.py"
+
+# Other useful commands
+./smithy build        # Build/rebuild Docker image
+./smithy status       # Check container status
+./smithy logs [-f]    # View container logs
+./smithy restart      # Restart container
+./smithy stop         # Stop container
+./smithy cleanup      # Remove container completely
 ```
 
 ## Key Commands
@@ -33,6 +50,7 @@ Launch development container:
 
 ### BERT Demo (Primary Validation)
 - `cd tests/end2end/bert && make single_layer` - Full validation test (generates DCP, multi-hour build)
+- `cd demos/bert && ./quicktest.sh` - Quick test without DCP generation
 - Alternative quick test from `demos/bert/`:
   - `python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json` - Generate folding config
   - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 --run_fifo_sizing -p ./configs/l1_simd12_pe8.json` - Full compilation
@@ -42,6 +60,13 @@ Launch development container:
 - `python -m brainsmith.tools.hw_kernel_gen.hkg <rtl_file> <compiler_data> -o <output_dir>` - Generate RTL wrapper templates
 - `python -m brainsmith.tools.hw_kernel_gen.cli parse <rtl_file>` - Parse RTL and show interfaces
 - `python -m brainsmith.tools.hw_kernel_gen.cli generate <rtl_file> <compiler_data> -o <output_dir>` - Full generation pipeline
+
+### Linting and Code Style
+The project uses `.editorconfig` for consistent formatting:
+- 4-space indentation (2 for YAML)
+- Max line length: 80 characters
+- UTF-8 encoding, LF line endings
+- Trim trailing whitespace, final newline required
 
 ## Architecture
 
@@ -100,9 +125,17 @@ module my_accelerator(...);
 - Integration tests in `tests/integration/`
 - Golden reference comparisons in `tests/tools/hw_kernel_gen/golden/`
 - BERT demo as comprehensive validation
+- Parameter sweep testing: `demos/bert/tests/param_sweep.sh`
 
 ### AI Cache Directory
 Use `ai_cache/` for development artifacts (plans, analysis, checklists) that should not be part of the codebase. This keeps development documentation separate from production code.
+
+## Dependency Management
+
+Dependencies are fetched automatically during container initialization:
+- FINN from `custom/transformer` branch → `deps/finn/`
+- Other dependencies via `docker/fetch-repos.sh`
+- To update FINN: edit `FINN_COMMIT` in `docker/fetch-repos.sh` and rebuild container
 
 ## Key Dependencies
 - PyTorch 2.7.0 with CUDA 12.1

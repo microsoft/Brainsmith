@@ -350,7 +350,7 @@ def create_argument_parser():
     bert_group = parser.add_argument_group('BERT Model Configuration')
     bert_group.add_argument('--hidden-size', type=int, default=384,
                            help='BERT hidden size')
-    bert_group.add_argument('--num-layers', type=int, default=3,
+    bert_group.add_argument('--num-layers', type=int, default=1,
                            help='Number of BERT layers')
     bert_group.add_argument('--num-heads', type=int, default=12,
                            help='Number of attention heads')
