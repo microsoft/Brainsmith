@@ -8,21 +8,20 @@
   "generated_files": [
     "test_kernel_e2e_hw_custom_op.py",
     "test_kernel_e2e_rtl.py",
-    "test_kernel_e2e_wrapper.v",
-    "test_test_kernel_e2e.py"
+    "test_kernel_e2e_wrapper.v"
   ],
   "generation_time_ms": null,
   "summary": {
     "kernel_name": "test_kernel_e2e",
     "source_file": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv",
     "success": true,
-    "files_generated": 4,
+    "files_generated": 3,
     "validation_passed": true,
     "error_count": 0,
     "warning_count": 0,
     "generation_time_ms": null,
     "output_directory": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e",
-    "files_written": 4,
+    "files_written": 3,
     "metadata_files": 0
   },
   "template_context": {

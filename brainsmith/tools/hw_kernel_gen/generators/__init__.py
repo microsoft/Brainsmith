@@ -11,7 +11,6 @@ from .manager import GeneratorManager
 # Import all generators for auto-discovery
 from .hw_custom_op_generator import HWCustomOpGenerator
 from .rtl_wrapper_generator import RTLWrapperGenerator
-from .test_suite_generator import TestSuiteGenerator
 from .rtl_backend_generator import RTLBackendGenerator
 
 __all__ = [
@@ -19,6 +18,5 @@ __all__ = [
     "GeneratorManager",
     "HWCustomOpGenerator",
     "RTLWrapperGenerator", 
-    "TestSuiteGenerator",
     "RTLBackendGenerator",
 ]

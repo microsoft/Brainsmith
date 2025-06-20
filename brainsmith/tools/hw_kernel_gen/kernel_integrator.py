@@ -31,7 +31,7 @@ class KernelIntegrator:
     Uses the new GeneratorManager for discoverable, extensible generation:
     - AutoHWCustomOp subclasses with runtime parameter extraction
     - Enhanced RTL wrappers with parameter validation
-    - Test suites with Phase 2 parameter handling
+    - RTL backend with Phase 2 parameter handling
     - Extensible via additional generators
     
     Key Features:

@@ -69,7 +69,7 @@ class GeneratorManager:
         """Auto-discover generator definitions using package introspection."""
         # Import the generators package to ensure all generators are loaded
         try:
-            from . import hw_custom_op_generator, rtl_wrapper_generator, test_suite_generator, rtl_backend_generator
+            from . import hw_custom_op_generator, rtl_wrapper_generator, rtl_backend_generator
             
             # Use introspection to find all GeneratorBase subclasses in current namespace
             import sys

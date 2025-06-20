@@ -74,8 +74,8 @@ class GoldenComparator:
         golden_files = sorted([f.name for f in self.golden_dir.rglob("*") if f.is_file()])
         output_files = sorted([f.name for f in self.output_dir.rglob("*") if f.is_file()])
         
-        # Filter out timestamp-based files
-        golden_files = [f for f in golden_files if not f.startswith("generation_")]
+        # Filter out timestamp-based files and test suite files (no longer generated)
+        golden_files = [f for f in golden_files if not f.startswith("generation_") and not f.startswith("test_test_")]
         output_files = [f for f in output_files if not f.startswith("generation_")]
         
         if golden_files != output_files:
@@ -89,6 +89,9 @@ class GoldenComparator:
         """Compare Python files using AST to ignore formatting differences."""
         success = True
         for py_file in sorted(self.golden_dir.glob("*.py")):
+            # Skip test suite files that are no longer generated
+            if py_file.name.startswith("test_test_"):
+                continue
             golden_path = py_file
             output_path = self.output_dir / py_file.name
             
@@ -446,23 +449,8 @@ def run_end_to_end_test(test_rtl: Path, output_dir: Path, golden_dir: Path) -> b
         print("\n⚠️  No golden reference found. Run with --generate-golden first.")
         return False
     
-    # Step 4: Validate generated test suite
-    print("\n🧪 Step 4: Validating generated test suite...")
-    test_file = output_dir / kernel_metadata.name / f"test_{kernel_metadata.name}.py"
-    if test_file.exists():
-        try:
-            # Just validate that the test file is valid Python
-            compile(test_file.read_text(), str(test_file), 'exec')
-            print("   ✓ Generated test file is valid Python")
-            print("   ℹ️  To run the generated tests, use:")
-            print(f"      cd {output_dir / kernel_metadata.name}")
-            print(f"      pytest {test_file.name} -v")
-        except SyntaxError as e:
-            print(f"   ❌ Generated test has syntax error: {e}")
-            return False
-    else:
-        print(f"   ❌ Test file not found: {test_file}")
-        return False
+    # Step 4: Test suite generation has been removed
+    # Note: Users should write their own tests for generated HWCustomOp classes
     
     print("\n✅ End-to-end test completed successfully!")
     return True

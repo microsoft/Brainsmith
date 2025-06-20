@@ -17,7 +17,7 @@ Phase 4 Architecture:
 - RTL Parser: SystemVerilog parsing with BDIM pragma support
 - KernelIntegrator: High-level orchestration of generation workflow
 - GeneratorManager: Discovery and management of modular generators
-- Generators: Modular, extensible artifact generation (hw_custom_op, rtl_wrapper, test_suite)
+- Generators: Modular, extensible artifact generation (hw_custom_op, rtl_wrapper, rtl_backend)
 - Enhanced data structures: Unified GenerationResult with rich tracking
 """
 

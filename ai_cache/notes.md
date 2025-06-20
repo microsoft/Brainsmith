@@ -12,3 +12,8 @@
 - Modified AutoHWCustomOp to filter interfaces - only AXI-Stream in get_interface_metadata()
 - Updated context generator to detect CONFIG interfaces for template generation
 - Successfully tested with thresholding example - all tests pass
+- Cleaned up test suite generation remnants from Hardware Kernel Generator:
+  - Removed cached Python files for test_suite_generator
+  - Updated documentation to remove references to test suite
+  - Regenerated golden references without phantom test file
+  - Verified all tests pass after cleanup

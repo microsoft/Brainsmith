@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for test_kernel_e2e
 # Generated from: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
-# Generation timestamp: 2025-06-20T06:52:46.938290
+# Generation timestamp: 2025-06-20T07:35:12.766341
 #
 # PHASE 2: FINN INTEGRATION
 # This HWCustomOp follows FINN's standard pattern with simple constructor

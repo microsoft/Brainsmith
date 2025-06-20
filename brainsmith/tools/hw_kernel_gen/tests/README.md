@@ -9,7 +9,6 @@ The end-to-end test suite verifies that HKG correctly:
 2. Generates all expected output files
 3. Produces correct Python integration code
 4. Creates valid RTL wrappers
-5. Generates working test suites
 
 ## Test Structure
 
