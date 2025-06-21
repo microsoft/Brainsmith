@@ -162,7 +162,6 @@ def generate_bert_model(
             model_path,
             do_constant_folding=True,
             input_names=['input_ids'],
-            output_names=['last_hidden_state'],  # DEBUG: Add explicit output names
             opset_version=17,
         )
         
@@ -204,7 +203,9 @@ def create_adaptive_blueprint(args) -> str:
         sequence_length=seqlen,
         bitwidth=args.bitwidth,
         target_device=args.board,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        folding_config_file=args.param,  # Pass folding config if provided
+        target_fps=args.target_fps  # Pass target_fps from args
     )
     
     print(f"📋 Generated adaptive blueprint: {adapted_blueprint_path}")
@@ -336,6 +337,8 @@ def create_argument_parser():
                           help='Target clock period in ns')
     opt_group.add_argument('--board', default='V80',
                           help='Target FPGA board')
+    opt_group.add_argument('-p', '--param', type=str, default=None,
+                          help='Pre-configured folding parameters JSON file')
     
     return parser
 

@@ -32,7 +32,9 @@ class BlueprintAdapter:
                               sequence_length: int,
                               bitwidth: int,
                               ultra_small: bool = False,
-                              target_device: str = "V80") -> Dict[str, Any]:
+                              target_device: str = "V80",
+                              folding_config_file: Optional[str] = None,
+                              target_fps: Optional[int] = None) -> Dict[str, Any]:
         """
         Adapt blueprint for specific model configuration.
         
@@ -74,6 +76,26 @@ class BlueprintAdapter:
         
         # Update platform settings
         adapted['platform']['board'] = target_device
+        
+        # Ensure finn_config section exists
+        if 'finn_config' not in adapted:
+            adapted['finn_config'] = {}
+            
+        # Add folding config file to finn_config if provided
+        if folding_config_file:
+            # Add folding config file path
+            adapted['finn_config']['folding_config_file'] = folding_config_file
+            
+            # When using a folding config, we should disable auto folding
+            adapted['finn_config']['target_fps'] = None
+        else:
+            # When not using folding config, use a conservative target_fps
+            # to avoid aggressive parallelization that causes shape mismatches
+            if target_fps is not None:
+                adapted['finn_config']['target_fps'] = target_fps
+            else:
+                # Use a very conservative default to avoid shape mismatches
+                adapted['finn_config']['target_fps'] = 10
         
         # Update blueprint metadata
         self._update_metadata(adapted, ultra_small, hidden_size, num_hidden_layers)
@@ -148,7 +170,9 @@ def create_runtime_blueprint(base_blueprint_path: str,
                            bitwidth: int,
                            ultra_small: bool = False,
                            target_device: str = "V80",
-                           output_dir: str = "./") -> str:
+                           output_dir: str = "./",
+                           folding_config_file: Optional[str] = None,
+                           target_fps: Optional[int] = None) -> str:
     """
     Convenience function to create a runtime-adapted blueprint.
     
@@ -165,7 +189,9 @@ def create_runtime_blueprint(base_blueprint_path: str,
         sequence_length=sequence_length,
         bitwidth=bitwidth,
         ultra_small=ultra_small,
-        target_device=target_device
+        target_device=target_device,
+        folding_config_file=folding_config_file,
+        target_fps=target_fps
     )
     
     # Generate output filename based on configuration

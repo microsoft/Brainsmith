@@ -11,18 +11,23 @@ category: "transformers"
 legacy_finn: true
 
 # Custom step ordering for legacy FINN interface
+# Matches exact order from demos/bert/bert.py BUILD_STEPS
 legacy_preproc:
   - "cleanup_step"
   - "remove_head_step"
   - "remove_tail_step"
+  # - "fix_dynamic_dimensions_step"  # DISABLED: Testing if ONNX export fix alone resolves issue
   - "qonnx_to_finn_step"
+  - "generate_reference_io_step"
   - "streamlining_step"
   - "infer_hardware_step"
 
 legacy_postproc:
   - "step_measure_rtlsim_performance"
+  - "constrain_folding_and_set_pumped_compute_step"
   - "step_set_fifo_depths"
   - "step_create_stitched_ip"
+  - "shell_metadata_handover_step"
 
 # Default model configuration (will be updated at runtime)
 model_configuration:
@@ -108,7 +113,7 @@ build_configuration:
 finn_config:
   # Stop at RTL performance measurement (before FIFO sizing)
   # This skips the time-consuming FIFO sizing step for faster iteration
-  stop_step: "step_measure_rtlsim_performance"
+  # stop_step: "step_measure_rtlsim_performance"
   
   # Performance and optimization settings
   synth_clk_period_ns: 5.0      # 200MHz default clock
@@ -129,7 +134,7 @@ finn_config:
   
   # Optimization settings
   minimize_bit_width: true
-  standalone_thresholds: false
+  standalone_thresholds: true  # Match old demo setting
   mvau_wwidth_max: 36          # Default PE stream width
   
   # Debug settings

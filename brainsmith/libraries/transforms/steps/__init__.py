@@ -25,7 +25,7 @@ from typing import Dict, List, Callable, Optional
 from dataclasses import dataclass
 
 # Import all steps by functionality
-from .cleanup import cleanup_step, cleanup_advanced_step
+from .cleanup import cleanup_step, cleanup_advanced_step, fix_dynamic_dimensions_step
 from .conversion import qonnx_to_finn_step
 from .streamlining import streamlining_step
 from .hardware import infer_hardware_step
@@ -168,7 +168,7 @@ def validate_step_sequence(step_names: List[str]) -> List[str]:
 # Export all public functions and steps
 __all__ = [
     # Cleanup operations
-    'cleanup_step', 'cleanup_advanced_step',
+    'cleanup_step', 'cleanup_advanced_step', 'fix_dynamic_dimensions_step',
     # Conversion operations  
     'qonnx_to_finn_step',
     # Streamlining operations

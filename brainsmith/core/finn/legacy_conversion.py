@@ -10,6 +10,8 @@ from typing import Dict, List, Any, Optional, Callable
 import logging
 import importlib
 from pathlib import Path
+import json
+import sys
 
 # Import proven step functions to replace dynamic generation
 from brainsmith.libraries.transforms.steps import (
@@ -18,9 +20,12 @@ from brainsmith.libraries.transforms.steps import (
     infer_hardware_step,      # ✅ Complete hardware inference
     cleanup_step,             # ✅ Basic cleanup operations
     cleanup_advanced_step,    # ✅ Advanced cleanup
+    fix_dynamic_dimensions_step,  # ✅ Fixes dynamic dimensions
     remove_head_step,         # ✅ BERT-specific head removal
     remove_tail_step,         # ✅ BERT-specific tail removal
     generate_reference_io_step,  # ✅ IO validation
+    constrain_folding_and_set_pumped_compute_step,  # ✅ Folding optimization
+    shell_metadata_handover_step,  # ✅ Shell metadata extraction
 )
 
 logger = logging.getLogger(__name__)
@@ -196,12 +201,15 @@ class LegacyConversionLayer:
         return {
             'cleanup_step': cleanup_step,
             'cleanup_advanced_step': cleanup_advanced_step,
+            'fix_dynamic_dimensions_step': fix_dynamic_dimensions_step,
             'remove_head_step': remove_head_step,
             'remove_tail_step': remove_tail_step,
             'qonnx_to_finn_step': qonnx_to_finn_step,
             'streamlining_step': streamlining_step,
             'infer_hardware_step': infer_hardware_step,
             'generate_reference_io_step': generate_reference_io_step,
+            'constrain_folding_and_set_pumped_compute_step': constrain_folding_and_set_pumped_compute_step,
+            'shell_metadata_handover_step': shell_metadata_handover_step,
         }
     
     def _build_step_sequence(self, blueprint_config: Dict[str, Any]) -> List[Callable]:

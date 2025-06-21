@@ -37,6 +37,11 @@ def remove_head_step(model, cfg):
     model.graph.input.pop()
     model.graph.input.append(in_vi)
     model.graph.value_info.remove(in_vi)
+    
+    # Fix dynamic batch dimension to concrete value
+    # The hardware inference needs concrete dimensions
+    if model.graph.input[0].type.tensor_type.shape.dim[0].HasField('dim_param'):
+        model.graph.input[0].type.tensor_type.shape.dim[0].dim_value = 1
 
     # Reconnect input
     for con in consumers:
