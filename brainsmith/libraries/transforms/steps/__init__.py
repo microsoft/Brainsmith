@@ -33,6 +33,7 @@ from .optimizations import constrain_folding_and_set_pumped_compute_step
 from .validation import generate_reference_io_step
 from .metadata import shell_metadata_handover_step
 from .bert import remove_head_step, remove_tail_step
+from .preprocessing import onnx_preprocessing_step
 
 
 @dataclass
@@ -167,6 +168,8 @@ def validate_step_sequence(step_names: List[str]) -> List[str]:
 
 # Export all public functions and steps
 __all__ = [
+    # Preprocessing operations
+    'onnx_preprocessing_step',
     # Cleanup operations
     'cleanup_step', 'cleanup_advanced_step', 'fix_dynamic_dimensions_step',
     # Conversion operations  

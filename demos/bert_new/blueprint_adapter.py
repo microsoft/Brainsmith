@@ -34,7 +34,8 @@ class BlueprintAdapter:
                               ultra_small: bool = False,
                               target_device: str = "V80",
                               folding_config_file: Optional[str] = None,
-                              target_fps: Optional[int] = None) -> Dict[str, Any]:
+                              target_fps: Optional[int] = None,
+                              output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Adapt blueprint for specific model configuration.
         
@@ -80,6 +81,10 @@ class BlueprintAdapter:
         # Ensure finn_config section exists
         if 'finn_config' not in adapted:
             adapted['finn_config'] = {}
+            
+        # Add output directory to finn_config if provided
+        if output_dir:
+            adapted['finn_config']['output_dir'] = output_dir
             
         # Add folding config file to finn_config if provided
         if folding_config_file:
@@ -191,7 +196,8 @@ def create_runtime_blueprint(base_blueprint_path: str,
         ultra_small=ultra_small,
         target_device=target_device,
         folding_config_file=folding_config_file,
-        target_fps=target_fps
+        target_fps=target_fps,
+        output_dir=output_dir
     )
     
     # Generate output filename based on configuration

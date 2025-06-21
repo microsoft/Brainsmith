@@ -13,6 +13,7 @@ legacy_finn: true
 # Custom step ordering for legacy FINN interface
 # Matches exact order from demos/bert/bert.py BUILD_STEPS
 legacy_preproc:
+  - "onnx_preprocessing_step"  # CRITICAL: Simplify + cleanup for FINN compatibility
   - "cleanup_step"
   - "remove_head_step"
   - "remove_tail_step"
@@ -24,7 +25,7 @@ legacy_preproc:
 
 legacy_postproc:
   - "step_measure_rtlsim_performance"
-  - "constrain_folding_and_set_pumped_compute_step"
+  # - "constrain_folding_and_set_pumped_compute_step"  # NOT in old demo BUILD_STEPS!
   - "step_set_fifo_depths"
   - "step_create_stitched_ip"
   - "shell_metadata_handover_step"
@@ -125,17 +126,23 @@ finn_config:
   # Enable intermediate model saving for debugging
   save_intermediate_models: true
   
-  # FIFO configuration
+  # FIFO configuration - CRITICAL PARAMETERS FROM OLD DEMO
   auto_fifo_depths: true
-  auto_fifo_strategy: "LARGEFIFO_RTLSIM"
+  split_large_fifos: true       # CRITICAL: Was missing! Required for FIFO compatibility
+  fifosim_n_inferences: 2       # Match old demo
+  # auto_fifo_strategy: "LARGEFIFO_RTLSIM"  # REMOVED: Not in old demo, may cause issues
   
-  # Verification settings (disabled for speed by default)
+  # Verification settings
   verify_steps: []              # Can be enabled as needed
+  verification_atol: 0.1        # Match old demo (1e-1)
   
   # Optimization settings
   minimize_bit_width: true
-  standalone_thresholds: true  # Match old demo setting
-  mvau_wwidth_max: 36          # Default PE stream width
+  standalone_thresholds: true   # Match old demo setting
+  # mvau_wwidth_max: 36         # REMOVED: Not in old demo, may affect folding
+  
+  # DCP generation
+  stitched_ip_gen_dcp: false    # Skip by default for speed
   
   # Debug settings
   verbose: false               # Set to true for detailed output

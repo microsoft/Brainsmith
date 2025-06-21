@@ -15,6 +15,7 @@ import sys
 
 # Import proven step functions to replace dynamic generation
 from brainsmith.libraries.transforms.steps import (
+    onnx_preprocessing_step,  # ✅ ONNX simplify + cleanup for FINN
     qonnx_to_finn_step,       # ✅ Handles FoldConstants correctly
     streamlining_step,        # ✅ Proven transformation sequence
     infer_hardware_step,      # ✅ Complete hardware inference
@@ -65,6 +66,12 @@ class LegacyConversionLayer:
             
             logger.info("Converting to FINN DataflowBuildConfig with blueprint-driven step ordering")
             
+            # DEBUG: Print complete blueprint config
+            print("="*80, file=sys.stderr)
+            print("DEBUG: Complete Blueprint Configuration:", file=sys.stderr)
+            print(json.dumps(blueprint_config, indent=2), file=sys.stderr)
+            print("="*80, file=sys.stderr)
+            
             # Build step function list from blueprint configuration
             step_functions = self._build_step_sequence(blueprint_config)
             
@@ -86,6 +93,12 @@ class LegacyConversionLayer:
                 'large_fifo_mem_style': LargeFIFOMemStyle,
                 'vitis_opt_strategy': VitisOptStrategyCfg
             })
+            
+            # DEBUG: Print FINN parameters
+            print("="*80, file=sys.stderr)
+            print("DEBUG: FINN Parameters from Blueprint:", file=sys.stderr)
+            print(json.dumps(finn_params, indent=2), file=sys.stderr)
+            print("="*80, file=sys.stderr)
             
             # Create DataflowBuildConfig with all parameters
             # Start with required parameters
@@ -120,6 +133,15 @@ class LegacyConversionLayer:
                         config_params[param] = enum_conversions[param]
                     else:
                         config_params[param] = finn_params[param]
+            
+            # DEBUG: Print final config params
+            print("="*80, file=sys.stderr)
+            print("DEBUG: Final DataflowBuildConfig Parameters:", file=sys.stderr)
+            debug_params = {k: v for k, v in config_params.items() if k != 'steps'}
+            debug_params['steps_count'] = len(config_params['steps'])
+            debug_params['step_names'] = [s.__name__ for s in config_params['steps']]
+            print(json.dumps(debug_params, indent=2, default=str), file=sys.stderr)
+            print("="*80, file=sys.stderr)
             
             dataflow_config = DataflowBuildConfig(**config_params)
             
@@ -199,6 +221,7 @@ class LegacyConversionLayer:
     def _initialize_brainsmith_steps(self) -> Dict[str, Callable]:
         """Initialize mapping of BrainSmith step names to functions."""
         return {
+            'onnx_preprocessing_step': onnx_preprocessing_step,
             'cleanup_step': cleanup_step,
             'cleanup_advanced_step': cleanup_advanced_step,
             'fix_dynamic_dimensions_step': fix_dynamic_dimensions_step,

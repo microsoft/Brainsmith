@@ -1,0 +1,7 @@
+{
+  "model": "BERT-1L-384D",
+  "board": "V80",
+  "blueprint_type": "adaptive_unified",
+  "status": "success",
+  "generated_by": "brainsmith.forge_v2() with adaptive blueprint"
+}

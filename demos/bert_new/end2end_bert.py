@@ -193,6 +193,9 @@ def create_adaptive_blueprint(args) -> str:
         # Fallback: try from repo root
         base_blueprint = "brainsmith/libraries/blueprints_v2/transformers/bert_demo.yaml"
     
+    # Get the actual build output directory from BSMITH_BUILD_DIR
+    build_dir = os.path.join(os.environ.get("BSMITH_BUILD_DIR", "./builds"), args.output_dir)
+    
     # Create runtime-adapted blueprint
     adapted_blueprint_path = create_runtime_blueprint(
         base_blueprint_path=base_blueprint,
@@ -203,13 +206,15 @@ def create_adaptive_blueprint(args) -> str:
         sequence_length=seqlen,
         bitwidth=args.bitwidth,
         target_device=args.board,
-        output_dir=args.output_dir,
+        output_dir=build_dir,  # Pass the full build directory path
         folding_config_file=args.param,  # Pass folding config if provided
         target_fps=args.target_fps  # Pass target_fps from args
     )
     
     print(f"📋 Generated adaptive blueprint: {adapted_blueprint_path}")
     return adapted_blueprint_path
+
+
 
 
 def main(args):
@@ -234,12 +239,13 @@ def main(args):
     
     print(f"🎯 Target board: {args.board}")
     print("🚀 Generating BERT accelerator with adaptive blueprint...")
+    print("📋 Note: ONNX preprocessing now handled automatically by blueprint")
     
-    # Use unified forge with adaptive blueprint
+    # Use unified forge with adaptive blueprint - preprocessing now automatic!
     try:
         from brainsmith.core.api import forge
         result = forge(
-            model_path=model_path,
+            model_path=model_path,  # Pass raw model - preprocessing is automatic now!
             blueprint_path=blueprint_path,
             target_device=args.board,
             output_dir=args.output_dir
