@@ -259,7 +259,7 @@ class RTLParser:
                 exposed_parameters=exposed_parameters,
                 pragmas=parsed_data.pragmas,
                 parsing_warnings=parsed_data.parsing_warnings,
-                parameter_pragma_data={"aliases": {}, "derived": {}},
+                linked_parameters={"aliases": {}, "derived": {}, "axilite": {}},
                 internal_datatypes=[]
             )
 

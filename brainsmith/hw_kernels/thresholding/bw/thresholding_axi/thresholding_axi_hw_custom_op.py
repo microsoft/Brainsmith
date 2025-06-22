@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: brainsmith/hw_kernels/thresholding/thresholding_axi_bw.sv
-# Generation timestamp: 2025-06-20T16:18:11.853776
+# Generation timestamp: 2025-06-20T23:09:54.944003
 #
 # PHASE 2: FINN INTEGRATION
 # This HWCustomOp follows FINN's standard pattern with simple constructor
@@ -92,8 +92,6 @@ class ThresholdingAxi(AutoHWCustomOp):
         my_attrs = {}
         
         # RTL parameters as node attributes (only exposed parameters)
-        my_attrs["input_BDIM"] = ("i", True, None)  # Required parameter
-        my_attrs["input_SDIM"] = ("i", True, None)  # Required parameter
         my_attrs["input_FPARG"] = ("i", True, None)  # Required parameter
         my_attrs["THRESHOLDS_PATH"] = ("i", True, None)  # Required parameter
         my_attrs["USE_AXILITE"] = ("i", True, None)  # Required parameter
@@ -198,8 +196,6 @@ def make_thresholding_axi_node(inputs, outputs, **node_attrs):
     Create ThresholdingAxi ONNX node.
     
     Required algorithm parameters:
-    - input_BDIM: int
-    - input_SDIM: int
     - input_FPARG: int
     - THRESHOLDS_PATH: int
     - USE_AXILITE: int
@@ -219,7 +215,7 @@ def make_thresholding_axi_node(inputs, outputs, **node_attrs):
     import onnx.helper
     
     # Validate required algorithm parameters (only exposed parameters)
-    required_algorithm_params = [p for p in ['input_WIDTH', 'output_WIDTH', 'T_WIDTH', 'input_BDIM', 'input_SDIM', 'input_SIGNED', 'input_FPARG', 'output_BIAS', 'THRESHOLDS_PATH', 'USE_AXILITE', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE'] if p in ['input_BDIM', 'input_SDIM', 'input_FPARG', 'THRESHOLDS_PATH', 'USE_AXILITE', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE']]
+    required_algorithm_params = [p for p in ['input_WIDTH', 'output_WIDTH', 'T_WIDTH', 'input_BDIM', 'input_SDIM', 'input_SIGNED', 'input_FPARG', 'output_BIAS', 'THRESHOLDS_PATH', 'USE_AXILITE', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE'] if p in ['input_FPARG', 'THRESHOLDS_PATH', 'USE_AXILITE', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE']]
     missing = [p for p in required_algorithm_params if p not in node_attrs]
     if missing:
         raise ValueError(f"Missing required algorithm parameters: {missing}")

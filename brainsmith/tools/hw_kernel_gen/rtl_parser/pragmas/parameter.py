@@ -70,13 +70,13 @@ class AliasPragma(Pragma):
         if rtl_param in kernel.exposed_parameters:
             kernel.exposed_parameters.remove(rtl_param)
         
-        # Add to parameter pragma data
-        if kernel.parameter_pragma_data is None:
-            kernel.parameter_pragma_data = {"aliases": {}, "derived": {}}
-        if "aliases" not in kernel.parameter_pragma_data:
-            kernel.parameter_pragma_data["aliases"] = {}
+        # Add to linked parameters
+        if not hasattr(kernel, 'linked_parameters') or kernel.linked_parameters is None:
+            kernel.linked_parameters = {"aliases": {}, "derived": {}, "axilite": {}}
+        if "aliases" not in kernel.linked_parameters:
+            kernel.linked_parameters["aliases"] = {}
         
-        kernel.parameter_pragma_data["aliases"][rtl_param] = nodeattr_name
+        kernel.linked_parameters["aliases"][rtl_param] = nodeattr_name
         
         logger.debug(f"Applied ALIAS pragma: {rtl_param} -> {nodeattr_name}")
     
@@ -153,12 +153,65 @@ class DerivedParameterPragma(Pragma):
         if param_name in kernel.exposed_parameters:
             kernel.exposed_parameters.remove(param_name)
         
-        # Add to parameter pragma data
-        if kernel.parameter_pragma_data is None:
-            kernel.parameter_pragma_data = {"aliases": {}, "derived": {}}
-        if "derived" not in kernel.parameter_pragma_data:
-            kernel.parameter_pragma_data["derived"] = {}
+        # Add to linked parameters
+        if not hasattr(kernel, 'linked_parameters') or kernel.linked_parameters is None:
+            kernel.linked_parameters = {"aliases": {}, "derived": {}, "axilite": {}}
+        if "derived" not in kernel.linked_parameters:
+            kernel.linked_parameters["derived"] = {}
         
-        kernel.parameter_pragma_data["derived"][param_name] = python_expression
+        kernel.linked_parameters["derived"][param_name] = python_expression
         
         logger.debug(f"Applied DERIVED_PARAMETER pragma: {param_name} -> {python_expression}")
+
+
+@dataclass
+class AxiLiteParamPragma(Pragma):
+    """AXILITE_PARAM pragma for linking parameters to AXI-Lite configuration interfaces.
+    
+    Format: @brainsmith axilite_param <interface_name> <param_name>
+    
+    This pragma links a parameter to a specific AXI-Lite interface, marking it as
+    a configuration control parameter and specifying which interface it controls.
+    
+    Examples:
+    - @brainsmith axilite_param s_axilite_config USE_AXILITE
+    - @brainsmith axilite_param s_axilite_ctrl CONFIG_EN
+    - @brainsmith axilite_param potato MY_CUSTOM_CONFIG
+    """
+    
+    def __post_init__(self):
+        super().__post_init__()
+    
+    def _parse_inputs(self) -> Dict:
+        """Parse AXILITE_PARAM pragma: @brainsmith axilite_param <interface_name> <param_name>"""
+        logger.debug(f"Parsing AXILITE_PARAM pragma: {self.inputs} at line {self.line_number}")
+        if len(self.inputs) != 2:
+            raise PragmaError(f"AXILITE_PARAM pragma at line {self.line_number} requires exactly 2 arguments: <interface_name> <param_name>. Got: {self.inputs}")
+        
+        interface_name = self.inputs[0]
+        param_name = self.inputs[1]
+        
+        # Validate parameter name
+        if not param_name.isidentifier():
+            raise PragmaError(f"AXILITE_PARAM pragma parameter name '{param_name}' is not a valid identifier")
+        
+        # Validate interface name
+        if not interface_name.replace('_', '').isalnum():
+            raise PragmaError(f"AXILITE_PARAM pragma interface name '{interface_name}' contains invalid characters")
+        
+        return {"param_name": param_name, "interface_name": interface_name}
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply AXILITE_PARAM pragma to kernel metadata."""
+        param_name = self.parsed_data.get("param_name")
+        interface_name = self.parsed_data.get("interface_name")
+        
+        # Initialize linked_parameters if not present
+        if not hasattr(kernel, 'linked_parameters') or kernel.linked_parameters is None:
+            kernel.linked_parameters = {"aliases": {}, "derived": {}, "axilite": {}}
+        if "axilite" not in kernel.linked_parameters:
+            kernel.linked_parameters["axilite"] = {}
+        
+        # Add parameter -> interface mapping
+        kernel.linked_parameters["axilite"][param_name] = interface_name
+        logger.debug(f"Linked parameter '{param_name}' to AXI-Lite interface '{interface_name}'")

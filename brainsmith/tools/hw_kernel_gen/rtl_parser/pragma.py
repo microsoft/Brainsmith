@@ -20,7 +20,7 @@ from .data import PragmaType
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
-    AliasPragma, DerivedParameterPragma, BDimPragma, SDimPragma
+    AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma
 )
 from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
 from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
@@ -47,6 +47,7 @@ class PragmaHandler:
             PragmaType.WEIGHT: WeightPragma,
             PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
             PragmaType.ALIAS: AliasPragma,
+            PragmaType.AXILITE_PARAM: AxiLiteParamPragma,
         }
 
     def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:

@@ -11,9 +11,46 @@ This template generates clean Verilog wrappers with:
 // Date: {{ generation_timestamp }}
 
 module {{ kernel_name }}_wrapper #(
-    // Parameters from original module
-{% for param in parameter_definitions %}
-    parameter {{ param.name }} = {{ param.template_param_name }}{% if not loop.last %},{% endif %}{{ "\n" if not loop.last else "" }}{% endfor -%}
+{%- set cat_params = categorized_parameters -%}
+{%- set all_param_sections = [] -%}
+{%- if cat_params.general_parameters -%}{%- set _ = all_param_sections.append('general') -%}{%- endif -%}
+{%- if cat_params.axilite_parameters -%}{%- set _ = all_param_sections.append('axilite') -%}{%- endif -%}
+{%- if cat_params.internal_datatype_groups -%}{%- set _ = all_param_sections.append('internal') -%}{%- endif -%}
+{%- if cat_params.interface_parameter_groups -%}{%- set _ = all_param_sections.append('interface') -%}{%- endif -%}
+
+{%- if cat_params.general_parameters %}
+    // General algorithm parameters
+{% for param in cat_params.general_parameters %}
+    parameter {{ param.name }} = {{ param.template_param_name }}{% if not (loop.last and 'general' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{%- endif %}
+
+{%- if cat_params.axilite_parameters %}
+    // AXI-Lite configuration parameter
+{% for param in cat_params.axilite_parameters %}
+    parameter {{ param.name }} = {{ param.template_param_name }}{% if not (loop.last and 'axilite' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{%- endif %}
+
+{%- if cat_params.internal_datatype_groups %}
+{% set internal_datatype_names = cat_params.internal_datatype_groups.keys() | list %}
+{% for datatype_name in internal_datatype_names %}
+    // {{ datatype_name }} datatype
+{% set params = cat_params.internal_datatype_groups[datatype_name] -%}
+{% for param in params %}
+    parameter {{ param.name }} = {{ param.template_param_name }}{% if not (loop.last and datatype_name == internal_datatype_names[-1] and 'internal' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{% endfor %}
+{%- endif %}
+
+{%- if cat_params.interface_parameter_groups %}
+{% for group in cat_params.interface_parameter_groups %}
+    // {{ group.interface.name }} interface parameters
+{% for param in group.parameters %}
+    parameter {{ param.name }} = {{ param.template_param_name }}{% if not (loop.last and group == cat_params.interface_parameter_groups[-1] and 'interface' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{% endfor %}
+{%- endif %}
 ) (
     // Global Control
     input wire ap_clk,
@@ -72,9 +109,46 @@ module {{ kernel_name }}_wrapper #(
 
     // Instantiate the wrapped kernel
     {{ kernel_name }} #(
-        // Pass parameters
-{% for param in parameter_definitions %}
-        .{{ param.name }}({{ param.name }}){% if not loop.last %},{% endif %}{{ "\n" if not loop.last else "" }}{% endfor %}
+{%- set cat_params = categorized_parameters -%}
+{%- set all_param_sections = [] -%}
+{%- if cat_params.general_parameters -%}{%- set _ = all_param_sections.append('general') -%}{%- endif -%}
+{%- if cat_params.axilite_parameters -%}{%- set _ = all_param_sections.append('axilite') -%}{%- endif -%}
+{%- if cat_params.internal_datatype_groups -%}{%- set _ = all_param_sections.append('internal') -%}{%- endif -%}
+{%- if cat_params.interface_parameter_groups -%}{%- set _ = all_param_sections.append('interface') -%}{%- endif -%}
+
+{%- if cat_params.general_parameters %}
+        // General algorithm parameters
+{% for param in cat_params.general_parameters %}
+        .{{ param.name }}({{ param.name }}){% if not (loop.last and 'general' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{%- endif %}
+
+{%- if cat_params.axilite_parameters %}
+        // AXI-Lite configuration parameters
+{% for param in cat_params.axilite_parameters %}
+        .{{ param.name }}({{ param.name }}){% if not (loop.last and 'axilite' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{%- endif %}
+
+{%- if cat_params.internal_datatype_groups %}
+{% set internal_datatype_names = cat_params.internal_datatype_groups.keys() | list %}
+{% for datatype_name in internal_datatype_names %}
+        // {{ datatype_name }} datatype
+{% set params = cat_params.internal_datatype_groups[datatype_name] -%}
+{% for param in params %}
+        .{{ param.name }}({{ param.name }}){% if not (loop.last and datatype_name == internal_datatype_names[-1] and 'internal' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{% endfor %}
+{%- endif %}
+
+{%- if cat_params.interface_parameter_groups %}
+{% for group in cat_params.interface_parameter_groups %}
+        // {{ group.interface.name }} interface parameters
+{% for param in group.parameters %}
+        .{{ param.name }}({{ param.name }}){% if not (loop.last and group == cat_params.interface_parameter_groups[-1] and 'interface' == all_param_sections[-1]) %},
+{% endif %}{% endfor %}
+{% endfor %}
+{%- endif %}
     ) {{ kernel_name }}_inst (
         // Global control
         .ap_clk(ap_clk),

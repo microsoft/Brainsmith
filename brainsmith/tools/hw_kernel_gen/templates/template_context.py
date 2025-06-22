@@ -92,8 +92,11 @@ class TemplateContext:
     # Template-time parameter assignments (replaces runtime logic)
     datatype_parameter_assignments: List[Dict[str, str]] = field(default_factory=list)
     
-    # Parameter pragma data (ALIAS and DERIVED_PARAMETER)
-    parameter_pragma_data: Dict[str, Any] = field(default_factory=dict)
+    # Linked parameter data (ALIAS, DERIVED_PARAMETER, AXILITE_PARAM)
+    linked_parameters: Dict[str, Any] = field(default_factory=dict)
+    
+    # Categorized parameters for organized RTL wrapper generation
+    categorized_parameters: Dict[str, Any] = field(default_factory=dict)
     
     # Template flags
     has_inputs: bool = False

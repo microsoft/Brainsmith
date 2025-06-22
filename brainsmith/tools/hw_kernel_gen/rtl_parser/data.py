@@ -49,6 +49,7 @@ class PragmaType(Enum):
     SDIM = "sdim"                      # Override stream dimensions for an interface
     DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
     ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
+    AXILITE_PARAM = "axilite_param"    # Mark parameter as AXI-Lite configuration related
 
 
 # --- Simple Data Structures ---

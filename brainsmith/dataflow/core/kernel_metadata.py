@@ -128,23 +128,25 @@ class KernelMetadata:
     - Help developers understand parsing decisions
     """
     
-    parameter_pragma_data: Dict[str, Any] = field(default_factory=dict)
+    linked_parameters: Dict[str, Any] = field(default_factory=dict)
     """
-    Data from parameter pragmas (ALIAS and DERIVED_PARAMETER).
+    Linked parameter data from pragmas (ALIAS, DERIVED_PARAMETER, AXILITE_PARAM).
     
     Structure:
     {
         "aliases": {"rtl_param": "nodeattr_name", ...},
-        "derived": {"param_name": "python_expression", ...}
+        "derived": {"param_name": "python_expression", ...},
+        "axilite": {"param_name": "interface_name", ...}
     }
     
-    Reason: Parameter pragmas affect how parameters are exposed and handled
-    in the generated RTLBackend.
+    Reason: Parameter pragmas affect how parameters are exposed, computed,
+    and categorized in the generated code.
     
     Use:
     - ALIAS: Maps RTL parameter names to different nodeattr names
     - DERIVED: Parameters assigned via Python expressions instead of nodeattr
-    - Template generation for prepare_codegen_rtl_values()
+    - AXILITE: Links control parameters to their AXI-Lite interfaces
+    - Template generation for prepare_codegen_rtl_values() and categorization
     """
     
     internal_datatypes: List[DatatypeMetadata] = field(default_factory=list)

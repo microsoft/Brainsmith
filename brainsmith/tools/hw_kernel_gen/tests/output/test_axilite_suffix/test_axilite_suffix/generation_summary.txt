@@ -1,0 +1,12 @@
+Generation Summary for test_axilite_suffix
+==================================================
+Source File: brainsmith/tools/hw_kernel_gen/tests/test_axilite_suffix.sv
+Output Directory: brainsmith/tools/hw_kernel_gen/tests/output/test_axilite_suffix/test_axilite_suffix
+Success: True
+Validation Passed: True
+Files Generated: 3
+
+Generated Files:
+  - brainsmith/tools/hw_kernel_gen/tests/output/test_axilite_suffix/test_axilite_suffix/test_axilite_suffix_hw_custom_op.py
+  - brainsmith/tools/hw_kernel_gen/tests/output/test_axilite_suffix/test_axilite_suffix/test_axilite_suffix_rtl.py
+  - brainsmith/tools/hw_kernel_gen/tests/output/test_axilite_suffix/test_axilite_suffix/test_axilite_suffix_wrapper.v

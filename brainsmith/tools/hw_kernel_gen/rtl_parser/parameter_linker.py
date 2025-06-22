@@ -252,6 +252,12 @@ class ParameterLinker:
                         interface.bdim_param = f"{interface.name}_BDIM"
                     if not interface.sdim_param:
                         interface.sdim_param = f"{interface.name}_SDIM"
+                    
+                    # Remove BDIM/SDIM parameters from exposed list
+                    if interface.bdim_param and interface.bdim_param in kernel_metadata.exposed_parameters:
+                        kernel_metadata.exposed_parameters.remove(interface.bdim_param)
+                    if interface.sdim_param and interface.sdim_param in kernel_metadata.exposed_parameters:
+                        kernel_metadata.exposed_parameters.remove(interface.sdim_param)
         
         # Apply internal auto-linking
         if self.enable_internal_linking:

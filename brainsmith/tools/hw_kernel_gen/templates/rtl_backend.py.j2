@@ -61,9 +61,11 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
     {% endif %}
 {% endfor %}
         
-        {% if has_config_interface %}
+        {% if axilite_parameters %}
         # Standardized AXI-Lite configuration support
-        my_attrs["axilite_config"] = ("i", False, 1, {0, 1})
+        {% for param_name, interface_name in axilite_parameters.items() %}
+        my_attrs["{{ param_name }}"] = ("i", False, 1, {0, 1})
+        {% endfor %}
         {% endif %}
         
         # Merge with parent class attributes
@@ -103,19 +105,38 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
     {% endif %}
 {% endfor %}
         
-        # BDIM/SDIM parameter linkage (from interface metadata)
+        # BDIM/SDIM parameter linkage using parent class shape methods
         interface_metadata = self.get_interface_metadata()
-        for interface in interface_metadata:
-            # BDIM parameter linkage
+        
+        # Get folded shapes from parent class
+        folded_input_shape = self.get_folded_input_shape()
+        folded_output_shape = self.get_folded_output_shape()
+        
+        for idx, interface in enumerate(interface_metadata):
+            # Set BDIM parameter value
             if hasattr(interface, 'bdim_param') and interface.bdim_param:
-                bdim_value = self.get_nodeattr(interface.bdim_param) if interface.bdim_param in {{ exposed_parameters }} else None
-                if bdim_value is not None:
+                if interface.interface_type.value == 'input' and idx < len(folded_input_shape):
+                    bdim_value = folded_input_shape[idx][0]  # First dimension is BDIM
+                    code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
+                elif interface.interface_type.value == 'output' and idx < len(folded_output_shape):
+                    bdim_value = folded_output_shape[idx][0]  # First dimension is BDIM
+                    code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
+                # For weight interfaces, use input shape as default
+                elif interface.interface_type.value == 'weight' and len(folded_input_shape) > 0:
+                    bdim_value = folded_input_shape[0][0]  # Use first input's BDIM
                     code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
             
-            # SDIM parameter linkage  
+            # Set SDIM parameter value
             if hasattr(interface, 'sdim_param') and interface.sdim_param:
-                sdim_value = self.get_nodeattr(interface.sdim_param) if interface.sdim_param in {{ exposed_parameters }} else None
-                if sdim_value is not None:
+                if interface.interface_type.value == 'input' and idx < len(folded_input_shape):
+                    sdim_value = folded_input_shape[idx][1] if len(folded_input_shape[idx]) > 1 else 1
+                    code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
+                elif interface.interface_type.value == 'output' and idx < len(folded_output_shape):
+                    sdim_value = folded_output_shape[idx][1] if len(folded_output_shape[idx]) > 1 else 1
+                    code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
+                # For weight interfaces, use input shape as default
+                elif interface.interface_type.value == 'weight' and len(folded_input_shape) > 0:
+                    sdim_value = folded_input_shape[0][1] if len(folded_input_shape[0]) > 1 else 1
                     code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
         
         # Datatype parameter assignments (generated at template time)
@@ -195,12 +216,15 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         # For now, use base class estimate
         return super().dsp_estimation(fpgapart)
     
-    {% if has_config_interface %}
+    {% if interface_control_params %}
     def get_verilog_top_module_intf_names(self):
-        """Override to add AXI-Lite interface when configuration is enabled."""
+        """Override to add AXI-Lite interfaces when configuration is enabled."""
         intf_names = super().get_verilog_top_module_intf_names()
-        if self.get_nodeattr("axilite_config") == 1:
-            intf_names["axilite"] = ["{{ config_interface_name }}"]
+        {% for interface_name, param_name in interface_control_params.items() %}
+        if self.get_nodeattr("{{ param_name }}") == 1:
+            intf_names["axilite"] = intf_names.get("axilite", [])
+            intf_names["axilite"].append("{{ interface_name }}")
+        {% endfor %}
         return intf_names
     {% endif %}
 {% if has_implementation_styles %}

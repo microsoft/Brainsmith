@@ -121,12 +121,14 @@ class TemplateContextGenerator:
             datatype_param_mappings=datatype_mappings.get('datatype_param_mappings', {}),
             interface_datatype_attributes=datatype_mappings.get('interface_datatype_attributes', []),
             datatype_derivation_methods=datatype_mappings.get('datatype_derivation_methods', {}),
-            # Add parameter pragma data
-            parameter_pragma_data=kernel_metadata.parameter_pragma_data,
+            # Add linked parameter data
+            linked_parameters=kernel_metadata.linked_parameters,
             # Add internal datatypes
             internal_datatypes=kernel_metadata.internal_datatypes,
             # Generate template-time parameter assignments
-            datatype_parameter_assignments=generator._generate_datatype_parameter_assignments(kernel_metadata)
+            datatype_parameter_assignments=generator._generate_datatype_parameter_assignments(kernel_metadata),
+            # Add categorized parameters for organized RTL wrapper generation
+            categorized_parameters=generator._categorize_parameters(kernel_metadata, parameter_definitions, datatype_mappings)
         )
         
         return template_context
@@ -270,10 +272,11 @@ class TemplateContextGenerator:
         # Add datatype parameter mappings to context
         context.update(datatype_mappings)
         
-        # Add parameter pragma data to context
-        context["parameter_pragma_data"] = template_ctx.parameter_pragma_data
-        context["parameter_aliases"] = template_ctx.parameter_pragma_data.get("aliases", {})
-        context["derived_parameters"] = template_ctx.parameter_pragma_data.get("derived", {})
+        # Add linked parameter data to context
+        context["linked_parameters"] = template_ctx.linked_parameters
+        context["parameter_aliases"] = template_ctx.linked_parameters.get("aliases", {})
+        context["derived_parameters"] = template_ctx.linked_parameters.get("derived", {})
+        context["axilite_parameters"] = template_ctx.linked_parameters.get("axilite", {})
         
         # Add internal datatypes to context
         context["internal_datatypes"] = template_ctx.internal_datatypes
@@ -281,21 +284,36 @@ class TemplateContextGenerator:
         # Add template-time parameter assignments to context
         context["datatype_parameter_assignments"] = template_ctx.datatype_parameter_assignments
         
-        # Add CONFIG interface detection for axilite_config nodeattr
+        # Add categorized parameters for organized RTL wrapper generation
+        context["categorized_parameters"] = template_ctx.categorized_parameters
+        
+        # Add CONFIG interface detection and control parameter mapping
         if kernel_metadata:
             config_interfaces_list = TemplateContextGenerator()._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG)
             context["has_config_interface"] = len(config_interfaces_list) > 0
+            
+            # Create interface -> control parameter mapping
+            interface_control_params = {}
+            for param_name, interface_name in context["axilite_parameters"].items():
+                interface_control_params[interface_name] = param_name
+            context["interface_control_params"] = interface_control_params
+            
+            # For backward compatibility - use first config interface's control param
             if config_interfaces_list:
-                # Use the first CONFIG interface name (typically there's only one)
-                context["config_interface_name"] = config_interfaces_list[0].name
+                first_interface = config_interfaces_list[0].name
+                context["config_interface_name"] = first_interface
+                context["axilite_control_param"] = interface_control_params.get(first_interface, "axilite_config")
             else:
                 context["config_interface_name"] = None
+                context["axilite_control_param"] = "axilite_config"
         else:
             # Fallback: extract from template_ctx interfaces
             config_interfaces_list = [iface for iface in template_ctx.interface_metadata 
                                     if iface.interface_type == InterfaceType.CONFIG]
             context["has_config_interface"] = len(config_interfaces_list) > 0
             context["config_interface_name"] = config_interfaces_list[0].name if config_interfaces_list else None
+            context["axilite_control_param"] = "axilite_config"  # Default fallback
+            context["interface_control_params"] = {}
         
         return context
     
@@ -738,3 +756,126 @@ class TemplateContextGenerator:
         \"\"\"Derive {parameter_name} from {interface_name} datatype (property: {property_type}).\"\"\"
         # TODO: Implement derivation for property type '{property_type}'
         return 1"""
+    
+    def _categorize_parameters(self, kernel_metadata: KernelMetadata, 
+                             parameter_definitions: List[ParameterDefinition],
+                             datatype_mappings: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Categorize parameters for organized RTL wrapper generation.
+        
+        Args:
+            kernel_metadata: Kernel metadata with interfaces and datatypes
+            parameter_definitions: All parameter definitions
+            datatype_mappings: Datatype parameter mapping information
+            
+        Returns:
+            Dictionary with categorized parameter groups
+        """
+        # Get sets of parameters that are linked to specific purposes
+        datatype_linked_params = set(datatype_mappings.get('datatype_linked_params', []))
+        
+        # Collect internal datatype parameters
+        internal_datatype_params = set()
+        internal_datatype_groups = {}
+        for dt_meta in kernel_metadata.internal_datatypes:
+            dt_params = dt_meta.get_all_parameters()
+            internal_datatype_params.update(dt_params)
+            if dt_params:
+                internal_datatype_groups[dt_meta.name] = [
+                    param for param in parameter_definitions 
+                    if param.name in dt_params
+                ]
+        
+        # Collect interface-specific parameters grouped by interface
+        interface_parameter_groups = {}
+        for interface in kernel_metadata.interfaces:
+            interface_params = set()
+            
+            # Collect datatype parameters
+            if hasattr(interface, 'datatype_metadata') and interface.datatype_metadata:
+                dt_meta = interface.datatype_metadata
+                interface_params.update(dt_meta.get_all_parameters())
+            
+            # Collect shape parameters (BDIM/SDIM)
+            if hasattr(interface, 'bdim_param') and interface.bdim_param:
+                interface_params.add(interface.bdim_param)
+            if hasattr(interface, 'sdim_param') and interface.sdim_param:
+                interface_params.add(interface.sdim_param)
+            
+            if interface_params:
+                # Sort parameters: BDIM first, SDIM second, then datatype params
+                sorted_params = []
+                
+                # Add BDIM parameter first
+                if hasattr(interface, 'bdim_param') and interface.bdim_param:
+                    bdim_params = [p for p in parameter_definitions if p.name == interface.bdim_param]
+                    sorted_params.extend(bdim_params)
+                
+                # Add SDIM parameter second
+                if hasattr(interface, 'sdim_param') and interface.sdim_param:
+                    sdim_params = [p for p in parameter_definitions if p.name == interface.sdim_param]
+                    sorted_params.extend(sdim_params)
+                
+                # Add datatype parameters in their defined order
+                if hasattr(interface, 'datatype_metadata') and interface.datatype_metadata:
+                    dt_meta = interface.datatype_metadata
+                    # Get parameters in the order they're defined in datatype metadata
+                    for param_name in dt_meta.get_all_parameters():
+                        if param_name not in [interface.bdim_param if hasattr(interface, 'bdim_param') else None,
+                                             interface.sdim_param if hasattr(interface, 'sdim_param') else None]:
+                            dt_params = [p for p in parameter_definitions if p.name == param_name]
+                            sorted_params.extend(dt_params)
+                
+                interface_parameter_groups[interface.name] = {
+                    'interface': interface,
+                    'parameters': sorted_params
+                }
+        
+        # Identify AXI-Lite configuration parameters from linked_parameters
+        axilite_params = []
+        axilite_param_names = set(kernel_metadata.linked_parameters.get("axilite", {}).keys())
+        
+        for param in parameter_definitions:
+            if param.name in axilite_param_names:
+                if param.name not in datatype_linked_params and param.name not in internal_datatype_params:
+                    axilite_params.append(param)
+        
+        # Collect all interface-linked parameters (including BDIM/SDIM)
+        interface_linked_params = set()
+        for group_data in interface_parameter_groups.values():
+            interface_linked_params.update(p.name for p in group_data['parameters'])
+        
+        # General algorithm parameters (everything else, in original order)
+        excluded_params = datatype_linked_params | internal_datatype_params | interface_linked_params | {p.name for p in axilite_params}
+        general_params = [
+            param for param in parameter_definitions 
+            if param.name not in excluded_params
+        ]
+        
+        # Organize interface parameters by interface type and order
+        organized_interface_params = []
+        
+        # Input interfaces first
+        for interface in kernel_metadata.interfaces:
+            if (interface.interface_type.value == 'input' and 
+                interface.name in interface_parameter_groups):
+                organized_interface_params.append(interface_parameter_groups[interface.name])
+        
+        # Output interfaces second  
+        for interface in kernel_metadata.interfaces:
+            if (interface.interface_type.value == 'output' and 
+                interface.name in interface_parameter_groups):
+                organized_interface_params.append(interface_parameter_groups[interface.name])
+        
+        # Weight interfaces third
+        for interface in kernel_metadata.interfaces:
+            if (interface.interface_type.value == 'weight' and 
+                interface.name in interface_parameter_groups):
+                organized_interface_params.append(interface_parameter_groups[interface.name])
+        
+        return {
+            'general_parameters': general_params,
+            'axilite_parameters': axilite_params,
+            'internal_datatype_groups': internal_datatype_groups,
+            'interface_parameter_groups': organized_interface_params
+        }

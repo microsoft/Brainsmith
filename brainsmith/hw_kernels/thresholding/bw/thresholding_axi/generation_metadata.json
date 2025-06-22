@@ -20,7 +20,7 @@
     "error_count": 0,
     "warning_count": 0,
     "generation_time_ms": null,
-    "output_directory": "brainsmith/hw_kernels/thresholding/gen/thresholding_axi",
+    "output_directory": "brainsmith/hw_kernels/thresholding/bw/thresholding_axi",
     "files_written": 3,
     "metadata_files": 0
   },

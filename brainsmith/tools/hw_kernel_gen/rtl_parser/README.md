@@ -39,10 +39,14 @@ SystemVerilog File → Tree-sitter AST → Interface Scanning → Protocol Valid
 | **`parser.py`** | Main orchestrator, tree-sitter integration, and 3-stage parsing pipeline |
 | **`data.py`** | Core data structures: `Parameter`, `Port`, `Pragma` subclasses with `InterfaceNameMatcher` |
 | **`grammar.py`** | SystemVerilog grammar loading via tree-sitter |
+| **`ast_parser.py`** | Low-level AST operations and syntax validation |
+| **`module_extractor.py`** | Module selection, component extraction (parameters, ports) |
 | **`interface_scanner.py`** | Port grouping based on naming conventions into `PortGroup` objects |
 | **`protocol_validator.py`** | Interface protocol compliance validation for grouped ports |
 | **`interface_builder.py`** | Direct `InterfaceMetadata` creation from validated `PortGroup` objects |
+| **`parameter_linker.py`** | Automatic parameter-to-interface linking with smart conflict resolution |
 | **`pragma.py`** | `PragmaHandler` for extraction and pragma subclass instantiation |
+| **`pragmas/`** | Hierarchical pragma system with base classes and specific implementations |
 
 ### Processing Pipeline
 
@@ -607,7 +611,7 @@ These restrictions ensure that all RTL modules can be reliably processed by the 
 - **Parameter Expressions**: Preserves but doesn't evaluate complex expressions  
 - **BDIM Validation**: Parameter validation occurs during pragma application, not during initial parsing
 
-### Recent Improvements (Based on Test Analysis)
+### Recent Improvements (Current Architecture)
 
 - **Pragma Error Isolation**: Individual pragma failures don't break the entire parsing process
 - **Direct Metadata Creation**: No longer creates temporary `Interface` objects, works directly with `InterfaceMetadata`
@@ -615,6 +619,9 @@ These restrictions ensure that all RTL modules can be reliably processed by the 
 - **Parameter Validation**: BDIM pragmas validate parameter names against actual module parameters
 - **QONNX Integration**: Datatype constraints use `DatatypeConstraintGroup` for QONNX compatibility
 - **Magic Number Prevention**: BDIM pragmas explicitly reject magic numbers to ensure parameterizability
+- **Smart Auto-Linking**: Automatic parameter-to-interface binding with conflict resolution and mixed pragma/auto-link support
+- **Modular Parser Design**: Clean separation between AST parsing, module extraction, and workflow orchestration
+- **Enhanced Datatype Handling**: Support for internal datatypes and comprehensive datatype parameter mappings
 
 ### Planned Enhancements
 

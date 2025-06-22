@@ -357,5 +357,4 @@ __all__ = [
     
     # Utility functions
     "create_generation_result",
-    "merge_generation_results",
 ]

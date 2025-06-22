@@ -18,7 +18,7 @@ This package contains all pragma implementations organized by type:
 from .base import Pragma, InterfacePragma, PragmaError
 from .module import TopModulePragma
 from .interface import DatatypePragma, DatatypeParamPragma, WeightPragma
-from .parameter import AliasPragma, DerivedParameterPragma
+from .parameter import AliasPragma, DerivedParameterPragma, AxiLiteParamPragma
 from .dimension import BDimPragma, SDimPragma
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     # Parameter pragmas
     'AliasPragma',
     'DerivedParameterPragma',
+    'AxiLiteParamPragma',
     # Dimension pragmas
     'BDimPragma',
     'SDimPragma',

@@ -41,6 +41,7 @@
 // @brainsmith DATATYPE input FIXED 1 32
 // @brainsmith DATATYPE output FIXED 1 32
 // @brainsmith DATATYPE_PARAM threshold width T_WIDTH
+// @brainsmith AXILITE_PARAM threshold USE_AXILITE
 
 module thresholding_axi #(
 	int unsigned  input_WIDTH,    // input precision
@@ -75,28 +76,28 @@ module thresholding_axi #(
 
 	//- AXI Lite ------------------------
 	// Writing
-	input	logic                  s_axilite_AWVALID,
-	output	logic                  s_axilite_AWREADY,
-	input	logic [ADDR_BITS-1:0]  s_axilite_AWADDR,	// lowest 2 bits (byte selectors) are ignored
+	input	logic                  threhsold_AWVALID,
+	output	logic                  threhsold_AWREADY,
+	input	logic [ADDR_BITS-1:0]  threhsold_AWADDR,	// lowest 2 bits (byte selectors) are ignored
 
-	input	logic         s_axilite_WVALID,
-	output	logic         s_axilite_WREADY,
-	input	logic [31:0]  s_axilite_WDATA,
-	input	logic [ 3:0]  s_axilite_WSTRB,
+	input	logic         threhsold_WVALID,
+	output	logic         threhsold_WREADY,
+	input	logic [31:0]  threhsold_WDATA,
+	input	logic [ 3:0]  threhsold_WSTRB,
 
-	output	logic        s_axilite_BVALID,
-	input	logic        s_axilite_BREADY,
-	output	logic [1:0]  s_axilite_BRESP,
+	output	logic        threhsold_BVALID,
+	input	logic        threhsold_BREADY,
+	output	logic [1:0]  threhsold_BRESP,
 
 	// Reading
-	input	logic                  s_axilite_ARVALID,
-	output	logic                  s_axilite_ARREADY,
-	input	logic [ADDR_BITS-1:0]  s_axilite_ARADDR,
+	input	logic                  threhsold_ARVALID,
+	output	logic                  threhsold_ARREADY,
+	input	logic [ADDR_BITS-1:0]  threhsold_ARADDR,
 
-	output	logic         s_axilite_RVALID,
-	input	logic         s_axilite_RREADY,
-	output	logic [31:0]  s_axilite_RDATA,
-	output	logic [ 1:0]  s_axilite_RRESP,
+	output	logic         threhsold_RVALID,
+	input	logic         threhsold_RREADY,
+	output	logic [31:0]  threhsold_RDATA,
+	output	logic [ 1:0]  threhsold_RRESP,
 
 	//- AXI Stream - Input --------------
 	output	logic  input_tready,
@@ -123,12 +124,12 @@ module thresholding_axi #(
 		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(T_WIDTH)) axi (
 			.aclk(ap_clk), .aresetn(ap_rst_n),
 
-			.awready(s_axilite_AWREADY), .awvalid(s_axilite_AWVALID), .awaddr(s_axilite_AWADDR), .awprot('x),
-			.wready(s_axilite_WREADY),   .wvalid(s_axilite_WVALID),   .wdata(s_axilite_WDATA),   .wstrb(s_axilite_WSTRB),
-			.bready(s_axilite_BREADY),   .bvalid(s_axilite_BVALID),   .bresp(s_axilite_BRESP),
+			.awready(threhsold_AWREADY), .awvalid(threhsold_AWVALID), .awaddr(threhsold_AWADDR), .awprot('x),
+			.wready(threhsold_WREADY),   .wvalid(threhsold_WVALID),   .wdata(threhsold_WDATA),   .wstrb(threhsold_WSTRB),
+			.bready(threhsold_BREADY),   .bvalid(threhsold_BVALID),   .bresp(threhsold_BRESP),
 
-			.arready(s_axilite_ARREADY), .arvalid(s_axilite_ARVALID), .araddr(s_axilite_ARADDR), .arprot('x),
-			.rready(s_axilite_RREADY),   .rvalid(s_axilite_RVALID),   .rresp(s_axilite_RRESP),   .rdata(s_axilite_RDATA),
+			.arready(threhsold_ARREADY), .arvalid(threhsold_ARVALID), .araddr(threhsold_ARADDR), .arprot('x),
+			.rready(threhsold_RREADY),   .rvalid(threhsold_RVALID),   .rresp(threhsold_RRESP),   .rdata(threhsold_RDATA),
 
 			.ip_en(cfg_en), .ip_wen(cfg_we), .ip_addr(cfg_a0), .ip_wdata(cfg_d),
 			.ip_rack(cfg_rack), .ip_rdata(cfg_q)
