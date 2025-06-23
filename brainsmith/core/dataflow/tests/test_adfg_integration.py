@@ -11,7 +11,7 @@ import pytest
 from brainsmith.core.dataflow.core.types import INT16, InterfaceDirection
 from brainsmith.core.dataflow.core.interface import Interface
 from brainsmith.core.dataflow.core.kernel import Kernel
-from brainsmith.core.dataflow.core.pragma import TiePragma, ConstrPragma
+from brainsmith.core.dataflow.core.relationships import RelationType, DimensionRelationship
 from brainsmith.core.dataflow.core.graph import DataflowGraph, DataflowEdge
 
 from brainsmith.core.dataflow.adfg import (

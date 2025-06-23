@@ -9,9 +9,22 @@
 
 from .core.types import Shape, RaggedShape, InterfaceDirection, DataType
 from .core.interface import Interface
-from .core.pragma import Pragma, TiePragma, ConstrPragma, parse_pragma
+from .core.relationships import (
+    RelationType, DimensionRelationship, ArchitecturalConstraint, 
+    ParameterDependency, ConstraintViolation, ValidationResult
+)
 from .core.kernel import Kernel
 from .core.graph import DataflowGraph, DataflowEdge
+
+# New Definition/Model architecture
+from .core.base import (
+    BaseDefinition, BaseModel, ParameterBinding, ValidationContext,
+    ModelFactory, DefinitionRegistry, DEFINITION_REGISTRY
+)
+from .core.interface_definition import InterfaceDefinition
+from .core.interface_model import InterfaceModel
+from .core.kernel_definition import KernelDefinition
+from .core.kernel_model import KernelModel
 
 __version__ = "0.1.0"
 
@@ -21,14 +34,28 @@ __all__ = [
     "RaggedShape", 
     "InterfaceDirection",
     "DataType",
-    # Core classes
+    # Legacy core classes
     "Interface",
     "Kernel",
     "DataflowGraph",
     "DataflowEdge",
-    # Pragmas
-    "Pragma",
-    "TiePragma",
-    "ConstrPragma",
-    "parse_pragma",
+    # Relationships and constraints
+    "RelationType",
+    "DimensionRelationship",
+    "ArchitecturalConstraint",
+    "ParameterDependency",
+    "ConstraintViolation",
+    "ValidationResult",
+    # New Definition/Model architecture
+    "BaseDefinition",
+    "BaseModel",
+    "ParameterBinding",
+    "ValidationContext",
+    "ModelFactory",
+    "DefinitionRegistry",
+    "DEFINITION_REGISTRY",
+    "InterfaceDefinition",
+    "InterfaceModel", 
+    "KernelDefinition",
+    "KernelModel",
 ]

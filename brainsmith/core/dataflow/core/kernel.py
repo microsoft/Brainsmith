@@ -8,23 +8,28 @@
 """Unified kernel definition"""
 
 from dataclasses import dataclass, field, replace
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, Union
 import math
 from .interface import Interface
-from .pragma import Pragma
+from .relationships import (
+    DimensionRelationship, ArchitecturalConstraint, ParameterDependency,
+    ValidationResult, RelationType
+)
+from .validators import KernelValidator
+from .expressions import evaluate_expression
 from .types import InterfaceDirection, prod
 
 
 @dataclass
 class Kernel:
-    """Hardware kernel with interfaces and constraints
+    """Hardware kernel with interfaces and native constraints
     
     Represents a hardware accelerator kernel with:
     - Multiple streaming interfaces (input/output/weight/config)
     - Timing characteristics (latency, initiation intervals)
     - Pipeline costs (priming/flush cycles)
-    - Declarative constraints (pragmas)
-    - Resource estimates
+    - Native relationship and constraint modeling
+    - Resource estimates and architectural requirements
     """
     
     # Identity
@@ -43,9 +48,16 @@ class Kernel:
     priming_cycles: int = 0  # Cycles to fill pipeline
     flush_cycles: int = 0    # Cycles to drain pipeline
     
-    # Constraints
-    pragmas: List[Pragma] = field(default_factory=list)
-    pragma_env: Dict[str, int] = field(default_factory=dict)
+    # Native relationships and constraints
+    relationships: List[DimensionRelationship] = field(default_factory=list)
+    constraints: List[ArchitecturalConstraint] = field(default_factory=list)
+    dependencies: List[ParameterDependency] = field(default_factory=list)
+    
+    # Architectural requirements
+    requires_burst_alignment: bool = False
+    requires_power_of_two: Set[str] = field(default_factory=set)  # Interface names
+    memory_architecture: Optional[str] = None  # "distributed", "HBM", "DDR", etc.
+    pipeline_style: Optional[str] = None  # "streaming", "batch", "hybrid"
     
     # Resource estimates
     resources: Dict[str, float] = field(default_factory=dict)
@@ -72,22 +84,35 @@ class Kernel:
         if self.priming_cycles < 0 or self.flush_cycles < 0:
             raise ValueError("Pipeline costs must be non-negative")
     
-    def validate(self) -> None:
-        """Validate kernel configuration including pragma constraints
+    def validate(self) -> ValidationResult:
+        """Validate kernel configuration including native constraints
+        
+        Returns:
+            ValidationResult with any violations
+        """
+        # Create validator
+        validator = KernelValidator(self.relationships, self.constraints, self.dependencies)
+        
+        # Build context for validation
+        context = {
+            'interfaces': {intf.name: intf for intf in self.interfaces},
+            'parameters': {},  # Will be populated with runtime parameters
+            'constants': {}    # Will be populated with design-time constants
+        }
+        
+        # Validate all constraints
+        result = validator.validate(context)
+        
+        return result
+    
+    def validate_and_raise(self) -> None:
+        """Validate kernel and raise exception if invalid
         
         Raises:
             ValueError: If any constraint is violated
         """
-        # Build interface dictionary
-        intf_dict = {intf.name: intf for intf in self.interfaces}
-        
-        # Validate all pragmas
-        for pragma in self.pragmas:
-            try:
-                if not pragma.evaluate(intf_dict, self.pragma_env):
-                    raise ValueError(f"Pragma violation: {pragma.to_string()}")
-            except Exception as e:
-                raise ValueError(f"Error evaluating pragma '{pragma.to_string()}': {e}")
+        result = self.validate()
+        result.raise_if_invalid(self.name)
     
     @property
     def input_interfaces(self) -> List[Interface]:
@@ -133,6 +158,109 @@ class Kernel:
             if intf.name == name:
                 return intf
         raise KeyError(f"Interface '{name}' not found in kernel '{self.name}'")
+    
+    def add_relationship(self, source: str, target: str,
+                        relation: RelationType = RelationType.EQUAL,
+                        source_dim: Optional[int] = None,
+                        target_dim: Optional[int] = None,
+                        factor: Optional[Union[int, float]] = None,
+                        description: str = "") -> None:
+        """Add a dimension relationship between interfaces
+        
+        Args:
+            source: Source interface name
+            target: Target interface name
+            relation: Type of relationship
+            source_dim: Source dimension index (None for total size)
+            target_dim: Target dimension index (None for total size)
+            factor: Factor for MULTIPLE relationships
+            description: Human-readable description
+        """
+        rel = DimensionRelationship(
+            source_interface=source,
+            target_interface=target,
+            relation=relation,
+            source_dim=source_dim,
+            target_dim=target_dim,
+            factor=factor,
+            description=description
+        )
+        self.relationships.append(rel)
+        
+        # Update interface dataflow metadata
+        try:
+            src_intf = self.get_interface(source)
+            tgt_intf = self.get_interface(target)
+            
+            # Add dataflow connections for certain relationship types
+            if relation in [RelationType.EQUAL, RelationType.MULTIPLE]:
+                src_intf.add_produces(target)
+                tgt_intf.add_consumes(source)
+        except KeyError:
+            pass  # Interface might not exist yet
+    
+    def add_constraint(self, name: str, expression: str,
+                      operator: str, value: Union[int, float, str],
+                      description: str = "") -> None:
+        """Add an architectural constraint
+        
+        Args:
+            name: Constraint name
+            expression: Expression to evaluate
+            operator: Comparison operator (==, <=, >=, etc.)
+            value: Target value or expression
+            description: Human-readable description
+        """
+        constraint = ArchitecturalConstraint(
+            name=name,
+            expression=expression,
+            operator=operator,
+            value=value,
+            description=description
+        )
+        self.constraints.append(constraint)
+    
+    def add_dependency(self, dependent: str, expression: str,
+                      description: str = "") -> None:
+        """Add a parameter dependency
+        
+        Args:
+            dependent: Name of dependent parameter
+            expression: Expression to compute parameter value
+            description: Human-readable description
+        """
+        dependency = ParameterDependency(
+            dependent=dependent,
+            expression=expression,
+            description=description
+        )
+        self.dependencies.append(dependency)
+    
+    def get_relationships_for_interface(self, interface_name: str) -> List[DimensionRelationship]:
+        """Get all relationships involving a specific interface"""
+        return [rel for rel in self.relationships 
+                if rel.source_interface == interface_name or rel.target_interface == interface_name]
+    
+    def get_dependent_interfaces(self, interface_name: str) -> Set[str]:
+        """Get all interfaces that depend on the given interface"""
+        dependents = set()
+        for rel in self.relationships:
+            if rel.source_interface == interface_name:
+                dependents.add(rel.target_interface)
+        return dependents
+    
+    def get_constraint_graph(self) -> Dict[str, Set[str]]:
+        """Get constraint dependency graph
+        
+        Returns:
+            Dict mapping interface names to their dependencies
+        """
+        graph = {}
+        for rel in self.relationships:
+            if rel.target_interface not in graph:
+                graph[rel.target_interface] = set()
+            graph[rel.target_interface].add(rel.source_interface)
+        return graph
     
     def initiation_interval(self) -> int:
         """Compute kernel initiation interval

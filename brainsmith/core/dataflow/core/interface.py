@@ -8,7 +8,7 @@
 """Unified interface definition"""
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Set
 import math
 from .types import (
     Shape, RaggedShape, InterfaceDirection, DataType,
@@ -41,6 +41,17 @@ class Interface:
     # Advanced features
     skip_prob: List[float] = field(default_factory=list)  # Sparsity per phase
     optional: bool = False  # For conditional interfaces
+    
+    # Native constraints
+    alignment: Optional[int] = None          # Memory alignment requirement in bytes
+    min_dims: Optional[Shape] = None         # Minimum dimension sizes
+    max_dims: Optional[Shape] = None         # Maximum dimension sizes
+    granularity: Optional[Shape] = None      # Dimension granularity (must be multiples)
+    
+    # Dataflow metadata
+    produces: Set[str] = field(default_factory=set)      # Interfaces this feeds
+    consumes: Set[str] = field(default_factory=set)      # Interfaces this reads from
+    synchronized_with: Set[str] = field(default_factory=set)  # Must process together
     
     def __post_init__(self):
         """Validate and normalize inputs"""
@@ -105,6 +116,9 @@ class Interface:
         else:
             # Default: no sparsity
             self.skip_prob = [0.0] * self.n_phases
+        
+        # Validate native constraints
+        self._validate_native_constraints()
     
     @property
     def ipar(self) -> int:
@@ -224,13 +238,119 @@ class Interface:
                 f"Data type mismatch: {self.dtype} != {other.dtype}"
             )
     
+    def _validate_native_constraints(self):
+        """Validate native interface constraints during construction"""
+        errors = self.validate_constraints()
+        if errors:
+            raise ValueError(f"Interface constraint violations:\n" + "\n".join(errors))
+    
+    def validate_constraints(self) -> List[str]:
+        """Validate interface-level constraints
+        
+        Returns:
+            List of constraint violation messages (empty if valid)
+        """
+        errors = []
+        
+        # Check alignment constraint
+        if self.alignment is not None:
+            if self.alignment <= 0:
+                errors.append(f"Alignment must be positive, got {self.alignment}")
+            
+            total_size = prod(self.tensor_dims) * self.dtype.bits // 8  # Size in bytes
+            if total_size % self.alignment != 0:
+                errors.append(
+                    f"Interface {self.name} total size {total_size} bytes "
+                    f"not aligned to {self.alignment} bytes"
+                )
+        
+        # Check dimension bounds
+        if self.min_dims is not None:
+            if len(self.min_dims) != len(self.tensor_dims):
+                errors.append(
+                    f"min_dims length {len(self.min_dims)} != "
+                    f"tensor dims length {len(self.tensor_dims)}"
+                )
+            else:
+                for i, (actual, min_val) in enumerate(zip(self.tensor_dims, self.min_dims)):
+                    if actual < min_val:
+                        errors.append(
+                            f"Interface {self.name} dim[{i}]={actual} < min={min_val}"
+                        )
+        
+        if self.max_dims is not None:
+            if len(self.max_dims) != len(self.tensor_dims):
+                errors.append(
+                    f"max_dims length {len(self.max_dims)} != "
+                    f"tensor dims length {len(self.tensor_dims)}"
+                )
+            else:
+                for i, (actual, max_val) in enumerate(zip(self.tensor_dims, self.max_dims)):
+                    if actual > max_val:
+                        errors.append(
+                            f"Interface {self.name} dim[{i}]={actual} > max={max_val}"
+                        )
+        
+        # Check granularity constraints
+        if self.granularity is not None:
+            if len(self.granularity) != len(self.tensor_dims):
+                errors.append(
+                    f"granularity length {len(self.granularity)} != "
+                    f"tensor dims length {len(self.tensor_dims)}"
+                )
+            else:
+                for i, (actual, gran) in enumerate(zip(self.tensor_dims, self.granularity)):
+                    if gran is not None and gran > 0 and actual % gran != 0:
+                        errors.append(
+                            f"Interface {self.name} dim[{i}]={actual} "
+                            f"not divisible by granularity {gran}"
+                        )
+        
+        return errors
+    
+    def add_produces(self, interface_name: str):
+        """Add interface to produces set"""
+        self.produces.add(interface_name)
+    
+    def add_consumes(self, interface_name: str):
+        """Add interface to consumes set"""
+        self.consumes.add(interface_name)
+    
+    def add_synchronized_with(self, interface_name: str):
+        """Add interface to synchronized_with set"""
+        self.synchronized_with.add(interface_name)
+    
+    def has_constraint(self, constraint_type: str) -> bool:
+        """Check if interface has a specific type of constraint"""
+        if constraint_type == "alignment":
+            return self.alignment is not None
+        elif constraint_type == "bounds":
+            return self.min_dims is not None or self.max_dims is not None
+        elif constraint_type == "granularity":
+            return self.granularity is not None
+        else:
+            return False
+    
     def __repr__(self) -> str:
         """String representation"""
+        constraints = []
+        if self.alignment is not None:
+            constraints.append(f"align={self.alignment}")
+        if self.min_dims is not None:
+            constraints.append(f"min={self.min_dims}")
+        if self.max_dims is not None:
+            constraints.append(f"max={self.max_dims}")
+        if self.granularity is not None:
+            constraints.append(f"gran={self.granularity}")
+        
+        constraint_str = f", {', '.join(constraints)}" if constraints else ""
+        
         return (
             f"Interface(name='{self.name}', "
             f"dir={self.direction.value}, "
             f"dtype={self.dtype}, "
             f"tensor={self.tensor_dims}, "
             f"block={self.block_dims if self.is_csdf else self.block_dims[0]}, "
-            f"stream={self.stream_dims})"
+            f"stream={self.stream_dims}"
+            f"{constraint_str})"
         )

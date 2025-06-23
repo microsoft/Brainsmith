@@ -10,7 +10,7 @@
 import pytest
 from brainsmith.core.dataflow.core.types import InterfaceDirection, INT16, INT32
 from brainsmith.core.dataflow.core.interface import Interface
-from brainsmith.core.dataflow.core.pragma import TiePragma, ConstrPragma
+from brainsmith.core.dataflow.core.relationships import RelationType, DimensionRelationship, ArchitecturalConstraint
 from brainsmith.core.dataflow.core.kernel import Kernel
 
 
