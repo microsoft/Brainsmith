@@ -44,9 +44,8 @@ def dynmvu(pe:int, simd:int)->dict:
     d["SIMD"] = simd
     d["ram_style"] = "auto"
     d["resType"] = "auto"
-    d["mem_mode"] = "external"
-    d["runtime_writeable_weights"] = 0
     return d
+
 
 def eltwiseadd(pe:int)->dict:
     d = {}
@@ -77,12 +76,20 @@ def main(args):
     for n in range(args.num_layers):
 
         # Generate all MVAUs
-        for m in range(0, 6):
-            if m == 4 or m == 5:
+        for m in range(0, 8):
+            if m == 7 or m == 8:
                 d = mvau(2 * args.simd, 2 * args.pe, args.runtime_writeable_weights)
+            # dyn mvau
+            elif m == 3 or m == 4:
+                if args.simd % 3 == 0:
+                    d = dynmvu(args.pe, int(args.simd/3))
+                elif args.simd % 4 == 0:
+                    d = dynmvu(args.pe, int(args.simd/4))
+                else:
+                    d = dynmvu(args.pe, args.simd)
             else:
                 d = mvau(args.simd, args.pe, args.runtime_writeable_weights)
-            c[f"MVAU_rtl_{m + (6 * n)}"] = d
+            c[f"MVAU_rtl_{m + (8 * n)}"] = d
 
         # Duplicate streams
         for m in range(0, 3):
@@ -98,16 +105,6 @@ def main(args):
         for m in range(0, 9):
             d = thresholding(args.other, 0)
             c[f"Thresholding_rtl_{m + (9 * n)}"] = d
-
-        # DynMVUs
-        for m in range(0, 2):
-            if args.simd % 3 == 0:
-                d = dynmvu(args.pe, int(args.simd/3))
-            elif args.simd % 4 == 0:
-                d = dynmvu(args.pe, int(args.simd/4))
-            else:
-                d = dynmvu(args.pe, args.simd)
-            c[f"DynMVU_rtl_{m + (2 * n)}"] = d
 
         # EltwiseAdds
         for m in range(0, 2):
