@@ -10,10 +10,10 @@ import tempfile
 import json
 from unittest.mock import Mock, patch
 
-from brainsmith.core.api_v2 import forge_v2
+from brainsmith.core.api import forge
 from brainsmith.core.finn_v2 import FINNEvaluationBridge
-from brainsmith.core.dse_v2.space_explorer import DesignSpaceExplorer, ExplorationConfig
-from brainsmith.core.blueprint_v2 import load_blueprint_v2
+from brainsmith.core.dse.space_explorer import DesignSpaceExplorer, ExplorationConfig
+from brainsmith.core.blueprint import load_blueprint
 
 
 class TestEndToEndWorkflow:
@@ -25,7 +25,7 @@ class TestEndToEndWorkflow:
         
         if Path(blueprint_path).exists():
             # Test direct blueprint loading
-            design_space = load_blueprint_v2(blueprint_path)
+            design_space = load_blueprint(blueprint_path)
             
             # Verify structure
             assert design_space.name == "bert_accelerator_v2"
@@ -60,7 +60,7 @@ class TestEndToEndWorkflow:
         
         try:
             # Load blueprint
-            design_space = load_blueprint_v2(blueprint_path)
+            design_space = load_blueprint(blueprint_path)
             
             # Create DSE configuration for fast testing
             config = ExplorationConfig(
@@ -101,8 +101,8 @@ class TestEndToEndWorkflow:
         except Exception as e:
             print(f"DSE → FINN integration test failed (may be expected): {e}")
     
-    def test_forge_v2_complete_workflow_error_handling(self):
-        """Test forge_v2 complete workflow with error handling."""
+    def test_forge_complete_workflow_error_handling(self):
+        """Test forge complete workflow with error handling."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
         if not Path(blueprint_path).exists():
@@ -110,7 +110,7 @@ class TestEndToEndWorkflow:
         
         with tempfile.TemporaryDirectory() as temp_dir:
             # Test with minimal configuration for fast execution
-            result = forge_v2(
+            result = forge(
                 model_path="nonexistent_model.onnx",  # Will fail but test error handling
                 blueprint_path=blueprint_path,
                 output_dir=temp_dir,
@@ -130,15 +130,15 @@ class TestEndToEndWorkflow:
             assert result['success'] == False
             assert result['error'] is not None
             
-            print(f"✓ forge_v2 error handling successful")
+            print(f"✓ forge error handling successful")
             print(f"  - Error message: {result['error'][:100]}...")
     
     @pytest.mark.skipif(
         not Path("custom_bert/bert_model.onnx").exists(),
         reason="BERT model not available"
     )
-    def test_forge_v2_with_real_model_mock_finn(self):
-        """Test forge_v2 with real model but mocked FINN."""
+    def test_forge_with_real_model_mock_finn(self):
+        """Test forge with real model but mocked FINN."""
         model_path = "custom_bert/bert_model.onnx"
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
@@ -167,7 +167,7 @@ class TestEndToEndWorkflow:
                     }
                     
                     # Test with very minimal DSE for speed
-                    result = forge_v2(
+                    result = forge(
                         model_path=model_path,
                         blueprint_path=blueprint_path,
                         output_dir=temp_dir,
@@ -185,10 +185,10 @@ class TestEndToEndWorkflow:
                     
                     # Check output files
                     output_path = Path(temp_dir)
-                    assert (output_path / "forge_v2_results.json").exists()
-                    assert (output_path / "forge_v2_summary.json").exists()
+                    assert (output_path / "forge_results.json").exists()
+                    assert (output_path / "forge_summary.json").exists()
                     
-                    print(f"✓ forge_v2 with real model successful")
+                    print(f"✓ forge with real model successful")
                     print(f"  - Total evaluations: {result['exploration_summary']['total_evaluations']}")
                     print(f"  - Best score: {result['best_design']['score']}")
                     print(f"  - Execution time: {result['execution_time']:.2f}s")
@@ -203,7 +203,7 @@ class TestEndToEndWorkflow:
         # Test component instantiation and compatibility
         try:
             # Test Blueprint V2 loading
-            design_space = load_blueprint_v2(blueprint_path)
+            design_space = load_blueprint(blueprint_path)
             
             # Test FINN bridge creation
             blueprint_config = {
@@ -250,7 +250,7 @@ class TestEndToEndWorkflow:
             with patch('brainsmith.core.finn_v2.evaluation_bridge.FINNEvaluationBridge.evaluate_combination') as mock_eval:
                 mock_eval.side_effect = Exception("Simulated FINN failure")
                 
-                result = forge_v2(
+                result = forge(
                     model_path="test_model.onnx",
                     blueprint_path=blueprint_path,
                     output_dir=temp_dir,
@@ -294,7 +294,7 @@ class TestEndToEndPerformance:
                 results = []
                 
                 for count in evaluation_counts:
-                    result = forge_v2(
+                    result = forge(
                         model_path="test_model.onnx",
                         blueprint_path=blueprint_path,
                         dse_config={
@@ -329,7 +329,7 @@ class TestEndToEndDocumentation:
             pytest.skip("BERT Blueprint V2 not available")
         
         # Test documented return structure
-        result = forge_v2(
+        result = forge(
             model_path="nonexistent.onnx",
             blueprint_path=blueprint_path,
             dse_config={'max_evaluations': 1}
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     test_e2e.test_blueprint_v2_loading_pipeline()
     print("✓ Blueprint loading test passed")
     
-    test_e2e.test_forge_v2_complete_workflow_error_handling()
+    test_e2e.test_forge_complete_workflow_error_handling()
     print("✓ Error handling test passed")
     
     test_e2e.test_component_integration_compatibility()

@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
 from brainsmith.core.finn_v2.evaluation_bridge import FINNEvaluationBridge
-from brainsmith.core.dse_v2.combination_generator import ComponentCombination
+from brainsmith.core.dse.combination_generator import ComponentCombination
 
 
 class TestFINNEvaluationBridge:

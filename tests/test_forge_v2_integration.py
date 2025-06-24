@@ -1,5 +1,5 @@
 """
-Integration Tests for forge_v2() API
+Integration Tests for forge() API
 
 Tests the complete Blueprint V2 → DSE → FINN flow with real integration.
 """
@@ -9,18 +9,18 @@ from pathlib import Path
 import tempfile
 import json
 
-from brainsmith.core.api_v2 import forge_v2, validate_blueprint_v2
+from brainsmith.core.api import forge, validate_blueprint
 
 
 class TestForgeV2Integration:
-    """Integration tests for forge_v2() function."""
+    """Integration tests for forge() function."""
     
-    def test_validate_blueprint_v2_success(self):
+    def test_validate_blueprint_success(self):
         """Test Blueprint V2 validation with valid blueprint."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
         if Path(blueprint_path).exists():
-            is_valid, errors = validate_blueprint_v2(blueprint_path)
+            is_valid, errors = validate_blueprint(blueprint_path)
             
             # Should be valid or have only minor warnings
             assert isinstance(is_valid, bool)
@@ -29,18 +29,18 @@ class TestForgeV2Integration:
             if not is_valid:
                 print(f"Blueprint validation issues: {errors}")
     
-    def test_validate_blueprint_v2_missing_file(self):
+    def test_validate_blueprint_missing_file(self):
         """Test Blueprint V2 validation with missing file."""
-        is_valid, errors = validate_blueprint_v2("nonexistent_blueprint.yaml")
+        is_valid, errors = validate_blueprint("nonexistent_blueprint.yaml")
         
         assert is_valid == False
         assert len(errors) > 0
         assert any("not found" in error.lower() for error in errors)
     
-    def test_forge_v2_basic_structure(self):
-        """Test forge_v2() basic structure and error handling."""
+    def test_forge_basic_structure(self):
+        """Test forge() basic structure and error handling."""
         # Test with invalid inputs to check error handling
-        result = forge_v2(
+        result = forge(
             model_path="nonexistent_model.onnx",
             blueprint_path="nonexistent_blueprint.yaml"
         )
@@ -58,12 +58,12 @@ class TestForgeV2Integration:
         assert result['success'] == False
         assert result['error'] is not None
     
-    def test_forge_v2_with_valid_blueprint_invalid_model(self):
-        """Test forge_v2() with valid blueprint but invalid model."""
+    def test_forge_with_valid_blueprint_invalid_model(self):
+        """Test forge() with valid blueprint but invalid model."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
         if Path(blueprint_path).exists():
-            result = forge_v2(
+            result = forge(
                 model_path="nonexistent_model.onnx",
                 blueprint_path=blueprint_path
             )
@@ -77,7 +77,7 @@ class TestForgeV2Integration:
         not Path("custom_bert/bert_model.onnx").exists(),
         reason="BERT model not available"
     )
-    def test_forge_v2_end_to_end_bert(self):
+    def test_forge_end_to_end_bert(self):
         """Test complete flow with bert_accelerator_v2.yaml and BERT model."""
         model_path = "custom_bert/bert_model.onnx"
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
@@ -95,7 +95,7 @@ class TestForgeV2Integration:
             }
             
             try:
-                result = forge_v2(
+                result = forge(
                     model_path=model_path,
                     blueprint_path=blueprint_path,
                     output_dir=temp_dir,
@@ -117,20 +117,20 @@ class TestForgeV2Integration:
                     
                     # Check output files were created
                     output_path = Path(temp_dir)
-                    assert (output_path / "forge_v2_results.json").exists()
-                    assert (output_path / "forge_v2_summary.json").exists()
+                    assert (output_path / "forge_results.json").exists()
+                    assert (output_path / "forge_summary.json").exists()
                 else:
                     # If failed, should have meaningful error
                     assert 'error' in result
-                    print(f"forge_v2 failed (expected for testing): {result['error']}")
+                    print(f"forge failed (expected for testing): {result['error']}")
                     
             except Exception as e:
                 # Expected - FINN may not be available in test environment
-                print(f"forge_v2 test failed (expected): {e}")
+                print(f"forge test failed (expected): {e}")
                 assert "FINN" in str(e) or "not available" in str(e)
     
-    def test_forge_v2_objective_overrides(self):
-        """Test forge_v2() with objective overrides."""
+    def test_forge_objective_overrides(self):
+        """Test forge() with objective overrides."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
         if Path(blueprint_path).exists():
@@ -145,7 +145,7 @@ class TestForgeV2Integration:
                 'target_frequency_mhz': 200
             }
             
-            result = forge_v2(
+            result = forge(
                 model_path="nonexistent_model.onnx",  # Will fail but test override parsing
                 blueprint_path=blueprint_path,
                 objectives=custom_objectives,
@@ -157,8 +157,8 @@ class TestForgeV2Integration:
             assert result['success'] == False
             assert 'error' in result
     
-    def test_forge_v2_dse_config_options(self):
-        """Test forge_v2() with various DSE configuration options."""
+    def test_forge_dse_config_options(self):
+        """Test forge() with various DSE configuration options."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/transformers/bert_accelerator_v2.yaml"
         
         if Path(blueprint_path).exists():
@@ -170,7 +170,7 @@ class TestForgeV2Integration:
                 'early_termination_patience': 5
             }
             
-            result = forge_v2(
+            result = forge(
                 model_path="nonexistent_model.onnx",
                 blueprint_path=blueprint_path,
                 dse_config=dse_config
@@ -182,24 +182,31 @@ class TestForgeV2Integration:
 
 
 class TestForgeV2Components:
-    """Unit tests for forge_v2() component functions."""
+    """Unit tests for forge() component functions."""
     
     def test_blueprint_v2_loading_functions(self):
         """Test Blueprint V2 loading helper functions."""
-        from brainsmith.core.api_v2 import _load_blueprint_v2_strict
+        from brainsmith.core.api import _load_blueprint_strict
         
         # Test with nonexistent file
         with pytest.raises(FileNotFoundError):
-            _load_blueprint_v2_strict("nonexistent.yaml")
+            _load_blueprint_strict("nonexistent.yaml")
         
         # Test with wrong extension
-        with pytest.raises(ValueError):
-            _load_blueprint_v2_strict("test.txt")
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
+            f.write(b"test content")
+            temp_path = f.name
+        
+        try:
+            with pytest.raises(ValueError):
+                _load_blueprint_strict(temp_path)
+        finally:
+            Path(temp_path).unlink()
     
     def test_clean_results_formatting(self):
         """Test clean results formatting functions."""
-        from brainsmith.core.api_v2 import _format_clean_results
-        from brainsmith.core.dse_v2.space_explorer import ExplorationResults
+        from brainsmith.core.api import _format_clean_results
+        from brainsmith.core.dse.space_explorer import ExplorationResults
         
         # Create mock exploration results
         mock_results = ExplorationResults(
@@ -227,12 +234,12 @@ class TestForgeV2Components:
 class TestBlueprintV2Validation:
     """Tests for Blueprint V2 validation functionality."""
     
-    def test_validate_blueprint_v2_integration(self):
+    def test_validate_blueprint_integration(self):
         """Test Blueprint V2 validation integration."""
         blueprint_path = "brainsmith/libraries/blueprints_v2/base/transformer_base.yaml"
         
         if Path(blueprint_path).exists():
-            is_valid, errors = validate_blueprint_v2(blueprint_path)
+            is_valid, errors = validate_blueprint(blueprint_path)
             
             assert isinstance(is_valid, bool)
             assert isinstance(errors, list)
@@ -253,7 +260,7 @@ class TestBlueprintV2Validation:
             for blueprint_path in blueprint_files:
                 print(f"Validating: {blueprint_path}")
                 
-                is_valid, errors = validate_blueprint_v2(str(blueprint_path))
+                is_valid, errors = validate_blueprint(str(blueprint_path))
                 
                 # Print results but don't fail test - blueprints may be incomplete
                 if not is_valid:
@@ -268,12 +275,12 @@ if __name__ == "__main__":
     # Run basic tests
     test_class = TestForgeV2Integration()
     
-    print("Testing forge_v2() basic functionality...")
-    test_class.test_forge_v2_basic_structure()
+    print("Testing forge() basic functionality...")
+    test_class.test_forge_basic_structure()
     print("✓ Basic structure test passed")
     
     print("Testing Blueprint V2 validation...")
-    test_class.test_validate_blueprint_v2_missing_file()
+    test_class.test_validate_blueprint_missing_file()
     print("✓ Validation test passed")
     
     print("All basic tests passed!")

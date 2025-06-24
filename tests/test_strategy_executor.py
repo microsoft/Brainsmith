@@ -6,13 +6,13 @@ import pytest
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from brainsmith.core.dse_v2.strategy_executor import (
+from brainsmith.core.dse.strategy_executor import (
     StrategyExecutor, ExplorationStrategy, HierarchicalExplorationStrategy,
     AdaptiveExplorationStrategy, ParetoGuidedStrategy, ExplorationContext,
     StrategyResult, StrategyPhase
 )
-from brainsmith.core.dse_v2.combination_generator import ComponentCombination, CombinationGenerator
-from brainsmith.core.blueprint_v2 import (
+from brainsmith.core.dse.combination_generator import ComponentCombination, CombinationGenerator
+from brainsmith.core.blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules, DSEStrategy, DSEStrategies
 )

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Brainsmith is an open-source platform for FPGA AI accelerators developed collaboratively by Microsoft and AMD. It converts PyTorch models to RTL implementations for FPGA deployment using Interface-Wise Dataflow Modeling.
+Brainsmith is an open-source platform for FPGA AI accelerators developed collaboratively by Microsoft and AMD. It converts PyTorch models to RTL implementations for FPGA deployment using a Blueprint-based design space exploration approach.
 
 ## Development Environment
 
@@ -41,15 +41,16 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 
 ## Key Commands
 
+### Execution Guidelines
+- **Always** run python commands with `./smithy exec <command>` to execute in the docker environment
+
 ### Testing
 - `cd tests && pytest ./` - Run comprehensive test suite
-- `python -m pytest tests/dataflow/ -v` - Test dataflow components
-- `python -m pytest tests/tools/hw_kernel_gen/ -v` - Test hardware kernel generation
-- `python -m pytest tests/dataflow/unit/test_dataflow_interface.py::TestDataflowInterface::test_creation` - Run single test
+- `python -m pytest tests/unit/ -v` - Run unit tests
+- `python -m pytest tests/integration/ -v` - Run integration tests
 - `./smithy exec "cd tests && pytest ./"` - Run tests in container
 
 ### BERT Demo (Primary Validation)
-- `cd tests/end2end/bert && make single_layer` - Full validation test (generates DCP, multi-hour build)
 - `cd demos/bert && ./quicktest.sh` - Quick test without DCP generation
 - Alternative quick test from `demos/bert/`:
   - `python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json` - Generate folding config
@@ -57,9 +58,9 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
   - `python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False` - Skip DCP generation
 
 ### Hardware Kernel Generation
-- `python -m brainsmith.tools.hw_kernel_gen.hkg <rtl_file> <compiler_data> -o <output_dir>` - Generate RTL wrapper templates
-- `python -m brainsmith.tools.hw_kernel_gen.cli parse <rtl_file>` - Parse RTL and show interfaces
-- `python -m brainsmith.tools.hw_kernel_gen.cli generate <rtl_file> <compiler_data> -o <output_dir>` - Full generation pipeline
+- `python -m brainsmith.libraries.analysis.tools.hw_kernel_gen.hkg <rtl_file> <compiler_data> -o <output_dir>` - Generate RTL wrapper templates
+- `python -m brainsmith.libraries.analysis.tools.hw_kernel_gen.cli parse <rtl_file>` - Parse RTL and show interfaces
+- `python -m brainsmith.libraries.analysis.tools.hw_kernel_gen.cli generate <rtl_file> <compiler_data> -o <output_dir>` - Full generation pipeline
 
 ### Linting and Code Style
 The project uses `.editorconfig` for consistent formatting:
@@ -73,44 +74,64 @@ The project uses `.editorconfig` for consistent formatting:
 ### Core Pipeline
 ```
 PyTorch Model → Brevitas Quantization → ONNX → FINN → RTL Synthesis
-SystemVerilog RTL → RTL Parser → Interface Analysis → Template Generation → FINN Integration
+Blueprint V2 Design → DSE → Hardware Implementation → FPGA Deployment
 ```
 
-### Unified Interface Type System
-The codebase uses a unified interface type system defined in `brainsmith/dataflow/core/interface_types.py`:
-- **INPUT/OUTPUT/WEIGHT** - AXI-Stream dataflow interfaces
-- **CONFIG** - AXI-Lite configuration interface
-- **CONTROL** - Global control signals (clk, rst)
+### V2 Architecture (Blueprint-based DSE)
+The codebase follows a unified V2 architecture focused on design space exploration:
 
-Interface roles are inherently tied to protocols (e.g., INPUT is always AXI-Stream).
+**Core Components** (`brainsmith/core/`)
+- `Blueprint` - Configuration format for hardware designs
+- `DSE` (Design Space Exploration) - Optimization engine for finding optimal hardware configurations
+- `API` - High-level interface for model compilation and deployment
+
+**Libraries System** (`brainsmith/libraries/`)
+- `kernels/` - Hardware kernel implementations (RTL, HLS)
+- `transforms/` - Model transformation utilities
+- `analysis/` - Analysis tools including the hardware kernel generator
+- `memory/` - Memory management utilities
+- `common/` - Shared utilities and helpers
+
+### Function-Focused Design
+The project emphasizes single-purpose functions and modules:
+```python
+# Example from brainsmith/libraries/common/util.py
+def load_json(filepath):
+    """Load JSON file from filepath."""
+    with open(filepath, 'r') as f:
+        return json.load(f)
+
+def save_json(data, filepath):
+    """Save data to JSON file."""
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+```
 
 ### Key Architectural Components
 
-**Interface-Wise Dataflow Modeling** (`brainsmith/dataflow/core/`)
-- `DataflowInterface` - Represents hardware interfaces with tensor dimensions and chunking
-- `DataflowModel` - Unified computational model for hardware generation
-- `AutoHWCustomOp`/`AutoRTLBackend` - Automatic generation from dataflow models
-- Tensor chunking follows: tensor_dims → block_dims → stream_dims → element
+**Blueprint V2 System**
+- JSON-based configuration format for hardware designs
+- Hierarchical structure supporting layers, operations, and parameters
+- Integration with DSE for automatic optimization
 
-**Hardware Kernel Generator (HKG)** (`brainsmith/tools/hw_kernel_gen/`)
+**Hardware Kernel Generator (HKG)** (`brainsmith/libraries/analysis/tools/hw_kernel_gen/`)
 - RTL Parser uses tree-sitter for SystemVerilog parsing
 - Pragma system for annotations: `@brainsmith BDIM`, `@brainsmith DATATYPE`, etc.
 - Template-based code generation for FINN integration
-- Direct RTL → Template pipeline bypassing DataflowModel for performance
+- Support for both HLS and RTL kernel types
 
 **Template System**
-- Jinja2 templates in `brainsmith/tools/hw_kernel_gen/templates/`
+- Jinja2 templates in `brainsmith/libraries/analysis/tools/hw_kernel_gen/templates/`
 - Generates HWCustomOp, RTLBackend, Verilog wrappers, test suites
-- Template context built directly from EnhancedRTLParsingResult
-- Minimal instantiation templates that use dataflow models
+- Minimal instantiation templates that integrate with FINN
 
 ## Development Patterns
 
-### Adding Custom Operations
-1. Create HLS implementation in `brainsmith/hw_kernels/hls/`
-2. Add RTL module in `brainsmith/hw_kernels/rtl/` with proper pragmas
-3. Extend `brainsmith/custom_op/fpgadataflow/` for FPGA-specific operations
-4. Use AutoHWCustomOp/AutoRTLBackend for automatic generation
+### Adding Hardware Kernels
+1. Create RTL implementation in `brainsmith/libraries/kernels/rtl/` with proper pragmas
+2. Or create HLS implementation in `brainsmith/libraries/kernels/hls/`
+3. Use hardware kernel generator to create FINN integration code
+4. Register kernel in the appropriate registry for discovery
 
 ### RTL Integration with Pragmas
 ```systemverilog
@@ -121,9 +142,9 @@ module my_accelerator(...);
 ```
 
 ### Testing Strategy
-- Unit tests for components in `tests/dataflow/unit/`
+- Unit tests for components in `tests/unit/`
 - Integration tests in `tests/integration/`
-- Golden reference comparisons in `tests/tools/hw_kernel_gen/golden/`
+- Golden reference comparisons in `tests/libraries/analysis/tools/hw_kernel_gen/golden/`
 - BERT demo as comprehensive validation
 - Parameter sweep testing: `demos/bert/tests/param_sweep.sh`
 

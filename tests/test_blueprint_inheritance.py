@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, Any
 
-from brainsmith.core.blueprint_v2 import load_blueprint_v2, DesignSpaceDefinition
+from brainsmith.core.blueprint import load_blueprint, DesignSpaceDefinition
 from brainsmith.core.blueprint_inheritance import (
     merge_blueprints, resolve_blueprint_path, validate_inheritance_chain,
     BlueprintInheritanceError, _merge_available_components, _merge_exploration_rules
@@ -89,7 +89,7 @@ objectives:
                 f.write(derived_yaml)
             
             # Load derived blueprint
-            blueprint = load_blueprint_v2(str(derived_file))
+            blueprint = load_blueprint(str(derived_file))
             
             # Verify inheritance results
             assert blueprint.name == "bert_accelerator"  # Overridden
@@ -211,7 +211,7 @@ configuration_files:
                     f.write(content)
             
             # Load final child blueprint
-            blueprint = load_blueprint_v2(str(temp_path / "bert_accelerator.yaml"))
+            blueprint = load_blueprint(str(temp_path / "bert_accelerator.yaml"))
             
             # Verify all levels were inherited
             assert blueprint.name == "bert_accelerator"
@@ -338,7 +338,7 @@ transforms:
             
             # Should detect circular dependency
             with pytest.raises(ValueError, match="Blueprint inheritance failed"):
-                load_blueprint_v2(str(temp_path / "blueprint_a.yaml"))
+                load_blueprint(str(temp_path / "blueprint_a.yaml"))
     
     def test_base_blueprint_resolution(self):
         """Test base blueprint path resolution."""
@@ -550,7 +550,7 @@ constraints:
                     f.write(content)
             
             # Load derived blueprint
-            blueprint = load_blueprint_v2(str(temp_path / "complex_derived.yaml"))
+            blueprint = load_blueprint(str(temp_path / "complex_derived.yaml"))
             
             # Verify all aspects were merged correctly
             

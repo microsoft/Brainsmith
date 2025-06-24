@@ -5,10 +5,10 @@ Comprehensive tests for Component Combination Generator.
 import pytest
 from typing import List, Dict, Set
 
-from brainsmith.core.dse_v2.combination_generator import (
+from brainsmith.core.dse.combination_generator import (
     ComponentCombination, CombinationGenerator, generate_component_combinations
 )
-from brainsmith.core.blueprint_v2 import (
+from brainsmith.core.blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules
 )

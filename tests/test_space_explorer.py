@@ -9,12 +9,12 @@ import tempfile
 import json
 import time
 
-from brainsmith.core.dse_v2.space_explorer import (
+from brainsmith.core.dse.space_explorer import (
     DesignSpaceExplorer, ExplorationConfig, ExplorationProgress, 
     ExplorationResults, explore_design_space
 )
-from brainsmith.core.dse_v2.combination_generator import ComponentCombination
-from brainsmith.core.blueprint_v2 import (
+from brainsmith.core.dse.combination_generator import ComponentCombination
+from brainsmith.core.blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules, DSEStrategy, DSEStrategies
 )

@@ -175,21 +175,11 @@ class FINNEvaluationBridge:
             return finn_result
             
         except ImportError as e:
-            logger.warning(f"FINN import failed: {e}")
-            # V1 compatibility: Fall back to mock results when FINN unavailable
-            if self.blueprint_config.get('enable_fallback', True):
-                logger.info("Using fallback mock FINN results for V1 compatibility")
-                return self._generate_fallback_finn_result(model_path)
-            else:
-                raise RuntimeError("FINN not available - ensure FINN is installed and accessible")
+            logger.error(f"FINN import failed: {e}")
+            raise RuntimeError("FINN not available - ensure FINN is installed and accessible") from e
         except Exception as e:
-            logger.warning(f"FINN build failed: {e}")
-            # V1 compatibility: Fall back to mock results on FINN failure
-            if self.blueprint_config.get('enable_fallback', True):
-                logger.info("Using fallback mock FINN results due to build failure")
-                return self._generate_fallback_finn_result(model_path)
-            else:
-                raise RuntimeError(f"FINN execution failed: {str(e)}")
+            logger.error(f"FINN build failed: {e}")
+            raise RuntimeError(f"FINN execution failed: {str(e)}") from e
     
     def get_supported_objectives(self) -> list:
         """Get list of supported optimization objectives."""
@@ -231,56 +221,3 @@ class FINNEvaluationBridge:
         is_valid = len(errors) == 0
         return is_valid, errors
     
-    def _generate_fallback_finn_result(self, model_path: str) -> Any:
-        """
-        Generate mock FINN result for fallback when real FINN unavailable.
-        
-        Provides V1-compatible behavior with estimated metrics.
-        
-        Args:
-            model_path: Path to ONNX model (used for size estimation)
-            
-        Returns:
-            Mock FINN result object with reasonable estimates
-        """
-        import random
-        from pathlib import Path
-        
-        logger.info("Generating fallback FINN result for V1 compatibility")
-        
-        # Estimate model complexity from file size
-        try:
-            model_size_mb = Path(model_path).stat().st_size / (1024 * 1024)
-            complexity_factor = min(model_size_mb / 10.0, 2.0)  # Cap at 2x for large models
-        except:
-            complexity_factor = 1.0
-        
-        # Generate realistic but mock metrics
-        base_throughput = 100.0 * complexity_factor
-        base_latency = 10.0 / complexity_factor
-        
-        class MockFINNResult:
-            def __init__(self):
-                self.success = True
-                self.throughput = base_throughput + random.uniform(-20, 20)
-                self.latency = base_latency + random.uniform(-2, 2)
-                self.frequency = 200.0 + random.uniform(-50, 50)
-                self.lut_util = 0.3 + random.uniform(-0.1, 0.3)
-                self.dsp_util = 0.4 + random.uniform(-0.1, 0.3)
-                self.bram_util = 0.2 + random.uniform(-0.05, 0.2)
-                self.power = 5.0 + random.uniform(-1, 2)
-                
-                # Mock build artifacts
-                self.build_dir = "/tmp/mock_finn_build"
-                self.ip_files = ["mock_accelerator.zip"]
-                self.synthesis_results = {
-                    'status': 'success_fallback_mode',
-                    'timing_met': True,
-                    'estimated_resources': {
-                        'LUT': int(self.lut_util * 50000),
-                        'DSP': int(self.dsp_util * 200),
-                        'BRAM': int(self.bram_util * 100)
-                    }
-                }
-                
-        return MockFINNResult()

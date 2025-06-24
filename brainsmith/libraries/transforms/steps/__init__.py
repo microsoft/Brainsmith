@@ -120,17 +120,24 @@ def get_step(name: str) -> Callable:
     Get step function by name with FINN fallback for compatibility.
     Maintains existing DataflowBuildConfig integration.
     """
-    # Check BrainSmith steps first
+    # Check BrainSmith legacy steps first
     steps = discover_all_steps()
     if name in steps:
         return steps[name]
     
-    # Fallback to FINN built-in steps
+    # Check new FINN steps system
+    try:
+        from brainsmith.steps import get_step as finn_get_step
+        return finn_get_step(name)
+    except (ImportError, ValueError):
+        pass
+    
+    # Final fallback to FINN built-in steps
     from finn.builder.build_dataflow_steps import __dict__ as finn_steps
     if name in finn_steps and callable(finn_steps[name]):
         return finn_steps[name]
     
-    raise ValueError(f"Step '{name}' not found in BrainSmith or FINN")
+    raise ValueError(f"Step '{name}' not found in BrainSmith legacy, FINN steps, or FINN built-in")
 
 
 def validate_step_sequence(step_names: List[str]) -> List[str]:

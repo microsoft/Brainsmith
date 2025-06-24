@@ -8,11 +8,11 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Dict, Any
 
-from brainsmith.core.blueprint_v2 import (
+from brainsmith.core.blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules, DSEStrategy, DSEStrategies,
     Objective, Constraint, OptimizationDirection,
-    load_blueprint_v2, _is_blueprint_v2
+    load_blueprint, _is_blueprint_v2
 )
 
 
@@ -143,7 +143,7 @@ constraints:
             f.flush()
             
             # Load blueprint
-            blueprint = load_blueprint_v2(f.name)
+            blueprint = load_blueprint(f.name)
             
             # Verify all sections loaded correctly
             assert blueprint.name == "test_bert_accelerator"
@@ -257,7 +257,7 @@ configuration_files:
                 f.write(derived_yaml)
             
             # Load derived blueprint (should inherit from base)
-            blueprint = load_blueprint_v2(str(derived_file))
+            blueprint = load_blueprint(str(derived_file))
             
             # Verify inheritance worked
             assert blueprint.name == "bert_accelerator"  # Overridden
@@ -286,7 +286,7 @@ transforms:
             f.write(minimal_yaml)
             f.flush()
             
-            blueprint = load_blueprint_v2(f.name)
+            blueprint = load_blueprint(f.name)
             
             assert blueprint.name == "minimal_test"
             assert blueprint.version == "2.0"
@@ -348,7 +348,7 @@ transforms:
         """Test error handling during blueprint loading."""
         # Test file not found
         with pytest.raises(FileNotFoundError):
-            load_blueprint_v2("non_existent_file.yaml")
+            load_blueprint("non_existent_file.yaml")
         
         # Test invalid YAML syntax
         with NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
@@ -356,7 +356,7 @@ transforms:
             f.flush()
             
             with pytest.raises(yaml.YAMLError):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         Path(f.name).unlink()
         
         # Test non-dict blueprint
@@ -365,7 +365,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Blueprint must be a YAML dictionary"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         Path(f.name).unlink()
         
         # Test validation errors
@@ -391,7 +391,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         Path(f.name).unlink()
     
     def test_complex_component_options_serialization(self):
@@ -430,7 +430,7 @@ transforms:
             f.write(complex_yaml)
             f.flush()
             
-            blueprint = load_blueprint_v2(f.name)
+            blueprint = load_blueprint(f.name)
             
             # Verify component parsing
             hw_kernels = blueprint.nodes.hw_kernels

@@ -6,10 +6,10 @@ import pytest
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from brainsmith.core.blueprint_v2 import (
+from brainsmith.core.blueprint import (
     DesignSpaceDefinition, NodeDesignSpace, TransformDesignSpace,
     ComponentSpace, ExplorationRules, DSEStrategies, DSEStrategy,
-    Objective, Constraint, OptimizationDirection, load_blueprint_v2
+    Objective, Constraint, OptimizationDirection, load_blueprint
 )
 
 
@@ -45,7 +45,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
         
@@ -76,7 +76,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
         
@@ -103,7 +103,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
@@ -139,7 +139,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
@@ -171,7 +171,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
@@ -241,7 +241,7 @@ objectives:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
         
@@ -272,7 +272,7 @@ constraints:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
@@ -301,7 +301,7 @@ transforms:
             f.flush()
             
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
@@ -421,7 +421,7 @@ constraints:
             
             # Should catch multiple validation errors
             with pytest.raises(ValueError, match="Invalid blueprint"):
-                load_blueprint_v2(f.name)
+                load_blueprint(f.name)
         
         Path(f.name).unlink()
     
