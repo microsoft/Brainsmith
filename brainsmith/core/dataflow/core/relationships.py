@@ -23,6 +23,7 @@ class RelationType(Enum):
     GREATER_EQUAL = "greater_equal"
     LESS_EQUAL = "less_equal"
     COUPLED = "coupled"
+    DEPENDENT = "dependent"  # NEW: Dimension-specific dependency
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class DimensionRelationship:
     target_dim: Optional[int] = None  # None means total size
     factor: Optional[Union[int, float]] = None  # For MULTIPLE relations
     coupling_func: Optional[Callable[[int, int], bool]] = None  # For COUPLED
+    dependency_type: Optional[str] = None  # For DEPENDENT: "copy", "scaled", "min"
     description: str = ""
     
     def __post_init__(self):
@@ -86,8 +88,15 @@ class DimensionRelationship:
             return f"{src} >= {tgt}"
         elif self.relation == RelationType.LESS_EQUAL:
             return f"{src} <= {tgt}"
-        else:
+        elif self.relation == RelationType.COUPLED:
             return f"{src} coupled with {tgt}"
+        elif self.relation == RelationType.DEPENDENT:
+            if self.dependency_type == "scaled" and self.factor:
+                return f"{tgt} = {src} * {self.factor}"
+            else:
+                return f"{tgt} depends on {src}"
+        else:
+            return f"{src} ? {tgt}"
     
     def evaluate(self, interfaces: Dict[str, Any]) -> bool:
         """Evaluate the relationship given interface objects
@@ -140,6 +149,10 @@ class DimensionRelationship:
             return src_val <= tgt_val
         elif self.relation == RelationType.COUPLED:
             return self.coupling_func(src_val, tgt_val)
+        elif self.relation == RelationType.DEPENDENT:
+            # For DEPENDENT, we validate during SDIM propagation
+            # Here we just return True as it's a valid relationship type
+            return True
         else:
             raise ValueError(f"Unknown relation type: {self.relation}")
 

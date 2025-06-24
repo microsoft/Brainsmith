@@ -23,9 +23,7 @@ RaggedShape = Union[Shape, List[Shape]]
 class InterfaceDirection(Enum):
     """Direction of data flow for an interface"""
     INPUT = "input"
-    OUTPUT = "output" 
-    WEIGHT = "weight"
-    CONFIG = "config"
+    OUTPUT = "output"
     
     @classmethod
     def from_string(cls, direction: str) -> "InterfaceDirection":
@@ -185,3 +183,13 @@ UINT16 = DataType("UINT16", 16, signed=False)
 UINT32 = DataType("UINT32", 32, signed=False)
 BINARY = DataType("BINARY", 1, signed=False)
 BIPOLAR = DataType("BIPOLAR", 1, signed=True)
+
+
+@dataclass
+class SDIMParameterInfo:
+    """Information about SDIM parameters for an interface"""
+    interface_name: str
+    total_dimensions: int
+    free_dimensions: List[int]
+    constrained_dimensions: Dict[int, str]  # dim -> constraint type
+    block_dims: Shape
