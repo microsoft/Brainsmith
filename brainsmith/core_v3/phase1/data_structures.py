@@ -103,10 +103,13 @@ class HWCompilerSpace:
             name, backends = item
             if name and isinstance(name, str) and name.startswith("~"):
                 # Optional kernel - add both enabled and disabled
-                options.append((name[1:], backends))
+                for backend in backends:
+                    options.append((name[1:], [backend]))
                 options.append(("", []))  # Empty name = skipped
             elif name and isinstance(name, str):
-                options.append((name, backends))
+                # Generate separate options for each backend
+                for backend in backends:
+                    options.append((name, [backend]))
             else:
                 # This is actually a mutually exclusive list, not a tuple
                 for subitem in item:
@@ -146,6 +149,54 @@ class HWCompilerSpace:
             for item in self.transforms:
                 combinations.append(self._parse_transform_item(item))
             return list(itertools.product(*combinations))
+    
+    def get_transform_combinations_by_stage(self) -> List[Dict[str, List[str]]]:
+        """
+        Generate all valid transform combinations preserving stage information.
+        
+        Returns:
+            List of transform combinations as dictionaries mapping stage -> transforms
+        """
+        if isinstance(self.transforms, dict):
+            # Phase-based transforms - preserve stage info
+            stage_combinations = {}
+            for stage, transforms in self.transforms.items():
+                stage_options = []
+                for item in transforms:
+                    stage_options.append(self._parse_transform_item(item))
+                if stage_options:
+                    stage_combinations[stage] = list(itertools.product(*stage_options))
+                else:
+                    stage_combinations[stage] = [[]]  # Empty list for this stage
+            
+            # Generate all combinations across stages
+            all_combos = []
+            stage_names = list(stage_combinations.keys())
+            if stage_names:
+                for combo in itertools.product(*[stage_combinations[s] for s in stage_names]):
+                    combo_dict = {}
+                    for i, stage in enumerate(stage_names):
+                        # Filter out empty transforms
+                        stage_transforms = [t for t in combo[i] if t]
+                        if stage_transforms:
+                            combo_dict[stage] = stage_transforms
+                    all_combos.append(combo_dict)
+            return all_combos if all_combos else [{}]
+        else:
+            # Flat list - put all in "default" stage
+            combinations = []
+            for item in self.transforms:
+                combinations.append(self._parse_transform_item(item))
+            
+            all_combos = []
+            for combo in itertools.product(*combinations):
+                # Filter out empty transforms
+                active_transforms = [t for t in combo if t]
+                if active_transforms:
+                    all_combos.append({"default": active_transforms})
+                else:
+                    all_combos.append({})
+            return all_combos if all_combos else [{}]
     
     def _parse_transform_item(self, item) -> List[str]:
         """Parse a single transform configuration item into transform names."""
@@ -271,15 +322,49 @@ class GlobalConfig:
         cache_results: Whether to cache build results
         save_artifacts: Whether to save build artifacts
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
+        max_combinations: Maximum allowed design space combinations (overrides global default)
+        timeout_minutes: Default timeout for DSE jobs in minutes (overrides global default)
     """
-    output_stage: OutputStage
-    working_directory: str
+    output_stage: OutputStage = OutputStage.RTL
+    working_directory: str = "/tmp/brainsmith"
     cache_results: bool = True
     save_artifacts: bool = True
     log_level: str = "INFO"
+    max_combinations: Optional[int] = None
+    timeout_minutes: Optional[int] = None
     
     def __str__(self) -> str:
         return f"Output: {self.output_stage.value}, Dir: {self.working_directory}"
+
+
+@dataclass
+class BuildMetrics:
+    """
+    Metrics collected from a build execution.
+    
+    This represents performance and resource utilization metrics
+    from a successful build.
+    
+    Attributes:
+        throughput: Inferences per second
+        latency: Inference latency in microseconds
+        clock_frequency: Operating frequency in MHz
+        lut_utilization: LUT utilization (0.0-1.0)
+        dsp_utilization: DSP utilization (0.0-1.0)
+        bram_utilization: BRAM utilization (0.0-1.0)
+        total_power: Total power consumption in Watts
+        accuracy: Model accuracy (0.0-1.0)
+        custom: Additional custom metrics
+    """
+    throughput: float                    # inferences/sec
+    latency: float                       # microseconds
+    clock_frequency: float               # MHz
+    lut_utilization: float              # 0.0-1.0
+    dsp_utilization: float              # 0.0-1.0
+    bram_utilization: float             # 0.0-1.0
+    total_power: float                  # Watts
+    accuracy: float                     # 0.0-1.0
+    custom: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

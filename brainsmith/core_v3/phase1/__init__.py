@@ -14,6 +14,7 @@ from .data_structures import (
     DesignSpace,
     SearchStrategy,
     OutputStage,
+    BuildMetrics,
 )
 from .exceptions import (
     BrainsmithError,
@@ -34,6 +35,7 @@ __all__ = [
     "DesignSpace",
     "SearchStrategy",
     "OutputStage",
+    "BuildMetrics",
     # Exceptions
     "BrainsmithError",
     "BlueprintParseError",

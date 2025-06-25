@@ -24,6 +24,7 @@ from .data_structures import (
     OutputStage,
 )
 from .exceptions import BlueprintParseError
+from ..config import get_config
 
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,17 @@ class BlueprintParser:
             global_config = self._parse_global(
                 blueprint_data.get("global", {})
             )
+            
+            # Resolve effective timeout with proper priority
+            # Priority: search.timeout_minutes > global.timeout_minutes > global library config
+            if search_config.timeout_minutes is None:
+                if global_config.timeout_minutes is not None:
+                    # Use blueprint's global timeout
+                    search_config.timeout_minutes = global_config.timeout_minutes
+                else:
+                    # Use library global config default
+                    library_config = get_config()
+                    search_config.timeout_minutes = library_config.timeout_minutes
             
             # Create and return DesignSpace
             design_space = DesignSpace(
@@ -268,11 +280,26 @@ class BlueprintParser:
             for i, c in enumerate(constraints_data)
         ]
         
+        # Parse timeout_minutes - will be None if not specified here
+        # The effective timeout will be resolved later considering global config
+        timeout_minutes = search_data.get("timeout_minutes")
+        if timeout_minutes is not None:
+            try:
+                timeout_minutes = int(timeout_minutes)
+                if timeout_minutes <= 0:
+                    raise BlueprintParseError(
+                        "search.timeout_minutes must be a positive integer"
+                    )
+            except (TypeError, ValueError):
+                raise BlueprintParseError(
+                    f"search.timeout_minutes must be an integer, got {type(timeout_minutes).__name__}"
+                )
+        
         return SearchConfig(
             strategy=strategy,
             constraints=constraints,
             max_evaluations=search_data.get("max_evaluations"),
-            timeout_minutes=search_data.get("timeout_minutes"),
+            timeout_minutes=timeout_minutes,
             parallel_builds=search_data.get("parallel_builds", 1)
         )
     
@@ -307,12 +334,42 @@ class BlueprintParser:
             output_stage_str, OutputStage, "global.output_stage"
         )
         
+        # Parse optional max_combinations
+        max_combinations = global_data.get("max_combinations")
+        if max_combinations is not None:
+            try:
+                max_combinations = int(max_combinations)
+                if max_combinations <= 0:
+                    raise BlueprintParseError(
+                        "global.max_combinations must be a positive integer"
+                    )
+            except (TypeError, ValueError):
+                raise BlueprintParseError(
+                    f"global.max_combinations must be an integer, got {type(max_combinations).__name__}"
+                )
+        
+        # Parse optional timeout_minutes
+        timeout_minutes = global_data.get("timeout_minutes")
+        if timeout_minutes is not None:
+            try:
+                timeout_minutes = int(timeout_minutes)
+                if timeout_minutes <= 0:
+                    raise BlueprintParseError(
+                        "global.timeout_minutes must be a positive integer"
+                    )
+            except (TypeError, ValueError):
+                raise BlueprintParseError(
+                    f"global.timeout_minutes must be an integer, got {type(timeout_minutes).__name__}"
+                )
+        
         return GlobalConfig(
             output_stage=output_stage,
             working_directory=global_data.get("working_directory", "./builds"),
             cache_results=global_data.get("cache_results", True),
             save_artifacts=global_data.get("save_artifacts", True),
-            log_level=global_data.get("log_level", "INFO")
+            log_level=global_data.get("log_level", "INFO"),
+            max_combinations=max_combinations,
+            timeout_minutes=timeout_minutes
         )
 
 

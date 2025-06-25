@@ -241,6 +241,129 @@ class TestBlueprintParser:
         with pytest.raises(BlueprintParseError) as exc:
             parser.parse(blueprint, "model.onnx")
         assert "Unknown search.strategy" in str(exc.value)
+    
+    def test_parse_global_config_with_limits(self, parser):
+        """Test parsing global config with new max_combinations and timeout_minutes fields."""
+        blueprint = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {"strategy": "exhaustive"},
+            "global": {
+                "output_stage": "rtl",
+                "working_directory": "./builds",
+                "max_combinations": 50000,
+                "timeout_minutes": 90
+            }
+        }
+        
+        design_space = parser.parse(blueprint, "model.onnx")
+        assert design_space.global_config.max_combinations == 50000
+        assert design_space.global_config.timeout_minutes == 90
+    
+    def test_timeout_priority_resolution(self, parser):
+        """Test timeout priority: search > global > library config."""
+        # Test 1: search.timeout_minutes takes precedence
+        blueprint_search_priority = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {
+                "strategy": "exhaustive",
+                "timeout_minutes": 30  # Should take precedence
+            },
+            "global": {
+                "timeout_minutes": 90  # Should be ignored
+            }
+        }
+        
+        design_space = parser.parse(blueprint_search_priority, "model.onnx")
+        assert design_space.search_config.timeout_minutes == 30
+        
+        # Test 2: global.timeout_minutes used when search doesn't specify
+        blueprint_global_priority = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {
+                "strategy": "exhaustive"
+                # No timeout_minutes specified
+            },
+            "global": {
+                "timeout_minutes": 90  # Should be used
+            }
+        }
+        
+        design_space = parser.parse(blueprint_global_priority, "model.onnx")
+        assert design_space.search_config.timeout_minutes == 90
+        
+        # Test 3: library config used when neither search nor global specify
+        blueprint_library_config = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {
+                "strategy": "exhaustive"
+            },
+            "global": {
+                "output_stage": "rtl"
+                # No timeout_minutes specified
+            }
+        }
+        
+        design_space = parser.parse(blueprint_library_config, "model.onnx")
+        # Should get default from library config (60 minutes)
+        assert design_space.search_config.timeout_minutes == 60
+    
+    def test_invalid_global_config_values(self, parser):
+        """Test handling of invalid global config values."""
+        # Invalid max_combinations
+        blueprint_invalid_max = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {"strategy": "exhaustive"},
+            "global": {
+                "max_combinations": -100  # Invalid
+            }
+        }
+        
+        with pytest.raises(BlueprintParseError) as exc:
+            parser.parse(blueprint_invalid_max, "model.onnx")
+        assert "max_combinations must be a positive integer" in str(exc.value)
+        
+        # Invalid timeout_minutes
+        blueprint_invalid_timeout = {
+            "version": "3.0",
+            "hw_compiler": {
+                "kernels": ["MatMul"],
+                "transforms": [],
+                "build_steps": ["ConvertToHW"]
+            },
+            "search": {"strategy": "exhaustive"},
+            "global": {
+                "timeout_minutes": "not_a_number"  # Invalid
+            }
+        }
+        
+        with pytest.raises(BlueprintParseError) as exc:
+            parser.parse(blueprint_invalid_timeout, "model.onnx")
+        assert "timeout_minutes must be an integer" in str(exc.value)
 
 
 class TestLoadBlueprint:

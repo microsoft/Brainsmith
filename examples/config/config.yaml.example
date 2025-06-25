@@ -1,0 +1,26 @@
+# Brainsmith User Configuration Example
+# 
+# Copy this file to ~/.brainsmith/config.yaml and customize as needed.
+# 
+# Configuration Priority (highest to lowest):
+# 1. Blueprint-level configuration (in your blueprint YAML)
+# 2. User configuration (this file when placed at ~/.brainsmith/config.yaml)
+# 3. Environment variables (BRAINSMITH_MAX_COMBINATIONS, BRAINSMITH_TIMEOUT_MINUTES)
+# 4. Built-in defaults
+
+# Maximum number of combinations allowed in a design space
+# This prevents accidental creation of extremely large design spaces
+# that could take days or weeks to explore.
+# Default: 100000
+max_combinations: 1000000
+
+# Default timeout for DSE jobs in minutes
+# Individual blueprints can override this in their search or global sections.
+# Default: 60 (1 hour)
+timeout_minutes: 120
+
+# Future configuration options can be added here as needed
+# Examples might include:
+# - default_parallel_builds: 4
+# - default_working_directory: ~/brainsmith_work
+# - default_log_level: INFO

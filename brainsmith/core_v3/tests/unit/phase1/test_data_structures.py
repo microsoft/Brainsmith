@@ -74,8 +74,9 @@ class TestHWCompilerSpace:
             build_steps=[]
         )
         kernel_combos = space.get_kernel_combinations()
-        assert len(kernel_combos) == 1
-        assert kernel_combos[0][0] == ("MatMul", ["rtl", "hls"])
+        assert len(kernel_combos) == 2  # One for each backend
+        assert kernel_combos[0][0] == ("MatMul", ["rtl"])
+        assert kernel_combos[1][0] == ("MatMul", ["hls"])
     
     def test_parse_mutually_exclusive_kernels(self):
         space = HWCompilerSpace(
@@ -223,5 +224,8 @@ class TestDesignSpace:
             global_config=global_config
         )
         
-        # Total should be: 1 (kernels) * 2 (transforms) * 2 (preprocessing) = 4
-        assert design_space.get_total_combinations() == 4
+        # Total should be: 2 (kernels) * 2 (transforms) * 2 (preprocessing) * 1 (postprocessing) = 8
+        # Kernels: MatMul + Softmax[hls], MatMul + Softmax[rtl] = 2 combinations
+        # Transforms: quantization + fold1, quantization + fold2 = 2 combinations
+        # Preprocessing: norm(method=a), norm(method=b) = 2 combinations
+        assert design_space.get_total_combinations() == 8

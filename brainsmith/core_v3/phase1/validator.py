@@ -18,6 +18,7 @@ from .data_structures import (
     GlobalConfig,
 )
 from .exceptions import ValidationError
+from ..config import get_config
 
 
 logger = logging.getLogger(__name__)
@@ -318,12 +319,28 @@ class DesignSpaceValidator:
         try:
             total = design_space.get_total_combinations()
             
+            # Get effective max_combinations limit
+            # Priority: blueprint > global config > legacy constant
+            max_combinations_limit = self.MAX_COMBINATIONS_ERROR  # Legacy default
+            
+            # Check global config
+            global_config = get_config()
+            if global_config.max_combinations is not None:
+                max_combinations_limit = global_config.max_combinations
+            
+            # Blueprint override takes precedence
+            if design_space.global_config.max_combinations is not None:
+                max_combinations_limit = design_space.global_config.max_combinations
+            
             if total == 0:
                 errors.append("Design space has no valid combinations")
-            elif total > self.MAX_COMBINATIONS_ERROR:
+            elif total > max_combinations_limit:
                 errors.append(
                     f"Design space has {total:,} combinations, "
-                    f"exceeding maximum of {self.MAX_COMBINATIONS_ERROR:,}"
+                    f"exceeding maximum of {max_combinations_limit:,}. "
+                    f"You can increase this limit by setting max_combinations in the blueprint's "
+                    f"global section, or in ~/.brainsmith/config.yaml, or via "
+                    f"BRAINSMITH_MAX_COMBINATIONS environment variable."
                 )
             elif total > self.MAX_COMBINATIONS_WARNING:
                 warnings.append(
