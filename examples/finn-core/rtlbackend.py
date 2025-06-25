@@ -31,10 +31,9 @@ from abc import ABC, abstractmethod
 from finn.util.basic import make_build_dir
 
 try:
-    import pyxsi_utils
+    import finn_xsi.adapter as finnxsi
 except ModuleNotFoundError:
-    pyxsi_utils = None
-
+    finnxsi = None
 
 class RTLBackend(ABC):
     """RTLBackend class all custom ops that correspond to a module in finn-rtllib
@@ -58,7 +57,7 @@ class RTLBackend(ABC):
 
         verilog_files = self.get_rtl_file_list(abspath=True)
         single_src_dir = make_build_dir("rtlsim_" + self.onnx_node.name + "_")
-        ret = pyxsi_utils.compile_sim_obj(
+        ret = finnxsi.compile_sim_obj(
             self.get_verilog_top_module_name(), verilog_files, single_src_dir
         )
         # save generated lib filename in attribute
