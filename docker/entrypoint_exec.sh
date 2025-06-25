@@ -37,9 +37,9 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         exit 1
     fi
     
-    # Since container is ready, dependencies should exist - check for pyxsi directory
-    if [ ! -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-        log_error "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
+    # Since container is ready, dependencies should exist - check for finnxsi directory
+    if [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
+        log_error "finnxsi directory not found at ${BSMITH_DIR}/deps/finn/finnxsi"
         log_error "This suggests dependencies were not fetched properly in daemon mode"
         exit 1
     fi
