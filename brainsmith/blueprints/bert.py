@@ -525,7 +525,7 @@ BUILD_BERT_STEPS = [
         custom_step_remove_tail,
         custom_step_qonnx2finn,
 
-        custom_step_generate_reference_io,
+        #custom_step_generate_reference_io,
         custom_streamlining_step,
         custom_step_infer_hardware,
         step_create_dataflow_partition,
