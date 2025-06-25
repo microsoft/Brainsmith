@@ -23,7 +23,7 @@ ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
 FINN_COMMIT="custom/transformer_loop"
 #FINN_COMMIT="feature/forward_metadat"
-QONNX_COMMIT="feature/forward-metadata"
+QONNX_COMMIT="custom/brainsmith"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 #BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
 BREVITAS_COMMIT="335633a5cb8474464661b94aa13bf4c1bd74c957"
