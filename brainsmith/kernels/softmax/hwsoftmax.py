@@ -15,8 +15,15 @@ from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.custom_op.registry import register_op
+from brainsmith.plugin.decorators import kernel
 
 
+@kernel(
+    name="HWSoftmax",
+    description="Hardware implementation of Softmax",
+    author="shane-fleming",
+    version="1.0.0"
+)
 @register_op(domain="brainsmith.libraries.kernels.softmax", op_type="HWSoftmax")
 class HWSoftmax(HWCustomOp):
     """Abstraction layer for HW implementation of VectorVectorActivation layers."""

@@ -1,66 +1,76 @@
 ############################################################################
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
 #
-# @author       Josh Monson <joshmonson@microsoft.com>
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
-
 
 import numpy as np
 import os
 
 from brainsmith.libraries.kernels.utils import brainsmith_templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.libraries.kernels.crop.crop import Crop
+from brainsmith.kernels.shuffle.shuffle import Shuffle 
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
+from brainsmith.plugin.decorators import backend
 
-class Crop_hls(Crop, HLSBackend):
+@backend(
+    name="ShuffleHLS",
+    description="HLS implementation of Shuffle",
+    author="shane-fleming",
+    version="1.0.0"
+)
+class Shuffle_hls(Shuffle, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        return Crop.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
+        return Shuffle.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
-            '#include "crop.hpp"',
-            '#include <bs_utils.hpp>',
+            '#include "input_gen.hpp"',
             '#include <ap_int.h>',
             '#include <hls_vector.h>',
             '#include <hls_stream.h>',
-            '#include <iostream>',
         ]
 
     def defines(self, var):
-        simd = self.get_nodeattr("simd")
+        simd = self.get_nodeattr("SIMD")
+
         dtype = self.get_input_datatype()
         self.code_gen_dict["$DEFINES$"] = [
             f"""
-            constexpr unsigned  SIMD   = {simd};
-            constexpr unsigned  H      = {self.get_nodeattr("height")};
-            constexpr unsigned  W      = {self.get_nodeattr("width")/simd};
-            constexpr unsigned  CF     = {self.get_nodeattr("channel_fold")};
-            constexpr unsigned  CROP_N = {self.get_nodeattr("crop_north")};
-            constexpr unsigned  CROP_E = {self.get_nodeattr("crop_east")};
-            constexpr unsigned  CROP_S = {self.get_nodeattr("crop_south")};
-            constexpr unsigned  CROP_W = {self.get_nodeattr("crop_west")};
+            constexpr unsigned  SIMD = {simd}; 
             using  TE = {dtype.get_hls_datatype_str()};
             using  TV = hls::vector<TE, SIMD>;
             """
         ]
 
+    def get_exp_cycles(self):
+        out_shape = self.get_nodeattr("out_shape")
+        simd = self.get_nodeattr("SIMD")
+        return int(np.prod(out_shape)/simd) 
+
     def docompute(self):
+        simd = self.get_nodeattr("SIMD")
+        out_shape = self.get_nodeattr("out_shape")
+        out_shape[-1] = int(out_shape[-1]/simd)
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
-            hls::stream<TV>  dst0;
+	    hls::stream<TV>  dst0;
             #pragma HLS stream variable=src0 depth=2
             #pragma HLS stream variable=dst0 depth=2
 
             move(in0_V, src0);
-            crop< H, W,	CF,	CROP_N, CROP_E, CROP_S, CROP_W, TV>(src0, dst0);
-            move(dst0, out0_V);
+	    input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(src0, dst0);
+	    move(dst0, out0_V);
             """
         ]
 
@@ -69,7 +79,7 @@ class Crop_hls(Crop, HLSBackend):
             f"""
             void {self.onnx_node.name} (
                 hls::stream<TV> &in0_V,
-                hls::stream<TV> &out0_V
+	        hls::stream<TV> &out0_V
             )
             """
         ]
@@ -79,13 +89,14 @@ class Crop_hls(Crop, HLSBackend):
             f"""
             #pragma HLS interface AXIS port=in0_V
             #pragma HLS interface AXIS port=out0_V
-            #pragma HLS aggregate variable=in0_V compact=bit
-            #pragma HLS aggregate variable=out0_V compact=bit
+	    #pragma HLS aggregate variable=in0_V compact=bit
+	    #pragma HLS aggregate variable=out0_V compact=bit
 
             #pragma HLS interface ap_ctrl_none port=return
             #pragma HLS dataflow disable_start_propagation
             """
         ]
+
 
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
@@ -101,6 +112,7 @@ class Crop_hls(Crop, HLSBackend):
         inp = context[node.input[0]]
         inp = inp.reshape(folded_ishape)
         np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
+        
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
@@ -112,7 +124,7 @@ class Crop_hls(Crop, HLSBackend):
             sim = self.get_rtlsim()
             nbits = self.get_instream_width()
             rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_dt, nbits
+                f"{code_gen_dir}/input_0.npy", export_dt, nbits 
             )
             super().reset_rtlsim(sim)
             super().toggle_clk(sim)
@@ -139,6 +151,7 @@ class Crop_hls(Crop, HLSBackend):
         else:
             raise Exception(f"Unsupported execution mode: {mode}")
 
+
     def compile_singlenode_code(self):
         """
         Builds the bash script for compilation using the CppBuilder from
@@ -152,21 +165,17 @@ class Crop_hls(Crop, HLSBackend):
         builder.append_includes("-I$BSMITH_DIR/deps/cnpy/")
         builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
         builder.append_includes("-I$BSMITH_DIR/brainsmith/hw_kernels/hls")
+        #builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
         builder.append_sources(code_gen_dir + "/*.cpp")
         builder.append_sources("$BSMITH_DIR/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
-        builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
-        )
-        builder.append_includes( #TODO: [STF]I have a feeling this should/could be removed for shuffle as it's all FP related?
-            "-L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
-        )
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
         self.set_nodeattr("executable_path", builder.executable_path)
+
 
     def code_generation_cppsim(self, model):
         """Generates c++ code for simulation (cppsim)."""
@@ -183,25 +192,25 @@ class Crop_hls(Crop, HLSBackend):
         oshape = self.get_folded_output_shape()
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
-        simd = self.get_nodeattr("simd")
-
+        simd = self.get_nodeattr("SIMD")
+        out_shape = self.get_nodeattr("out_shape")
+        out_shape[-1] = int(out_shape[-1]/simd)
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
+        interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             static hls::stream<TV>  in0_V;
             static hls::stream<TV>  out0_V;
-            std::cout << "reading in data" << std::endl;
-            npy2vectorstream<TE, float, SIMD>("{path}/input_0.npy", in0_V);
 
-            std::cout << "computing" << std::endl;
-            unsigned in0_size = in0_V.size();
-            for (int i = 0; i < in0_size; i++)
-                crop< H, W,	CF,	CROP_N, CROP_E, CROP_S, CROP_W, TV>(in0_V, out0_V);
-            std::cout << "writing out data " << out0_V.size() << std::endl;
+            npy2vectorstream<TE, float, SIMD>("{path}/input_0.npy", in0_V);
+            int stream_size = in0_V.size();
+
+            while(out0_V.size() != stream_size) {{
+                input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(in0_V, out0_V);
+            }}
+
             vectorstream2npy<TE, float, SIMD>(out0_V,{oshape_str}, "{path}/output_0.npy");
-            std::cout << "done" << std::endl;
-            std::cout << "in0_V size: " << in0_V.size() << std::endl;
-            std::cout << "out0_V size: " << out0_V.size() << std::endl;
             """
         ]
         self.save_as_npy()
@@ -215,8 +224,7 @@ class Crop_hls(Crop, HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-        #raise NotImplementedError("This function is not yet immplemented.")
-    
+
     def ipgen_extra_includes(self):
         """Add kernel-specific include paths."""
         import os

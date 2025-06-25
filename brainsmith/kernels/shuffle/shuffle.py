@@ -15,8 +15,15 @@ from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.custom_op.registry import register_op
+from brainsmith.plugin.decorators import kernel
 
 
+@kernel(
+    name="Shuffle",
+    description="Hardware shuffle (rearrange and transpose) operation",
+    author="shane-fleming",
+    version="1.0.0"
+)
 @register_op(domain="brainsmith.libraries.kernels.shuffle", op_type="Shuffle")
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""

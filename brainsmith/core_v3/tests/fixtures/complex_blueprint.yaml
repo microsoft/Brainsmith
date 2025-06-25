@@ -1,0 +1,95 @@
+version: "3.0"
+name: "Complex Test Blueprint"
+description: "A complex blueprint demonstrating all features"
+
+hw_compiler:
+  kernels:
+    - "MatMul"
+    - ["Gemm", ["rtl_optimized", "hls_balanced"]]
+    - [["LayerNorm", ["standard", "quantized"]], "RMSNorm"]  # Mutually exclusive
+    - [~, "Transpose"]  # Optional
+    - [["~Softmax", ["flash", "standard"]]]  # Optional with backends
+  
+  transforms:
+    # Phase-based organization
+    graph_cleanup:
+      - "remove_identity"
+      - "constant_folding"
+    
+    topology_optimization:
+      - ["fold_layer_wise", "fold_operator_wise"]  # Mutually exclusive
+      - (~, "streamline", "streamline_aggressive")  # Optional and mutually exclusive
+    
+    kernel_optimization:
+      - "optimize_kernels"
+      - "~fuse_operations"  # Optional
+    
+    graph_optimization:
+      - "optimize_graph"
+  
+  build_steps:
+    - "ConvertToHW"
+    - "InsertDWC"
+    - "InsertFIFO"
+    - "GiveUniqueNodeNames"
+    - "PrepareIP"
+    - "HLSSynthIP"
+    - "CreateStitchedIP"
+  
+  config_flags:
+    target_device: "xczu7ev-ffvc1156-2-e"
+    target_clock_ns: 3.33
+    synth_directive: "Performance"
+
+processing:
+  preprocessing:
+    - name: "graph_optimization"
+      options:
+        - enabled: true
+          passes: ["const_fold", "dead_code"]
+        - enabled: false
+    
+    - name: "input_normalization"
+      options:
+        - method: "standard"
+          mean: 0.5
+          std: 0.5
+        - method: "none"
+  
+  postprocessing:
+    - name: "performance_analysis"
+      options:
+        - enabled: true
+          detailed: true
+        - enabled: true
+          detailed: false
+        - enabled: false
+    
+    - name: "accuracy_validation"
+      options:
+        - enabled: true
+          dataset_size: 1000
+
+search:
+  strategy: "exhaustive"
+  constraints:
+    - metric: "lut_utilization"
+      operator: "<="
+      value: 0.85
+    - metric: "throughput"
+      operator: ">="
+      value: 1000
+    - metric: "latency"
+      operator: "<"
+      value: 10
+  
+  max_evaluations: 100
+  timeout_minutes: 720
+  parallel_builds: 4
+
+global:
+  output_stage: "rtl"
+  working_directory: "./exploration_builds"
+  cache_results: true
+  save_artifacts: false
+  log_level: "DEBUG"

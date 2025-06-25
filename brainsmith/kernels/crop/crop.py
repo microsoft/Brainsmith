@@ -11,7 +11,14 @@ from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.custom_op.registry import register_op
+from brainsmith.plugin.decorators import kernel
 
+@kernel(
+    name="Crop",
+    description="Hardware cropping operation",
+    author="josh-monson",
+    version="1.0.0"
+)
 @register_op(domain="brainsmith.libraries.kernels.crop", op_type="Crop")
 class Crop(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""

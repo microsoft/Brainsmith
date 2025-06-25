@@ -31,8 +31,8 @@ import finn.transformation.streamline as absorb
 import finn.transformation.streamline.reorder as reorder
 from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-import brainsmith.libraries.transforms.operations.convert_to_hw_layers as to_bs_hw
-from brainsmith.libraries.transforms.operations.expand_norms import ExpandNorms
+from brainsmith.transforms.kernel_mapping import InferLayerNorm, InferShuffle, InferHWSoftmax
+from brainsmith.transforms.topology_optimization.expand_norms import ExpandNorms
 
 # Included for getting reference IO from model with head/tail removed
 import finn.core.onnx_exec as oxe
@@ -183,12 +183,12 @@ def custom_step_infer_hardware(model, cfg):
         explictly duplicated.
 
     """
-    model = model.transform(to_bs_hw.InferLayerNorm())
+    model = model.transform(InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
-    model = model.transform(to_bs_hw.InferShuffle())
-    #model = model.transform(to_bs_hw.InferQuantSoftmax())
-    model = model.transform(to_bs_hw.InferHWSoftmax())
+    model = model.transform(InferShuffle())
+    #model = model.transform(InferQuantSoftmax())
+    model = model.transform(InferHWSoftmax())
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
     return model

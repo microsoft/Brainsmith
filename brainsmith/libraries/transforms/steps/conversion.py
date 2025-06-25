@@ -39,7 +39,7 @@ except ImportError as e:
     FINN_AVAILABLE = False
 
 try:
-    from brainsmith.libraries.transforms.operations.expand_norms import ExpandNorms
+    from brainsmith.transforms.topology_optimization.expand_norms import ExpandNorms
     BRAINSMITH_TRANSFORMS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"BrainSmith transforms not available: {e}")

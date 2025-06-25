@@ -131,9 +131,8 @@ def cleanup_step(model: Any, cfg: Any) -> Any:
         )
         from qonnx.transformation.remove import RemoveIdentityOps
         
+        model = model.transform(SortCommutativeInputsInitializerLast())
         model = model.transform(RemoveIdentityOps())
-        model = model.transform(SortCommutativeInputsInitializerLast()) 
-        model = model.transform(RemoveUnusedTensors())
         return model
     except ImportError as e:
         raise RuntimeError(f"cleanup_step requires qonnx package: {e}")
@@ -160,6 +159,52 @@ def cleanup_advanced_step(model: Any, cfg: Any) -> Any:
         return model
     except ImportError as e:
         raise RuntimeError(f"cleanup_advanced_step requires qonnx package: {e}")
+
+
+@finn_step(
+    name="fix_dynamic_dimensions",
+    category="cleanup",
+    dependencies=[],
+    description="Fix all dynamic dimensions in the model to concrete values"
+)
+def fix_dynamic_dimensions_step(model, cfg):
+    """
+    Fix all dynamic dimensions in the model to concrete values.
+    
+    This step is crucial for hardware inference which requires concrete dimensions.
+    It converts any remaining dynamic dimensions (like 'unk__0') to the value 1.
+    """
+    changes_made = 0
+    
+    # Fix graph inputs
+    for inp in model.graph.input:
+        for i, dim in enumerate(inp.type.tensor_type.shape.dim):
+            if dim.HasField('dim_param'):
+                logger.info(f"Fixing dynamic dimension in input {inp.name}[{i}]: {dim.dim_param} -> 1")
+                dim.dim_value = 1
+                dim.ClearField('dim_param')
+                changes_made += 1
+    
+    # Fix value_info tensors (intermediate tensors)
+    for vi in model.graph.value_info:
+        for i, dim in enumerate(vi.type.tensor_type.shape.dim):
+            if dim.HasField('dim_param'):
+                logger.info(f"Fixing dynamic dimension in tensor {vi.name}[{i}]: {dim.dim_param} -> 1")
+                dim.dim_value = 1
+                dim.ClearField('dim_param')
+                changes_made += 1
+    
+    # Fix graph outputs
+    for out in model.graph.output:
+        for i, dim in enumerate(out.type.tensor_type.shape.dim):
+            if dim.HasField('dim_param'):
+                logger.info(f"Fixing dynamic dimension in output {out.name}[{i}]: {dim.dim_param} -> 1")
+                dim.dim_value = 1
+                dim.ClearField('dim_param')
+                changes_made += 1
+    
+    logger.info(f"Fixed {changes_made} dynamic dimensions")
+    return model
 
 
 # === Conversion Steps ===
@@ -306,13 +351,77 @@ def remove_tail_step(model, cfg):
     name="onnx_preprocessing",
     category="preprocessing",
     dependencies=[],
-    description="ONNX preprocessing operations"
+    description="Simplifies and cleans ONNX model for FINN dataflow compiler"
 )
 def onnx_preprocessing_step(model, cfg):
-    """ONNX preprocessing operations."""
-    # This was imported but implementation needs to be checked
-    logger.warning("onnx_preprocessing_step implementation needs to be migrated")
-    return model
+    """
+    Standard ONNX preprocessing with simplify and cleanup for FINN compatibility.
+    
+    This preprocessing step is CRITICAL for avoiding FIFO shape mismatches in FINN.
+    It ensures the ONNX model has the correct structure for dataflow compilation.
+    """
+    try:
+        from onnxsim import simplify
+        from qonnx.util.cleanup import cleanup as qonnx_cleanup
+        import onnx
+        from pathlib import Path
+    except ImportError as e:
+        raise RuntimeError(
+            f"onnx_preprocessing_step requires onnxsim and qonnx packages: {e}. "
+            "Install with: pip install onnxsim qonnx"
+        )
+    
+    logger.info("Applying ONNX preprocessing for FINN compatibility")
+    
+    # Get output directory for intermediate files
+    output_dir = getattr(cfg, 'output_dir', './intermediate_models')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Handle both raw ONNX models and ModelWrapper objects
+    if hasattr(model, 'model'):
+        # This is a ModelWrapper, extract the ONNX model
+        onnx_model = model.model
+        is_wrapper = True
+    else:
+        # This is already an ONNX model
+        onnx_model = model
+        is_wrapper = False
+    
+    # Step 1: Simplify the model
+    logger.info("  Step 1/2: Running ONNX simplification...")
+    simplified_model, check = simplify(onnx_model)
+    
+    if not check:
+        raise RuntimeError(
+            "ONNX simplification failed. The model may have unsupported operations "
+            "or invalid structure for FINN compilation."
+        )
+    
+    # Save simplified model for qonnx cleanup
+    simp_path = os.path.join(output_dir, "onnx_preprocessing_simp.onnx")
+    onnx.save(simplified_model, simp_path)
+    logger.debug(f"  Saved simplified model to: {simp_path}")
+    
+    # Step 2: Run QONNX cleanup
+    logger.info("  Step 2/2: Running QONNX cleanup...")
+    cleaned_path = os.path.join(output_dir, "onnx_preprocessing_cleaned.onnx")
+    
+    # qonnx cleanup works with file paths
+    qonnx_cleanup(in_file=simp_path, out_file=cleaned_path)
+    logger.debug(f"  Saved cleaned model to: {cleaned_path}")
+    
+    # Load the cleaned model back
+    if is_wrapper:
+        # Return as ModelWrapper if input was ModelWrapper
+        from qonnx.core.modelwrapper import ModelWrapper
+        cleaned_model = ModelWrapper(cleaned_path)
+        logger.info("✅ ONNX preprocessing completed successfully (ModelWrapper)")
+        return cleaned_model
+    else:
+        # Return as raw ONNX model
+        cleaned_model = onnx.load(cleaned_path)
+        logger.info("✅ ONNX preprocessing completed successfully (ONNX model)")
+        return cleaned_model
 
 
 # === Optimization Steps ===
@@ -321,10 +430,16 @@ def onnx_preprocessing_step(model, cfg):
     name="constrain_folding_and_set_pumped_compute",
     category="optimization", 
     dependencies=[],
-    description="Folding and compute optimizations"
+    description="Apply optimizations including folding constraints and pumped compute"
 )
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
-    """Folding and compute optimizations."""
-    # This step needs implementation - it was referenced but not found in the source
-    logger.warning("constrain_folding_and_set_pumped_compute_step implementation needs to be migrated")
-    return model
+    """Apply optimizations including folding constraints and pumped compute."""
+    try:
+        from brainsmith.transforms.kernel_optimization.temp_shuffle_fixer import TempShuffleFixer
+        from brainsmith.transforms.kernel_optimization.set_pumped_compute import SetPumpedCompute
+        
+        model = model.transform(TempShuffleFixer())
+        model = model.transform(SetPumpedCompute())
+        return model
+    except ImportError as e:
+        raise RuntimeError(f"constrain_folding_and_set_pumped_compute_step requires brainsmith transforms: {e}")

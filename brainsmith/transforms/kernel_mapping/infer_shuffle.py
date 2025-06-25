@@ -9,8 +9,6 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.libraries.transforms.operations.shuffle_helpers import shuffle_perfect_loopnest_coeffs
-from brainsmith.libraries.transforms.operations.shuffle_helpers import innerloop_moves
 from brainsmith.plugin.decorators import transform
 
 
@@ -29,6 +27,30 @@ class InferShuffle(Transformation):
     """
     def __init__(self):
         super().__init__()
+    
+    @staticmethod
+    def shuffle_perfect_loopnest_coeffs(shape: tuple[int], perm: tuple[int]) -> tuple[int]:
+        """
+        Given an input shape and permutation matrix calculate the
+        coefficients for the perfect loop nest for HLS generation.
+        """
+        adjusted_shape = list(shape) + [1]
+        input_coeffs = [np.prod(adjusted_shape[i+1:]) for i in range(len(shape))]
+        out_coeffs = [input_coeffs[i] for i in perm]
+        return tuple(out_coeffs)
+    
+    @staticmethod
+    def innerloop_moves(shape: tuple[int], perm: tuple[int]) -> bool:
+        """
+        Returns true if the inner dimension moves
+        otherwise returns false
+        """
+        innermost_original = len(shape) - 1
+        new_position = perm.index(innermost_original)
+        if new_position == len(perm) - 1:
+            return False
+        else:
+            return True
 
     def apply(self, model):
         graph = model.graph
@@ -105,8 +127,8 @@ class InferShuffle(Transformation):
                             out_reshaped=out_reshaped,
                             data_type=idt.name,
                             name=f"Shuffle_{n.name}",
-                            loop_coeffs=shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
-                            inner_moves=innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
+                            loop_coeffs=self.shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
+                            inner_moves=self.innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
                             SIMD=simd,
                             
                             NumChannels=in_reshaped[-1]

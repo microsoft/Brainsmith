@@ -1,7 +1,9 @@
 """Hardware layer inference operations."""
 
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-from brainsmith.libraries.transforms.operations.convert_to_hw_layers import *
+from brainsmith.transforms.kernel_mapping.infer_layernorm import InferLayerNorm
+from brainsmith.transforms.kernel_mapping.infer_shuffle import InferShuffle
+from brainsmith.transforms.kernel_mapping.infer_hwsoftmax import InferHWSoftmax
 
 
 def infer_hardware_step(model, cfg):

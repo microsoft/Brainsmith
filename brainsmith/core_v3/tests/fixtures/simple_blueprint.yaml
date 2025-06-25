@@ -1,0 +1,38 @@
+version: "3.0"
+name: "Simple Test Blueprint"
+description: "A minimal blueprint for testing"
+
+hw_compiler:
+  kernels:
+    - "MatMul"
+    - ["Softmax", ["hls", "rtl"]]
+  
+  transforms:
+    - "quantization"
+    - "folding"
+  
+  build_steps:
+    - "ConvertToHW"
+    - "PrepareIP"
+  
+  config_flags:
+    target_device: "xczu7ev"
+
+processing:
+  preprocessing:
+    - name: "normalization"
+      options:
+        - enabled: true
+          method: "standard"
+        - enabled: false
+
+search:
+  strategy: "exhaustive"
+  constraints:
+    - metric: "lut_utilization"
+      operator: "<="
+      value: 0.85
+
+global:
+  output_stage: "rtl"
+  working_directory: "./test_builds"
