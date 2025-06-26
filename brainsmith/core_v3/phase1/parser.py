@@ -362,6 +362,33 @@ class BlueprintParser:
                     f"global.timeout_minutes must be an integer, got {type(timeout_minutes).__name__}"
                 )
         
+        # Parse step configuration fields
+        start_step = global_data.get("start_step")
+        stop_step = global_data.get("stop_step")
+        input_type = global_data.get("input_type")
+        output_type = global_data.get("output_type")
+        
+        # Validate step types if provided
+        if start_step is not None and not isinstance(start_step, (str, int)):
+            raise BlueprintParseError(
+                f"global.start_step must be a string or integer, got {type(start_step).__name__}"
+            )
+        
+        if stop_step is not None and not isinstance(stop_step, (str, int)):
+            raise BlueprintParseError(
+                f"global.stop_step must be a string or integer, got {type(stop_step).__name__}"
+            )
+        
+        if input_type is not None and not isinstance(input_type, str):
+            raise BlueprintParseError(
+                f"global.input_type must be a string, got {type(input_type).__name__}"
+            )
+        
+        if output_type is not None and not isinstance(output_type, str):
+            raise BlueprintParseError(
+                f"global.output_type must be a string, got {type(output_type).__name__}"
+            )
+
         return GlobalConfig(
             output_stage=output_stage,
             working_directory=global_data.get("working_directory", "./builds"),
@@ -369,7 +396,11 @@ class BlueprintParser:
             save_artifacts=global_data.get("save_artifacts", True),
             log_level=global_data.get("log_level", "INFO"),
             max_combinations=max_combinations,
-            timeout_minutes=timeout_minutes
+            timeout_minutes=timeout_minutes,
+            start_step=start_step,
+            stop_step=stop_step,
+            input_type=input_type,
+            output_type=output_type
         )
 
 

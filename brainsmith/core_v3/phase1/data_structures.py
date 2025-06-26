@@ -317,13 +317,17 @@ class GlobalConfig:
     Global configuration parameters that apply to all exploration runs.
     
     Attributes:
-        output_stage: Target output stage (dataflow_graph, rtl, stitched_ip)
+        output_stage: Target output stage (dataflow_graph, rtl, stitched_ip) - maintained for backward compatibility
         working_directory: Directory for build artifacts
         cache_results: Whether to cache build results
         save_artifacts: Whether to save build artifacts
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         max_combinations: Maximum allowed design space combinations (overrides global default)
         timeout_minutes: Default timeout for DSE jobs in minutes (overrides global default)
+        start_step: Starting build step (string name or integer index)
+        stop_step: Stopping build step (string name or integer index)
+        input_type: Semantic input type for automatic start_step resolution
+        output_type: Semantic output type for automatic stop_step resolution
     """
     output_stage: OutputStage = OutputStage.RTL
     working_directory: str = "/tmp/brainsmith"
@@ -332,6 +336,10 @@ class GlobalConfig:
     log_level: str = "INFO"
     max_combinations: Optional[int] = None
     timeout_minutes: Optional[int] = None
+    start_step: Optional[Union[str, int]] = None
+    stop_step: Optional[Union[str, int]] = None
+    input_type: Optional[str] = None
+    output_type: Optional[str] = None
     
     def __str__(self) -> str:
         return f"Output: {self.output_stage.value}, Dir: {self.working_directory}"
