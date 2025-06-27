@@ -20,6 +20,7 @@ from .module import TopModulePragma
 from .interface import DatatypePragma, DatatypeParamPragma, WeightPragma
 from .parameter import AliasPragma, DerivedParameterPragma, AxiLiteParamPragma
 from .dimension import BDimPragma, SDimPragma
+from .relationship import RelationshipPragma, RelationshipMetadata
 
 __all__ = [
     # Base classes
@@ -39,4 +40,7 @@ __all__ = [
     # Dimension pragmas
     'BDimPragma',
     'SDimPragma',
+    # Relationship pragmas
+    'RelationshipPragma',
+    'RelationshipMetadata',
 ]

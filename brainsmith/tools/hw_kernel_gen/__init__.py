@@ -24,7 +24,7 @@ Phase 4 Architecture:
 import warnings
 
 # Core Phase 4 components
-from .data import GenerationResult, ValidationResult, PerformanceMetrics
+from .data import GenerationResult, GenerationValidationResult, PerformanceMetrics
 from .config import Config
 from .cli import main
 from .kernel_integrator import KernelIntegrator, KernelIntegratorError
@@ -38,7 +38,7 @@ __all__ = [
     "GeneratorManager",
     "GeneratorBase",
     "GenerationResult",
-    "ValidationResult", 
+    "GenerationValidationResult", 
     "PerformanceMetrics",
     "Config",
     "main",

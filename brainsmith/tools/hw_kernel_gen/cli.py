@@ -42,6 +42,8 @@ Notes:
                        help='Enable debug logging and detailed output')
     parser.add_argument('--template-version', choices=['phase2'], default='phase2',
                        help='Template version to use (default: phase2)')
+    parser.add_argument('--no-strict', action='store_true',
+                       help='Disable strict validation (allows parsing files that don\'t meet all requirements)')
     
     return parser
 
@@ -67,8 +69,10 @@ def main():
         # Step 1: Parse RTL with Phase 1 validation
         if args.debug:
             print("🔍 Step 1: Parsing RTL with parameter and BDIM validation...")
+            if args.no_strict:
+                print("   ⚠️  Running in non-strict mode (validation disabled)")
         
-        parser_instance = RTLParser()
+        parser_instance = RTLParser(strict=not args.no_strict)
         kernel_metadata = parser_instance.parse_file(str(args.rtl_file))
         
         if args.debug:

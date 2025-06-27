@@ -15,16 +15,14 @@ from typing import Optional, List
 from pathlib import Path
 from tree_sitter import Node, Tree
 
-from .data import PragmaType, Parameter, Port
+from ..metadata import KernelMetadata
+from .rtl_data import PragmaType, Parameter, Port
 from .pragmas import Pragma
 from .pragma import PragmaHandler
 from .interface_builder import InterfaceBuilder
 from .ast_parser import ASTParser, SyntaxError
 from .module_extractor import ModuleExtractor
 from .parameter_linker import ParameterLinker
-
-# KernelMetadata integration
-from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -62,7 +60,7 @@ class RTLParser:
     """
     
     def __init__(self, grammar_path: Optional[str] = None, debug: bool = False,
-                 auto_link_parameters: bool = True):
+                 auto_link_parameters: bool = True, strict: bool = True):
         """Initializes the RTLParser.
 
         Creates sub-components for AST parsing, component extraction,
@@ -74,6 +72,9 @@ class RTLParser:
             debug: If True, enables detailed debug logging.
             auto_link_parameters: If True, enables automatic parameter linking based
                                 on naming conventions. Default is True.
+            strict: If True, enables strict validation of parsed metadata. When False,
+                    validation is skipped allowing parsing of files that don't meet all
+                    requirements. Default is True.
 
         Raises:
             FileNotFoundError: If the grammar library cannot be found or loaded.
@@ -81,6 +82,7 @@ class RTLParser:
         """
         self.debug = debug
         self.auto_link_parameters = auto_link_parameters
+        self.strict = strict
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
         # Initialize sub-components
@@ -269,11 +271,20 @@ class RTLParser:
             # Auto-linking with remaining parameters
             self._apply_autolinking(kernel_metadata)
             
-            # Validate the complete KernelMetadata
-            try:
-                kernel_metadata.validate_comprehensive()
-            except ValueError as e:
-                raise ParserError(str(e))
+            # Validate the complete KernelMetadata only if strict mode is enabled
+            if self.strict:
+                try:
+                    logger.info("Starting KernelMetadata validation...")
+                    validation_errors = kernel_metadata.validate()
+                    logger.info(f"Validation returned {len(validation_errors)} errors")
+                    if validation_errors:
+                        logger.error(f"Validation errors: {validation_errors}")
+                        raise ValueError(f"KernelMetadata validation failed: {'; '.join(validation_errors)}")
+                except ValueError as e:
+                    logger.error(f"Validation raised ValueError: {e}")
+                    raise ParserError(str(e))
+            else:
+                logger.info("Skipping validation (strict mode disabled)")
             
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")

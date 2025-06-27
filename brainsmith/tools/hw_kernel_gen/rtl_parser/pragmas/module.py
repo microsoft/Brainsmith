@@ -14,7 +14,7 @@ from typing import Dict
 import logging
 
 from .base import Pragma, PragmaError
-from ..data import PragmaType
+from ..rtl_data import PragmaType
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,12 @@ class TopModulePragma(Pragma):
     def _parse_inputs(self) -> Dict:
         """Handles TOP_MODULE pragma: @brainsmith top_module <module_name>"""
         logger.debug(f"Parsing TOP_MODULE pragma: {self.inputs} at line {self.line_number}")
-        if len(self.inputs) != 1:
+        
+        pos = self.inputs['positional']
+        
+        if len(pos) != 1:
             raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
-        return {"module_name": self.inputs[0]}
+        return {"module_name": pos[0]}
 
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply TOP_MODULE pragma to kernel metadata."""

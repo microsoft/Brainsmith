@@ -11,11 +11,11 @@ pragma types in the RTL parser.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Any
 import logging
 
-from ..data import PragmaType
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
+from ...metadata import InterfaceMetadata
+from ..rtl_data import PragmaType
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,24 @@ class Pragma:
     
     Attributes:
         type: Pragma type identifier (using PragmaType enum)
-        inputs: List of space-separated inputs
+        inputs: Dict with 'raw', 'positional', and 'named' arguments
         line_number: Source line number for error reporting
         parsed_data: Optional processed data from pragma handler
     """
     type: PragmaType
-    inputs: List[str]
+    inputs: Dict[str, Any]
     line_number: int
     parsed_data: Dict = field(init=False)  # Stores the result of _parse_inputs
 
     def __post_init__(self):
+        # For backward compatibility - convert list to dict format
+        if isinstance(self.inputs, list):
+            self.inputs = {
+                'raw': self.inputs,
+                'positional': self.inputs,
+                'named': {}
+            }
+        
         try:
             self.parsed_data = self._parse_inputs()
         except PragmaError as e:
@@ -75,7 +83,9 @@ class Pragma:
         raise NotImplementedError(f"Pragma type {self.type.name} must implement apply_to_kernel.")
 
     def __str__(self):
-        return f"@brainsmith {self.type.value} " + " ".join(map(str, self.inputs))
+        # Use raw inputs if available, otherwise fall back to positional
+        raw_inputs = self.inputs.get('raw', self.inputs.get('positional', []))
+        return f"@brainsmith {self.type.value} " + " ".join(map(str, raw_inputs))
 
 
 @dataclass
@@ -86,58 +96,33 @@ class InterfacePragma(Pragma):
     interfaces, including interface name matching and base application logic.
     """
     
-    def apply_to_interface_by_name(self, interface_name: str, kernel: 'KernelMetadata') -> bool:
-        """
-        Find interface by name in KernelMetadata and apply pragma if found.
-        
-        This method centralizes the interface-finding logic that was previously
-        duplicated across all interface pragma subclasses.
-        
-        Args:
-            interface_name: Name of target interface
-            kernel: KernelMetadata containing interfaces
-            
-        Returns:
-            bool: True if interface was found and pragma applied, False otherwise
-        """
-        # Find the target interface
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                # Apply pragma-specific logic via apply_to_interface
-                updated_metadata = self.apply_to_interface(interface)
-                
-                # Update the interface in the kernel with the modified metadata
-                # Since InterfaceMetadata objects are mutable, we update in place
-                interface.datatype_constraints = updated_metadata.datatype_constraints
-                interface.chunking_strategy = updated_metadata.chunking_strategy
-                interface.datatype_metadata = updated_metadata.datatype_metadata
-                interface.bdim_param = updated_metadata.bdim_param
-                interface.sdim_param = updated_metadata.sdim_param
-                interface.shape_params = updated_metadata.shape_params
-                interface.interface_type = updated_metadata.interface_type
-                interface.description = updated_metadata.description
-                
-                logger.debug(f"Applied {self.type.value} pragma to interface '{interface_name}'")
-                return True
-        
-        logger.warning(f"{self.type.value} pragma target interface '{interface_name}' not found")
-        return False
-    
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """
         Apply interface pragma to kernel metadata.
         
-        Default implementation handles single interface pragmas.
+        Default implementation finds interface by name and applies pragma.
         Subclasses can override for more complex behavior (e.g., WeightPragma
         for multiple interfaces, DatatypeParamPragma for internal datatypes).
+        
+        Args:
+            kernel: KernelMetadata object containing interfaces to modify
         """
         interface_name = self.parsed_data.get("interface_name")
-        if interface_name:
-            self.apply_to_interface_by_name(interface_name, kernel)
+        if not interface_name:
+            return
+            
+        # Find and apply to interface
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                self.apply_to_interface(interface)
+                logger.debug(f"Applied {self.type.value} pragma to interface '{interface_name}'")
+                return
+                
+        logger.warning(f"{self.type.value} pragma target interface '{interface_name}' not found")
 
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
         """
-        Apply pragma effects to InterfaceMetadata.
+        Apply pragma effects to InterfaceMetadata in-place.
         
         Subclasses must override this method to implement their specific effects.
         
@@ -145,11 +130,7 @@ class InterfacePragma(Pragma):
         pragma can modify the interface metadata independently and composably.
         
         Args:
-            metadata: Current InterfaceMetadata to modify
-            
-        Returns:
-            InterfaceMetadata: Modified metadata with pragma effects applied.
-                              Should return a new InterfaceMetadata instance.
+            metadata: InterfaceMetadata object to modify in-place
         """
         # Subclasses must override this method
         raise NotImplementedError(f"{self.__class__.__name__} must implement apply_to_interface()")

@@ -22,16 +22,17 @@ Example Usage:
 
 from typing import Dict, List, Any
 
-# Import unified InterfaceType from dataflow module
-from brainsmith.dataflow.core.interface_types import InterfaceType
-
-# Expose key classes and functions for easier import
-from .data import (
+# Import shared types
+from ..data import (
+    InterfaceType,
     Direction,
+)
+# Import RTL-specific types
+from .rtl_data import (
     Parameter,
     Port,
     PortGroup,
-    ValidationResult,
+    ProtocolValidationResult,
     PragmaType,
 )
 from .pragmas import Pragma
@@ -48,7 +49,8 @@ __all__ = [
     "InterfaceType",
     "Direction",
     "Pragma",
-    "ValidationResult",
+    "PragmaType",
+    "ProtocolValidationResult",
     "parse_rtl_file",
 ]
 

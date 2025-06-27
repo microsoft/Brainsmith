@@ -16,16 +16,15 @@ from typing import List, Optional, Dict, Callable, Any, Tuple
 
 from tree_sitter import Node
 
-from .data import PragmaType
+from ..data import InterfaceType
+from ..metadata import InterfaceMetadata, DatatypeMetadata
+from .rtl_data import PragmaType
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
-    AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma
+    AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma,
+    RelationshipPragma
 )
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
-from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
-from brainsmith.dataflow.core.interface_types import InterfaceType
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -48,6 +47,7 @@ class PragmaHandler:
             PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
             PragmaType.ALIAS: AliasPragma,
             PragmaType.AXILITE_PARAM: AxiLiteParamPragma,
+            PragmaType.RELATIONSHIP: RelationshipPragma,
         }
 
     def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:
@@ -68,13 +68,23 @@ class PragmaHandler:
         if not text.startswith('@brainsmith'):
             return None
 
-        parts = text.split()
+        # First split to get pragma type
+        parts = text.split(None, 2)  # Split into at most 3 parts: @brainsmith, type, rest
         if len(parts) < 2:
             logger.warning(f"Invalid pragma format at line {line_number}: {text}")
             return None
 
         pragma_type_str = parts[1]
-        inputs = parts[2:] if len(parts) > 2 else []
+        
+        # Parse remaining arguments with intelligence
+        if len(parts) > 2:
+            parsed_inputs = self._parse_pragma_arguments(parts[2])
+        else:
+            parsed_inputs = {
+                'raw': [],
+                'positional': [],
+                'named': {}
+            }
 
         pragma_enum_type: Optional[PragmaType] = None
         pragma_type_lower = pragma_type_str.lower()
@@ -91,11 +101,11 @@ class PragmaHandler:
         pragma_class = self.pragma_constructors[pragma_enum_type]
         
         try:
-            # Instantiate the specific Pragma subclass
+            # Instantiate the specific Pragma subclass with parsed inputs
             # The _parse_inputs logic is now handled in the Pragma subclass __post_init__
             return pragma_class(
                 type=pragma_enum_type,
-                inputs=inputs,
+                inputs=parsed_inputs,
                 line_number=line_number
             )
         except PragmaError as e:
@@ -106,6 +116,82 @@ class PragmaHandler:
         except Exception as e:
             logger.error(f"Unexpected error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
             return None
+
+    def _parse_pragma_arguments(self, text: str) -> Dict[str, Any]:
+        """
+        Parse pragma arguments into structured format.
+        
+        Lists are parsed in-place:
+        - "[A, B, C]" becomes ["A", "B", "C"] in positional args
+        - "key=[A, B]" becomes {"key": ["A", "B"]} in named args
+        
+        Args:
+            text: The argument portion of the pragma (after type)
+            
+        Returns:
+            Dict with:
+            - 'raw': Original tokenized arguments (strings)
+            - 'positional': Positional args with lists parsed
+            - 'named': Named args with lists parsed
+        """
+        # First tokenize respecting brackets
+        tokens = []
+        current_token = ""
+        bracket_depth = 0
+        
+        for char in text + " ":  # Add space to flush last token
+            if char == '[':
+                bracket_depth += 1
+                current_token += char
+            elif char == ']':
+                bracket_depth -= 1
+                current_token += char
+            elif char.isspace() and bracket_depth == 0:
+                if current_token:
+                    tokens.append(current_token)
+                    current_token = ""
+            else:
+                current_token += char
+        
+        # Now parse tokens into structured format
+        result = {
+            'raw': tokens[:],  # Keep original tokens
+            'positional': [],
+            'named': {}
+        }
+        
+        for token in tokens:
+            # Check for key=value syntax
+            if '=' in token and not token.startswith('['):
+                parts = token.split('=', 1)
+                if len(parts) == 2:
+                    key, value = parts
+                    # Check if value is a list
+                    if value.startswith('[') and value.endswith(']'):
+                        # Parse list for named argument
+                        list_content = value[1:-1].strip()
+                        if list_content:
+                            result['named'][key] = [item.strip() for item in list_content.split(',')]
+                        else:
+                            result['named'][key] = []  # Empty list
+                    else:
+                        result['named'][key] = value
+                    continue
+            
+            # Check for list syntax in positional argument
+            if token.startswith('[') and token.endswith(']'):
+                # Parse list directly into positional
+                list_content = token[1:-1].strip()
+                if list_content:
+                    parsed_list = [item.strip() for item in list_content.split(',')]
+                else:
+                    parsed_list = []  # Empty list
+                result['positional'].append(parsed_list)
+            else:
+                # Regular positional argument
+                result['positional'].append(token)
+        
+        return result
 
     def extract_pragmas(self, root_node: Node) -> List[Pragma]:
         """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.

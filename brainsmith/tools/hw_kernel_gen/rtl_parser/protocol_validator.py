@@ -16,8 +16,8 @@ presence of required signals and correct port directions. Protocol definitions
 import logging
 from typing import Dict, Set, List, Tuple
 
-from brainsmith.dataflow.core.interface_types import InterfaceType
-from .data import Port, Direction, PortGroup, ValidationResult
+from ..data import InterfaceType, Direction
+from .rtl_data import Port, PortGroup, ProtocolValidationResult
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
@@ -80,7 +80,7 @@ class ProtocolValidator:
         self.input_count = 0
         self.output_count = 0
 
-    def validate(self, group: PortGroup) -> ValidationResult:
+    def validate(self, group: PortGroup) -> ProtocolValidationResult:
         """Dispatches validation to the appropriate method based on group type."""
         itype = group.interface_type
         logger.debug(f"Validating {itype} group '{group.name}'. Received ports: {list(group.ports.keys())}")
@@ -93,7 +93,7 @@ class ProtocolValidator:
         elif itype == InterfaceType.CONFIG:
             return self.validate_axi_lite(group)
         else:
-            return ValidationResult(False, f"Unknown interface type '{itype}' for group '{group.name}'.")
+            return ProtocolValidationResult(False, f"Unknown interface type '{itype}' for group '{group.name}'.")
 
     def _check_required_signals(self, group_ports: Dict[str, Port], required_spec: Dict[str, Dict]) -> Tuple[Set[str], Set[str]]:
         """Checks if all required signals (keys) are present in the group's ports, and filters for any unexpected signals.
@@ -108,9 +108,9 @@ class ProtocolValidator:
         unexpected = present_keys - required_keys - optional_keys
         return missing, unexpected
 
-    def validate_global_control(self, group: PortGroup) -> ValidationResult:
+    def validate_global_control(self, group: PortGroup) -> ProtocolValidationResult:
         if group.interface_type != InterfaceType.CONTROL:
-            return ValidationResult(False, "Invalid group type for Global Control validation.")
+            return ProtocolValidationResult(False, "Invalid group type for Global Control validation.")
         
         # Set final interface type to CONTROL (global control signals)
         group.interface_type = InterfaceType.CONTROL
@@ -118,9 +118,9 @@ class ProtocolValidator:
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, GLOBAL_SIGNAL_SUFFIXES)
         if missing:
-            return ValidationResult(False, f"Global Control: Missing required signal(s) in '{group.name}': {missing}")
+            return ProtocolValidationResult(False, f"Global Control: Missing required signal(s) in '{group.name}': {missing}")
         if unexpected:
-            return ValidationResult(False, f"Global Control: Unexpected signal in '{group.name}': {unexpected}")
+            return ProtocolValidationResult(False, f"Global Control: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
         incorrect_ports = [
@@ -131,22 +131,22 @@ class ProtocolValidator:
         
         direction = len(incorrect_ports) == 0
         if not direction:
-            return ValidationResult(False, f"Global Control: Incorrect direction in '{group.name}': {incorrect_ports}")
+            return ProtocolValidationResult(False, f"Global Control: Incorrect direction in '{group.name}': {incorrect_ports}")
 
         logger.debug(f"  Validation successful for Global Control group '{group.name}'")
-        return ValidationResult(True)
+        return ProtocolValidationResult(True)
 
-    def validate_axi_stream(self, group: PortGroup) -> ValidationResult:
+    def validate_axi_stream(self, group: PortGroup) -> ProtocolValidationResult:
         # Accept any preliminary AXI-Stream type (INPUT, OUTPUT, WEIGHT)
         if group.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-            return ValidationResult(False, "Invalid group type for AXI-Stream validation.")
+            return ProtocolValidationResult(False, "Invalid group type for AXI-Stream validation.")
 
         # Check against required & expected signals
         missing, unexpected = self._check_required_signals(group.ports, AXI_STREAM_SUFFIXES)
         if missing:
-            return ValidationResult(False, f"AXI-Stream: Missing required signal(s) in '{group.name}': {missing}")
+            return ProtocolValidationResult(False, f"AXI-Stream: Missing required signal(s) in '{group.name}': {missing}")
         if unexpected:
-            return ValidationResult(False, f"AXI-Stream: Unexpected signal in '{group.name}': {unexpected}")
+            return ProtocolValidationResult(False, f"AXI-Stream: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction consistency
         incorrect_ports = []
@@ -164,7 +164,7 @@ class ProtocolValidator:
         all_backward = not any(direction_matches)
         
         if not (all_forward or all_backward):
-            return ValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
+            return ProtocolValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
         
         # Set interface direction metadata
         direction = Direction.INPUT if all_forward else Direction.OUTPUT
@@ -179,11 +179,11 @@ class ProtocolValidator:
         group.interface_type = self._determine_dataflow_type(group.name, direction)
 
         logger.debug(f"  Validation successful for AXI-Stream group '{group.name}' → {group.interface_type}")
-        return ValidationResult(True)
+        return ProtocolValidationResult(True)
 
-    def validate_axi_lite(self, group: PortGroup) -> ValidationResult:
+    def validate_axi_lite(self, group: PortGroup) -> ProtocolValidationResult:
         if group.interface_type != InterfaceType.CONFIG:
-            return ValidationResult(False, "Invalid group type for AXI-Lite validation.")
+            return ProtocolValidationResult(False, "Invalid group type for AXI-Lite validation.")
         
         # Set final interface type to CONFIG (AXI-Lite always for configuration)
         group.interface_type = InterfaceType.CONFIG
@@ -193,13 +193,13 @@ class ProtocolValidator:
         has_write_channel = any(AXI_LITE_WRITE_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_WRITE_SUFFIXES)
         has_read_channel = any(AXI_LITE_READ_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_READ_SUFFIXES)
         if has_write_channel and any(sig in AXI_LITE_WRITE_SUFFIXES for sig in missing):
-            return ValidationResult(False, f"AXI-Lite: Partial write, missing required signal(s) in '{group.name}': {missing}")
+            return ProtocolValidationResult(False, f"AXI-Lite: Partial write, missing required signal(s) in '{group.name}': {missing}")
         if has_read_channel and any(sig in AXI_LITE_READ_SUFFIXES for sig in missing):
-            return ValidationResult(False, f"AXI-Lite: Partial read, missing required signal(s) in '{group.name}': {missing}")
+            return ProtocolValidationResult(False, f"AXI-Lite: Partial read, missing required signal(s) in '{group.name}': {missing}")
         if not has_write_channel and not has_read_channel:
-            return ValidationResult(False, f"AXI-Lite: Not enough valid signals in '{group.name}' for read or write.")
+            return ProtocolValidationResult(False, f"AXI-Lite: Not enough valid signals in '{group.name}' for read or write.")
         if unexpected:
-            return ValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
+            return ProtocolValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
 
         # Determine direction
         incorrect_ports = [
@@ -210,7 +210,7 @@ class ProtocolValidator:
         
         directions_valid = len(incorrect_ports) == 0
         if not directions_valid:
-            return ValidationResult(False, f"AXI-Lite: Incorrect direction in '{group.name}': {incorrect_ports}")
+            return ProtocolValidationResult(False, f"AXI-Lite: Incorrect direction in '{group.name}': {incorrect_ports}")
 
         # TODO: Add checks for response signal widths
 
@@ -236,7 +236,7 @@ class ProtocolValidator:
             }
 
         logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
-        return ValidationResult(True)
+        return ProtocolValidationResult(True)
 
     def _determine_dataflow_type(self, interface_name: str, direction: Direction) -> InterfaceType:
         """Determine dataflow interface type from name patterns and direction."""

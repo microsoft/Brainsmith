@@ -9,6 +9,28 @@ All pragmas follow this format:
 // @brainsmith <type> <arguments...>
 ```
 
+## Interface Type Compatibility
+
+The following table shows which pragmas and auto-linking features apply to each interface type:
+
+| Feature | INPUT | OUTPUT | WEIGHT | CONFIG | CONTROL |
+|---------|-------|---------|---------|---------|----------|
+| DATATYPE | ✓ | ✓ | ✓ | ✓ | ✗ |
+| DATATYPE_PARAM | ✓ | ✓ | ✓ | ✓ | ✗ |
+| WEIGHT pragma | ✓ | ✗ | N/A | ✗ | ✗ |
+| BDIM | ✓ | ✓ | ✓ | ✗ | ✗ |
+| SDIM | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Auto-link datatypes | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Auto-link BDIM | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Auto-link SDIM | ✓ | ✗ | ✓ | ✗ | ✗ |
+
+**Key Points:**
+- BDIM (Block Dimensions) apply to all dataflow interfaces: INPUT, OUTPUT, and WEIGHT
+- SDIM (Stream Dimensions) only apply to INPUT and WEIGHT interfaces
+- Datatype features (DATATYPE pragma, DATATYPE_PARAM pragma, auto-linking) apply to all data-carrying interfaces: INPUT, OUTPUT, WEIGHT, and CONFIG
+- CONTROL interfaces (clock/reset signals) do not support any parameterization
+- The WEIGHT pragma marks an input interface as containing weights
+
 ## Supported Pragmas
 
 ### TOP_MODULE
@@ -45,25 +67,51 @@ Mark input interfaces as weight interfaces.
 ```
 
 ### BDIM
-Link interface to block dimension parameter with optional shape specification.
+Specify block dimension parameters for an interface.
 ```systemverilog
+// Single parameter syntax
 // @brainsmith BDIM s_axis_input0 INPUT0_BDIM
-// @brainsmith BDIM weights_V WEIGHTS_BLOCK_SIZE SHAPE=[C,PE] RINDEX=0
-// @brainsmith BDIM out0 OUTPUT0_BDIM SHAPE=[TILE_SIZE,:] RINDEX=1
-```
-**Format**: `BDIM <interface_name> <param_name> [SHAPE=<shape>] [RINDEX=<n>]`
+// @brainsmith BDIM weights_V WEIGHTS_BLOCK_SIZE
 
-**Notes**: Parameter name is mandatory. SHAPE and RINDEX are optional. Use parameter names (not magic numbers) in shapes.
+// Multi-dimensional syntax
+// @brainsmith BDIM s_axis_input0 [TILE_H, TILE_W]
+// @brainsmith BDIM weights_V [1, KERNEL_SIZE]      # Singleton first dimension
+// @brainsmith BDIM output0 [OUT_H, OUT_W, OUT_C]
+```
+**Formats**: 
+- `BDIM <interface_name> <param_name>` - Single dimension
+- `BDIM <interface_name> [<param1>, <param2>, ...]` - Multi-dimensional
+
+**Interface Types**: INPUT, OUTPUT, WEIGHT only (not CONFIG)
+
+**Special Values**: 
+- `1` - Singleton dimension (only in lists with at least one parameter)
+- Parameter names - Actual block dimensions
+
+**Notes**: Lists containing "1" must have at least one real parameter. No magic numbers except "1".
 
 ### SDIM
-Link interface to stream dimension parameter.
+Specify stream dimension parameters for an interface.
 ```systemverilog
+// Single parameter syntax
 // @brainsmith SDIM s_axis_input0 INPUT0_SDIM
 // @brainsmith SDIM weights_V WEIGHTS_STREAM_SIZE
-```
-**Format**: `SDIM <interface_name> <param_name>`
 
-**Notes**: Stream shape is inferred from BDIM configuration.
+// Multi-dimensional syntax
+// @brainsmith SDIM input0 [SDIM_H, SDIM_W, SDIM_C]
+// @brainsmith SDIM weights [1, STREAM_DIM]          # Singleton first dimension
+```
+**Formats**: 
+- `SDIM <interface_name> <param_name>` - Single dimension
+- `SDIM <interface_name> [<param1>, <param2>, ...]` - Multi-dimensional
+
+**Interface Types**: INPUT, WEIGHT only (not OUTPUT or CONFIG)
+
+**Special Values**: 
+- `1` - Singleton dimension (only in lists with at least one parameter)
+- Parameter names - Actual stream dimensions
+
+**Notes**: Stream dimensions only make sense for inputs and weights. Lists containing "1" must have at least one real parameter.
 
 ### ALIAS
 Expose RTL parameters with user-friendly names in the Python API.
@@ -233,6 +281,94 @@ def prepare_codegen_rtl_values(self):
     code_gen_dict["$S_AXIS_SIGNED$"] = [str(int(self.get_input_datatype().signed()))]
     
     return code_gen_dict
+```
+
+## Auto-Linking for Dimension Parameters
+
+The RTL parser supports automatic linking of BDIM/SDIM parameters without pragmas using naming conventions:
+
+### Single Dimension Parameters
+```systemverilog
+parameter s_axis_BDIM = 64;   // Auto-linked to s_axis interface
+parameter s_axis_SDIM = 128;  // Auto-linked to s_axis interface
+```
+
+### Indexed Multi-Dimensional Parameters
+```systemverilog
+// Contiguous indexed BDIM (3D tensor: H x W x C)
+parameter input_BDIM0 = 16;   // Height
+parameter input_BDIM1 = 16;   // Width  
+parameter input_BDIM2 = 3;    // Channels
+// Auto-linked as: bdim_params = ["input_BDIM0", "input_BDIM1", "input_BDIM2"]
+
+// Non-contiguous indexed (missing BDIM1 treated as singleton)
+parameter weights_BDIM0 = 32;  // Batch
+parameter weights_BDIM2 = 64;  // Features
+// Auto-linked as: bdim_params = ["weights_BDIM0", "1", "weights_BDIM2"]
+
+// Mixed case supported
+parameter output_sdim0 = 256;
+parameter output_sdim1 = 128;
+// Auto-linked as: sdim_params = ["output_sdim0", "output_sdim1"]
+```
+
+### Precedence Rules
+1. **Pragma wins**: If BDIM/SDIM pragma exists, it overrides auto-linking
+2. **Single before indexed**: `interface_BDIM` takes precedence over `interface_BDIM0/1/2`
+3. **Default fallback**: If no parameters found, defaults to `interface_BDIM` and `interface_SDIM`
+
+### Examples
+
+#### Complete Example with Mixed Styles
+```systemverilog
+module example #(
+    // Indexed parameters for input (supports both BDIM and SDIM)
+    parameter s_axis_input_BDIM0 = 16,
+    parameter s_axis_input_BDIM1 = 16,
+    parameter s_axis_input_BDIM2 = 3,
+    parameter s_axis_input_SDIM0 = 1024,
+    parameter s_axis_input_SDIM1 = 512,
+    
+    // Single parameter for weights (supports both BDIM and SDIM)
+    parameter weights_BDIM = 64,
+    parameter weights_SDIM = 512,
+    
+    // Output parameters (BDIM only - SDIM ignored on outputs)
+    parameter m_axis_output_BDIM = 128,
+    parameter m_axis_output_SDIM = 256,  // This will be ignored!
+    
+    // Config parameters (neither BDIM nor SDIM apply)
+    parameter s_axilite_config_BDIM = 32,  // This will be ignored!
+    parameter s_axilite_config_SDIM = 64,  // This will be ignored!
+    
+    // Pragma override example
+    parameter OUT_H = 8,
+    parameter OUT_W = 8
+) (
+    // ... ports ...
+);
+
+// @brainsmith BDIM m_axis_result [OUT_H, OUT_W]  // This pragma wins over any auto-linking
+```
+
+#### Interface Type Examples
+```systemverilog
+// ✓ VALID: Input interface with both BDIM and SDIM
+parameter s_axis_data_BDIM = 64;
+parameter s_axis_data_SDIM = 1024;
+
+// ✓ VALID: Weight interface with both BDIM and SDIM  
+parameter weights_V_BDIM0 = 32;
+parameter weights_V_BDIM1 = 64;
+parameter weights_V_SDIM = 512;
+
+// ⚠️ PARTIAL: Output interface - only BDIM applies
+parameter m_axis_result_BDIM = 16;
+parameter m_axis_result_SDIM = 128;  // Ignored by auto-linking
+
+// ✗ INVALID: Config interface - neither BDIM nor SDIM apply
+parameter s_axilite_ctrl_BDIM = 8;   // Ignored by auto-linking
+parameter s_axilite_ctrl_SDIM = 256; // Ignored by auto-linking
 ```
 
 ## Troubleshooting

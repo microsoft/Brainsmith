@@ -15,7 +15,7 @@ from typing import Dict, List
 import logging
 
 from .base import Pragma, PragmaError
-from ..data import PragmaType, Parameter
+from ..rtl_data import PragmaType, Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,14 @@ class AliasPragma(Pragma):
     def _parse_inputs(self) -> Dict:
         """Parse ALIAS pragma: @brainsmith ALIAS <rtl_param> <nodeattr_name>"""
         logger.debug(f"Parsing ALIAS pragma: {self.inputs} at line {self.line_number}")
-        if len(self.inputs) != 2:
-            raise PragmaError(f"ALIAS pragma at line {self.line_number} requires exactly 2 arguments: <rtl_param> <nodeattr_name>. Got: {self.inputs}")
         
-        rtl_param = self.inputs[0]
-        nodeattr_name = self.inputs[1]
+        pos = self.inputs['positional']
+        
+        if len(pos) != 2:
+            raise PragmaError(f"ALIAS pragma at line {self.line_number} requires exactly 2 arguments: <rtl_param> <nodeattr_name>. Got: {len(pos)} arguments")
+        
+        rtl_param = pos[0]
+        nodeattr_name = pos[1]
         
         # Validate both names are valid identifiers
         if not rtl_param.isidentifier():
@@ -56,30 +59,7 @@ class AliasPragma(Pragma):
             raise PragmaError(f"ALIAS pragma nodeattr name '{nodeattr_name}' is not a valid identifier")
         
         return {"rtl_param": rtl_param, "nodeattr_name": nodeattr_name}
-    
-    
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
-        """Apply ALIAS pragma to kernel metadata."""
-        rtl_param = self.parsed_data.get("rtl_param")
-        nodeattr_name = self.parsed_data.get("nodeattr_name")
         
-        # Validate against other parameters
-        self.validate_against_parameters(kernel.parameters)
-        
-        # Remove from exposed parameters (it will be exposed with the alias name)
-        if rtl_param in kernel.exposed_parameters:
-            kernel.exposed_parameters.remove(rtl_param)
-        
-        # Add to linked parameters
-        if not hasattr(kernel, 'linked_parameters') or kernel.linked_parameters is None:
-            kernel.linked_parameters = {"aliases": {}, "derived": {}, "axilite": {}}
-        if "aliases" not in kernel.linked_parameters:
-            kernel.linked_parameters["aliases"] = {}
-        
-        kernel.linked_parameters["aliases"][rtl_param] = nodeattr_name
-        
-        logger.debug(f"Applied ALIAS pragma: {rtl_param} -> {nodeattr_name}")
-    
     def validate_against_parameters(self, all_parameters: List[Parameter]) -> None:
         """
         Validate that the nodeattr_name doesn't conflict with existing parameters.
@@ -108,6 +88,32 @@ class AliasPragma(Pragma):
                 f"ALIAS pragma references non-existent parameter '{rtl_param}'. "
                 f"This alias will have no effect unless the parameter is defined."
             )
+    
+    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+        """Apply ALIAS pragma to kernel metadata."""
+        rtl_param = self.parsed_data.get("rtl_param")
+        nodeattr_name = self.parsed_data.get("nodeattr_name")
+        
+        # Validate against other parameters
+        self.validate_against_parameters(kernel.parameters)
+        
+        # Remove from exposed parameters (it will be exposed with the alias name)
+        if rtl_param in kernel.exposed_parameters:
+            kernel.exposed_parameters.remove(rtl_param)
+        
+        # Add the alias name to exposed parameters
+        if nodeattr_name not in kernel.exposed_parameters:
+            kernel.exposed_parameters.append(nodeattr_name)
+        
+        # Add to linked parameters
+        if not hasattr(kernel, 'linked_parameters') or kernel.linked_parameters is None:
+            kernel.linked_parameters = {"aliases": {}, "derived": {}, "axilite": {}}
+        if "aliases" not in kernel.linked_parameters:
+            kernel.linked_parameters["aliases"] = {}
+        
+        kernel.linked_parameters["aliases"][rtl_param] = nodeattr_name
+        
+        logger.debug(f"Applied ALIAS pragma: {rtl_param} -> {nodeattr_name}")
 
 
 @dataclass
@@ -130,12 +136,15 @@ class DerivedParameterPragma(Pragma):
     def _parse_inputs(self) -> Dict:
         """Parse DERIVED_PARAMETER pragma: @brainsmith DERIVED_PARAMETER <rtl_param> <python_expression>"""
         logger.debug(f"Parsing DERIVED_PARAMETER pragma: {self.inputs} at line {self.line_number}")
-        if len(self.inputs) < 2:
-            raise PragmaError(f"DERIVED_PARAMETER pragma at line {self.line_number} requires parameter name and Python expression. Got: {self.inputs}")
         
-        param_name = self.inputs[0]
+        pos = self.inputs['positional']
+        
+        if len(pos) < 2:
+            raise PragmaError(f"DERIVED_PARAMETER pragma at line {self.line_number} requires parameter name and Python expression. Got: {len(pos)} arguments")
+        
+        param_name = pos[0]
         # Join remaining inputs as the Python expression (allows spaces)
-        python_expression = " ".join(self.inputs[1:])
+        python_expression = " ".join(pos[1:])
         
         # Validate parameter name
         if not param_name.isidentifier():
@@ -185,11 +194,14 @@ class AxiLiteParamPragma(Pragma):
     def _parse_inputs(self) -> Dict:
         """Parse AXILITE_PARAM pragma: @brainsmith axilite_param <interface_name> <param_name>"""
         logger.debug(f"Parsing AXILITE_PARAM pragma: {self.inputs} at line {self.line_number}")
-        if len(self.inputs) != 2:
-            raise PragmaError(f"AXILITE_PARAM pragma at line {self.line_number} requires exactly 2 arguments: <interface_name> <param_name>. Got: {self.inputs}")
         
-        interface_name = self.inputs[0]
-        param_name = self.inputs[1]
+        pos = self.inputs['positional']
+        
+        if len(pos) != 2:
+            raise PragmaError(f"AXILITE_PARAM pragma at line {self.line_number} requires exactly 2 arguments: <interface_name> <param_name>. Got: {len(pos)} arguments")
+        
+        interface_name = pos[0]
+        param_name = pos[1]
         
         # Validate parameter name
         if not param_name.isidentifier():

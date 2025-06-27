@@ -1,23 +1,209 @@
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 """
-Enhanced data structures for Phase 3 HWKG.
+Shared data structures for Hardware Kernel Generator.
 
-Provides unified data structures for the Phase 3 clean-break refactor,
-including enhanced GenerationResult with Phase 2 template integration.
+This module contains data structures that are shared across the hw_kernel_gen
+package, including common enums, type system, generation results, and validation.
+
+Organization:
+- Enums: Direction, InterfaceType
+- Type System: DatatypeConstraintGroup and validation functions  
+- Generation Results: GenerationResult, PerformanceMetrics
+- Validation: GenerationValidationResult
+- Utility Functions
+
+RTL parser specific classes are in rtl_parser/rtl_data.py
+Metadata classes are in metadata.py
 """
 
 import json
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
+
+# Import QONNX datatypes - required dependency
+from qonnx.core.datatype import DataType, BaseDataType
 
 # Use TYPE_CHECKING to avoid circular imports
 if TYPE_CHECKING:
-    from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
     from .templates.template_context import TemplateContext
+    from .metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 
+
+# ============================================================================
+# ENUMS
+# ============================================================================
+
+class Direction(Enum):
+    """Port direction enumeration."""
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
+
+
+class InterfaceType(Enum):
+    """Unified interface types with inherent protocol-role relationships"""
+    
+    # AXI-Stream interfaces (dataflow)
+    INPUT = "input"      # AXI-Stream input for activation data
+    OUTPUT = "output"    # AXI-Stream output for result data  
+    WEIGHT = "weight"    # AXI-Stream input for weight/parameter data
+    
+    # AXI-Lite interfaces (configuration)
+    CONFIG = "config"    # AXI-Lite for runtime configuration
+    
+    # Global control signals
+    CONTROL = "control"  # Global control signals (clk, rst, etc.)
+    
+    # Unknown/fallback
+    UNKNOWN = "unknown"  # Unrecognized interfaces
+    
+    @property
+    def protocol(self) -> str:
+        """Get the hardware protocol for this interface type"""
+        protocol_map = {
+            InterfaceType.INPUT: "axi_stream",
+            InterfaceType.OUTPUT: "axi_stream", 
+            InterfaceType.WEIGHT: "axi_stream",
+            InterfaceType.CONFIG: "axi_lite",
+            InterfaceType.CONTROL: "global_control",
+            InterfaceType.UNKNOWN: "unknown"
+        }
+        return protocol_map[self]
+    
+    @property
+    def is_dataflow(self) -> bool:
+        """Check if this interface participates in dataflow"""
+        return self in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]
+    
+    @property
+    def is_axi_stream(self) -> bool:
+        """Check if this interface uses AXI-Stream protocol"""
+        return self.protocol == "axi_stream"
+    
+    @property
+    def is_axi_lite(self) -> bool:
+        """Check if this interface uses AXI-Lite protocol"""
+        return self.protocol == "axi_lite"
+    
+    @property
+    def is_configuration(self) -> bool:
+        """Check if this interface is for configuration"""
+        return self in [InterfaceType.CONFIG, InterfaceType.CONTROL]
+    
+    @property
+    def direction(self) -> str:
+        """Get the expected direction for this interface type"""
+        direction_map = {
+            InterfaceType.INPUT: "input",
+            InterfaceType.WEIGHT: "input", 
+            InterfaceType.OUTPUT: "output",
+            InterfaceType.CONFIG: "bidirectional",
+            InterfaceType.CONTROL: "input",
+            InterfaceType.UNKNOWN: "unknown"
+        }
+        return direction_map[self]
+    
+    def __str__(self) -> str:
+        """String representation"""
+        return f"InterfaceType.{self.name}"
+    
+    def __repr__(self) -> str:
+        """Detailed string representation"""
+        return f"InterfaceType.{self.name}('{self.value}', protocol='{self.protocol}')"
+
+
+# ============================================================================
+# TYPE SYSTEM
+# ============================================================================
+
+@dataclass
+class DatatypeConstraintGroup:
+    """
+    Simple constraint group: [DTYPE, MIN_WIDTH, MAX_WIDTH]
+    
+    Examples:
+        DatatypeConstraintGroup("INT", 4, 8)    # INT4, INT5, INT6, INT7, INT8
+        DatatypeConstraintGroup("UINT", 8, 16)  # UINT8, UINT16
+        DatatypeConstraintGroup("FIXED", 8, 16) # FIXED<8,N>, FIXED<16,N>
+    """
+    base_type: str      # "INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY"
+    min_width: int      # Minimum bit width (inclusive)
+    max_width: int      # Maximum bit width (inclusive)
+    
+    def __post_init__(self):
+        """Validate constraint group parameters."""
+        if self.min_width <= 0:
+            raise ValueError(f"min_width must be positive, got {self.min_width}")
+        if self.max_width < self.min_width:
+            raise ValueError(f"max_width ({self.max_width}) must be >= min_width ({self.min_width})")
+        
+        valid_base_types = ["INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY", "BINARY"]
+        if self.base_type not in valid_base_types:
+            raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_base_types}")
+
+
+def validate_datatype_against_constraints(
+    datatype: BaseDataType, 
+    constraint_groups: List[DatatypeConstraintGroup]
+) -> bool:
+    """
+    Check if a QONNX datatype satisfies any constraint group.
+    
+    Args:
+        datatype: QONNX BaseDataType instance to validate
+        constraint_groups: List of constraint groups to check against
+        
+    Returns:
+        True if datatype satisfies at least one constraint group
+    """
+    if not constraint_groups:
+        return True  # No constraints = allow anything
+        
+    for group in constraint_groups:
+        if _matches_constraint_group(datatype, group):
+            return True
+    return False
+
+
+def _matches_constraint_group(datatype: BaseDataType, group: DatatypeConstraintGroup) -> bool:
+    """Check if datatype matches a single constraint group."""
+    # Extract base type from QONNX canonical name
+    canonical_name = datatype.get_canonical_name()
+    
+    # Check base type
+    if group.base_type == "INT" and not (canonical_name.startswith("INT") and datatype.signed()):
+        return False
+    elif group.base_type == "UINT" and not (canonical_name.startswith("UINT") or canonical_name == "BINARY"):
+        return False
+    elif group.base_type == "FIXED" and not canonical_name.startswith("FIXED<"):
+        return False
+    elif group.base_type == "FLOAT" and not canonical_name.startswith("FLOAT"):
+        return False
+    elif group.base_type == "BIPOLAR" and canonical_name != "BIPOLAR":
+        return False
+    elif group.base_type == "TERNARY" and canonical_name != "TERNARY":
+        return False
+    elif group.base_type == "BINARY" and canonical_name != "BINARY":
+        return False
+    
+    # Check bitwidth range
+    bitwidth = datatype.bitwidth()
+    return group.min_width <= bitwidth <= group.max_width
+
+
+# ============================================================================
+# GENERATION RESULTS
+# ============================================================================
 
 @dataclass
 class GenerationResult:
@@ -258,42 +444,6 @@ class GenerationResult:
         summary_file.write_text("\n".join(summary_lines))
         self.metadata_files.append(summary_file)
         return summary_file
-    
-    # ===== Backward Compatibility Methods =====
-    
-
-# ===== Additional Phase 3 Data Structures =====
-
-@dataclass
-class ValidationResult:
-    """
-    Result of Phase 3 validation checks.
-    
-    Used for validating generated code, templates, and configurations
-    before finalizing generation results.
-    """
-    passed: bool = True
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    checks_performed: List[str] = field(default_factory=list)
-    
-    def add_error(self, error: str, check_name: str = "unknown") -> None:
-        """Add a validation error."""
-        self.errors.append(error)
-        self.passed = False
-        self.checks_performed.append(f"{check_name} (FAILED)")
-        logger.error(f"Validation error in {check_name}: {error}")
-    
-    def add_warning(self, warning: str, check_name: str = "unknown") -> None:
-        """Add a validation warning."""
-        self.warnings.append(warning)
-        self.checks_performed.append(f"{check_name} (WARNING)")
-        logger.warning(f"Validation warning in {check_name}: {warning}")
-    
-    def add_check(self, check_name: str) -> None:
-        """Mark a check as passed."""
-        self.checks_performed.append(f"{check_name} (PASSED)")
-        logger.debug(f"Validation check passed: {check_name}")
 
 
 @dataclass  
@@ -326,7 +476,45 @@ class PerformanceMetrics:
         }
 
 
-# ===== Utility Functions =====
+# ============================================================================
+# VALIDATION RESULTS
+# ============================================================================
+
+@dataclass
+class GenerationValidationResult:
+    """
+    Result of comprehensive generation validation checks.
+    
+    Used for validating generated code, templates, and configurations
+    before finalizing generation results.
+    """
+    passed: bool = True
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    checks_performed: List[str] = field(default_factory=list)
+    
+    def add_error(self, error: str, check_name: str = "unknown") -> None:
+        """Add a validation error."""
+        self.errors.append(error)
+        self.passed = False
+        self.checks_performed.append(f"{check_name} (FAILED)")
+        logger.error(f"Validation error in {check_name}: {error}")
+    
+    def add_warning(self, warning: str, check_name: str = "unknown") -> None:
+        """Add a validation warning."""
+        self.warnings.append(warning)
+        self.checks_performed.append(f"{check_name} (WARNING)")
+        logger.warning(f"Validation warning in {check_name}: {warning}")
+    
+    def add_check(self, check_name: str) -> None:
+        """Mark a check as passed."""
+        self.checks_performed.append(f"{check_name} (PASSED)")
+        logger.debug(f"Validation check passed: {check_name}")
+
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
 
 def create_generation_result(
     kernel_name: str,
@@ -347,13 +535,28 @@ def create_generation_result(
         kernel_metadata=kernel_metadata
     )
 
-# ===== Module Exports =====
+
+# ============================================================================
+# MODULE EXPORTS
+# ============================================================================
 
 __all__ = [
-    # Main data structures
+    # Enums
+    "Direction",
+    "InterfaceType",
+    
+    # Type System
+    "DatatypeConstraintGroup",
+    "validate_datatype_against_constraints",
+    "DataType",
+    "BaseDataType",
+    
+    # Generation Results
     "GenerationResult",
-    "ValidationResult", 
     "PerformanceMetrics",
+    
+    # Validation
+    "GenerationValidationResult",
     
     # Utility functions
     "create_generation_result",

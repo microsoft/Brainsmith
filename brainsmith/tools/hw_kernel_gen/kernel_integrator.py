@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
+from .metadata import KernelMetadata
 from .data import GenerationResult
 from .generators import GeneratorManager
 from .templates.context_generator import TemplateContextGenerator

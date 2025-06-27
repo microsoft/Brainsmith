@@ -8,9 +8,10 @@
 // @brainsmith datatype m_axis_output UINT 8 32
 // @brainsmith datatype s_axis_weights FIXED 8 16
 // @brainsmith weight s_axis_weights
-// @brainsmith bdim s_axis_input INPUT_BDIM SHAPE=[:]
+// @brainsmith bdim s_axis_input INPUT_BDIM
 // @brainsmith sdim s_axis_input INPUT_SDIM
-// @brainsmith bdim s_axis_weights WEIGHT_BDIM SHAPE=[:,:] RINDEX=1
+// @brainsmith bdim s_axis_weights WEIGHT_BDIM
+// @brainsmith bdim m_axis_output OUTPUT_BDIM
 // @brainsmith alias PE num_engines
 // @brainsmith derived_parameter MEM_DEPTH self.calc_memory_depth()
 // @brainsmith datatype_param s_axis_input width INPUT_WIDTH
@@ -31,6 +32,7 @@ module test_kernel_e2e #(
     parameter int INPUT_BDIM = 1,
     parameter int INPUT_SDIM = 1,
     parameter int WEIGHT_BDIM = 1,
+    parameter int OUTPUT_BDIM = 1,
     parameter int MEM_DEPTH = 1024,
     parameter int ACTIVATION_TYPE = 0  // 0=ReLU, 1=None
 ) (

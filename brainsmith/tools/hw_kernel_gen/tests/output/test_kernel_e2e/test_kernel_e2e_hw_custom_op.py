@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for test_kernel_e2e
 # Generated from: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
-# Generation timestamp: 2025-06-20T20:48:27.997893
+# Generation timestamp: 2025-06-25T13:56:08.949120
 #
 # PHASE 2: FINN INTEGRATION
 # This HWCustomOp follows FINN's standard pattern with simple constructor
@@ -61,7 +61,7 @@ class TestKernelE2e(AutoHWCustomOp):
                     ),
                 ],
                 chunking_strategy=BlockChunkingStrategy(
-                    block_shape=[':'],  # Validated symbolic shape
+                    block_shape=[':', ':'],  # Validated symbolic shape
                     rindex=0
                 )
             ),
@@ -76,8 +76,8 @@ class TestKernelE2e(AutoHWCustomOp):
                     ),
                 ],
                 chunking_strategy=BlockChunkingStrategy(
-                    block_shape=[':', ':'],  # Validated symbolic shape
-                    rindex=1
+                    block_shape=['PE'],  # Validated symbolic shape
+                    rindex=0
                 )
             ),
             InterfaceMetadata(
@@ -108,7 +108,6 @@ class TestKernelE2e(AutoHWCustomOp):
         
         # RTL parameters as node attributes (only exposed parameters)
         my_attrs["INPUT_BDIM"] = ("i", True, None)  # Required parameter
-        my_attrs["INPUT_SDIM"] = ("i", True, None)  # Required parameter
         my_attrs["WEIGHT_BDIM"] = ("i", True, None)  # Required parameter
         my_attrs["ACTIVATION_TYPE"] = ("i", True, None)  # Required parameter
         
@@ -209,7 +208,6 @@ def make_test_kernel_e2e_node(inputs, outputs, **node_attrs):
     
     Required algorithm parameters:
     - INPUT_BDIM: int
-    - INPUT_SDIM: int
     - WEIGHT_BDIM: int
     - ACTIVATION_TYPE: int
     
@@ -227,7 +225,7 @@ def make_test_kernel_e2e_node(inputs, outputs, **node_attrs):
     import onnx.helper
     
     # Validate required algorithm parameters (only exposed parameters)
-    required_algorithm_params = [p for p in ['INPUT_WIDTH', 'WEIGHT_WIDTH', 'WEIGHT_SIGNED', 'OUTPUT_WIDTH', 'ACC_WIDTH', 'ACC_SIGNED', 'THRESH_WIDTH', 'INPUT_BDIM', 'INPUT_SDIM', 'WEIGHT_BDIM', 'ACTIVATION_TYPE'] if p in ['INPUT_BDIM', 'INPUT_SDIM', 'WEIGHT_BDIM', 'ACTIVATION_TYPE']]
+    required_algorithm_params = [p for p in ['INPUT_WIDTH', 'WEIGHT_WIDTH', 'WEIGHT_SIGNED', 'OUTPUT_WIDTH', 'ACC_WIDTH', 'ACC_SIGNED', 'THRESH_WIDTH', 'INPUT_BDIM', 'INPUT_SDIM', 'WEIGHT_BDIM', 'ACTIVATION_TYPE'] if p in ['INPUT_BDIM', 'WEIGHT_BDIM', 'ACTIVATION_TYPE', 'num_engines']]
     missing = [p for p in required_algorithm_params if p not in node_attrs]
     if missing:
         raise ValueError(f"Missing required algorithm parameters: {missing}")

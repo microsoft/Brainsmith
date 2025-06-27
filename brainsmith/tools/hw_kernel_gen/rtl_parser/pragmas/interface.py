@@ -15,10 +15,9 @@ from typing import Dict
 import logging
 
 from .base import InterfacePragma, PragmaError
-from ..data import PragmaType
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.qonnx_types import DatatypeConstraintGroup
-from brainsmith.dataflow.core.interface_types import InterfaceType
+from ...data import DatatypeConstraintGroup, InterfaceType
+from ...metadata import InterfaceMetadata, DatatypeMetadata
+from ..rtl_data import PragmaType
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +49,19 @@ class DatatypePragma(InterfacePragma):
         """
         logger.debug(f"Parsing DATATYPE pragma: {self.inputs} at line {self.line_number}")
         
-        if len(self.inputs) != 4:
+        pos = self.inputs['positional']
+        
+        if len(pos) != 4:
             raise PragmaError("DATATYPE pragma requires interface_name, base_type, min_bits, max_bits")
         
-        interface_name = self.inputs[0]
-        base_type = self.inputs[1].strip()
+        interface_name = pos[0]
+        base_type = pos[1].strip()
         
         try:
-            min_bits = int(self.inputs[2])
-            max_bits = int(self.inputs[3])
+            min_bits = int(pos[2])
+            max_bits = int(pos[3])
         except ValueError:
-            raise PragmaError(f"DATATYPE pragma min_bits and max_bits must be integers, got: {self.inputs[2]}, {self.inputs[3]}")
+            raise PragmaError(f"DATATYPE pragma min_bits and max_bits must be integers, got: {pos[2]}, {pos[3]}")
         
         if min_bits <= 0:
             raise PragmaError(f"DATATYPE pragma min_bits must be positive, got: {min_bits}")
@@ -82,16 +83,26 @@ class DatatypePragma(InterfacePragma):
             "max_width": max_bits
         }
 
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
         """Apply DATATYPE pragma to modify datatype constraints."""
+        logger.debug(f"Attempting to apply DATATYPE pragma to interface '{metadata.name}'")
+        
+        # Validate interface type - exclude CONTROL
+        if metadata.interface_type == InterfaceType.CONTROL:
+            error_msg = (f"DATATYPE pragma at line {self.line_number} cannot be applied to "
+                        f"CONTROL interface '{metadata.name}'. DATATYPE pragmas are not "
+                        f"applicable to clock/reset signals.")
+            logger.error(f"DATATYPE interface type validation failed: {error_msg}")
+            raise PragmaError(error_msg)
+        
         # Create new datatype constraint group based on pragma
         new_constraint_group = self._create_constraint_group()
         
         # Combine with existing constraints (pragma adds to constraints, doesn't replace)
-        existing_constraints = getattr(metadata, 'datatype_constraints', []) or []
-        new_constraints = existing_constraints + [new_constraint_group]
+        existing_constraints = metadata.datatype_constraints or []
+        metadata.datatype_constraints = existing_constraints + [new_constraint_group]
         
-        return metadata.update_attributes(datatype_constraints=new_constraints)
+        logger.debug(f"DATATYPE pragma successfully applied to interface '{metadata.name}'")
 
     def _create_constraint_group(self) -> DatatypeConstraintGroup:
         """Create DatatypeConstraintGroup from pragma data."""
@@ -126,12 +137,19 @@ class WeightPragma(InterfacePragma):
     def _parse_inputs(self) -> Dict:
         """Handles WEIGHT pragma: @brainsmith WEIGHT <interface_name_0> [<interface_name_1> ...]"""
         logger.debug(f"Parsing WEIGHT pragma: {self.inputs} at line {self.line_number}")
-        if not self.inputs:
-            raise PragmaError(f"WEIGHT pragma at line {self.line_number} requires at least one argument: <interface_name_0> [...]. Got: {self.inputs}")
+        
+        pos = self.inputs['positional']
+        
+        if not pos:
+            raise PragmaError(f"WEIGHT pragma at line {self.line_number} requires at least one argument: <interface_name_0> [...]")
         
         # All inputs are interface names
-        interface_names = self.inputs
+        interface_names = pos
         return {"interface_names": interface_names}
+    
+    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
+        """Apply WEIGHT pragma to mark interface as weight type."""
+        metadata.interface_type = InterfaceType.WEIGHT  # Override type
 
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply WEIGHT pragma to kernel metadata."""
@@ -139,13 +157,17 @@ class WeightPragma(InterfacePragma):
         
         # WeightPragma handles multiple interfaces, so we apply to each one
         for interface_name in interface_names:
-            self.apply_to_interface_by_name(interface_name, kernel)
-    
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
-        """Apply WEIGHT pragma to mark interface as weight type."""
-        return metadata.update_attributes(
-            interface_type=InterfaceType.WEIGHT  # Override type
-        )
+            found = False
+            for interface in kernel.interfaces:
+                if interface.name == interface_name:
+                    self.apply_to_interface(interface)
+                    logger.debug(f"Applied WEIGHT pragma to interface '{interface_name}'")
+                    found = True
+                    break
+            
+            if not found:
+                logger.warning(f"WEIGHT pragma target interface '{interface_name}' not found")
+
 
 
 @dataclass 
@@ -164,12 +186,14 @@ class DatatypeParamPragma(InterfacePragma):
     """
     
     def _parse_inputs(self) -> Dict:
-        if len(self.inputs) != 3:
+        pos = self.inputs['positional']
+        
+        if len(pos) != 3:
             raise PragmaError("DATATYPE_PARAM pragma requires interface_name, property_type, parameter_name")
         
-        interface_name = self.inputs[0]
-        property_type = self.inputs[1].lower()
-        parameter_name = self.inputs[2]
+        interface_name = pos[0]
+        property_type = pos[1].lower()
+        parameter_name = pos[2]
         
         # Validate property type
         valid_properties = ['width', 'signed', 'format', 'bias', 'fractional_width']
@@ -182,13 +206,22 @@ class DatatypeParamPragma(InterfacePragma):
             "parameter_name": parameter_name
         }
     
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> InterfaceMetadata:
+    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
         """Apply DATATYPE_PARAM pragma to set datatype parameter mapping."""
+        logger.debug(f"Attempting to apply DATATYPE_PARAM pragma to interface '{metadata.name}'")
+        
+        # Validate interface type - exclude CONTROL
+        if metadata.interface_type == InterfaceType.CONTROL:
+            error_msg = (f"DATATYPE_PARAM pragma at line {self.line_number} cannot be applied to "
+                        f"CONTROL interface '{metadata.name}'. Datatype parameters are not "
+                        f"applicable to clock/reset signals.")
+            logger.error(f"DATATYPE_PARAM interface type validation failed: {error_msg}")
+            raise PragmaError(error_msg)
+        
         property_type = self.parsed_data['property_type']
         parameter_name = self.parsed_data['parameter_name']
         
-        # Import DatatypeMetadata
-        from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
+        # DatatypeMetadata is already imported at module level
         
         # Get or create DatatypeMetadata
         if metadata.datatype_metadata is None:
@@ -203,13 +236,10 @@ class DatatypeParamPragma(InterfacePragma):
                     width=f"{metadata.name}_WIDTH",
                     **{property_type: parameter_name}
                 )
-            metadata = metadata.update_attributes(datatype_metadata=new_dt)
+            metadata.datatype_metadata = new_dt
         else:
-            # Update existing DatatypeMetadata
-            updated_dt_metadata = metadata.datatype_metadata.update(**{property_type: parameter_name})
-            metadata = metadata.update_attributes(datatype_metadata=updated_dt_metadata)
-        
-        return metadata
+            # Update existing DatatypeMetadata in-place
+            setattr(metadata.datatype_metadata, property_type, parameter_name)
     
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply DATATYPE_PARAM pragma to kernel metadata."""
@@ -217,11 +247,19 @@ class DatatypeParamPragma(InterfacePragma):
         property_type = self.parsed_data.get("property_type")
         parameter_name = self.parsed_data.get("parameter_name")
         
-        # Try to apply to interface first using unified method
-        if self.apply_to_interface_by_name(interface_name, kernel):
-            # Successfully applied to interface, also remove from exposed parameters
-            if parameter_name in kernel.exposed_parameters:
-                kernel.exposed_parameters.remove(parameter_name)
+        # Try to find and apply to interface
+        found = False
+        for interface in kernel.interfaces:
+            if interface.name == interface_name:
+                self.apply_to_interface(interface)
+                logger.debug(f"Applied DATATYPE_PARAM pragma to interface '{interface_name}'")
+                found = True
+                # Remove from exposed parameters
+                if parameter_name in kernel.exposed_parameters:
+                    kernel.exposed_parameters.remove(parameter_name)
+                break
+        
+        if found:
             return
         
         # If interface not found, this might be an internal datatype
@@ -253,7 +291,6 @@ class DatatypeParamPragma(InterfacePragma):
     
     def create_standalone_datatype(self) -> 'DatatypeMetadata':
         """Create a standalone DatatypeMetadata for internal mechanisms."""
-        from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
         
         interface_name = self.parsed_data['interface_name']
         property_type = self.parsed_data['property_type']

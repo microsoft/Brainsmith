@@ -16,10 +16,9 @@ any ports that couldn't be assigned to a valid interface.
 import logging
 from typing import List, Dict, Tuple
 
-from brainsmith.dataflow.core.interface_types import InterfaceType
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.block_chunking import DefaultChunkingStrategy
-from .data import Port, ValidationResult, PortGroup
+from ..data import InterfaceType
+from ..metadata import InterfaceMetadata
+from .rtl_data import Port, ProtocolValidationResult, PortGroup
 from .interface_scanner import InterfaceScanner
 from .protocol_validator import ProtocolValidator
 
@@ -137,22 +136,8 @@ class InterfaceBuilder:
         # Interface type has been correctly determined by ProtocolValidator
         interface_type = group.interface_type
         
-        # Create appropriate default chunking strategy based on interface type
-        # This provides smart defaults when no BDIM pragma is specified
-        from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
-        
-        # For now, use simple defaults (will be refined based on actual tensor shape later)
-        # The actual tensor shape is not available at RTL parsing time
-        # Use only parameter names and ":" - NO magic numbers allowed
-        if interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
-            # Default for activations: process rightmost dimensions
-            chunking_strategy = BlockChunkingStrategy(block_shape=[":", ":"], rindex=0)
-        elif interface_type == InterfaceType.WEIGHT:
-            # Default for weights: use PE parameter for parameterizability
-            chunking_strategy = BlockChunkingStrategy(block_shape=["PE"], rindex=0)
-        else:
-            # Default for others: full tensor
-            chunking_strategy = BlockChunkingStrategy(block_shape=[":"], rindex=0)
+        # NOTE: chunking_strategy is deprecated and no longer set by RTL parser
+        # It will remain None and be handled by future AutoHWCustomOp refactoring
         
         # Extract description from validation metadata
         description = f"Interface {group.name} ({interface_type.value})"
@@ -190,11 +175,10 @@ class InterfaceBuilder:
             name=group.name,
             interface_type=interface_type,
             compiler_name=compiler_name,
-            chunking_strategy=chunking_strategy,
             description=description,
             datatype_metadata=None,  # Will be set by pragma application in parser
-            bdim_param=bdim_param,
-            sdim_param=sdim_param
+            bdim_params=[bdim_param] if bdim_param else None,  # Store as list
+            sdim_params=[sdim_param] if sdim_param else None   # Store as list
         )
     
     

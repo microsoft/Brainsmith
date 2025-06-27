@@ -15,7 +15,8 @@ import logging
 from typing import Optional, List, Tuple, Dict
 from tree_sitter import Node
 
-from .data import Port, Parameter, Direction, PragmaType
+from ..data import Direction
+from .rtl_data import Port, Parameter, PragmaType
 from .pragmas import Pragma
 from .ast_parser import ASTParser
 
