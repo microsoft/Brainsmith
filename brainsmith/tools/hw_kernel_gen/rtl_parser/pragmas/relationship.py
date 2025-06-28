@@ -15,8 +15,9 @@ from typing import Dict, List, Optional, Any, Union
 import logging
 
 from .base import Pragma, PragmaError
-from ...metadata import KernelMetadata, RelationshipMetadata
+from ...metadata import KernelMetadata
 from ..rtl_data import PragmaType
+from ...metadata import DimensionRelationship, RelationType
 
 logger = logging.getLogger(__name__)
 
@@ -152,17 +153,32 @@ class RelationshipPragma(Pragma):
         if not hasattr(kernel, 'relationships'):
             kernel.relationships = []
         
-        # Create and add relationship metadata
-        relationship = RelationshipMetadata(
+        # Map string relationship type to enum
+        rel_type_str = self.parsed_data["relationship_type"]
+        rel_type_map = {
+            "EQUAL": RelationType.EQUAL,
+            "DEPENDENT": RelationType.DEPENDENT,
+            "MULTIPLE": RelationType.MULTIPLE,
+            "DIVISIBLE": RelationType.DIVISIBLE,
+        }
+        
+        if rel_type_str not in rel_type_map:
+            raise PragmaError(f"Cannot map relationship type '{rel_type_str}' to RelationType enum")
+        
+        rel_type = rel_type_map[rel_type_str]
+        
+        # Create DimensionRelationship
+        relationship = DimensionRelationship(
             source_interface=source,
             target_interface=target,
-            relationship_type=self.parsed_data["relationship_type"],
+            relation=rel_type,
             source_dim=self.parsed_data.get("source_dim"),
             target_dim=self.parsed_data.get("target_dim"),
+            factor=self.parsed_data.get("scale_factor"),
             dependency_type=self.parsed_data.get("dependency_type"),
-            scale_factor=self.parsed_data.get("scale_factor")
+            description=f"From pragma: {rel_type_str} relationship"
         )
         
         kernel.relationships.append(relationship)
-        logger.debug(f"Added {relationship.relationship_type} relationship between "
+        logger.debug(f"Added {relationship.relation.value} relationship between "
                     f"'{source}' and '{target}' to kernel metadata")

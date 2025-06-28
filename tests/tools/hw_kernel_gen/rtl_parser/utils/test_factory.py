@@ -14,12 +14,13 @@ from typing import Tuple, List, Dict, Optional, Union
 from pathlib import Path
 
 from brainsmith.tools.hw_kernel_gen.metadata import (
-    KernelMetadata, InterfaceMetadata, DatatypeMetadata, RelationshipMetadata
+    KernelMetadata, InterfaceMetadata, DatatypeMetadata, DimensionRelationship
 )
 from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import Parameter
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragmas.base import Pragma
 from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PragmaType
-from brainsmith.tools.hw_kernel_gen.data import InterfaceType, Direction, DatatypeConstraintGroup
+from brainsmith.tools.hw_kernel_gen.data import InterfaceType, DatatypeConstraintGroup
+from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection
 from .rtl_builder import RTLBuilder, StrictRTLBuilder
 
 
@@ -54,22 +55,16 @@ class TestDataFactory:
                 InterfaceMetadata(
                     name="global_control",
                     interface_type=InterfaceType.CONTROL,
-                    direction=Direction.SLAVE,
-                    compiler_name="global_control"
                 ),
                 InterfaceMetadata(
                     name="s_axis_input",
                     interface_type=InterfaceType.INPUT,
-                    direction=Direction.SLAVE,
-                    compiler_name="input0",
                     bdim_params=["s_axis_input_BDIM"],
                     sdim_params=["s_axis_input_SDIM"]
                 ),
                 InterfaceMetadata(
                     name="m_axis_output",
                     interface_type=InterfaceType.OUTPUT,
-                    direction=Direction.MASTER,
-                    compiler_name="output0",
                     bdim_params=["m_axis_output_BDIM"]
                 )
             ],
@@ -115,14 +110,9 @@ class TestDataFactory:
         rtl = builder.build()
         
         # Build expected interface metadata
-        compiler_name = "input0" if interface_type != InterfaceType.OUTPUT else "output0"
-        direction = Direction.MASTER if interface_type == InterfaceType.OUTPUT else Direction.SLAVE
-        
         interface = InterfaceMetadata(
             name=interface_name,
-            interface_type=interface_type,
-            direction=direction,
-            compiler_name=compiler_name
+            interface_type=interface_type
         )
         
         # Apply pragma effects
@@ -154,8 +144,6 @@ class TestDataFactory:
         interfaces.append(InterfaceMetadata(
             name="global_control",
             interface_type=InterfaceType.CONTROL,
-            direction=Direction.SLAVE,
-            compiler_name="global_control"
         ))
         
         # Add inputs
@@ -165,9 +153,7 @@ class TestDataFactory:
             interfaces.append(InterfaceMetadata(
                 name=name,
                 interface_type=InterfaceType.INPUT,
-                direction=Direction.SLAVE,
-                compiler_name=f"input{i}",
-                bdim_params=[f"{name}_BDIM"],
+                    bdim_params=[f"{name}_BDIM"],
                 sdim_params=[f"{name}_SDIM"]
             ))
         
@@ -178,9 +164,7 @@ class TestDataFactory:
             interfaces.append(InterfaceMetadata(
                 name=name,
                 interface_type=InterfaceType.WEIGHT,
-                direction=Direction.SLAVE,
-                compiler_name=f"weight{i}",
-                bdim_params=[f"{name}_BDIM"],
+                    bdim_params=[f"{name}_BDIM"],
                 sdim_params=[f"{name}_SDIM"]
             ))
         
@@ -191,8 +175,6 @@ class TestDataFactory:
             interfaces.append(InterfaceMetadata(
                 name=name,
                 interface_type=InterfaceType.OUTPUT,
-                direction=Direction.MASTER,
-                compiler_name=f"output{i}",
                 bdim_params=[f"{name}_BDIM"]
             ))
         

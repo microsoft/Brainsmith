@@ -182,11 +182,9 @@ class BDimPragma(InterfacePragma):
         bdim_params = self.parsed_data.get("bdim_params", [])
         
         # Update interface metadata in-place
-        # NOTE: chunking_strategy is deprecated - we only set native BDIM parameters
         metadata.bdim_params = bdim_params
         metadata.block_shape = bdim_params  # Same as bdim_params for compatibility
         metadata.block_rindex = 0  # Always 0 now that RINDEX is removed
-        metadata.shape_params = {"shape": bdim_params}
         
         logger.debug(f"BDIM pragma successfully applied to interface '{metadata.name}'")
 

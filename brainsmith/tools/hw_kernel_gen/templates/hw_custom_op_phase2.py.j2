@@ -31,9 +31,8 @@ import numpy as np
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.core import AutoHWCustomOp
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.qonnx_types import DatatypeConstraintGroup
-from brainsmith.dataflow.core.interface_types import InterfaceType
+from brainsmith.tools.hw_kernel_gen.data import DatatypeConstraintGroup, InterfaceType
+from brainsmith.tools.hw_kernel_gen.metadata import InterfaceMetadata
 from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy
 
 

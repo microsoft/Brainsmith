@@ -113,31 +113,83 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         folded_output_shape = self.get_folded_output_shape()
         
         for idx, interface in enumerate(interface_metadata):
-            # Set BDIM parameter value
-            if hasattr(interface, 'bdim_param') and interface.bdim_param:
+            # Set BDIM parameter values (now supports lists)
+            if hasattr(interface, 'bdim_params') and interface.bdim_params:
                 if interface.interface_type.value == 'input' and idx < len(folded_input_shape):
-                    bdim_value = folded_input_shape[idx][0]  # First dimension is BDIM
-                    code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
+                    folded_shape = folded_input_shape[idx]
+                    # Iterate through each BDIM parameter
+                    for param_idx, param_name in enumerate(interface.bdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            # Get corresponding value from folded shape
+                            if param_idx < len(folded_shape):
+                                bdim_value = folded_shape[param_idx]
+                            else:
+                                bdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(bdim_value)]
                 elif interface.interface_type.value == 'output' and idx < len(folded_output_shape):
-                    bdim_value = folded_output_shape[idx][0]  # First dimension is BDIM
-                    code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
+                    folded_shape = folded_output_shape[idx]
+                    # Iterate through each BDIM parameter
+                    for param_idx, param_name in enumerate(interface.bdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            # Get corresponding value from folded shape
+                            if param_idx < len(folded_shape):
+                                bdim_value = folded_shape[param_idx]
+                            else:
+                                bdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(bdim_value)]
                 # For weight interfaces, use input shape as default
                 elif interface.interface_type.value == 'weight' and len(folded_input_shape) > 0:
-                    bdim_value = folded_input_shape[0][0]  # Use first input's BDIM
-                    code_gen_dict[f"${interface.bdim_param.upper()}$"] = [str(bdim_value)]
+                    folded_shape = folded_input_shape[0]  # Use first input's shape
+                    # Iterate through each BDIM parameter
+                    for param_idx, param_name in enumerate(interface.bdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            # Get corresponding value from folded shape
+                            if param_idx < len(folded_shape):
+                                bdim_value = folded_shape[param_idx]
+                            else:
+                                bdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(bdim_value)]
             
-            # Set SDIM parameter value
-            if hasattr(interface, 'sdim_param') and interface.sdim_param:
+            # Set SDIM parameter values (now supports lists)
+            if hasattr(interface, 'sdim_params') and interface.sdim_params:
                 if interface.interface_type.value == 'input' and idx < len(folded_input_shape):
-                    sdim_value = folded_input_shape[idx][1] if len(folded_input_shape[idx]) > 1 else 1
-                    code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
+                    folded_shape = folded_input_shape[idx]
+                    # For SDIM, we typically use the last dimensions
+                    # BDIM params consume the first dimensions, SDIM params get the rest
+                    bdim_count = len(interface.bdim_params) if interface.bdim_params else 0
+                    for param_idx, param_name in enumerate(interface.sdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            shape_idx = bdim_count + param_idx
+                            if shape_idx < len(folded_shape):
+                                sdim_value = folded_shape[shape_idx]
+                            else:
+                                sdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(sdim_value)]
                 elif interface.interface_type.value == 'output' and idx < len(folded_output_shape):
-                    sdim_value = folded_output_shape[idx][1] if len(folded_output_shape[idx]) > 1 else 1
-                    code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
+                    folded_shape = folded_output_shape[idx]
+                    # For SDIM, we typically use the last dimensions
+                    bdim_count = len(interface.bdim_params) if interface.bdim_params else 0
+                    for param_idx, param_name in enumerate(interface.sdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            shape_idx = bdim_count + param_idx
+                            if shape_idx < len(folded_shape):
+                                sdim_value = folded_shape[shape_idx]
+                            else:
+                                sdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(sdim_value)]
                 # For weight interfaces, use input shape as default
                 elif interface.interface_type.value == 'weight' and len(folded_input_shape) > 0:
-                    sdim_value = folded_input_shape[0][1] if len(folded_input_shape[0]) > 1 else 1
-                    code_gen_dict[f"${interface.sdim_param.upper()}$"] = [str(sdim_value)]
+                    folded_shape = folded_input_shape[0]  # Use first input's shape
+                    # For SDIM, we typically use the last dimensions
+                    bdim_count = len(interface.bdim_params) if interface.bdim_params else 0
+                    for param_idx, param_name in enumerate(interface.sdim_params):
+                        if param_name != '1':  # Skip singleton dimensions
+                            shape_idx = bdim_count + param_idx
+                            if shape_idx < len(folded_shape):
+                                sdim_value = folded_shape[shape_idx]
+                            else:
+                                sdim_value = 1  # Default if shape is shorter
+                            code_gen_dict[f"${param_name.upper()}$"] = [str(sdim_value)]
         
         # Datatype parameter assignments (generated at template time)
         from qonnx.core.datatype import DataType

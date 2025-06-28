@@ -15,8 +15,7 @@ import logging
 from typing import Optional, List, Tuple, Dict
 from tree_sitter import Node
 
-from ..data import Direction
-from .rtl_data import Port, Parameter, PragmaType
+from .rtl_data import Port, Parameter, PragmaType, PortDirection
 from .pragmas import Pragma
 from .ast_parser import ASTParser
 
@@ -319,7 +318,7 @@ class ModuleExtractor:
         
         final_width = "1"  # Default
         data_type = "logic"  # Default
-        direction = Direction.INPUT  # Default
+        direction = PortDirection.INPUT  # Default
         
         # Try finding header types
         variable_port_header = self.ast_parser.find_child(node, ["variable_port_header"])
@@ -449,7 +448,7 @@ class ModuleExtractor:
         # Filter and deduplicate names
         filtered_names = []
         seen_names = set()
-        keywords_to_exclude = set([d.value for d in Direction])
+        keywords_to_exclude = set([d.value for d in PortDirection])
         
         for name in potential_names:
             if name and name not in keywords_to_exclude and name not in seen_names:
@@ -471,14 +470,14 @@ class ModuleExtractor:
         
         return parsed_ports
     
-    def _extract_direction(self, node: Node) -> Optional[Direction]:
+    def _extract_direction(self, node: Node) -> Optional[PortDirection]:
         """Extract the port direction from AST nodes.
         
         Args:
             node: Node potentially containing direction information.
             
         Returns:
-            Direction enum value or None.
+            PortDirection enum value or None.
         """
         if node is None:
             return None
@@ -490,19 +489,19 @@ class ModuleExtractor:
         if direction_node:
             dir_text = direction_node.text.decode('utf8')
             if dir_text in direction_types:
-                direction = Direction(dir_text)
+                direction = PortDirection(dir_text)
             elif direction_node.type == "port_direction":
                 # Find the actual keyword within the port_direction node
                 for child in direction_node.children:
                     if child.text.decode('utf8') in direction_types:
-                        direction = Direction(child.text.decode('utf8'))
+                        direction = PortDirection(child.text.decode('utf8'))
                         break
         
         if direction is None:
             node_text = node.text.decode('utf8')
             first_word = node_text.split()[0] if node_text else ""
             if first_word in direction_types:
-                direction = Direction(first_word)
+                direction = PortDirection(first_word)
         
         return direction
     
@@ -565,7 +564,7 @@ class ModuleExtractor:
         node_text = node.text.decode('utf8').strip()
         
         # Keywords to exclude
-        keywords_to_exclude = [d.value for d in Direction] + [
+        keywords_to_exclude = [d.value for d in PortDirection] + [
             'logic', 'reg', 'wire', 'bit', 'integer', 'input', 'output', 'inout',
             'signed', 'unsigned', 'parameter', 'localparam', 'module', 'endmodule',
             'interface', 'endinterface'

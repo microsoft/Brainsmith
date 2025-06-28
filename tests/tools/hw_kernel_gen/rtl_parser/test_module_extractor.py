@@ -20,7 +20,7 @@ from pathlib import Path
 from brainsmith.tools.hw_kernel_gen.rtl_parser.module_extractor import ModuleExtractor
 from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import Parameter, Port, PragmaType
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragmas.module import TopModulePragma
-from brainsmith.tools.hw_kernel_gen.data import Direction
+from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection
 
 from .utils.rtl_builder import RTLBuilder, create_minimal_module
 from .utils.ast_patterns import ASTPatterns
@@ -187,18 +187,18 @@ class TestModuleExtractor:
         
         # Check specific ports
         clk_port = next(p for p in ports if p.name == "clk")
-        assert clk_port.direction == Direction.INPUT
+        assert clk_port.direction == PortDirection.INPUT
         assert clk_port.width == "1"
         
         data_in_port = next(p for p in ports if p.name == "data_in")
-        assert data_in_port.direction == Direction.INPUT
+        assert data_in_port.direction == PortDirection.INPUT
         assert data_in_port.width == "WIDTH-1:0"
         
         valid_port = next(p for p in ports if p.name == "valid")
-        assert valid_port.direction == Direction.OUTPUT
+        assert valid_port.direction == PortDirection.OUTPUT
         
         bidir_port = next(p for p in ports if p.name == "bidir_bus")
-        assert bidir_port.direction == Direction.INOUT
+        assert bidir_port.direction == PortDirection.INOUT
         # RTLBuilder converts "16" to "16-1:0"
         assert bidir_port.width == "16-1:0"
     

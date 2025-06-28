@@ -18,7 +18,8 @@ from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import (
     Parameter, Port, PortGroup, PragmaType
 )
 from brainsmith.tools.hw_kernel_gen.rtl_parser.pragmas.base import Pragma
-from brainsmith.tools.hw_kernel_gen.data import Direction, InterfaceType
+from brainsmith.tools.hw_kernel_gen.data import InterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection
 from brainsmith.tools.hw_kernel_gen.metadata import InterfaceMetadata, KernelMetadata
 
 
@@ -287,14 +288,9 @@ class TestDataHelpers:
         else:
             compiler_name = name
         
-        # Determine direction
-        direction = Direction.MASTER if interface_type == InterfaceType.OUTPUT else Direction.SLAVE
-        
         metadata = InterfaceMetadata(
             name=name,
-            interface_type=interface_type,
-            direction=direction,
-            compiler_name=compiler_name
+            interface_type=interface_type
         )
         
         # Add parameters if requested

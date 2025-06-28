@@ -9,10 +9,9 @@ from typing import Dict, Any, List
 from datetime import datetime
 from pathlib import Path
 
-from brainsmith.dataflow.core.interface_types import InterfaceType
-from brainsmith.dataflow.core.kernel_metadata import KernelMetadata
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from ..rtl_parser.data import Parameter
+from ..data import InterfaceType
+from ..metadata import KernelMetadata, InterfaceMetadata
+from ..rtl_parser.rtl_data import Parameter
 from ..parameter_config.parameter_defaults import (
     is_parameter_whitelisted,
     get_default_value,
@@ -796,33 +795,47 @@ class TemplateContextGenerator:
                 dt_meta = interface.datatype_metadata
                 interface_params.update(dt_meta.get_all_parameters())
             
-            # Collect shape parameters (BDIM/SDIM)
-            if hasattr(interface, 'bdim_param') and interface.bdim_param:
-                interface_params.add(interface.bdim_param)
-            if hasattr(interface, 'sdim_param') and interface.sdim_param:
-                interface_params.add(interface.sdim_param)
+            # Collect shape parameters (BDIM/SDIM) - now lists
+            if hasattr(interface, 'bdim_params') and interface.bdim_params:
+                for param in interface.bdim_params:
+                    if param != '1':  # Skip singleton dimensions
+                        interface_params.add(param)
+            if hasattr(interface, 'sdim_params') and interface.sdim_params:
+                for param in interface.sdim_params:
+                    if param != '1':  # Skip singleton dimensions
+                        interface_params.add(param)
             
             if interface_params:
                 # Sort parameters: BDIM first, SDIM second, then datatype params
                 sorted_params = []
                 
-                # Add BDIM parameter first
-                if hasattr(interface, 'bdim_param') and interface.bdim_param:
-                    bdim_params = [p for p in parameter_definitions if p.name == interface.bdim_param]
-                    sorted_params.extend(bdim_params)
+                # Add BDIM parameters first (now a list)
+                if hasattr(interface, 'bdim_params') and interface.bdim_params:
+                    for bdim_param in interface.bdim_params:
+                        if bdim_param != '1':  # Skip singleton dimensions
+                            bdim_params = [p for p in parameter_definitions if p.name == bdim_param]
+                            sorted_params.extend(bdim_params)
                 
-                # Add SDIM parameter second
-                if hasattr(interface, 'sdim_param') and interface.sdim_param:
-                    sdim_params = [p for p in parameter_definitions if p.name == interface.sdim_param]
-                    sorted_params.extend(sdim_params)
+                # Add SDIM parameters second (now a list)
+                if hasattr(interface, 'sdim_params') and interface.sdim_params:
+                    for sdim_param in interface.sdim_params:
+                        if sdim_param != '1':  # Skip singleton dimensions
+                            sdim_params = [p for p in parameter_definitions if p.name == sdim_param]
+                            sorted_params.extend(sdim_params)
                 
                 # Add datatype parameters in their defined order
                 if hasattr(interface, 'datatype_metadata') and interface.datatype_metadata:
                     dt_meta = interface.datatype_metadata
                     # Get parameters in the order they're defined in datatype metadata
+                    # Collect all BDIM/SDIM params to exclude
+                    shape_params = set()
+                    if hasattr(interface, 'bdim_params') and interface.bdim_params:
+                        shape_params.update(p for p in interface.bdim_params if p != '1')
+                    if hasattr(interface, 'sdim_params') and interface.sdim_params:
+                        shape_params.update(p for p in interface.sdim_params if p != '1')
+                    
                     for param_name in dt_meta.get_all_parameters():
-                        if param_name not in [interface.bdim_param if hasattr(interface, 'bdim_param') else None,
-                                             interface.sdim_param if hasattr(interface, 'sdim_param') else None]:
+                        if param_name not in shape_params:
                             dt_params = [p for p in parameter_definitions if p.name == param_name]
                             sorted_params.extend(dt_params)
                 

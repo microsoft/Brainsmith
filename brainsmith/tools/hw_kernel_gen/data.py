@@ -43,13 +43,6 @@ logger = logging.getLogger(__name__)
 # ENUMS
 # ============================================================================
 
-class Direction(Enum):
-    """Port direction enumeration."""
-    INPUT = "input"
-    OUTPUT = "output"
-    INOUT = "inout"
-
-
 class InterfaceType(Enum):
     """Unified interface types with inherent protocol-role relationships"""
     
@@ -542,7 +535,6 @@ def create_generation_result(
 
 __all__ = [
     # Enums
-    "Direction",
     "InterfaceType",
     
     # Type System

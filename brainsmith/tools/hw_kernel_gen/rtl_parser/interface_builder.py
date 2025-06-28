@@ -150,31 +150,19 @@ class InterfaceBuilder:
         bdim_param = None
         sdim_param = None
         
-        # Assign standardized compiler_name based on interface type and discovery order
-        if interface_type == InterfaceType.CONTROL:
-            compiler_name = 'global'
-        elif interface_type == InterfaceType.INPUT:
-            compiler_name = f'input{self._interface_counters[InterfaceType.INPUT]}'
+        # Update interface counters for naming
+        if interface_type == InterfaceType.INPUT:
             self._interface_counters[InterfaceType.INPUT] += 1
         elif interface_type == InterfaceType.OUTPUT:
-            compiler_name = f'output{self._interface_counters[InterfaceType.OUTPUT]}'
             self._interface_counters[InterfaceType.OUTPUT] += 1
         elif interface_type == InterfaceType.WEIGHT:
-            compiler_name = f'weight{self._interface_counters[InterfaceType.WEIGHT]}'
             self._interface_counters[InterfaceType.WEIGHT] += 1
         elif interface_type == InterfaceType.CONFIG:
-            compiler_name = f'config{self._interface_counters[InterfaceType.CONFIG]}'
             self._interface_counters[InterfaceType.CONFIG] += 1
-        else:
-            logger.warning(f"Unknown interface type '{interface_type}' for interface '{group.name}', using name as compiler_name")
-            compiler_name = group.name
-        
-        logger.debug(f"Assigned compiler_name '{compiler_name}' to {interface_type.value} interface '{group.name}'")
         
         return InterfaceMetadata(
             name=group.name,
             interface_type=interface_type,
-            compiler_name=compiler_name,
             description=description,
             datatype_metadata=None,  # Will be set by pragma application in parser
             bdim_params=[bdim_param] if bdim_param else None,  # Store as list

@@ -7,7 +7,7 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List, Optional
+from typing import Tuple, Union, List, Optional, Dict
 from dataclasses import dataclass
 from enum import Enum
 import math

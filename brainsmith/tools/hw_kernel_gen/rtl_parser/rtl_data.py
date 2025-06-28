@@ -25,7 +25,13 @@ from typing import List, Dict, Optional, Any
 import logging
 
 # Import shared types from main data module
-from ..data import Direction, InterfaceType
+from ..data import InterfaceType
+
+# Temporary: Define InterfaceDirection locally to avoid import issues
+from enum import Enum as _Enum
+class InterfaceDirection(_Enum):
+    INPUT = "input"
+    OUTPUT = "output"
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -34,6 +40,29 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # ENUMS
 # ============================================================================
+
+class PortDirection(Enum):
+    """RTL port directions (includes bidirectional).
+    
+    This enum is specific to RTL ports which can be bidirectional (INOUT).
+    For dataflow interfaces, use InterfaceDirection which only has INPUT/OUTPUT.
+    """
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
+    
+    def to_interface_direction(self) -> Optional[InterfaceDirection]:
+        """Convert to dataflow interface direction.
+        
+        Returns:
+            InterfaceDirection for INPUT/OUTPUT, None for INOUT
+        """
+        if self == PortDirection.INPUT:
+            return InterfaceDirection.INPUT
+        elif self == PortDirection.OUTPUT:
+            return InterfaceDirection.OUTPUT
+        else:
+            return None  # INOUT has no dataflow equivalent
 
 class PragmaType(Enum):
     """Valid pragma types recognized by the parser."""
@@ -88,7 +117,7 @@ class Port:
         description: Optional documentation from RTL comments
     """
     name: str
-    direction: Direction
+    direction: PortDirection
     width: str = "1"  # Default to single bit
     description: Optional[str] = None
 
@@ -96,10 +125,10 @@ class Port:
         """Validate port attributes, converting string direction to Enum if needed."""
         if not self.name.isidentifier():
             raise ValueError(f"Invalid port name: {self.name}")
-        if not isinstance(self.direction, Direction):
+        if not isinstance(self.direction, PortDirection):
             if isinstance(self.direction, str):
                 try:
-                    self.direction = Direction(self.direction.lower())
+                    self.direction = PortDirection(self.direction.lower())
                 except ValueError:
                     raise ValueError(f"Invalid port direction string: {self.direction}")
             else:
@@ -145,6 +174,7 @@ class ProtocolValidationResult:
 # Module exports
 __all__ = [
     # Enums
+    "PortDirection",
     "PragmaType",
     
     # RTL Data Structures  

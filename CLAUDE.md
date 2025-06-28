@@ -36,6 +36,10 @@ All development happens inside Docker containers managed by the `smithy` script:
 # Run all tests from project root
 ./smithy exec "cd tests && pytest ./"
 
+# Run specific test directories
+./smithy exec "pytest brainsmith/core/dataflow/tests/"
+./smithy exec "pytest brainsmith/core/dataflow/core/tests/"
+
 # Run hardware kernel generator E2E tests
 ./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
 
@@ -66,9 +70,12 @@ Convert SystemVerilog RTL to FINN HWCustomOp:
 
 ### Core Components
 
-1. **Interface-Wise Dataflow Modeling**: Located in `brainsmith/dataflow/`
-   - `KernelMetadata`: Core data structure representing hardware kernels
-   - Manages kernel interfaces, parameters, and connectivity
+1. **Interface-Wise Dataflow Modeling** (`brainsmith/core/dataflow/`):
+   - Data hierarchy: Tensor → Block → Stream → Element
+   - `KernelDefinition`: Static kernel metadata and constraints
+   - `KernelModel`: Runtime instance with actual dimensions
+   - `InterfaceDefinition`/`InterfaceModel`: Interface specifications
+   - Stream dimension (SDIM) architecture for parallelism modeling
 
 2. **Hardware Kernels** (`brainsmith/hw_kernels/`):
    - SystemVerilog RTL implementations
@@ -89,15 +96,30 @@ Convert SystemVerilog RTL to FINN HWCustomOp:
 
 The RTL parser uses pragmas to annotate SystemVerilog code:
 
-- `// hwk::interface(type=axis_input)`: Marks AXI-Stream interfaces
-- `// hwk::parameter(dtype_str=true)`: Marks datatype string parameters
-- `// hwk::link_parameter()`: Links parameters to interface properties
+```systemverilog
+// @brainsmith BDIM <interface> <param> [SHAPE=<shape>] [RINDEX=<idx>]
+// @brainsmith SDIM <interface> <param>
+// @brainsmith DATATYPE <interface> <type> <min_bits> <max_bits>
+// @brainsmith DATATYPE_PARAM <interface> <property> <rtl_param>
+// @brainsmith WEIGHT <interface>
+// @brainsmith ALIAS <rtl_param> <python_name>
+// @brainsmith DERIVED_PARAMETER <param> <python_expression>
+// @brainsmith TOP_MODULE <module_name>
+```
 
 ### Key Workflows
 
 1. **Model Conversion**: PyTorch → ONNX → Dataflow Model → RTL
 2. **Hardware Generation**: Uses FINN framework for synthesis
 3. **Testing**: E2E tests validate RTL generation and functionality
+
+## Current Development Focus
+
+The project is actively developing on the `experimental/hwkg` branch with focus on:
+- Native relationship modeling system (replacing pragma-based approach)
+- Stream dimension (SDIM) architecture implementation
+- Clean separation between definition (static) and model (runtime) layers
+- Function-based tiling system for parallelism
 
 ## Code Header Convention
 
@@ -118,3 +140,13 @@ When creating substantial files in the project, use the following header:
 - **All commands must run in Docker**: Use `./smithy exec` prefix for all Python commands
 - **Dependencies auto-fetched**: FINN and other deps are fetched during container build via `docker/fetch-repos.sh`
 - **FINN integration**: The project extends FINN's HWCustomOp framework for custom hardware kernels
+- **Breaking changes preferred**: Per user preferences, prefer breaking refactors over compatibility layers
+
+## Development Guidelines
+
+- **License and File Notes**:
+  - Don't add the license header to markdown files
+
+## Memories
+
+- **Always run python commands with smithy**

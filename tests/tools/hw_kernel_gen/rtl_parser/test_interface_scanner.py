@@ -19,7 +19,8 @@ from pathlib import Path
 
 from brainsmith.tools.hw_kernel_gen.rtl_parser.interface_scanner import InterfaceScanner
 from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import Port, PortGroup
-from brainsmith.tools.hw_kernel_gen.data import Direction, InterfaceType
+from brainsmith.tools.hw_kernel_gen.data import InterfaceType
+from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection
 
 from .utils.rtl_builder import RTLBuilder
 
@@ -30,15 +31,15 @@ class TestInterfaceScanner:
     def test_scan_axi_stream_patterns(self, interface_scanner):
         """Test detecting AXI-Stream interface patterns."""
         ports = [
-            Port("s_axis_input_tdata", Direction.INPUT, "31:0"),
-            Port("s_axis_input_tvalid", Direction.INPUT, "1"),
-            Port("s_axis_input_tready", Direction.OUTPUT, "1"),
-            Port("s_axis_input_tlast", Direction.INPUT, "1"),
-            Port("m_axis_output_tdata", Direction.OUTPUT, "31:0"),
-            Port("m_axis_output_tvalid", Direction.OUTPUT, "1"),
-            Port("m_axis_output_tready", Direction.INPUT, "1"),
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst", Direction.INPUT, "1")
+            Port("s_axis_input_tdata", PortDirection.INPUT, "31:0"),
+            Port("s_axis_input_tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis_input_tready", PortDirection.OUTPUT, "1"),
+            Port("s_axis_input_tlast", PortDirection.INPUT, "1"),
+            Port("m_axis_output_tdata", PortDirection.OUTPUT, "31:0"),
+            Port("m_axis_output_tvalid", PortDirection.OUTPUT, "1"),
+            Port("m_axis_output_tready", PortDirection.INPUT, "1"),
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -66,25 +67,25 @@ class TestInterfaceScanner:
         """Test detecting AXI-Lite interface patterns."""
         ports = [
             # AXI-Lite slave interface
-            Port("s_axi_awaddr", Direction.INPUT, "31:0"),
-            Port("s_axi_awvalid", Direction.INPUT, "1"),
-            Port("s_axi_awready", Direction.OUTPUT, "1"),
-            Port("s_axi_wdata", Direction.INPUT, "31:0"),
-            Port("s_axi_wstrb", Direction.INPUT, "3:0"),
-            Port("s_axi_wvalid", Direction.INPUT, "1"),
-            Port("s_axi_wready", Direction.OUTPUT, "1"),
-            Port("s_axi_bresp", Direction.OUTPUT, "1:0"),
-            Port("s_axi_bvalid", Direction.OUTPUT, "1"),
-            Port("s_axi_bready", Direction.INPUT, "1"),
-            Port("s_axi_araddr", Direction.INPUT, "31:0"),
-            Port("s_axi_arvalid", Direction.INPUT, "1"),
-            Port("s_axi_arready", Direction.OUTPUT, "1"),
-            Port("s_axi_rdata", Direction.OUTPUT, "31:0"),
-            Port("s_axi_rresp", Direction.OUTPUT, "1:0"),
-            Port("s_axi_rvalid", Direction.OUTPUT, "1"),
-            Port("s_axi_rready", Direction.INPUT, "1"),
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst_n", Direction.INPUT, "1")
+            Port("s_axi_awaddr", PortDirection.INPUT, "31:0"),
+            Port("s_axi_awvalid", PortDirection.INPUT, "1"),
+            Port("s_axi_awready", PortDirection.OUTPUT, "1"),
+            Port("s_axi_wdata", PortDirection.INPUT, "31:0"),
+            Port("s_axi_wstrb", PortDirection.INPUT, "3:0"),
+            Port("s_axi_wvalid", PortDirection.INPUT, "1"),
+            Port("s_axi_wready", PortDirection.OUTPUT, "1"),
+            Port("s_axi_bresp", PortDirection.OUTPUT, "1:0"),
+            Port("s_axi_bvalid", PortDirection.OUTPUT, "1"),
+            Port("s_axi_bready", PortDirection.INPUT, "1"),
+            Port("s_axi_araddr", PortDirection.INPUT, "31:0"),
+            Port("s_axi_arvalid", PortDirection.INPUT, "1"),
+            Port("s_axi_arready", PortDirection.OUTPUT, "1"),
+            Port("s_axi_rdata", PortDirection.OUTPUT, "31:0"),
+            Port("s_axi_rresp", PortDirection.OUTPUT, "1:0"),
+            Port("s_axi_rvalid", PortDirection.OUTPUT, "1"),
+            Port("s_axi_rready", PortDirection.INPUT, "1"),
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst_n", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -107,15 +108,15 @@ class TestInterfaceScanner:
     def test_scan_global_control_signals(self, interface_scanner):
         """Test detecting global control signals."""
         ports = [
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst", Direction.INPUT, "1"),
-            Port("ap_clk", Direction.INPUT, "1"),
-            Port("ap_rst_n", Direction.INPUT, "1"),
-            Port("aclk", Direction.INPUT, "1"),
-            Port("aresetn", Direction.INPUT, "1"),
-            Port("enable", Direction.INPUT, "1"),
-            Port("data_in", Direction.INPUT, "31:0"),
-            Port("data_out", Direction.OUTPUT, "31:0")
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst", PortDirection.INPUT, "1"),
+            Port("ap_clk", PortDirection.INPUT, "1"),
+            Port("ap_rst_n", PortDirection.INPUT, "1"),
+            Port("aclk", PortDirection.INPUT, "1"),
+            Port("aresetn", PortDirection.INPUT, "1"),
+            Port("enable", PortDirection.INPUT, "1"),
+            Port("data_in", PortDirection.INPUT, "31:0"),
+            Port("data_out", PortDirection.OUTPUT, "31:0")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -139,27 +140,27 @@ class TestInterfaceScanner:
         """Test scanning multiple interfaces of same type."""
         ports = [
             # First input stream
-            Port("s_axis_input0_tdata", Direction.INPUT, "31:0"),
-            Port("s_axis_input0_tvalid", Direction.INPUT, "1"),
-            Port("s_axis_input0_tready", Direction.OUTPUT, "1"),
+            Port("s_axis_input0_tdata", PortDirection.INPUT, "31:0"),
+            Port("s_axis_input0_tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis_input0_tready", PortDirection.OUTPUT, "1"),
             
             # Second input stream
-            Port("s_axis_input1_tdata", Direction.INPUT, "15:0"),
-            Port("s_axis_input1_tvalid", Direction.INPUT, "1"),
-            Port("s_axis_input1_tready", Direction.OUTPUT, "1"),
+            Port("s_axis_input1_tdata", PortDirection.INPUT, "15:0"),
+            Port("s_axis_input1_tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis_input1_tready", PortDirection.OUTPUT, "1"),
             
             # Weight stream
-            Port("s_axis_weights_tdata", Direction.INPUT, "7:0"),
-            Port("s_axis_weights_tvalid", Direction.INPUT, "1"),
-            Port("s_axis_weights_tready", Direction.OUTPUT, "1"),
+            Port("s_axis_weights_tdata", PortDirection.INPUT, "7:0"),
+            Port("s_axis_weights_tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis_weights_tready", PortDirection.OUTPUT, "1"),
             
             # Output stream
-            Port("m_axis_output_tdata", Direction.OUTPUT, "31:0"),
-            Port("m_axis_output_tvalid", Direction.OUTPUT, "1"),
-            Port("m_axis_output_tready", Direction.INPUT, "1"),
+            Port("m_axis_output_tdata", PortDirection.OUTPUT, "31:0"),
+            Port("m_axis_output_tvalid", PortDirection.OUTPUT, "1"),
+            Port("m_axis_output_tready", PortDirection.INPUT, "1"),
             
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst", Direction.INPUT, "1")
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -178,14 +179,14 @@ class TestInterfaceScanner:
     def test_scan_unmatched_ports(self, interface_scanner):
         """Test handling of ports that don't match any pattern."""
         ports = [
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst", Direction.INPUT, "1"),
-            Port("custom_data_in", Direction.INPUT, "31:0"),
-            Port("custom_valid", Direction.INPUT, "1"),
-            Port("custom_ready", Direction.OUTPUT, "1"),
-            Port("status_flags", Direction.OUTPUT, "7:0"),
-            Port("config_reg", Direction.INPUT, "15:0"),
-            Port("interrupt", Direction.OUTPUT, "1")
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst", PortDirection.INPUT, "1"),
+            Port("custom_data_in", PortDirection.INPUT, "31:0"),
+            Port("custom_valid", PortDirection.INPUT, "1"),
+            Port("custom_ready", PortDirection.OUTPUT, "1"),
+            Port("status_flags", PortDirection.OUTPUT, "7:0"),
+            Port("config_reg", PortDirection.INPUT, "15:0"),
+            Port("interrupt", PortDirection.OUTPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -202,20 +203,20 @@ class TestInterfaceScanner:
         """Test handling various naming conventions."""
         ports = [
             # Uppercase variation
-            Port("S_AXIS_TDATA", Direction.INPUT, "31:0"),
-            Port("S_AXIS_TVALID", Direction.INPUT, "1"),
-            Port("S_AXIS_TREADY", Direction.OUTPUT, "1"),
+            Port("S_AXIS_TDATA", PortDirection.INPUT, "31:0"),
+            Port("S_AXIS_TVALID", PortDirection.INPUT, "1"),
+            Port("S_AXIS_TREADY", PortDirection.OUTPUT, "1"),
             
             # Mixed case
-            Port("m_Axis_Output_TData", Direction.OUTPUT, "31:0"),
-            Port("m_Axis_Output_TValid", Direction.OUTPUT, "1"),
-            Port("m_Axis_Output_TReady", Direction.INPUT, "1"),
+            Port("m_Axis_Output_TData", PortDirection.OUTPUT, "31:0"),
+            Port("m_Axis_Output_TValid", PortDirection.OUTPUT, "1"),
+            Port("m_Axis_Output_TReady", PortDirection.INPUT, "1"),
             
             # Underscores in different places
-            Port("s_axis__input__tdata", Direction.INPUT, "7:0"),
-            Port("s_axis__input__tvalid", Direction.INPUT, "1"),
+            Port("s_axis__input__tdata", PortDirection.INPUT, "7:0"),
+            Port("s_axis__input__tvalid", PortDirection.INPUT, "1"),
             
-            Port("clk", Direction.INPUT, "1")
+            Port("clk", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -228,18 +229,18 @@ class TestInterfaceScanner:
         """Test detecting incomplete interfaces."""
         ports = [
             # Partial AXI-Stream (missing tready)
-            Port("s_axis_partial_tdata", Direction.INPUT, "31:0"),
-            Port("s_axis_partial_tvalid", Direction.INPUT, "1"),
+            Port("s_axis_partial_tdata", PortDirection.INPUT, "31:0"),
+            Port("s_axis_partial_tvalid", PortDirection.INPUT, "1"),
             
             # Another partial (only tdata)
-            Port("m_axis_minimal_tdata", Direction.OUTPUT, "15:0"),
+            Port("m_axis_minimal_tdata", PortDirection.OUTPUT, "15:0"),
             
             # Complete interface for comparison
-            Port("s_axis_complete_tdata", Direction.INPUT, "7:0"),
-            Port("s_axis_complete_tvalid", Direction.INPUT, "1"),
-            Port("s_axis_complete_tready", Direction.OUTPUT, "1"),
+            Port("s_axis_complete_tdata", PortDirection.INPUT, "7:0"),
+            Port("s_axis_complete_tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis_complete_tready", PortDirection.OUTPUT, "1"),
             
-            Port("clk", Direction.INPUT, "1")
+            Port("clk", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -257,20 +258,20 @@ class TestInterfaceScanner:
         """Test interfaces with custom prefixes."""
         ports = [
             # Custom input stream
-            Port("input_stream_data", Direction.INPUT, "31:0"),
-            Port("input_stream_valid", Direction.INPUT, "1"),
-            Port("input_stream_ready", Direction.OUTPUT, "1"),
+            Port("input_stream_data", PortDirection.INPUT, "31:0"),
+            Port("input_stream_valid", PortDirection.INPUT, "1"),
+            Port("input_stream_ready", PortDirection.OUTPUT, "1"),
             
             # Custom output stream  
-            Port("output_stream_data", Direction.OUTPUT, "31:0"),
-            Port("output_stream_valid", Direction.OUTPUT, "1"),
-            Port("output_stream_ready", Direction.INPUT, "1"),
+            Port("output_stream_data", PortDirection.OUTPUT, "31:0"),
+            Port("output_stream_valid", PortDirection.OUTPUT, "1"),
+            Port("output_stream_ready", PortDirection.INPUT, "1"),
             
             # Mixed with standard
-            Port("s_axis_standard_tdata", Direction.INPUT, "7:0"),
-            Port("s_axis_standard_tvalid", Direction.INPUT, "1"),
+            Port("s_axis_standard_tdata", PortDirection.INPUT, "7:0"),
+            Port("s_axis_standard_tvalid", PortDirection.INPUT, "1"),
             
-            Port("clk", Direction.INPUT, "1")
+            Port("clk", PortDirection.INPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)
@@ -295,11 +296,11 @@ class TestInterfaceScanner:
     def test_single_port_interface(self, interface_scanner):
         """Test handling single-port interfaces."""
         ports = [
-            Port("clk", Direction.INPUT, "1"),
-            Port("rst", Direction.INPUT, "1"),
-            Port("enable", Direction.INPUT, "1"),
-            Port("done", Direction.OUTPUT, "1"),
-            Port("error", Direction.OUTPUT, "1")
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst", PortDirection.INPUT, "1"),
+            Port("enable", PortDirection.INPUT, "1"),
+            Port("done", PortDirection.OUTPUT, "1"),
+            Port("error", PortDirection.OUTPUT, "1")
         ]
         
         port_groups, unassigned = interface_scanner.scan(ports)

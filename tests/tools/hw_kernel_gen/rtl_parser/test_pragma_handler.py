@@ -253,23 +253,50 @@ class TestPragmaHandler:
         assert pragmas_sorted[2].type == PragmaType.ALIAS
         assert pragmas_sorted[2].line_number > pragmas_sorted[1].line_number
     
-    @pytest.mark.skip(reason="Import error in DatatypeParamPragma.create_standalone_datatype")
     def test_collect_internal_datatype_pragmas(self, pragma_handler, ast_parser):
         """Test collecting internal datatype pragmas."""
-        # Use PragmaPatterns for datatype param test
-        rtl = PragmaPatterns.datatype_param_cascade()
+        # Build RTL with valid DATATYPE_PARAM pragmas
+        rtl = (RTLBuilder()
+               .module("datatype_params")
+               .parameter("ACC_WIDTH", "48")
+               .parameter("ACC_SIGNED", "1")
+               .parameter("THRESH_WIDTH", "32")
+               .parameter("THRESH_SIGNED", "0")
+               # Multiple params for same datatype
+               .pragma("DATATYPE_PARAM", "accumulator", "width", "ACC_WIDTH")
+               .pragma("DATATYPE_PARAM", "accumulator", "signed", "ACC_SIGNED")
+               # Different internal datatype
+               .pragma("DATATYPE_PARAM", "threshold", "width", "THRESH_WIDTH")
+               .pragma("DATATYPE_PARAM", "threshold", "signed", "THRESH_SIGNED")
+               .port("clk", "input")
+               .port("s_axis_input_tdata", "input", "32")
+               .port("s_axis_input_tvalid", "input")
+               .port("s_axis_input_tready", "output")
+               .port("m_axis_output_tdata", "output", "32")
+               .port("m_axis_output_tvalid", "output")
+               .port("m_axis_output_tready", "input")
+               .build())
         
         tree = ast_parser.parse_source(rtl)
         pragmas = pragma_handler.extract_pragmas(tree.root_node)
         
         # Test collecting internal datatypes (not matching any interface)
-        interface_names = ["in0", "out0"]  # in0 matches, others don't
+        interface_names = ["s_axis_input", "m_axis_output"]  # Real interfaces to exclude
         internal_datatypes = pragma_handler.collect_internal_datatype_pragmas(interface_names)
         
         # Should get 2 internal datatypes (accumulator and threshold)
         assert len(internal_datatypes) == 2
         assert any(dt.name == "accumulator" for dt in internal_datatypes)
         assert any(dt.name == "threshold" for dt in internal_datatypes)
+        
+        # Verify the datatypes have the correct properties
+        accumulator = next(dt for dt in internal_datatypes if dt.name == "accumulator")
+        assert accumulator.width == "ACC_WIDTH"
+        assert accumulator.signed == "ACC_SIGNED"
+        
+        threshold = next(dt for dt in internal_datatypes if dt.name == "threshold")
+        assert threshold.width == "THRESH_WIDTH"
+        assert threshold.signed == "THRESH_SIGNED"
     
     def test_pragma_with_brackets(self, pragma_handler, ast_parser):
         """Test pragmas containing bracket expressions."""

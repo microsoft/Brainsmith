@@ -25,7 +25,6 @@ from typing import Dict, List, Any
 # Import shared types
 from ..data import (
     InterfaceType,
-    Direction,
 )
 # Import RTL-specific types
 from .rtl_data import (
@@ -47,7 +46,6 @@ __all__ = [
     "Port",
     "PortGroup",
     "InterfaceType",
-    "Direction",
     "Pragma",
     "PragmaType",
     "ProtocolValidationResult",

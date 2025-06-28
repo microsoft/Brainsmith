@@ -135,3 +135,7 @@ class KernelDefinitionV2(BaseDefinition):
         return (f"KernelDefinitionV2(name='{self.name}', "
                 f"inputs={len(self.input_definitions)}, "
                 f"outputs={len(self.output_definitions)})")
+
+
+# Compatibility alias
+KernelDefinition = KernelDefinitionV2

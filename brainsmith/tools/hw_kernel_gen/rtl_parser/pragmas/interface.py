@@ -297,8 +297,14 @@ class DatatypeParamPragma(InterfacePragma):
         parameter_name = self.parsed_data['parameter_name']
         
         # Create datatype with only the specified property
-        return DatatypeMetadata(
-            name=interface_name,
-            **{property_type: parameter_name},
-            description=f"Internal datatype binding from pragma at line {self.line_number}"
-        )
+        kwargs = {
+            'name': interface_name,
+            'description': f"Internal datatype binding from pragma at line {self.line_number}"
+        }
+        
+        # Add the specific property
+        if property_type in ['width', 'signed', 'format', 'bias', 'fractional_width', 
+                             'exponent_width', 'mantissa_width']:
+            kwargs[property_type] = parameter_name
+        
+        return DatatypeMetadata(**kwargs)

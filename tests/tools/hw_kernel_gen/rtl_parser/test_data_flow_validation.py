@@ -221,7 +221,7 @@ class TestDataFlowValidation:
         
         complete_interface = complete_interfaces[0]
         assert complete_interface.interface_type == InterfaceType.INPUT
-        assert complete_interface.compiler_name.startswith("input")
+        assert complete_interface.name.startswith("s_axis")
         
         # Check that partial interface may be rejected or accepted
         partial_interfaces = [i for i in interfaces if "partial" in i.name]
@@ -230,7 +230,6 @@ class TestDataFlowValidation:
         # Check metadata structure
         assert complete_interface.name is not None
         assert complete_interface.description is not None
-        assert complete_interface.chunking_strategy is None  # Deprecated
     
     def test_pragma_modified_interfaces(self, rtl_parser):
         """Test how pragmas modify interface metadata."""

@@ -9,10 +9,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Any, Optional
 from pathlib import Path
 
-from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata
-from brainsmith.dataflow.core.interface_types import InterfaceType
-from brainsmith.dataflow.core.datatype_metadata import DatatypeMetadata
-from ..rtl_parser.data import Parameter
+from ..data import InterfaceType
+from ..metadata import InterfaceMetadata, DatatypeMetadata
+from ..rtl_parser.rtl_data import Parameter
 
 
 @dataclass
@@ -67,8 +66,7 @@ class TemplateContext:
         "import numpy as np",
         "from qonnx.core.datatype import DataType",
         "from brainsmith.dataflow.core import AutoHWCustomOp",
-        "from brainsmith.dataflow.core.interface_metadata import InterfaceMetadata",
-        "from brainsmith.dataflow.core.interface_types import InterfaceType",
+        "from brainsmith.tools.hw_kernel_gen.data import InterfaceMetadata, InterfaceType",
         "from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy"
     ])
     

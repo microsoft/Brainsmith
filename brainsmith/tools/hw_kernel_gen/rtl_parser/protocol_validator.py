@@ -16,51 +16,51 @@ presence of required signals and correct port directions. Protocol definitions
 import logging
 from typing import Dict, Set, List, Tuple
 
-from ..data import InterfaceType, Direction
-from .rtl_data import Port, PortGroup, ProtocolValidationResult
+from ..data import InterfaceType
+from .rtl_data import Port, PortGroup, ProtocolValidationResult, PortDirection, InterfaceDirection
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
 GLOBAL_SIGNAL_SUFFIXES = {
-    "clk": {"direction": Direction.INPUT, "required": True},
-    "rst_n": {"direction": Direction.INPUT, "required": True},
-    "clk2x": {"direction": Direction.INPUT, "required": False},
+    "clk": {"direction": PortDirection.INPUT, "required": True},
+    "rst_n": {"direction": PortDirection.INPUT, "required": True},
+    "clk2x": {"direction": PortDirection.INPUT, "required": False},
 }
 
 # Suffixes for AXI-Stream signals (direction defaults to slave, but both supported) 
 AXI_STREAM_SUFFIXES = {
-    "TDATA": {"direction": Direction.INPUT, "required": True},
-    "TVALID": {"direction": Direction.INPUT, "required": True},
-    "TREADY": {"direction": Direction.OUTPUT, "required": True},
-    "TLAST": {"direction": Direction.INPUT, "required": False}, # Optional
+    "TDATA": {"direction": PortDirection.INPUT, "required": True},
+    "TVALID": {"direction": PortDirection.INPUT, "required": True},
+    "TREADY": {"direction": PortDirection.OUTPUT, "required": True},
+    "TLAST": {"direction": PortDirection.INPUT, "required": False}, # Optional
 }
 
 # Suffixes for AXI-Lite signals
 AXI_LITE_SUFFIXES = {
     # Write Address Channel
-    "AWADDR": {"direction": Direction.INPUT, "required": True},
-    "AWPROT": {"direction": Direction.INPUT, "required": False}, # Optional
-    "AWVALID": {"direction": Direction.INPUT, "required": True},
-    "AWREADY": {"direction": Direction.OUTPUT, "required": True},
+    "AWADDR": {"direction": PortDirection.INPUT, "required": True},
+    "AWPROT": {"direction": PortDirection.INPUT, "required": False}, # Optional
+    "AWVALID": {"direction": PortDirection.INPUT, "required": True},
+    "AWREADY": {"direction": PortDirection.OUTPUT, "required": True},
     # Write Data Channel
-    "WDATA": {"direction": Direction.INPUT, "required": True},
-    "WSTRB": {"direction": Direction.INPUT, "required": True},
-    "WVALID": {"direction": Direction.INPUT, "required": True},
-    "WREADY": {"direction": Direction.OUTPUT, "required": True},
+    "WDATA": {"direction": PortDirection.INPUT, "required": True},
+    "WSTRB": {"direction": PortDirection.INPUT, "required": True},
+    "WVALID": {"direction": PortDirection.INPUT, "required": True},
+    "WREADY": {"direction": PortDirection.OUTPUT, "required": True},
     # Write Response Channel
-    "BRESP": {"direction": Direction.OUTPUT, "required": True},
-    "BVALID": {"direction": Direction.OUTPUT, "required": True},
-    "BREADY": {"direction": Direction.INPUT, "required": True},
+    "BRESP": {"direction": PortDirection.OUTPUT, "required": True},
+    "BVALID": {"direction": PortDirection.OUTPUT, "required": True},
+    "BREADY": {"direction": PortDirection.INPUT, "required": True},
     # Read Address Channel
-    "ARADDR": {"direction": Direction.INPUT, "required": True},
-    "ARPROT": {"direction": Direction.INPUT, "required": False}, # Optional
-    "ARVALID": {"direction": Direction.INPUT, "required": True},
-    "ARREADY": {"direction": Direction.OUTPUT, "required": True},
+    "ARADDR": {"direction": PortDirection.INPUT, "required": True},
+    "ARPROT": {"direction": PortDirection.INPUT, "required": False}, # Optional
+    "ARVALID": {"direction": PortDirection.INPUT, "required": True},
+    "ARREADY": {"direction": PortDirection.OUTPUT, "required": True},
     # Read Data Channel
-    "RDATA": {"direction": Direction.OUTPUT, "required": True},
-    "RRESP": {"direction": Direction.OUTPUT, "required": True},
-    "RVALID": {"direction": Direction.OUTPUT, "required": True},
-    "RREADY": {"direction": Direction.INPUT, "required": True},
+    "RDATA": {"direction": PortDirection.OUTPUT, "required": True},
+    "RRESP": {"direction": PortDirection.OUTPUT, "required": True},
+    "RVALID": {"direction": PortDirection.OUTPUT, "required": True},
+    "RREADY": {"direction": PortDirection.INPUT, "required": True},
 }
 
 # Helper sets for channel identification (using UPPERCASE keys now)
@@ -167,7 +167,7 @@ class ProtocolValidator:
             return ProtocolValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
         
         # Set interface direction metadata
-        direction = Direction.INPUT if all_forward else Direction.OUTPUT
+        direction = InterfaceDirection.INPUT if all_forward else InterfaceDirection.OUTPUT
         group.metadata['direction'] = direction
 
         # Extract data width metadata
@@ -238,7 +238,7 @@ class ProtocolValidator:
         logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
         return ProtocolValidationResult(True)
 
-    def _determine_dataflow_type(self, interface_name: str, direction: Direction) -> InterfaceType:
+    def _determine_dataflow_type(self, interface_name: str, direction: InterfaceDirection) -> InterfaceType:
         """Determine dataflow interface type from name patterns and direction."""
         name_lower = interface_name.lower()
         
@@ -247,9 +247,9 @@ class ProtocolValidator:
             return InterfaceType.WEIGHT
         
         # Input/output based on direction
-        if direction == Direction.INPUT:
+        if direction == InterfaceDirection.INPUT:
             return InterfaceType.INPUT
-        elif direction == Direction.OUTPUT:
+        elif direction == InterfaceDirection.OUTPUT:
             return InterfaceType.OUTPUT
         else:
             return InterfaceType.INPUT  # Default to input for unknown directions

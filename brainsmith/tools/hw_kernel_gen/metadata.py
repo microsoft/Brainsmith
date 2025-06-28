@@ -14,7 +14,6 @@ output with the template generation system.
 Classes:
 - DatatypeMetadata: RTL parameter to datatype property mappings
 - InterfaceMetadata: Complete interface description with constraints
-- RelationshipMetadata: Interface relationships and dependencies
 - KernelMetadata: Complete kernel description for code generation
 """
 
@@ -24,6 +23,28 @@ from typing import Dict, List, Optional, Any, Union, TYPE_CHECKING
 
 # Import shared types from main data module
 from .data import InterfaceType, DatatypeConstraintGroup, validate_datatype_against_constraints, BaseDataType
+# Import DimensionRelationship from core
+# Temporary: Define DimensionRelationship locally to avoid import issues
+from dataclasses import dataclass
+from enum import Enum as _Enum
+from typing import Optional, Any
+
+class RelationType(_Enum):
+    EQUAL = "equal"
+    DEPENDENT = "dependent"
+    MULTIPLE = "multiple"
+    DIVISIBLE = "divisible"
+
+@dataclass
+class DimensionRelationship:
+    source_interface: str
+    target_interface: str
+    relation: RelationType
+    source_dim: Optional[int] = None
+    target_dim: Optional[int] = None
+    factor: Optional[Any] = None
+    dependency_type: Optional[str] = None
+    description: Optional[str] = None
 
 if TYPE_CHECKING:
     from .rtl_parser.rtl_data import Parameter
@@ -135,21 +156,7 @@ class InterfaceMetadata:
     """
     name: str
     interface_type: InterfaceType
-    compiler_name: Optional[str] = None
-    """
-    Standardized compiler name for consistent code generation.
-    
-    Format based on interface type and discovery order:
-    - CONTROL: 'global'
-    - INPUT: 'input0', 'input1', 'input2', ...
-    - WEIGHT: 'weight0', 'weight1', 'weight2', ...
-    - OUTPUT: 'output0', 'output1', 'output2', ...
-    
-    Used for consistent variable naming in generated AutoHWCustomOp and AutoRTLBackend.
-    """
     datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
-    chunking_strategy: Any = field(default=None)  # DEPRECATED: Legacy dataflow field, to be removed with AutoHWCustomOp refactoring
-    default_layout: Optional[str] = None
     description: Optional[str] = None
     
     # Parameter linkage mappings
@@ -191,13 +198,6 @@ class InterfaceMetadata:
     Starting index for block dimensions (from BDIM pragma RINDEX).
     """
     
-    shape_params: Optional[Dict[str, Any]] = None
-    """
-    Optional shape specification parameters from BDIM pragma.
-    Contains 'shape' (List[str]) and 'rindex' (int) if specified.
-    
-    Example: {"shape": ["C", "PE"], "rindex": 0}
-    """
     
     def __post_init__(self):
         """Validate metadata parameters."""
@@ -206,15 +206,6 @@ class InterfaceMetadata:
         
         # Allow empty datatype_constraints - these can be populated by pragmas
     
-    @property
-    def bdim_param(self) -> Optional[str]:
-        """Backward compatibility - returns first BDIM parameter."""
-        return self.bdim_params[0] if self.bdim_params else None
-    
-    @property
-    def sdim_param(self) -> Optional[str]:
-        """Backward compatibility - returns first SDIM parameter."""
-        return self.sdim_params[0] if self.sdim_params else None
     
     def validates_datatype(self, datatype: BaseDataType) -> bool:
         """
@@ -299,13 +290,12 @@ class InterfaceMetadata:
                     f"Streaming interfaces require a width parameter for data formatting."
                 )
         
-        # Check shape parameters reference valid module parameters
-        if self.shape_params:
-            shape = self.shape_params.get('shape', [])
-            for shape_element in shape:
-                if shape_element != '1' and shape_element not in module_param_names:
+        # Check block_shape elements reference valid module parameters
+        if self.block_shape:
+            for shape_element in self.block_shape:
+                if isinstance(shape_element, str) and shape_element not in ['1', ':'] and shape_element not in module_param_names:
                     errors.append(
-                        f"Interface '{self.name}' BDIM shape references parameter '{shape_element}' "
+                        f"Interface '{self.name}' block shape references parameter '{shape_element}' "
                         f"that was not found in module parameters."
                     )
         
@@ -409,30 +399,7 @@ class InterfaceMetadata:
         Returns:
             bool: True if both BDIM and SDIM parameters are available
         """
-        return bool(self.bdim_params or self._has_default_bdim_param()) and \
-               bool(self.sdim_params or self._has_default_sdim_param())
-    
-    def _has_default_bdim_param(self) -> bool:
-        """Check if interface follows default BDIM parameter naming."""
-        # This will be validated during interface building
-        return True  # Assume available for now
-    
-    def _has_default_sdim_param(self) -> bool:
-        """Check if interface follows default SDIM parameter naming."""
-        # This will be validated during interface building
-        return True  # Assume available for now
-
-
-@dataclass
-class RelationshipMetadata:
-    """Processed relationship between interfaces."""
-    source_interface: str
-    target_interface: str
-    relationship_type: str      # "EQUAL", "DEPENDENT", etc.
-    source_dim: Optional[int] = None
-    target_dim: Optional[int] = None
-    dependency_type: Optional[str] = None  # "copy", "scaled", "min"
-    scale_factor: Optional[Union[int, str]] = None
+        return bool(self.bdim_params) and bool(self.sdim_params)
 
 
 @dataclass
@@ -581,7 +548,7 @@ class KernelMetadata:
     - Template generation for internal datatype handling
     """
     
-    relationships: List[RelationshipMetadata] = field(default_factory=list)
+    relationships: List[DimensionRelationship] = field(default_factory=list)
     """
     Interface relationships defined via RELATIONSHIP pragmas.
     
@@ -666,6 +633,5 @@ class KernelMetadata:
 __all__ = [
     "DatatypeMetadata",
     "InterfaceMetadata", 
-    "RelationshipMetadata",
     "KernelMetadata",
 ]

@@ -13,7 +13,7 @@ import math
 from .base import BaseModel, ParameterBinding
 from .input_interface import InputInterface
 from .output_interface import OutputInterface
-from .types import prod, SDIMParameterInfo
+from .types import prod, SDIMParameterInfo, Shape
 from .relationships import RelationType
 
 @dataclass
@@ -396,3 +396,7 @@ class KernelModelV2(BaseModel):
             f"outputs={len(self.output_models)}, "
             f"throughput={self.throughput_fps():.1f}fps)"
         )
+
+
+# Compatibility alias
+KernelModel = KernelModelV2
