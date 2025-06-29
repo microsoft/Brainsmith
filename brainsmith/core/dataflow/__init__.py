@@ -5,57 +5,76 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Unified Kernel Modeling Framework for FPGA AI Accelerators"""
+"""Core dataflow modeling components
 
-from .core.types import Shape, RaggedShape, InterfaceDirection, DataType
-from .core.interface import Interface
-from .core.relationships import (
-    RelationType, DimensionRelationship, ArchitecturalConstraint, 
-    ParameterDependency, ConstraintViolation, ValidationResult
+This module provides the core classes for modeling dataflow kernels with
+the SDIM (Streaming Dimensions) architecture.
+
+Key Components:
+- InputDefinition/OutputDefinition: Schema for interfaces
+- InputInterface/OutputInterface: Runtime models with SDIM support
+- KernelDefinition/KernelModel: Kernel-level abstractions
+- RelationType: Including DEPENDENT relationship for dimension constraints
+- Tiling functions: For block dimension configuration
+"""
+
+# Core types
+from .types import Shape
+
+# Relationships
+from .relationships import DimensionRelationship, RelationType
+
+# QONNX types (unified type system)
+from .qonnx_types import (
+    BaseDataType,
+    create_simple_datatype,
+    datatype_from_string,
 )
-from .core.kernel import Kernel
-from .core.graph import DataflowGraph, DataflowEdge
 
-# New Definition/Model architecture
-from .core.base import (
-    BaseDefinition, BaseModel, ParameterBinding, ValidationContext,
-    ModelFactory, DefinitionRegistry, DEFINITION_REGISTRY
+# Core architecture
+from .input_definition import InputDefinition
+from .output_definition import OutputDefinition
+from .input_interface import InputInterface
+from .output_interface import OutputInterface
+from .kernel_definition import KernelDefinition
+from .kernel_model import KernelModel
+
+# Tiling functions and configuration
+from .tiling_functions import (
+    fixed_tiles,
+    parameterized_tiles,
+    adaptive_tiles,
+    full_tensor,
+    channel_major_tiling,
+    power_of_two_tiles,
+    ratio_based_tiles,
+    memory_constrained_tiles,
+    composite_tiling,
+    phase_dependent_tiles,
+    validate_tiling_function
 )
-from .core.interface_definition import InterfaceDefinition
-from .core.interface_model import InterfaceModel
-from .core.kernel_definition import KernelDefinition
-from .core.kernel_model import KernelModel
+from .tiling_config import TilingStrategy, TilingConfig, create_tiling_config
 
-__version__ = "0.1.0"
 
 __all__ = [
-    # Types
-    "Shape",
-    "RaggedShape", 
-    "InterfaceDirection",
-    "DataType",
-    # Legacy core classes
-    "Interface",
-    "Kernel",
-    "DataflowGraph",
-    "DataflowEdge",
-    # Relationships and constraints
-    "RelationType",
-    "DimensionRelationship",
-    "ArchitecturalConstraint",
-    "ParameterDependency",
-    "ConstraintViolation",
-    "ValidationResult",
-    # New Definition/Model architecture
-    "BaseDefinition",
-    "BaseModel",
-    "ParameterBinding",
-    "ValidationContext",
-    "ModelFactory",
-    "DefinitionRegistry",
-    "DEFINITION_REGISTRY",
-    "InterfaceDefinition",
-    "InterfaceModel", 
-    "KernelDefinition",
-    "KernelModel",
+    # Core types
+    'Shape',
+    
+    # Relationships
+    'DimensionRelationship', 'RelationType',
+    
+    # QONNX types (unified type system)
+    'BaseDataType', 'create_simple_datatype', 'datatype_from_string',
+    
+    # Core architecture
+    'InputDefinition', 'OutputDefinition',
+    'InputInterface', 'OutputInterface',
+    'KernelDefinition', 'KernelModel',
+    
+    # Tiling functions
+    'fixed_tiles', 'parameterized_tiles', 'adaptive_tiles',
+    'full_tensor', 'channel_major_tiling', 'power_of_two_tiles', 
+    'ratio_based_tiles', 'memory_constrained_tiles', 'composite_tiling',
+    'phase_dependent_tiles', 'validate_tiling_function',
+    'TilingStrategy', 'TilingConfig', 'create_tiling_config',
 ]
