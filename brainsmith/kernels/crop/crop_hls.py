@@ -9,15 +9,17 @@
 import numpy as np
 import os
 
-from brainsmith.libraries.kernels.utils import brainsmith_templates
+from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.crop.crop import Crop
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.plugin.decorators import backend
+from brainsmith.plugin.core import backend
 
 @backend(
     name="CropHLS",
+    kernel="Crop",
+    backend_type="hls",
     description="HLS implementation of Crop",
     author="josh-monson",
     version="1.0.0"
@@ -158,7 +160,10 @@ class Crop_hls(Crop, HLSBackend):
         builder.append_includes("-I$BSMITH_DIR/deps/finn/src/finn/qnn-data/cpp")
         builder.append_includes("-I$BSMITH_DIR/deps/cnpy/")
         builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
-        builder.append_includes("-I$BSMITH_DIR/brainsmith/hw_kernels/hls")
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        # Crop doesn't have kernel-specific HPP files, only needs utils
+        builder.append_includes(f"-I{utils_dir}")
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
         builder.append_includes("-O3")
@@ -213,7 +218,7 @@ class Crop_hls(Crop, HLSBackend):
         ]
         self.save_as_npy()
 
-        template = brainsmith_templates.docompute_template
+        template = templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:
@@ -229,4 +234,5 @@ class Crop_hls(Crop, HLSBackend):
         import os
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
         utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
-        return f"-I{kernel_dir} -I{utils_dir}"
+        # Crop doesn't have kernel-specific HPP files, only needs utils
+        return f"-I{utils_dir}"

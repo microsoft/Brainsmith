@@ -1,36 +1,21 @@
 """
 BrainSmith Plugin System
 
-This module provides the core plugin infrastructure for registering and managing
+This module provides the unified plugin infrastructure for registering and managing
 transforms, kernels, backends, and hardware transforms.
 """
 
-from .decorators import transform, kernel, backend, hw_transform
-from .registry import PluginRegistry
-from .discovery import PluginDiscovery
-from .exceptions import (
-    PluginError,
-    PluginNotFoundError,
-    PluginRegistrationError,
-    PluginValidationError
-)
+# Import core decorators and registry
+from .core import transform, kernel, backend, get_registry
 
 __all__ = [
-    # Decorators
+    # Core decorators
     'transform',
     'kernel', 
     'backend',
-    'hw_transform',
     
-    # Core classes
-    'PluginRegistry',
-    'PluginDiscovery',
-    
-    # Exceptions
-    'PluginError',
-    'PluginNotFoundError',
-    'PluginRegistrationError',
-    'PluginValidationError'
+    # Registry access
+    'get_registry',
 ]
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"

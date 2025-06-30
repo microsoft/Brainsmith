@@ -4,12 +4,14 @@ Matrix Multiplication RTL Backend
 Optimized RTL backend implementation for matrix multiplication.
 """
 
-from brainsmith.plugin import backend
+from brainsmith.plugin.core import backend
 from .matmul import MatMul
 
 
 @backend(
     name="MatMulRTL",
+    kernel="MatMul",
+    backend_type="rtl",
     description="Optimized RTL backend for MatMul kernel",
     author="brainsmith-team",
     version="1.0.0"

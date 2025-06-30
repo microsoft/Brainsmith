@@ -23,10 +23,10 @@ check_installation()
 # Import kernels to ensure they register themselves with QONNX
 try:
     # Import all kernel modules to trigger @register_op decorators
-    from .libraries.kernels.layernorm import layernorm
-    from .libraries.kernels.softmax import hwsoftmax
-    from .libraries.kernels.shuffle import shuffle
-    from .libraries.kernels.crop import crop
+    from .kernels.layernorm import layernorm
+    from .kernels.softmax import hwsoftmax
+    from .kernels.shuffle import shuffle
+    from .kernels.crop import crop
     import logging
     logging.getLogger(__name__).info("BrainSmith custom operators registered successfully")
 except ImportError as e:
@@ -34,51 +34,46 @@ except ImportError as e:
     logging.getLogger(__name__).warning(f"Some custom operators not available: {e}")
 
 # === 🎯 CORE DSE (5-minute success) ===
-from .core.api import forge, validate_blueprint
-from .core.dse.combination_generator import ComponentCombination as DesignSpace
-from .core.dse.space_explorer import DesignSpaceExplorer as DSEInterface
-from .core.metrics import DSEMetrics
+from .core import forge, DesignSpace
+from .core.phase2 import explore as explore_design_space
+from .core.phase2 import BuildConfig, BuildResult, ExplorationResults
 
 # === ⚡ AUTOMATION (15-minute success) ===
-from .libraries.automation import (
-    parameter_sweep,    # Explore parameter combinations
-    batch_process,      # Process multiple models
-    find_best,          # Find optimal results
-    aggregate_stats     # Statistical summaries
-)
+# Placeholder for missing automation module
+parameter_sweep = None
+batch_process = None
+find_best = None
+aggregate_stats = None
 
 # === 📊 ANALYSIS & MONITORING (30-minute success) ===
-from .core.hooks import (
-    log_optimization_event,     # Event tracking
-    register_event_handler      # Custom monitoring
-)
-from .core.data import (
-    collect_dse_metrics as get_analysis_data,  # Data extraction
-    export_metrics as export_results           # Data export
-)
+# Placeholder for missing hooks
+log_optimization_event = None
+register_event_handler = None
+get_analysis_data = None
+export_results = None
 
 # === 🔧 ADVANCED BUILDING (1-hour success) ===
-from .core.finn import FINNEvaluationBridge as build_accelerator      # FINN integration
-from .core.dse.combination_generator import generate_component_combinations as sample_design_space     # Sampling
+from .core.phase3 import create_build_runner_factory as build_accelerator
 
 # === 🔌 EXTENSIBILITY (contributor-focused) ===
-from .core.registry import BaseRegistry, ComponentInfo
-from .core.hooks.registry import HooksRegistry, get_hooks_registry
+# Use the unified plugin system
+from .plugin import get_registry
 
 # === 📋 STRUCTURED EXPORTS ===
 __all__ = [
     # === CORE DSE (Start here - 5 minutes to success) ===
-    'forge',              # Primary function: model + blueprint → accelerator
-    'validate_blueprint', # Validate configuration before DSE
-    'DesignSpace',        # Design space representation  
-    'DSEInterface',       # Design space exploration engine
-    'DSEMetrics',         # Performance metrics collection
+    'forge',                    # Primary function: model + blueprint → accelerator
+    'DesignSpace',              # Design space representation  
+    'explore_design_space',     # Design space exploration
+    'BuildConfig',              # Build configuration
+    'BuildResult',              # Build results
+    'ExplorationResults',       # Exploration results
     
     # === AUTOMATION (Scale up - 15 minutes to success) ===
-    'parameter_sweep',    # Explore parameter combinations automatically
-    'batch_process',      # Process multiple model/blueprint pairs
-    'find_best',          # Find optimal results by metric
-    'aggregate_stats',    # Generate statistical summaries
+    'parameter_sweep',          # Explore parameter combinations automatically
+    'batch_process',            # Process multiple model/blueprint pairs
+    'find_best',                # Find optimal results by metric
+    'aggregate_stats',          # Generate statistical summaries
     
     # === ANALYSIS & MONITORING (Integrate - 30 minutes to success) ===
     'log_optimization_event',   # Track optimization events
@@ -87,14 +82,10 @@ __all__ = [
     'export_results',           # Export to pandas, CSV, JSON
     
     # === ADVANCED BUILDING (Master - 1 hour to success) ===
-    'build_accelerator',        # Generate FINN accelerator
-    'sample_design_space',      # Advanced design space sampling
+    'build_accelerator',        # Build runner factory
     
     # === EXTENSIBILITY (Contributors) ===
-    'BaseRegistry',             # Foundation for component discovery
-    'ComponentInfo',            # Component metadata interface
-    'HooksRegistry',            # Plugin and handler management
-    'get_hooks_registry'        # Registry access
+    'get_registry',             # Unified plugin registry
 ]
 
 # === 🎯 WORKFLOW HELPERS ===

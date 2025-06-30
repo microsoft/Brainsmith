@@ -13,4 +13,7 @@ from .hwsoftmax import HWSoftmax
 # Import HLS backend if needed
 from .hwsoftmax_hls import HWSoftmax_hls
 
-__all__ = ["HWSoftmax", "HWSoftmax_hls"]
+# Import inference transform
+from .infer_hwsoftmax import InferHWSoftmax
+
+__all__ = ["HWSoftmax", "HWSoftmax_hls", "InferHWSoftmax"]

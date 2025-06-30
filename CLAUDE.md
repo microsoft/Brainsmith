@@ -43,6 +43,7 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 
 ### Execution Guidelines
 - **Always** run python commands with `./smithy exec <command>` to execute in the docker environment
+- **ALWAYS** run python commands with `./smithy exec "python <command>"` to ensure proper environment execution
 
 ### Testing
 - `cd tests && pytest ./` - Run comprehensive test suite

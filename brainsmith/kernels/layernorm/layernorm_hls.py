@@ -4,12 +4,14 @@ Layer Normalization HLS Backend
 HLS backend implementation for layer normalization.
 """
 
-from brainsmith.plugin import backend
+from brainsmith.plugin.core import backend
 from .layernorm import LayerNorm
 
 
 @backend(
     name="LayerNormHLS", 
+    kernel="LayerNorm",
+    backend_type="hls",
     description="High-Level Synthesis backend for LayerNorm kernel",
     author="brainsmith-team",
     version="1.0.0"
@@ -59,3 +61,10 @@ class LayerNormHLS(LayerNorm):
             "TI": idtype.get_hls_datatype_str(),
             "TO": odtype.get_hls_datatype_str(),
         }
+    
+    def ipgen_extra_includes(self):
+        """Add kernel-specific include paths."""
+        import os
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        return f"-I{kernel_dir}/hls -I{utils_dir}"

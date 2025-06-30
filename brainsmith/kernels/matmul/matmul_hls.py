@@ -4,12 +4,14 @@ Matrix Multiplication HLS Backend
 HLS backend implementation for matrix multiplication.
 """
 
-from brainsmith.plugin import backend
+from brainsmith.plugin.core import backend
 from .matmul import MatMul
 
 
 @backend(
     name="MatMulHLS",
+    kernel="MatMul",
+    backend_type="hls",
     description="High-Level Synthesis backend for MatMul kernel",
     author="brainsmith-team",
     version="1.0.0"

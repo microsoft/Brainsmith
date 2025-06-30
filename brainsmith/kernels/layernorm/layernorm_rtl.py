@@ -4,12 +4,14 @@ Layer Normalization RTL Backend
 Optimized RTL backend implementation for layer normalization.
 """
 
-from brainsmith.plugin import backend
+from brainsmith.plugin.core import backend
 from .layernorm import LayerNorm
 
 
 @backend(
     name="LayerNormRTL",
+    kernel="LayerNorm",
+    backend_type="rtl",
     description="Optimized RTL backend for LayerNorm kernel",
     author="brainsmith-team",
     version="1.0.0"

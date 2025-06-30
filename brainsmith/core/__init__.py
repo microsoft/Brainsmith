@@ -1,85 +1,32 @@
 """
-BrainSmith Core - Simple and Focused
+Brainsmith Core V3 - Clean DSE Architecture
 
-Core functionality for FPGA accelerator design space exploration.
-Provides essential tools aligned with North Star goals: Functions Over Frameworks.
-
-North Star Promise: result = brainsmith.core.forge('model.onnx', 'blueprint.yaml')
-Essential Functions: forge + 12 helpers + 3 classes for complete FPGA workflow
+This package implements the new three-phase DSE architecture:
+1. Design Space Constructor - Parse blueprints into design spaces
+2. Design Space Explorer - Systematically explore configurations  
+3. Build Runner - Execute builds and collect metrics
 """
 
-# Primary North Star function
-from .api import forge, validate_blueprint
-from . import finn
-from .metrics import DSEMetrics
+__version__ = "3.0.0"
 
-# Essential classes (3 core concepts) - V2 migration
-from .dse.combination_generator import ComponentCombination as DesignSpace  # Design space representation
-from .dse.space_explorer import DesignSpaceExplorer as DSEInterface  # DSE interface
+# Phase 1: Design Space Constructor
+from .phase1 import forge, ForgeAPI, DesignSpace
 
-# North Star Helper Functions (12 essential functions)
-# 1-4: Automation helpers
-from brainsmith.libraries.automation import (
-    parameter_sweep,
-    batch_process,
-    find_best,
-    aggregate_stats
-)
+# Phase 2: Design Space Explorer
+from .phase2 import explore
 
-# 5-7: Hooks and event management
-from .hooks import (
-    log_optimization_event,
-    register_event_handler
-)
+# Phase 3: Build Runner
+from .phase3 import create_build_runner_factory
 
-# 8: FINN accelerator building - V2 migration
-from .finn import FINNEvaluationBridge as build_accelerator  # FINN accelerator building
-
-# 9-11: Data management and analysis
-from .data import (
-    collect_dse_metrics as get_analysis_data,
-    export_metrics as export_results
-)
-
-# 12: Design space management - V2 migration
-from .dse.combination_generator import generate_component_combinations as sample_design_space  # Design space management
-
-# Registry infrastructure (for advanced users)
-from .registry import BaseRegistry, ComponentInfo
-from .hooks.registry import HooksRegistry, get_hooks_registry
-
-__version__ = "0.5.0"
-
-# North Star API - Primary function + 12 helpers + 3 classes
 __all__ = [
-    # PRIMARY FUNCTION (North Star Promise)
-    'forge',
+    # Phase 1
+    "forge", 
+    "ForgeAPI", 
+    "DesignSpace",
     
-    # 12 ESSENTIAL HELPER FUNCTIONS
-    'parameter_sweep',        # 1. Parameter exploration
-    'find_best',              # 2. Result optimization (alias: find_best_result)
-    'batch_process',          # 3. Batch processing
-    'aggregate_stats',        # 4. Statistical analysis
-    'log_optimization_event', # 5. Event logging
-    'register_event_handler', # 6. Event handling
-    'build_accelerator',      # 7. FINN accelerator building
-    'get_analysis_data',      # 8. Data analysis (alias: collect_dse_metrics)
-    'export_results',         # 9. Data export (alias: export_metrics)
-    'sample_design_space',    # 10. Design space sampling
-    'validate_blueprint',     # 11. Blueprint validation
-    # 12th function will be added based on needs
+    # Phase 2
+    "explore",
     
-    # 3 ESSENTIAL CLASSES (Core concepts)
-    'DesignSpace',            # Design space representation
-    'DSEInterface',           # Design space exploration interface
-    'DSEMetrics',             # Metrics collection and analysis
-    
-    # REGISTRY INFRASTRUCTURE (Advanced)
-    'BaseRegistry',
-    'ComponentInfo',
-    'HooksRegistry',
-    'get_hooks_registry'
+    # Phase 3
+    "create_build_runner_factory",
 ]
-
-# Convenience aliases for North Star compliance
-find_best_result = find_best  # Alias for more descriptive name

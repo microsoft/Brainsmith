@@ -13,4 +13,7 @@ from .crop import Crop
 # Import HLS backend if needed
 from .crop_hls import Crop_hls
 
-__all__ = ["Crop", "Crop_hls"]
+# Import inference transform
+from .infer_crop_from_gather import InferCropFromGather
+
+__all__ = ["Crop", "Crop_hls", "InferCropFromGather"]

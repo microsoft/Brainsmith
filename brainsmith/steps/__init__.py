@@ -19,6 +19,7 @@ Usage:
 
 from .decorators import finn_step
 from .registry import FinnStepRegistry
+from .transform_resolver import resolve_transforms, validate_transform_dependencies, TransformResolutionError
 
 # Create global registry instance
 _registry = FinnStepRegistry()
@@ -40,11 +41,24 @@ def list_finn_steps():
     return _registry.list_steps()
 
 def register_step(name: str, func, category: str = "unknown", 
-                  dependencies=None, description: str = ""):
+                  dependencies=None, description: str = "", transforms=None):
     """Programmatically register a FINN step."""
-    _registry.register(name, func, category, dependencies or [], description)
+    _registry.register(name, func, category, dependencies or [], description, transforms or [])
+
+def get_step_transforms(name: str):
+    """Get list of transforms required by a step."""
+    return _registry.get_step_transforms(name)
 
 # Import all step modules to trigger registration
-from . import steps
+from . import bert_steps
 
-__all__ = ["finn_step", "get_step", "list_finn_steps", "register_step"]
+__all__ = [
+    "finn_step", 
+    "get_step", 
+    "list_finn_steps", 
+    "register_step",
+    "get_step_transforms",
+    "resolve_transforms",
+    "validate_transform_dependencies",
+    "TransformResolutionError"
+]

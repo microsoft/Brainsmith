@@ -2,12 +2,12 @@
 
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensorNames
-from brainsmith.plugin.decorators import transform
+from brainsmith.plugin.core import transform
 
 
 @transform(
     name="RemoveBertHead",
-    stage="model_specific",
+    stage="topology_opt",
     description="Remove all nodes up to the first LayerNormalization node and rewire input",
     author="shane.fleming",
     version="1.0.0",

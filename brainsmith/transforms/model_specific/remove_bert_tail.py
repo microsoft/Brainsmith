@@ -1,7 +1,7 @@
 """BERT tail removal transform."""
 
 from qonnx.transformation.base import Transformation
-from brainsmith.plugin.decorators import transform
+from brainsmith.plugin.core import transform
 
 
 def _recurse_model_tail_removal(model, to_remove, node):
@@ -17,7 +17,7 @@ def _recurse_model_tail_removal(model, to_remove, node):
 
 @transform(
     name="RemoveBertTail",
-    stage="model_specific",
+    stage="topology_opt",
     description="Remove from global_out_1 all the way back to the first LayerNorm",
     author="shane.fleming",
     version="1.0.0",

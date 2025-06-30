@@ -10,15 +10,17 @@
 import numpy as np
 import os
 
-from brainsmith.libraries.kernels.utils import brainsmith_templates
+from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.softmax.hwsoftmax import HWSoftmax
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.plugin.decorators import backend
+from brainsmith.plugin.core import backend
 
 @backend(
     name="HWSoftmaxHLS",
+    kernel="HWSoftmax",
+    backend_type="hls",
     description="HLS implementation of HWSoftmax",
     author="shane-fleming",
     version="1.0.0"
@@ -155,7 +157,10 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
         builder.append_includes("-I$BSMITH_DIR/deps/finn/src/finn/qnn-data/cpp")
         builder.append_includes("-I$BSMITH_DIR/deps/cnpy/")
         builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
-        builder.append_includes("-I$BSMITH_DIR/brainsmith/hw_kernels/hls")
+        kernel_dir = os.path.dirname(os.path.abspath(__file__))
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        builder.append_includes(f"-I{kernel_dir}/hls")
+        builder.append_includes(f"-I{utils_dir}")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
         builder.append_includes("--std=c++14")
@@ -205,7 +210,7 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
         ]
         self.save_as_npy()
 
-        template = brainsmith_templates.docompute_template
+        template = templates.docompute_template
 
         code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim") + f"/execute_{node.op_type}.cpp"
         with open(code_gen_dir, "w") as f:
@@ -220,4 +225,4 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
         import os
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
         utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
-        return f"-I{kernel_dir} -I{utils_dir}"
+        return f"-I{kernel_dir}/hls -I{utils_dir}"

@@ -59,7 +59,8 @@ class FinnStepRegistry:
         """
         # Check our registry first
         if name in self._steps:
-            return self._steps[name]["function"]
+            step_info = self._steps[name]
+            return step_info["function"]
         
         # Fallback to legacy BrainSmith steps
         try:
@@ -85,6 +86,16 @@ class FinnStepRegistry:
     def get_step_info(self, name: str) -> Optional[Dict[str, Any]]:
         """Get metadata for a registered step."""
         return self._steps.get(name)
+    
+    def get_step_transforms(self, name: str) -> List[str]:
+        """DEPRECATED: Steps no longer declare transforms in registration."""
+        import warnings
+        warnings.warn(
+            "get_step_transforms() is deprecated. Steps now access transforms directly via apply_transform().",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return []
     
     def list_by_category(self, category: str) -> List[str]:
         """List steps by category."""

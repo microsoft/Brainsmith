@@ -4,13 +4,13 @@ Remove Identity Operations Transform
 Example transform that removes identity operations from the graph.
 """
 
-from brainsmith.plugin import transform
+from brainsmith.plugin.core import transform
 from qonnx.transformation.base import Transformation
 
 
 @transform(
     name="RemoveIdentityOps",
-    stage="graph_cleanup",
+    stage="cleanup",
     description="Remove identity operations from computation graph",
     author="brainsmith-team",
     version="1.0.0"
