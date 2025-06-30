@@ -8,13 +8,14 @@
 """Kernel definition with separate input/output definitions"""
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List, Optional, Dict, Any, Tuple, Union, TYPE_CHECKING
 from .base import BaseDefinition, ParameterBinding
 from .types import Shape
 from .qonnx_types import BaseDataType
 from .input_definition import InputDefinition
 from .output_definition import OutputDefinition
 from .relationships import DimensionRelationship, RelationType
+
 
 @dataclass
 class KernelDefinition(BaseDefinition):
@@ -24,6 +25,7 @@ class KernelDefinition(BaseDefinition):
     - Separate input_definitions and output_definitions
     - Clean API with add_input() and add_output()
     - Relationships primarily between inputs
+    - Pure algorithmic abstraction independent of code generation
     """
     
     name: str
@@ -101,6 +103,69 @@ class KernelDefinition(BaseDefinition):
             if out.name == name:
                 return out
         return None
+    
+    def get_required_parameters(self) -> List[str]:
+        """Get list of all parameters used in block_dims_expr.
+        
+        Extracts parameter names from parameterized_tiles() expressions.
+        
+        Returns:
+            Sorted list of unique parameter names
+        """
+        params = set()
+        
+        # Helper to extract params from expression
+        def extract_params(expr):
+            if hasattr(expr, '__code__'):
+                # This is a function, check if it has parameter names in its closure
+                if hasattr(expr, '__closure__') and expr.__closure__:
+                    # For parameterized_tiles, the closure contains the parameter names
+                    for cell in expr.__closure__:
+                        if isinstance(cell.cell_contents, (list, tuple)):
+                            # This is likely the list of parameter names
+                            for item in cell.cell_contents:
+                                if isinstance(item, str) and item[0].isupper():
+                                    # Parameter names typically start with uppercase
+                                    params.add(item)
+                        elif isinstance(cell.cell_contents, str) and cell.cell_contents[0].isupper():
+                            # Single parameter
+                            params.add(cell.cell_contents)
+        
+        # Extract from input definitions
+        for inp in self.input_definitions:
+            if inp.block_dims_expr:
+                extract_params(inp.block_dims_expr)
+                
+        # Extract from output definitions
+        for out in self.output_definitions:
+            if out.block_dims_expr:
+                extract_params(out.block_dims_expr)
+                
+        return sorted(params)
+    
+    def has_weights(self) -> bool:
+        """Check if kernel has weight inputs.
+        
+        Returns:
+            True if any input has is_weight=True
+        """
+        return any(inp.is_weight for inp in self.input_definitions)
+    
+    def get_regular_inputs(self) -> List[InputDefinition]:
+        """Get non-weight inputs.
+        
+        Returns:
+            List of InputDefinitions where is_weight=False
+        """
+        return [inp for inp in self.input_definitions if not inp.is_weight]
+    
+    def get_weight_inputs(self) -> List[InputDefinition]:
+        """Get weight inputs.
+        
+        Returns:
+            List of InputDefinitions where is_weight=True
+        """
+        return [inp for inp in self.input_definitions if inp.is_weight]
     
     def create_model(self,
                     input_specs: Dict[str, Tuple[Shape, BaseDataType]],

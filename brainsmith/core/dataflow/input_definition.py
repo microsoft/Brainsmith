@@ -29,6 +29,7 @@ class InputDefinition(BaseDefinition):
     granularity: Optional[Shape] = None
     optional: bool = False
     rate_pattern: Optional[List[int]] = None
+    is_weight: bool = False  # Explicitly mark weight inputs for FINN integration
     
     def create_model(self,
                     tensor_dims: Shape,
@@ -106,7 +107,8 @@ class InputDefinition(BaseDefinition):
         
         if callable(self.block_dims_expr):
             # Call tiling function
-            return self.block_dims_expr(tensor_dims, parameter_binding or {}, config or {})
+            params_dict = parameter_binding.parameters if parameter_binding else {}
+            return self.block_dims_expr(tensor_dims, params_dict, config or {})
         
         # Handle list of expressions
         if isinstance(self.block_dims_expr, list):

@@ -102,16 +102,16 @@ class KernelModelValidator:
                 continue
                 
             # Check tensor dims match block dims length
-            if len(intf.tensor_dims) != len(intf.block_dims[0]):
+            if len(intf.tensor_dims) != len(intf.block_dims):
                 self.issues.append(ValidationIssue(
                     severity="error",
                     interface=intf.definition.name,
-                    message=f"Tensor dims {intf.tensor_dims} and block dims {intf.block_dims[0]} have different lengths",
+                    message=f"Tensor dims {intf.tensor_dims} and block dims {intf.block_dims} have different lengths",
                     suggestion="Ensure tensor and block dimensions have the same number of dimensions"
                 ))
             
             # Check block divides tensor
-            for i, (t, b) in enumerate(zip(intf.tensor_dims, intf.block_dims[0])):
+            for i, (t, b) in enumerate(zip(intf.tensor_dims, intf.block_dims)):
                 if t % b != 0:
                     self.issues.append(ValidationIssue(
                         severity="error",
@@ -122,7 +122,7 @@ class KernelModelValidator:
             
             # Check SDIM compatibility with block dims
             if hasattr(intf, 'sdim') and intf.sdim:
-                for i, (b, s) in enumerate(zip(intf.block_dims[0], intf.sdim)):
+                for i, (b, s) in enumerate(zip(intf.block_dims, intf.sdim)):
                     if s > b:
                         self.issues.append(ValidationIssue(
                             severity="error",
@@ -156,7 +156,7 @@ class KernelModelValidator:
             
             # Check iPar vs block size
             block_size = 1
-            for dim in intf.block_dims[0]:
+            for dim in intf.block_dims:
                 block_size *= dim
             
             # Check bandwidth doesn't exceed block size
@@ -240,8 +240,8 @@ class KernelModelValidator:
             if (rel.relation == RelationType.EQUAL and 
                 rel.source_dim is not None and rel.target_dim is not None):
                 
-                source_blocks = source.block_dims[0]
-                target_blocks = target.block_dims[0]
+                source_blocks = source.block_dims
+                target_blocks = target.block_dims
                 
                 if (rel.source_dim < len(source_blocks) and 
                     rel.target_dim < len(target_blocks)):

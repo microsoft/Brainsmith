@@ -18,6 +18,7 @@ from ..parameter_config.parameter_defaults import (
     PARAMETER_DEFAULTS
 )
 from .template_context import TemplateContext, ParameterDefinition
+from .codegen_binding_generator import generate_codegen_binding
 # TODO: Need to implement TemplateDatatype, SimpleKernel or replace with proper classes
 # from ..rtl_parser.data import TemplateDatatype, SimpleKernel
 
@@ -89,6 +90,14 @@ class TemplateContextGenerator:
         # Extract datatype parameter mappings
         datatype_mappings = generator._extract_datatype_parameter_mappings(kernel_metadata)
         
+        # Generate unified CodegenBinding
+        codegen_binding = generate_codegen_binding(kernel_metadata)
+        
+        # Extract relationships if available
+        relationships = []
+        if hasattr(kernel_metadata, 'relationships'):
+            relationships = kernel_metadata.relationships
+        
         # Create the enhanced TemplateContext
         template_context = TemplateContext(
             module_name=kernel_metadata.name,
@@ -127,194 +136,16 @@ class TemplateContextGenerator:
             # Generate template-time parameter assignments
             datatype_parameter_assignments=generator._generate_datatype_parameter_assignments(kernel_metadata),
             # Add categorized parameters for organized RTL wrapper generation
-            categorized_parameters=generator._categorize_parameters(kernel_metadata, parameter_definitions, datatype_mappings)
+            categorized_parameters=generator._categorize_parameters(kernel_metadata, parameter_definitions, datatype_mappings),
+            # Add unified CodegenBinding
+            codegen_binding=codegen_binding,
+            # Add relationships
+            relationships=relationships
         )
         
         return template_context
     
-    @staticmethod
-    def _template_context_to_dict(template_ctx: TemplateContext, kernel_metadata: KernelMetadata = None) -> Dict[str, Any]:
-        """Convert TemplateContext to dictionary format for backward compatibility."""
-        # Enhanced RTL parameters with whitelist info
-        rtl_parameters = []
-        for param in template_ctx.parameter_definitions:
-            rtl_parameters.append({
-                "name": param.name,
-                "param_type": param.param_type or "int",
-                "default_value": param.default_value if param.default_value is not None else 0,
-                "template_param_name": param.template_param_name,
-                "is_whitelisted": param.is_whitelisted,
-                "is_required": param.is_required
-            })
-        
-        # Get dataflow interfaces with enhanced datatype parameter info
-        dataflow_interfaces = []
-        for iface in template_ctx.interface_metadata:
-            if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-                # Add datatype parameter generation to interface
-                interface_dict = {
-                    'name': iface.name,
-                    'compiler_name': iface.compiler_name,
-                    'interface_type': iface.interface_type,
-                    'datatype_constraints': iface.datatype_constraints,
-                    'chunking_strategy': iface.chunking_strategy,
-                    'description': iface.description,
-                    'datatype_metadata': iface.datatype_metadata,
-                    # Generate parameter names for common properties
-                    'width_param': iface.get_datatype_parameter_name('width'),
-                    'signed_param': iface.get_datatype_parameter_name('signed'),
-                    'format_param': iface.get_datatype_parameter_name('format'),
-                    'bias_param': iface.get_datatype_parameter_name('bias'),
-                    'fractional_width_param': iface.get_datatype_parameter_name('fractional_width')
-                }
-                dataflow_interfaces.append(interface_dict)
-        
-        # Use datatype information from TemplateContext if available, otherwise extract from kernel_metadata
-        datatype_mappings = {}
-        if hasattr(template_ctx, 'datatype_linked_params'):
-            # Use datatype information from TemplateContext
-            datatype_mappings = {
-                'datatype_linked_params': template_ctx.datatype_linked_params,
-                'datatype_param_mappings': template_ctx.datatype_param_mappings,
-                'interface_datatype_attributes': template_ctx.interface_datatype_attributes,
-                'datatype_derivation_methods': template_ctx.datatype_derivation_methods
-            }
-        elif kernel_metadata:
-            # Fallback: extract from kernel_metadata 
-            datatype_mappings = TemplateContextGenerator._extract_datatype_parameter_mappings(kernel_metadata)
-        
-        # Collect all datatype-linked parameters to exclude from node attributes
-        datatype_linked_params = set(datatype_mappings.get('datatype_linked_params', []))
-        if not datatype_linked_params:
-            # Fallback: extract from interface metadata
-            for iface in template_ctx.interface_metadata:
-                if hasattr(iface, 'datatype_params') and iface.datatype_params:
-                    datatype_linked_params.update(iface.datatype_params.values())
-        
-        # Start with the basic context
-        context = {
-            "kernel_name": template_ctx.module_name,
-            "class_name": template_ctx.class_name,
-            "source_file": str(template_ctx.source_file),
-            "generation_timestamp": datetime.now().isoformat(),
-            "datatype_linked_params": list(datatype_linked_params),
-            
-            # Interface metadata
-            "interface_metadata": template_ctx.interface_metadata,
-            "interfaces_list": template_ctx.interface_metadata,  # Compatibility
-            
-            # Categorized interfaces with datatype parameter info
-            "input_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.input_interfaces),
-            "output_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.output_interfaces),
-            "weight_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.weight_interfaces),
-            "config_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.config_interfaces),
-            "control_interfaces": TemplateContextGenerator()._enhance_interfaces_with_datatype_params(template_ctx.control_interfaces),
-            "dataflow_interfaces": dataflow_interfaces,
-            
-            # Enhanced RTL parameters with Phase 2 info
-            "rtl_parameters": rtl_parameters,
-            "parameter_definitions": template_ctx.parameter_definitions,
-            "exposed_parameters": template_ctx.exposed_parameters,
-            "whitelisted_defaults": template_ctx.whitelisted_defaults,
-            "required_attributes": template_ctx.required_attributes,
-            
-            # AutoHWCustomOp-specific enhancements
-            "node_attributes": template_ctx.node_attributes,
-            "parallelism_info": template_ctx.parallelism_info,
-            "algorithm_info": template_ctx.algorithm_info,
-            # Note: datatype_mappings, shape_calculation_methods, stream_width_methods removed
-            "resource_estimation_methods": template_ctx.resource_estimation_methods,
-            
-            # Template boolean flags
-            "has_inputs": template_ctx.has_inputs,
-            "has_outputs": template_ctx.has_outputs,
-            "has_weights": template_ctx.has_weights,
-            "has_config": template_ctx.has_config,
-            
-            # Interface counts
-            "input_interfaces_count": len(template_ctx.input_interfaces),
-            "output_interfaces_count": len(template_ctx.output_interfaces),
-            "weight_interfaces_count": len(template_ctx.weight_interfaces),
-            
-            # Kernel analysis
-            "kernel_complexity": template_ctx.kernel_complexity,
-            "kernel_type": template_ctx.kernel_type,
-            "resource_estimation_required": len(template_ctx.interface_metadata) > 2 or template_ctx.kernel_complexity != 'low',
-            "verification_required": template_ctx.has_weights or template_ctx.kernel_complexity == 'high',
-            
-            # Template enums and utilities
-            "InterfaceType": InterfaceType,  # Direct enum access
-            
-            # Kernel object for RTL wrapper template compatibility  
-            "kernel": {
-                "name": template_ctx.module_name,
-                "parameters": [
-                    Parameter(
-                        name=p.name,
-                        param_type=p.param_type,
-                        default_value=str(p.default_value) if p.default_value is not None else None,
-                        description=p.description
-                        # Note: template_param_name is computed automatically, line_number not supported
-                    ) for p in template_ctx.parameter_definitions
-                ]
-            },
-            
-            # Summary statistics
-            "dataflow_model_summary": {
-                "num_interfaces": len(template_ctx.interface_metadata),
-                "input_count": len(template_ctx.input_interfaces),
-                "output_count": len(template_ctx.output_interfaces),
-                "weight_count": len(template_ctx.weight_interfaces),
-            }
-        }
-        
-        # Add datatype parameter mappings to context
-        context.update(datatype_mappings)
-        
-        # Add linked parameter data to context
-        context["linked_parameters"] = template_ctx.linked_parameters
-        context["parameter_aliases"] = template_ctx.linked_parameters.get("aliases", {})
-        context["derived_parameters"] = template_ctx.linked_parameters.get("derived", {})
-        context["axilite_parameters"] = template_ctx.linked_parameters.get("axilite", {})
-        
-        # Add internal datatypes to context
-        context["internal_datatypes"] = template_ctx.internal_datatypes
-        
-        # Add template-time parameter assignments to context
-        context["datatype_parameter_assignments"] = template_ctx.datatype_parameter_assignments
-        
-        # Add categorized parameters for organized RTL wrapper generation
-        context["categorized_parameters"] = template_ctx.categorized_parameters
-        
-        # Add CONFIG interface detection and control parameter mapping
-        if kernel_metadata:
-            config_interfaces_list = TemplateContextGenerator()._get_interfaces_by_type(kernel_metadata, InterfaceType.CONFIG)
-            context["has_config_interface"] = len(config_interfaces_list) > 0
-            
-            # Create interface -> control parameter mapping
-            interface_control_params = {}
-            for param_name, interface_name in context["axilite_parameters"].items():
-                interface_control_params[interface_name] = param_name
-            context["interface_control_params"] = interface_control_params
-            
-            # For backward compatibility - use first config interface's control param
-            if config_interfaces_list:
-                first_interface = config_interfaces_list[0].name
-                context["config_interface_name"] = first_interface
-                context["axilite_control_param"] = interface_control_params.get(first_interface, "axilite_config")
-            else:
-                context["config_interface_name"] = None
-                context["axilite_control_param"] = "axilite_config"
-        else:
-            # Fallback: extract from template_ctx interfaces
-            config_interfaces_list = [iface for iface in template_ctx.interface_metadata 
-                                    if iface.interface_type == InterfaceType.CONFIG]
-            context["has_config_interface"] = len(config_interfaces_list) > 0
-            context["config_interface_name"] = config_interfaces_list[0].name if config_interfaces_list else None
-            context["axilite_control_param"] = "axilite_config"  # Default fallback
-            context["interface_control_params"] = {}
-        
-        return context
+    # Legacy method removed - generators now work directly with TemplateContext
     
     def _get_class_name(self, module_name: str) -> str:
         """Generate Python class name from module name."""
@@ -518,27 +349,7 @@ class TemplateContextGenerator:
         # Note: get_exp_cycles and calc_tmem handled by AutoHWCustomOp parent class
         return methods
     
-    def _enhance_interfaces_with_datatype_params(self, interfaces: List[InterfaceMetadata]) -> List[Dict[str, Any]]:
-        """Enhance interface list with datatype parameter information for templates."""
-        enhanced_interfaces = []
-        for iface in interfaces:
-            interface_dict = {
-                'name': iface.name,
-                'compiler_name': iface.compiler_name,
-                'interface_type': iface.interface_type,
-                'datatype_constraints': iface.datatype_constraints,
-                'chunking_strategy': iface.chunking_strategy,
-                'description': iface.description,
-                'datatype_metadata': iface.datatype_metadata,
-                # Generate parameter names for common properties
-                'width_param': iface.get_datatype_parameter_name('width'),
-                'signed_param': iface.get_datatype_parameter_name('signed'),
-                'format_param': iface.get_datatype_parameter_name('format'),
-                'bias_param': iface.get_datatype_parameter_name('bias'),
-                'fractional_width_param': iface.get_datatype_parameter_name('fractional_width')
-            }
-            enhanced_interfaces.append(interface_dict)
-        return enhanced_interfaces
+    # Legacy interface enhancement method removed - templates now work directly with TemplateContext
     
     @staticmethod
     def _extract_datatype_parameter_mappings(kernel_metadata: KernelMetadata) -> Dict[str, Any]:

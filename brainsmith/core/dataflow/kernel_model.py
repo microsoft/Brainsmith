@@ -143,7 +143,7 @@ class KernelModel(BaseModel):
             if name in hidden_interfaces:
                 continue
             
-            n_dims = len(inp.block_dims[0])
+            n_dims = len(inp.block_dims[0])  # Number of dimensions in the first phase
             dim_constraints = dimension_constraints.get(name, {})
             free_dims = [i for i in range(n_dims) if i not in dim_constraints]
             
@@ -180,6 +180,7 @@ class KernelModel(BaseModel):
         
         for intf_name, sdim_spec in config.items():
             inp = self._input_map[intf_name]
+            # Initialize SDIM to 1 for each dimension in the first phase
             current_sdim = list(inp.sdim) if inp._sdim else [1] * len(inp.block_dims[0])
             
             if isinstance(sdim_spec, int):
@@ -187,7 +188,16 @@ class KernelModel(BaseModel):
                 params = self.get_sdim_parameters()
                 if intf_name in params:
                     for dim in params[intf_name].free_dimensions:
-                        current_sdim[dim] = sdim_spec
+                        # Only apply if it doesn't exceed block dimension
+                        # Access the dimension within the first phase
+                        if sdim_spec <= inp.block_dims[0][dim]:
+                            current_sdim[dim] = sdim_spec
+                else:
+                    # If no parameter info, apply to dims where it fits
+                    # Iterate over dimensions in the first phase
+                    for i, bd in enumerate(inp.block_dims[0]):
+                        if sdim_spec <= bd:
+                            current_sdim[i] = sdim_spec
             
             elif isinstance(sdim_spec, dict):
                 # Sparse specification
@@ -246,10 +256,21 @@ class KernelModel(BaseModel):
                     continue
                 
                 if rel.relation == RelationType.EQUAL:
-                    # Full SDIM equality
-                    if target._sdim is None or target._sdim != source._sdim:
-                        target.sdim = source.sdim
-                        changed = True
+                    # Check if dimension-specific or full equality
+                    if rel.source_dim is not None and rel.target_dim is not None:
+                        # Dimension-specific equality
+                        target_sdim = list(target.sdim)
+                        source_dim_value = source.sdim[rel.source_dim]
+                        if target_sdim[rel.target_dim] != source_dim_value:
+                            target_sdim[rel.target_dim] = source_dim_value
+                            target.sdim = target_sdim
+                            changed = True
+                    else:
+                        # Full SDIM equality (only if dimensions match)
+                        if len(source.sdim) == len(target.sdim):
+                            if target._sdim is None or target._sdim != source._sdim:
+                                target.sdim = source.sdim
+                                changed = True
                 
                 elif rel.relation == RelationType.DEPENDENT:
                     # Dimension-specific dependency
@@ -284,11 +305,23 @@ class KernelModel(BaseModel):
             
             try:
                 if rel.relation == RelationType.EQUAL:
-                    if source.sdim != target.sdim:
-                        errors.append(
-                            f"EQUAL constraint violated: {rel.source_interface}.sdim="
-                            f"{source.sdim} != {rel.target_interface}.sdim={target.sdim}"
-                        )
+                    # Check if dimension-specific or full equality
+                    if rel.source_dim is not None and rel.target_dim is not None:
+                        # Dimension-specific equality
+                        source_val = source.sdim[rel.source_dim]
+                        target_val = target.sdim[rel.target_dim]
+                        if source_val != target_val:
+                            errors.append(
+                                f"EQUAL constraint violated: {rel.source_interface}[{rel.source_dim}]="
+                                f"{source_val} != {rel.target_interface}[{rel.target_dim}]={target_val}"
+                            )
+                    else:
+                        # Full SDIM equality
+                        if source.sdim != target.sdim:
+                            errors.append(
+                                f"EQUAL constraint violated: {rel.source_interface}.sdim="
+                                f"{source.sdim} != {rel.target_interface}.sdim={target.sdim}"
+                            )
                 
                 elif rel.relation == RelationType.DEPENDENT:
                     if rel.source_dim is not None and rel.target_dim is not None:

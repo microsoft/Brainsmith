@@ -6,12 +6,16 @@ needed to generate AutoHWCustomOp subclass code from RTL modules.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from ..data import InterfaceType
 from ..metadata import InterfaceMetadata, DatatypeMetadata
 from ..rtl_parser.rtl_data import Parameter
+
+if TYPE_CHECKING:
+    from ..codegen_binding import CodegenBinding
+    from brainsmith.core.dataflow.relationships import DimensionRelationship
 
 
 @dataclass
@@ -105,6 +109,12 @@ class TemplateContext:
     # Kernel analysis
     kernel_complexity: str = "medium"
     kernel_type: str = "generic"
+    
+    # Unified CodegenBinding
+    codegen_binding: Optional['CodegenBinding'] = None
+    
+    # Relationships between interfaces
+    relationships: List['DimensionRelationship'] = field(default_factory=list)
     
     def get_node_attribute_definitions(self) -> Dict[str, Tuple[str, bool, Any]]:
         """

@@ -1,30 +1,21 @@
 """
-HWCustomOp generator for HWKG.
+HWCustomOp generator with CodegenBinding.
 
-Generates AutoHWCustomOp subclasses using the Phase 2 template system.
+Generates AutoHWCustomOp subclasses using the modern template system with CodegenBinding.
+This is the primary and only HWCustomOp generator.
 """
 
 from typing import Dict
 
-try:
-    from .base import GeneratorBase
-    from ..templates.template_context import TemplateContext
-except ImportError:
-    # Handle case when imported directly
-    import sys
-    from pathlib import Path
-    current_dir = Path(__file__).parent
-    sys.path.insert(0, str(current_dir))
-    sys.path.insert(0, str(current_dir.parent))
-    from base import GeneratorBase
-    from templates.template_context import TemplateContext
+from .base import GeneratorBase
+from ..templates.template_context import TemplateContext
 
 
 class HWCustomOpGenerator(GeneratorBase):
-    """Generates AutoHWCustomOp subclass with runtime parameter extraction."""
+    """Generates AutoHWCustomOp subclass with CodegenBinding."""
     
     name = "hw_custom_op"
-    template_file = "hw_custom_op_phase2.py.j2"
+    template_file = "hw_custom_op.py.j2"
     output_pattern = "{kernel_name}_hw_custom_op.py"
     
-    # Using base class process_context which now properly converts TemplateContext
+    # Using base class process_context which properly converts TemplateContext

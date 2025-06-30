@@ -78,7 +78,7 @@ class InputInterface(BaseModel):
     def sdim(self) -> Shape:
         """Streaming dimensions (elements per cycle per dimension)"""
         if self._sdim is None:
-            # Default: minimal streaming [1, 1, ...]
+            # Default: minimal streaming [1, 1, ...] for each dimension
             return tuple(1 for _ in self.block_dims[0])
         return self._sdim
     
@@ -93,19 +93,20 @@ class InputInterface(BaseModel):
         """
         # Convert to tuple
         if isinstance(value, int):
+            # Uniform for all dimensions in the first phase
             value = tuple(value for _ in self.block_dims[0])
         else:
             value = tuple(value)
         
-        # Validate
-        bd = self.block_dims[0] if self.block_dims else []
-        if len(value) != len(bd):
+        # Validate against dimensions in the first phase
+        if len(value) != len(self.block_dims[0]):
             raise ValueError(
                 f"SDIM dimensionality {len(value)} must match "
-                f"block dimensionality {len(bd)}"
+                f"block dimensionality {len(self.block_dims[0])}"
             )
         
-        for i, (s, b) in enumerate(zip(value, bd)):
+        # Validate each dimension
+        for i, (s, b) in enumerate(zip(value, self.block_dims[0])):
             if s <= 0:
                 raise ValueError(f"SDIM[{i}]={s} must be positive")
             if s > b:

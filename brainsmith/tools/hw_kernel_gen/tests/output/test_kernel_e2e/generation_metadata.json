@@ -20,7 +20,7 @@
     "error_count": 0,
     "warning_count": 0,
     "generation_time_ms": null,
-    "output_directory": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/golden/test_kernel_e2e",
+    "output_directory": "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/output/test_kernel_e2e",
     "files_written": 3,
     "metadata_files": 0
   },

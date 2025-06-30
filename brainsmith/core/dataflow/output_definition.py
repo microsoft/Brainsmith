@@ -100,7 +100,8 @@ class OutputDefinition(BaseDefinition):
             return self._default_block_chunking(tensor_dims)
         
         if callable(self.block_dims_expr):
-            return self.block_dims_expr(tensor_dims, parameter_binding or {}, config or {})
+            params_dict = parameter_binding.parameters if parameter_binding else {}
+            return self.block_dims_expr(tensor_dims, params_dict, config or {})
         
         # Handle list of expressions
         if isinstance(self.block_dims_expr, list):

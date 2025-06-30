@@ -1,0 +1,245 @@
+{#-
+AutoHWCustomOp Subclass Template
+
+This template generates AutoHWCustomOp subclasses that:
+1. Create simplified KernelDefinition with interface definitions
+2. Generate explicit get_nodeattr_types() method for FINN integration
+3. Inherit all FINN method implementations from AutoHWCustomOp
+4. Only implement kernel-specific runtime extraction methods
+
+Key features:
+- Explicit, human-readable node attribute definitions
+- No runtime CodegenBinding dependencies
+- Clean separation of concerns
+- Compile-time parameter binding resolution
+-#}
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Auto-generated HWCustomOp for {{ kernel_name }}
+# Generated from: {{ source_file }}
+# Generation timestamp: {{ generation_timestamp }}
+#
+# This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
+# parameter definitions and no runtime CodegenBinding dependencies.
+############################################################################
+
+from typing import List, Dict, Tuple, Any
+import numpy as np
+from qonnx.core.datatype import DataType
+
+from brainsmith.tools.hw_kernel_gen.auto_hw_custom_op_v2 import AutoHWCustomOp
+from brainsmith.core.dataflow import (
+    KernelDefinition,
+    InputDefinition,
+    OutputDefinition,
+    RelationType,
+    DatatypeConstraintGroup,
+    parameterized_tiles,
+    fixed_tiles
+)
+
+
+class {{ class_name }}(AutoHWCustomOp):
+    """
+    Auto-generated HWCustomOp for {{ kernel_name }} kernel.
+    
+    Generated from RTL: {{ source_file }}
+    Uses AutoHWCustomOp for automatic FINN method implementation.
+    """
+    
+    def __init__(self, onnx_node, **kwargs):
+        """Initialize {{ class_name }} with KernelDefinition."""
+        kernel_def = self._create_kernel_definition()
+        super().__init__(onnx_node, kernel_def, **kwargs)
+        
+        # Set kernel-specific attributes
+        self.kernel_name = "{{ kernel_name }}"
+        self.rtl_source = "{{ source_file }}"
+    
+    def get_nodeattr_types(self):
+        """Explicit node attribute definitions."""
+        return {
+            {% for param_name, attr_spec in explicit_nodeattr_types.items() %}
+            "{{ param_name }}": {{ attr_spec | replace('null', 'None') | replace('true', 'True') | replace('false', 'False') }},
+            {% endfor %}
+        }
+    
+    def _create_kernel_definition(self) -> KernelDefinition:
+        """Create simplified KernelDefinition with interface definitions only."""
+        kernel_def = KernelDefinition(name="{{ kernel_name }}")
+        
+        # Add input definitions
+        {% for interface in input_interfaces %}
+        input_def = InputDefinition(
+            name="{{ interface.compiler_name }}",
+            datatype_constraints=[
+                {% for constraint in interface.datatype_constraints %}
+                DatatypeConstraintGroup(
+                    base_type="{{ constraint.base_type }}",
+                    min_width={{ constraint.min_width }},
+                    max_width={{ constraint.max_width }}
+                ),
+                {% endfor %}
+            ],
+            {% if interface.block_shape %}
+            block_dims_expr=parameterized_tiles({{ interface.block_shape | map('tojson') | join(', ') }}),
+            {% endif %}
+            description="{{ interface.description or '' }}"
+        )
+        kernel_def.add_input(input_def)
+        {% endfor %}
+        
+        # Add weight input definitions
+        {% for interface in weight_interfaces %}
+        weight_def = InputDefinition(
+            name="{{ interface.compiler_name }}",
+            datatype_constraints=[
+                {% for constraint in interface.datatype_constraints %}
+                DatatypeConstraintGroup(
+                    base_type="{{ constraint.base_type }}",
+                    min_width={{ constraint.min_width }},
+                    max_width={{ constraint.max_width }}
+                ),
+                {% endfor %}
+            ],
+            {% if interface.block_shape %}
+            block_dims_expr=parameterized_tiles({{ interface.block_shape | map('tojson') | join(', ') }}),
+            {% endif %}
+            is_weight=True,
+            description="{{ interface.description or '' }}"
+        )
+        kernel_def.add_input(weight_def)
+        {% endfor %}
+        
+        # Add output definitions
+        {% for interface in output_interfaces %}
+        output_def = OutputDefinition(
+            name="{{ interface.compiler_name }}",
+            datatype_constraints=[
+                {% for constraint in interface.datatype_constraints %}
+                DatatypeConstraintGroup(
+                    base_type="{{ constraint.base_type }}",
+                    min_width={{ constraint.min_width }},
+                    max_width={{ constraint.max_width }}
+                ),
+                {% endfor %}
+            ],
+            {% if interface.block_shape %}
+            block_dims_expr=parameterized_tiles({{ interface.block_shape | map('tojson') | join(', ') }}),
+            {% endif %}
+            description="{{ interface.description or '' }}"
+        )
+        kernel_def.add_output(output_def)
+        {% endfor %}
+        
+        # Add relationships
+        {% for rel in relationships %}
+        kernel_def.add_relationship(
+            source_name="{{ rel.source_interface }}",
+            target_name="{{ rel.target_interface }}",
+            relationship_type=RelationType.{{ rel.relation.name }},
+            {% if rel.source_dim is not none %}source_dim={{ rel.source_dim }},{% endif %}
+            {% if rel.target_dim is not none %}target_dim={{ rel.target_dim }},{% endif %}
+            {% if rel.factor is not none %}factor={{ rel.factor }},{% endif %}
+            {% if rel.dependency_type %}dependency_type="{{ rel.dependency_type }}"{% endif %}
+        )
+        {% endfor %}
+        return kernel_def
+    
+    def _extract_input_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
+        """
+        Extract input specifications from ONNX context.
+        
+        Returns:
+            Dictionary mapping input names to (shape, datatype) tuples
+        """
+        specs = {}
+        
+        {% for i, interface in enumerate(input_interfaces + weight_interfaces) %}
+        # {{ interface.compiler_name }} interface
+        input_shape_{{ i }} = self.get_normal_input_shape({{ i }})
+        input_dtype_{{ i }} = self._get_interface_datatype("{{ interface.compiler_name }}")
+        specs["{{ interface.compiler_name }}"] = (tuple(input_shape_{{ i }}), input_dtype_{{ i }})
+        
+        {% endfor %}
+        return specs
+    
+    def _extract_output_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
+        """
+        Extract output specifications from ONNX context.
+        
+        Returns:
+            Dictionary mapping output names to (shape, datatype) tuples
+        """
+        specs = {}
+        
+        {% for i, interface in enumerate(output_interfaces) %}
+        # {{ interface.compiler_name }} interface
+        {% if kernel_type == 'threshold' %}
+        # For thresholding, output shape equals input shape
+        output_shape_{{ i }} = self.get_normal_input_shape(0)
+        {% else %}
+        # Derive output shape from kernel behavior
+        output_shape_{{ i }} = self.get_normal_output_shape({{ i }})
+        {% endif %}
+        output_dtype_{{ i }} = self._get_interface_datatype("{{ interface.compiler_name }}")
+        specs["{{ interface.compiler_name }}"] = (tuple(output_shape_{{ i }}), output_dtype_{{ i }})
+        
+        {% endfor %}
+        return specs
+    
+    {% if verification_required %}
+    def verify_node(self) -> List[str]:
+        """Verify kernel-specific constraints."""
+        messages = super().verify_node()
+        
+        # Verify all required parameters are present
+        {% for param in required_attributes %}
+        if self.get_nodeattr("{{ param }}") is None:
+            messages.append(f"✗ Required parameter '{{ param }}' not specified")
+        {% endfor %}
+        
+        # Additional {{ kernel_name }}-specific verification
+        # TODO: Add kernel-specific constraint checks
+        
+        return messages
+    {% endif %}
+
+
+# Convenience function for FINN integration
+def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
+    """
+    Create {{ class_name }} ONNX node.
+    
+    Required parameters:
+    {% for param in required_attributes %}
+    - {{ param }}: int
+    {% endfor %}
+    
+    Interface datatype attributes:
+    {% for interface_attr in interface_datatype_attributes %}
+    - {{ interface_attr.name }}: str = "{{ interface_attr.default_datatype }}"
+    {% endfor %}
+    
+    Optional parameters (with defaults):
+    {% for param_name, default_value in whitelisted_defaults.items() %}
+    - {{ param_name }}: int = {{ default_value }}
+    {% endfor %}
+    """
+    import onnx.helper
+    
+    # Validate required parameters
+    required = {{ required_attributes }}
+    missing = [p for p in required if p not in node_attrs]
+    if missing:
+        raise ValueError(f"Missing required parameters: {missing}")
+    
+    return onnx.helper.make_node(
+        "{{ class_name }}",
+        inputs=inputs,
+        outputs=outputs,
+        domain="finn.custom_op.fpgadataflow",
+        **node_attrs
+    )

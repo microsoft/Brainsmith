@@ -10,7 +10,7 @@ import importlib.util
 import inspect
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
@@ -56,6 +56,9 @@ class GeneratorManager:
             # Add custom filters and tests
             self.jinja_env.filters['repr'] = repr
             self.jinja_env.tests['none'] = lambda x: x is None
+            
+            # Add global functions
+            self.jinja_env.globals['enumerate'] = enumerate
             
             logger.info(f"Initialized Jinja2 environment with templates from {self.template_dir}")
         except Exception as e:
@@ -201,6 +204,9 @@ class GeneratorManager:
             # Let generator process context
             processed_context = generator.process_context(context)
             
+            # Convert TemplateContext to template variables
+            template_vars = self._convert_context_to_template_vars(processed_context)
+            
             # Get template file (with potential fallbacks)
             try:
                 template_file = generator.get_template_file(self.jinja_env)
@@ -210,7 +216,7 @@ class GeneratorManager:
                     f"Template not found: {generator.template_file} for generator {generator_name}"
                 )
             
-            rendered_content = template.render(**processed_context)
+            rendered_content = template.render(**template_vars)
             logger.debug(f"Successfully rendered {generator_name}")
             return rendered_content
             
@@ -254,3 +260,181 @@ class GeneratorManager:
                 logger.warning(f"Template not found for {name}: {generator.template_file}")
         
         return status
+    
+    def _convert_context_to_template_vars(self, template_ctx: TemplateContext) -> Dict[str, Any]:
+        """Convert TemplateContext to template variables for Jinja2."""
+        from datetime import datetime
+        from ..codegen_binding import SourceType
+        
+        # Extract variables that templates expect
+        vars_dict = {
+            # Basic info
+            "kernel_name": template_ctx.module_name,
+            "class_name": template_ctx.class_name,
+            "source_file": str(template_ctx.source_file),
+            "generation_timestamp": datetime.now().isoformat(),
+            
+            # Interfaces
+            "interface_metadata": template_ctx.interface_metadata,
+            "input_interfaces": template_ctx.input_interfaces,
+            "output_interfaces": template_ctx.output_interfaces,
+            "weight_interfaces": template_ctx.weight_interfaces,
+            "config_interfaces": template_ctx.config_interfaces,
+            "control_interfaces": template_ctx.control_interfaces,
+            
+            # Parameters
+            "parameter_definitions": template_ctx.parameter_definitions,
+            "exposed_parameters": template_ctx.exposed_parameters,
+            "whitelisted_defaults": template_ctx.whitelisted_defaults,
+            "required_attributes": template_ctx.required_attributes,
+            
+            # Linked parameters from CodegenBinding
+            "parameter_aliases": template_ctx.linked_parameters.get("aliases", {}),
+            "derived_parameters": template_ctx.linked_parameters.get("derived", {}),
+            "axilite_parameters": template_ctx.linked_parameters.get("axilite", {}),
+            
+            # Explicit mappings from CodegenBinding (compile-time)
+            "explicit_nodeattr_types": self._generate_nodeattr_types_from_binding(template_ctx.codegen_binding),
+            "explicit_datatype_attrs": self._generate_datatype_attributes_from_binding(template_ctx.codegen_binding),
+            "explicit_parameter_assignments": self._generate_parameter_assignments_from_binding(template_ctx.codegen_binding),
+            
+            # Enum types for templates (still needed for some legacy logic)
+            "SourceType": SourceType,
+            
+            # Flags
+            "has_inputs": template_ctx.has_inputs,
+            "has_outputs": template_ctx.has_outputs,
+            "has_weights": template_ctx.has_weights,
+            "has_config": template_ctx.has_config,
+            
+            # Other data
+            "relationships": template_ctx.relationships,
+            "internal_datatypes": template_ctx.internal_datatypes,
+            "kernel_complexity": template_ctx.kernel_complexity,
+            "kernel_type": template_ctx.kernel_type,
+            "categorized_parameters": template_ctx.categorized_parameters,
+        }
+        
+        return vars_dict
+    
+    def _generate_nodeattr_types_from_binding(self, codegen_binding) -> Dict[str, tuple]:
+        """Convert CodegenBinding to explicit FINN node attribute specifications."""
+        from ..codegen_binding import SourceType
+        
+        nodeattr_types = {}
+        
+        if not codegen_binding:
+            return nodeattr_types
+        
+        # Process parameter bindings to generate node attribute types
+        for param_name, binding in codegen_binding.parameter_bindings.items():
+            if binding.source.type == SourceType.NODEATTR:
+                # Direct node attribute - use default values if available
+                nodeattr_types[param_name] = ("i", True, None)
+            elif binding.source.type == SourceType.NODEATTR_ALIAS:
+                # Aliased node attribute - use the alias name
+                alias_name = binding.source.nodeattr_name
+                if alias_name:
+                    nodeattr_types[alias_name] = ("i", True, None)
+        
+        # Add interface datatype attributes
+        for interface_name, interface_binding in codegen_binding.interface_bindings.items():
+            # Generate datatype attribute name (e.g., "inputDataType", "weightDataType") 
+            attr_name = f"{interface_name}DataType"
+            nodeattr_types[attr_name] = ("s", False, "INT8")  # Default datatype
+        
+        return nodeattr_types
+    
+    def _generate_datatype_attributes_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
+        """Generate interface datatype attribute definitions from CodegenBinding."""
+        datatype_attrs = []
+        
+        if not codegen_binding:
+            return datatype_attrs
+        
+        # Generate datatype attributes for each interface with datatype bindings
+        for interface_name, interface_binding in codegen_binding.interface_bindings.items():
+            attr_name = f"{interface_name}DataType"
+            datatype_attrs.append({
+                "name": attr_name,
+                "interface_name": interface_name,
+                "default_datatype": "INT8",
+                "attr_spec": ("s", False, "INT8")
+            })
+        
+        return datatype_attrs
+    
+    def _generate_parameter_assignments_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
+        """Generate explicit parameter assignment statements from CodegenBinding."""
+        from ..codegen_binding import SourceType
+        
+        assignments = []
+        
+        if not codegen_binding:
+            return assignments
+        
+        # Generate assignment for each parameter based on its source type
+        for param_name, binding in codegen_binding.parameter_bindings.items():
+            if binding.source.type == SourceType.NODEATTR:
+                assignments.append({
+                    "param": param_name,
+                    "template_var": f"${param_name.upper()}$",
+                    "assignment": f'str(self.get_nodeattr("{param_name}"))',
+                    "comment": f"Algorithm parameter {param_name}"
+                })
+            elif binding.source.type == SourceType.NODEATTR_ALIAS:
+                alias_name = binding.source.nodeattr_name
+                if alias_name:
+                    assignments.append({
+                        "param": param_name,
+                        "template_var": f"${param_name.upper()}$", 
+                        "assignment": f'str(self.get_nodeattr("{alias_name}"))',
+                        "comment": f"Aliased parameter {param_name} from {alias_name}"
+                    })
+            elif binding.source.type == SourceType.DERIVED:
+                expression = binding.source.expression
+                if expression:
+                    assignments.append({
+                        "param": param_name,
+                        "template_var": f"${param_name.upper()}$",
+                        "assignment": f"str({expression})",
+                        "comment": f"Derived parameter {param_name}"
+                    })
+            elif binding.source.type == SourceType.INTERFACE_DATATYPE:
+                interface_name = binding.source.interface_name
+                property_name = binding.source.property_name
+                
+                if property_name == "width":
+                    assignments.append({
+                        "param": param_name,
+                        "template_var": f"${param_name.upper()}$",
+                        "assignment": f'str(DataType[self.get_nodeattr("{interface_name}DataType")].bitwidth())',
+                        "comment": f"Interface {interface_name} width parameter"
+                    })
+                elif property_name == "signed":
+                    assignments.append({
+                        "param": param_name, 
+                        "template_var": f"${param_name.upper()}$",
+                        "assignment": f'str(1 if DataType[self.get_nodeattr("{interface_name}DataType")].signed() else 0)',
+                        "comment": f"Interface {interface_name} signed parameter"
+                    })
+            elif binding.source.type == SourceType.INTERNAL_DATATYPE:
+                interface_name = binding.source.interface_name  # Internal datatype name
+                property_name = binding.source.property_name
+                
+                if property_name == "width":
+                    assignments.append({
+                        "param": param_name,
+                        "template_var": f"${param_name.upper()}$",
+                        "assignment": f'str(DataType[self.get_nodeattr("{interface_name}DataType")].bitwidth())',
+                        "comment": f"Internal {interface_name} width parameter"
+                    })
+                elif property_name == "signed":
+                    assignments.append({
+                        "param": param_name,
+                        "template_var": f"${param_name.upper()}$", 
+                        "assignment": f'str(1 if DataType[self.get_nodeattr("{interface_name}DataType")].signed() else 0)',
+                        "comment": f"Internal {interface_name} signed parameter"
+                    })
+        
+        return assignments

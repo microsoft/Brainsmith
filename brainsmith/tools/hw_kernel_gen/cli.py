@@ -23,7 +23,7 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   python -m brainsmith.tools.hw_kernel_gen matrix_mult.sv -o output/
   python -m brainsmith.tools.hw_kernel_gen conv2d.sv -o output/ --debug
-  python -m brainsmith.tools.hw_kernel_gen thresholding.sv -o output/ --template-version phase2
+  python -m brainsmith.tools.hw_kernel_gen thresholding.sv -o output/
 
 Notes:
   - RTL file should contain @brainsmith BDIM and @brainsmith DATATYPE pragmas
@@ -40,8 +40,6 @@ Notes:
     # Optional arguments
     parser.add_argument('--debug', action='store_true', 
                        help='Enable debug logging and detailed output')
-    parser.add_argument('--template-version', choices=['phase2'], default='phase2',
-                       help='Template version to use (default: phase2)')
     parser.add_argument('--no-strict', action='store_true',
                        help='Disable strict validation (allows parsing files that don\'t meet all requirements)')
     
@@ -63,7 +61,6 @@ def main():
             print("=== Phase 4 Hardware Kernel Generator ===")
             print(f"RTL file: {args.rtl_file}")
             print(f"Output directory: {args.output}")
-            print(f"Template version: {args.template_version}")
             print()
         
         # Step 1: Parse RTL with Phase 1 validation
