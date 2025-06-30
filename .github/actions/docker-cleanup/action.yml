@@ -1,0 +1,29 @@
+name: 'Smithy Cleanup'
+description: 'Clean Smithy container resources safely (scoped to current job)'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Clean Smithy container resources
+      shell: bash
+      run: |
+        echo "=== Smithy scoped cleanup ==="
+        
+        # Clean container
+        if [ -x ./smithy ]; then
+            ./smithy cleanup
+            echo "✓ Smithy container cleanup completed"
+        else
+            echo "No smithy script found, skipping container cleanup"
+        fi
+        
+        # Clean build directory on runner host
+        # Build dir format: /tmp/brainsmith_dev_${user}_${hash}
+        if [ -n "$USER" ]; then
+            PATTERN="/tmp/brainsmith_dev_${USER}_*"
+            echo "=== Cleaning build directories: $PATTERN ==="
+            rm -rf $PATTERN 2>/dev/null || true
+            echo "✓ Build directories cleaned"
+        fi
+        
+        echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"

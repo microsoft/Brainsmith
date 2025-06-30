@@ -10,8 +10,6 @@ LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahd
 
 ARG ENTRYPOINT
 
-# WORKDIR /workspace
-
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y \
@@ -62,7 +60,12 @@ RUN rm /tmp/requirements.txt
 ENV TZ="US/Pacific"
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-COPY $ENTRYPOINT /usr/local/bin/entrypoint.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh
+# Copy all entrypoint scripts
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/entrypoint_exec.sh /usr/local/bin/entrypoint_exec.sh
+COPY docker/setup_env.sh /usr/local/bin/setup_env.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_exec.sh /usr/local/bin/setup_env.sh
+
+# Set default entrypoint (can be overridden by ENTRYPOINT build arg for backward compatibility)
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]

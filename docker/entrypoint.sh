@@ -4,139 +4,237 @@
 # Modifications copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 
-export HOME=/tmp/home_dir
-export SHELL=/bin/bash
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
-export LANGUAGE="en_US:en"
-# colorful terminal output
-export PS1='\[\033[1;36m\]\u\[\033[1;31m\]@\[\033[1;32m\]\h:\[\033[1;35m\]\w\[\033[1;31m\]\$\[\033[0m\] '
-export PATH=$PATH:$OHMYXILINX
+# Main entrypoint for Brainsmith development environment
+# Handles full setup including dependency fetching and installation
 
-# Set up key FINN environment variables
-export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
-export FINN_DEPS_DIR="${BSMITH_DIR}/deps"
-export FINN_ROOT="${FINN_DEPS_DIR}/finn"
-
-# Define colors for terminal output
-YELLOW='\033[0;33m'
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Colorful terminal output functions
-yecho () {
-  echo -e "${YELLOW}WARNING: $1${NC}"
+# Enhanced logging for debugging
+log_debug() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] DEBUG: $1" >&2
 }
 
-gecho () {
-  echo -e "${GREEN}$1${NC}"
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
 }
 
-recho () {
-  echo -e "${RED}$1${NC}"
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
 }
 
-# qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
-# To be fixed in future Ubuntu versions (https://bugs.launchpad.net/ubuntu/+source/setuptools/+bug/1994016)
-mv ${BSMITH_DIR}/deps/qonnx/pyproject.toml ${BSMITH_DIR}/deps/qonnx/pyproject.tmp
-pip install --user -e ${BSMITH_DIR}/deps/qonnx
-mv ${BSMITH_DIR}/deps/qonnx/pyproject.tmp ${BSMITH_DIR}/deps/qonnx/pyproject.toml
-# finn-experimental
-pip install --user -e ${BSMITH_DIR}/deps/finn-experimental
-# brevitas
-pip install --user -e ${BSMITH_DIR}/deps/brevitas
-# finn
-pip install --user -e ${BSMITH_DIR}/deps/finn
-# onnxscript has an issue with setuptools that I can't figure out
-# so manually install it's dependencies here and set PYTHONPATH
-# TODO: Reconcile onnxscript deps w/ requirements.txt
-pip install numpy onnx>=1.16 typing_extensions>=4.10 ml_dtypes packaging
-export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/onnxscript
+# Status emission for container synchronization
+BRAINSMITH_STATUS_PREFIX="BRAINSMITH_STATUS:"
+emit_status() {
+    local status="$1"
+    local detail="${2:-}"
+    echo "${BRAINSMITH_STATUS_PREFIX}${status}${detail:+:$detail}"
+    log_info "Status: $status${detail:+ - $detail}"
+}
 
-if [ -f "${BSMITH_DIR}/setup.py" ];then
-  # run pip install for Brainsmith
-  pip install --user -e ${BSMITH_DIR}
+log_info "Starting BrainSmith entrypoint"
+emit_status "INITIALIZING"
+
+cd $BSMITH_DIR
+
+# First: Fetch dependencies if they don't exist (before environment setup)
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && ([ ! -d "$BSMITH_DIR/deps/qonnx" ] || [ ! -d "$BSMITH_DIR/deps/finn" ]); then
+    emit_status "FETCHING_DEPENDENCIES"
+    log_info "Fetching dependencies to $BSMITH_DIR/deps/ (required before environment setup)"
+    
+    if source docker/fetch-repos.sh; then
+        log_info "Dependencies fetched successfully"
+    else
+        emit_status "ERROR" "Failed to fetch dependencies"
+        log_error "Failed to fetch dependencies"
+        exit 1
+    fi
+    
+    log_info "Dependencies ready at $(date)"
 else
-  recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
-  recho "Ensure you have passed -v <path-to-finn-repo>:<path-to-finn-repo> to the docker run command"
-  exit -1
+    log_info "Dependencies already exist, ready at $(date)"
 fi
 
-if [ -f "$VITIS_PATH/settings64.sh" ];then
-  # source Vitis env.vars
-  export XILINX_VITIS=$VITIS_PATH
-  source $VITIS_PATH/settings64.sh
-  gecho "Found Vitis at $VITIS_PATH"
-else
-  yecho "Unable to find $VITIS_PATH/settings64.sh"
-  yecho "Functionality dependent on Vitis will not be available."
-  yecho "If you need Vitis, ensure VITIS_PATH is set correctly and mounted into the Docker container."
-  if [ -f "$VIVADO_PATH/settings64.sh" ];then
-    # source Vivado env.vars
-    export XILINX_VIVADO=$VIVADO_PATH
-    source $VIVADO_PATH/settings64.sh
-    gecho "Found Vivado at $VIVADO_PATH"
-  else
-    yecho "Unable to find $VIVADO_PATH/settings64.sh"
-    yecho "Functionality dependent on Vivado will not be available."
-    yecho "If you need Vivado, ensure VIVADO_PATH is set correctly and mounted into the Docker container."
-  fi
+# Second: Load environment setup (now that dependencies exist)
+source /usr/local/bin/setup_env.sh
+
+# Check FINN dependency after environment is loaded (so recho function is available)
+if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -f "$BSMITH_DIR/deps/finn/setup.py" ]; then
+    recho "FINN dependency not found or not fetched"
+    recho "Dependencies should be automatically fetched during container initialization"
+    exit 1
 fi
 
-if [ -z "${XILINX_VIVADO}" ]; then
-  yecho "pyxsi is unavailable since Vivado was not found"
+# Function to build finnxsi if needed
+build_finnxsi_if_needed() {
+    if [ ! -z "${XILINX_VIVADO}" ] && [ -d "${BSMITH_DIR}/deps/finn/finn_xsi" ] && [ ! -f "${BSMITH_DIR}/deps/finn/xsi.so" ]; then
+        emit_status "BUILDING_FINNXSI"
+        log_info "Building finnxsi (Vivado available and finnxsi source exists)"
+        OLDPWD=$(pwd)
+        cd ${BSMITH_DIR}/deps/finn/finn_xsi || {
+            emit_status "ERROR" "Failed to enter finnxsi directory"
+            log_error "Failed to enter finnxsi directory"
+            exit 1
+        }
+        if make; then
+            log_info "finnxsi built successfully"
+        else
+            emit_status "ERROR" "Failed to build finnxsi"
+            log_error "Failed to build finnxsi"
+            exit 1
+        fi
+        cd $OLDPWD
+    elif [ -z "${XILINX_VIVADO}" ]; then
+        log_info "Skipping finnxsi build - Vivado not available"
+    elif [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
+        log_info "Skipping finnxsi build - finnxsi source not available"
+    else
+        log_info "finnxsi already built - skipping"
+    fi
+}
+
+# Third: Build finnxsi if needed (both daemon and one-shot mode)
+build_finnxsi_if_needed
+
+# Smart package management with persistent state
+CACHE_FILE="/tmp/.brainsmith_packages_installed"
+
+# Function to check if packages are already installed and working
+packages_already_installed() {
+    if [ -f "$CACHE_FILE" ]; then
+        # Quick check if all key packages can be imported
+        python -c "
+try:
+    import qonnx, finnexperimental, brevitas, finn, brainsmith
+    exit(0)
+except ImportError as e:
+    exit(1)
+" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+
+# Function to install packages with proper error handling and progress
+install_packages_with_progress() {
+    log_info "Starting package installation process"
+    emit_status "INSTALLING_PACKAGES" "starting"
+    
+    gecho "Installing development packages (this may take a moment)..."
+    
+    # Ensure deps directory exists
+    mkdir -p "$BSMITH_DIR/deps"
+    
+    local install_success=true
+    local failed_packages=""
+    
+    # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
+    if [ -d "${BSMITH_DIR}/deps/qonnx" ]; then
+        emit_status "INSTALLING_PACKAGES" "qonnx"
+        gecho "Installing qonnx..."
+        mv ${BSMITH_DIR}/deps/qonnx/pyproject.toml ${BSMITH_DIR}/deps/qonnx/pyproject.tmp 2>/dev/null || true
+        if ! pip install --user -e ${BSMITH_DIR}/deps/qonnx; then
+            install_success=false
+            failed_packages+="qonnx "
+        fi
+        mv ${BSMITH_DIR}/deps/qonnx/pyproject.tmp ${BSMITH_DIR}/deps/qonnx/pyproject.toml 2>/dev/null || true
+    fi
+
+    # finn-experimental
+    if [ -d "${BSMITH_DIR}/deps/finn-experimental" ]; then
+        emit_status "INSTALLING_PACKAGES" "finn-experimental"
+        gecho "Installing finn-experimental..."
+        if ! pip install --user -e ${BSMITH_DIR}/deps/finn-experimental; then
+            install_success=false
+            failed_packages+="finn-experimental "
+        fi
+    fi
+
+    # brevitas
+    if [ -d "${BSMITH_DIR}/deps/brevitas" ]; then
+        emit_status "INSTALLING_PACKAGES" "brevitas"
+        gecho "Installing brevitas..."
+        if ! pip install --user -e ${BSMITH_DIR}/deps/brevitas; then
+            install_success=false
+            failed_packages+="brevitas "
+        fi
+    fi
+
+    # finn
+    if [ -d "${BSMITH_DIR}/deps/finn" ]; then
+        emit_status "INSTALLING_PACKAGES" "finn"
+        gecho "Installing finn..."
+        if ! pip install --user -e ${BSMITH_DIR}/deps/finn; then
+            install_success=false
+            failed_packages+="finn "
+        fi
+    fi
+
+    # brainsmith
+    if [ -f "${BSMITH_DIR}/setup.py" ]; then
+        emit_status "INSTALLING_PACKAGES" "brainsmith"
+        gecho "Installing brainsmith..."
+        if ! pip install --user -e ${BSMITH_DIR}; then
+            install_success=false
+            failed_packages+="brainsmith "
+        fi
+    else
+        emit_status "ERROR" "Unable to find Brainsmith source code"
+        recho "Unable to find Brainsmith source code in ${BSMITH_DIR}"
+        recho "Ensure you have passed -v <path-to-brainsmith-repo>:<path-to-brainsmith-repo> to the docker run command"
+        exit 1
+    fi
+    
+    if [ "$install_success" = true ]; then
+        # Mark packages as successfully installed
+        touch "$CACHE_FILE"
+        gecho "Development packages installed and cached successfully!"
+        return 0
+    else
+        emit_status "ERROR" "Package installation failed: $failed_packages"
+        recho "Failed to install packages: $failed_packages"
+        recho "Some functionality may not work properly."
+        return 1
+    fi
+}
+
+# Install packages only if not already cached and working
+if ! packages_already_installed; then
+    install_packages_with_progress
 else
-  if [ -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
-    gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
-  else
-    yecho "Building pyxsi at ${BSMITH_DIR}/deps/pyxsi"
-    OLDPWD=$(pwd)
-    cd ${BSMITH_DIR}/deps/pyxsi
-    make
-    cd $OLDPWD
-  fi
-  export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
-  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
+    gecho "Development packages already installed - using cached setup"
 fi
 
-if [ -f "$HLS_PATH/settings64.sh" ];then
-  # source Vitis HLS env.vars
-  source $HLS_PATH/settings64.sh
-  gecho "Found Vitis HLS at $HLS_PATH"
-else
-  yecho "Unable to find $HLS_PATH/settings64.sh"
-  yecho "Functionality dependent on Vitis HLS will not be available."
-  yecho "Please note that FINN needs at least version 2020.2 for Vitis HLS support. Our recommendation is to use version 2022.2"
-  yecho "If you need Vitis HLS, ensure HLS_PATH is set correctly and mounted into the Docker container."
+# For daemon mode, complete ALL setup before going into background
+# For direct command execution, only install packages if needed for that command
+if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
+    log_info "Daemon mode: ensuring all packages are installed before going into background"
+    # Force package installation/verification in daemon mode
+    if ! packages_already_installed; then
+        install_packages_with_progress
+    else
+        gecho "Development packages already installed - using cached setup"
+    fi
+    
+    # Create readiness marker ONLY after everything is truly ready
+    log_info "Creating dependency readiness marker"
+    touch /tmp/.brainsmith_deps_ready
+    
+    # Emit final ready status for log monitoring
+    emit_status "READY"
+    log_info "All setup complete - container is now fully ready for exec commands"
+    # Industry standard: use tail -f /dev/null to keep container alive
+    exec tail -f /dev/null
 fi
 
-if [ -d "$BSMITH_DIR/.Xilinx" ]; then
-  mkdir "$HOME/.Xilinx"
-  if [ -f "$BSMITH_DIR/.Xilinx/HLS_init.tcl" ]; then
-    cp "$BSMITH_DIR/.Xilinx/HLS_init.tcl" "$HOME/.Xilinx/"
-    gecho "Found HLS_init.tcl and copied to $HOME/.Xilinx/HLS_init.tcl"
-  else
-    yecho "Unable to find $BSMITH_DIR/.Xilinx/HLS_init.tcl"
-  fi
-
-  if [ -f "$BSMITH_DIR/.Xilinx/Vivado/Vivado_init.tcl" ]; then
-    mkdir "$HOME/.Xilinx/Vivado/"
-    cp "$BSMITH_DIR/.Xilinx/Vivado/Vivado_init.tcl" "$HOME/.Xilinx/Vivado/"
-    gecho "Found Vivado_init.tcl and copied to $HOME/.Xilinx/Vivado/Vivado_init.tcl"
-  else
-    yecho "Unable to find $BSMITH_DIR/.Xilinx/Vivado/Vivado_init.tcl"
-  fi
-else
-  echo "If you need to enable a beta device, ensure .Xilinx/HLS_init.tcl and/or .Xilinx/Vivado/Vivado_init.tcl are set correctly and mounted"
-  echo "See https://docs.xilinx.com/r/en-US/ug835-vivado-tcl-commands/Tcl-Initialization-Scripts"
-fi
-
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
-export PATH=$PATH:$HOME/.local/bin
-# execute the provided command(s) as root
-if [ $# -gt 0 ]; then
+# execute the provided command(s)
+if [ $# -gt 0 ] && [ "$1" != "" ]; then
+    # For direct commands, install packages only if needed
+    if ! packages_already_installed; then
+        install_packages_with_progress
+    fi
     exec bash -c "$*"
 else
+    # For interactive mode, install packages
+    if ! packages_already_installed; then
+        install_packages_with_progress
+    fi
     exec bash
 fi
