@@ -6,18 +6,8 @@ Generates SystemVerilog RTL wrappers with parameter validation and interface con
 
 from typing import Dict
 
-try:
-    from .base import GeneratorBase
-    from ..templates.template_context import TemplateContext
-except ImportError:
-    # Handle case when imported directly
-    import sys
-    from pathlib import Path
-    current_dir = Path(__file__).parent
-    sys.path.insert(0, str(current_dir))
-    sys.path.insert(0, str(current_dir.parent))
-    from base import GeneratorBase
-    from templates.template_context import TemplateContext
+from .base import GeneratorBase
+from ..templates import TemplateContext
 
 
 class RTLWrapperGenerator(GeneratorBase):

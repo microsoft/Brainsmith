@@ -1,5 +1,5 @@
 """
-Phase 3 Configuration for Hardware Kernel Generator.
+Configuration for Hardware Kernel Generator.
 
 Simplified configuration that handles only the essentials needed for the
 unified generation pipeline: RTL file, output directory, and debug settings.
@@ -13,7 +13,7 @@ from typing import Optional
 @dataclass
 class Config:
     """
-    Simplified Phase 3 configuration for RTL-to-template generation.
+    Simplified configuration for RTL-to-template generation.
     
     Only contains essential parameters needed for the unified generation pipeline.
     Removed complex configuration options and compiler data requirements.
@@ -21,14 +21,9 @@ class Config:
     rtl_file: Path
     output_dir: Path
     debug: bool = False
-    template_version: str = "phase2"
     
     def __post_init__(self):
         """Validate inputs and prepare output directory."""
-        # Validate template version first (for test compatibility)
-        if self.template_version not in ["phase2"]:
-            raise ValueError(f"Unsupported template version: {self.template_version}")
-        
         # Validate RTL file exists
         if not self.rtl_file.exists():
             raise ValueError(f"RTL file not found: {self.rtl_file}")

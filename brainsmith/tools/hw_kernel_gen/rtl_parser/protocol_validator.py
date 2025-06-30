@@ -17,7 +17,7 @@ import logging
 from typing import Dict, Set, List, Tuple
 
 from ..data import InterfaceType
-from .rtl_data import Port, PortGroup, ProtocolValidationResult, PortDirection, InterfaceDirection
+from .rtl_data import Port, PortGroup, ProtocolValidationResult, PortDirection
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
@@ -167,7 +167,7 @@ class ProtocolValidator:
             return ProtocolValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
         
         # Set interface direction metadata
-        direction = InterfaceDirection.INPUT if all_forward else InterfaceDirection.OUTPUT
+        direction = "input" if all_forward else "output"
         group.metadata['direction'] = direction
 
         # Extract data width metadata
@@ -238,7 +238,7 @@ class ProtocolValidator:
         logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
         return ProtocolValidationResult(True)
 
-    def _determine_dataflow_type(self, interface_name: str, direction: InterfaceDirection) -> InterfaceType:
+    def _determine_dataflow_type(self, interface_name: str, direction: str) -> InterfaceType:
         """Determine dataflow interface type from name patterns and direction."""
         name_lower = interface_name.lower()
         
@@ -247,9 +247,9 @@ class ProtocolValidator:
             return InterfaceType.WEIGHT
         
         # Input/output based on direction
-        if direction == InterfaceDirection.INPUT:
+        if direction == "input":
             return InterfaceType.INPUT
-        elif direction == InterfaceDirection.OUTPUT:
+        elif direction == "output":
             return InterfaceType.OUTPUT
         else:
             return InterfaceType.INPUT  # Default to input for unknown directions

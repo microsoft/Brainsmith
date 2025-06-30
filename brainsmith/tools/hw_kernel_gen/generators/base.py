@@ -8,15 +8,7 @@ Jinja2 templates to produce output files.
 from typing import Dict
 from abc import ABC
 
-try:
-    from ..templates.template_context import TemplateContext
-except ImportError:
-    # Handle case when imported directly
-    import sys
-    from pathlib import Path
-    parent_dir = Path(__file__).parent.parent
-    sys.path.insert(0, str(parent_dir))
-    from templates.template_context import TemplateContext
+from ..templates import TemplateContext
 
 
 class GeneratorBase(ABC):

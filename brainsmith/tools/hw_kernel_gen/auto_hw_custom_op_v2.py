@@ -149,55 +149,19 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """
         Extract kernel parameters from ONNX node attributes.
         
-        If CodegenBinding is present, uses it to resolve parameter values
-        based on their sources (nodeattr, alias, derived, etc.).
+        Uses new KernelModeling architecture to extract parameters directly
+        from node attributes based on the KernelDefinition requirements.
         
         Returns:
             ParameterBinding with parameter name->value mappings
         """
         params = {}
         
-        if self._kernel_def.codegen_binding:
-            codegen = self._kernel_def.codegen_binding
-            
-            # Process each parameter binding
-            for param_name, binding in codegen.parameter_bindings.items():
-                source = binding.source
-                
-                if source.type.value == "nodeattr":
-                    # Direct from node attribute
-                    value = self.get_nodeattr(param_name)
-                    if value is not None:
-                        params[param_name] = value
-                        
-                elif source.type.value == "alias":
-                    # From aliased node attribute
-                    if source.nodeattr_name:
-                        value = self.get_nodeattr(source.nodeattr_name)
-                        if value is not None:
-                            params[param_name] = value
-                            
-                elif source.type.value == "derived":
-                    # Computed from expression (evaluated later)
-                    if source.expression:
-                        try:
-                            # Evaluate expression with access to self
-                            value = eval(source.expression, {"self": self})
-                            params[param_name] = value
-                        except Exception as e:
-                            # Log error but continue
-                            pass
-                            
-                elif source.type.value == "constant":
-                    # Fixed value
-                    if source.constant_value is not None:
-                        params[param_name] = source.constant_value
-        else:
-            # Fallback to default behavior
-            for param_name in self._kernel_def.get_required_parameters():
-                value = self.get_nodeattr(param_name)
-                if value is not None:
-                    params[param_name] = value
+        # Extract parameters based on KernelDefinition requirements
+        for param_name in self._kernel_def.get_required_parameters():
+            value = self.get_nodeattr(param_name)
+            if value is not None:
+                params[param_name] = value
         
         return ParameterBinding(params) if params else None
     
@@ -571,36 +535,11 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         # Start with parent class attributes
         attrs = super().get_nodeattr_types()
         
-        # Check if we have CodegenBinding for enhanced parameter handling
-        if self._kernel_def.codegen_binding:
-            codegen = self._kernel_def.codegen_binding
-            
-            # Add algorithm parameters from CodegenBinding
-            for param_name, binding in codegen.parameter_bindings.items():
-                if binding.source.type.value == "nodeattr":
-                    # Direct node attribute
-                    attrs[param_name] = ("i", True, None)
-                elif binding.source.type.value == "alias":
-                    # Aliased node attribute
-                    if binding.source.nodeattr_name:
-                        attrs[binding.source.nodeattr_name] = ("i", True, None)
-            
-            # Add interface datatype attributes
-            for interface_name in codegen.interface_bindings:
-                # Use compiler name for consistent attribute naming
-                datatype_attr = f"{interface_name}DataType"
-                attrs[datatype_attr] = ("s", True, "")
-            
-            # Add internal datatype attributes
-            for internal_name in codegen.internal_bindings:
-                datatype_attr = f"{internal_name}DataType"
-                attrs[datatype_attr] = ("s", False, "UINT8")
-        else:
-            # Fallback to basic FINN attribute mapping
-            finn_attrs = self._get_finn_attribute_mapping()
-            for interface_name, attr_name in finn_attrs.items():
-                # All datatype attributes are required
-                attrs[attr_name] = ("s", True, "")
+        # Use new KernelModeling architecture for attribute mapping
+        finn_attrs = self._get_finn_attribute_mapping()
+        for interface_name, attr_name in finn_attrs.items():
+            # All datatype attributes are required
+            attrs[attr_name] = ("s", True, "")
         
         # Add standard attributes
         attrs["SIMD"] = ("i", False, 1)  # Maps to input SDIM

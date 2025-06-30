@@ -19,8 +19,6 @@ from ..parameter_config.parameter_defaults import (
 )
 from .template_context import TemplateContext, ParameterDefinition
 from .codegen_binding_generator import generate_codegen_binding
-# TODO: Need to implement TemplateDatatype, SimpleKernel or replace with proper classes
-# from ..rtl_parser.data import TemplateDatatype, SimpleKernel
 
 
 class TemplateContextGenerator:

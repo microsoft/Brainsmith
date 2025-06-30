@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for test_kernel_e2e
 # Generated from: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
-# Generation timestamp: 2025-06-30T06:52:39.883482
+# Generation timestamp: 2025-06-30T15:25:28.717318
 #
 # This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
 # parameter definitions and no runtime CodegenBinding dependencies.
@@ -44,15 +44,8 @@ class TestKernelE2e(AutoHWCustomOp):
         self.rtl_source = "/home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv"
     
     def get_nodeattr_types(self):
-        """Explicit node attribute definitions."""
+        """Define only interface datatype attributes needed for model creation."""
         return {
-            "INPUT_BDIM": ('i', True, None),
-            "INPUT_SDIM": ('i', True, None),
-            "WEIGHT_BDIM": ('i', True, None),
-            "WEIGHT_SDIM": ('i', True, None),
-            "OUTPUT_BDIM": ('i', True, None),
-            "PE": ('i', True, None),
-            "ACTIVATION_TYPE": ('i', True, None),
             "s_axis_inputDataType": ('s', False, 'INT8'),
             "s_axis_weightsDataType": ('s', False, 'INT8'),
             "m_axis_outputDataType": ('s', False, 'INT8'),
@@ -64,7 +57,7 @@ class TestKernelE2e(AutoHWCustomOp):
         
         # Add input definitions
         input_def = InputDefinition(
-            name="",
+            name="s_axis_input",
             datatype_constraints=[
                 DatatypeConstraintGroup(
                     base_type="UINT",
@@ -79,7 +72,7 @@ class TestKernelE2e(AutoHWCustomOp):
         
         # Add weight input definitions
         weight_def = InputDefinition(
-            name="",
+            name="s_axis_weights",
             datatype_constraints=[
                 DatatypeConstraintGroup(
                     base_type="FIXED",
@@ -95,7 +88,7 @@ class TestKernelE2e(AutoHWCustomOp):
         
         # Add output definitions
         output_def = OutputDefinition(
-            name="",
+            name="m_axis_output",
             datatype_constraints=[
                 DatatypeConstraintGroup(
                     base_type="UINT",
@@ -120,15 +113,15 @@ class TestKernelE2e(AutoHWCustomOp):
         """
         specs = {}
         
-        #  interface
+        # s_axis_input interface
         input_shape_0 = self.get_normal_input_shape(0)
-        input_dtype_0 = self._get_interface_datatype("")
-        specs[""] = (tuple(input_shape_0), input_dtype_0)
+        input_dtype_0 = self._get_interface_datatype("s_axis_input")
+        specs["s_axis_input"] = (tuple(input_shape_0), input_dtype_0)
         
-        #  interface
+        # s_axis_weights interface
         input_shape_1 = self.get_normal_input_shape(1)
-        input_dtype_1 = self._get_interface_datatype("")
-        specs[""] = (tuple(input_shape_1), input_dtype_1)
+        input_dtype_1 = self._get_interface_datatype("s_axis_weights")
+        specs["s_axis_weights"] = (tuple(input_shape_1), input_dtype_1)
         
         return specs
     
@@ -141,11 +134,11 @@ class TestKernelE2e(AutoHWCustomOp):
         """
         specs = {}
         
-        #  interface
+        # m_axis_output interface
         # Derive output shape from kernel behavior
         output_shape_0 = self.get_normal_output_shape(0)
-        output_dtype_0 = self._get_interface_datatype("")
-        specs[""] = (tuple(output_shape_0), output_dtype_0)
+        output_dtype_0 = self._get_interface_datatype("m_axis_output")
+        specs["m_axis_output"] = (tuple(output_shape_0), output_dtype_0)
         
         return specs
     

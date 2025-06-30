@@ -142,7 +142,7 @@ class InterfaceBuilder:
         # Extract description from validation metadata
         description = f"Interface {group.name} ({interface_type.value})"
         if 'direction' in group.metadata:
-            description += f" - Direction: {group.metadata['direction'].value}"
+            description += f" - Direction: {group.metadata['direction']}"
         
         # Parameter linking is now handled in the parser's _apply_autolinking_to_kernel method
         # InterfaceBuilder just creates base metadata without parameter assumptions

@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for test_kernel_e2e
 # Generated from: /home/tafk/dev/brainsmith-2/brainsmith/tools/hw_kernel_gen/tests/test_kernel_e2e.sv
-# Generation timestamp: 2025-06-30T10:16:37.244415
+# Generation timestamp: 2025-06-30T15:25:57.544840
 #
 # This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
 # parameter definitions and no runtime CodegenBinding dependencies.

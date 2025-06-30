@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 from .base import GeneratorBase
-from ..templates.template_context import TemplateContext
+from ..templates import TemplateContext
 
 logger = logging.getLogger(__name__)
 

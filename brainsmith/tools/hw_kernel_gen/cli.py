@@ -1,7 +1,7 @@
 """
-Phase 4 CLI for Hardware Kernel Generator.
+CLI for Hardware Kernel Generator.
 
-Modular CLI using the Phase 4 infrastructure with KernelIntegrator and GeneratorManager.
+Modular CLI using the current infrastructure with KernelIntegrator and GeneratorManager.
 Single generation path: parse RTL → generate all templates → write files → done.
 """
 
@@ -15,7 +15,7 @@ from .kernel_integrator import KernelIntegrator
 
 
 def create_parser() -> argparse.ArgumentParser:
-    """Create simplified argument parser for Phase 4 CLI."""
+    """Create simplified argument parser for HWKG CLI."""
     parser = argparse.ArgumentParser(
         description="Generate FINN-compatible HWCustomOp from SystemVerilog RTL",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -47,7 +47,7 @@ Notes:
 
 
 def main():
-    """Phase 4 main CLI entry point using KernelIntegrator."""
+    """Main CLI entry point using KernelIntegrator."""
     parser = create_parser()
     args = parser.parse_args()
     
@@ -58,12 +58,12 @@ def main():
     
     try:
         if args.debug:
-            print("=== Phase 4 Hardware Kernel Generator ===")
+            print("=== Hardware Kernel Generator ===")
             print(f"RTL file: {args.rtl_file}")
             print(f"Output directory: {args.output}")
             print()
         
-        # Step 1: Parse RTL with Phase 1 validation
+        # Step 1: Parse RTL with validation
         if args.debug:
             print("🔍 Step 1: Parsing RTL with parameter and BDIM validation...")
             if args.no_strict:
@@ -80,9 +80,9 @@ def main():
         
         # Step 2: Integrated generation and file writing
         if args.debug:
-            print("🏭 Step 2: Generating templates and writing files (integrated Phase 4)...")
+            print("🏭 Step 2: Generating templates and writing files...")
         
-        # Use KernelIntegrator for Phase 4 modular generation
+        # Use KernelIntegrator for modular generation
         integrator = KernelIntegrator(output_dir=args.output)
         result = integrator.generate_and_write(kernel_metadata)
         

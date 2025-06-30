@@ -27,11 +27,6 @@ import logging
 # Import shared types from main data module
 from ..data import InterfaceType
 
-# Temporary: Define InterfaceDirection locally to avoid import issues
-from enum import Enum as _Enum
-class InterfaceDirection(_Enum):
-    INPUT = "input"
-    OUTPUT = "output"
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -45,22 +40,22 @@ class PortDirection(Enum):
     """RTL port directions (includes bidirectional).
     
     This enum is specific to RTL ports which can be bidirectional (INOUT).
-    For dataflow interfaces, use InterfaceDirection which only has INPUT/OUTPUT.
+    For dataflow interfaces, use string values \"input\" and \"output\".
     """
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
     
-    def to_interface_direction(self) -> Optional[InterfaceDirection]:
-        """Convert to dataflow interface direction.
+    def to_interface_direction(self) -> Optional[str]:
+        """Convert to dataflow interface direction string.
         
         Returns:
-            InterfaceDirection for INPUT/OUTPUT, None for INOUT
+            "input" or "output" for INPUT/OUTPUT, None for INOUT
         """
         if self == PortDirection.INPUT:
-            return InterfaceDirection.INPUT
+            return "input"
         elif self == PortDirection.OUTPUT:
-            return InterfaceDirection.OUTPUT
+            return "output"
         else:
             return None  # INOUT has no dataflow equivalent
 
