@@ -14,6 +14,7 @@ folding_three_layers: l3_simd24_pe16
 max_folding_three_layers: l3_simd48_pe32
 small_folding_three_layers: l3_simd12_pe8
 single_layer: l1_simd12_pe8
+bert_large_single_layer: bert_large_l1_simd16_pe8
 
 l3_simd24_pe16:
 	python gen_initial_folding.py --simd 24 --pe 16 --num_layers 3 -t 4 -o ./configs/l3_simd24_pe16.json
@@ -38,3 +39,7 @@ bert_large:
 bert_large_mlo:
 	python gen_initial_folding.py --simd 64 --pe 16 --num_layers 2 -t 1 -o ./configs/bert_large.json
 	python end2end_bert.py -o bert_large_mlo -n 16 -l 2 -z 1024 -i 4096 -p ./configs/bert_large.json
+
+bert_large_l1_simd16_pe8:
+	python gen_initial_folding.py --simd 16 --pe 8 --num_layers 1 -t 1 -o ./configs/bert_large_l1_simd16_pe8.json
+	python end2end_bert.py -o bert_large_l1_simd16_pe8 -n 16 -l 1 -z 1024 -i 4096 --run_fifo_sizing -p ./configs/bert_large_l1_simd16_pe8.json

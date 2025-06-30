@@ -1,0 +1,1 @@
+Example files from FINN copied temporarily to this directory for testing purposes. These files will be more robustly called from the FINN repository in the future.
