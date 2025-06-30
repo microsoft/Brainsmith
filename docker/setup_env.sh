@@ -72,8 +72,8 @@ else
       yecho "Some functionality may be limited."
     fi
   fi
-  
-  export PYTHONPATH=$PYTHONPATH:${FINN_ROOT}/finn_xsi
+
+  export PYTHONPATH=$PYTHONPATH:${FINN_ROOT}/finn_xsi:${BSMITH_DIR}/deps/onnxscript
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 
