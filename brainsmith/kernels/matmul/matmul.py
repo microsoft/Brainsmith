@@ -4,7 +4,7 @@ Matrix Multiplication Kernel
 Kernel definition for matrix multiplication operations.
 """
 
-from brainsmith.plugin.core import kernel
+from brainsmith.plugin.decorators import kernel
 
 
 @kernel(

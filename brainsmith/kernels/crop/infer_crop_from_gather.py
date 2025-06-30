@@ -6,7 +6,7 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 
 
 def elements_are_consecutive(indices):
@@ -17,7 +17,7 @@ def elements_are_consecutive(indices):
         return np.all(np.diff(indices) == 1)
 
 
-@transform(name="InferCropFromGather", kernel="Crop", stage=None,
+@transform(name="InferCropFromGather", kernel="Crop",
     description="Convert Gather operations to Crop hardware operations",
     author="shane.fleming",
     version="1.0.0",

@@ -41,7 +41,7 @@ def _get_transform_class(transform_name: str) -> Type:
         TransformResolutionError: If transform cannot be found
         AmbiguousTransformError: If unprefixed name matches multiple frameworks
     """
-    from brainsmith.plugin.core import get_registry
+    from brainsmith.plugin.core.registry import get_plugin_registry as get_registry
     registry = get_registry()
     
     try:

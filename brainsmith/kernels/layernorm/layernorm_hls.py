@@ -4,7 +4,7 @@ Layer Normalization HLS Backend
 HLS backend implementation for layer normalization.
 """
 
-from brainsmith.plugin.core import backend
+from brainsmith.plugin.decorators import backend
 from .layernorm import LayerNorm
 
 

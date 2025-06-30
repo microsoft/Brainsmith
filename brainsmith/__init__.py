@@ -56,8 +56,8 @@ export_results = None
 from .core.phase3 import create_build_runner_factory as build_accelerator
 
 # === 🔌 EXTENSIBILITY (contributor-focused) ===
-# Use the unified plugin system
-from .plugin import get_registry
+# Use the pure stevedore plugin system
+from .plugins import get_plugin_manager
 
 # === 📋 STRUCTURED EXPORTS ===
 __all__ = [
@@ -85,7 +85,7 @@ __all__ = [
     'build_accelerator',        # Build runner factory
     
     # === EXTENSIBILITY (Contributors) ===
-    'get_registry',             # Unified plugin registry
+    'get_plugin_manager',       # Pure stevedore plugin manager
 ]
 
 # === 🎯 WORKFLOW HELPERS ===

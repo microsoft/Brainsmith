@@ -4,10 +4,10 @@ from onnx import helper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 
 
-@transform(name="InferHWSoftmax", kernel="HWSoftmax", stage=None,
+@transform(name="InferHWSoftmax", kernel="HWSoftmax",
     description="Convert Softmax nodes to HWSoftmax hardware operations",
     author="shane.fleming",
     version="1.0.0",

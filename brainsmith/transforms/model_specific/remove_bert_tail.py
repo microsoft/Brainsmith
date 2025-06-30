@@ -1,7 +1,7 @@
 """BERT tail removal transform."""
 
 from qonnx.transformation.base import Transformation
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 
 
 def _recurse_model_tail_removal(model, to_remove, node):

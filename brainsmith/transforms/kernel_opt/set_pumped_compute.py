@@ -2,7 +2,7 @@
 
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 
 
 @transform(

@@ -9,10 +9,10 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 
 
-@transform(name="InferShuffle", kernel="Shuffle", stage=None,
+@transform(name="InferShuffle", kernel="Shuffle",
     description="Convert Transpose+Reshape patterns to Shuffle hardware operations",
     author="shane.fleming",
     version="1.0.0",

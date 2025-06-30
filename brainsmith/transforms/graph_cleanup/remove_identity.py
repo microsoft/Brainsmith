@@ -4,7 +4,7 @@ Remove Identity Operations Transform
 Example transform that removes identity operations from the graph.
 """
 
-from brainsmith.plugin.core import transform
+from brainsmith.plugin.decorators import transform
 from qonnx.transformation.base import Transformation
 
 

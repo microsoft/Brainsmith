@@ -381,6 +381,114 @@ def optimizer(name: str, target: str, **kwargs):
     return decorator
 ```
 
+## Steps and Transform Access
+
+### FINN Step Registration
+
+FINN steps are registered using the `@finn_step` decorator with minimal metadata. Steps access transforms directly through the global registry using the `apply_transform()` helper:
+
+```python
+from brainsmith.steps.decorators import finn_step
+
+@finn_step(
+    name="qonnx_to_finn_step",
+    category="transformation",
+    dependencies=[],
+    description="Convert QONNX model to FINN format"
+)
+def qonnx_to_finn_step(model, cfg):
+    """Convert QONNX model to FINN with topology optimizations."""
+    # Access transforms directly via apply_transform()
+    model = apply_transform(model, "ExpandNorms")
+    model = apply_transform(model, "ConvertDivToMul")
+    model = apply_transform(model, "ConvertSignToThres")
+    return model
+
+def apply_transform(model, transform_name, **kwargs):
+    """Apply a transform by name, handling registry lookup and conflict detection."""
+    from brainsmith.plugin.core import get_registry
+    from brainsmith.steps.transform_resolver import AmbiguousTransformError
+    
+    registry = get_registry()
+    
+    try:
+        transform_cls = registry.get_with_conflict_detection("transform", transform_name)
+        if not transform_cls:
+            raise ValueError(f"Transform '{transform_name}' not found")
+        
+        return model.transform(transform_cls(**kwargs))
+    except AmbiguousTransformError as e:
+        raise ValueError(str(e))
+```
+
+### Key Features
+
+1. **No Transform Declaration**: Steps no longer declare which transforms they use in the decorator
+2. **Direct Registry Access**: Steps access transforms directly through the unified registry
+3. **Conflict Detection**: Framework prefixes only required when transform names conflict
+4. **Error Handling**: Clear error messages for missing or ambiguous transforms
+5. **Deprecation Warnings**: Old transform parameter usage shows deprecation warnings
+
+### Migration from Old System
+
+**Old Pattern (Deprecated)**:
+```python
+@finn_step(
+    name="cleanup",
+    category="cleanup",
+    transforms=["RemoveIdentityOps", "RemoveStaticGraphInputs"]  # DEPRECATED
+)
+def cleanup_step(model, cfg):
+    # Transforms were resolved automatically
+    return model
+```
+
+**New Pattern**:
+```python
+@finn_step(
+    name="cleanup",
+    category="cleanup",
+    description="Basic cleanup operations for ONNX models"
+)
+def cleanup_step(model, cfg):
+    # Access transforms directly
+    model = apply_transform(model, "RemoveIdentityOps")
+    model = apply_transform(model, "RemoveStaticGraphInputs")
+    return model
+```
+
+### Registry Integration
+
+Steps integrate seamlessly with the unified plugin registry:
+
+```python
+from brainsmith.steps.registry import FinnStepRegistry
+
+# Get step registry
+step_registry = FinnStepRegistry()
+
+# Execute a step
+step_func = step_registry.get_step("cleanup")
+result = step_func(model, config)
+
+# List available steps
+available_steps = step_registry.list_steps()
+
+# Get step metadata
+step_info = step_registry.get_step_info("cleanup")
+```
+
+### Transform Resolution
+
+The `apply_transform()` helper provides intelligent transform resolution:
+
+1. **Unique Names**: `apply_transform(model, "ExpandNorms")` - resolves directly
+2. **Conflicting Names**: `apply_transform(model, "qonnx:RemoveIdentityOps")` - requires prefix
+3. **Error Handling**: Clear messages for missing or ambiguous transforms
+4. **Framework Detection**: Automatic detection of QONNX, FINN, and BrainSmith transforms
+
 ## Conclusion
 
 This unified plugin system provides a clean, extensible foundation for BrainSmith's compilation pipeline. The design achieves simplicity through explicit decorators while maintaining the power of a unified registry. The clear separation between stage-based transforms and kernel inference transforms reflects their different roles in the compilation process.
+
+Steps complement the plugin system by providing high-level orchestration of transforms without the complexity of pre-declaring dependencies. The `apply_transform()` approach offers maximum flexibility while maintaining type safety and clear error handling.

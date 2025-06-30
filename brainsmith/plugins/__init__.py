@@ -19,7 +19,9 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from brainsmith.plugin.collections import TransformCollection, KernelCollection
+    from brainsmith.plugin.access.transforms import TransformCollection
+    from brainsmith.plugin.access.kernels import KernelCollection
+    from brainsmith.plugin.access.steps import StepCollection
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +36,14 @@ class _GlobalTransformCollection:
     
     def __init__(self):
         self._collection = None
-        self._manager = None
     
     @property
     def _transform_collection(self) -> 'TransformCollection':
         """Lazy-load the transform collection."""
         if self._collection is None:
-            from brainsmith.plugin.manager import get_plugin_manager
-            self._manager = get_plugin_manager()
-            self._collection = self._manager.get_transforms()
+            from brainsmith.plugin.access.factory import get_collection_factory
+            factory = get_collection_factory()
+            self._collection = factory.create_transform_collection()
         return self._collection
     
     def __getattr__(self, name: str):
@@ -66,15 +67,14 @@ class _GlobalKernelCollection:
     
     def __init__(self):
         self._collection = None
-        self._manager = None
     
     @property
     def _kernel_collection(self) -> 'KernelCollection':
         """Lazy-load the kernel collection."""
         if self._collection is None:
-            from brainsmith.plugin.manager import get_plugin_manager
-            self._manager = get_plugin_manager()
-            self._collection = self._manager.get_kernels()
+            from brainsmith.plugin.access.factory import get_collection_factory
+            factory = get_collection_factory()
+            self._collection = factory.create_kernel_collection()
         return self._collection
     
     def __getattr__(self, name: str):
@@ -89,10 +89,42 @@ class _GlobalKernelCollection:
         return "Global Kernel Collection (brainsmith.plugins.kernels)"
 
 
+class _GlobalStepCollection:
+    """
+    Thread-safe global step collection with lazy loading.
+    
+    Provides access to FINN build steps.
+    """
+    
+    def __init__(self):
+        self._collection = None
+    
+    @property
+    def _step_collection(self) -> 'StepCollection':
+        """Lazy-load the step collection."""
+        if self._collection is None:
+            from brainsmith.plugin.access.factory import get_collection_factory
+            factory = get_collection_factory()
+            self._collection = factory.create_step_collection()
+        return self._collection
+    
+    def __getattr__(self, name: str):
+        """Delegate all access to underlying step collection."""
+        return getattr(self._step_collection, name)
+    
+    def __dir__(self):
+        """Support tab completion."""
+        return dir(self._step_collection)
+    
+    def __repr__(self):
+        return "Global Step Collection (brainsmith.plugins.steps)"
+
+
 # Global instances - these act like module-level imports
-# Usage: from brainsmith.plugins import transforms, kernels
+# Usage: from brainsmith.plugins import transforms, kernels, steps
 transforms = _GlobalTransformCollection()
 kernels = _GlobalKernelCollection()
+steps = _GlobalStepCollection()
 
 
 # Utility functions for advanced usage
@@ -100,6 +132,12 @@ def get_plugin_manager():
     """Get the underlying plugin manager for advanced operations."""
     from brainsmith.plugin.manager import get_plugin_manager as _get_manager
     return _get_manager()
+
+
+def get_plugin_registry():
+    """Get the underlying plugin registry for advanced operations."""
+    from brainsmith.plugin.core.registry import get_plugin_registry as _get_registry
+    return _get_registry()
 
 
 def list_all_plugins():
@@ -116,13 +154,17 @@ def analyze_conflicts():
 
 def reset_plugin_cache():
     """Reset plugin cache (useful for testing)."""
-    global transforms, kernels
+    global transforms, kernels, steps
     
     # Reset the global collections
     transforms._collection = None
-    transforms._manager = None
     kernels._collection = None
-    kernels._manager = None
+    steps._collection = None
+    
+    # Reset the factory
+    from brainsmith.plugin.access.factory import get_collection_factory
+    factory = get_collection_factory()
+    factory.reset()
     
     # Reset the underlying manager
     manager = get_plugin_manager()
@@ -151,27 +193,21 @@ def load_plugins_for_blueprint(blueprint_path: str):
 
 def plugin_status():
     """Get status information about the plugin system."""
+    # Use the registry directly for better stats
+    registry = get_plugin_registry()
+    summary = registry.get_summary()
+    
+    # Get discovery strategy from manager
     manager = get_plugin_manager()
-    catalog = manager.discover_all()
-    
-    total_plugins = sum(len(plist) for plist in catalog.plugins_by_name.values())
-    unique_count = len(catalog.unique_plugins)
-    conflict_count = len(catalog.conflicts)
-    
-    by_framework = {}
-    for framework, plugin_list in catalog.plugins_by_framework.items():
-        by_framework[framework] = len(plugin_list)
-    
-    by_type = {}
-    for plugin_type, plugin_list in catalog.plugins_by_type.items():
-        by_type[plugin_type] = len(plugin_list)
     
     return {
-        'total_plugins': total_plugins,
-        'unique_plugins': unique_count,
-        'conflicted_plugins': conflict_count,
-        'by_framework': by_framework,
-        'by_type': by_type,
+        'total_plugins': summary['total_plugins'],
+        'unique_plugins': summary['unique_plugins'],
+        'conflicted_plugins': summary['conflicted_plugins'],
+        'by_framework': summary['by_framework'],
+        'by_type': summary['by_type'],
+        'stages': summary.get('stages', {}),
+        'kernel_backends': summary.get('kernel_backends', {}),
         'discovery_strategy': manager.strategy.value
     }
 
@@ -179,8 +215,10 @@ def plugin_status():
 # Make key classes available for type hints and advanced usage
 __all__ = [
     'transforms',
-    'kernels', 
+    'kernels',
+    'steps',
     'get_plugin_manager',
+    'get_plugin_registry',
     'list_all_plugins',
     'analyze_conflicts',
     'reset_plugin_cache',

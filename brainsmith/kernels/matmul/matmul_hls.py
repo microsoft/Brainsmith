@@ -4,7 +4,7 @@ Matrix Multiplication HLS Backend
 HLS backend implementation for matrix multiplication.
 """
 
-from brainsmith.plugin.core import backend
+from brainsmith.plugin.decorators import backend
 from .matmul import MatMul
 
 

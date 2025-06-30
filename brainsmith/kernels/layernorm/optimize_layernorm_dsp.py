@@ -4,7 +4,7 @@ LayerNorm DSP Optimization Transform
 Hardware transform to optimize DSP usage in LayerNorm implementations.
 """
 
-from brainsmith.plugin.core import hw_transform
+from brainsmith.plugin.decorators import hw_transform
 
 
 @hw_transform(
