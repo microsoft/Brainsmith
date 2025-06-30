@@ -28,6 +28,7 @@ class AutoRTLBackend(RTLBackend):
     - TCL command generation for IPI integration
     - Resource estimation using standard formulas
     - finn-rtllib integration patterns
+    - KernelModel access for interface properties
     """
     
     def __init__(self, *args, **kwargs):
@@ -35,6 +36,10 @@ class AutoRTLBackend(RTLBackend):
         # For multiple inheritance, pass through all arguments to the next class in MRO
         # This allows proper cooperative inheritance
         super().__init__(*args, **kwargs)
+        
+        # Cache for accessing KernelModel from associated HWCustomOp
+        self._hw_custom_op = None
+        self._kernel_model = None
     
     @property
     @abstractmethod
@@ -99,6 +104,94 @@ class AutoRTLBackend(RTLBackend):
             pass
             
         return variables
+    
+    def _get_hw_custom_op(self):
+        """Get associated HWCustomOp instance if available."""
+        if self._hw_custom_op is None:
+            # Try to find HWCustomOp in the model graph
+            # This is a simplified approach - in practice, FINN would provide this
+            pass
+        return self._hw_custom_op
+    
+    def _get_kernel_model(self):
+        """Get KernelModel from associated HWCustomOp if available."""
+        if self._kernel_model is None:
+            hw_op = self._get_hw_custom_op()
+            if hw_op and hasattr(hw_op, '_kernel_model'):
+                self._kernel_model = hw_op._kernel_model
+        return self._kernel_model
+    
+    def _get_interface_bdim(self, interface_name: str, dimension_index: int = 0) -> int:
+        """Get block dimension for interface from KernelModel."""
+        kernel_model = self._get_kernel_model()
+        if kernel_model:
+            # Find interface in inputs or outputs
+            for inp in kernel_model.input_models:
+                if inp.name == interface_name:
+                    if dimension_index < len(inp.block_dims):
+                        return inp.block_dims[dimension_index]
+                    return 1
+            for out in kernel_model.output_models:
+                if out.name == interface_name:
+                    if dimension_index < len(out.block_dims):
+                        return out.block_dims[dimension_index]
+                    return 1
+        
+        # Fallback to node attribute if KernelModel not available
+        # This maintains backward compatibility
+        param_name = f"{interface_name}_BDIM" if interface_name else "BDIM"
+        return self.get_nodeattr(param_name, 1)
+    
+    def _get_interface_sdim(self, interface_name: str, dimension_index: int = 0) -> int:
+        """Get stream dimension for interface from KernelModel."""
+        kernel_model = self._get_kernel_model()
+        if kernel_model:
+            # Find interface in inputs (only inputs have SDIM)
+            for inp in kernel_model.input_models:
+                if inp.name == interface_name:
+                    if dimension_index < len(inp.sdim):
+                        return inp.sdim[dimension_index]
+                    return 1
+        
+        # Fallback to node attribute if KernelModel not available
+        param_name = f"{interface_name}_SDIM" if interface_name else "SDIM"
+        return self.get_nodeattr(param_name, 1)
+    
+    def _get_interface_width(self, interface_name: str) -> int:
+        """Get datatype width for interface from KernelModel."""
+        kernel_model = self._get_kernel_model()
+        if kernel_model:
+            # Find interface in inputs or outputs
+            for inp in kernel_model.input_models:
+                if inp.name == interface_name:
+                    return inp.datatype.bitwidth()
+            for out in kernel_model.output_models:
+                if out.name == interface_name:
+                    return out.datatype.bitwidth()
+        
+        # Fallback to node attribute if KernelModel not available
+        from qonnx.core.datatype import DataType
+        dtype_attr = f"{interface_name}DataType"
+        dtype_str = self.get_nodeattr(dtype_attr, "INT8")
+        return DataType[dtype_str].bitwidth()
+    
+    def _get_interface_signed(self, interface_name: str) -> bool:
+        """Get datatype signed property for interface from KernelModel."""
+        kernel_model = self._get_kernel_model()
+        if kernel_model:
+            # Find interface in inputs or outputs
+            for inp in kernel_model.input_models:
+                if inp.name == interface_name:
+                    return inp.datatype.signed()
+            for out in kernel_model.output_models:
+                if out.name == interface_name:
+                    return out.datatype.signed()
+        
+        # Fallback to node attribute if KernelModel not available
+        from qonnx.core.datatype import DataType
+        dtype_attr = f"{interface_name}DataType"
+        dtype_str = self.get_nodeattr(dtype_attr, "INT8")
+        return DataType[dtype_str].signed()
     
     def execute_node(self, context, graph):
         """

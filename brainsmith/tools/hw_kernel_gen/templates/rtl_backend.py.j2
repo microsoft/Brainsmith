@@ -8,14 +8,12 @@ assignments generated at compile-time from CodegenBinding.
 # Generated from: {{ source_file }}
 # Date: {{ generation_timestamp }}
 
-{% if base_kernel_class %}
-from finn.custom_op.fpgadataflow.{{ base_kernel_class.lower() }} import {{ base_kernel_class }}
-{% endif %}
-from brainsmith.dataflow.core.auto_rtl_backend import AutoRTLBackend
+from brainsmith.tools.hw_kernel_gen.auto_rtl_backend import AutoRTLBackend
+from .{{ kernel_name }}_hw_custom_op import {{ class_name }}
 from qonnx.core.datatype import DataType
 
 
-class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {% endif %}AutoRTLBackend):
+class {{ kernel_name }}_rtl({{ class_name }}, AutoRTLBackend):
     """RTL backend for {{ kernel_name }} operation.
     
     Auto-generated from SystemVerilog RTL analysis.
@@ -35,18 +33,17 @@ class {{ kernel_name }}_rtl({% if base_kernel_class %}{{ base_kernel_class }}, {
         return "{{ finn_rtllib_module }}"
     
     def get_nodeattr_types(self):
-        """Explicit node attribute types for RTL backend."""
-        my_attrs = {
-            {% for param_name, attr_spec in explicit_nodeattr_types.items() %}
+        """Define all node attributes including RTL-specific parameters."""
+        # Get interface datatype attributes from HWCustomOp parent
+        my_attrs = super().get_nodeattr_types()
+        
+        # Add RTL-specific algorithm parameters
+        rtl_attrs = {
+            {% for param_name, attr_spec in rtl_specific_nodeattrs.items() %}
             "{{ param_name }}": {{ attr_spec | replace('null', 'None') | replace('true', 'True') | replace('false', 'False') }},
             {% endfor %}
         }
-        
-        # Merge with parent class attributes
-        {% if base_kernel_class %}
-        my_attrs.update({{ base_kernel_class }}.get_nodeattr_types(self))
-        {% endif %}
-        my_attrs.update(AutoRTLBackend.get_nodeattr_types(self))
+        my_attrs.update(rtl_attrs)
         
         return my_attrs
     

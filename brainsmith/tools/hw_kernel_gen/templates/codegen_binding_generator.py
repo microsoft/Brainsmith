@@ -37,11 +37,27 @@ def generate_codegen_binding(kernel_metadata: KernelMetadata) -> 'CodegenBinding
     processed_params = set()
     
     # 1. Process exposed algorithm parameters
+    # First, identify which parameters are BDIM/SDIM from interface metadata
+    shape_params = set()
+    for interface in kernel_metadata.interfaces:
+        if interface.bdim_params:
+            shape_params.update(p for p in interface.bdim_params if p != '1')
+        if interface.sdim_params:
+            shape_params.update(p for p in interface.sdim_params if p != '1')
+    
     for param_name in kernel_metadata.exposed_parameters:
+        # Determine category based on parameter usage
+        if param_name in shape_params:
+            # This is a shape parameter (BDIM/SDIM)
+            category = ParameterCategory.SHAPE
+        else:
+            # This is an algorithm parameter
+            category = ParameterCategory.ALGORITHM
+            
         codegen.add_parameter_binding(
             param_name,
             ParameterSource(type=SourceType.NODEATTR),
-            ParameterCategory.ALGORITHM
+            category
         )
         processed_params.add(param_name)
     

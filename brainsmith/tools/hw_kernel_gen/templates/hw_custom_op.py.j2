@@ -59,10 +59,10 @@ class {{ class_name }}(AutoHWCustomOp):
         self.rtl_source = "{{ source_file }}"
     
     def get_nodeattr_types(self):
-        """Explicit node attribute definitions."""
+        """Define only interface datatype attributes needed for model creation."""
         return {
-            {% for param_name, attr_spec in explicit_nodeattr_types.items() %}
-            "{{ param_name }}": {{ attr_spec | replace('null', 'None') | replace('true', 'True') | replace('false', 'False') }},
+            {% for attr in explicit_datatype_attrs %}
+            "{{ attr.name }}": {{ attr.attr_spec | replace('null', 'None') | replace('true', 'True') | replace('false', 'False') }},
             {% endfor %}
         }
     
@@ -73,7 +73,7 @@ class {{ class_name }}(AutoHWCustomOp):
         # Add input definitions
         {% for interface in input_interfaces %}
         input_def = InputDefinition(
-            name="{{ interface.compiler_name }}",
+            name="{{ interface.name }}",
             datatype_constraints=[
                 {% for constraint in interface.datatype_constraints %}
                 DatatypeConstraintGroup(
@@ -94,7 +94,7 @@ class {{ class_name }}(AutoHWCustomOp):
         # Add weight input definitions
         {% for interface in weight_interfaces %}
         weight_def = InputDefinition(
-            name="{{ interface.compiler_name }}",
+            name="{{ interface.name }}",
             datatype_constraints=[
                 {% for constraint in interface.datatype_constraints %}
                 DatatypeConstraintGroup(
@@ -116,7 +116,7 @@ class {{ class_name }}(AutoHWCustomOp):
         # Add output definitions
         {% for interface in output_interfaces %}
         output_def = OutputDefinition(
-            name="{{ interface.compiler_name }}",
+            name="{{ interface.name }}",
             datatype_constraints=[
                 {% for constraint in interface.datatype_constraints %}
                 DatatypeConstraintGroup(
@@ -158,10 +158,10 @@ class {{ class_name }}(AutoHWCustomOp):
         specs = {}
         
         {% for i, interface in enumerate(input_interfaces + weight_interfaces) %}
-        # {{ interface.compiler_name }} interface
+        # {{ interface.name }} interface
         input_shape_{{ i }} = self.get_normal_input_shape({{ i }})
-        input_dtype_{{ i }} = self._get_interface_datatype("{{ interface.compiler_name }}")
-        specs["{{ interface.compiler_name }}"] = (tuple(input_shape_{{ i }}), input_dtype_{{ i }})
+        input_dtype_{{ i }} = self._get_interface_datatype("{{ interface.name }}")
+        specs["{{ interface.name }}"] = (tuple(input_shape_{{ i }}), input_dtype_{{ i }})
         
         {% endfor %}
         return specs
@@ -176,7 +176,7 @@ class {{ class_name }}(AutoHWCustomOp):
         specs = {}
         
         {% for i, interface in enumerate(output_interfaces) %}
-        # {{ interface.compiler_name }} interface
+        # {{ interface.name }} interface
         {% if kernel_type == 'threshold' %}
         # For thresholding, output shape equals input shape
         output_shape_{{ i }} = self.get_normal_input_shape(0)
@@ -184,8 +184,8 @@ class {{ class_name }}(AutoHWCustomOp):
         # Derive output shape from kernel behavior
         output_shape_{{ i }} = self.get_normal_output_shape({{ i }})
         {% endif %}
-        output_dtype_{{ i }} = self._get_interface_datatype("{{ interface.compiler_name }}")
-        specs["{{ interface.compiler_name }}"] = (tuple(output_shape_{{ i }}), output_dtype_{{ i }})
+        output_dtype_{{ i }} = self._get_interface_datatype("{{ interface.name }}")
+        specs["{{ interface.name }}"] = (tuple(output_shape_{{ i }}), output_dtype_{{ i }})
         
         {% endfor %}
         return specs

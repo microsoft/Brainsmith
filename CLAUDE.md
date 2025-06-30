@@ -28,6 +28,9 @@ All development happens inside Docker containers managed by the `smithy` script:
 
 # Stop container
 ./smithy stop
+
+# Clean up container
+./smithy cleanup
 ```
 
 ### Running Tests
@@ -38,7 +41,6 @@ All development happens inside Docker containers managed by the `smithy` script:
 
 # Run specific test directories
 ./smithy exec "pytest brainsmith/core/dataflow/tests/"
-./smithy exec "pytest brainsmith/core/dataflow/core/tests/"
 
 # Run hardware kernel generator E2E tests
 ./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
@@ -49,6 +51,15 @@ All development happens inside Docker containers managed by the `smithy` script:
 
 # Run specific test file
 ./smithy exec "python brainsmith/tools/hw_kernel_gen/tests/test_e2e_generation.py"
+
+# Run single test function
+./smithy exec "pytest brainsmith/core/dataflow/tests/test_kernel_model.py::TestKernelModel::test_simple_kernel"
+
+# Run tests with verbose output
+./smithy exec "pytest -v brainsmith/core/dataflow/tests/"
+
+# Run tests with output capture disabled (see print statements)
+./smithy exec "pytest -s brainsmith/core/dataflow/tests/"
 ```
 
 ### Hardware Kernel Generator
@@ -74,8 +85,10 @@ Convert SystemVerilog RTL to FINN HWCustomOp:
    - Data hierarchy: Tensor → Block → Stream → Element
    - `KernelDefinition`: Static kernel metadata and constraints
    - `KernelModel`: Runtime instance with actual dimensions
-   - `InterfaceDefinition`/`InterfaceModel`: Interface specifications
+   - `InputDefinition`/`OutputDefinition`: Interface schemas (replaced InterfaceDefinition)
+   - `InputInterface`/`OutputInterface`: Runtime models (replaced InterfaceModel)
    - Stream dimension (SDIM) architecture for parallelism modeling
+   - Note: Components now directly in `dataflow/`, not `dataflow/core/`
 
 2. **Hardware Kernels** (`brainsmith/hw_kernels/`):
    - SystemVerilog RTL implementations
@@ -107,6 +120,37 @@ The RTL parser uses pragmas to annotate SystemVerilog code:
 // @brainsmith TOP_MODULE <module_name>
 ```
 
+### Data Hierarchy
+
+The system models data at four granularity levels:
+
+1. **Tensor**: Full data for one inference (e.g., 512×256 matrix)
+2. **Block**: Tile processed by kernel (e.g., 64×32 tile)
+3. **Stream**: Data per clock cycle (e.g., 8×16 patch)
+4. **Element**: Individual data item (e.g., INT8 value)
+
+### SDIM (Streaming Dimensions) Architecture
+
+SDIM replaces the legacy `iPar` parallelism model with per-dimension streaming control:
+
+```python
+# Configure streaming for each dimension
+kernel.configure_sdim({
+    "input": [8, 16, 32]  # Stream 8×16×32 per cycle
+})
+
+# Or uniform streaming
+kernel.configure_sdim({
+    "input": 16  # Stream 16 elements in each dimension
+})
+```
+
+Key principles:
+- Only inputs have configurable SDIM
+- Outputs streaming rates are computed from kernel behavior
+- SDIM values cannot exceed block dimensions
+- Relationships propagate SDIM between interfaces
+
 ### Key Workflows
 
 1. **Model Conversion**: PyTorch → ONNX → Dataflow Model → RTL
@@ -134,6 +178,33 @@ When creating substantial files in the project, use the following header:
 ############################################################################
 ```
 
+## Environment Setup
+
+### Required Environment Variables
+
+Set these before building the Docker container:
+
+```bash
+export BSMITH_ROOT="~/brainsmith"
+export BSMITH_BUILD_DIR="~/builds/brainsmith"
+export BSMITH_XILINX_PATH="/tools/Xilinx"
+export BSMITH_XILINX_VERSION="2024.2"
+export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+```
+
+### Updating Dependencies
+
+Dependencies are managed in `docker/fetch-repos.sh`. To update FINN:
+
+```bash
+# Edit docker/fetch-repos.sh
+# Change FINN_COMMIT variable to new commit hash or branch
+
+# Rebuild container to fetch updated dependencies
+./smithy cleanup
+./smithy build
+```
+
 ## Important Notes
 
 - **No linting/formatting tools configured**: The project currently lacks Python linting or formatting configuration
@@ -141,12 +212,43 @@ When creating substantial files in the project, use the following header:
 - **Dependencies auto-fetched**: FINN and other deps are fetched during container build via `docker/fetch-repos.sh`
 - **FINN integration**: The project extends FINN's HWCustomOp framework for custom hardware kernels
 - **Breaking changes preferred**: Per user preferences, prefer breaking refactors over compatibility layers
+- **Python package installed in dev mode**: Changes to code are immediately reflected without rebuilding container
 
 ## Development Guidelines
 
 - **License and File Notes**:
   - Don't add the license header to markdown files
 
+## Common File Locations
+
+- **Kernel Modeling Tests**: `brainsmith/core/dataflow/tests/`
+- **RTL Parser Tests**: `brainsmith/tools/hw_kernel_gen/tests/`
+- **Example Hardware Kernels**: `brainsmith/hw_kernels/`
+- **FINN Integration**: Look for `*/finn/` subdirectories
+- **Build Outputs**: Check `$BSMITH_BUILD_DIR` environment variable
+
+## Debugging Tips
+
+```bash
+# View generated RTL wrapper
+./smithy exec "cat output/rtl_wrapper.v"
+
+# Check pragma parsing results
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen.rtl_parser.parser <rtl_file>"
+
+# Run with debug logging
+./smithy exec "PYTHONPATH=/workspace python -m brainsmith.tools.hw_kernel_gen --debug <rtl_file>"
+
+# Interactive debugging
+./smithy shell
+# Then use ipdb or pdb in your code
+```
+
 ## Memories
 
 - **Always run python commands with smithy**
+- **User preferences from .claude/CLAUDE.md include**:
+  - **Break Fearlessly (PD-1)**: Assume zero external users, prefer breaking refactors
+  - **Visual Clarity (PD-2)**: Use diagrams when helpful
+  - **Concrete Tests (PD-3)**: Test against real implementations, avoid mocks
+  - **Gate-Kept Commits (PD-4)**: Get explicit approval before git commits

@@ -240,9 +240,9 @@ class InterfaceMetadata:
         if self.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
             return errors
         
-        # CRITICAL: All stream interfaces MUST have BDIM
+        # CRITICAL: INPUT and WEIGHT interfaces MUST have BDIM, OUTPUT interfaces are optional
         has_bdim = bool(self.bdim_params)
-        if not has_bdim:
+        if not has_bdim and self.interface_type.value in ['input', 'weight']:
             errors.append(
                 f"AXI Stream interface '{self.name}' ({self.interface_type.value.upper()}) "
                 f"is missing required BDIM parameter. Either add a parameter named "
