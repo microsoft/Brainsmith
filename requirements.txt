@@ -18,6 +18,6 @@ scipy==1.10.1
 setupext-janitor>=1.1.2
 sigtools==4.0.1
 toposort==1.7.0
-transformers==4.46.3
+transformers==4.53.0
 vcdvcd==1.0.5
 wget==3.2
