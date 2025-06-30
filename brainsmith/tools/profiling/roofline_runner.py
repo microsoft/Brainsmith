@@ -93,6 +93,15 @@ bert_large_512 = {
     'head_size' : 64,
     'intermediate' : 4*16*64,
     }
+bert_large_1024 = {
+    'offload' : True,
+    'arch' : 'bert',
+    'num_layers' : 24,
+    'seq_len' : 1024,
+    'num_heads' : 16,
+    'head_size' : 64,
+    'intermediate' : 4*16*64,
+    }
 
 # SLM Model definitions
 slm_params = { # Parameters common to all SLM models
@@ -302,11 +311,11 @@ u55c = {
 }
 
 model_params = {}
-# model_params.update(bert_params) # Architecture shared params
-# model_params.update(bert_large_512) # Model specific params
-model_params.update(slm_params) # Architecture shared params
-model_params.update(mistral_4k) # Model specific params
-model_params.update(mistral_tg_batch1) # MLO optimizations
+model_params.update(bert_params) # Architecture shared params
+model_params.update(bert_large_512) # Model specific params
+# model_params.update(slm_params) # Architecture shared params
+# model_params.update(mistral_4k) # Model specific params
+# model_params.update(mistral_tg_batch1) # MLO optimizations
 hw_params = v80
 # hw_params['lut_util'] = 0.0 # Disable LUT compute
 dtypes = [8, 4]
