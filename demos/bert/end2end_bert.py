@@ -13,6 +13,7 @@ import onnx
 import os
 import argparse
 import torch
+import torch.nn.functional as F
 import json
 from torch import nn
 from transformers import BertConfig, BertModel
@@ -23,10 +24,16 @@ from brevitas.quant import Int8ActPerTensorFloat
 from brevitas.quant import Int8WeightPerTensorFloat
 from brevitas.quant import Uint8ActPerTensorFloat
 import brevitas.onnx as bo
-from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.graph.calibrate import calibration_mode
+from brevitas.graph import TorchFunctionalToModule
 from brainsmith.core.hw_compiler import forge
+
+
+def replace_sdpa_with_quantizable_layers(graph_model):
+    fn_to_module_map = ((F.scaled_dot_product_attention, qnn.ScaledDotProductAttention),)
+    graph_model = TorchFunctionalToModule(fn_to_module_map=fn_to_module_map).apply(graph_model)
+    return graph_model
 
 
 def gen_initial_bert_model(
