@@ -4,12 +4,12 @@
 
 The RTL Parser is a sophisticated SystemVerilog analysis engine that serves as the critical bridge between custom hardware implementations and the Brainsmith Hardware Kernel Generator (HKG) ecosystem. It transforms SystemVerilog RTL files with embedded pragmas into structured `KernelMetadata` objects that drive FINN compiler integration and wrapper template generation.
 
-**Key Metrics (Production-Ready)**:
-- **96 comprehensive tests** with 98.96% success rate
-- **<10ms parsing time** for typical hardware kernels
-- **10 pragma types** supported with extensible architecture
-- **3 interface protocols** (AXI-Stream, AXI-Lite, Global Control)
-- **100% tree-sitter based** parsing with robust error handling
+**Key Capabilities**:
+- **Comprehensive pragma support** with 10 pragma types and extensible architecture
+- **Fast parsing** optimized for typical hardware kernel files
+- **Protocol support** for AXI-Stream, AXI-Lite, and Global Control interfaces
+- **Tree-sitter based** parsing with robust error handling and syntax validation
+- **Production-tested** with real-world hardware designs
 
 ## 1. System Architecture Overview
 
@@ -17,7 +17,15 @@ The RTL Parser is a sophisticated SystemVerilog analysis engine that serves as t
 
 The RTL Parser enables hardware engineers to integrate custom RTL implementations into the Brainsmith ecosystem by automatically extracting interface metadata, validating protocol compliance, and processing compiler directives. It enforces strict compatibility requirements while providing flexible pragma-based customization.
 
-### 1.2 High-Level Architecture
+### 1.2 Known Limitations
+
+**Current Architectural Challenges**:
+- **Circular Dependencies**: Some circular import issues exist between `metadata.py` and the rtl_parser package, currently mitigated with TYPE_CHECKING imports
+- **Test Infrastructure**: While the parser is production-ready, the test suite is located outside the rtl_parser directory and may not be immediately visible
+- **Performance Benchmarks**: Performance metrics are based on real-world usage but formal benchmarks are pending
+- **Grammar System**: Currently uses a pre-compiled `sv.so` file; migration to dynamic grammar building is planned
+
+### 1.3 High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -306,10 +314,42 @@ class ParameterLinker:
 - Clear precedence hierarchy
 
 #### 2.5.2 Internal Datatype Creation
-**Prefix Analysis**:
-- Detect parameter prefixes not matching interfaces
-- Create internal `DatatypeMetadata` for unmatched prefixes
-- Example: `THRESH_WIDTH`, `THRESH_SIGNED` → `threshold` datatype
+**Automatic Internal Datatype Detection**:
+The parser automatically detects parameters that follow datatype naming patterns but don't match any interface name, creating internal `DatatypeMetadata` objects for these parameter groups.
+
+**Detection Algorithm**:
+- Groups parameters by common prefix (e.g., `THRESH_WIDTH`, `THRESH_SIGNED` → prefix `THRESH`)
+- Excludes interface names from prefix detection to avoid conflicts
+- Creates internal datatype metadata for each unique prefix
+
+**Example**:
+```systemverilog
+module example #(
+    // Interface parameters (handled by interface linking)
+    parameter INPUT_WIDTH = 8,
+    parameter INPUT_SIGNED = 0,
+    
+    // Internal mechanism parameters (auto-detected)
+    parameter THRESH_WIDTH = 16,    // → internal datatype "THRESH"
+    parameter THRESH_SIGNED = 1,
+    parameter ACC_WIDTH = 32,       // → internal datatype "ACC"
+    parameter ACC_SIGNED = 1,
+    parameter ACC_BIAS = 128
+) (...);
+```
+
+**Generated Internal Datatypes**:
+- `DatatypeMetadata(name="THRESH", width="THRESH_WIDTH", signed="THRESH_SIGNED")`
+- `DatatypeMetadata(name="ACC", width="ACC_WIDTH", signed="ACC_SIGNED", bias="ACC_BIAS")`
+
+**Supported Properties**:
+- `<PREFIX>_WIDTH` → width parameter
+- `<PREFIX>_SIGNED` → signed parameter
+- `<PREFIX>_FORMAT` → format parameter
+- `<PREFIX>_BIAS` → bias parameter
+- `<PREFIX>_FRACTIONAL_WIDTH` → fractional_width parameter
+- `<PREFIX>_EXPONENT_WIDTH` → exponent_width parameter
+- `<PREFIX>_MANTISSA_WIDTH` → mantissa_width parameter
 
 #### 2.5.3 Parameter Exposure Control
 **Exposure Rules**:
@@ -723,10 +763,10 @@ def resolve_parameter_conflicts(self, kernel_metadata: KernelMetadata):
 ### 7.1 Performance Characteristics
 
 #### 7.1.1 Parsing Performance
-**Measured Results** (from test validation):
-- **Real hardware kernel**: 8.2ms for `thresholding_axi.sv` (13 parameters, 4 interfaces)
-- **Test suite execution**: 190ms for 96 comprehensive tests
-- **Memory usage**: Consistent across test runs, no memory leaks
+**Performance Characteristics**:
+- **Real hardware kernels**: Fast parsing of typical designs (sub-100ms target)
+- **Scalability**: Linear performance with file size and complexity
+- **Memory efficiency**: Consistent memory usage patterns without leaks
 
 #### 7.1.2 Scalability Analysis
 **Component Performance**:
@@ -782,26 +822,26 @@ class ASTParser:
 ### 8.1 Test Suite Design
 
 #### 8.1.1 Test Architecture Overview
-**Total Coverage**: 96 tests with 98.96% success rate
+**Test Infrastructure**: Comprehensive test suite validates parser functionality
 
-**Test Categories**:
-1. **Component Unit Tests** (70 tests):
-   - AST Parser: 16 tests
-   - Module Extractor: 11 tests  
-   - Interface Scanner: 10 tests
-   - Protocol Validator: 11 tests
-   - Pragma Handler: 9 tests (1 skipped)
-   - Parameter Linker: 13 tests
+**Test Coverage Areas**:
+1. **Component Unit Tests**:
+   - AST Parser: Grammar loading, syntax validation, node traversal
+   - Module Extractor: Parameter/port extraction, module selection
+   - Interface Scanner: Pattern matching, port grouping
+   - Protocol Validator: AXI-Stream/AXI-Lite/Global Control validation
+   - Pragma Handler: Pragma extraction, parsing, error handling
+   - Parameter Linker: Auto-linking, conflict resolution
 
-2. **Integration Tests** (25 tests):
-   - End-to-End: 10 tests
-   - Data Flow Validation: 7 tests  
-   - Pragma Integration: 8 tests
+2. **Integration Tests**:
+   - End-to-End: Complete RTL file → KernelMetadata pipeline
+   - Pragma Integration: Complex pragma combinations and interactions
+   - Real Hardware Examples: Production kernel parsing validation
 
-3. **Test Infrastructure** (1 test framework):
-   - RTL Builder utility for test data generation
-   - Validation utilities for result checking
-   - pytest fixtures with comprehensive coverage
+3. **Test Infrastructure**:
+   - RTL Builder utility for systematic test data generation
+   - Validation utilities for result verification
+   - Comprehensive error scenario coverage
 
 #### 8.1.2 Prime Directive PD-3 Compliance
 **Concrete Testing Strategy**:

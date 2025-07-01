@@ -48,22 +48,18 @@ class TemplateContextGenerator:
         required_attributes = []
         
         for param in kernel_metadata.parameters:
-            is_whitelisted = is_parameter_whitelisted(param.name)
+            # Use consolidated parameter resolution logic
+            from ..utils import resolve_parameter_defaults
+            default_value, is_required = resolve_parameter_defaults(
+                param, 
+                is_parameter_whitelisted,
+                get_default_value
+            )
             
-            # Determine if parameter is required (no default or not whitelisted)
-            has_rtl_default = param.default_value is not None
-            is_required = not has_rtl_default or not is_whitelisted
-            
-            # Get effective default value
-            if is_whitelisted and has_rtl_default:
-                default_value = int(param.default_value)
+            # Track whitelisted defaults and required attributes
+            if default_value is not None:
                 whitelisted_defaults[param.name] = default_value
-            elif is_whitelisted and not has_rtl_default:
-                # Use system default for whitelisted params without RTL default
-                default_value = get_default_value(param.name)
-                whitelisted_defaults[param.name] = default_value
-            else:
-                default_value = None
+            if is_required:
                 required_attributes.append(param.name)
             
             param_def = ParameterDefinition(
@@ -73,7 +69,7 @@ class TemplateContextGenerator:
                 description=param.description,
                 line_number=0,  # Parameter object doesn't have line_number
                 template_param_name=param.template_param_name,
-                is_whitelisted=is_whitelisted,
+                is_whitelisted=is_parameter_whitelisted(param.name),
                 is_required=is_required
             )
             parameter_definitions.append(param_def)
@@ -114,7 +110,6 @@ class TemplateContextGenerator:
             parallelism_info=parallelism_info,
             algorithm_info=algorithm_info,
             node_attributes=generator._generate_node_attributes(kernel_metadata, parallelism_info, algorithm_info),
-            # Note: Datatype, shape, and stream width methods removed - handled by AutoHWCustomOp parent class
             resource_estimation_methods=generator._generate_resource_estimation_methods(kernel_metadata, parallelism_info),
             has_inputs=len(input_interfaces) > 0,
             has_outputs=len(output_interfaces) > 0,
@@ -145,13 +140,10 @@ class TemplateContextGenerator:
         
         return template_context
     
-    # Legacy method removed - generators now work directly with TemplateContext
-    
     def _get_class_name(self, module_name: str) -> str:
         """Generate Python class name from module name."""
-        # Convert snake_case or kebab-case to PascalCase
-        parts = module_name.replace('-', '_').split('_')
-        return ''.join(word.capitalize() for word in parts)
+        from ..utils import pascal_case
+        return pascal_case(module_name)
     
     def _get_interfaces_by_type(self, kernel_metadata: KernelMetadata, interface_type: InterfaceType) -> List:
         """Get interfaces matching specific InterfaceType."""
@@ -332,24 +324,14 @@ class TemplateContextGenerator:
         
         return node_attrs
     
-    # Note: _generate_datatype_mappings removed - handled by AutoHWCustomOp parent class
-    
-    # Note: _generate_shape_calculation_methods removed - handled by AutoHWCustomOp parent class
-    
-    # Note: _generate_stream_width_methods removed - handled by AutoHWCustomOp parent class
-    
     def _generate_resource_estimation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
         """Generate simplified resource estimation stubs for template."""
-        # Simplified - only basic resource estimation stubs that can't be computed generically
         methods = {
             "bram_estimation": "return 1",
             "lut_estimation": "return 2000", 
             "dsp_estimation": "return 0"
         }
-        # Note: get_exp_cycles and calc_tmem handled by AutoHWCustomOp parent class
         return methods
-    
-    # Legacy interface enhancement method removed - templates now work directly with TemplateContext
     
     @staticmethod
     def _extract_datatype_parameter_mappings(kernel_metadata: KernelMetadata) -> Dict[str, Any]:

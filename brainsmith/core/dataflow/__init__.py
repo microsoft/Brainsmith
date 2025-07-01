@@ -31,6 +31,12 @@ from .qonnx_types import (
     datatype_from_string,
 )
 
+# Constraint types
+from .constraint_types import (
+    DatatypeConstraintGroup,
+    validate_datatype_against_constraints,
+)
+
 # Core architecture
 from .input_definition import InputDefinition
 from .output_definition import OutputDefinition
@@ -61,6 +67,9 @@ __all__ = [
     
     # QONNX types (unified type system)
     'BaseDataType', 'create_simple_datatype', 'datatype_from_string',
+    
+    # Constraint types
+    'DatatypeConstraintGroup', 'validate_datatype_against_constraints',
     
     # Core architecture
     'InputDefinition', 'OutputDefinition',

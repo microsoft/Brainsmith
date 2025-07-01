@@ -67,7 +67,7 @@ Mark input interfaces as weight interfaces.
 ```
 
 ### BDIM
-Specify block dimension parameters for an interface.
+Specify block dimension parameters for an interface with optional SHAPE mapping.
 ```systemverilog
 // Single parameter syntax
 // @brainsmith BDIM s_axis_input0 INPUT0_BDIM
@@ -77,10 +77,16 @@ Specify block dimension parameters for an interface.
 // @brainsmith BDIM s_axis_input0 [TILE_H, TILE_W]
 // @brainsmith BDIM weights_V [1, KERNEL_SIZE]      # Singleton first dimension
 // @brainsmith BDIM output0 [OUT_H, OUT_W, OUT_C]
+
+// With SHAPE parameter for tiling specification
+// @brainsmith BDIM input0 [BDIM0, BDIM1, BDIM2] SHAPE=[TILE_H, TILE_W, :]
+// @brainsmith BDIM weights [WBDIM0, 1] SHAPE=[KERNEL_SIZE, 1]
+// @brainsmith BDIM output [OUT_BDIM] SHAPE=[OUT_TILES]
 ```
 **Formats**: 
 - `BDIM <interface_name> <param_name>` - Single dimension
 - `BDIM <interface_name> [<param1>, <param2>, ...]` - Multi-dimensional
+- `BDIM <interface_name> [<params...>] SHAPE=[<expr1>, <expr2>, ...]` - With shape mapping
 
 **Interface Types**: INPUT, OUTPUT, WEIGHT only (not CONFIG)
 
@@ -88,10 +94,20 @@ Specify block dimension parameters for an interface.
 - `1` - Singleton dimension (only in lists with at least one parameter)
 - Parameter names - Actual block dimensions
 
-**Notes**: Lists containing "1" must have at least one real parameter. No magic numbers except "1".
+**SHAPE Expressions**:
+- `1` - Singleton dimension
+- `:` - Full slice dimension (default if SHAPE not specified)
+- `param_name` - Parameter alias for node attributes in tiling system
+
+**Notes**: 
+- Lists containing "1" must have at least one real parameter
+- No magic numbers except "1"
+- SHAPE length must match parameter count
+- If SHAPE not specified, defaults to all full slices (`:`)
+- SHAPE controls how RTL parameters map to the Kernel Modeling tiling system
 
 ### SDIM
-Specify stream dimension parameters for an interface.
+Specify stream dimension parameters for an interface with optional SHAPE mapping.
 ```systemverilog
 // Single parameter syntax
 // @brainsmith SDIM s_axis_input0 INPUT0_SDIM
@@ -100,10 +116,16 @@ Specify stream dimension parameters for an interface.
 // Multi-dimensional syntax
 // @brainsmith SDIM input0 [SDIM_H, SDIM_W, SDIM_C]
 // @brainsmith SDIM weights [1, STREAM_DIM]          # Singleton first dimension
+
+// With SHAPE parameter for streaming specification
+// @brainsmith SDIM input0 [SDIM0, SDIM1] SHAPE=[SIMD, PARALLEL]
+// @brainsmith SDIM weights [WSDIM0, WSDIM1, 1] SHAPE=[PE, :, 1]
+// @brainsmith SDIM input [IN_STREAM] SHAPE=[STREAM_WIDTH]
 ```
 **Formats**: 
 - `SDIM <interface_name> <param_name>` - Single dimension
 - `SDIM <interface_name> [<param1>, <param2>, ...]` - Multi-dimensional
+- `SDIM <interface_name> [<params...>] SHAPE=[<expr1>, <expr2>, ...]` - With shape mapping
 
 **Interface Types**: INPUT, WEIGHT only (not OUTPUT or CONFIG)
 
@@ -111,7 +133,17 @@ Specify stream dimension parameters for an interface.
 - `1` - Singleton dimension (only in lists with at least one parameter)
 - Parameter names - Actual stream dimensions
 
-**Notes**: Stream dimensions only make sense for inputs and weights. Lists containing "1" must have at least one real parameter.
+**SHAPE Expressions**:
+- `1` - Singleton dimension
+- `:` - Full slice dimension (uncommon for SDIM but allowed)
+- `param_name` - Parameter alias for node attributes in streaming system
+
+**Notes**: 
+- Stream dimensions only make sense for inputs and weights
+- Lists containing "1" must have at least one real parameter
+- SHAPE length must match parameter count
+- If SHAPE not specified, defaults to using RTL parameter names directly
+- SHAPE controls how RTL parameters map to the Kernel Modeling streaming system
 
 ### ALIAS
 Expose RTL parameters with user-friendly names in the Python API.
@@ -140,6 +172,59 @@ Compute parameter values from Python expressions instead of exposing them.
 - Parameter is computed in HWCustomOp/RTLBackend context
 - Can reference other parameters via `self.get_nodeattr()`
 - Not exposed as node attributes
+
+### RELATIONSHIP
+Define relationships between interface dimensions for the Kernel Modeling system.
+```systemverilog
+// Equal dimensions across all dimensions
+// @brainsmith RELATIONSHIP input0 output0 EQUAL
+
+// Dependent relationships with specific dimensions
+// @brainsmith RELATIONSHIP input0 output0 DEPENDENT 0 0 copy          // output0.d[0] = input0.d[0]
+// @brainsmith RELATIONSHIP input0 output0 DEPENDENT 1 1 scaled SCALE_FACTOR  // output0.d[1] = input0.d[1] * SCALE_FACTOR
+// @brainsmith RELATIONSHIP input0 output0 DEPENDENT 2 2 min           // output0.d[2] = min(input0.d[2], ...)
+
+// Multiple/Divisible relationships
+// @brainsmith RELATIONSHIP input0 output0 MULTIPLE 0 0 factor=4      // output0.d[0] = input0.d[0] * 4
+// @brainsmith RELATIONSHIP input0 output0 DIVISIBLE 1 1              // input0.d[1] must be divisible by output0.d[1]
+```
+
+**Formats**:
+- `RELATIONSHIP <source_interface> <target_interface> EQUAL`
+- `RELATIONSHIP <source_interface> <target_interface> DEPENDENT <src_dim> <tgt_dim> <dep_type> [scale_factor]`
+- `RELATIONSHIP <source_interface> <target_interface> MULTIPLE <src_dim> <tgt_dim> [factor=N]`
+- `RELATIONSHIP <source_interface> <target_interface> DIVISIBLE <src_dim> <tgt_dim>`
+
+**Relationship Types**:
+- `EQUAL`: All dimensions must match between interfaces
+- `DEPENDENT`: Target dimension depends on source dimension
+  - `copy`: Direct copy (tgt = src)
+  - `scaled`: Scaled by parameter (tgt = src * scale_factor)
+  - `min`: Minimum constraint (tgt = min(src, ...))
+- `MULTIPLE`: Target is multiple of source (tgt = src * factor)
+- `DIVISIBLE`: Source must be divisible by target
+
+**Notes**:
+- Dimension indices are 0-based
+- Scale factors can be integer literals or parameter names
+- Relationships used by Kernel Modeling for validation and inference
+
+### AXILITE_PARAM
+Link RTL parameters to AXI-Lite configuration interfaces.
+```systemverilog
+// Link threshold parameter to config interface
+// @brainsmith AXILITE_PARAM THRESHOLD_VALUE s_axilite_config
+
+// Link multiple parameters to same interface
+// @brainsmith AXILITE_PARAM ENABLE_FLAG s_axilite_control
+// @brainsmith AXILITE_PARAM MODE_SELECT s_axilite_control
+```
+**Format**: `AXILITE_PARAM <parameter_name> <axilite_interface_name>`
+
+**Notes**:
+- Marks parameters as configuration registers accessible via AXI-Lite
+- Parameters are not exposed as node attributes
+- Used for runtime configuration through memory-mapped interface
 
 ## Multi-Interface Example
 
@@ -294,6 +379,9 @@ parameter s_axis_SDIM = 128;  // Auto-linked to s_axis interface
 ```
 
 ### Indexed Multi-Dimensional Parameters
+
+The RTL parser supports automatic detection of indexed dimension parameters for multi-dimensional arrays:
+
 ```systemverilog
 // Contiguous indexed BDIM (3D tensor: H x W x C)
 parameter input_BDIM0 = 16;   // Height
@@ -306,11 +394,23 @@ parameter weights_BDIM0 = 32;  // Batch
 parameter weights_BDIM2 = 64;  // Features
 // Auto-linked as: bdim_params = ["weights_BDIM0", "1", "weights_BDIM2"]
 
-// Mixed case supported
+// Mixed case supported (both upper and lower case work)
 parameter output_sdim0 = 256;
 parameter output_sdim1 = 128;
 // Auto-linked as: sdim_params = ["output_sdim0", "output_sdim1"]
+
+// SDIM indexed parameters also supported
+parameter s_axis_data_SDIM0 = 1024;
+parameter s_axis_data_SDIM1 = 512;
+parameter s_axis_data_SDIM2 = 64;
+// Auto-linked as: sdim_params = ["s_axis_data_SDIM0", "s_axis_data_SDIM1", "s_axis_data_SDIM2"]
 ```
+
+**Indexing Rules**:
+- Indices start at 0 and increment: `interface_BDIM0`, `interface_BDIM1`, `interface_BDIM2`, etc.
+- Both uppercase (`BDIM0`) and lowercase (`bdim0`) suffixes are supported
+- Missing indices are filled with singleton dimension `"1"`
+- Maximum index determines the total dimension count
 
 ### Precedence Rules
 1. **Pragma wins**: If BDIM/SDIM pragma exists, it overrides auto-linking

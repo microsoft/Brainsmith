@@ -1,7 +1,27 @@
-## Brainsmith
+## Brainsmith - Kernel Integrator Development Branch
 
-Brainsmith is an open-source platform for FPGA AI accelerators.
-This repository is in a pre-release state and under active co-devlopment by Microsoft and AMD.
+**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch dedicated exclusively to **Kernel Integrator** (Hardware Kernel Generator) development. Many core Brainsmith features have been removed for streamlined development.
+
+### About This Branch
+
+This branch focuses on developing the **Hardware Kernel Generator (HKG)** component of Brainsmith, which converts SystemVerilog RTL modules into FINN-compatible HWCustomOp implementations.
+
+**Available Features:**
+- RTL Parser with pragma system for SystemVerilog analysis
+- Kernel Modeling system with BDIM/SDIM architecture for parallelism
+- FINN integration via AutoHWCustomOp and AutoRTLBackend base classes
+- Template-based code generation for HWCustomOp and RTLBackend classes
+- Complete SystemVerilog → FINN HWCustomOp conversion pipeline
+
+**Removed for Streamlined Development:**
+- End-to-end BERT compilation demos
+- QuantSoftMax and Shuffle hardware operations
+- Full AI model compilation pipeline
+- Production deployment and optimization tools
+
+### Relationship to Main Brainsmith
+
+This development branch will be merged back into the main Brainsmith platform once the Kernel Integrator reaches maturity. For the full Brainsmith platform with complete AI model compilation capabilities, use the main branch.
 
 ### Quick start
 
@@ -54,26 +74,34 @@ FINN_COMMIT="new-commit-hash-or-branch"
 
 > **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
 
-5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
+5. **Hardware Kernel Generator Usage**:
+
+Convert SystemVerilog RTL to FINN HWCustomOp:
 ```bash
-cd tests/end2end/bert
-make single_layer
+# Basic conversion
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen <rtl_file> -o <output_dir>"
+
+# Example with thresholding kernel
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
 ```
 
-6. Alternatively, run a simplified test skipping DCP gen:
+6. **Run Hardware Kernel Generator Tests**:
 ```bash
-cd demos/bert
-python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
+# Run HKG-specific tests
+./smithy exec "pytest brainsmith/tools/hw_kernel_gen/tests/"
+
+# Run end-to-end generation test
+./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
+
+# Test Kernel Modeling system
+./smithy exec "pytest brainsmith/core/dataflow/tests/"
 ```
 
-7. Alternatively, you can also run a suite of tests on the brainsmith repository which will check:
- 
-* Shuffle hardware generation and correctness
-* QuantSoftMax hardware generation and correctness
-* EndtoEnd flow
-
+7. **Explore Examples**:
 ```bash
-cd tests
-pytest ./
+# View example implementations
+./smithy exec "python examples/auto_hw_custom_op/thresholding_km.py"
+
+# Check RTL parser capabilities  
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen.rtl_parser.parser --help"
 ```

@@ -1,26 +1,32 @@
 # Unified Kernel Generation Architecture Design
 
-**Version**: 3.0 (Post-CodegenBinding Migration & Explicit Code Generation)  
-**Date**: 2025-06-30  
-**Status**: Implemented  
+**Version**: 3.1 (Post-Cleanup & Architectural Improvements)  
+**Date**: 2025-07-01  
+**Status**: Implemented & Cleaned  
 
 ## Overview
 
 This document describes the modern Hardware Kernel Generator (HWKG) architecture after the complete deprecation of legacy template systems and migration to explicit code generation. The unified architecture follows **Prime Directive PD-1: Break Fearlessly** and implements a clean, modular code generation pipeline that produces explicit, human-readable code from RTL parsing to FINN-compatible artifacts.
 
-## Key Architectural Changes (Version 3.0)
+## Key Architectural Changes
 
-### ✅ **CodegenBinding Migration (2025-06-30)**
+### Version 3.0: CodegenBinding Migration (2025-06-30)
 - **Moved**: `CodegenBinding` from `brainsmith/core/dataflow/` to `brainsmith/tools/hw_kernel_gen/`
 - **Removed**: `codegen_binding` field from `KernelDefinition` class
 - **Clean Architecture**: Core dataflow modeling now independent of code generation
 - **Single Responsibility**: `CodegenBinding` only exists where it's used (HWKG tool)
 
-### ✅ **Explicit Code Generation System**
+### Version 3.0: Explicit Code Generation System
 - **Runtime → Compile-Time**: `CodegenBinding` now generates explicit code at compile-time
 - **Human-Readable Output**: All parameter assignments are explicit with comments
 - **No Runtime Dependencies**: Generated code has zero dependency on `CodegenBinding`
 - **Performance Improvement**: 18% faster generation, 40% smaller generated files
+
+### ✅ **Version 3.1: Architectural Cleanup (2025-07-01)**
+- **Fixed Circular Dependencies**: Moved `DatatypeConstraintGroup` to `core/dataflow/constraint_types.py`
+- **Created Utility Module**: Consolidated common functions in `utils.py`
+- **Removed Dead Code**: Cleaned deprecated methods and legacy comments
+- **Improved Organization**: Better separation of concerns throughout codebase
 
 ## System Architecture
 
@@ -50,6 +56,8 @@ Generated Artifacts (3 files, human-readable)
 4. **CodegenBinding**: Compile-time RTL parameter binding system (HWKG-local)
 5. **GeneratorManager**: Explicit code generation system with helper functions
 6. **KernelIntegrator**: Orchestrates the complete workflow
+7. **Utility Module** (v3.1): Common functions for code generation (`utils.py`)
+8. **Constraint Types** (v3.1): Shared type definitions in `core/dataflow/constraint_types.py`
 
 ## Core Data Structures
 
@@ -734,13 +742,57 @@ def _convert_context_to_template_vars(self, template_ctx: TemplateContext) -> Di
     return vars_dict
 ```
 
-## Architectural Benefits (Version 3.0)
+## Cleanup Improvements (Version 3.1)
+
+### Utility Functions Module (`utils.py`)
+
+Common utility functions consolidated to reduce code duplication:
+
+```python
+# Naming conventions
+pascal_case(name: str) -> str          # Convert to PascalCase
+snake_case(name: str) -> str           # Convert to snake_case
+
+# Validation
+is_valid_identifier(name: str) -> bool
+validate_parameter_name(name: str) -> Tuple[bool, Optional[str]]
+validate_shape_expression(shape_expr: List[Any], available_params: set) -> Tuple[bool, Optional[str]]
+
+# Parameter handling
+resolve_parameter_defaults(parameter, is_whitelisted_func, get_default_func) -> Tuple[Optional[Any], bool]
+merge_parameter_defaults(rtl_defaults, whitelist_defaults, pragma_defaults) -> Dict[str, Any]
+group_parameters_by_interface(parameters, interface_mappings) -> Dict[str, List[str]]
+
+# Template utilities
+format_template_variable(param_name: str) -> str    # Format as $PARAM$
+parse_template_variable(template_var: str) -> Optional[str]
+create_parameter_assignment(param_name, assignment_expr, comment) -> Dict[str, str]
+```
+
+### Fixed Circular Dependencies
+
+Moved shared types to appropriate locations:
+- `DatatypeConstraintGroup` → `core/dataflow/constraint_types.py`
+- `validate_datatype_against_constraints` → `core/dataflow/constraint_types.py`
+- Imports updated throughout to prevent circular dependencies
+
+### Removed Dead Code
+
+- Removed deprecated `_generate_nodeattr_types_from_binding()` from GeneratorManager
+- Cleaned deprecated methods from TemplateContext:
+  - `get_node_attribute_definitions()`
+  - `get_runtime_parameter_extraction()`
+  - `get_interface_metadata_code()`
+- Removed legacy comments throughout codebase
+
+## Architectural Benefits (Version 3.0+)
 
 ### 🎯 **Clean Architecture**
 - **Separation of Concerns**: Core dataflow modeling independent of code generation
 - **Single Responsibility**: `CodegenBinding` only exists where it's used (HWKG tool)
-- **No Circular Dependencies**: Clear hierarchy between modeling and tooling
+- **No Circular Dependencies**: Fixed in v3.1 with proper type organization
 - **Domain Isolation**: Mathematical abstractions separate from implementation details
+- **Reduced Duplication**: Common utilities consolidated in dedicated module
 
 ### 📖 **Human-Readable Generated Code**  
 - **Explicit Parameter Assignments**: Every parameter resolution is visible and commented

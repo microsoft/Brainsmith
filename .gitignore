@@ -396,7 +396,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
-=======
 
 # Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
 
@@ -482,3 +481,7 @@ deps/
 __pycache__/
 *.pyc
 *.egg-info/
+ai_cache/
+
+# Claude Code file annotations
+#file:CLAUDE.md

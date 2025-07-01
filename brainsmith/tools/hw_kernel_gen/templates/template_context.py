@@ -64,22 +64,11 @@ class TemplateContext:
     config_interfaces: List[InterfaceMetadata] = field(default_factory=list)
     control_interfaces: List[InterfaceMetadata] = field(default_factory=list)
     
-    # Template generation helpers
-    base_imports: List[str] = field(default_factory=lambda: [
-        "from typing import List, Dict, Tuple, Any",
-        "import numpy as np",
-        "from qonnx.core.datatype import DataType",
-        "from brainsmith.dataflow.core import AutoHWCustomOp",
-        "from brainsmith.tools.hw_kernel_gen.data import InterfaceMetadata, InterfaceType",
-        "from brainsmith.dataflow.core.block_chunking import BlockChunkingStrategy"
-    ])
     
-    # Additional context from existing template system
+    # Additional context
     parallelism_info: Dict[str, Any] = field(default_factory=dict)
     algorithm_info: Dict[str, Any] = field(default_factory=dict)
     node_attributes: Dict[str, Any] = field(default_factory=dict)
-    # Note: datatype_mappings, shape_calculation_methods, stream_width_methods removed
-    # These are now handled by AutoHWCustomOp parent class automatically
     resource_estimation_methods: Dict[str, Any] = field(default_factory=dict)
     
     # Datatype parameter information for new architecture
@@ -118,86 +107,6 @@ class TemplateContext:
     
     # SHAPE parameters for HWCustomOp node attributes
     shape_nodeattrs: List[Dict[str, str]] = field(default_factory=list)
-    
-    def get_node_attribute_definitions(self) -> Dict[str, Tuple[str, bool, Any]]:
-        """
-        Generate FINN node attribute definitions for all parameters.
-        
-        Returns:
-            Dict mapping attribute names to (type, required, default) tuples
-        """
-        attrs = {}
-        
-        # Add all RTL parameters as node attributes
-        for param in self.parameter_definitions:
-            if param.is_whitelisted and param.default_value is not None:
-                # Optional attribute with default
-                attrs[param.name] = ("i", False, param.default_value)
-            else:
-                # Required attribute (no default)
-                attrs[param.name] = ("i", True, None)
-        
-        # Add datatype attributes if interfaces exist
-        if self.has_inputs:
-            attrs["inputDataType"] = ("s", True, "")
-        if self.has_outputs:
-            attrs["outputDataType"] = ("s", True, "")
-        if self.has_weights:
-            attrs["weightDataType"] = ("s", True, "")
-            
-        # Add standard AutoHWCustomOp attributes
-        attrs["runtime_writeable_weights"] = ("i", False, 0)
-        attrs["numInputVectors"] = ("ints", False, [1])
-        
-        return attrs
-    
-    def get_runtime_parameter_extraction(self) -> List[str]:
-        """
-        Generate code lines for extracting runtime parameters from ONNX node.
-        
-        Returns:
-            List of Python code lines for parameter extraction
-        """
-        lines = []
-        lines.append("runtime_parameters = {}")
-        
-        for param in self.parameter_definitions:
-            lines.append(f'runtime_parameters["{param.name}"] = self.get_nodeattr("{param.name}")')
-        
-        return lines
-    
-    def get_interface_metadata_code(self) -> List[str]:
-        """
-        Generate code for the get_interface_metadata() method.
-        
-        Returns:
-            List of Python code lines for interface metadata
-        """
-        lines = []
-        lines.append("return [")
-        
-        for interface in self.interface_metadata:
-            lines.append("    InterfaceMetadata(")
-            lines.append(f'        name="{interface.name}",')
-            lines.append(f'        interface_type=InterfaceType.{interface.interface_type.name},')
-            
-            # Allowed datatypes
-            if interface.allowed_datatypes:
-                dt_strs = []
-                for dt in interface.allowed_datatypes:
-                    dt_strs.append(f'DataTypeConstraint(finn_type="{dt.finn_type}", '
-                                 f'bit_width={dt.bit_width}, signed={dt.signed})')
-                lines.append(f'        allowed_datatypes=[{", ".join(dt_strs)}],')
-            else:
-                lines.append('        allowed_datatypes=[],')
-            
-            # Chunking strategy is deprecated and not used in modern templates
-            lines.append('        chunking_strategy=None')
-                
-            lines.append("    ),")
-        
-        lines.append("]")
-        return lines
     
     def validate(self) -> List[str]:
         """

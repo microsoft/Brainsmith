@@ -22,33 +22,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, TYPE_CHECKING
 
 # Import shared types from main data module
-from .data import InterfaceType, DatatypeConstraintGroup, validate_datatype_against_constraints, BaseDataType
-# Import DimensionRelationship from core
-# Temporary: Define DimensionRelationship locally to avoid import issues
-from dataclasses import dataclass
-from enum import Enum as _Enum
-from typing import Optional, Any
-
-class RelationType(_Enum):
-    EQUAL = "equal"
-    DEPENDENT = "dependent"
-    MULTIPLE = "multiple"
-    DIVISIBLE = "divisible"
-
-@dataclass
-class DimensionRelationship:
-    source_interface: str
-    target_interface: str
-    relation: RelationType
-    source_dim: Optional[int] = None
-    target_dim: Optional[int] = None
-    factor: Optional[Any] = None
-    dependency_type: Optional[str] = None
-    description: Optional[str] = None
+from .data import InterfaceType, BaseDataType
+from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup, validate_datatype_against_constraints
 
 if TYPE_CHECKING:
     from .rtl_parser.rtl_data import Parameter
     from .rtl_parser.pragmas.base import Pragma
+    from brainsmith.core.dataflow.relationships import DimensionRelationship
 
 import logging
 
@@ -551,7 +531,7 @@ class KernelMetadata:
     - Template generation for internal datatype handling
     """
     
-    relationships: List[DimensionRelationship] = field(default_factory=list)
+    relationships: List['DimensionRelationship'] = field(default_factory=list)
     """
     Interface relationships defined via RELATIONSHIP pragmas.
     
@@ -577,8 +557,8 @@ class KernelMetadata:
         - thresholding_axi → ThresholdingAxi
         - matrix-multiply → MatrixMultiply
         """
-        parts = self.name.replace('-', '_').split('_')
-        return ''.join(word.capitalize() for word in parts if word)
+        from .utils import pascal_case
+        return pascal_case(self.name)
     
     def validate(self) -> List[str]:
         """

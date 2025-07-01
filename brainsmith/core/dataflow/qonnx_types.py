@@ -17,8 +17,8 @@ from qonnx.core.datatype import DataType as QONNXDataType, BaseDataType
 DataType = QONNXDataType
 BaseDataType = BaseDataType
 
-# Import constraint types from hw_kernel_gen for reuse
-from brainsmith.tools.hw_kernel_gen.data import (
+# Import constraint types from shared module
+from .constraint_types import (
     DatatypeConstraintGroup,
     validate_datatype_against_constraints
 )

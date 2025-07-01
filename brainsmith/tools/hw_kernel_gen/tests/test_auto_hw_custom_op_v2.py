@@ -32,7 +32,7 @@ from brainsmith.core.dataflow.base import ParameterBinding
 from brainsmith.tools.hw_kernel_gen.data import DatatypeConstraintGroup
 
 # AutoHWCustomOp import
-from brainsmith.tools.hw_kernel_gen.auto_hw_custom_op_v2 import AutoHWCustomOp
+from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
 
 
 # Fixtures

@@ -294,7 +294,6 @@ class GeneratorManager:
             "axilite_parameters": template_ctx.linked_parameters.get("axilite", {}),
             
             # Explicit mappings from CodegenBinding (compile-time)
-            "explicit_nodeattr_types": self._generate_nodeattr_types_from_binding(template_ctx.codegen_binding),
             "explicit_datatype_attrs": self._generate_datatype_attributes_from_binding(template_ctx.codegen_binding),
             "explicit_parameter_assignments": self._generate_parameter_assignments_from_binding(template_ctx.codegen_binding),
             
@@ -323,16 +322,6 @@ class GeneratorManager:
         
         return vars_dict
     
-    def _generate_nodeattr_types_from_binding(self, codegen_binding) -> Dict[str, tuple]:
-        """Convert CodegenBinding to explicit FINN node attribute specifications.
-        
-        This method is no longer used - HWCustomOp only defines interface datatypes
-        and FINN legacy parameters. RTLBackend defines algorithm parameters.
-        Kept for backward compatibility but returns empty dict.
-        """
-        # This method is deprecated - node attributes are now split between
-        # HWCustomOp (interface datatypes) and RTLBackend (algorithm params)
-        return {}
     
     def _generate_datatype_attributes_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
         """Generate interface datatype attribute definitions from CodegenBinding."""
@@ -389,21 +378,22 @@ class GeneratorManager:
                     dimension_index = binding.source.dimension_index or 0
                     
                     # Determine if this is BDIM or SDIM based on parameter name
+                    from ..utils import create_parameter_assignment
                     if "BDIM" in param_name:
                         # Find interface index and generate KernelModel access
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f'str(self._get_interface_bdim("{interface_name}", {dimension_index}))',
-                            "comment": f"Block dimension from KernelModel for {interface_name}"
-                        })
+                        assignment = create_parameter_assignment(
+                            param_name,
+                            f'str(self._get_interface_bdim("{interface_name}", {dimension_index}))',
+                            f"Block dimension from KernelModel for {interface_name}"
+                        )
+                        assignments.append(assignment)
                     elif "SDIM" in param_name:
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f'str(self._get_interface_sdim("{interface_name}", {dimension_index}))',
-                            "comment": f"Stream dimension from KernelModel for {interface_name}"
-                        })
+                        assignment = create_parameter_assignment(
+                            param_name,
+                            f'str(self._get_interface_sdim("{interface_name}", {dimension_index}))',
+                            f"Stream dimension from KernelModel for {interface_name}"
+                        )
+                        assignments.append(assignment)
                 elif binding.source.type == SourceType.NODEATTR:
                     # BDIM/SDIM exposed as node attributes but we'll use KernelModel
                     # We need to figure out which interface this belongs to
@@ -439,30 +429,30 @@ class GeneratorManager:
             # Handle algorithm parameters via node attributes
             elif binding.category == ParameterCategory.ALGORITHM:
                 if binding.source.type == SourceType.NODEATTR:
-                    assignments.append({
-                        "param": param_name,
-                        "template_var": f"${param_name.upper()}$",
-                        "assignment": f'str(self.get_nodeattr("{param_name}"))',
-                        "comment": f"Algorithm parameter {param_name}"
-                    })
+                    assignment = create_parameter_assignment(
+                        param_name,
+                        f'str(self.get_nodeattr("{param_name}"))',
+                        f"Algorithm parameter {param_name}"
+                    )
+                    assignments.append(assignment)
                 elif binding.source.type == SourceType.NODEATTR_ALIAS:
                     alias_name = binding.source.nodeattr_name
                     if alias_name:
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$", 
-                            "assignment": f'str(self.get_nodeattr("{alias_name}"))',
-                            "comment": f"Aliased parameter {param_name} from {alias_name}"
-                        })
+                        assignment = create_parameter_assignment(
+                            param_name,
+                            f'str(self.get_nodeattr("{alias_name}"))',
+                            f"Aliased parameter {param_name} from {alias_name}"
+                        )
+                        assignments.append(assignment)
                 elif binding.source.type == SourceType.DERIVED:
                     expression = binding.source.expression
                     if expression:
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f"str({expression})",
-                            "comment": f"Derived parameter {param_name}"
-                        })
+                        assignment = create_parameter_assignment(
+                            param_name,
+                            f"str({expression})",
+                            f"Derived parameter {param_name}"
+                        )
+                        assignments.append(assignment)
             
             # Handle datatype parameters via KernelModel
             elif binding.category == ParameterCategory.DATATYPE:
