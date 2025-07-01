@@ -3,7 +3,6 @@ import torch.nn as nn
 import brevitas.nn as qnn
 from brevitas.quant import Int8WeightPerTensorFloat, Int8ActPerTensorFloat
 import brevitas.onnx as bo
-from brevitas.export.onnx.qonnx.function import QuantWrapper
 from brainsmith.core.hw_compiler import forge
 import onnx
 
@@ -69,7 +68,7 @@ with torch.no_grad():
         input_names=['input_ids'],
         opset_version=18,
         dynamo=True,
-        custom_translation_table={torch.ops.mylibrary.int_quant.default: QuantWrapper,}
+        optimize=True,
     )
 
 
