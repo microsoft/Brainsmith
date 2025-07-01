@@ -92,7 +92,8 @@ class BaseModel(ABC):
 - **Purpose**: Schema for input interfaces
 - **Key Features**:
   - `datatype_constraints`: List of allowed type groups (required)
-  - `block_dims_expr`: Tiling function or expression (optional)
+  - `block_tiling`: List-based tiling expressions (recommended) or legacy function
+  - `stream_tiling`: Stream subdivision expressions (inputs only)
   - `onnx_layout`: Layout hint for ONNX compatibility (optional)
   - `granularity`: Dimension constraints (optional)
   - `optional`: Whether the input is optional (default: False)
@@ -103,7 +104,8 @@ class BaseModel(ABC):
 - **Purpose**: Schema for output interfaces
 - **Key Features**:
   - Similar to InputDefinition (same optional parameters)
-  - No SDIM configuration (computed from kernel behavior)
+  - `block_tiling`: List-based expressions for output tiling
+  - No `stream_tiling` (computed from kernel behavior)
   - `streaming_rate` in models is computed, not configured
 
 #### KernelDefinition
@@ -158,9 +160,38 @@ class DimensionRelationship:
     target_dim: Optional[int]  # None = total size
 ```
 
-### 6. Tiling Functions (`tiling_functions.py`)
+### 6. Tiling System
 
-Flexible block dimension specification:
+The system now provides two approaches for block dimension specification:
+
+#### New Explicit Shape Expression System (`tiling_spec.py`, `tiling_strategy.py`)
+
+**Recommended approach** using intuitive list-based expressions:
+
+```python
+# Clean, explicit tiling expressions
+input_def = InputDefinition(
+    name="input",
+    block_tiling=[1, "CH_TILES", ":", ":"],    # [singleton, parameter, full, full]
+    stream_tiling=[1, "SIMD", 1, 1]            # Stream subdivision
+)
+
+# Expression types:
+# 1          - Singleton (fixed size 1)
+# ":"        - Full dimension (no tiling)
+# 32         - Literal tile size
+# "PARAM"    - Named parameter (resolved at runtime)
+```
+
+**Key Benefits:**
+- **Intuitive API**: Direct mapping from tensor → block → stream dimensions
+- **Type-safe**: Validation at creation and runtime
+- **Parameter extraction**: Automatically finds parameter names for node attributes
+- **RTL decoupling**: Abstract parameter names, not tied to RTL
+
+#### Legacy Tiling Functions (`tiling_functions.py`)
+
+**Legacy approach** using callable functions (still supported):
 
 ```python
 # Fixed tiles
@@ -211,7 +242,7 @@ kernel.configure_sdim({"input": {0: 8, 2: 32}})
 
 ## Usage Examples
 
-### Basic Kernel
+### Basic Kernel (ReLU with New Tiling System)
 
 ```python
 from brainsmith.core.dataflow import (
@@ -220,76 +251,78 @@ from brainsmith.core.dataflow import (
 )
 from qonnx.core.datatype import DataType
 
-# Define kernel
+# Define kernel with explicit tiling
 kernel_def = KernelDefinition(name="relu")
 kernel_def.add_input(InputDefinition(
     name="x",
-    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 16)]
+    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 16)],
+    block_tiling=[1, ":"],          # [singleton batch, full features]
+    stream_tiling=[1, "SIMD"]       # Stream SIMD elements per cycle
 ))
 kernel_def.add_output(OutputDefinition(
     name="y",
-    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 16)]
+    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 16)],
+    block_tiling=[1, ":"]           # Same as input for element-wise op
 ))
 kernel_def.add_relationship("x", "y", RelationType.EQUAL)
 
-# Create model with concrete types
+# Create model with concrete types and parameters
 model = kernel_def.create_model(
     input_specs={"x": ((256, 256), DataType["INT8"])},
-    output_specs={"y": ((256, 256), DataType["INT8"])}
+    output_specs={"y": ((256, 256), DataType["INT8"])},
+    parameter_binding={"SIMD": 16}  # SIMD parameter automatically extracted
 )
-
-# Configure streaming
-model.configure_sdim({"x": 16})
 ```
 
-### Matrix Multiply
+### Matrix Multiply (New Tiling System)
 
 ```python
 from brainsmith.core.dataflow import (
     KernelDefinition, InputDefinition, OutputDefinition,
-    DatatypeConstraintGroup, RelationType, parameterized_tiles
+    DatatypeConstraintGroup, RelationType
 )
 from qonnx.core.datatype import DataType
 
 kernel_def = KernelDefinition(name="matmul")
 
-# Inputs with parameterized tiling
+# Inputs with explicit parameterized tiling
 kernel_def.add_input(InputDefinition(
     name="A",
     datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)],
-    block_dims_expr=parameterized_tiles("TILE_M", "TILE_K")
+    block_tiling=["TILE_M", "TILE_K"],        # Parameters for M×K tiles
+    stream_tiling=["STREAM_M", "STREAM_K"]    # Stream subdivision
 ))
 kernel_def.add_input(InputDefinition(
-    name="B",
+    name="B", 
     datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)],
-    block_dims_expr=parameterized_tiles("TILE_K", "TILE_N")
+    block_tiling=["TILE_K", "TILE_N"],        # K must match A, N parameterized
+    stream_tiling=["STREAM_K", "STREAM_N"]    # Stream subdivision
 ))
 kernel_def.add_output(OutputDefinition(
     name="C",
-    datatype_constraints=[DatatypeConstraintGroup("INT", 32, 32)]
+    datatype_constraints=[DatatypeConstraintGroup("INT", 32, 32)],
+    block_tiling=["TILE_M", "TILE_N"]         # Output matches A×B result
 ))
 
-# K dimensions must match
+# K dimensions must match (relationship validation)
 kernel_def.add_relationship(
     "A", "B", RelationType.DEPENDENT,
     source_dim=1, target_dim=0,
     dependency_type="copy"
 )
 
-# Create and configure
+# Create model - parameters automatically extracted from tiling expressions
 model = kernel_def.create_model(
     input_specs={
         "A": ((512, 256), DataType["INT8"]),
         "B": ((256, 128), DataType["INT8"])
     },
     output_specs={"C": ((512, 128), DataType["INT32"])},
-    parameter_binding={"TILE_M": 64, "TILE_K": 32, "TILE_N": 64}
+    parameter_binding={
+        "TILE_M": 64, "TILE_K": 32, "TILE_N": 64,        # Block tiling
+        "STREAM_M": 8, "STREAM_K": 16, "STREAM_N": 8     # Stream tiling
+    }
 )
-
-model.configure_sdim({
-    "A": [8, 16],    # Stream 8×16 patches
-    "B": [16, 8]     # B[0]=16 due to relationship
-})
 ```
 
 ## Migration from Legacy System
@@ -302,30 +335,50 @@ model.configure_sdim({
 4. **Models**: InterfaceModel → InputInterface/OutputInterface
 5. **Parallelism**: iPar → SDIM per dimension
 6. **Directions**: InterfaceDirection enum → Separate classes
+7. **Tiling**: Function-based → List-based expressions (recommended)
 
 ### Migration Example
 
 ```python
-# Old
+# Old (Function-based tiling)
+from brainsmith.core.dataflow import parameterized_tiles
+
+input_def = InputDefinition(
+    name="input",
+    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)],
+    block_dims_expr=parameterized_tiles("TILE_CH", "TILE_W")
+)
+
+# New (List-based tiling - recommended)
+input_def = InputDefinition(
+    name="input", 
+    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)],
+    block_tiling=["TILE_CH", "TILE_W"],        # Clean, explicit
+    stream_tiling=["SIMD", 1]                  # Stream subdivision
+)
+
+# Even older (Legacy interface system)
 interface = Interface(
     direction=InterfaceDirection.INPUT,
     dtype=DataType.INT8,
     ipar=16
 )
 
-# New
+# Current (Full new system)
 from brainsmith.core.dataflow import InputDefinition, DatatypeConstraintGroup
 from qonnx.core.datatype import DataType
 
 input_def = InputDefinition(
     name="input",
-    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)]
+    datatype_constraints=[DatatypeConstraintGroup("INT", 8, 8)],
+    block_tiling=[1, ":"],          # [batch=1, full channels]
+    stream_tiling=[1, "SIMD"]       # Stream SIMD per cycle
 )
 input_model = input_def.create_model(
     tensor_dims=(256, 256),
-    datatype=DataType["INT8"]
+    datatype=DataType["INT8"],
+    parameter_binding={"SIMD": 16}  # Explicit parameter values
 )
-input_model.sdim = (16, 16)  # Explicit per dimension
 ```
 
 ## Performance Modeling
@@ -392,6 +445,50 @@ The system is designed for future RTL parser integration:
 - **Completeness**: Supports all hardware types
 - **Maintenance**: No custom type system to maintain
 
+## New Tiling System Highlights
+
+### Real-World Examples
+
+```python
+# Thresholding kernel (element-wise operation)
+input_def = InputDefinition(
+    name="input",
+    block_tiling=[1, ":"],          # Process one sample, all channels
+    stream_tiling=[1, "SIMD"]       # Stream SIMD channels per cycle
+)
+
+# Conv2D kernel (channel-major processing)
+input_def = InputDefinition(
+    name="input", 
+    block_tiling=[1, "CH_TILES", ":", ":"],    # Tile channels only
+    stream_tiling=[1, "SIMD", 1, 1]            # Stream within channel tiles
+)
+
+# Matrix multiply (full parameterization)
+a_def = InputDefinition(
+    name="A",
+    block_tiling=["TILE_M", "TILE_K"],         # Tile both dimensions
+    stream_tiling=["STREAM_M", "STREAM_K"]     # Stream within tiles
+)
+```
+
+### Parameter Extraction
+
+The system automatically extracts parameters from tiling expressions:
+
+```python
+# Parameters automatically found: {"CH_TILES", "SIMD", "TILE_M", "TILE_K"}
+params = kernel_def.get_required_parameters()
+# Returns: {
+#     "CH_TILES": "input_block_tiling",
+#     "SIMD": "input_stream_tiling", 
+#     "TILE_M": "A_block_tiling",
+#     "TILE_K": "A_block_tiling_and_B_block_tiling"
+# }
+```
+
+These parameters can be directly exposed as HWCustomOp node attributes for FINN integration.
+
 ## Summary
 
-The Kernel Modeling System provides a clean, type-safe abstraction for hardware accelerator design. Through careful separation of concerns, integration with standard types, and precise parallelism control, it enables both correctness and optimization in the path from neural networks to FPGA implementations. The system is production-ready and designed for seamless integration with RTL generation tools.
+The Kernel Modeling System provides a clean, type-safe abstraction for hardware accelerator design. The new explicit tiling system with list-based expressions dramatically simplifies the API while providing more power and flexibility than the previous function-based approach. Through careful separation of concerns, integration with standard types, and precise parallelism control, it enables both correctness and optimization in the path from neural networks to FPGA implementations. The system is production-ready and designed for seamless integration with RTL generation tools.

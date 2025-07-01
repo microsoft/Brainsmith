@@ -185,17 +185,28 @@ class InterfaceMetadata:
     Example: ["STREAM_SIZE"] or ["SDIM_D0", "SDIM_D1", "SDIM_D2"]
     """
     
-    block_shape: Optional[List[Any]] = None
-    """
-    Multi-dimensional block shape specification.
-    Elements can be parameter names (str) or literals (int) or ':' for full dimension.
     
-    Example: ["TILE_M", 64, ":"]
+    
+    bdim_shape: Optional[List[Union[str, int]]] = None
+    """
+    Shape expressions for block dimensions in TilingSpec format.
+    Elements can be:
+    - 1: Singleton dimension
+    - ":": Full slice dimension  
+    - "param_name": Parameter alias for node attributes
+    
+    Example: [1, "TILE_SIZE", ":"] means [singleton, parameter, full_slice]
     """
     
-    block_rindex: int = 0
+    sdim_shape: Optional[List[Union[str, int]]] = None
     """
-    Starting index for block dimensions (from BDIM pragma RINDEX).
+    Shape expressions for stream dimensions in TilingSpec format.
+    Elements can be:
+    - 1: Singleton dimension
+    - ":": Full slice dimension (unusual for SDIM)
+    - "param_name": Parameter alias for node attributes
+    
+    Example: [1, "SIMD", 1] means [singleton, parameter, singleton]
     """
     
     
@@ -290,14 +301,6 @@ class InterfaceMetadata:
                     f"Streaming interfaces require a width parameter for data formatting."
                 )
         
-        # Check block_shape elements reference valid module parameters
-        if self.block_shape:
-            for shape_element in self.block_shape:
-                if isinstance(shape_element, str) and shape_element not in ['1', ':'] and shape_element not in module_param_names:
-                    errors.append(
-                        f"Interface '{self.name}' block shape references parameter '{shape_element}' "
-                        f"that was not found in module parameters."
-                    )
         
         return errors
     

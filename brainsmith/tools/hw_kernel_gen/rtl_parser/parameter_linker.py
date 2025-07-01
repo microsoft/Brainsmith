@@ -320,7 +320,6 @@ class ParameterLinker:
                         if indexed_bdims:
                             # Multi-dimensional case
                             interface.bdim_params = indexed_bdims
-                            interface.block_shape = indexed_bdims  # For compatibility
                             # Remove all indexed params from exposed (except singletons)
                             for param in indexed_bdims:
                                 if param != "1" and param in kernel_metadata.exposed_parameters:
@@ -329,7 +328,6 @@ class ParameterLinker:
                         elif single_bdim:
                             # Single parameter case - store as list
                             interface.bdim_params = [single_bdim]
-                            interface.block_shape = [single_bdim]  # For compatibility
                             if single_bdim in kernel_metadata.exposed_parameters:
                                 kernel_metadata.exposed_parameters.remove(single_bdim)
                                 logger.debug(f"Removed single BDIM parameter '{single_bdim}' from exposed list")

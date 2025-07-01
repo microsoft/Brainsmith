@@ -13,6 +13,8 @@ from .base import BaseDefinition, ParameterBinding
 from .types import Shape
 from .qonnx_types import BaseDataType, DatatypeConstraintGroup, validate_datatype_against_constraints
 from .output_interface import OutputInterface
+from .tiling_spec import TilingSpec
+from .tiling_strategy import TilingStrategy
 
 @dataclass
 class OutputDefinition(BaseDefinition):
@@ -25,10 +27,22 @@ class OutputDefinition(BaseDefinition):
     
     name: str
     datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
-    block_dims_expr: Optional[Union[List[Union[str, int]], Callable]] = None
-    onnx_layout: Optional[str] = None
+    block_tiling: Optional[List[Union[int, str]]] = None
     optional: bool = False
-    rate_pattern: Optional[List[int]] = None
+    
+    # Internal tiling specification (created from list)
+    _block_tiling_spec: Optional[TilingSpec] = field(init=False, default=None)
+    _tiling_strategy: Optional[TilingStrategy] = field(init=False, default=None)
+    
+    def __post_init__(self):
+        """Convert tiling list to internal TilingSpec object"""
+        if self.block_tiling is not None:
+            self._block_tiling_spec = TilingSpec(self.block_tiling)
+            # Create tiling strategy (outputs only have block tiling)
+            self._tiling_strategy = TilingStrategy(
+                block_spec=self._block_tiling_spec,
+                stream_spec=None  # Outputs don't have configurable stream tiling
+            )
     
     def create_model(self,
                     tensor_dims: Shape,
@@ -94,32 +108,35 @@ class OutputDefinition(BaseDefinition):
                          tensor_dims: Shape,
                          parameter_binding: Optional[ParameterBinding] = None,
                          config: Optional[Dict[str, Any]] = None) -> Shape:
-        """Derive concrete block dimensions"""
-        # Simplified for now - would implement full logic
-        if self.block_dims_expr is None:
-            return self._default_block_chunking(tensor_dims)
+        """Derive concrete block dimensions using tiling strategy
         
-        if callable(self.block_dims_expr):
-            params_dict = parameter_binding.parameters if parameter_binding else {}
-            return self.block_dims_expr(tensor_dims, params_dict, config or {})
+        Args:
+            tensor_dims: Full tensor dimensions
+            parameter_binding: Parameter values for expressions
+            config: Runtime configuration
+            
+        Returns:
+            Block dimensions
+            
+        Raises:
+            ValueError: If tiling cannot be applied
+        """
+        if not self._tiling_strategy or not self._tiling_strategy.block_spec:
+            # No block tiling specified - use full tensor
+            return list(tensor_dims)
         
-        # Handle list of expressions
-        if isinstance(self.block_dims_expr, list):
-            result = []
-            for i, expr in enumerate(self.block_dims_expr):
-                if isinstance(expr, int):
-                    # Literal integer
-                    result.append(expr)
-                elif expr == ":" and i < len(tensor_dims):
-                    # Full dimension
-                    result.append(tensor_dims[i])
-                else:
-                    # For now, default to tensor dimension
-                    result.append(tensor_dims[i] if i < len(tensor_dims) else 1)
-            return tuple(result)
+        # Get parameters dict
+        params_dict = parameter_binding.parameters if parameter_binding else {}
         
-        # Default
-        return tensor_dims
+        # Apply block tiling
+        result = self._tiling_strategy.apply_block_tiling(tensor_dims, params_dict)
+        
+        # Log warnings if any
+        if result.warnings:
+            for warning in result.warnings:
+                print(f"Warning in {self.name} block tiling: {warning}")
+        
+        return result.block_dims
     
     def _default_block_chunking(self, tensor_dims: Shape) -> Shape:
         """Default chunking strategy"""
@@ -134,6 +151,23 @@ class OutputDefinition(BaseDefinition):
         
         return errors
     
+    def get_tiling_parameters(self) -> Dict[str, str]:
+        """Get all parameters used in tiling expressions
+        
+        Returns:
+            Dict mapping parameter names to their usage context
+        """
+        if self._tiling_strategy:
+            return self._tiling_strategy.get_required_parameters()
+        return {}
+    
     def __repr__(self) -> str:
-        constraint_str = f"{len(self.datatype_constraints)} constraints" if self.datatype_constraints else "no constraints"
-        return f"OutputDefinition(name='{self.name}', {constraint_str})"
+        parts = [f"name='{self.name}'"]
+        
+        if self.datatype_constraints:
+            parts.append(f"{len(self.datatype_constraints)} constraints")
+        
+        if self.block_tiling:
+            parts.append(f"block_tiling={self.block_tiling}")
+        
+        return f"OutputDefinition({', '.join(parts)})"

@@ -143,7 +143,7 @@ class KernelModel(BaseModel):
             if name in hidden_interfaces:
                 continue
             
-            n_dims = len(inp.block_dims[0])  # Number of dimensions in the first phase
+            n_dims = len(inp.block_dims)  # Number of dimensions in the first phase
             dim_constraints = dimension_constraints.get(name, {})
             free_dims = [i for i in range(n_dims) if i not in dim_constraints]
             
@@ -153,7 +153,7 @@ class KernelModel(BaseModel):
                     total_dimensions=n_dims,
                     free_dimensions=free_dims,
                     constrained_dimensions=dim_constraints,
-                    block_dims=inp.block_dims[0]
+                    block_dims=inp.block_dims
                 )
         
         return parameters
@@ -181,7 +181,7 @@ class KernelModel(BaseModel):
         for intf_name, sdim_spec in config.items():
             inp = self._input_map[intf_name]
             # Initialize SDIM to 1 for each dimension in the first phase
-            current_sdim = list(inp.sdim) if inp._sdim else [1] * len(inp.block_dims[0])
+            current_sdim = list(inp.sdim) if inp._sdim else [1] * len(inp.block_dims)
             
             if isinstance(sdim_spec, int):
                 # Uniform for all free dimensions
@@ -190,12 +190,12 @@ class KernelModel(BaseModel):
                     for dim in params[intf_name].free_dimensions:
                         # Only apply if it doesn't exceed block dimension
                         # Access the dimension within the first phase
-                        if sdim_spec <= inp.block_dims[0][dim]:
+                        if sdim_spec <= inp.block_dims[dim]:
                             current_sdim[dim] = sdim_spec
                 else:
                     # If no parameter info, apply to dims where it fits
                     # Iterate over dimensions in the first phase
-                    for i, bd in enumerate(inp.block_dims[0]):
+                    for i, bd in enumerate(inp.block_dims):
                         if sdim_spec <= bd:
                             current_sdim[i] = sdim_spec
             

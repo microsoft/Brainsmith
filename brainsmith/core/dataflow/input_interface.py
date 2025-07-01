@@ -79,7 +79,7 @@ class InputInterface(BaseModel):
         """Streaming dimensions (elements per cycle per dimension)"""
         if self._sdim is None:
             # Default: minimal streaming [1, 1, ...] for each dimension
-            return tuple(1 for _ in self.block_dims[0])
+            return tuple(1 for _ in self.block_dims)
         return self._sdim
     
     @sdim.setter
@@ -94,19 +94,19 @@ class InputInterface(BaseModel):
         # Convert to tuple
         if isinstance(value, int):
             # Uniform for all dimensions in the first phase
-            value = tuple(value for _ in self.block_dims[0])
+            value = tuple(value for _ in self.block_dims)
         else:
             value = tuple(value)
         
         # Validate against dimensions in the first phase
-        if len(value) != len(self.block_dims[0]):
+        if len(value) != len(self.block_dims):
             raise ValueError(
                 f"SDIM dimensionality {len(value)} must match "
-                f"block dimensionality {len(self.block_dims[0])}"
+                f"block dimensionality {len(self.block_dims)}"
             )
         
         # Validate each dimension
-        for i, (s, b) in enumerate(zip(value, self.block_dims[0])):
+        for i, (s, b) in enumerate(zip(value, self.block_dims)):
             if s <= 0:
                 raise ValueError(f"SDIM[{i}]={s} must be positive")
             if s > b:
@@ -136,12 +136,12 @@ class InputInterface(BaseModel):
         if "initiation_interval" not in self._cached_metrics:
             # Total blocks needed
             total_blocks = 1
-            for t, b in zip(self.tensor_dims, self.block_dims[0]):
+            for t, b in zip(self.tensor_dims, self.block_dims):
                 total_blocks *= math.ceil(t / b)
             
             # Cycles per block
             cycles_per_block = 1
-            for b, s in zip(self.block_dims[0], self.sdim):
+            for b, s in zip(self.block_dims, self.sdim):
                 cycles_per_block *= math.ceil(b / s)
             
             self._cached_metrics["initiation_interval"] = total_blocks * cycles_per_block
@@ -178,7 +178,7 @@ class InputInterface(BaseModel):
         """Calculate comprehensive performance metrics"""
         return {
             "tensor_dims": self.tensor_dims,
-            "block_dims": self.block_dims[0],
+            "block_dims": self.block_dims,
             "sdim": self.sdim,
             "streaming_bandwidth": self.streaming_bandwidth,
             "initiation_interval": self.initiation_interval,
@@ -217,7 +217,7 @@ class InputInterface(BaseModel):
         return (
             f"InputInterface("
             f"tensor={self.tensor_dims}, "
-            f"block={self.block_dims[0] if len(self.block_dims) == 1 else self.block_dims}, "
+            f"block={self.block_dims}, "
             f"sdim={self.sdim}, "
             f"bandwidth={self.streaming_bandwidth})"
         )

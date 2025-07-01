@@ -116,6 +116,9 @@ class TemplateContext:
     # Relationships between interfaces
     relationships: List['DimensionRelationship'] = field(default_factory=list)
     
+    # SHAPE parameters for HWCustomOp node attributes
+    shape_nodeattrs: List[Dict[str, str]] = field(default_factory=list)
+    
     def get_node_attribute_definitions(self) -> Dict[str, Tuple[str, bool, Any]]:
         """
         Generate FINN node attribute definitions for all parameters.
@@ -188,17 +191,8 @@ class TemplateContext:
             else:
                 lines.append('        allowed_datatypes=[],')
             
-            # Chunking strategy with validated symbolic BDIM
-            if interface.chunking_strategy:
-                cs = interface.chunking_strategy
-                # Convert block_shape to proper representation
-                shape_repr = repr(cs.block_shape)  # Handles both strings and integers
-                lines.append(f'        chunking_strategy=BlockChunkingStrategy(')
-                lines.append(f'            block_shape={shape_repr},')
-                lines.append(f'            rindex={cs.rindex}')
-                lines.append('        )')
-            else:
-                lines.append('        chunking_strategy=None')
+            # Chunking strategy is deprecated and not used in modern templates
+            lines.append('        chunking_strategy=None')
                 
             lines.append("    ),")
         

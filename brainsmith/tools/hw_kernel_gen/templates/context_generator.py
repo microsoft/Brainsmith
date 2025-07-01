@@ -137,6 +137,8 @@ class TemplateContextGenerator:
             categorized_parameters=generator._categorize_parameters(kernel_metadata, parameter_definitions, datatype_mappings),
             # Add unified CodegenBinding
             codegen_binding=codegen_binding,
+            # Add SHAPE parameters for HWCustomOp node attributes
+            shape_nodeattrs=generator._extract_shape_nodeattrs(kernel_metadata),
             # Add relationships
             relationships=relationships
         )
@@ -405,7 +407,11 @@ class TemplateContextGenerator:
                     # Use compiler_name for consistent naming (e.g., input0DataType instead of s_axis_input0DataType)
                     compiler_name = getattr(interface, 'compiler_name', interface.name)
                     datatype_attr_name = f"{compiler_name}DataType"
+                    
+                    # Use the base_type from the first datatype constraint as default
                     default_datatype = "INT8"  # Default fallback
+                    if interface.datatype_constraints:
+                        default_datatype = interface.datatype_constraints[0].base_type
                     
                     interface_datatype_attributes.append({
                         'name': datatype_attr_name,
@@ -422,6 +428,54 @@ class TemplateContextGenerator:
             'interface_datatype_attributes': interface_datatype_attributes,
             'datatype_derivation_methods': datatype_derivation_methods
         }
+    
+    @staticmethod
+    def _extract_shape_nodeattrs(kernel_metadata: KernelMetadata) -> List[Dict[str, str]]:
+        """
+        Extract unique parameter names from BDIM/SDIM SHAPE expressions for HWCustomOp node attributes.
+        
+        This collects all parameter names found in bdim_shape and sdim_shape fields across
+        all interfaces and creates node attribute definitions for the HWCustomOp template.
+        
+        Returns:
+            List of dictionaries with 'name' and 'source_comment' for each unique parameter
+        """
+        shape_params = {}  # Dict to collect unique params with their sources
+        
+        # Scan all interfaces for SHAPE parameters
+        for interface in kernel_metadata.interfaces:
+            interface_name = interface.name
+            
+            # Extract from BDIM shape expressions
+            if hasattr(interface, 'bdim_shape') and interface.bdim_shape:
+                for element in interface.bdim_shape:
+                    if isinstance(element, str) and element != ":" and element.isidentifier():
+                        # This is a parameter name (not singleton 1 or full slice ":")
+                        if element not in shape_params:
+                            shape_params[element] = []
+                        shape_params[element].append(f"BDIM: {interface_name}")
+            
+            # Extract from SDIM shape expressions  
+            if hasattr(interface, 'sdim_shape') and interface.sdim_shape:
+                for element in interface.sdim_shape:
+                    if isinstance(element, str) and element != ":" and element.isidentifier():
+                        # This is a parameter name (not singleton 1 or full slice ":")
+                        if element not in shape_params:
+                            shape_params[element] = []
+                        shape_params[element].append(f"SDIM: {interface_name}")
+        
+        # Convert to list format for template
+        nodeattrs = []
+        for param_name, sources in shape_params.items():
+            nodeattrs.append({
+                'name': param_name,
+                'source_comment': ', '.join(sources)
+            })
+        
+        # Sort by parameter name for consistent output
+        nodeattrs.sort(key=lambda x: x['name'])
+        
+        return nodeattrs
     
     @staticmethod
     def _generate_datatype_parameter_assignments(kernel_metadata: KernelMetadata) -> List[Dict[str, str]]:

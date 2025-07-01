@@ -316,6 +316,9 @@ class GeneratorManager:
             "kernel_complexity": template_ctx.kernel_complexity,
             "kernel_type": template_ctx.kernel_type,
             "categorized_parameters": template_ctx.categorized_parameters,
+            
+            # SHAPE parameters for HWCustomOp node attributes
+            "shape_nodeattrs": template_ctx.shape_nodeattrs,
         }
         
         return vars_dict
@@ -323,44 +326,13 @@ class GeneratorManager:
     def _generate_nodeattr_types_from_binding(self, codegen_binding) -> Dict[str, tuple]:
         """Convert CodegenBinding to explicit FINN node attribute specifications.
         
-        This now only includes true algorithm parameters, not interface properties
-        like BDIM/SDIM which are handled by the KernelModel.
+        This method is no longer used - HWCustomOp only defines interface datatypes
+        and FINN legacy parameters. RTLBackend defines algorithm parameters.
+        Kept for backward compatibility but returns empty dict.
         """
-        from ..codegen_binding import SourceType, ParameterCategory
-        
-        nodeattr_types = {}
-        
-        if not codegen_binding:
-            return nodeattr_types
-        
-        # Process parameter bindings to generate node attribute types
-        for param_name, binding in codegen_binding.parameter_bindings.items():
-            # Skip interface shape parameters (BDIM/SDIM) - these come from KernelModel
-            if binding.category == ParameterCategory.SHAPE:
-                continue
-                
-            # Skip interface datatype parameters - these are set via _extract_*_specs
-            if binding.category == ParameterCategory.DATATYPE:
-                continue
-                
-            if binding.source.type == SourceType.NODEATTR:
-                # Direct node attribute - only for algorithm parameters
-                if binding.category == ParameterCategory.ALGORITHM:
-                    nodeattr_types[param_name] = ("i", True, None)
-            elif binding.source.type == SourceType.NODEATTR_ALIAS:
-                # Aliased node attribute - use the alias name
-                alias_name = binding.source.nodeattr_name
-                if alias_name and binding.category == ParameterCategory.ALGORITHM:
-                    nodeattr_types[alias_name] = ("i", True, None)
-        
-        # Add interface datatype attributes - these are user-configurable
-        # and needed by _extract_*_specs to create the KernelModel
-        for interface_name, interface_binding in codegen_binding.interface_bindings.items():
-            # Generate datatype attribute name based on interface type
-            attr_name = f"{interface_name}DataType"
-            nodeattr_types[attr_name] = ("s", False, "INT8")  # Default datatype
-        
-        return nodeattr_types
+        # This method is deprecated - node attributes are now split between
+        # HWCustomOp (interface datatypes) and RTLBackend (algorithm params)
+        return {}
     
     def _generate_datatype_attributes_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
         """Generate interface datatype attribute definitions from CodegenBinding."""
@@ -371,12 +343,26 @@ class GeneratorManager:
         
         # Generate datatype attributes for each interface with datatype bindings
         for interface_name, interface_binding in codegen_binding.interface_bindings.items():
+            # Determine default datatype based on interface parameters
+            default_datatype = "INT8"
+            
+            # Check if this interface has signed parameter to determine default
+            if interface_binding.datatype_params.get("signed"):
+                signed_param = interface_binding.datatype_params["signed"]
+                # Look up the parameter's default value if available
+                for param_name, binding in codegen_binding.parameter_bindings.items():
+                    if param_name == signed_param:
+                        # If we find metadata suggesting unsigned, use UINT8
+                        if binding.metadata.get("default_unsigned", False):
+                            default_datatype = "UINT8"
+                        break
+            
             attr_name = f"{interface_name}DataType"
             datatype_attrs.append({
                 "name": attr_name,
                 "interface_name": interface_name,
-                "default_datatype": "INT8",
-                "attr_spec": ("s", False, "INT8")
+                "default_datatype": default_datatype,
+                "attr_spec": ("s", False, default_datatype)
             })
         
         return datatype_attrs
@@ -523,10 +509,10 @@ class GeneratorManager:
         return assignments
     
     def _generate_rtl_specific_nodeattrs(self, codegen_binding) -> Dict[str, tuple]:
-        """Generate RTL-specific node attributes (excluding interface datatype attributes).
+        """Generate RTL-specific node attributes for RTLBackend.
         
-        This includes algorithm parameters and internal datatype attributes,
-        but not interface datatype attributes which are handled by HWCustomOp.
+        Only includes parameters that are exposed as NODEATTR or NODEATTR_ALIAS.
+        Excludes all shape, datatype, and derived parameters.
         """
         from ..codegen_binding import SourceType, ParameterCategory
         
@@ -535,42 +521,36 @@ class GeneratorManager:
         if not codegen_binding:
             return rtl_nodeattrs
         
-        # Get datatype attribute names to exclude (only interface datatypes)
-        interface_datatype_attr_names = set()
-        for interface_name in codegen_binding.interface_bindings:
-            interface_datatype_attr_names.add(f"{interface_name}DataType")
-        
-        # Add internal datatype attributes (these are RTL-specific)
+        # Process parameter bindings to find exposed algorithm parameters
         for param_name, binding in codegen_binding.parameter_bindings.items():
-            if binding.category == ParameterCategory.INTERNAL:
-                if binding.source.type == SourceType.INTERNAL_DATATYPE:
-                    # This is a parameter that references an internal datatype
-                    # We need to add the datatype attribute for it
-                    internal_name = binding.source.interface_name
-                    attr_name = f"{internal_name}DataType"
-                    if attr_name not in interface_datatype_attr_names:
-                        rtl_nodeattrs[attr_name] = ("s", False, "INT8")
-        
-        # Process parameter bindings to find RTL-specific node attributes
-        for param_name, binding in codegen_binding.parameter_bindings.items():
-            # Skip interface shape parameters (BDIM/SDIM)
-            if binding.category == ParameterCategory.SHAPE:
+            # Only include algorithm and control parameters that are exposed
+            if binding.category not in [ParameterCategory.ALGORITHM, ParameterCategory.CONTROL]:
                 continue
                 
-            # Skip interface datatype parameters
-            if binding.category == ParameterCategory.DATATYPE:
-                continue
-                
-            # Include algorithm parameters that are node attributes
             if binding.source.type == SourceType.NODEATTR:
-                if binding.category == ParameterCategory.ALGORITHM:
+                # Direct node attribute
+                # Determine type based on parameter name patterns
+                if param_name.endswith("_PATH") or "PATH" in param_name:
+                    # Path parameters are strings
+                    rtl_nodeattrs[param_name] = ("s", False, '')
+                else:
+                    # Most parameters are integers
                     rtl_nodeattrs[param_name] = ("i", True, None)
+                    
             elif binding.source.type == SourceType.NODEATTR_ALIAS:
                 # Aliased node attribute - use the alias name
                 alias_name = binding.source.nodeattr_name
-                if alias_name and binding.category == ParameterCategory.ALGORITHM:
-                    # Skip if this is an interface datatype attribute
-                    if alias_name not in interface_datatype_attr_names:
+                if alias_name:
+                    # Determine type based on alias name
+                    if alias_name.endswith("_PATH") or "PATH" in alias_name:
+                        rtl_nodeattrs[alias_name] = ("s", False, '')
+                    else:
                         rtl_nodeattrs[alias_name] = ("i", True, None)
+        
+        # Add internal datatype attributes if they exist
+        # These are for internal mechanisms like accumulator, threshold
+        for internal_name, internal_binding in codegen_binding.internal_bindings.items():
+            attr_name = f"{internal_name}DataType"
+            rtl_nodeattrs[attr_name] = ("s", False, "INT8")
         
         return rtl_nodeattrs

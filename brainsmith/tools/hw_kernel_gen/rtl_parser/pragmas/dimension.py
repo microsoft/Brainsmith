@@ -89,30 +89,73 @@ class BDimPragma(InterfacePragma):
         
         logger.debug(f"BDIM pragma parameter validation completed successfully")
 
+    def _validate_shape_expression(self, shape_expr: List[str], expected_length: int) -> List:
+        """
+        Validate SHAPE expression for BDIM pragma.
+        
+        Args:
+            shape_expr: List of shape elements from SHAPE=[]
+            expected_length: Expected number of elements (must match param count)
+            
+        Returns:
+            Validated shape expression ready for TilingSpec
+            
+        Raises:
+            PragmaError: If shape expression is invalid
+        """
+        logger.debug(f"Validating BDIM SHAPE expression: {shape_expr}")
+        
+        if not isinstance(shape_expr, list):
+            raise PragmaError(f"SHAPE parameter must be a list, got {type(shape_expr)}")
+        
+        if len(shape_expr) != expected_length:
+            raise PragmaError(f"SHAPE length {len(shape_expr)} does not match parameter count {expected_length}")
+        
+        validated_shape = []
+        for i, element in enumerate(shape_expr):
+            if element == "1":
+                # Singleton dimension - store as integer
+                validated_shape.append(1)
+            elif element == ":":
+                # Full slice dimension - store as string
+                validated_shape.append(":")
+            elif isinstance(element, str) and element.isidentifier():
+                # Parameter alias name - store as string
+                validated_shape.append(element)
+            else:
+                raise PragmaError(f"Invalid SHAPE element '{element}' at position {i}. "
+                                f"Must be '1' (singleton), ':' (full slice), or parameter name.")
+        
+        logger.debug(f"BDIM SHAPE expression validated: {validated_shape}")
+        return validated_shape
+
     def _parse_inputs(self) -> Dict:
         """
-        Parse BDIM pragma format using the new universal parser.
+        Parse BDIM pragma format with optional SHAPE parameter.
         
         Formats:
         - @brainsmith BDIM <interface_name> <param_name>              # Single dimension
         - @brainsmith BDIM <interface_name> [<p1>, <p2>, ...]         # Multi-dimensional
+        - @brainsmith BDIM <interface_name> [<p1>, <p2>, ...] SHAPE=[<expr1>, <expr2>, ...]  # With shape
         
         The parameters ARE the RTL parameters that define the block dimensions.
-        Special values (only allowed in lists):
-        - "1" for singleton dimension
-        - Parameter names for actual dimensions
+        SHAPE expressions define how these map to the new tiling system:
+        - 1: Singleton dimension
+        - ":": Full slice dimension
+        - "param_name": Parameter alias for node attributes
         
         Examples:
-        - @brainsmith BDIM input0 TILE_SIZE               # Single parameter
-        - @brainsmith BDIM input0 [TILE_H, TILE_W]        # Multi-dimensional
-        - @brainsmith BDIM weights [1, KERNEL_SIZE]       # Singleton first dimension
+        - @brainsmith BDIM input0 TILE_SIZE               # Single parameter → shape=[":"]
+        - @brainsmith BDIM input0 [TILE_H, TILE_W]        # Multi-dimensional → shape=[":", ":"]
+        - @brainsmith BDIM input0 [BDIM0, BDIM1, 1] SHAPE=[TILE_SIZE, :, 1]  # With explicit shape
         
         Returns:
-            Dict with parsed data including interface name and block dimension parameters
+            Dict with parsed data including interface name, parameters, and shape
         """
         logger.debug(f"Parsing BDIM pragma: {self.inputs} at line {self.line_number}")
         
         pos = self.inputs['positional']
+        named = self.inputs['named']
         
         if len(pos) < 2:
             raise PragmaError("BDIM pragma requires interface name and parameter(s)")
@@ -159,13 +202,22 @@ class BDimPragma(InterfacePragma):
         if len(pos) > 2:
             raise PragmaError(f"Unexpected extra arguments in BDIM pragma: {pos[2:]}. RINDEX is no longer supported.")
         
+        # Parse SHAPE parameter if provided
+        shape_expr = named.get('SHAPE')
+        if shape_expr:
+            bdim_shape = self._validate_shape_expression(shape_expr, len(bdim_params))
+        else:
+            # Default: all parameters become full slices
+            bdim_shape = [":"] * len(bdim_params)
+        
         return {
             "interface_name": interface_name,
-            "bdim_params": bdim_params  # Always a list
+            "bdim_params": bdim_params,  # Always a list - for CodegenBinding
+            "bdim_shape": bdim_shape     # Always a list - for TilingSpec
         }
 
     def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply BDIM pragma to set block dimension parameters and update metadata."""
+        """Apply BDIM pragma to set block dimension parameters and shape."""
         logger.debug(f"Attempting to apply BDIM pragma to interface '{metadata.name}'")
         
         # Validate that BDIM pragma is only applied to INPUT, OUTPUT, or WEIGHT interfaces (not CONTROL)
@@ -178,15 +230,16 @@ class BDimPragma(InterfacePragma):
         
         logger.debug(f"BDIM pragma applying to interface '{metadata.name}'")
         
-        # Get block dimension parameters
+        # Get block dimension parameters and shape
         bdim_params = self.parsed_data.get("bdim_params", [])
+        bdim_shape = self.parsed_data.get("bdim_shape", [])
         
         # Update interface metadata in-place
-        metadata.bdim_params = bdim_params
-        metadata.block_shape = bdim_params  # Same as bdim_params for compatibility
-        metadata.block_rindex = 0  # Always 0 now that RINDEX is removed
+        metadata.bdim_params = bdim_params      # RTL parameters for CodegenBinding
+        metadata.bdim_shape = bdim_shape        # Shape expressions for TilingSpec
         
-        logger.debug(f"BDIM pragma successfully applied to interface '{metadata.name}'")
+        logger.debug(f"BDIM pragma successfully applied to interface '{metadata.name}' "
+                    f"with params={bdim_params} and shape={bdim_shape}")
 
     
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
@@ -265,24 +318,73 @@ class SDimPragma(InterfacePragma):
         
         logger.debug(f"SDIM pragma parameter validation completed successfully")
 
+    def _validate_shape_expression(self, shape_expr: List[str], expected_length: int) -> List:
+        """
+        Validate SHAPE expression for SDIM pragma.
+        
+        Args:
+            shape_expr: List of shape elements from SHAPE=[]
+            expected_length: Expected number of elements (must match param count)
+            
+        Returns:
+            Validated shape expression ready for TilingSpec
+            
+        Raises:
+            PragmaError: If shape expression is invalid
+        """
+        logger.debug(f"Validating SDIM SHAPE expression: {shape_expr}")
+        
+        if not isinstance(shape_expr, list):
+            raise PragmaError(f"SHAPE parameter must be a list, got {type(shape_expr)}")
+        
+        if len(shape_expr) != expected_length:
+            raise PragmaError(f"SHAPE length {len(shape_expr)} does not match parameter count {expected_length}")
+        
+        validated_shape = []
+        for i, element in enumerate(shape_expr):
+            if element == "1":
+                # Singleton dimension - store as integer
+                validated_shape.append(1)
+            elif element == ":":
+                # Full slice dimension - store as string (unusual for SDIM but allowed)
+                validated_shape.append(":")
+            elif isinstance(element, str) and element.isidentifier():
+                # Parameter alias name - store as string
+                validated_shape.append(element)
+            else:
+                raise PragmaError(f"Invalid SHAPE element '{element}' at position {i}. "
+                                f"Must be '1' (singleton), ':' (full slice), or parameter name.")
+        
+        logger.debug(f"SDIM SHAPE expression validated: {validated_shape}")
+        return validated_shape
+
     def _parse_inputs(self) -> Dict:
         """
-        Parse SDIM pragma format using the new universal parser.
+        Parse SDIM pragma format with optional SHAPE parameter.
         
         Formats:
         - @brainsmith SDIM <interface_name> <param_name>              # Single dimension
         - @brainsmith SDIM <interface_name> [<p1>, <p2>, ...]         # Multi-dimensional
+        - @brainsmith SDIM <interface_name> [<p1>, <p2>, ...] SHAPE=[<expr1>, <expr2>, ...]  # With shape
         
-        Special values (only allowed in lists):
-        - "1" for singleton dimension
-        - Parameter names for actual dimensions
+        The parameters ARE the RTL parameters that define the stream dimensions.
+        SHAPE expressions define how these map to the new tiling system:
+        - 1: Singleton dimension
+        - ":": Full slice dimension (not common for SDIM)
+        - "param_name": Parameter alias for node attributes
+        
+        Examples:
+        - @brainsmith SDIM input0 STREAM_SIZE               # Single parameter → shape=["STREAM_SIZE"]
+        - @brainsmith SDIM input0 [SDIM_H, SDIM_W]          # Multi-dimensional → shape=["SDIM_H", "SDIM_W"]
+        - @brainsmith SDIM input0 [SDIM0, SDIM1, 1] SHAPE=[SIMD, PARALLEL, 1]  # With explicit shape
         
         Returns:
-            Dict with parsed data including interface name and parameter name(s)
+            Dict with parsed data including interface name, parameters, and shape
         """
         logger.debug(f"Parsing SDIM pragma: {self.inputs} at line {self.line_number}")
         
         pos = self.inputs['positional']
+        named = self.inputs['named']
         
         if len(pos) < 2:
             raise PragmaError("SDIM pragma requires at least two arguments: interface name and parameter(s)")
@@ -325,13 +427,22 @@ class SDimPragma(InterfacePragma):
             
             sdim_params = [param]  # Store as single-element list for uniform handling
         
+        # Parse SHAPE parameter if provided
+        shape_expr = named.get('SHAPE')
+        if shape_expr:
+            sdim_shape = self._validate_shape_expression(shape_expr, len(sdim_params))
+        else:
+            # Default: parameters become direct node attributes (use RTL parameter names)
+            sdim_shape = sdim_params[:]  # Copy the parameter names as-is
+        
         return {
             "interface_name": interface_name,
-            "sdim_params": sdim_params  # Always a list
+            "sdim_params": sdim_params,  # Always a list - for CodegenBinding
+            "sdim_shape": sdim_shape     # Always a list - for TilingSpec
         }
 
     def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply SDIM pragma to set stream dimension parameter(s)."""
+        """Apply SDIM pragma to set stream dimension parameters and shape."""
         logger.debug(f"Attempting to apply SDIM pragma to interface '{metadata.name}'")
         
         # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
@@ -344,13 +455,16 @@ class SDimPragma(InterfacePragma):
         
         logger.debug(f"SDIM pragma applying to interface '{metadata.name}'")
         
-        # Get SDIM parameters - always a list now
+        # Get stream dimension parameters and shape
         sdim_params = self.parsed_data.get("sdim_params", [])
+        sdim_shape = self.parsed_data.get("sdim_shape", [])
         
         # Update interface metadata in-place
-        metadata.sdim_params = sdim_params
+        metadata.sdim_params = sdim_params      # RTL parameters for CodegenBinding
+        metadata.sdim_shape = sdim_shape        # Shape expressions for TilingSpec
         
-        logger.debug(f"SDIM pragma successfully applied to interface '{metadata.name}'")
+        logger.debug(f"SDIM pragma successfully applied to interface '{metadata.name}' "
+                    f"with params={sdim_params} and shape={sdim_shape}")
     
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply SDIM pragma to kernel metadata with validation."""

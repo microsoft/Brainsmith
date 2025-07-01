@@ -104,44 +104,37 @@ class KernelDefinition(BaseDefinition):
                 return out
         return None
     
-    def get_required_parameters(self) -> List[str]:
-        """Get list of all parameters used in block_dims_expr.
-        
-        Extracts parameter names from parameterized_tiles() expressions.
+    def get_required_parameters(self) -> Dict[str, str]:
+        """Get all parameters used in tiling expressions.
         
         Returns:
-            Sorted list of unique parameter names
+            Dict mapping parameter names to their usage context
         """
-        params = set()
-        
-        # Helper to extract params from expression
-        def extract_params(expr):
-            if hasattr(expr, '__code__'):
-                # This is a function, check if it has parameter names in its closure
-                if hasattr(expr, '__closure__') and expr.__closure__:
-                    # For parameterized_tiles, the closure contains the parameter names
-                    for cell in expr.__closure__:
-                        if isinstance(cell.cell_contents, (list, tuple)):
-                            # This is likely the list of parameter names
-                            for item in cell.cell_contents:
-                                if isinstance(item, str) and item[0].isupper():
-                                    # Parameter names typically start with uppercase
-                                    params.add(item)
-                        elif isinstance(cell.cell_contents, str) and cell.cell_contents[0].isupper():
-                            # Single parameter
-                            params.add(cell.cell_contents)
+        params = {}
         
         # Extract from input definitions
         for inp in self.input_definitions:
-            if inp.block_dims_expr:
-                extract_params(inp.block_dims_expr)
-                
+            tiling_params = inp.get_tiling_parameters()
+            for param_name, context in tiling_params.items():
+                if param_name in params:
+                    # Parameter used in multiple places
+                    if params[param_name] != context:
+                        params[param_name] = f"{params[param_name]}_and_{context}"
+                else:
+                    params[param_name] = f"{inp.name}_{context}"
+        
         # Extract from output definitions
         for out in self.output_definitions:
-            if out.block_dims_expr:
-                extract_params(out.block_dims_expr)
-                
-        return sorted(params)
+            tiling_params = out.get_tiling_parameters()
+            for param_name, context in tiling_params.items():
+                if param_name in params:
+                    # Parameter used in multiple places
+                    if params[param_name] != context:
+                        params[param_name] = f"{params[param_name]}_and_{out.name}_{context}"
+                else:
+                    params[param_name] = f"{out.name}_{context}"
+        
+        return params
     
     def has_weights(self) -> bool:
         """Check if kernel has weight inputs.

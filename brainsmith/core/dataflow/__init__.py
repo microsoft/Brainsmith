@@ -42,18 +42,13 @@ from .kernel_model import KernelModel
 # Tiling functions and configuration
 from .tiling_functions import (
     fixed_tiles,
+    adaptive_parameterized_tiles,
     parameterized_tiles,
     adaptive_tiles,
-    full_tensor,
-    channel_major_tiling,
-    power_of_two_tiles,
-    ratio_based_tiles,
-    memory_constrained_tiles,
-    composite_tiling,
-    phase_dependent_tiles,
-    validate_tiling_function
+    full_tensor
 )
-from .tiling_config import TilingStrategy, TilingConfig, create_tiling_config
+from .tiling_spec import TilingSpec, TilingExpr, TilingExprType
+from .tiling_strategy import TilingStrategy, TilingOrder, TilingResult
 
 
 
@@ -73,9 +68,8 @@ __all__ = [
     'KernelDefinition', 'KernelModel',
     
     # Tiling functions
-    'fixed_tiles', 'parameterized_tiles', 'adaptive_tiles',
-    'full_tensor', 'channel_major_tiling', 'power_of_two_tiles', 
-    'ratio_based_tiles', 'memory_constrained_tiles', 'composite_tiling',
-    'phase_dependent_tiles', 'validate_tiling_function',
-    'TilingStrategy', 'TilingConfig', 'create_tiling_config',
+    'fixed_tiles', 'adaptive_parameterized_tiles', 'parameterized_tiles', 'adaptive_tiles',
+    'full_tensor',
+    'TilingSpec', 'TilingExpr', 'TilingExprType',
+    'TilingStrategy', 'TilingOrder', 'TilingResult',
 ]

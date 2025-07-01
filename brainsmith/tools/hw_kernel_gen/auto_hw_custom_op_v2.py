@@ -149,19 +149,39 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """
         Extract kernel parameters from ONNX node attributes.
         
-        Uses new KernelModeling architecture to extract parameters directly
-        from node attributes based on the KernelDefinition requirements.
+        Only extracts parameters that are defined as node attributes.
+        Shape parameters (BDIM/SDIM) are handled by KernelModel configuration,
+        not through parameter binding.
         
         Returns:
             ParameterBinding with parameter name->value mappings
         """
         params = {}
         
-        # Extract parameters based on KernelDefinition requirements
-        for param_name in self._kernel_def.get_required_parameters():
-            value = self.get_nodeattr(param_name)
-            if value is not None:
-                params[param_name] = value
+        # Get all defined node attributes for this kernel
+        nodeattr_types = self.get_nodeattr_types()
+        
+        # Extract only the parameters that are actually node attributes
+        # Skip interface datatypes and FINN legacy parameters
+        skip_attrs = {'SIMD', 'PE', 'ram_style'}
+        
+        for attr_name in nodeattr_types:
+            # Skip interface datatype attributes (end with DataType)
+            if attr_name.endswith('DataType'):
+                continue
+                
+            # Skip FINN legacy attributes
+            if attr_name in skip_attrs:
+                continue
+                
+            # Extract the parameter value
+            try:
+                value = self.get_nodeattr(attr_name)
+                if value is not None:
+                    params[attr_name] = value
+            except AttributeError:
+                # Parameter not found - skip it
+                continue
         
         return ParameterBinding(params) if params else None
     

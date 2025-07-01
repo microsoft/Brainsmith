@@ -40,7 +40,11 @@
 
 // @brainsmith DATATYPE input FIXED 1 32
 // @brainsmith DATATYPE output FIXED 1 32
+// @brainsmith DATATYPE_PARAM input width input_WIDTH
+// @brainsmith DATATYPE_PARAM output width output_WIDTH
 // @brainsmith DATATYPE_PARAM threshold width T_WIDTH
+// @brainsmith BDIM input input_BDIM SHAPE=[CHANNELS]
+// @brainsmith SDIM input input_SDIM SHAPE=[SIMD]
 // @brainsmith AXILITE_PARAM threshold USE_AXILITE
 
 module thresholding_axi #(
