@@ -17,7 +17,8 @@ Usage:
     steps = list_finn_steps()
 """
 
-from .decorators import finn_step
+# Decorator is now in the unified plugin system
+# from brainsmith.plugin.decorators import step as finn_step
 from .registry import FinnStepRegistry
 from .transform_resolver import resolve_transforms, validate_transform_dependencies, TransformResolutionError
 
@@ -53,7 +54,7 @@ def get_step_transforms(name: str):
 from . import bert_steps
 
 __all__ = [
-    "finn_step", 
+    # "finn_step",  # Now in brainsmith.plugin.decorators
     "get_step", 
     "list_finn_steps", 
     "register_step",

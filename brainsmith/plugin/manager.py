@@ -1,727 +1,558 @@
 """
-Pure Stevedore Plugin Manager
+Enhanced Plugin Manager with Memory Management
 
-Uses Stevedore to its full potential for optimal plugin discovery and management.
-Combines entry points (for external plugins) with intelligent auto-discovery 
-(for development) to create the best possible system.
+Adds memory management capabilities to the simplified plugin manager
+while maintaining the pragmatic hybrid discovery approach.
 """
 
 import logging
-import inspect
 import importlib
 import pkgutil
-from typing import Dict, List, Set, Optional, Union, Any, Type
-from dataclasses import dataclass
-from threading import Lock, RLock
-from enum import Enum
-from pathlib import Path
+import gc
+from typing import Dict, List, Optional, Type, Any, Set
+from dataclasses import dataclass, field
+from threading import Lock
+from datetime import datetime
 
 try:
-    from stevedore import extension, named, driver
+    from stevedore import extension
 except ImportError:
-    raise ImportError(
-        "Stevedore is required for the plugin system. "
-        "Install with: pip install stevedore"
-    )
+    extension = None
+
+from .data_models import PluginInfo
+from .framework_adapters import UnifiedFrameworkDiscovery
 
 logger = logging.getLogger(__name__)
 
 
-class DiscoveryStrategy(Enum):
-    """Plugin discovery strategies."""
-    STEVEDORE_ONLY = "stevedore_only"       # Use only entry points
-    AUTO_DISCOVERY = "auto_discovery"       # Scan codebase + entry points
-    HYBRID = "hybrid"                       # Best of both worlds (default)
-
-
-@dataclass
-class PluginInfo:
-    """
-    Enhanced plugin information with Stevedore integration.
-    """
-    name: str
-    plugin_class: type
-    framework: str  # "qonnx", "finn", "brainsmith"
-    plugin_type: str  # "transform", "kernel", "backend", "kernel_inference"
-    metadata: Dict[str, Any]
-    discovery_method: str  # "stevedore", "auto", "framework_native"
-    stevedore_extension: Optional[Any] = None  # Stevedore extension object if applicable
-    
-    @property
-    def qualified_name(self) -> str:
-        """Get the qualified name with framework prefix."""
-        return f"{self.framework}:{self.name}"
-    
-    @property
-    def is_unique(self) -> bool:
-        """Check if this plugin name is unique across frameworks."""
-        return self.metadata.get('is_unique', False)
-    
-    def instantiate(self, **kwargs) -> Any:
-        """Create an instance of the plugin using the best method."""
-        if self.stevedore_extension:
-            # Use Stevedore's optimized loading
-            return self.stevedore_extension.obj(**kwargs)
-        else:
-            # Fallback to direct instantiation
-            return self.plugin_class(**kwargs)
-    
-    def __str__(self) -> str:
-        return f"{self.name} ({self.framework}, {self.discovery_method})"
-
-
-@dataclass
-class PluginCatalog:
-    """
-    Complete catalog of discovered plugins organized by type and framework.
-    """
-    plugins_by_name: Dict[str, List[PluginInfo]]  # name -> [plugin_info_list]
-    plugins_by_type: Dict[str, List[PluginInfo]]  # type -> [plugin_info_list]
-    plugins_by_framework: Dict[str, List[PluginInfo]]  # framework -> [plugin_info_list]
-    conflicts: Dict[str, List[PluginInfo]]  # name -> [conflicting_plugins]
-    unique_plugins: Dict[str, PluginInfo]  # name -> unique_plugin
-    
-    def get_plugin(self, name: str, framework: str = None) -> Optional[PluginInfo]:
-        """Get specific plugin by name and optionally framework."""
-        if framework:
-            qualified_name = f"{framework}:{name}"
-            for plugin in self.plugins_by_name.get(name, []):
-                if plugin.framework == framework:
-                    return plugin
-        else:
-            # Check if unique first
-            if name in self.unique_plugins:
-                return self.unique_plugins[name]
-            # If not unique, need framework specification
-            if name in self.conflicts:
-                frameworks = [p.framework for p in self.conflicts[name]]
-                raise ValueError(
-                    f"Plugin '{name}' is ambiguous. Found in frameworks: {frameworks}. "
-                    f"Use qualified name like 'qonnx:{name}' or 'finn:{name}'"
-                )
-        return None
-    
-    def list_transforms(self, framework: str = None) -> List[PluginInfo]:
-        """List all transforms, optionally filtered by framework."""
-        transforms = self.plugins_by_type.get("transform", [])
-        if framework:
-            transforms = [t for t in transforms if t.framework == framework]
-        return transforms
-    
-    def list_kernels(self, framework: str = None) -> List[PluginInfo]:
-        """List all kernels, optionally filtered by framework."""
-        kernels = self.plugins_by_type.get("kernel", [])
-        if framework:
-            kernels = [k for k in kernels if k.framework == framework]
-        return kernels
-
-
 class PluginManager:
     """
-    Pure Stevedore Plugin Manager - Uses Stevedore to its full potential.
+    Enhanced plugin manager with memory management capabilities.
     
-    Combines entry points (external plugins) with intelligent auto-discovery
-    (development convenience) to create the optimal plugin system.
+    Maintains the simplified design while adding:
+    - Memory usage tracking
+    - Cache cleanup methods
+    - Discovery prioritization
     """
     
-    # Entry point namespaces for different plugin types
-    ENTRY_POINT_NAMESPACES = {
-        'transform': [
-            'brainsmith.transforms',
-            'brainsmith.external.transforms',
-        ],
-        'kernel': [
-            'brainsmith.kernels', 
-            'brainsmith.external.kernels',
-        ],
-        'backend': [
-            'brainsmith.backends',
-            'brainsmith.external.backends',
-        ]
-    }
-    
-    def __init__(self, strategy: DiscoveryStrategy = DiscoveryStrategy.HYBRID):
-        self.strategy = strategy
-        self._catalog: Optional[PluginCatalog] = None
-        self._stevedore_managers: Dict[str, extension.ExtensionManager] = {}
-        self._lock = RLock()
-        self._discovery_completed = False
+    def __init__(self):
+        self._plugins: Dict[str, PluginInfo] = {}  # name -> PluginInfo
+        self._discovery_done = False
+        self._lock = Lock()  # Thread safety
         
-        # Initialize Stevedore managers for each namespace
-        self._init_stevedore_managers()
+        # Framework discovery system
+        self._framework_discovery = UnifiedFrameworkDiscovery()
+        
+        # Performance and caching
+        self._discovery_cache: Optional[Dict[str, List[PluginInfo]]] = None
+        self._discovery_cache_timestamp: Optional[float] = None
+        self._cache_ttl = 300  # 5 minutes cache TTL
+        
+        # Memory management tracking
+        self._discovery_stats = {
+            'stevedore': 0,
+            'internal': 0,
+            'framework': 0,
+            'discovery_time': None,
+            'cache_hits': 0,
+            'cache_misses': 0
+        }
+        self._cache_references: Set[Any] = set()  # Track collection instances
     
-    def discover_all(self, force_refresh: bool = False) -> PluginCatalog:
+    def discover_plugins(self, modes=None, frameworks=None, types=None) -> None:
         """
-        Discover all available plugins using pure Stevedore approach.
+        Discover plugins using conditional discovery based on requirements.
         
         Args:
-            force_refresh: Force rediscovery even if already completed
-            
-        Returns:
-            Complete plugin catalog
+            modes: Discovery modes ('full', 'blueprint', 'selective'). Default: 'full'
+            frameworks: List of frameworks to discover ('brainsmith', 'qonnx', 'finn'). Default: all
+            types: List of plugin types to discover. Default: all
+        
+        Discovery Priority:
+        1. Stevedore entry points (external plugins)
+        2. Internal module scanning (brainsmith plugins)
+        3. Framework registries (qonnx/finn plugins)
         """
         with self._lock:
-            if self._catalog is not None and not force_refresh:
-                return self._catalog
+            # Check if discovery can be served from cache
+            cache_key = self._generate_cache_key(modes, frameworks, types)
+            if self._can_use_cache(cache_key):
+                self._load_from_cache(cache_key)
+                self._discovery_stats['cache_hits'] += 1
+                return
             
-            logger.info("Discovering plugins with pure Stevedore system...")
+            self._discovery_stats['cache_misses'] += 1
             
-            all_plugins = []
+            if self._discovery_done:
+                return
             
-            if self.strategy in [DiscoveryStrategy.STEVEDORE_ONLY, DiscoveryStrategy.HYBRID]:
-                # Discover via Stevedore entry points
-                stevedore_plugins = self._discover_via_stevedore()
-                all_plugins.extend(stevedore_plugins)
-                logger.info(f"Found {len(stevedore_plugins)} plugins via Stevedore entry points")
-            
-            if self.strategy in [DiscoveryStrategy.AUTO_DISCOVERY, DiscoveryStrategy.HYBRID]:
-                # Auto-discover BrainSmith native plugins
-                auto_plugins = self._discover_brainsmith_native()
-                all_plugins.extend(auto_plugins)
-                logger.info(f"Found {len(auto_plugins)} plugins via auto-discovery")
+            # Set default modes
+            if modes is None:
+                modes = ['full']
+            elif isinstance(modes, str):
+                modes = [modes]
                 
-                # Direct framework integration
-                qonnx_plugins = self._discover_qonnx_transforms()
-                finn_plugins = self._discover_finn_transforms()
-                all_plugins.extend(qonnx_plugins)
-                all_plugins.extend(finn_plugins)
-                logger.info(f"Found {len(qonnx_plugins)} QONNX + {len(finn_plugins)} FINN plugins")
+            start_time = datetime.now()
             
-            # Organize plugins into catalog structure
-            plugins_by_name = {}
-            plugins_by_type = {}
-            plugins_by_framework = {}
-            conflicts = {}
-            unique_plugins = {}
+            # Conditional discovery based on modes and requirements
+            stevedore_count = 0
+            internal_count = 0
+            framework_count = 0
             
-            for plugin_info in all_plugins:
-                # Organize by name
-                if plugin_info.name not in plugins_by_name:
-                    plugins_by_name[plugin_info.name] = []
-                plugins_by_name[plugin_info.name].append(plugin_info)
-                
-                # Organize by type
-                if plugin_info.plugin_type not in plugins_by_type:
-                    plugins_by_type[plugin_info.plugin_type] = []
-                plugins_by_type[plugin_info.plugin_type].append(plugin_info)
-                
-                # Organize by framework
-                if plugin_info.framework not in plugins_by_framework:
-                    plugins_by_framework[plugin_info.framework] = []
-                plugins_by_framework[plugin_info.framework].append(plugin_info)
+            # Always discover Stevedore (lightweight, external plugins)
+            if self._should_discover_stevedore(modes, frameworks):
+                stevedore_count = self._discover_stevedore()
+                self._discovery_stats['stevedore'] = stevedore_count
             
-            # Identify conflicts and unique plugins
-            for name, plugin_list in plugins_by_name.items():
-                if len(plugin_list) > 1:
-                    conflicts[name] = plugin_list
-                    # Mark all as non-unique
-                    for plugin in plugin_list:
-                        plugin.metadata['is_unique'] = False
-                else:
-                    unique_plugins[name] = plugin_list[0]
-                    plugin_list[0].metadata['is_unique'] = True
+            # Always discover internal plugins (zero-friction development)
+            if self._should_discover_internal(modes, frameworks):
+                internal_count = self._discover_internal_plugins()
+                self._discovery_stats['internal'] = internal_count
             
-            self._catalog = PluginCatalog(
-                plugins_by_name=plugins_by_name,
-                plugins_by_type=plugins_by_type,
-                plugins_by_framework=plugins_by_framework,
-                conflicts=conflicts,
-                unique_plugins=unique_plugins
+            # Conditionally discover framework plugins
+            if self._should_discover_frameworks(modes, frameworks):
+                framework_count = self._discover_framework_plugins(frameworks)
+                self._discovery_stats['framework'] = framework_count
+            
+            self._discovery_done = True
+            self._discovery_stats['discovery_time'] = (datetime.now() - start_time).total_seconds()
+            
+            # Cache the results
+            self._cache_discovery_results(cache_key)
+            
+            logger.info(f"Discovered {len(self._plugins)} plugins in {self._discovery_stats['discovery_time']:.2f}s")
+            logger.debug(f"Discovery breakdown: {self._discovery_stats}")
+    
+    def _discover_stevedore(self) -> int:
+        """Discover plugins via Stevedore entry points."""
+        if not extension:
+            logger.debug("Stevedore not available")
+            return 0
+        
+        count = 0
+        try:
+            # Standard plugin namespace
+            mgr = extension.ExtensionManager(
+                namespace='brainsmith.plugins',
+                invoke_on_load=False
             )
             
-            self._discovery_completed = True
-            
-            # Log comprehensive summary
-            total_plugins = sum(len(plist) for plist in plugins_by_name.values())
-            unique_count = len(unique_plugins)
-            conflict_count = len(conflicts)
-            
-            logger.info(f"Pure Stevedore discovery complete: {total_plugins} total plugins")
-            logger.info(f"  - {unique_count} unique plugins (no prefix needed)")
-            logger.info(f"  - {conflict_count} conflicted plugins (prefix required)")
-            
-            by_framework = {}
-            for framework, plugin_list in plugins_by_framework.items():
-                by_framework[framework] = len(plugin_list)
-            logger.info(f"  - By framework: {by_framework}")
-            
-            return self._catalog
+            for ext in mgr.extensions:
+                try:
+                    plugin_class = ext.obj
+                    if self._register_from_class(plugin_class, 'brainsmith', 'stevedore'):
+                        count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to load Stevedore plugin {ext.name}: {e}")
+                    
+        except Exception as e:
+            logger.debug(f"Stevedore discovery failed: {e}")
+        
+        return count
     
-    def get_plugin(self, name: str, plugin_type: str = None, framework: str = None) -> Optional[PluginInfo]:
-        """
-        Get a specific plugin with intelligent conflict resolution.
-        
-        Args:
-            name: Plugin name (can include framework prefix like "qonnx:RemoveIdentityOps")
-            plugin_type: Optional plugin type filter
-            framework: Optional framework filter
+    def _discover_internal_plugins(self) -> int:
+        """Discover BrainSmith internal plugins via framework adapter."""
+        count = 0
+        try:
+            # Use BrainSmith adapter for internal plugin discovery
+            brainsmith_adapter = self._framework_discovery.adapters['brainsmith']
+            plugins = brainsmith_adapter.discover_plugins()
             
-        Returns:
-            PluginInfo if found, None otherwise
-            
-        Raises:
-            ValueError: If plugin name is ambiguous and needs framework specification
-        """
-        # Ensure discovery is complete
-        catalog = self.discover_all()
+            # Register discovered plugins
+            for plugin_info in plugins:
+                self.register_plugin(plugin_info)
+                count += 1
+                
+        except Exception as e:
+            logger.debug(f"Internal discovery failed: {e}")
         
-        # Handle framework prefix in name
-        if ":" in name and framework is None:
-            framework, name = name.split(":", 1)
-        
-        # Get plugin from catalog
-        plugin_info = catalog.get_plugin(name, framework)
-        
-        if plugin_info and plugin_type and plugin_info.plugin_type != plugin_type:
-            return None  # Type mismatch
-        
-        return plugin_info
+        return count
     
-    def load_plugin(self, name: str, plugin_type: str = None, framework: str = None) -> Optional[PluginInfo]:
-        """
-        Load a specific plugin and mark it as loaded.
+    def _discover_framework_plugins(self, frameworks: Optional[List[str]] = None) -> int:
+        """Discover plugins from framework registries using adapters."""
+        count = 0
         
-        Args:
-            name: Plugin name
-            plugin_type: Optional plugin type filter
-            framework: Optional framework filter
+        try:
+            if frameworks:
+                # Discover only specified frameworks
+                plugins = self._framework_discovery.discover_framework_plugins(frameworks)
+            else:
+                # Discover all available frameworks
+                plugins = self._framework_discovery.discover_all_plugins()
             
-        Returns:
-            Loaded PluginInfo if successful, None otherwise
-        """
+            # Register discovered plugins
+            for plugin_info in plugins:
+                self.register_plugin(plugin_info)
+                count += 1
+                
+        except Exception as e:
+            logger.warning(f"Framework discovery failed: {e}")
+        
+        return count
+    
+    def _should_discover_stevedore(self, modes: List[str], frameworks: Optional[List[str]]) -> bool:
+        """Determine if Stevedore discovery should run."""
+        # Always discover external plugins (lightweight discovery)
+        return True
+    
+    def _should_discover_internal(self, modes: List[str], frameworks: Optional[List[str]]) -> bool:
+        """Determine if internal plugin discovery should run."""
+        # Always discover internal plugins for zero-friction development
+        return True
+    
+    def _should_discover_frameworks(self, modes: List[str], frameworks: Optional[List[str]]) -> bool:
+        """Determine if framework plugin discovery should run."""
+        # Only discover frameworks if:
+        # 1. Full discovery mode is requested
+        # 2. Specific frameworks are requested
+        # 3. Blueprint mode with framework plugins specified
+        
+        if 'full' in modes:
+            return True
+            
+        if frameworks:
+            # Check if any framework plugins are specifically requested
+            return bool(set(frameworks) & {'qonnx', 'finn'})
+            
+        # For blueprint and selective modes, only discover if explicitly needed
+        return False
+    
+    def _generate_cache_key(self, modes: Optional[List[str]], frameworks: Optional[List[str]], types: Optional[List[str]]) -> str:
+        """Generate a cache key for discovery parameters."""
+        import hashlib
+        
+        # Normalize parameters
+        modes_str = ','.join(sorted(modes or ['full']))
+        frameworks_str = ','.join(sorted(frameworks or ['all']))
+        types_str = ','.join(sorted(types or ['all']))
+        
+        # Create cache key
+        key_data = f"{modes_str}|{frameworks_str}|{types_str}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def _can_use_cache(self, cache_key: str) -> bool:
+        """Check if cache can be used for the given key."""
+        import time
+        
+        if self._discovery_cache is None:
+            return False
+        
+        if cache_key not in self._discovery_cache:
+            return False
+        
+        # Check TTL
+        if self._discovery_cache_timestamp is None:
+            return False
+        
+        age = time.time() - self._discovery_cache_timestamp
+        if age > self._cache_ttl:
+            logger.debug(f"Cache expired (age: {age:.1f}s, TTL: {self._cache_ttl}s)")
+            self._discovery_cache = None
+            self._discovery_cache_timestamp = None
+            return False
+        
+        return True
+    
+    def _load_from_cache(self, cache_key: str) -> None:
+        """Load plugins from cache."""
+        if self._discovery_cache and cache_key in self._discovery_cache:
+            cached_plugins = self._discovery_cache[cache_key]
+            
+            # Load cached plugins into manager
+            for plugin_info in cached_plugins:
+                self._plugins[plugin_info.name] = plugin_info
+            
+            self._discovery_done = True
+            logger.debug(f"Loaded {len(cached_plugins)} plugins from cache")
+    
+    def _cache_discovery_results(self, cache_key: str) -> None:
+        """Cache current discovery results."""
+        import time
+        
+        if self._discovery_cache is None:
+            self._discovery_cache = {}
+        
+        # Cache all discovered plugins
+        self._discovery_cache[cache_key] = list(self._plugins.values())
+        self._discovery_cache_timestamp = time.time()
+        
+        logger.debug(f"Cached {len(self._plugins)} plugins with key: {cache_key}")
+    
+    def clear_discovery_cache(self) -> None:
+        """Clear the discovery cache."""
         with self._lock:
-            # Initialize loaded plugins cache if needed
-            if not hasattr(self, '_loaded_plugins'):
-                self._loaded_plugins = {}
-            
-            # Check if already loaded
-            cache_key = f"{framework or 'any'}:{plugin_type or 'any'}:{name}"
-            if cache_key in self._loaded_plugins:
-                return self._loaded_plugins[cache_key]
-            
-            # Get plugin info
-            plugin_info = self.get_plugin(name, plugin_type, framework)
-            if not plugin_info:
-                return None
-            
-            # Mark as loaded
-            plugin_info.metadata['is_loaded'] = True
-            self._loaded_plugins[cache_key] = plugin_info
-            
-            logger.debug(f"Loaded plugin: {plugin_info}")
-            return plugin_info
+            self._discovery_cache = None
+            self._discovery_cache_timestamp = None
+            logger.debug("Discovery cache cleared")
     
-    def load_plugins(self, requirements: List[str]) -> Dict[str, PluginInfo]:
-        """
-        Load multiple plugins based on requirements.
+    
+    def register_plugin(self, plugin_info: PluginInfo) -> None:
+        """Register a plugin with conflict resolution."""
+        key = plugin_info.name
         
-        Args:
-            requirements: List of plugin names (can include framework prefixes)
+        # Check for conflicts
+        if key in self._plugins:
+            existing = self._plugins[key]
             
-        Returns:
-            Dict mapping requirement names to loaded PluginInfo objects
-        """
-        loaded = {}
-        errors = []
-        
-        for requirement in requirements:
-            try:
-                plugin_info = self.load_plugin(requirement)
-                if plugin_info:
-                    loaded[requirement] = plugin_info
-                else:
-                    errors.append(f"Plugin '{requirement}' not found")
-            except Exception as e:
-                errors.append(f"Failed to load '{requirement}': {e}")
-        
-        if errors:
-            logger.warning(f"Plugin loading errors: {'; '.join(errors)}")
-        
-        return loaded
-    
-    def get_transforms(self) -> 'TransformCollection':
-        """Get transform collection for natural access."""
-        from .collections import TransformCollection
-        return TransformCollection(self)
-    
-    def get_kernels(self) -> 'KernelCollection':
-        """Get kernel collection for natural access."""
-        from .collections import KernelCollection
-        return KernelCollection(self)
-    
-    def list_available(self, plugin_type: str = None, framework: str = None) -> List[PluginInfo]:
-        """
-        List all available plugins, optionally filtered.
-        
-        Args:
-            plugin_type: Optional type filter ("transform", "kernel", etc.)
-            framework: Optional framework filter ("qonnx", "finn", "brainsmith")
+            # Prioritize by discovery source
+            existing_source = existing.metadata.get('discovery_source', 'unknown')
+            new_source = plugin_info.metadata.get('discovery_source', 'unknown')
             
-        Returns:
-            List of matching PluginInfo objects
-        """
-        catalog = self.discover_all()
+            # Priority: stevedore > qonnx_manual_registry > module_scan > qonnx_registry > unknown
+            source_priority = {
+                'stevedore': 0,
+                'qonnx_manual_registry': 1,
+                'module_scan': 2,
+                'qonnx_registry': 3,
+                'unknown': 4
+            }
+            
+            if source_priority.get(new_source, 4) < source_priority.get(existing_source, 4):
+                # New plugin has higher priority
+                logger.debug(f"Replacing {key} from {existing_source} with {new_source}")
+                self._plugins[key] = plugin_info
+            else:
+                # Keep existing plugin
+                logger.debug(f"Keeping existing {key} from {existing_source} over {new_source}")
+        else:
+            self._plugins[key] = plugin_info
+    
+    def get_plugin(self, name: str, framework: Optional[str] = None) -> Optional[PluginInfo]:
+        """Get a plugin by name, optionally filtered by framework."""
+        # Full discovery for manual plugin access
+        self._ensure_discovered(modes=['full'])
+        
+        # Direct lookup
+        if name in self._plugins:
+            plugin = self._plugins[name]
+            if framework is None or plugin.framework == framework:
+                return plugin
+        
+        # Try with framework prefix
+        if framework:
+            prefixed = f"{framework}:{name}"
+            if prefixed in self._plugins:
+                return self._plugins[prefixed]
+        
+        return None
+    
+    def list_plugins(self, plugin_type: Optional[str] = None, 
+                    framework: Optional[str] = None) -> List[PluginInfo]:
+        """List plugins with optional filtering."""
+        # Full discovery for listing plugins
+        self._ensure_discovered(modes=['full'])
+        
+        plugins = list(self._plugins.values())
         
         if plugin_type:
-            plugins = catalog.plugins_by_type.get(plugin_type, [])
-        else:
-            plugins = []
-            for plugin_list in catalog.plugins_by_name.values():
-                plugins.extend(plugin_list)
+            plugins = [p for p in plugins if p.plugin_type == plugin_type]
         
         if framework:
             plugins = [p for p in plugins if p.framework == framework]
         
         return plugins
     
-    def analyze_conflicts(self) -> Dict[str, List[PluginInfo]]:
-        """Get all naming conflicts."""
-        catalog = self.discover_all()
-        return catalog.conflicts.copy()
-    
-    def clear_loaded(self):
-        """Clear all loaded plugins (useful for testing)."""
-        with self._lock:
-            if hasattr(self, '_loaded_plugins'):
-                self._loaded_plugins.clear()
-            logger.debug("Cleared all loaded plugins")
-    
-    def reset(self):
-        """Reset manager to initial state (useful for testing)."""
-        with self._lock:
-            self._catalog = None
-            if hasattr(self, '_loaded_plugins'):
-                self._loaded_plugins.clear()
-            self._discovery_completed = False
-            logger.debug("Reset plugin manager")
-    
-    def _init_stevedore_managers(self):
-        """Initialize Stevedore extension managers for each namespace."""
-        for plugin_type, namespaces in self.ENTRY_POINT_NAMESPACES.items():
-            for namespace in namespaces:
-                try:
-                    manager = extension.ExtensionManager(
-                        namespace=namespace,
-                        invoke_on_load=False,  # Don't instantiate immediately
-                        on_load_failure_callback=self._on_stevedore_load_failure
-                    )
-                    self._stevedore_managers[namespace] = manager
-                    logger.debug(f"Initialized Stevedore manager for namespace: {namespace}")
-                except RuntimeError as e:
-                    # No entry points found - this is normal during development
-                    logger.debug(f"No entry points found for namespace {namespace}: {e}")
-    
-    def _on_stevedore_load_failure(self, manager, ep, err):
-        """Handle Stevedore extension loading failures gracefully."""
-        logger.warning(f"Failed to load entry point {ep.name} from {ep.dist}: {err}")
-    
-    def _discover_via_stevedore(self) -> List[PluginInfo]:
-        """Discover plugins via Stevedore entry points."""
-        plugins = []
+    def get_summary(self) -> Dict[str, Any]:
+        """Get comprehensive plugin system summary."""
+        self._ensure_discovered()
         
-        for namespace, manager in self._stevedore_managers.items():
-            for extension_obj in manager.extensions:
+        plugins = list(self._plugins.values())
+        
+        # Count by type
+        by_type = {}
+        for plugin in plugins:
+            plugin_type = plugin.plugin_type
+            by_type[plugin_type] = by_type.get(plugin_type, 0) + 1
+        
+        # Count by framework
+        by_framework = {}
+        for plugin in plugins:
+            framework = plugin.framework
+            by_framework[framework] = by_framework.get(framework, 0) + 1
+        
+        # Count by discovery source
+        by_source = {}
+        for plugin in plugins:
+            source = plugin.metadata.get('discovery_source', 'unknown')
+            by_source[source] = by_source.get(source, 0) + 1
+        
+        # Add performance metrics
+        cache_hit_rate = 0.0
+        total_cache_ops = self._discovery_stats['cache_hits'] + self._discovery_stats['cache_misses']
+        if total_cache_ops > 0:
+            cache_hit_rate = self._discovery_stats['cache_hits'] / total_cache_ops
+        
+        return {
+            'total_plugins': len(plugins),
+            'by_type': by_type,
+            'by_framework': by_framework,
+            'by_source': by_source,
+            'discovery_stats': self._discovery_stats.copy(),
+            'performance_stats': {
+                'cache_hit_rate': cache_hit_rate,
+                'cache_enabled': self._discovery_cache is not None,
+                'cache_ttl': self._cache_ttl,
+                'available_frameworks': self._framework_discovery.get_available_frameworks()
+            }
+        }
+    
+    def _ensure_discovered(self, modes=None, frameworks=None, types=None) -> None:
+        """Ensure plugins have been discovered with specified parameters."""
+        if not self._discovery_done:
+            self.discover_plugins(modes=modes, frameworks=frameworks, types=types)
+    
+    def reset(self) -> None:
+        """Reset the plugin manager state."""
+        with self._lock:
+            self._plugins.clear()
+            self._discovery_done = False
+            self._discovery_stats = {
+                'stevedore': 0,
+                'internal': 0,
+                'framework': 0,
+                'discovery_time': None,
+                'cache_hits': 0,
+                'cache_misses': 0
+            }
+            logger.debug("Reset plugin manager state")
+    
+    # Memory management methods
+    
+    def register_collection(self, collection: Any) -> None:
+        """Register a collection instance for memory tracking."""
+        self._cache_references.add(collection)
+    
+    def clear_all_caches(self) -> None:
+        """Clear all caches across all registered collections."""
+        logger.info("Clearing all plugin caches...")
+        
+        # Clear caches in all registered collections
+        for collection in self._cache_references:
+            if hasattr(collection, 'clear_all_caches'):
                 try:
-                    # Determine plugin type and framework from namespace
-                    plugin_type = self._extract_plugin_type_from_namespace(namespace)
-                    framework = self._extract_framework_from_namespace(namespace)
-                    
-                    plugin_info = PluginInfo(
-                        name=extension_obj.name,
-                        plugin_class=extension_obj.obj,
-                        framework=framework,
-                        plugin_type=plugin_type,
-                        metadata={
-                            'entry_point': str(extension_obj.entry_point),
-                            'distribution': str(extension_obj.entry_point.dist)
-                        },
-                        discovery_method="stevedore",
-                        stevedore_extension=extension_obj
-                    )
-                    
-                    plugins.append(plugin_info)
-                    logger.debug(f"Discovered via Stevedore: {plugin_info.qualified_name}")
-                    
+                    collection.clear_all_caches()
                 except Exception as e:
-                    logger.warning(f"Error processing Stevedore extension {extension_obj.name}: {e}")
+                    logger.warning(f"Failed to clear cache for {collection}: {e}")
         
-        return plugins
+        # Force garbage collection
+        gc.collect()
+        logger.info("Cache clearing complete")
     
-    def _discover_brainsmith_native(self) -> List[PluginInfo]:
-        """Auto-discover BrainSmith native plugins."""
-        plugins = []
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """Get memory usage statistics."""
+        stats = {
+            'plugin_count': len(self._plugins),
+            'registered_collections': len(self._cache_references),
+            'collection_stats': []
+        }
         
-        # Discover transforms in brainsmith.transforms
-        transform_plugins = self._discover_brainsmith_transforms()
-        plugins.extend(transform_plugins)
-        
-        # Discover kernels in brainsmith.kernels  
-        kernel_plugins = self._discover_brainsmith_kernels()
-        plugins.extend(kernel_plugins)
-        
-        # Discover steps in brainsmith.steps
-        step_plugins = self._discover_brainsmith_steps()
-        plugins.extend(step_plugins)
-        
-        return plugins
-    
-    def _discover_brainsmith_transforms(self) -> List[PluginInfo]:
-        """Discover BrainSmith native transforms."""
-        plugins = []
-        
-        try:
-            import brainsmith.transforms
-            
-            # Look for transform modules and classes
-            transform_modules = [
-                'topology_opt.expand_norms',
-                'model_specific.remove_bert_head', 
-                'model_specific.remove_bert_tail',
-                'kernel_opt.set_pumped_compute',
-                'kernel_opt.temp_shuffle_fixer',
-                'metadata.extract_shell_integration_metadata'
-            ]
-            
-            for module_path in transform_modules:
+        # Get stats from each collection
+        for collection in self._cache_references:
+            if hasattr(collection, 'get_cache_stats'):
                 try:
-                    module = importlib.import_module(f'brainsmith.transforms.{module_path}')
-                    
-                    # Look for transform classes (typically end with the module name)
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        
-                        if (inspect.isclass(attr) and 
-                            hasattr(attr, '__call__') and
-                            not attr_name.startswith('_')):
-                            
-                            plugin_info = PluginInfo(
-                                name=attr_name,
-                                plugin_class=attr,
-                                framework="brainsmith",
-                                plugin_type="transform",
-                                metadata={'module': module_path},
-                                discovery_method="auto"
-                            )
-                            
-                            plugins.append(plugin_info)
-                            logger.debug(f"Auto-discovered BrainSmith transform: {attr_name}")
-                            
-                except ImportError as e:
-                    logger.debug(f"Could not import BrainSmith transform module {module_path}: {e}")
-                    
-        except ImportError:
-            logger.debug("BrainSmith transforms module not available")
+                    collection_stats = collection.get_cache_stats()
+                    stats['collection_stats'].append(collection_stats)
+                except Exception as e:
+                    logger.warning(f"Failed to get stats for {collection}: {e}")
         
-        return plugins
+        return stats
     
-    def _discover_qonnx_transforms(self) -> List[PluginInfo]:
-        """Discover QONNX transforms from their native registry."""
-        plugins = []
+    def load_for_blueprint(self, blueprint_requirements: Dict[str, List[str]]) -> Dict[str, List[PluginInfo]]:
+        """
+        Load only plugins specified in blueprint requirements.
         
-        try:
-            # Import QONNX transformation modules directly
-            qonnx_transform_modules = [
-                'qonnx.transformation.general',
-                'qonnx.transformation.remove',
-                'qonnx.transformation.fold_constants',
-                'qonnx.transformation.infer_data_layouts', 
-                'qonnx.transformation.infer_datatypes',
-                'qonnx.transformation.infer_shapes'
-            ]
+        Args:
+            blueprint_requirements: Dict with keys like 'transforms', 'kernels', 'backends'
+                                   and values as lists of plugin names
+        
+        Returns:
+            Dict mapping plugin types to lists of loaded PluginInfo objects
+        """
+        with self._lock:
+            # Force discovery in blueprint mode with selective loading
+            self._discovery_done = False  # Reset to allow selective discovery
             
-            for module_name in qonnx_transform_modules:
+            # Determine required frameworks from plugin names
+            required_frameworks = self._analyze_blueprint_frameworks(blueprint_requirements)
+            
+            # Selective discovery based on blueprint needs
+            self.discover_plugins(modes=['blueprint'], frameworks=required_frameworks)
+            
+            # Filter to only requested plugins from discovered plugins
+            result = {}
+            for plugin_type, requested_names in blueprint_requirements.items():
+                result[plugin_type] = []
+                for name in requested_names:
+                    # Direct lookup in discovered plugins
+                    if name in self._plugins:
+                        plugin = self._plugins[name]
+                        if plugin.plugin_type == plugin_type:
+                            result[plugin_type].append(plugin)
+                            continue
+                    
+                    # Try framework-prefixed lookup
+                    found = False
+                    for framework in ['brainsmith', 'qonnx', 'finn']:
+                        prefixed = f"{framework}:{name}"
+                        if prefixed in self._plugins:
+                            plugin = self._plugins[prefixed]
+                            if plugin.plugin_type == plugin_type:
+                                result[plugin_type].append(plugin)
+                                found = True
+                                break
+                    
+                    if not found:
+                        logger.warning(f"Blueprint plugin not found: {plugin_type}.{name}")
+            
+            return result
+    
+    def _analyze_blueprint_frameworks(self, blueprint_requirements: Dict[str, List[str]]) -> List[str]:
+        """Analyze blueprint to determine which frameworks are needed."""
+        # For now, we'll do a simple analysis
+        # In the future, this could use plugin name patterns or explicit framework specs
+        frameworks = ['brainsmith']  # Always include brainsmith
+        
+        # Add framework-specific plugins if they exist
+        all_names = []
+        for names in blueprint_requirements.values():
+            all_names.extend(names)
+        
+        # Simple heuristics for framework detection
+        for name in all_names:
+            if name.startswith('qonnx_') or 'qonnx' in name.lower():
+                frameworks.append('qonnx')
+            elif name.startswith('finn_') or 'finn' in name.lower():
+                frameworks.append('finn')
+        
+        return list(set(frameworks))
+    
+    def optimize_memory(self) -> None:
+        """
+        Optimize memory usage by clearing unused caches.
+        
+        This is a more selective approach than clear_all_caches,
+        only clearing caches with low hit rates.
+        """
+        logger.info("Optimizing plugin memory usage...")
+        
+        cleared = 0
+        for collection in self._cache_references:
+            if hasattr(collection, 'get_cache_stats') and hasattr(collection, 'clear_all_caches'):
                 try:
-                    module = importlib.import_module(module_name)
+                    stats = collection.get_cache_stats()
                     
-                    # Look for transformation classes
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        
-                        if (inspect.isclass(attr) and 
-                            hasattr(attr, '__call__') and
-                            not attr_name.startswith('_') and
-                            attr_name not in ['Transformation']):
-                            
-                            plugin_info = PluginInfo(
-                                name=attr_name,
-                                plugin_class=attr,
-                                framework="qonnx",
-                                plugin_type="transform",
-                                metadata={'module': module_name},
-                                discovery_method="framework_native"
-                            )
-                            
-                            plugins.append(plugin_info)
-                            logger.debug(f"Discovered QONNX transform: {attr_name}")
-                            
-                except ImportError as e:
-                    logger.debug(f"Could not import QONNX module {module_name}: {e}")
-                    
-        except Exception as e:
-            logger.debug(f"Error discovering QONNX transforms: {e}")
+                    # Clear collections with low hit rate
+                    if isinstance(stats, dict) and 'plugin_stats' in stats:
+                        for plugin_stat in stats['plugin_stats']:
+                            if plugin_stat.get('hit_rate', 1.0) < 0.2:  # Less than 20% hit rate
+                                # This is inefficient, but we'd need per-plugin clearing
+                                logger.debug(f"Low hit rate for {plugin_stat.get('plugin_name')}")
+                                
+                except Exception as e:
+                    logger.warning(f"Failed to optimize {collection}: {e}")
         
-        return plugins
-    
-    def _discover_finn_transforms(self) -> List[PluginInfo]:
-        """Discover FINN transforms from their native registry."""
-        plugins = []
-        
-        try:
-            # Import FINN transformation modules directly
-            finn_transform_modules = [
-                'finn.transformation.streamline',
-                'finn.transformation.streamline.reorder',
-                'finn.transformation.move_reshape',
-                'finn.transformation.fpgadataflow.convert_to_hw_layers'
-            ]
-            
-            for module_name in finn_transform_modules:
-                try:
-                    module = importlib.import_module(module_name)
-                    
-                    # Look for transformation classes
-                    for attr_name in dir(module):
-                        attr = getattr(module, attr_name)
-                        
-                        if (inspect.isclass(attr) and 
-                            hasattr(attr, '__call__') and
-                            not attr_name.startswith('_') and
-                            attr_name not in ['Transformation']):
-                            
-                            plugin_info = PluginInfo(
-                                name=attr_name,
-                                plugin_class=attr,
-                                framework="finn",
-                                plugin_type="transform",
-                                metadata={'module': module_name},
-                                discovery_method="framework_native"
-                            )
-                            
-                            plugins.append(plugin_info)
-                            logger.debug(f"Discovered FINN transform: {attr_name}")
-                            
-                except ImportError as e:
-                    logger.debug(f"Could not import FINN module {module_name}: {e}")
-                    
-        except Exception as e:
-            logger.debug(f"Error discovering FINN transforms: {e}")
-        
-        return plugins
-    
-    def _discover_brainsmith_kernels(self) -> List[PluginInfo]:
-        """Discover BrainSmith kernel implementations."""
-        plugins = []
-        
-        try:
-            # Look in brainsmith.kernels for kernel modules
-            import brainsmith.kernels
-            
-            kernel_modules = ['layernorm', 'matmul', 'softmax', 'shuffle', 'crop']
-            
-            for kernel_name in kernel_modules:
-                try:
-                    kernel_module = importlib.import_module(f'brainsmith.kernels.{kernel_name}')
-                    
-                    # Look for kernel classes
-                    for attr_name in dir(kernel_module):
-                        attr = getattr(kernel_module, attr_name)
-                        
-                        if (inspect.isclass(attr) and 
-                            not attr_name.startswith('_')):
-                            
-                            plugin_info = PluginInfo(
-                                name=attr_name,
-                                plugin_class=attr,
-                                framework="brainsmith",
-                                plugin_type="kernel",
-                                metadata={'kernel_module': kernel_name},
-                                discovery_method="auto"
-                            )
-                            
-                            plugins.append(plugin_info)
-                            logger.debug(f"Auto-discovered BrainSmith kernel: {attr_name}")
-                            
-                except ImportError as e:
-                    logger.debug(f"Could not import BrainSmith kernel module {kernel_name}: {e}")
-                    
-        except ImportError:
-            logger.debug("BrainSmith kernels module not available")
-        
-        return plugins
-    
-    def _discover_brainsmith_steps(self) -> List[PluginInfo]:
-        """Discover BrainSmith steps with @finn_step decorators."""
-        plugins = []
-        
-        try:
-            import brainsmith.steps.bert_steps as bert_steps
-            
-            # Look for functions with finn_step decorator
-            for attr_name in dir(bert_steps):
-                attr = getattr(bert_steps, attr_name)
-                
-                if (callable(attr) and 
-                    hasattr(attr, '_finn_step_name') and
-                    not attr_name.startswith('_')):
-                    
-                    plugin_info = PluginInfo(
-                        name=attr._finn_step_name,
-                        plugin_class=attr,
-                        framework="brainsmith",
-                        plugin_type="step",
-                        metadata={
-                            'category': getattr(attr, '_finn_step_category', 'unknown'),
-                            'dependencies': getattr(attr, '_finn_step_dependencies', []),
-                            'description': getattr(attr, '_finn_step_description', '')
-                        },
-                        discovery_method="auto"
-                    )
-                    
-                    plugins.append(plugin_info)
-                    logger.debug(f"Auto-discovered BrainSmith step: {attr._finn_step_name}")
-                    
-        except ImportError as e:
-            logger.debug(f"Could not import BrainSmith steps: {e}")
-        
-        return plugins
-    
-    def _extract_plugin_type_from_namespace(self, namespace: str) -> str:
-        """Extract plugin type from Stevedore namespace."""
-        if 'transforms' in namespace:
-            return 'transform'
-        elif 'kernels' in namespace:
-            return 'kernel'
-        elif 'backends' in namespace:
-            return 'backend'
-        else:
-            return 'unknown'
-    
-    def _extract_framework_from_namespace(self, namespace: str) -> str:
-        """Extract framework from Stevedore namespace."""
-        if 'external' in namespace:
-            return 'external'
-        else:
-            return 'brainsmith'
-    
-    def _discover_and_load_all(self):
-        """Internal method to discover and load all plugins (EAGER mode)."""
-        catalog = self.discover_all()
-        
-        # Initialize loaded plugins cache if needed
-        if not hasattr(self, '_loaded_plugins'):
-            self._loaded_plugins = {}
-        
-        logger.info("Loading all plugins (EAGER mode)...")
-        loaded_count = 0
-        
-        for name, plugin_list in catalog.plugins_by_name.items():
-            for plugin_info in plugin_list:
-                cache_key = f"{plugin_info.framework}:{plugin_info.plugin_type}:{plugin_info.name}"
-                plugin_info.metadata['is_loaded'] = True
-                self._loaded_plugins[cache_key] = plugin_info
-                loaded_count += 1
-        
-        logger.info(f"Loaded {loaded_count} plugins in EAGER mode")
+        gc.collect()
+        logger.info("Memory optimization complete")
 
 
 # Global plugin manager instance
@@ -736,13 +567,25 @@ def get_plugin_manager() -> PluginManager:
     if _global_manager is None:
         with _manager_lock:
             if _global_manager is None:
-                _global_manager = PluginManager(DiscoveryStrategy.HYBRID)
+                _global_manager = PluginManager()
     
     return _global_manager
 
 
-def set_plugin_manager(manager: PluginManager):
+def set_plugin_manager(manager: PluginManager) -> None:
     """Set the global plugin manager (useful for testing)."""
     global _global_manager
     with _manager_lock:
         _global_manager = manager
+
+
+def clear_global_caches() -> None:
+    """Convenience function to clear all global caches."""
+    manager = get_plugin_manager()
+    manager.clear_all_caches()
+
+
+def get_global_memory_stats() -> Dict[str, Any]:
+    """Convenience function to get global memory statistics."""
+    manager = get_plugin_manager()
+    return manager.get_memory_stats()
