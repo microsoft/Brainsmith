@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Brainsmith is an open-source platform for FPGA AI accelerators developed collaboratively by Microsoft and AMD. It converts PyTorch models to RTL implementations for FPGA deployment using Interface-Wise Dataflow Modeling.
+**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch dedicated exclusively to **Kernel Integrator** (Hardware Kernel Generator) development. Many core Brainsmith features have been removed for streamlined development.
+
+This branch focuses on developing the **Hardware Kernel Generator (HKG)** component of Brainsmith, which converts SystemVerilog RTL modules into FINN-compatible HWCustomOp implementations. The full Brainsmith platform (with complete AI model compilation) is available on the main branch.
 
 ## Development Commands
 
@@ -45,9 +47,8 @@ All development happens inside Docker containers managed by the `smithy` script:
 # Run hardware kernel generator E2E tests
 ./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
 
-# Run BERT demo tests (multi-hour builds)
-./smithy exec "cd demos/bert && make single_layer"
-./smithy exec "cd demos/bert && ./quicktest.sh"  # Faster test
+# Run AutoHWCustomOp tests (Kernel Modeling integration)
+./smithy exec "pytest brainsmith/tools/hw_kernel_gen/tests/test_auto_hw_custom_op_v2.py"
 
 # Run specific test file
 ./smithy exec "python brainsmith/tools/hw_kernel_gen/tests/test_e2e_generation.py"
@@ -90,20 +91,25 @@ Convert SystemVerilog RTL to FINN HWCustomOp:
    - Stream dimension (SDIM) architecture for parallelism modeling
    - Note: Components now directly in `dataflow/`, not `dataflow/core/`
 
-2. **Hardware Kernels** (`brainsmith/hw_kernels/`):
+2. **FINN Integration** (`brainsmith/core/finn/`):
+   - `AutoHWCustomOp`: Base class for FINN HWCustomOp implementations using Kernel Modeling
+   - `AutoRTLBackend`: Base class for FINN RTLBackend implementations with template support
+   - Bridges Kernel Modeling system with FINN's execution framework
+
+3. **Hardware Kernels** (`brainsmith/hw_kernels/`):
    - SystemVerilog RTL implementations
    - FINN integration modules (`*/finn/` subdirectories)
    - Generated wrapper code for FINN HWCustomOp
 
-3. **RTL Parser** (`brainsmith/tools/hw_kernel_gen/rtl_parser/`):
+4. **RTL Parser** (`brainsmith/tools/hw_kernel_gen/rtl_parser/`):
    - Parses SystemVerilog with pragma annotations
    - Extracts interface definitions and parameters
    - Generates FINN-compatible Python wrappers
 
-4. **Template System** (`brainsmith/tools/hw_kernel_gen/templates/`):
+5. **Template System** (`brainsmith/tools/hw_kernel_gen/templates/`):
    - Jinja2 templates for code generation
-   - `rtl_backend.py.j2`: FINN RTL backend class
-   - `rtl_wrapper_minimal.v.j2`: Verilog wrapper
+   - `hw_custom_op.py.j2`: AutoHWCustomOp subclass generation
+   - `rtl_backend.py.j2`: AutoRTLBackend subclass generation
 
 ### Pragma System
 
@@ -117,6 +123,8 @@ The RTL parser uses pragmas to annotate SystemVerilog code:
 // @brainsmith WEIGHT <interface>
 // @brainsmith ALIAS <rtl_param> <python_name>
 // @brainsmith DERIVED_PARAMETER <param> <python_expression>
+// @brainsmith RELATIONSHIP <source> <target> <type> [args...]
+// @brainsmith AXILITE_PARAM <parameter> <interface>
 // @brainsmith TOP_MODULE <module_name>
 ```
 
@@ -153,17 +161,28 @@ Key principles:
 
 ### Key Workflows
 
-1. **Model Conversion**: PyTorch → ONNX → Dataflow Model → RTL
-2. **Hardware Generation**: Uses FINN framework for synthesis
-3. **Testing**: E2E tests validate RTL generation and functionality
+1. **Hardware Kernel Integration**: SystemVerilog RTL → Pragma Analysis → FINN HWCustomOp
+   - Parse SystemVerilog with `@brainsmith` pragmas
+   - Generate KernelDefinition from interface analysis
+   - Create AutoHWCustomOp and AutoRTLBackend subclasses
+   - Integrate with FINN compilation pipeline
+
+2. **Kernel Modeling Development**: Definition → Model → Configuration
+   - Define static interface schemas with KernelDefinition
+   - Create runtime instances with KernelModel
+   - Configure streaming parallelism with SDIM
+   - Validate constraints and relationships
+
+3. **Testing**: E2E validation of RTL generation and FINN integration
 
 ## Current Development Focus
 
-The project is actively developing on the `experimental/hwkg` branch with focus on:
-- Native relationship modeling system (replacing pragma-based approach)
-- Stream dimension (SDIM) architecture implementation
-- Clean separation between definition (static) and model (runtime) layers
-- Function-based tiling system for parallelism
+This `experimental/hwkg` branch is a streamlined development environment focused on:
+- **Hardware Kernel Generator**: Complete SystemVerilog → FINN HWCustomOp pipeline
+- **Kernel Modeling System**: BDIM/SDIM architecture with clean definition/runtime separation
+- **FINN Integration**: AutoHWCustomOp and AutoRTLBackend base classes (moved to `brainsmith.core.finn`)
+- **Template-Based Generation**: Automated HWCustomOp and RTLBackend class generation
+- **Pragma System**: Enhanced RTL parsing with RELATIONSHIP and AXILITE_PARAM support
 
 ## Code Header Convention
 
@@ -223,9 +242,28 @@ Dependencies are managed in `docker/fetch-repos.sh`. To update FINN:
 
 - **Kernel Modeling Tests**: `brainsmith/core/dataflow/tests/`
 - **RTL Parser Tests**: `brainsmith/tools/hw_kernel_gen/tests/`
+- **FINN Integration Classes**: `brainsmith/core/finn/` (AutoHWCustomOp, AutoRTLBackend)
 - **Example Hardware Kernels**: `brainsmith/hw_kernels/`
-- **FINN Integration**: Look for `*/finn/` subdirectories
+- **Generated Code Examples**: `examples/auto_hw_custom_op/`
+- **Template Files**: `brainsmith/tools/hw_kernel_gen/templates/`
 - **Build Outputs**: Check `$BSMITH_BUILD_DIR` environment variable
+
+## Key Import Paths
+
+```python
+# FINN integration base classes
+from brainsmith.core.finn import AutoHWCustomOp, AutoRTLBackend
+
+# Kernel Modeling system
+from brainsmith.core.dataflow import (
+    KernelDefinition, KernelModel,
+    InputDefinition, OutputDefinition,
+    InputInterface, OutputInterface
+)
+
+# Hardware Kernel Generator
+from brainsmith.tools.hw_kernel_gen import RTLParser
+```
 
 ## Debugging Tips
 
