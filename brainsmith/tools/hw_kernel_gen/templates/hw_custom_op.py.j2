@@ -66,10 +66,9 @@ class {{ class_name }}(AutoHWCustomOp):
             
             # BDIM/SDIM parameters from SHAPE pragmas
             {% for param in shape_nodeattrs %}
-            "{{ param.name }}": ('i', False, 1),  # {{ param.source_comment }}
+            "{{ param.name }}": ('i', True, 0),  # {{ param.source_comment }}
             {% endfor %}
             
-            # Optional hardware optimization hints
             {% if has_weights %}
             "ram_style": ('s', False, 'auto', {'auto', 'block', 'distributed', 'ultra'}),
             {% endif %}
@@ -229,12 +228,12 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     
     Interface datatype attributes (required):
     {% for interface_attr in explicit_datatype_attrs %}
-    - {{ interface_attr.name }}: str = "{{ interface_attr.default_datatype }}"
+    - {{ interface_attr.name }}: str (required)
     {% endfor %}
     
     BDIM/SDIM parameters from SHAPE pragmas:
     {% for param in shape_nodeattrs %}
-    - {{ param.name }}: int = 1  # {{ param.source_comment }}
+    - {{ param.name }}: int (required)  # {{ param.source_comment }}
     {% endfor %}
     
     {% if has_weights %}
@@ -244,10 +243,10 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     """
     import onnx.helper
     
-    # Ensure interface datatypes are specified
+    # Verify required interface datatypes are specified
     {% for interface_attr in explicit_datatype_attrs %}
     if "{{ interface_attr.name }}" not in node_attrs:
-        node_attrs["{{ interface_attr.name }}"] = "{{ interface_attr.default_datatype }}"
+        raise ValueError("Required attribute '{{ interface_attr.name }}' not specified")
     {% endfor %}
     
     return onnx.helper.make_node(

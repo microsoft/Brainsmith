@@ -34,8 +34,8 @@ Notes:
     
     # Required arguments
     parser.add_argument('rtl_file', type=Path, help='SystemVerilog RTL file to process')
-    parser.add_argument('-o', '--output', type=Path, required=True, 
-                       help='Output directory for generated files')
+    parser.add_argument('-o', '--output', type=Path, required=False, 
+                       help='Output directory for generated files (default: brainsmith/hw_kernels/<kernel_name>)')
     
     # Optional arguments
     parser.add_argument('--debug', action='store_true', 
@@ -57,20 +57,41 @@ def main():
         return 1
     
     try:
+        # Step 1: Parse RTL first to get kernel name for default output directory
+        parser_instance = RTLParser(strict=not args.no_strict)
+        kernel_metadata = parser_instance.parse_file(str(args.rtl_file))
+        
+        # Determine output directory
+        if args.output:
+            output_dir = args.output
+        else:
+            # Default: brainsmith/hw_kernels/<kernel_name>
+            # Find brainsmith root by looking for parent directories containing "brainsmith"
+            current_path = args.rtl_file.resolve().parent
+            brainsmith_root = None
+            while current_path != current_path.parent:
+                if current_path.name == "brainsmith" and (current_path / "hw_kernels").exists():
+                    brainsmith_root = current_path
+                    break
+                current_path = current_path.parent
+            
+            if brainsmith_root:
+                output_dir = brainsmith_root / "hw_kernels" / kernel_metadata.name
+            else:
+                # Fallback: create in current directory
+                output_dir = Path.cwd() / "brainsmith" / "hw_kernels" / kernel_metadata.name
+        
         if args.debug:
             print("=== Hardware Kernel Generator ===")
             print(f"RTL file: {args.rtl_file}")
-            print(f"Output directory: {args.output}")
+            print(f"Output directory: {output_dir}")
             print()
         
-        # Step 1: Parse RTL with validation
+        # Step 1 (cont): Report parsing results
         if args.debug:
             print("🔍 Step 1: Parsing RTL with parameter and BDIM validation...")
             if args.no_strict:
                 print("   ⚠️  Running in non-strict mode (validation disabled)")
-        
-        parser_instance = RTLParser(strict=not args.no_strict)
-        kernel_metadata = parser_instance.parse_file(str(args.rtl_file))
         
         if args.debug:
             print(f"   ✅ Parsed module: {kernel_metadata.name}")
@@ -83,7 +104,7 @@ def main():
             print("🏭 Step 2: Generating templates and writing files...")
         
         # Use KernelIntegrator for modular generation
-        integrator = KernelIntegrator(output_dir=args.output)
+        integrator = KernelIntegrator(output_dir=output_dir)
         result = integrator.generate_and_write(kernel_metadata)
         
         if args.debug:

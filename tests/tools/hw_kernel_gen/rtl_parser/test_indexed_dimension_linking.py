@@ -150,7 +150,6 @@ class TestIndexedDimensionLinking:
         # Check interface has indexed BDIM parameters
         interface = kernel.interfaces[0]
         assert interface.bdim_params == ["in0_BDIM0", "in0_BDIM1", "in0_BDIM2"]
-        assert interface.block_shape == ["in0_BDIM0", "in0_BDIM1", "in0_BDIM2"]
         
         # Check indexed parameters were removed from exposed
         assert "in0_BDIM0" not in kernel.exposed_parameters

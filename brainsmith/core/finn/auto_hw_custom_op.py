@@ -96,15 +96,12 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         output_specs = self._extract_output_specs()
         param_binding = self._extract_parameter_binding()
         
-        # Create kernel model
+        # Create kernel model with clean tiling system handling SDIM
         self._kernel_model = self._kernel_def.create_model(
             input_specs=input_specs,
             output_specs=output_specs,
             parameter_binding=param_binding
         )
-        
-        # Apply SDIM configuration
-        self._apply_sdim_configuration()
         
         # Apply any legacy attribute mappings
         self._apply_legacy_attributes()
@@ -163,7 +160,8 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         # Extract only the parameters that are actually node attributes
         # Skip interface datatypes and FINN legacy parameters
-        skip_attrs = {'SIMD', 'PE', 'ram_style'}
+        # Note: PE is included because modern kernels use it for stream tiling
+        skip_attrs = {'SIMD', 'ram_style'}
         
         for attr_name in nodeattr_types:
             # Skip interface datatype attributes (end with DataType)
@@ -242,48 +240,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         return DataType[dtype_str]
     
-    def _extract_sdim_configuration(self) -> Dict[str, Union[int, List[int]]]:
-        """
-        Extract SDIM configuration from node attributes.
-        
-        Checks for interface-specific SDIM attributes first, then falls
-        back to legacy SIMD attribute for backward compatibility.
-        
-        Returns:
-            Dictionary mapping interface names to SDIM values
-        """
-        sdim_config = {}
-        
-        # Try interface-specific SDIM attributes
-        for inp_def in self._kernel_def.input_definitions:
-            sdim_attr = f"{inp_def.name}_sdim"
-            if sdim_attr in [a.name for a in self.onnx_node.attribute]:
-                value = self.get_nodeattr(sdim_attr)
-                if value is not None:
-                    # Handle both scalar and list values
-                    if isinstance(value, (list, tuple)) or (isinstance(value, int) and value > 0):
-                        sdim_config[inp_def.name] = value
-        
-        # Fall back to legacy SIMD for all inputs
-        if not sdim_config:
-            simd = self.get_nodeattr("SIMD")
-            if simd and simd > 0:
-                for inp_def in self._kernel_def.input_definitions:
-                    sdim_config[inp_def.name] = simd
-        
-        return sdim_config
     
-    def _apply_sdim_configuration(self):
-        """
-        Apply SDIM configuration to KernelModel.
-        
-        Extracts SDIM values from node attributes and configures
-        the kernel model's streaming dimensions.
-        """
-        sdim_config = self._extract_sdim_configuration()
-        if sdim_config:
-            self._kernel_model.configure_sdim(sdim_config)
-            self._sdim_config = sdim_config
     
     # FINN Abstract Method Implementations
     
@@ -718,14 +675,19 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             Number of URAM blocks
         """
         # Check if using ultra RAM
-        if self.get_nodeattr("ram_style") == "ultra":
-            # Similar to BRAM but with 288Kb blocks
-            bram_count = self.bram_estimation()
-            if bram_count > 0:
-                # Rough conversion from BRAM to URAM
-                bram_bits = bram_count * 18 * 1024
-                uram_bits = 288 * 1024
-                return (bram_bits + uram_bits - 1) // uram_bits
+        try:
+            ram_style = self.get_nodeattr("ram_style")
+            if ram_style == "ultra":
+                # Similar to BRAM but with 288Kb blocks
+                bram_count = self.bram_estimation()
+                if bram_count > 0:
+                    # Rough conversion from BRAM to URAM
+                    bram_bits = bram_count * 18 * 1024
+                    uram_bits = 288 * 1024
+                    return (bram_bits + uram_bits - 1) // uram_bits
+        except AttributeError:
+            # ram_style attribute doesn't exist
+            pass
         
         return 0
     

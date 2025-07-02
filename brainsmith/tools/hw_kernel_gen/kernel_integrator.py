@@ -276,10 +276,8 @@ class KernelIntegrator:
         Returns:
             Path to output directory for this kernel
         """
-        if output_structure == "flat":
-            return self.output_dir
-        else:  # hierarchical (default)
-            return self._create_kernel_directory(kernel_name)
+        # Always use flat structure - output directly to specified directory
+        return self.output_dir
     
     def list_generators(self) -> List[str]:
         """

@@ -139,20 +139,25 @@ class TilingSpec:
         """
         errors = []
         
-        # Check dimension count
-        if len(self.expressions) != len(shape):
+        # Allow specs with fewer dimensions than tensor (will be left-padded)
+        if len(self.expressions) > len(shape):
             errors.append(
                 f"Tiling spec has {len(self.expressions)} dimensions "
-                f"but tensor has {len(shape)} dimensions"
+                f"but tensor only has {len(shape)} dimensions"
             )
             return errors  # Can't validate further
         
-        # Check each expression
-        for i, (expr, dim_size) in enumerate(zip(self.expressions, shape)):
+        # Check each expression against corresponding dimension from the right
+        # If tensor has more dims than spec, leftmost tensor dims are untiled (singleton)
+        offset = len(shape) - len(self.expressions)
+        for i, expr in enumerate(self.expressions):
+            shape_idx = offset + i
+            dim_size = shape[shape_idx]
+            
             if expr.expr_type == TilingExprType.LITERAL:
                 if dim_size % expr.value != 0:
                     errors.append(
-                        f"Dimension {i}: tile size {expr.value} does not "
+                        f"Dimension {shape_idx}: tile size {expr.value} does not "
                         f"evenly divide tensor dimension {dim_size}"
                     )
         
@@ -161,24 +166,37 @@ class TilingSpec:
     def resolve(self, shape: List[int], parameters: dict) -> List[int]:
         """Resolve expressions to concrete tile sizes
         
+        Supports adaptive behavior: if tensor has more dimensions than the
+        tiling spec, the spec is left-padded with singletons (1) to match.
+        This allows RTL to specify tiling only for dimensions it cares about.
+        
         Args:
             shape: Tensor shape
             parameters: Parameter values
             
         Returns:
-            List of resolved tile sizes
+            List of resolved tile sizes (same length as shape)
             
         Raises:
             ValueError: If resolution fails
         """
-        if len(self.expressions) != len(shape):
+        # Handle dimension mismatch with adaptive left-padding
+        if len(self.expressions) > len(shape):
             raise ValueError(
                 f"Cannot resolve: tiling spec has {len(self.expressions)} dims "
-                f"but shape has {len(shape)} dims"
+                f"but shape only has {len(shape)} dims"
             )
         
-        result = []
-        for i, (expr, dim_size) in enumerate(zip(self.expressions, shape)):
+        # Left-pad with singletons if shape has more dimensions
+        padding_needed = len(shape) - len(self.expressions)
+        result = [1] * padding_needed  # Start with singleton padding
+        
+        # Resolve expressions for the rightmost dimensions
+        offset = len(shape) - len(self.expressions)
+        for i, expr in enumerate(self.expressions):
+            shape_idx = offset + i
+            dim_size = shape[shape_idx]
+            
             if expr.expr_type == TilingExprType.SINGLETON:
                 result.append(1)
             elif expr.expr_type == TilingExprType.FULL:

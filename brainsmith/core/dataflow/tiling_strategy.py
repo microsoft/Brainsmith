@@ -98,7 +98,7 @@ class TilingStrategy:
                 parameters_used={}
             )
         
-        # Validate spec against shape
+        # Validate spec against shape (now handles adaptive padding)
         errors = self.block_spec.validate_against_shape(tensor_shape)
         if errors:
             raise ValueError(f"Block tiling validation failed: {'; '.join(errors)}")
@@ -157,7 +157,7 @@ class TilingStrategy:
                 parameters_used={}
             )
         
-        # Validate spec against block shape
+        # Validate spec against block shape (now handles adaptive padding)
         errors = self.stream_spec.validate_against_shape(block_shape)
         if errors:
             raise ValueError(f"Stream tiling validation failed: {'; '.join(errors)}")

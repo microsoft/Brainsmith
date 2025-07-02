@@ -41,6 +41,7 @@ class InputInterface(BaseModel):
                  tensor_dims: Shape, 
                  block_dims: RaggedShape,
                  datatype: BaseDataType,
+                 stream_dims: Optional[Shape] = None,
                  skip_prob: List[float] = None,
                  actual_utilization: float = 1.0,
                  definition: Optional['InputDefinition'] = None,
@@ -56,8 +57,12 @@ class InputInterface(BaseModel):
         self.actual_utilization = actual_utilization
         self.parameter_binding = parameter_binding
         
-        # Initialize fields
-        self._sdim = None
+        # Initialize streaming dimensions from constructor parameter
+        if stream_dims is not None:
+            self._sdim = tuple(stream_dims)
+        else:
+            self._sdim = None
+        
         self._cached_metrics = {}
         
         self.__post_init__()

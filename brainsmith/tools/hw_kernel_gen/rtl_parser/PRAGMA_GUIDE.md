@@ -41,12 +41,31 @@ module my_accelerator #(...) (...);
 ```
 
 ### DATATYPE
-Constrain datatype for an interface.
+Constrain datatype for an interface. Supports single type, list of types, or wildcard.
 ```systemverilog
+// Single type
 // @brainsmith DATATYPE input0 UINT 8 16
 // @brainsmith DATATYPE weights FIXED 8 8
+
+// Multiple types (accepts any of the listed types)
+// @brainsmith DATATYPE input0 [INT, UINT, FIXED] 1 32
+// @brainsmith DATATYPE weights [FIXED, FLOAT] 16 32
+
+// Wildcard - any datatype with specified bit width
+// @brainsmith DATATYPE input0 * 8 32      // Any datatype from 8-32 bits
+// @brainsmith DATATYPE weights * 16 16    // Any 16-bit datatype
 ```
-**Format**: `DATATYPE <interface_name> <base_type> <min_bits> <max_bits>`
+**Format**: 
+- `DATATYPE <interface_name> <base_type> <min_bits> <max_bits>`
+- `DATATYPE <interface_name> [<type1>, <type2>, ...] <min_bits> <max_bits>`
+- `DATATYPE <interface_name> * <min_bits> <max_bits>`
+
+**Notes**:
+- When using a list of types, the interface will accept any datatype that matches one of the listed base types within the bit width range
+- The wildcard `*` accepts any datatype that fits within the specified bit width range
+- Valid base types: INT, UINT, FIXED, FLOAT, BIPOLAR, TERNARY, BINARY
+- Wildcard is useful when you want to be flexible about the datatype but strict about bit width
+- Multiple DATATYPE pragmas for the same interface are additive (all constraints apply)
 
 ### DATATYPE_PARAM
 Map interface datatype properties to specific RTL parameters.

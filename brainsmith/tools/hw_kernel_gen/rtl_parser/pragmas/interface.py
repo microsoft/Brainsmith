@@ -43,19 +43,39 @@ class DatatypePragma(InterfacePragma):
         """
         Handles DATATYPE pragma with constraint groups:
         @brainsmith DATATYPE <interface_name> <base_type> <min_bits> <max_bits>
+        @brainsmith DATATYPE <interface_name> [<type1>, <type2>, ...] <min_bits> <max_bits>
+        @brainsmith DATATYPE <interface_name> * <min_bits> <max_bits>
         
         Example: @brainsmith DATATYPE in0 UINT 8 16
         Example: @brainsmith DATATYPE weights FIXED 8 8
+        Example: @brainsmith DATATYPE in0 [INT, UINT, FIXED] 1 32
+        Example: @brainsmith DATATYPE in0 * 8 32  # Any type from 8-32 bits
         """
         logger.debug(f"Parsing DATATYPE pragma: {self.inputs} at line {self.line_number}")
         
         pos = self.inputs['positional']
         
         if len(pos) != 4:
-            raise PragmaError("DATATYPE pragma requires interface_name, base_type, min_bits, max_bits")
+            raise PragmaError("DATATYPE pragma requires interface_name, base_type(s), min_bits, max_bits")
         
         interface_name = pos[0]
-        base_type = pos[1].strip()
+        base_types_input = pos[1]
+        
+        # Handle both single type (string) and list of types
+        if isinstance(base_types_input, list):
+            # List of types provided
+            base_types = base_types_input
+            if not base_types:
+                raise PragmaError("DATATYPE pragma base type list cannot be empty")
+            # Handle wildcard in list - if * is present, use ANY
+            if "*" in base_types:
+                base_types = ["ANY"]
+        else:
+            # Single type provided - convert to list for consistent handling
+            if base_types_input.strip() == "*":
+                base_types = ["ANY"]
+            else:
+                base_types = [base_types_input.strip()]
         
         try:
             min_bits = int(pos[2])
@@ -69,16 +89,20 @@ class DatatypePragma(InterfacePragma):
         if min_bits > max_bits:
             raise PragmaError(f"DATATYPE pragma min_bits ({min_bits}) cannot be greater than max_bits ({max_bits})")
         
-        # Validate base type using DatatypeConstraintGroup validation
-        try:
-            # Test constraint group creation to validate base type
-            DatatypeConstraintGroup(base_type, min_bits, max_bits)
-        except ValueError as e:
-            raise PragmaError(f"DATATYPE pragma invalid base type or constraints: {e}")
+        # Validate each base type using DatatypeConstraintGroup validation
+        for base_type in base_types:
+            # ANY type is always valid - skip additional validation
+            if base_type == "ANY":
+                continue
+            try:
+                # Test constraint group creation to validate base type
+                DatatypeConstraintGroup(base_type, min_bits, max_bits)
+            except ValueError as e:
+                raise PragmaError(f"DATATYPE pragma invalid base type '{base_type}' or constraints: {e}")
         
         return {
             "interface_name": interface_name,
-            "base_type": base_type,
+            "base_types": base_types,  # Now always a list
             "min_width": min_bits,
             "max_width": max_bits
         }
@@ -95,26 +119,22 @@ class DatatypePragma(InterfacePragma):
             logger.error(f"DATATYPE interface type validation failed: {error_msg}")
             raise PragmaError(error_msg)
         
-        # Create new datatype constraint group based on pragma
-        new_constraint_group = self._create_constraint_group()
-        
-        # Combine with existing constraints (pragma adds to constraints, doesn't replace)
-        existing_constraints = metadata.datatype_constraints or []
-        metadata.datatype_constraints = existing_constraints + [new_constraint_group]
-        
-        logger.debug(f"DATATYPE pragma successfully applied to interface '{metadata.name}'")
-
-    def _create_constraint_group(self) -> DatatypeConstraintGroup:
-        """Create DatatypeConstraintGroup from pragma data."""
-        if not self.parsed_data:
-            # Default constraint if no pragma data
-            return DatatypeConstraintGroup("UINT", 8, 32)
-        
-        base_type = self.parsed_data.get("base_type", "UINT")
+        # Create new datatype constraint groups based on pragma
+        new_constraint_groups = []
+        base_types = self.parsed_data.get("base_types", ["UINT"])
         min_width = self.parsed_data.get("min_width", 8)
         max_width = self.parsed_data.get("max_width", 32)
         
-        return DatatypeConstraintGroup(base_type, min_width, max_width)
+        for base_type in base_types:
+            constraint_group = DatatypeConstraintGroup(base_type, min_width, max_width)
+            new_constraint_groups.append(constraint_group)
+        
+        # Combine with existing constraints (pragma adds to constraints, doesn't replace)
+        existing_constraints = metadata.datatype_constraints or []
+        metadata.datatype_constraints = existing_constraints + new_constraint_groups
+        
+        logger.debug(f"DATATYPE pragma successfully applied to interface '{metadata.name}' with {len(new_constraint_groups)} constraint groups")
+
 
 
 @dataclass

@@ -84,10 +84,14 @@ class InputDefinition(BaseDefinition):
         # Derive block dimensions
         block_dims = self.derive_block_dims(tensor_dims, parameter_binding, config)
         
-        # Create input model
+        # Derive stream dimensions from block dimensions using stream tiling
+        stream_dims = self.derive_stream_dims(block_dims, parameter_binding, config)
+        
+        # Create input model with both block and stream dimensions
         return InputInterface(
             tensor_dims=tensor_dims,
             block_dims=block_dims,
+            stream_dims=stream_dims,
             datatype=datatype,
             definition=self,
             parameter_binding=parameter_binding

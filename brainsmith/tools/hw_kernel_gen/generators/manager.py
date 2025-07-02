@@ -332,26 +332,11 @@ class GeneratorManager:
         
         # Generate datatype attributes for each interface with datatype bindings
         for interface_name, interface_binding in codegen_binding.interface_bindings.items():
-            # Determine default datatype based on interface parameters
-            default_datatype = "INT8"
-            
-            # Check if this interface has signed parameter to determine default
-            if interface_binding.datatype_params.get("signed"):
-                signed_param = interface_binding.datatype_params["signed"]
-                # Look up the parameter's default value if available
-                for param_name, binding in codegen_binding.parameter_bindings.items():
-                    if param_name == signed_param:
-                        # If we find metadata suggesting unsigned, use UINT8
-                        if binding.metadata.get("default_unsigned", False):
-                            default_datatype = "UINT8"
-                        break
-            
             attr_name = f"{interface_name}DataType"
             datatype_attrs.append({
                 "name": attr_name,
                 "interface_name": interface_name,
-                "default_datatype": default_datatype,
-                "attr_spec": ("s", False, default_datatype)
+                "attr_spec": ("s", True, "")
             })
         
         return datatype_attrs
@@ -363,6 +348,7 @@ class GeneratorManager:
         use KernelModel. For algorithm parameters, uses node attributes.
         """
         from ..codegen_binding import SourceType, ParameterCategory
+        from ..utils import create_parameter_assignment
         
         assignments = []
         
@@ -378,7 +364,6 @@ class GeneratorManager:
                     dimension_index = binding.source.dimension_index or 0
                     
                     # Determine if this is BDIM or SDIM based on parameter name
-                    from ..utils import create_parameter_assignment
                     if "BDIM" in param_name:
                         # Find interface index and generate KernelModel access
                         assignment = create_parameter_assignment(

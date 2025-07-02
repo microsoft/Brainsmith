@@ -26,6 +26,7 @@ class DatatypeConstraintGroup:
         DatatypeConstraintGroup("INT", 4, 8)    # INT4, INT5, INT6, INT7, INT8
         DatatypeConstraintGroup("UINT", 8, 16)  # UINT8, UINT16
         DatatypeConstraintGroup("FIXED", 8, 16) # FIXED<8,N>, FIXED<16,N>
+        DatatypeConstraintGroup("ANY", 8, 32)   # Any datatype from 8 to 32 bits
     """
     base_type: str      # "INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY"
     min_width: int      # Minimum bit width (inclusive)
@@ -38,7 +39,7 @@ class DatatypeConstraintGroup:
         if self.max_width < self.min_width:
             raise ValueError(f"max_width ({self.max_width}) must be >= min_width ({self.min_width})")
         
-        valid_base_types = ["INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY", "BINARY"]
+        valid_base_types = ["INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY", "BINARY", "ANY"]
         if self.base_type not in valid_base_types:
             raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_base_types}")
 
@@ -68,6 +69,15 @@ def validate_datatype_against_constraints(
 
 def _matches_constraint_group(datatype: BaseDataType, group: DatatypeConstraintGroup) -> bool:
     """Check if datatype matches a single constraint group."""
+    # Check bitwidth range first (applies to all types including ANY)
+    bitwidth = datatype.bitwidth()
+    if not (group.min_width <= bitwidth <= group.max_width):
+        return False
+    
+    # Special case: ANY matches any type (only bitwidth matters)
+    if group.base_type == "ANY":
+        return True
+    
     # Extract base type from QONNX canonical name
     canonical_name = datatype.get_canonical_name()
     
@@ -87,9 +97,7 @@ def _matches_constraint_group(datatype: BaseDataType, group: DatatypeConstraintG
     elif group.base_type == "BINARY" and canonical_name != "BINARY":
         return False
     
-    # Check bitwidth range
-    bitwidth = datatype.bitwidth()
-    return group.min_width <= bitwidth <= group.max_width
+    return True
 
 
 __all__ = [

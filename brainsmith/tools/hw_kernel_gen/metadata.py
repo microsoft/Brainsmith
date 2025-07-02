@@ -28,7 +28,9 @@ from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup, v
 if TYPE_CHECKING:
     from .rtl_parser.rtl_data import Parameter
     from .rtl_parser.pragmas.base import Pragma
-    from brainsmith.core.dataflow.relationships import DimensionRelationship
+
+# Import relationship types that are used in pragma implementation
+from brainsmith.core.dataflow.relationships import DimensionRelationship, RelationType
 
 import logging
 

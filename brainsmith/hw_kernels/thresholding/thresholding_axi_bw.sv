@@ -38,25 +38,28 @@
  *	- performs aligned byte address to parameter word address translation.
  *****************************************************************************/
 
-// @brainsmith DATATYPE input FIXED 1 32
-// @brainsmith DATATYPE output FIXED 1 32
-// @brainsmith DATATYPE_PARAM input width input_WIDTH
-// @brainsmith DATATYPE_PARAM output width output_WIDTH
+
+// @brainsmith DATATYPE input * 1 32
+// @brainsmith DATATYPE output * 1 32
 // @brainsmith DATATYPE_PARAM threshold width T_WIDTH
 // @brainsmith BDIM input input_BDIM SHAPE=[CHANNELS]
-// @brainsmith SDIM input input_SDIM SHAPE=[SIMD]
+// @brainsmith SDIM input input_SDIM SHAPE=[PE]
+// *NOTE: This PE should really be SIMD
 // @brainsmith AXILITE_PARAM threshold USE_AXILITE
 
 module thresholding_axi #(
-	int unsigned  input_WIDTH,    // input precision
-	int unsigned  output_WIDTH,   // output precision
-	int unsigned  T_WIDTH,        // threshold precision
+    // Interface Parallelism
 	int unsigned  input_BDIM = 1, // Channels
 	int unsigned  input_SDIM = 1, // Processing Parallelism, requires input BDIM % SDIM = 0
 
+    // Interface Datatype
+	int unsigned  input_WIDTH,    // input precision
+	int unsigned  output_WIDTH,   // output precision
+	int unsigned  T_WIDTH,        // threshold precision
 	bit  input_SIGNED = 1,	// signed inputs
 	bit  input_FPARG  = 0,	// floating-point inputs: [sign] | exponent | mantissa
-	int  output_BIAS  = 0,	// offsetting the output [0, 2^output_WIDTH-1] -> [output_BIAS, 2^output_WIDTH-1 + output_BIAS]
+
+	int  BIAS  = 0,	// offsetting the output [0, 2^output_WIDTH-1] -> [BIAS, 2^output_WIDTH-1 + BIAS]
 
 	// Initial Thresholds
 	parameter  THRESHOLDS_PATH = "",
@@ -70,9 +73,9 @@ module thresholding_axi #(
 
 	localparam int unsigned  CF = input_BDIM/input_SDIM,	// Channel Fold
 	localparam int unsigned  ADDR_BITS = $clog2(CF) + $clog2(input_SDIM) + output_WIDTH + 2,
-	localparam int unsigned  O_BITS = output_BIAS >= 0?
-		/* unsigned */ $clog2(2**output_WIDTH+output_BIAS) :
-		/* signed */ 1+$clog2(-output_BIAS >= 2**(output_WIDTH-1)? -output_BIAS : 2**output_WIDTH+output_BIAS)
+	localparam int unsigned  O_BITS = BIAS >= 0?
+		/* unsigned */ $clog2(2**output_WIDTH+BIAS) :
+		/* signed */ 1+$clog2(-BIAS >= 2**(output_WIDTH-1)? -BIAS : 2**output_WIDTH+BIAS)
 )(
 	//- Global Control ------------------
 	input	logic  ap_clk,
@@ -188,7 +191,7 @@ module thresholding_axi #(
 	// Kernel Implementation
 	thresholding #(
 		.output_WIDTH(output_WIDTH), .K(T_WIDTH), .input_BDIM(input_BDIM), .input_SDIM(input_SDIM),
-		.input_SIGNED(input_SIGNED), .input_FPARG(input_FPARG), .output_BIAS(output_BIAS),
+		.input_SIGNED(input_SIGNED), .input_FPARG(input_FPARG), .BIAS(BIAS),
 		.THRESHOLDS_PATH(THRESHOLDS_PATH), .USE_CONFIG(USE_AXILITE),
 		.DEPTH_TRIGGER_URAM(DEPTH_TRIGGER_URAM), .DEPTH_TRIGGER_BRAM(DEPTH_TRIGGER_BRAM),
 		.DEEP_PIPELINE(DEEP_PIPELINE)

@@ -20,7 +20,7 @@ from pathlib import Path
 from brainsmith.tools.hw_kernel_gen.rtl_parser.protocol_validator import ProtocolValidator
 from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import Port, PortGroup
 from brainsmith.tools.hw_kernel_gen.data import InterfaceType
-from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection, InterfaceDirection
+from brainsmith.tools.hw_kernel_gen.rtl_parser.rtl_data import PortDirection
 
 from .utils.rtl_builder import RTLBuilder
 
@@ -44,7 +44,7 @@ class TestProtocolValidator:
         
         result = protocol_validator.validate(slave_group)
         assert result.valid
-        assert slave_group.metadata.get('direction') == InterfaceDirection.INPUT
+        assert slave_group.metadata.get('direction') == "input"
         assert slave_group.metadata.get('data_width_expr') == "31:0"
         
         # Create valid AXI-Stream master interface
@@ -60,7 +60,7 @@ class TestProtocolValidator:
         
         result = protocol_validator.validate(master_group)
         assert result.valid
-        assert master_group.metadata.get('direction') == InterfaceDirection.OUTPUT
+        assert master_group.metadata.get('direction') == "output"
         assert master_group.metadata.get('data_width_expr') == "15:0"
     
     def test_validate_axi_stream_missing_signals(self, protocol_validator):

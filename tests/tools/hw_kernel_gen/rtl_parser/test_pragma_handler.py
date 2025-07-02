@@ -86,7 +86,7 @@ class TestPragmaHandler:
         datatype_pragma = next(p for p in pragmas if p.type == PragmaType.DATATYPE)
         assert isinstance(datatype_pragma, DatatypePragma)
         assert datatype_pragma.parsed_data["interface_name"] == "in0"
-        assert datatype_pragma.parsed_data["base_type"] == "UINT"
+        assert datatype_pragma.parsed_data["base_types"] == ["UINT"]  # Now always a list
         assert datatype_pragma.parsed_data["min_width"] == 8
         assert datatype_pragma.parsed_data["max_width"] == 32
         
@@ -167,7 +167,7 @@ class TestPragmaHandler:
         
         # Check DATATYPE with multiple types
         datatype_pragma = next(p for p in pragmas if p.type == PragmaType.DATATYPE)
-        assert datatype_pragma.parsed_data["base_type"] == "INT"
+        assert datatype_pragma.parsed_data["base_types"] == ["INT"]  # Now always a list
         
         # Check RELATIONSHIP pragma
         relationship_pragma = next(p for p in pragmas if p.type == PragmaType.RELATIONSHIP)
@@ -339,3 +339,109 @@ class TestPragmaHandler:
         
         assert len(pragmas) == 0
         assert pragma_handler.pragmas == []
+    
+    def test_datatype_pragma_with_list_types(self, pragma_handler, ast_parser):
+        """Test DATATYPE pragma with list of types."""
+        # Build RTL with DATATYPE pragmas using both single and list types
+        rtl = (RTLBuilder()
+               .pragma("DATATYPE", "in0", "[INT, UINT, FIXED]", "8", "16")
+               .pragma("DATATYPE", "in1", "UINT", "8", "32")  # Single type
+               .pragma("DATATYPE", "weights", "[FIXED, FLOAT]", "16", "32")
+               .module("test_module")
+               .port("s_axis_in0_tdata", "input", "16")
+               .port("s_axis_in1_tdata", "input", "32") 
+               .port("s_axis_weights_tdata", "input", "32")
+               .build())
+        
+        tree = ast_parser.parse_source(rtl)
+        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        
+        # Find DATATYPE pragmas
+        datatype_pragmas = [p for p in pragmas if p.type == PragmaType.DATATYPE]
+        assert len(datatype_pragmas) == 3
+        
+        # Check list type pragma for in0
+        list_pragma_in0 = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "in0")
+        assert list_pragma_in0.parsed_data["base_types"] == ["INT", "UINT", "FIXED"]
+        assert list_pragma_in0.parsed_data["min_width"] == 8
+        assert list_pragma_in0.parsed_data["max_width"] == 16
+        
+        # Check single type pragma for in1 (backward compatibility)
+        single_pragma = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "in1")
+        assert single_pragma.parsed_data["base_types"] == ["UINT"]
+        assert single_pragma.parsed_data["min_width"] == 8
+        assert single_pragma.parsed_data["max_width"] == 32
+        
+        # Check list type pragma for weights
+        list_pragma_weights = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "weights")
+        assert list_pragma_weights.parsed_data["base_types"] == ["FIXED", "FLOAT"]
+        assert list_pragma_weights.parsed_data["min_width"] == 16
+        assert list_pragma_weights.parsed_data["max_width"] == 32
+    
+    def test_datatype_pragma_edge_cases(self, pragma_handler, ast_parser):
+        """Test DATATYPE pragma edge cases."""
+        # Test empty list
+        rtl = (RTLBuilder()
+               .pragma("DATATYPE", "in0", "[]", "8", "16")
+               .module("test")
+               .port("in0", "input", "16")
+               .build())
+        
+        tree = ast_parser.parse_source(rtl)
+        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        
+        # Empty list should fail validation
+        datatype_pragma = next((p for p in pragmas if p.type == PragmaType.DATATYPE), None)
+        assert datatype_pragma is None  # Should not create pragma due to validation error
+        
+        # Test invalid type in list
+        rtl = (RTLBuilder()
+               .pragma("DATATYPE", "in0", "[INT, INVALID_TYPE]", "8", "16")
+               .module("test")
+               .port("in0", "input", "16")
+               .build())
+        
+        tree = ast_parser.parse_source(rtl)
+        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        
+        # Invalid type should fail validation
+        datatype_pragma = next((p for p in pragmas if p.type == PragmaType.DATATYPE), None)
+        assert datatype_pragma is None  # Should not create pragma due to validation error
+    
+    def test_datatype_pragma_with_wildcard(self, pragma_handler, ast_parser):
+        """Test DATATYPE pragma with wildcard * type."""
+        # Build RTL with wildcard DATATYPE pragmas
+        rtl = (RTLBuilder()
+               .pragma("DATATYPE", "in0", "*", "8", "32")
+               .pragma("DATATYPE", "in1", "[*, UINT]", "16", "16")  # * in list
+               .pragma("DATATYPE", "in2", "[INT, *]", "4", "8")     # * in list with other type
+               .module("test_module")
+               .port("s_axis_in0_tdata", "input", "16")
+               .port("s_axis_in1_tdata", "input", "16")
+               .port("s_axis_in2_tdata", "input", "8")
+               .build())
+        
+        tree = ast_parser.parse_source(rtl)
+        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        
+        # Find DATATYPE pragmas
+        datatype_pragmas = [p for p in pragmas if p.type == PragmaType.DATATYPE]
+        assert len(datatype_pragmas) == 3
+        
+        # Check wildcard expansion to ANY
+        wildcard_pragma = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "in0")
+        assert wildcard_pragma.parsed_data["base_types"] == ["ANY"]
+        assert wildcard_pragma.parsed_data["min_width"] == 8
+        assert wildcard_pragma.parsed_data["max_width"] == 32
+        
+        # Check wildcard in list - should become just ANY
+        list_pragma1 = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "in1")
+        assert list_pragma1.parsed_data["base_types"] == ["ANY"]
+        assert list_pragma1.parsed_data["min_width"] == 16
+        assert list_pragma1.parsed_data["max_width"] == 16
+        
+        # Check wildcard with other type in list - should still become ANY
+        list_pragma2 = next(p for p in datatype_pragmas if p.parsed_data["interface_name"] == "in2")
+        assert list_pragma2.parsed_data["base_types"] == ["ANY"]
+        assert list_pragma2.parsed_data["min_width"] == 4
+        assert list_pragma2.parsed_data["max_width"] == 8

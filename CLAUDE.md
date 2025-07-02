@@ -233,6 +233,13 @@ Dependencies are managed in `docker/fetch-repos.sh`. To update FINN:
 - **Breaking changes preferred**: Per user preferences, prefer breaking refactors over compatibility layers
 - **Python package installed in dev mode**: Changes to code are immediately reflected without rebuilding container
 
+### Container Management Notes
+
+- **Persistent containers**: `smithy daemon` creates long-running containers for faster operations
+- **Container naming**: Containers are named based on directory hash for persistence across sessions
+- **Build requirements**: Container builds require ~15GB disk space
+- **Initialization monitoring**: Container startup includes automatic dependency fetching and can take several minutes
+
 ## Development Guidelines
 
 - **License and File Notes**:
@@ -280,6 +287,11 @@ from brainsmith.tools.hw_kernel_gen import RTLParser
 # Interactive debugging
 ./smithy shell
 # Then use ipdb or pdb in your code
+
+# Container troubleshooting
+./smithy logs              # View container logs
+./smithy status           # Check container state
+BSMITH_SHOW_INIT_LOGS=true ./smithy daemon  # Debug container startup
 ```
 
 ## Memories
