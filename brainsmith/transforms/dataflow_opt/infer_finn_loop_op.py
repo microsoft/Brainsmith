@@ -7,7 +7,7 @@ until we add it to the FINN manual registry.
 """
 
 from qonnx.transformation.base import Transformation
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins.decorators import transform
 
 
 @transform(

@@ -30,7 +30,7 @@ def test_manual_registration():
     print("\n=== Testing Manual Registration ===")
     
     # Import a transform to trigger decorator registration
-    from brainsmith.transforms.graph_cleanup.remove_identity import RemoveIdentityOps
+    from brainsmith.transforms.cleanup.remove_identity import RemoveIdentityOps
     
     # Check if it was registered
     registry = PluginRegistry()
@@ -38,9 +38,9 @@ def test_manual_registration():
     
     if transform:
         print(f"✓ Successfully registered transform: {transform.__name__}")
-        metadata = transform._plugin_metadata
-        print(f"  - Stage: {metadata['stage']}")
-        print(f"  - Description: {metadata['description']}")
+        post_proc = transform._plugin_post_proc
+        print(f"  - Stage: {post_proc['stage']}")
+        print(f"  - Description: {post_proc['description']}")
     else:
         print("✗ Transform registration failed")
 
@@ -76,7 +76,7 @@ def test_registry_operations():
     
     # List transforms by stage
     print("\nTransforms by stage:")
-    stages = ["graph_cleanup", "topology_optimization", "kernel_mapping", 
+    stages = ["cleanup", "topology_optimization", "kernel_mapping", 
               "kernel_optimization", "graph_optimization"]
     
     for stage in stages:
@@ -153,7 +153,7 @@ def validate_structure():
     
     expected_dirs = [
         "brainsmith/plugin",
-        "brainsmith/transforms/graph_cleanup",
+        "brainsmith/transforms/cleanup",
         "brainsmith/transforms/topology_optimization",
         "brainsmith/transforms/kernel_mapping",
         "brainsmith/transforms/kernel_optimization",

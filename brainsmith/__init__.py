@@ -56,8 +56,8 @@ export_results = None
 from .core.phase3 import create_build_runner_factory as build_accelerator
 
 # === 🔌 EXTENSIBILITY (contributor-focused) ===
-# Use the pure stevedore plugin system
-from .plugins import get_plugin_manager
+# Plugin system functions available to contributors
+from .plugins import plugin_status, reset_plugin_system
 
 # === 📋 STRUCTURED EXPORTS ===
 __all__ = [
@@ -85,7 +85,8 @@ __all__ = [
     'build_accelerator',        # Build runner factory
     
     # === EXTENSIBILITY (Contributors) ===
-    'get_plugin_manager',       # Pure stevedore plugin manager
+    'plugin_status',            # Plugin system status
+    'reset_plugin_system',      # Reset plugin system
 ]
 
 # === 🎯 WORKFLOW HELPERS ===

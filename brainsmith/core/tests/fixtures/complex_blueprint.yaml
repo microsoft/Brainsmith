@@ -12,7 +12,7 @@ hw_compiler:
   
   transforms:
     # Phase-based organization
-    graph_cleanup:
+    cleanup:
       - "remove_identity"
       - "constant_folding"
     

@@ -4,7 +4,7 @@ Layer Normalization HLS Backend
 HLS backend implementation for layer normalization.
 """
 
-from brainsmith.plugin.decorators import backend
+from brainsmith.core.plugins import backend
 from .layernorm import LayerNorm
 
 
@@ -12,6 +12,7 @@ from .layernorm import LayerNorm
     name="LayerNormHLS", 
     kernel="LayerNorm",
     backend_type="hls",
+    default=True,  # Mark as default backend
     description="High-Level Synthesis backend for LayerNorm kernel",
     author="brainsmith-team",
     version="1.0.0"

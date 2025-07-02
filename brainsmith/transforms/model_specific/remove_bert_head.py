@@ -2,7 +2,7 @@
 
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensorNames
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins.decorators import transform
 
 
 @transform(

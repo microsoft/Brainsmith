@@ -33,8 +33,7 @@ import shutil
 import logging
 from typing import Any
 
-from brainsmith.plugin.decorators import step
-from brainsmith.plugins import transforms as tfm
+from brainsmith.core.plugins import step, transforms as tfm
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ Port of the ExpandNorms transform to the plugin system.
 import numpy as np
 from onnx import helper as oh
 from onnx import TensorProto
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins.decorators import transform
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name

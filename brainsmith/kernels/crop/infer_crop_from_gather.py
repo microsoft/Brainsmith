@@ -6,7 +6,7 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins import transform
 
 
 def elements_are_consecutive(indices):

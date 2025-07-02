@@ -4,7 +4,7 @@ Layer Normalization Kernel
 Kernel definition for layer normalization operations.
 """
 
-from brainsmith.plugin.decorators import kernel
+from brainsmith.core.plugins import kernel
 
 
 @kernel(

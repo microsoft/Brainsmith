@@ -3,12 +3,12 @@
 import json
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins.decorators import transform
 
 
 @transform(
     name="ExtractShellIntegrationMetadata",
-    stage="cleanup",
+    stage="post_proc",
     description="Extract metadata for shell integration handover",
     author="shane.fleming",
     version="1.0.0",

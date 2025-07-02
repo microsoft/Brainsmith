@@ -6,7 +6,7 @@ Converted from custom_step_loop_rolling in old_bert.py.
 """
 
 from qonnx.transformation.base import Transformation
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins.decorators import transform
 
 
 @transform(

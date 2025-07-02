@@ -11,7 +11,7 @@ from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.custom_op.registry import register_op
-from brainsmith.plugin.decorators import kernel
+from brainsmith.core.plugins import kernel
 
 @kernel(
     name="Crop",

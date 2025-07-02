@@ -4,7 +4,7 @@ Layer Normalization RTL Backend
 Optimized RTL backend implementation for layer normalization.
 """
 
-from brainsmith.plugin.decorators import backend
+from brainsmith.core.plugins import backend
 from .layernorm import LayerNorm
 
 

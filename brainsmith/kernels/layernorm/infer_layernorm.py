@@ -6,7 +6,7 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.plugin.decorators import transform
+from brainsmith.core.plugins import transform
 
 
 @transform(name="InferLayerNorm", kernel="LayerNorm",

@@ -72,7 +72,7 @@ class TestForgeIntegration:
         # Check phase-based transforms
         transforms = design_space.hw_compiler_space.transforms
         assert isinstance(transforms, dict)
-        assert "graph_cleanup" in transforms
+        assert "cleanup" in transforms
         assert "topology_optimization" in transforms
         
         # Check preprocessing/postprocessing

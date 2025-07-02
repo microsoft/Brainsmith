@@ -10,7 +10,7 @@ def ensure_plugins_imported():
     # Import all transforms
     import brainsmith.transforms.topology_opt.expand_norms
     import brainsmith.transforms.kernel_opt.set_pumped_compute
-    import brainsmith.transforms.graph_cleanup.remove_identity
+    import brainsmith.transforms.cleanup.remove_identity
     
     # Import all kernels
     import brainsmith.kernels.layernorm.layernorm

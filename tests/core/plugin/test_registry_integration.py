@@ -12,7 +12,7 @@ class TestPluginRegistry:
         # Import transforms to trigger registration
         import brainsmith.transforms.topology_opt.expand_norms
         import brainsmith.transforms.kernel_opt.set_pumped_compute
-        import brainsmith.transforms.graph_cleanup.remove_identity
+        import brainsmith.transforms.cleanup.remove_identity
         
         # Query all transforms
         transforms = clean_registry.query(type="transform")
@@ -132,8 +132,8 @@ class TestPluginRegistry:
         assert clean_registry.get("transform", "NonExistent") is None
         assert clean_registry.get("kernel", "NonExistent") is None
     
-    def test_plugin_query_by_metadata(self, clean_registry):
-        """Test querying plugins by metadata."""
+    def test_plugin_query_by_post_proc(self, clean_registry):
+        """Test querying plugins by post_proc."""
         # Import plugins
         import brainsmith.transforms.topology_opt.expand_norms
         import brainsmith.transforms.kernel_opt.set_pumped_compute
@@ -188,7 +188,7 @@ class TestPluginRegistry:
         softmax_inf = clean_registry.get("kernel_inference", "InferHWSoftmax") 
         assert softmax_inf is not None
         
-        # Verify metadata
+        # Verify post_proc
         inferences = clean_registry.query(type="kernel_inference")
         for inf in inferences:
             assert inf["stage"] is None, f"Kernel inference {inf['name']} should have stage=None"
@@ -283,11 +283,11 @@ class TestPluginRegistry:
             assert hasattr(fold_constants, '__name__')
             assert hasattr(fold_constants, 'apply')
     
-    def test_metadata_completeness(self, clean_registry):
-        """Test that plugins have complete metadata."""
+    def test_post_proc_completeness(self, clean_registry):
+        """Test that plugins have complete post_proc."""
         all_plugins = clean_registry.query()
         
-        # Count metadata completeness
+        # Count post_proc completeness
         complete_count = 0
         partial_count = 0
         minimal_count = 0

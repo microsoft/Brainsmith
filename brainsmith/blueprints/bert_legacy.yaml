@@ -17,7 +17,7 @@ hw_compiler:
     
   transforms:
     # Using standardized stage names for BERT-specific flow
-    graph_cleanup:
+    cleanup:
       # Graph cleanup and preparation
       - "SortCommutativeInputsInitializerLast"
       - "RemoveIdentityOps"
@@ -59,7 +59,7 @@ hw_compiler:
     
     # === Core processing ===
     - "generate_reference_io"
-    - "streamlining"
+    - "topology_opt"
     - "infer_hardware"
     
     # === Standard FINN pipeline ===
@@ -75,8 +75,8 @@ hw_compiler:
     - "step_set_fifo_depths"
     - "step_create_stitched_ip"
     
-    # === Final metadata ===
-    - "shell_metadata_handover"
+    # === Final post_proc ===
+    - "shell_post_proc_handover"
     
   config_flags:
     # Hardware-specific settings for DSE v3

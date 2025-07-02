@@ -41,40 +41,60 @@ def _get_transform_class(transform_name: str) -> Type:
         TransformResolutionError: If transform cannot be found
         AmbiguousTransformError: If unprefixed name matches multiple frameworks
     """
-    from brainsmith.plugin.core.registry import get_plugin_registry as get_registry
+    from brainsmith.core.plugins import get_registry
     registry = get_registry()
     
-    try:
-        # Use enhanced conflict detection
-        transform_cls = registry.get_with_conflict_detection("transform", transform_name)
+    # Handle prefixed names (e.g., "qonnx:RemoveIdentityOps")
+    if ":" in transform_name:
+        framework, name = transform_name.split(":", 1)
+        transform_cls = registry.get_transform(name, framework=framework)
         if transform_cls:
-            # Log successful resolution for unprefixed names
-            if ":" not in transform_name:
-                logger.debug(f"Resolved unique transform '{transform_name}'")
+            logger.debug(f"Resolved prefixed transform '{transform_name}'")
             return transform_cls
-    except AmbiguousTransformError as e:
-        # Re-raise with additional context for better user experience
-        raise TransformResolutionError(str(e))
+    else:
+        # Handle unprefixed names - check for conflicts
+        name = transform_name
+        
+        # Check direct lookup first
+        transform_cls = registry.get_transform(name)
+        if transform_cls:
+            logger.debug(f"Resolved transform '{name}' (direct lookup)")
+            return transform_cls
+        
+        # Check across frameworks for conflicts
+        found_frameworks = []
+        found_class = None
+        
+        for framework in registry.framework_transforms.keys():
+            framework_cls = registry.get_transform(name, framework=framework)
+            if framework_cls:
+                found_frameworks.append(framework)
+                found_class = framework_cls
+        
+        if len(found_frameworks) == 1:
+            logger.debug(f"Resolved unique transform '{name}' from framework '{found_frameworks[0]}'")
+            return found_class
+        elif len(found_frameworks) > 1:
+            raise TransformResolutionError(
+                f"Ambiguous transform '{name}' found in multiple frameworks: {found_frameworks}. "
+                f"Use prefixed name like '{found_frameworks[0]}:{name}' to specify framework."
+            )
     
     # Not found - provide helpful error with context
-    all_transforms = registry.query(type="transform")
+    all_plugins = registry.list_all_plugins()
+    all_transforms = [p for p in all_plugins if p['metadata'].get('type') == 'transform']
     
     # Count by framework
-    qonnx_count = len([t for t in all_transforms if t.get("framework") == "qonnx"])
-    finn_count = len([t for t in all_transforms if t.get("framework") == "finn"])
-    brainsmith_count = len([t for t in all_transforms if t.get("framework") == "brainsmith"])
+    qonnx_count = len([t for t in all_transforms if t['metadata'].get("framework") == "qonnx"])
+    finn_count = len([t for t in all_transforms if t['metadata'].get("framework") == "finn"])
+    brainsmith_count = len([t for t in all_transforms if t['metadata'].get("framework") == "brainsmith"])
     
     # Suggest similar names
     all_names = [t["name"] for t in all_transforms]
-    unprefixed_names = []
-    for name in all_names:
-        if ":" in name:
-            unprefixed_names.append(name.split(":", 1)[1])
-        else:
-            unprefixed_names.append(name)
     
     # Find potential matches (simple substring matching)
-    suggestions = [name for name in set(unprefixed_names) if transform_name.lower() in name.lower()][:3]
+    search_name = transform_name.split(":")[-1] if ":" in transform_name else transform_name
+    suggestions = [name for name in all_names if search_name.lower() in name.lower()][:3]
     
     error_msg = (
         f"Transform '{transform_name}' not found in plugin registry. "

@@ -1,1 +1,0 @@
-"""MatMul kernel package."""

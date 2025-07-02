@@ -1,12 +1,8 @@
 """
-Dataflow optimization transforms for hardware-specific graph optimizations.
-
-These transforms prepare the model for dataflow execution on FPGA hardware.
+dataflow_opt transforms
 """
 
-# Import stub transforms for BERT compatibility (only for transforms missing from FINN)
-from .infer_finn_loop_op import InferFinnLoopOp
+# Import all transforms to trigger auto-registration
+from . import infer_finn_loop_op
 
-__all__ = [
-    'InferFinnLoopOp'
-]
+__all__ = ["infer_finn_loop_op"]
