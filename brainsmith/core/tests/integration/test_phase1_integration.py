@@ -13,6 +13,8 @@ from brainsmith.core.phase1.exceptions import (
     ValidationError,
 )
 
+# No fake plugins - use real QONNX/FINN plugins only
+
 
 class TestForgeIntegration:
     """Integration tests for the Forge API."""
@@ -47,8 +49,12 @@ class TestForgeIntegration:
         
         # Check kernels
         assert len(design_space.hw_compiler_space.kernels) == 2
-        assert design_space.hw_compiler_space.kernels[0] == "MatMul"
-        assert isinstance(design_space.hw_compiler_space.kernels[1], list)
+        # First kernel is auto-discovered, so it's a tuple (name, backends)
+        assert design_space.hw_compiler_space.kernels[0][0] == "LayerNorm"
+        assert isinstance(design_space.hw_compiler_space.kernels[0][1], list)
+        # Second kernel has explicit backends
+        assert isinstance(design_space.hw_compiler_space.kernels[1], tuple)
+        assert design_space.hw_compiler_space.kernels[1][0] == "Crop"
         
         # Check transforms
         assert len(design_space.hw_compiler_space.transforms) == 2
@@ -73,7 +79,7 @@ class TestForgeIntegration:
         transforms = design_space.hw_compiler_space.transforms
         assert isinstance(transforms, dict)
         assert "cleanup" in transforms
-        assert "topology_optimization" in transforms
+        assert "topology_opt" in transforms
         
         # Check preprocessing/postprocessing
         assert len(design_space.processing_space.preprocessing) == 2
@@ -152,7 +158,7 @@ hw_compiler:
   kernels:
     - MatMul
   transforms:
-    - quantization
+    - QuantizeGraph
   build_steps:
     - SomeCustomStep  # Missing common steps will warn
 search:
@@ -187,11 +193,11 @@ global:
 version: "3.0"
 hw_compiler:
   kernels:
-    - MatMul
-    - ["Option1", "Option2"]  # 2 options
+    - LayerNorm
+    - ["Crop", "Shuffle"]  # 2 options (real QONNX kernels)
   transforms:
-    - quantization
-    - ["fold1", "fold2", "fold3"]  # 3 options
+    - FoldConstants
+    - ["InferShapes", "InferDataTypes", "RemoveUnusedTensors"]  # 3 options (real QONNX transforms)
   build_steps:
     - ConvertToHW
 processing:

@@ -41,30 +41,31 @@ class BuildRunner:
         self.preprocessing_pipeline = PreprocessingPipeline()
         self.postprocessing_pipeline = PostprocessingPipeline()
         
-    def run(self, config: BuildConfig, model_path: str) -> BuildResult:
+    def run(self, config: BuildConfig) -> BuildResult:
         """
         Execute the complete build process.
         
         Args:
-            config: Build configuration from Phase 2
-            model_path: Path to the input model
+            config: Build configuration from Phase 2 (includes model_path)
             
         Returns:
             BuildResult with status, metrics, and artifacts
         """
         logger.info(f"Starting build {config.id} using {self.backend.get_backend_name()}")
         
+        # Extract model path from config
+        model_path = config.model_path
         processed_model_path = None
         
         try:
             # Step 1: Preprocessing
             logger.info("Executing preprocessing pipeline")
-            processed_model_path = self.preprocessing_pipeline.execute(config, model_path)
+            processed_model_path = self.preprocessing_pipeline.execute(config)
             logger.info(f"Preprocessing complete, processed model at: {processed_model_path}")
             
             # Step 2: Backend execution
             logger.info("Executing backend build")
-            result = self.backend.run(config, processed_model_path)
+            result = self.backend.run(config)
             
             # Step 3: Postprocessing (only if build was successful)
             if result.is_successful():

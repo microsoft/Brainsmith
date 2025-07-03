@@ -1,0 +1,41 @@
+version: "3.0"
+name: "Auto-Discovery Test Blueprint"
+description: "Tests kernel backend auto-discovery functionality"
+
+hw_compiler:
+  kernels:
+    # Simple kernel names that should auto-discover backends
+    - "MatMul"
+    - "LayerNorm"
+    - "~Softmax"  # Optional kernel with auto-discovery
+    
+    # Mixed with explicit backends
+    - ["Attention", ["hls", "rtl"]]
+    
+    # Mutually exclusive group with auto-discovery
+    - ["StandardConv", "DepthwiseConv", ~]
+  
+  transforms:
+    cleanup:
+      - "RemoveIdentityOps"
+      - "~RemoveUnusedTensors"
+    topology_opt:
+      - "FoldConstants"
+      - ["ConvertQONNXtoFINN", "KeepOriginal"]
+  
+  build_steps:
+    - "ConvertToHW"
+    - "PrepareIP"
+    - "GenerateDriver"
+
+search:
+  strategy: "exhaustive"
+  constraints:
+    - metric: "lut_utilization"
+      operator: "<="
+      value: 0.8
+
+global:
+  output_stage: "rtl"
+  working_directory: "./test_builds"
+  max_combinations: 1000

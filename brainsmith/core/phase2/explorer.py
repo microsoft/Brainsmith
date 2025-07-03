@@ -48,7 +48,6 @@ class ExplorerEngine:
         self.hooks = hooks or []
         self.progress_tracker: Optional[ProgressTracker] = None
         self.exploration_results: Optional[ExplorationResults] = None
-        self._current_model_path: Optional[str] = None
     
     def explore(
         self,
@@ -67,9 +66,6 @@ class ExplorerEngine:
         """
         logger.info(f"Starting exploration of design space from {design_space.model_path}")
         start_time = datetime.now()
-        
-        # Store model path for builds
-        self._current_model_path = design_space.model_path
         
         # Initialize exploration results
         combination_gen = CombinationGenerator()
@@ -183,8 +179,8 @@ class ExplorerEngine:
             BuildResult from the evaluation
         """
         try:
-            # Run the build with model path
-            result = build_runner.run(config, self._current_model_path)
+            # Run the build (model path is now in config)
+            result = build_runner.run(config)
             
             # Log outcome
             if result.status == BuildStatus.SUCCESS:

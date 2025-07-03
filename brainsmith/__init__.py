@@ -57,7 +57,7 @@ from .core.phase3 import create_build_runner_factory as build_accelerator
 
 # === 🔌 EXTENSIBILITY (contributor-focused) ===
 # Plugin system functions available to contributors
-from .plugins import plugin_status, reset_plugin_system
+from .core.plugins import plugin_status, reset_plugin_system
 
 # === 📋 STRUCTURED EXPORTS ===
 __all__ = [

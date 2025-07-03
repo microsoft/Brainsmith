@@ -39,10 +39,13 @@ def create_build_runner_factory(backend_type: str = "auto") -> Callable[[], Buil
             
         elif backend_type == "auto":
             # Auto-select based on configuration
-            # For now, default to legacy FINN since it's more mature
-            # In future, could check for availability of FINN-Brainsmith API
-            print("Auto-selecting backend: Using Legacy FINN Backend")
-            backend = LegacyFINNBackend()
+            # Prefer LegacyFINNBackend (real implementation) over mock
+            try:
+                backend = LegacyFINNBackend()
+                print("Auto-selecting backend: Using Legacy FINN Backend")
+            except ImportError:
+                print("Auto-selecting backend: Using Future Brainsmith Backend (fallback)")
+                backend = FutureBrainsmithBackend()
             
         else:
             raise ValueError(

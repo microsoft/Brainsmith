@@ -16,13 +16,12 @@ class BuildRunnerInterface(ABC):
     """Abstract interface for build execution backends."""
     
     @abstractmethod
-    def run(self, config: BuildConfig, model_path: str) -> BuildResult:
+    def run(self, config: BuildConfig) -> BuildResult:
         """
         Execute build and return results.
         
         Args:
-            config: Build configuration from Phase 2
-            model_path: Path to the preprocessed model file
+            config: Build configuration from Phase 2 (includes model_path)
             
         Returns:
             BuildResult with status, metrics, and artifacts

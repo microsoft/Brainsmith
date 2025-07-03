@@ -2,35 +2,28 @@
 Preprocessing pipeline for Phase 3.
 
 This module implements the shared preprocessing pipeline used by all backends
-to prepare models before hardware compilation. It provides simple handling logic
-that expects QONNX transforms and uses placeholder implementations.
+to prepare models before hardware compilation using the plugin registry system.
 """
 
 import os
 import shutil
 from typing import Dict
 
-from brainsmith.core.phase1.data_structures import ProcessingStep
 from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.core.plugins.registry import get_registry
 
 
 class PreprocessingPipeline:
     """
-    Shared preprocessing pipeline for all backends.
-    
-    This pipeline provides simple handling logic that expects QONNX transforms
-    and uses placeholder implementations for processing steps.
+    Shared preprocessing pipeline for all backends using plugin registry.
     """
     
     def execute(self, config: BuildConfig, model_path: str = None) -> str:
         """
-        Execute preprocessing steps and return processed model path.
-        
-        This is a simple handler that expects QONNX transforms. For now,
-        it uses placeholder implementations that pass through the model.
-        
+        Execute preprocessing transforms from 'pre_proc' stage and return processed model path.
+
         Args:
-            config: Build configuration with preprocessing steps
+            config: Build configuration with transform stages
             model_path: Path to the model file
             
         Returns:
@@ -49,53 +42,55 @@ class PreprocessingPipeline:
             # Fallback for testing
             current_model_path = "/path/to/model.onnx"
         
-        # Apply each preprocessing step (placeholder handling)
-        for i, step in enumerate(config.preprocessing):
-            if step.enabled:
-                print(f"[PLACEHOLDER] Preprocessing step {i+1}/{len(config.preprocessing)}: {step.name}")
-                current_model_path = self._apply_qonnx_transform(
-                    step, current_model_path, preprocess_dir
-                )
+        # Get transforms from 'pre_proc' stage
+        registry = get_registry()
+        pre_proc_transforms = config.transforms_by_stage.get('pre_proc', [])
         
-        # Copy final processed model to standard location
-        processed_model_path = os.path.join(config.output_dir, "processed_model.onnx")
+        if pre_proc_transforms:
+            print(f"Applying {len(pre_proc_transforms)} pre_proc transforms")
+            
+            # Apply transforms using QONNX ModelWrapper
+            try:
+                from qonnx.core.modelwrapper import ModelWrapper
+                model = ModelWrapper(current_model_path)
+                
+                for i, transform_name in enumerate(pre_proc_transforms):
+                    print(f"Applying pre_proc transform {i+1}/{len(pre_proc_transforms)}: {transform_name}")
+                    
+                    # Get transform from registry
+                    transform_class = registry.get_transform(transform_name)
+                    if transform_class:
+                        # Apply transform
+                        model = transform_class().apply(model)
+                    else:
+                        print(f"Warning: Transform '{transform_name}' not found in registry")
+                
+                # Save processed model
+                processed_model_path = os.path.join(config.output_dir, "processed_model.onnx")
+                model.save(processed_model_path)
+                
+            except ImportError:
+                print("Warning: QONNX not available, using passthrough preprocessing")
+                processed_model_path = self._passthrough_preprocessing(current_model_path, config.output_dir)
+                
+        else:
+            # No preprocessing transforms - just copy model
+            processed_model_path = self._passthrough_preprocessing(current_model_path, config.output_dir)
+        
+        return processed_model_path
+    
+    def _passthrough_preprocessing(self, model_path: str, output_dir: str) -> str:
+        """
+        Passthrough preprocessing when no transforms are specified or QONNX unavailable.
+        """
+        processed_model_path = os.path.join(output_dir, "processed_model.onnx")
         
         # Only copy if source file exists (for testing with dummy paths)
-        if os.path.exists(current_model_path):
-            shutil.copy2(current_model_path, processed_model_path)
+        if os.path.exists(model_path):
+            shutil.copy2(model_path, processed_model_path)
         else:
             # Create a dummy file for testing
             with open(processed_model_path, 'w') as f:
                 f.write("# Placeholder ONNX model file")
         
         return processed_model_path
-    
-    def _apply_qonnx_transform(self, step: ProcessingStep, model_path: str, output_dir: str) -> str:
-        """
-        Apply a QONNX transform step (placeholder implementation).
-        
-        In the real implementation, this would:
-        1. Load the model using QONNX
-        2. Apply the specified transform
-        3. Save the transformed model
-        
-        For now, this is a placeholder that just passes through the model.
-        """
-        print(f"[PLACEHOLDER] Would apply QONNX transform: {step.name}")
-        
-        # Placeholder: just copy the model to show processing occurred
-        step_output_path = os.path.join(output_dir, f"{step.name}_output.onnx")
-        
-        # Only copy if source file exists (for testing with dummy paths)
-        if os.path.exists(model_path):
-            shutil.copy2(model_path, step_output_path)
-        else:
-            # Create a dummy file for testing
-            with open(step_output_path, 'w') as f:
-                f.write("# Placeholder ONNX model file from transform")
-        
-        # Log parameters if any
-        if step.parameters:
-            print(f"[PLACEHOLDER] Transform parameters: {step.parameters}")
-        
-        return step_output_path

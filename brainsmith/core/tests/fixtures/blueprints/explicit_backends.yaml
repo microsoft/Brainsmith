@@ -1,0 +1,74 @@
+version: "3.0"
+name: "Explicit Backends Test Blueprint"
+description: "Tests explicit backend specification and validation"
+
+hw_compiler:
+  kernels:
+    # Explicit backend specifications
+    - ["MatMul", ["rtl", "hls"]]
+    - ["LayerNorm", ["hls"]]
+    - ["Softmax", ["rtl", "hls", "dsp"]]
+    
+    # Optional with explicit backends
+    - ["~Attention", ["cuda", "triton"]]
+    
+    # Mutually exclusive group with explicit backends
+    - [
+        ["Conv2D", ["rtl", "hls"]],
+        ["DepthwiseConv2D", ["dsp"]],
+        ["GroupedConv2D", ["hls"]],
+        ~  # Skip option
+      ]
+  
+  transforms:
+    pre_proc:
+      - "PrepareModel"
+    cleanup:
+      - "RemoveIdentityOps"
+      - "GiveReadableTensorNames"
+    topology_opt:
+      - "ConvertQONNXtoFINN"
+      - "InferDataLayouts"
+    kernel_opt:
+      - "OptimizeKernelConfig"
+    dataflow_opt:
+      - "OptimizeDataflow"
+    post_proc:
+      - "FinalizeModel"
+  
+  build_steps:
+    - "ConvertToHW"
+    - "PrepareIP"
+    - "GenerateDriver"
+    - "PackageDesign"
+
+processing:
+  preprocessing:
+    - name: "quantization"
+      options:
+        - {enabled: true, bits: 8}
+        - {enabled: true, bits: 4}
+        - {enabled: false}
+
+search:
+  strategy: "bayesian"
+  constraints:
+    - metric: "lut_utilization"
+      operator: "<="
+      value: 0.85
+    - metric: "bram_utilization"
+      operator: "<="
+      value: 0.9
+    - metric: "latency_cycles"
+      operator: "<="
+      value: 1000
+  max_evaluations: 50
+  timeout_minutes: 120
+  parallel_builds: 4
+
+global:
+  output_stage: "ip"
+  working_directory: "./explicit_backend_builds"
+  cache_results: true
+  save_artifacts: true
+  log_level: "DEBUG"

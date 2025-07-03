@@ -96,6 +96,7 @@ class CombinationGenerator:
             config = BuildConfig(
                 id=f"{design_space_id}_{config_dirname}",
                 design_space_id=design_space_id,
+                model_path=design_space.model_path,
                 kernels=list(active_kernels),
                 transforms=transforms,  # Now a dict
                 preprocessing=list(active_preprocessing),

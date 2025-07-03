@@ -33,6 +33,7 @@ class BuildConfig:
     """
     id: str                              # Unique identifier (e.g., "config_00001")
     design_space_id: str                 # Links to parent design space
+    model_path: str                      # Path to ONNX model file for this build
     
     # Specific selections from the design space
     kernels: List[Tuple[str, List[str]]] # Selected kernel configurations
@@ -74,6 +75,7 @@ class BuildConfig:
         return {
             "id": self.id,
             "design_space_id": self.design_space_id,
+            "model_path": self.model_path,
             "kernels": self.kernels,
             "transforms": self.transforms,
             "preprocessing": [

@@ -58,9 +58,12 @@ class LegacyFINNBackend(BuildRunnerInterface):
         """Return list of supported output stages."""
         return [OutputStage.RTL, OutputStage.STITCHED_IP]
     
-    def run(self, config: BuildConfig, model_path: str) -> BuildResult:
+    def run(self, config: BuildConfig) -> BuildResult:
         """Execute build using FINN's build_dataflow infrastructure."""
         result = BuildResult(config_id=config.id)
+        
+        # Extract model path from config
+        model_path = config.model_path
         
         # Set up logging
         logger = logging.getLogger("legacy_finn_backend")

@@ -1,31 +1,32 @@
 version: "3.0"
 name: "Complex Test Blueprint"
-description: "A complex blueprint demonstrating all features"
+description: "A complex blueprint demonstrating all features with real QONNX/FINN plugins"
 
 hw_compiler:
   kernels:
-    - "MatMul"
-    - ["Gemm", ["rtl_optimized", "hls_balanced"]]
-    - [["LayerNorm", ["standard", "quantized"]], "RMSNorm"]  # Mutually exclusive
-    - [~, "Transpose"]  # Optional
-    - [["~Softmax", ["flash", "standard"]]]  # Optional with backends
+    # Real QONNX/FINN kernels
+    - "LayerNorm"
+    - ["Crop", ["CropHLS"]]
+    - [["LayerNorm", ["LayerNormHLS", "LayerNormRTL"]], "Shuffle"]  # Mutually exclusive
+    - [~, "HWSoftmax"]  # Optional
+    - [["~Crop", ["CropHLS"]]]  # Optional with backends
   
   transforms:
-    # Phase-based organization
+    # Phase-based organization with real QONNX/FINN transforms
     cleanup:
-      - "remove_identity"
-      - "constant_folding"
+      - "RemoveUnusedTensors"
+      - "FoldConstants"
     
-    topology_optimization:
-      - ["fold_layer_wise", "fold_operator_wise"]  # Mutually exclusive
-      - (~, "streamline", "streamline_aggressive")  # Optional and mutually exclusive
+    topology_opt:
+      - ["InferShapes", "InferDataTypes"]  # Mutually exclusive (real QONNX transforms)
+      - (~, "Streamline")  # Optional (real FINN transform)
     
-    kernel_optimization:
-      - "optimize_kernels"
-      - "~fuse_operations"  # Optional
+    kernel_opt:
+      - "SpecializeLayers"  # Real kernel_opt transform
     
-    graph_optimization:
-      - "optimize_graph"
+    dataflow_opt:
+      - "MinimizeAccumulatorWidth"
+      - "~MinimizeWeightBitWidth"  # Optional
   
   build_steps:
     - "ConvertToHW"

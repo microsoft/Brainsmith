@@ -1,15 +1,17 @@
 version: "3.0"
 name: "Simple Test Blueprint"
-description: "A minimal blueprint for testing"
+description: "A minimal blueprint for testing with real QONNX/FINN plugins"
 
 hw_compiler:
   kernels:
-    - "MatMul"
-    - ["Softmax", ["hls", "rtl"]]
+    # Use real QONNX/FINN kernels
+    - "LayerNorm"
+    - ["Crop", ["CropHLS"]]
   
   transforms:
-    - "quantization"
-    - "folding"
+    # Use real QONNX transforms from cleanup stage
+    - "FoldConstants"
+    - "RemoveUnusedTensors"
   
   build_steps:
     - "ConvertToHW"

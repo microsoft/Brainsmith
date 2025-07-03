@@ -46,9 +46,12 @@ class FutureBrainsmithBackend(BuildRunnerInterface):
         """Return list of supported output stages."""
         return [OutputStage.DATAFLOW_GRAPH, OutputStage.RTL, OutputStage.STITCHED_IP]
     
-    def run(self, config: BuildConfig, model_path: str) -> BuildResult:
+    def run(self, config: BuildConfig) -> BuildResult:
         """Execute build using future FINN-Brainsmith interface (stubbed)."""
         result = BuildResult(config_id=config.id)
+        
+        # Extract model path from config
+        model_path = config.model_path
         
         try:
             # Create output directory

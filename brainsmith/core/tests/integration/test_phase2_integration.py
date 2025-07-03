@@ -15,6 +15,8 @@ from brainsmith.core.phase2 import (
     BuildStatus,
 )
 
+# No fake plugins - use real QONNX/FINN plugins only
+
 
 class TestPhase2Integration:
     """Integration tests for Phase 2."""
@@ -36,7 +38,7 @@ hw_compiler:
   kernels:
     - [Gemm, Conv]  # Mutually exclusive kernels (2 options)
   transforms:
-    - [quantize, fold]  # Mutually exclusive transforms (2 options)
+    - [QuantizeGraph, FoldConstants]  # Mutually exclusive transforms (2 options)
   build_steps:
     - synth
     - opt
@@ -83,13 +85,13 @@ global:
 version: "3.0"
 hw_compiler:
   kernels:
-    - ["Gemm", ["rtl", "hls"]]  # 2 backends
+    - ["Gemm", ["Gemm_rtl", "Gemm_hls"]]  # 2 backends
   transforms:
-    pre_quantization:
-      - fold
-      - ~streamline  # optional
-    quantization:
-      - quantize
+    cleanup:
+      - FoldConstants
+      - ~RemoveIdentityOps  # optional
+    topology_opt:
+      - QuantizeGraph
   build_steps:
     - synth
     - opt

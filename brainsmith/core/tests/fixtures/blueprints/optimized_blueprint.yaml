@@ -1,0 +1,35 @@
+version: "3.0"
+name: "Optimization Test Blueprint"
+description: "Blueprint for testing forge_optimized functionality"
+
+hw_compiler:
+  kernels:
+    # Use specific kernels for optimization testing
+    - "MatMul"
+    - ["LayerNorm", ["hls"]]
+    - "Softmax"
+  
+  transforms:
+    # Only use a subset of available transforms
+    cleanup:
+      - "RemoveIdentityOps"
+    topology_opt:
+      - "FoldConstants"
+      - "ConvertQONNXtoFINN"
+  
+  build_steps:
+    - "ConvertToHW"
+    - "PrepareIP"
+
+search:
+  strategy: "exhaustive"
+  constraints:
+    - metric: "lut_utilization"
+      operator: "<="
+      value: 0.85
+
+global:
+  output_stage: "rtl"
+  working_directory: "./optimized_builds"
+  cache_results: true
+  log_level: "INFO"
