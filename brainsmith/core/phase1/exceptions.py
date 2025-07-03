@@ -55,3 +55,34 @@ class ConfigurationError(BrainsmithError):
     configuration, or environment setup issues.
     """
     pass
+
+
+class PluginNotFoundError(BlueprintParseError):
+    """
+    Raised when a referenced plugin doesn't exist in the registry.
+    
+    Provides helpful suggestions when possible.
+    """
+    
+    def __init__(self, plugin_type: str, plugin_name: str, available: list = None):
+        """
+        Initialize error with plugin information.
+        
+        Args:
+            plugin_type: Type of plugin (transform, kernel, backend)
+            plugin_name: Name of the missing plugin
+            available: List of available plugin names for suggestions
+        """
+        message = f"{plugin_type.capitalize()} '{plugin_name}' not found"
+        
+        # Always show available options, even if empty
+        if available:
+            # Show first 5 available options
+            options = available[:5]
+            if len(available) > 5:
+                options.append("...")
+            message += f". Available: {options}"
+        else:
+            message += ". Available: []"
+        
+        super().__init__(message)

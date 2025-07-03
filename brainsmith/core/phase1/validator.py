@@ -19,6 +19,7 @@ from .data_structures import (
 )
 from .exceptions import ValidationError
 from ..config import get_config
+from ..plugins import get_registry
 
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class DesignSpaceValidator:
     - Configuration validity
     - Constraint feasibility
     - Design space size warnings
+    - Plugin existence and compatibility
     """
     
     # Thresholds for warnings
@@ -69,6 +71,10 @@ class DesignSpaceValidator:
     # Valid values for certain fields
     VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
     VALID_CONSTRAINT_OPERATORS = ["<=", ">=", "==", "<", ">"]
+    
+    def __init__(self):
+        """Initialize validator with plugin registry for enhanced checks."""
+        self.plugin_registry = get_registry()
     
     def validate(self, design_space: DesignSpace) -> ValidationResult:
         """
@@ -174,10 +180,11 @@ class DesignSpaceValidator:
                     )
     
     def _validate_kernel_format(self, kernel: any, index: int, errors: List[str], warnings: List[str]):
-        """Validate a single kernel configuration format."""
+        """Validate a single kernel configuration format and check against registry."""
         if isinstance(kernel, str):
-            # Simple string format - valid
-            pass
+            # Simple string format - validate against registry
+            kernel_name = kernel.strip("~")
+            self._validate_kernel_exists(kernel_name, errors)
         elif isinstance(kernel, tuple):
             if len(kernel) != 2:
                 errors.append(
@@ -189,6 +196,11 @@ class DesignSpaceValidator:
                     errors.append(
                         f"Kernel name at index {index} must be a string"
                     )
+                else:
+                    # Validate kernel exists
+                    kernel_name = name.strip("~") if name else name
+                    self._validate_kernel_exists(kernel_name, errors)
+                    
                 if not isinstance(backends, list):
                     errors.append(
                         f"Kernel backends at index {index} must be a list"
@@ -197,6 +209,10 @@ class DesignSpaceValidator:
                     errors.append(
                         f"Kernel '{name}' at index {index} has empty backends list"
                     )
+                else:
+                    # Validate backends exist for kernel
+                    kernel_name = name.strip("~") if isinstance(name, str) else name
+                    self._validate_backends_for_kernel(kernel_name, backends, errors)
         elif isinstance(kernel, list):
             # Mutually exclusive group
             if not kernel:
@@ -215,13 +231,24 @@ class DesignSpaceValidator:
             )
     
     def _validate_transform_format(self, transform: any, location: str, errors: List[str], warnings: List[str]):
-        """Validate a single transform configuration format."""
+        """Validate a single transform configuration format and check against registry."""
         if isinstance(transform, str):
-            # Simple string format - valid
+            # Simple string format - validate against registry
             if transform.startswith("~") and len(transform) == 1:
                 errors.append(
                     f"Invalid optional transform at {location}: '~' must be followed by a name"
                 )
+            else:
+                transform_name = transform.strip("~")
+                if transform_name not in self.plugin_registry.transforms:
+                    available = self.plugin_registry.list_available_transforms()[:5]
+                    errors.append(
+                        f"Transform '{transform_name}' at {location} not registered. "
+                        f"Available: {available}..."
+                    )
+                else:
+                    # Validate stage is appropriate
+                    self._validate_transform_stage(transform_name, errors)
         elif isinstance(transform, list):
             # Mutually exclusive group
             if not transform:
@@ -358,3 +385,39 @@ class DesignSpaceValidator:
                 
         except Exception as e:
             errors.append(f"Failed to calculate total combinations: {str(e)}")
+    
+    # ========== Plugin Registry Validation Methods ==========
+    
+    def _validate_kernel_exists(self, kernel_name: str, errors: List[str]):
+        """Check kernel exists in registry."""
+        if kernel_name and kernel_name not in self.plugin_registry.kernels:
+            available = self.plugin_registry.list_available_kernels()[:5]
+            errors.append(
+                f"Kernel '{kernel_name}' not registered. "
+                f"Available: {available}..."
+            )
+    
+    def _validate_backends_for_kernel(self, kernel: str, backends: List[str], errors: List[str]):
+        """Validate backends are available for kernel."""
+        if not kernel:
+            return
+            
+        invalid = self.plugin_registry.validate_kernel_backends(kernel, backends)
+        if invalid:
+            available = self.plugin_registry.list_backends_by_kernel(kernel)
+            errors.append(
+                f"Invalid backends {invalid} for kernel '{kernel}'. "
+                f"Available: {available}"
+            )
+    
+    def _validate_transform_stage(self, transform: str, errors: List[str]):
+        """Validate transform has valid stage."""
+        metadata = self.plugin_registry.get_plugin_metadata(transform)
+        stage = metadata.get('stage')
+        valid_stages = self.plugin_registry.get_valid_stages()
+        
+        if stage and stage not in valid_stages:
+            errors.append(
+                f"Transform '{transform}' has invalid stage '{stage}'. "
+                f"Valid stages: {valid_stages}"
+            )

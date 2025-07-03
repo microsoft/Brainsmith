@@ -25,6 +25,7 @@ from .data_structures import (
 )
 from .exceptions import BlueprintParseError
 from ..config import get_config
+from ..plugins import get_registry
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,10 @@ class BlueprintParser:
     """
     
     SUPPORTED_VERSION = "3.0"
+    
+    def __init__(self):
+        """Initialize parser with plugin registry for validation."""
+        self.plugin_registry = get_registry()
     
     def parse(self, blueprint_data: Dict[str, Any], model_path: str) -> DesignSpace:
         """
@@ -186,13 +191,21 @@ class BlueprintParser:
     @wrap_parse_errors("hw_compiler")
     def _parse_hw_compiler(self, hw_data: Dict[str, Any]) -> HWCompilerSpace:
         """Parse hardware compiler configuration space."""
+        # Parse kernels with plugin validation
+        kernels_data = self._get_field_with_validation(
+            hw_data, "kernels", list, [], parent_path="hw_compiler"
+        )
+        validated_kernels = self._validate_and_enrich_kernels(kernels_data)
+        
+        # Parse transforms with validation
+        transforms_data = self._get_field_with_validation(
+            hw_data, "transforms", (list, dict), [], parent_path="hw_compiler"
+        )
+        self._validate_transforms(transforms_data)
+        
         return HWCompilerSpace(
-            kernels=self._get_field_with_validation(
-                hw_data, "kernels", list, [], parent_path="hw_compiler"
-            ),
-            transforms=self._get_field_with_validation(
-                hw_data, "transforms", (list, dict), [], parent_path="hw_compiler"
-            ),
+            kernels=validated_kernels,
+            transforms=transforms_data,
             build_steps=self._get_field_with_validation(
                 hw_data, "build_steps", list, [], parent_path="hw_compiler"
             ),
@@ -402,6 +415,125 @@ class BlueprintParser:
             input_type=input_type,
             output_type=output_type
         )
+    
+    # ========== Plugin Validation Methods ==========
+    
+    def _validate_and_enrich_kernels(self, kernels_data: List) -> List:
+        """
+        Validate kernel specifications and auto-discover backends when needed.
+        
+        Args:
+            kernels_data: Raw kernel specifications from blueprint
+            
+        Returns:
+            Enriched kernel specifications with validated backends
+        """
+        validated_kernels = []
+        
+        for i, kernel_spec in enumerate(kernels_data):
+            if isinstance(kernel_spec, str):
+                # Simple kernel name - auto-discover backends
+                kernel_name = kernel_spec.strip("~")
+                if kernel_name not in self.plugin_registry.kernels:
+                    raise BlueprintParseError(
+                        f"Kernel '{kernel_name}' not found in plugin registry. "
+                        f"Available kernels: {self.plugin_registry.list_available_kernels()[:5]}..."
+                    )
+                
+                # Get available backends
+                available_backends = self.plugin_registry.list_backends_by_kernel(kernel_name)
+                if not available_backends:
+                    raise BlueprintParseError(
+                        f"No backends found for kernel '{kernel_name}'"
+                    )
+                
+                # Create tuple with auto-discovered backends
+                validated_kernels.append((kernel_spec, available_backends))
+                logger.debug(f"Auto-discovered backends for '{kernel_name}': {available_backends}")
+                
+            elif isinstance(kernel_spec, (tuple, list)) and len(kernel_spec) == 2:
+                # Check if this is a kernel with explicit backends (not a mutually exclusive group)
+                # In YAML, both are lists, but kernel+backends has string as first element
+                if isinstance(kernel_spec[0], str) and isinstance(kernel_spec[1], list):
+                    # Explicit backend specification - validate they exist
+                    kernel_name, specified_backends = kernel_spec
+                    kernel_name_clean = kernel_name.strip("~") if isinstance(kernel_name, str) else kernel_name
+                    
+                    # Validate kernel exists
+                    if kernel_name_clean not in self.plugin_registry.kernels:
+                        raise BlueprintParseError(
+                            f"Kernel '{kernel_name_clean}' not found in plugin registry"
+                        )
+                    
+                    # Validate backends
+                    invalid_backends = self.plugin_registry.validate_kernel_backends(
+                        kernel_name_clean, specified_backends
+                    )
+                    if invalid_backends:
+                        available = self.plugin_registry.list_backends_by_kernel(kernel_name_clean)
+                        raise BlueprintParseError(
+                            f"Invalid backends {invalid_backends} for kernel '{kernel_name_clean}'. "
+                            f"Available: {available}"
+                        )
+                    
+                    # Convert to tuple to distinguish from mutually exclusive groups
+                    validated_kernels.append((kernel_name, specified_backends))
+                else:
+                    # This is a mutually exclusive group
+                    validated_group = []
+                    for item in kernel_spec:
+                        if item is not None:
+                            validated_items = self._validate_and_enrich_kernels([item])
+                            validated_group.extend(validated_items)
+                        else:
+                            validated_group.append(None)
+                    validated_kernels.append(validated_group)
+                
+            elif isinstance(kernel_spec, list):
+                # Mutually exclusive group - validate each item
+                validated_group = []
+                for item in kernel_spec:
+                    validated_items = self._validate_and_enrich_kernels([item])
+                    validated_group.extend(validated_items)
+                validated_kernels.append(validated_group)
+                
+            else:
+                validated_kernels.append(kernel_spec)
+        
+        return validated_kernels
+    
+    def _validate_transforms(self, transforms_data: Union[List, Dict]):
+        """
+        Validate transform specifications exist in registry.
+        
+        Args:
+            transforms_data: Transform specifications (flat list or phase dict)
+        """
+        if isinstance(transforms_data, list):
+            # Flat list of transforms
+            for transform_spec in transforms_data:
+                if isinstance(transform_spec, str):
+                    transform_name = transform_spec.strip("~")
+                    if transform_name not in self.plugin_registry.transforms:
+                        available = self.plugin_registry.list_available_transforms()[:5]
+                        raise BlueprintParseError(
+                            f"Transform '{transform_name}' not found. "
+                            f"Available: {available}..."
+                        )
+                        
+        elif isinstance(transforms_data, dict):
+            # Phase-based transforms
+            for phase, phase_transforms in transforms_data.items():
+                if isinstance(phase_transforms, list):
+                    for transform_spec in phase_transforms:
+                        if isinstance(transform_spec, str):
+                            transform_name = transform_spec.strip("~")
+                            if transform_name not in self.plugin_registry.transforms:
+                                available = self.plugin_registry.list_available_transforms()[:5]
+                                raise BlueprintParseError(
+                                    f"Transform '{transform_name}' in phase '{phase}' not found. "
+                                    f"Available: {available}..."
+                                )
 
 
 def load_blueprint(blueprint_path: str) -> Dict[str, Any]:

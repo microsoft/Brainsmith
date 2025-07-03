@@ -1,241 +1,228 @@
-# Perfect Code Plugin System - Implementation Complete
+# Brainsmith Plugin System
+
+A high-performance plugin registry system for the Brainsmith FPGA compiler, providing transform, kernel, and backend management with zero discovery overhead.
 
 ## Overview
 
-Successfully implemented a high-performance plugin system with **zero discovery overhead** and **86.7% performance improvement** through blueprint optimization. The system maintains **100% API compatibility** while eliminating all technical debt from the previous hybrid discovery approach.
+The Brainsmith plugin system provides:
+- **Decoration-time registration** - Plugins register automatically when decorated
+- **Direct registry lookups** - O(1) access to any plugin without discovery
+- **Natural access patterns** - Use plugins via intuitive dot notation
+- **Blueprint optimization** - Load only required plugins for production
+- **Framework integration** - Seamless QONNX/FINN transform integration
 
-## Architecture
+## Quick Start
 
-### Core Components
+### Creating a Plugin
 
-1. **`registry.py`** - High-performance registry with direct dict lookups
-2. **`decorators.py`** - Auto-registration at decoration time
-3. **`collections.py`** - Natural access with direct registry delegation  
-4. **`framework_adapters.py`** - QONNX/FINN integration wrappers
-5. **`blueprint_loader.py`** - Blueprint-driven selective loading
-
-### Perfect Code Principles Applied
-
-- **Direct Registration**: Plugins register at decoration time, eliminating discovery
-- **Optimized Data Structures**: Pre-computed indexes for fast lookups
-- **Zero Overhead Collections**: Thin wrappers over registry with no caching
-- **Explicit Integration**: Simple wrappers for external frameworks
-- **Blueprint Optimization**: Subset registries for production workflows
-
-## Performance Results
-
-### Before (Hybrid Discovery System)
-- **Startup**: 25ms full discovery, 5ms blueprint mode
-- **Memory**: ~500MB (complex caching infrastructure)
-- **Access**: Cache-dependent performance
-- **Architecture**: Multiple discovery mechanisms, weak references, TTL caches
-
-### After (Perfect Code System)
-- **Startup**: <1ms (zero discovery overhead)
-- **Memory**: Minimal (direct registry, no caching)
-- **Access**: Sub-millisecond direct dict lookups
-- **Blueprint**: 86.7% reduction in loaded plugins
-- **Architecture**: Single registry with pre-computed indexes
-
-## API Compatibility
-
-Perfect Code system maintains **exact API compatibility**:
-
-```python
-# All existing code works unchanged
-from brainsmith.plugins import transforms as tfm, kernels as kn
-
-# Framework access
-model = model.transform(tfm.qonnx.RemoveIdentityOps())
-model = model.transform(tfm.brainsmith.ExpandNorms())
-
-# Direct access
-model = model.transform(tfm.MyTransform())
-
-# Plugin registration with convenience decorators
-@transform(name="MyTransform", stage="topology_opt")
-class MyTransform:
-    def apply(self, model):
-        return model, False
-
-# Or use generic decorator
-@plugin(type="transform", name="MyTransform", stage="topology_opt")
-class MyTransform:
-    pass
-```
-
-## Integration Results
-
-### ✅ BERT Pipeline Validation
-- All 15 QONNX transforms loaded successfully
-- Key BERT transforms verified: `RemoveIdentityOps`, `GiveReadableTensorNames`, `ConvertDivToMul`, `InferDataTypes`
-- Framework accessors working: `tfm.qonnx.TransformName`
-- Auto-registration working for new plugins
-
-### ✅ Blueprint Optimization
-- Test blueprint: 86.7% reduction in loaded plugins (15 → 2)
-- Subset registries created successfully
-- Optimized collections provide full functionality
-- Performance improvement exceeds 80% target
-
-### ✅ Framework Integration
-- QONNX transforms wrapped and integrated
-- Framework-specific access: `transforms.qonnx.*`
-- Graceful degradation for missing frameworks
-- Auto-initialization on import
-
-## Testing Results
-
-Created comprehensive test suite covering:
-- Core registry functionality (✅ All tests passing)
-- Decorator auto-registration (✅ All tests passing)  
-- Natural access collections (✅ All tests passing)
-- Blueprint optimization (✅ All tests passing)
-- Framework integration (✅ All tests passing)
-
-## Breaking Changes Justified (Perfect Mode)
-
-### What Was Removed
-1. **Complex discovery mechanisms** (Stevedore scanning, module discovery)
-2. **Caching infrastructure** (TTL caches, weak references, hit rate tracking)
-3. **Discovery modes** (full, selective, blueprint discovery)
-4. **Manager abstraction layer** (direct registry access instead)
-
-### Why These Are Improvements
-1. **Simplicity**: Single registry vs. multiple discovery + caching layers
-2. **Performance**: Direct lookups vs. cache-miss discovery overhead
-3. **Clarity**: Explicit registration vs. implicit discovery
-4. **Maintainability**: 500 lines of clear code vs. 2000+ lines of complex caching
-
-## Perfect Code Achievements
-
-### Code Quality
-- **Eliminated technical debt**: Removed complex hybrid discovery system
-- **Simplified architecture**: Single registry pattern with pre-computed indexes
-- **Clear separation**: Framework adapters isolated from core system
-- **Zero dependencies**: No complex external requirements
-- **Clean migration**: All code migrated from `brainsmith.plugin` to `brainsmith.core.plugins`
-
-### Performance
-- **Zero discovery overhead**: Auto-registration at decoration time
-- **Direct lookups**: Dict access instead of discovery + caching
-- **Blueprint optimization**: 86.7% improvement through subset registries
-- **Memory efficiency**: No caching infrastructure needed
-
-### Developer Experience
-- **Identical API**: 100% backward compatibility maintained
-- **Better errors**: Registry-aware error messages with suggestions
-- **Zero setup**: Convenience decorators (`@transform`, `@kernel`, etc.) auto-register
-- **Clear debugging**: Simple registry state vs. distributed caches
-- **Cleaner syntax**: Type-specific decorators for better readability
-
-## Usage Examples
-
-### Basic Plugin Development
-
-#### Using Convenience Decorators (Recommended)
 ```python
 from brainsmith.core.plugins import transform, kernel, backend
 
-# Transform with convenience decorator
+# Define a transform
 @transform(name="MyTransform", stage="topology_opt")
 class MyTransform:
     def apply(self, model):
+        # Transform logic here
         return model, False
 
-# Kernel with convenience decorator  
+# Define a kernel
 @kernel(name="MyKernel", op_type="MyOp")
 class MyKernel:
-    pass
+    def __init__(self, onnx_node, **kwargs):
+        super().__init__(onnx_node, **kwargs)
 
-# Backend with convenience decorator
-@backend(name="MyKernelHLS", kernel="MyKernel", backend_type="hls")
-class MyKernelHLS:
-    pass
-
-# Automatically available as:
-from brainsmith.plugins import transforms as tfm, kernels as kn
-transform = tfm.MyTransform()
-kernel = kn.MyKernel()
+# Define a backend
+@backend(name="MyKernelHLS", kernel="MyKernel", language="hls", default=True)
+class MyKernelHLS(MyKernel):
+    def generate_hls(self):
+        return "// HLS implementation"
 ```
 
-#### Using Generic Decorator (Alternative)
+### Using Plugins
+
 ```python
-from brainsmith.core.plugins import plugin
+from brainsmith.plugins import transforms as tfm, kernels as kn
 
-@plugin(type="transform", name="MyTransform", stage="topology_opt")
-class MyTransform:
-    def apply(self, model):
-        return model, False
+# Use transforms
+model = model.transform(tfm.MyTransform())
+model = model.transform(tfm.qonnx.RemoveIdentityOps())
+model = model.transform(tfm.finn.Streamline())
+
+# Use kernels and backends
+kernel = kn.MyKernel
+hls_impl = kernel()  # Gets default backend (HLS)
+hls_impl = kernel.hls()  # Explicitly get HLS backend
 ```
+
+## Plugin Types
+
+### Transforms
+Modify ONNX models during compilation. Must specify either `stage` or `kernel`.
+
+**Available stages:**
+- `pre_proc` - Pre-processing operations
+- `cleanup` - Graph cleanup operations  
+- `topology_opt` - Topology optimizations
+- `kernel_opt` - Kernel-specific optimizations
+- `dataflow_opt` - Dataflow optimizations
+- `post_proc` - Post-processing operations
+
+### Kernels
+Define hardware acceleration interfaces for specific operations.
+
+### Backends
+Provide implementation-specific code generation for kernels. Multiple backends can exist per kernel.
+
+**Supported languages:**
+- `hls` - High-Level Synthesis C++
+- `rtl` or `verilog` - RTL/Verilog implementation
+- `systemc` - SystemC implementation
+
+## Architecture
+
+The plugin system consists of five core components:
+
+1. **Registry** (`registry.py`) - Central storage with pre-computed indexes
+2. **Decorators** (`decorators.py`) - Auto-registration at decoration time
+3. **Collections** (`collections.py`) - Natural access patterns
+4. **Blueprint Loader** (`blueprint_loader.py`) - Production optimization
+5. **Framework Adapters** (`framework_adapters.py`) - External integration
+
+### How It Works
+
+1. **Registration**: When a class is decorated with `@transform`, `@kernel`, or `@backend`, it's immediately registered in the global registry
+2. **Storage**: The registry maintains dictionaries for fast O(1) lookups and pre-computed indexes for efficient queries
+3. **Access**: Collections provide natural dot-notation access that delegates directly to the registry
+4. **Optimization**: Blueprint loader creates subset registries containing only required plugins
+
+## Advanced Usage
 
 ### Blueprint Optimization
+
+For production deployments, load only required plugins:
+
+```yaml
+# blueprint.yaml
+hw_compiler:
+  transforms:
+    cleanup:
+      - RemoveIdentityOps
+      - GiveReadableTensorNames
+    topology_opt:
+      - MyTransform
+  kernels:
+    - LayerNorm
+```
+
 ```python
 from brainsmith.core.plugins.blueprint_loader import load_blueprint_plugins
 
-# Load only required plugins - 86.7% performance improvement
-collections = load_blueprint_plugins('bert_blueprint.yaml')
+# Load optimized subset
+collections = load_blueprint_plugins('blueprint.yaml')
 tfm = collections['transforms']
 
-# Use subset collections with full functionality
-model = model.transform(tfm.qonnx.RemoveIdentityOps())
+# Use normally - only blueprint plugins available
+model = model.transform(tfm.RemoveIdentityOps())
 ```
 
-### Framework Integration
+### Registry Queries
+
 ```python
-from brainsmith.core.plugins.framework_adapters import register_external_plugin
+from brainsmith.core.plugins import get_registry
 
-# Register external plugins
-register_external_plugin(
-    plugin_class=MyExternalTransform,
-    name="MyExternalTransform", 
-    plugin_type="transform",
-    framework="external",
-    stage="cleanup"
-)
+registry = get_registry()
+
+# List backends for a kernel
+backends = registry.list_backends_by_kernel("LayerNorm")
+# Returns: ["LayerNormHLS", "LayerNormRTL"]
+
+# Find backends by criteria
+hls_backends = registry.find_backends(language="hls")
+area_optimized = registry.find_backends(optimization="area")
+
+# Get plugin metadata
+metadata = registry.get_plugin_metadata("MyTransform")
+print(f"Stage: {metadata.get('stage')}")
+print(f"Framework: {metadata.get('framework')}")
 ```
 
-## Recent Migration (January 2025)
+### Multiple Backends
 
-### Migration from Old Plugin System
-
-The codebase has been successfully migrated from the old `brainsmith.plugin` system to the new `brainsmith.core.plugins` system:
-
-#### What Changed
-- **Import paths**: All imports changed from `brainsmith.plugin.*` to `brainsmith.core.plugins.*`
-- **Convenience decorators**: New type-specific decorators for cleaner syntax
-- **Old directory removed**: The `brainsmith/plugin/` directory has been deleted
-
-#### Migration Summary
-- ✅ **17 kernel files** migrated to new imports
-- ✅ **4 steps files** updated
-- ✅ **Test files** verified to use correct imports
-- ✅ **Bridge module** (`brainsmith.plugins`) provides backward compatibility
-- ✅ **119 transforms** remain registered and functional
-
-#### For Developers
 ```python
-# Old import (no longer works)
-from brainsmith.plugin.decorators import transform  # ❌
+# Register multiple backends for optimization choices
+@backend(name="KernelHLS_Fast", kernel="MyKernel", language="hls", 
+         optimization="throughput", resource_usage="high")
+class KernelHLS_Fast(MyKernel):
+    pass
 
-# New import 
-from brainsmith.core.plugins import transform  # ✅
+@backend(name="KernelHLS_Small", kernel="MyKernel", language="hls",
+         optimization="area", resource_usage="low")
+class KernelHLS_Small(MyKernel):
+    pass
 
-# Bridge module (backward compatible)
-from brainsmith.plugins import transforms as tfm  # ✅
+# Find backend by criteria
+kernel = kn.MyKernel
+fast_impl = kernel.find_backend(optimization="throughput")
+small_impl = kernel.find_backend(optimization="area")
 ```
 
-## Implementation Complete
+## API Reference
 
-The Perfect Code plugin system is **production ready** and delivers:
+### Decorators
 
-- ✅ **Zero discovery overhead** through auto-registration
-- ✅ **86.7% performance improvement** through blueprint optimization  
-- ✅ **100% API compatibility** with existing codebase
-- ✅ **Simplified architecture** eliminating technical debt
-- ✅ **BERT pipeline compatibility** with all required transforms
-- ✅ **Comprehensive test coverage** validating all functionality
+- `@transform(name, stage, kernel, framework, **metadata)` - Register a transform
+- `@kernel(name, op_type, framework, **metadata)` - Register a kernel  
+- `@backend(name, kernel, language, default, **metadata)` - Register a backend
+- `@plugin(type, name, **metadata)` - Generic plugin registration
 
-**Total implementation**: 5 core files, 4 test files, ~1000 lines of clear, maintainable code replacing a complex hybrid system.
+### Collections
 
-This represents the **Perfect Code** approach: maximum performance through optimal architecture, not through complex optimizations on top of suboptimal foundations.
+- `transforms` - Access transform plugins
+- `kernels` - Access kernel plugins
+- `backends` - Access backend plugins
+- `steps` - Access step plugins (treated as transforms)
+
+### Registry Methods
+
+- `get_registry()` - Get the global registry instance
+- `registry.get_transform(name)` - Get transform by name
+- `registry.get_kernel(name)` - Get kernel by name
+- `registry.get_backend(name)` - Get backend by name
+- `registry.find_backends(**criteria)` - Find backends matching criteria
+- `registry.list_backends_by_kernel(kernel)` - List backend names for kernel
+
+## Backward Compatibility
+
+The system maintains compatibility with existing code through:
+- Bridge module at `brainsmith.plugins` 
+- Support for both `backend_type` and `language` parameters
+- Framework-specific accessors (`transforms.qonnx.*`, `transforms.finn.*`)
+
+## Examples
+
+See the `examples/` directory for complete examples:
+- `basic_plugin.py` - Simple transform and kernel definition
+- `multi_backend.py` - Multiple backend implementations
+- `blueprint_usage.py` - Production blueprint optimization
+- `framework_integration.py` - QONNX/FINN integration
+
+## Development
+
+### Testing
+```bash
+# Run plugin system tests
+pytest brainsmith/core/plugins/tests/
+
+# Debug plugin registration
+python -m brainsmith.core.plugins.debug
+```
+
+### Common Issues
+
+**Plugin not found**: Ensure the module containing the plugin is imported
+**Backend not available**: Check that backend is registered with correct kernel name
+**Transform validation warnings**: Ensure either `stage` or `kernel` is specified, not both
+
+## License
+
+Part of the Brainsmith project. See LICENSE for details.

@@ -161,7 +161,7 @@ def _auto_register_plugin(cls: Type, metadata: Dict[str, Any]) -> None:
             kernel_metadata = {k: v for k, v in metadata.items() 
                              if k not in ['name', 'type', 'framework']}
             
-            registry.register_kernel(plugin_name, cls, **kernel_metadata)
+            registry.register_kernel(plugin_name, cls, framework=framework, **kernel_metadata)
             
         elif plugin_type == "backend":
             kernel = metadata['kernel']
@@ -173,6 +173,7 @@ def _auto_register_plugin(cls: Type, metadata: Dict[str, Any]) -> None:
                 plugin_name, 
                 cls, 
                 kernel=kernel,
+                framework=framework,
                 **backend_metadata
             )
             

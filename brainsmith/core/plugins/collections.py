@@ -6,7 +6,7 @@ Preserves exact API patterns while eliminating complex caching.
 """
 
 import logging
-from typing import Dict, Any, Optional, Type
+from typing import Dict, Any, Optional, Type, List
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,14 @@ class TransformCollection:
         stage_transforms = self.registry.transforms_by_stage.get(stage, {})
         return {name: TransformWrapper(cls, name, self.registry) 
                 for name, cls in stage_transforms.items()}
+    
+    def list_available(self) -> List[str]:
+        """List all available transform names."""
+        return list(self.registry.transforms.keys())
+    
+    def list_stages(self) -> List[str]:
+        """List valid transform stages."""
+        return list(self.registry.transforms_by_stage.keys())
 
 
 class KernelWrapper:
@@ -205,6 +213,10 @@ class KernelCollection:
     def list_all(self):
         """List all available kernels."""
         return list(self.registry.kernels.keys())
+    
+    def list_available(self) -> List[str]:
+        """List all available kernel names."""
+        return list(self.registry.kernels.keys())
 
 
 class BackendWrapper:
@@ -244,6 +256,10 @@ class BackendCollection:
     
     def list_all(self):
         """List all available backends."""
+        return list(self.registry.backends.keys())
+    
+    def list_available(self) -> List[str]:
+        """List all available backend names."""
         return list(self.registry.backends.keys())
 
 

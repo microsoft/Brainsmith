@@ -177,6 +177,50 @@ class ForgeAPI:
                 logger.info(f"  - {constraint}")
         
         logger.info("="*60 + "\n")
+    
+    def forge_optimized(self, model_path: str, blueprint_path: str, 
+                       optimize_plugins: bool = True) -> DesignSpace:
+        """
+        Construct design space with optional plugin optimization.
+        
+        When optimize_plugins=True, creates a subset registry containing
+        only the plugins referenced in the blueprint for better performance.
+        
+        Args:
+            model_path: Path to ONNX model file
+            blueprint_path: Path to Blueprint YAML file
+            optimize_plugins: Whether to optimize plugin loading
+            
+        Returns:
+            Validated DesignSpace object with optimization metadata
+            
+        Raises:
+            ConfigurationError: If model file doesn't exist
+            BlueprintParseError: If blueprint is invalid
+            ValidationError: If design space validation fails
+        """
+        # First create the design space normally
+        design_space = self.forge(model_path, blueprint_path)
+        
+        if optimize_plugins:
+            # Import here to avoid circular dependency
+            from ..plugins.blueprint_loader import BlueprintPluginLoader
+            
+            logger.info("Analyzing blueprint for plugin optimization...")
+            loader = BlueprintPluginLoader()
+            stats = loader.get_blueprint_stats(blueprint_path)
+            
+            # Store optimization info for use by later phases
+            design_space._plugin_optimization_enabled = True
+            design_space._plugin_stats = stats
+            
+            logger.info(f"Plugin optimization analysis:")
+            logger.info(f"  {stats['performance_improvement']}")
+            logger.info(f"  Total plugins available: {stats['total_available_plugins']}")
+            logger.info(f"  Plugins required: {stats['total_loaded_plugins']}")
+            logger.info(f"  Load percentage: {stats['load_percentage']:.1f}%")
+        
+        return design_space
 
 
 # Convenience function for simple usage

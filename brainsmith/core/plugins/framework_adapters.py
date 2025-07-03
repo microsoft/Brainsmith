@@ -209,34 +209,12 @@ def register_finn_transforms() -> int:
         ('MoveFlattenPastTopK', 'finn.transformation.streamline.reorder.MoveFlattenPastTopK', 'topology_opt'),
         ('MoveFlattenPastAffine', 'finn.transformation.streamline.reorder.MoveFlattenPastAffine', 'topology_opt'),
         ('MoveTransposePastScalarMul', 'finn.transformation.streamline.reorder.MoveTransposePastScalarMul', 'topology_opt'),
-        ('MoveTransposePastEltwise', 'finn.transformation.streamline.reorder.MoveTransposePastEltwise', 'topology_opt'),
-        ('MoveReshapePastEltwise', 'finn.transformation.streamline.reorder.MoveReshapePastEltwise', 'topology_opt'),
-        ('MoveReshapePastJoinOp', 'finn.transformation.streamline.reorder.MoveReshapePastJoinOp', 'topology_opt'),
         ('MoveTransposePastJoinAdd', 'finn.transformation.streamline.reorder.MoveTransposePastJoinAdd', 'topology_opt'),
         ('MoveTransposePastFork', 'finn.transformation.streamline.reorder.MoveTransposePastFork', 'topology_opt'),
         ('MoveLinearPastFork', 'finn.transformation.streamline.reorder.MoveLinearPastFork', 'topology_opt'),
         ('RoundAndClipThresholds', 'finn.transformation.streamline.round_thresholds.RoundAndClipThresholds', 'topology_opt'),
         ('AdjustBatchNormAxis', 'finn.transformation.streamline.batch_norm.AdjustBatchNormAxis', 'topology_opt'),
-        ('InferThresholdingLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferThresholdingLayer', 'kernel_opt'),
-        ('InferLabelSelectLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferLabelSelectLayer', 'kernel_opt'),
-        ('InferGlobalAccPoolLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferGlobalAccPoolLayer', 'kernel_opt'),
-        ('InferDuplicateStreamsLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferDuplicateStreamsLayer', 'kernel_opt'),
-        ('InferAddStreamsLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferAddStreamsLayer', 'kernel_opt'),
-        ('InferLookupLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferLookupLayer', 'kernel_opt'),
-        ('InferFlattenLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferFlattenLayer', 'kernel_opt'),
-        ('InferStreamingMVU', 'finn.transformation.fpgadataflow.infer_hlslib_mvau.InferStreamingMVU', 'kernel_opt'),
-        ('InferChannelwiseLinearLayer', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferChannelwiseLinearLayer', 'kernel_opt'),
-        ('InferStreamingEltwise', 'finn.transformation.fpgadataflow.infer_hlslib_layers.InferStreamingEltwise', 'kernel_opt'),
         ('ConvertToHLSLayers', 'finn.transformation.fpgadataflow.convert_to_hls_layers.ConvertToHLSLayers', 'kernel_opt'),
-        ('InferBinaryMatrixVectorActivation', 'finn.transformation.fpgadataflow.infer_binarymatrixvectoractivation.InferBinaryMatrixVectorActivation', 'kernel_opt'),
-        ('InferQuantizedMatrixVectorActivation', 'finn.transformation.fpgadataflow.infer_quantized_matrixvectoractivation.InferQuantizedMatrixVectorActivation', 'kernel_opt'),
-        ('InferVectorVectorActivation', 'finn.transformation.fpgadataflow.infer_vvau.InferVectorVectorActivation', 'kernel_opt'),
-        ('InferConvInpGen', 'finn.transformation.fpgadataflow.infer_conv_input_gen.InferConvInpGen', 'kernel_opt'),
-        ('InferStreamingMaxPool', 'finn.transformation.fpgadataflow.infer_streamingmaxpool.InferStreamingMaxPool', 'kernel_opt'),
-        ('InferPool', 'finn.transformation.fpgadataflow.infer_pool.InferPool', 'kernel_opt'),
-        ('InferDownSampler', 'finn.transformation.fpgadataflow.infer_downsampler.InferDownSampler', 'kernel_opt'),
-        ('InferUpsample', 'finn.transformation.fpgadataflow.infer_upsampling.InferUpsample', 'kernel_opt'),
-        ('InferConcat', 'finn.transformation.fpgadataflow.infer_concat.InferConcat', 'kernel_opt'),
         ('MinimizeAccumulatorWidth', 'finn.transformation.fpgadataflow.minimize_accumulator_width.MinimizeAccumulatorWidth', 'dataflow_opt'),
         ('MinimizeWeightBitWidth', 'finn.transformation.fpgadataflow.minimize_weight_bit_width.MinimizeWeightBitWidth', 'dataflow_opt'),
         ('InsertFIFO', 'finn.transformation.fpgadataflow.insert_fifo.InsertFIFO', 'dataflow_opt'),
@@ -305,6 +283,258 @@ def register_finn_transforms() -> int:
     return registered_count
 
 
+def register_finn_kernels() -> int:
+    """
+    Register FINN HWCustomOp kernels with the registry.
+    
+    Scans the FINN fpgadataflow directory for HWCustomOp subclasses
+    and registers them as kernels.
+    """
+    from .registry import get_registry
+    
+    # FINN kernel classes - HWCustomOp subclasses
+    finn_kernels = [
+        ('MVAU', 'finn.custom_op.fpgadataflow.matrixvectoractivation.MVAU'),
+        ('VVAU', 'finn.custom_op.fpgadataflow.vectorvectoractivation.VVAU'), 
+        ('Thresholding', 'finn.custom_op.fpgadataflow.thresholding.Thresholding'),
+        ('ConvolutionInputGenerator', 'finn.custom_op.fpgadataflow.convolutioninputgenerator.ConvolutionInputGenerator'),
+        ('FMPadding', 'finn.custom_op.fpgadataflow.fmpadding.FMPadding'),
+        ('FMPadding_Pixel', 'finn.custom_op.fpgadataflow.fmpadding_pixel.FMPadding_Pixel'),
+        ('StreamingDataWidthConverter', 'finn.custom_op.fpgadataflow.streamingdatawidthconverter.StreamingDataWidthConverter'),
+        ('StreamingFIFO', 'finn.custom_op.fpgadataflow.streamingfifo.StreamingFIFO'),
+        ('StreamingMaxPool', 'finn.custom_op.fpgadataflow.streamingmaxpool.StreamingMaxPool'),
+        ('Pool', 'finn.custom_op.fpgadataflow.pool.Pool'),
+        ('GlobalAccPool', 'finn.custom_op.fpgadataflow.globalaccpool.GlobalAccPool'),
+        ('AddStreams', 'finn.custom_op.fpgadataflow.addstreams.AddStreams'),
+        ('DuplicateStreams', 'finn.custom_op.fpgadataflow.duplicatestreams.DuplicateStreams'),
+        ('StreamingConcat', 'finn.custom_op.fpgadataflow.concat.StreamingConcat'),
+        ('LabelSelect', 'finn.custom_op.fpgadataflow.labelselect.LabelSelect'),
+        ('Lookup', 'finn.custom_op.fpgadataflow.lookup.Lookup'),
+        ('ChannelwiseOp', 'finn.custom_op.fpgadataflow.channelwise_op.ChannelwiseOp'),
+        ('ElementwiseBinaryOperation', 'finn.custom_op.fpgadataflow.elementwise_binary.ElementwiseBinaryOperation'),
+        ('StreamingEltwise', 'finn.custom_op.fpgadataflow.streamingeltwise.StreamingEltwise'),
+        ('DownSampler', 'finn.custom_op.fpgadataflow.downsampler.DownSampler'),
+        ('UpsampleNearestNeighbour', 'finn.custom_op.fpgadataflow.upsampler.UpsampleNearestNeighbour'),
+        # HLS-only kernels (these are HWCustomOp + HLSBackend classes directly)
+        ('TLastMarker', 'finn.custom_op.fpgadataflow.hls.tlastmarker_hls.TLastMarker_hls'),
+        ('IODMA', 'finn.custom_op.fpgadataflow.hls.iodma_hls.IODMA_hls'),
+        ('CheckSum', 'finn.custom_op.fpgadataflow.hls.checksum_hls.CheckSum_hls'),
+    ]
+    
+    registry = get_registry()
+    registered_count = 0
+    
+    for name, class_path in finn_kernels:
+        try:
+            # Dynamic import
+            module_path, class_name = class_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            kernel_class = getattr(module, class_name)
+            
+            # Register kernel
+            registry.register_kernel(
+                name,
+                kernel_class,
+                framework='finn',
+                description=f"FINN {name} kernel",
+                original_class=class_path
+            )
+            
+            registered_count += 1
+            logger.debug(f"Registered FINN kernel: {name}")
+            
+        except ImportError as e:
+            logger.debug(f"FINN kernel {name} not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to register FINN kernel {name}: {e}")
+    
+    logger.info(f"Registered {registered_count} FINN kernels")
+    return registered_count
+
+
+def register_finn_backends() -> int:
+    """
+    Register FINN HLS and RTL backend implementations.
+    
+    Scans HLS and RTL directories for backend classes and registers them
+    with their corresponding kernels.
+    """
+    from .registry import get_registry
+    
+    # FINN HLS backends
+    finn_hls_backends = [
+        ('MVAU_hls', 'finn.custom_op.fpgadataflow.hls.matrixvectoractivation_hls.MVAU_hls', 'MVAU'),
+        ('VVAU_hls', 'finn.custom_op.fpgadataflow.hls.vectorvectoractivation_hls.VVAU_hls', 'VVAU'),
+        ('Thresholding_hls', 'finn.custom_op.fpgadataflow.hls.thresholding_hls.Thresholding_hls', 'Thresholding'),
+        ('ConvolutionInputGenerator_hls', 'finn.custom_op.fpgadataflow.hls.convolutioninputgenerator_hls.ConvolutionInputGenerator_hls', 'ConvolutionInputGenerator'),
+        ('FMPadding_hls', 'finn.custom_op.fpgadataflow.hls.fmpadding_hls.FMPadding_hls', 'FMPadding'),
+        ('FMPadding_Pixel_hls', 'finn.custom_op.fpgadataflow.hls.fmpadding_pixel_hls.FMPadding_Pixel_hls', 'FMPadding_Pixel'),
+        ('StreamingDataWidthConverter_hls', 'finn.custom_op.fpgadataflow.hls.streamingdatawidthconverter_hls.StreamingDataWidthConverter_hls', 'StreamingDataWidthConverter'),
+        ('StreamingMaxPool_hls', 'finn.custom_op.fpgadataflow.hls.streamingmaxpool_hls.StreamingMaxPool_hls', 'StreamingMaxPool'),
+        ('Pool_hls', 'finn.custom_op.fpgadataflow.hls.pool_hls.Pool_hls', 'Pool'),
+        ('GlobalAccPool_hls', 'finn.custom_op.fpgadataflow.hls.globalaccpool_hls.GlobalAccPool_hls', 'GlobalAccPool'),
+        ('AddStreams_hls', 'finn.custom_op.fpgadataflow.hls.addstreams_hls.AddStreams_hls', 'AddStreams'),
+        ('DuplicateStreams_hls', 'finn.custom_op.fpgadataflow.hls.duplicatestreams_hls.DuplicateStreams_hls', 'DuplicateStreams'),
+        ('StreamingConcat_hls', 'finn.custom_op.fpgadataflow.hls.concat_hls.StreamingConcat_hls', 'StreamingConcat'),
+        ('LabelSelect_hls', 'finn.custom_op.fpgadataflow.hls.labelselect_hls.LabelSelect_hls', 'LabelSelect'),
+        ('Lookup_hls', 'finn.custom_op.fpgadataflow.hls.lookup_hls.Lookup_hls', 'Lookup'),
+        ('ChannelwiseOp_hls', 'finn.custom_op.fpgadataflow.hls.channelwise_op_hls.ChannelwiseOp_hls', 'ChannelwiseOp'),
+        ('StreamingEltwise_hls', 'finn.custom_op.fpgadataflow.hls.streamingeltwise_hls.StreamingEltwise_hls', 'StreamingEltwise'),
+        ('DownSampler_hls', 'finn.custom_op.fpgadataflow.hls.downsampler_hls.DownSampler_hls', 'DownSampler'),
+        ('UpsampleNearestNeighbour_hls', 'finn.custom_op.fpgadataflow.hls.upsampler_hls.UpsampleNearestNeighbour_hls', 'UpsampleNearestNeighbour'),
+        ('TLastMarker_hls', 'finn.custom_op.fpgadataflow.hls.tlastmarker_hls.TLastMarker_hls', 'TLastMarker'),
+        ('IODMA_hls', 'finn.custom_op.fpgadataflow.hls.iodma_hls.IODMA_hls', 'IODMA'),
+        ('CheckSum_hls', 'finn.custom_op.fpgadataflow.hls.checksum_hls.CheckSum_hls', 'CheckSum'),
+    ]
+    
+    # FINN RTL backends  
+    finn_rtl_backends = [
+        ('MVAU_rtl', 'finn.custom_op.fpgadataflow.rtl.matrixvectoractivation_rtl.MVAU_rtl', 'MVAU'),
+        ('VVAU_rtl', 'finn.custom_op.fpgadataflow.rtl.vectorvectoractivation_rtl.VVAU_rtl', 'VVAU'),
+        ('Thresholding_rtl', 'finn.custom_op.fpgadataflow.rtl.thresholding_rtl.Thresholding_rtl', 'Thresholding'),
+        ('ConvolutionInputGenerator_rtl', 'finn.custom_op.fpgadataflow.rtl.convolutioninputgenerator_rtl.ConvolutionInputGenerator_rtl', 'ConvolutionInputGenerator'),
+        ('FMPadding_rtl', 'finn.custom_op.fpgadataflow.rtl.fmpadding_rtl.FMPadding_rtl', 'FMPadding'),
+        ('StreamingDataWidthConverter_rtl', 'finn.custom_op.fpgadataflow.rtl.streamingdatawidthconverter_rtl.StreamingDataWidthConverter_rtl', 'StreamingDataWidthConverter'),
+        ('StreamingFIFO_rtl', 'finn.custom_op.fpgadataflow.rtl.streamingfifo_rtl.StreamingFIFO_rtl', 'StreamingFIFO'),
+        ('DynMVU_rtl', 'finn.custom_op.fpgadataflow.rtl.dynmvau_rtl.DynMVU_rtl', 'MVAU'),
+    ]
+    
+    registry = get_registry()
+    registered_count = 0
+    
+    # Register HLS backends
+    for name, class_path, kernel in finn_hls_backends:
+        try:
+            # Dynamic import
+            module_path, class_name = class_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            backend_class = getattr(module, class_name)
+            
+            # Register backend
+            registry.register_backend(
+                name,
+                backend_class,
+                kernel=kernel,
+                language='hls',
+                framework='finn',
+                description=f"FINN {kernel} HLS backend",
+                original_class=class_path
+            )
+            
+            registered_count += 1
+            logger.debug(f"Registered FINN HLS backend: {name}")
+            
+        except ImportError as e:
+            logger.debug(f"FINN HLS backend {name} not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to register FINN HLS backend {name}: {e}")
+    
+    # Register RTL backends
+    for name, class_path, kernel in finn_rtl_backends:
+        try:
+            # Dynamic import
+            module_path, class_name = class_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            backend_class = getattr(module, class_name)
+            
+            # Register backend
+            registry.register_backend(
+                name,
+                backend_class,
+                kernel=kernel,
+                language='rtl',
+                framework='finn',
+                description=f"FINN {kernel} RTL backend",
+                original_class=class_path
+            )
+            
+            registered_count += 1
+            logger.debug(f"Registered FINN RTL backend: {name}")
+            
+        except ImportError as e:
+            logger.debug(f"FINN RTL backend {name} not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to register FINN RTL backend {name}: {e}")
+    
+    logger.info(f"Registered {registered_count} FINN backends")
+    return registered_count
+
+
+def register_finn_kernel_inference_transforms() -> int:
+    """
+    Register FINN kernel inference transforms.
+    
+    These transforms convert generic operations into specific FINN HW kernels.
+    They are registered as kernel_inference type with the target kernel specified.
+    """
+    from .registry import get_registry
+    
+    # FINN kernel inference transforms - maps inference transform to target kernel
+    finn_kernel_inferences = [
+        ('InferThresholdingLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferThresholdingLayer', 'Thresholding'),
+        ('InferBinaryMatrixVectorActivation', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferBinaryMatrixVectorActivation', 'MVAU'),
+        ('InferQuantizedMatrixVectorActivation', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferQuantizedMatrixVectorActivation', 'MVAU'),
+        ('InferVectorVectorActivation', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferVectorVectorActivation', 'VVAU'),
+        ('InferStreamingMaxPool', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferStreamingMaxPool', 'StreamingMaxPool'),
+        ('InferAddStreamsLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferAddStreamsLayer', 'AddStreams'),
+        ('InferDuplicateStreamsLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferDuplicateStreamsLayer', 'DuplicateStreams'),
+        ('InferChannelwiseLinearLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferChannelwiseLinearLayer', 'ChannelwiseOp'),
+        ('InferStreamingEltwise', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferStreamingEltwise', 'StreamingEltwise'),
+        ('InferGlobalAccPoolLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferGlobalAccPoolLayer', 'GlobalAccPool'),
+        ('InferLabelSelectLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferLabelSelectLayer', 'LabelSelect'),
+        ('InferLookupLayer', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferLookupLayer', 'Lookup'),
+        ('InferConvInpGen', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferConvInpGen', 'ConvolutionInputGenerator'),
+        ('InferPool', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferPool', 'Pool'),
+        ('InferUpsample', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferUpsample', 'UpsampleNearestNeighbour'),
+        ('InferConcat', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferConcatLayer', 'StreamingConcat'),
+        ('InferElementwiseBinaryOperation', 'finn.transformation.fpgadataflow.convert_to_hw_layers.InferElementwiseBinaryOperation', 'ElementwiseBinaryOperation'),
+        ('InferPixelPaddingDeconv', 'finn.transformation.fpgadataflow.infer_pixel_padding_deconv.InferPixelPaddingDeconv', 'FMPadding_Pixel'),
+    ]
+    
+    registry = get_registry()
+    registered_count = 0
+    
+    for name, class_path, kernel in finn_kernel_inferences:
+        try:
+            # Dynamic import
+            module_path, class_name = class_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[class_name])
+            inference_class = getattr(module, class_name)
+            
+            # Create wrapper for kernel inference
+            wrapper_class = type(
+                f"{name}Wrapper",
+                (FINNTransformWrapper,),
+                {
+                    '__init__': lambda self, fc=inference_class: FINNTransformWrapper.__init__(self, fc),
+                    '__doc__': f"FINN {name} kernel inference wrapper"
+                }
+            )
+            
+            # Register as kernel_inference transform with plugin_type preserved
+            registry.register_transform(
+                name,
+                wrapper_class,
+                stage='kernel_inference',  # Use stage for internal categorization
+                framework='finn',
+                plugin_type='kernel_inference',  # Preserve the actual type
+                kernel=kernel,  # Specify target kernel
+                original_class=class_path,
+                description=f"FINN kernel inference for {kernel}"
+            )
+            
+            registered_count += 1
+            logger.debug(f"Registered FINN kernel inference: {name} -> {kernel}")
+            
+        except ImportError as e:
+            logger.debug(f"FINN kernel inference {name} not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to register FINN kernel inference {name}: {e}")
+    
+    logger.info(f"Registered {registered_count} FINN kernel inference transforms")
+    return registered_count
+
+
 def initialize_framework_integrations() -> Dict[str, int]:
     """
     Initialize all framework integrations.
@@ -317,21 +547,50 @@ def initialize_framework_integrations() -> Dict[str, int]:
     # Register QONNX transforms
     try:
         qonnx_count = register_qonnx_transforms()
-        results['qonnx'] = qonnx_count
+        results['qonnx_transforms'] = qonnx_count
     except Exception as e:
         logger.warning(f"Failed to initialize QONNX integration: {e}")
-        results['qonnx'] = 0
+        results['qonnx_transforms'] = 0
     
     # Register FINN transforms
     try:
         finn_count = register_finn_transforms()
-        results['finn'] = finn_count
+        results['finn_transforms'] = finn_count
     except Exception as e:
-        logger.warning(f"Failed to initialize FINN integration: {e}")
-        results['finn'] = 0
+        logger.warning(f"Failed to initialize FINN transform integration: {e}")
+        results['finn_transforms'] = 0
+    
+    # Register FINN kernels
+    try:
+        finn_kernel_count = register_finn_kernels()
+        results['finn_kernels'] = finn_kernel_count
+    except Exception as e:
+        logger.warning(f"Failed to initialize FINN kernel integration: {e}")
+        results['finn_kernels'] = 0
+    
+    # Register FINN backends
+    try:
+        finn_backend_count = register_finn_backends()
+        results['finn_backends'] = finn_backend_count
+    except Exception as e:
+        logger.warning(f"Failed to initialize FINN backend integration: {e}")
+        results['finn_backends'] = 0
+    
+    # Register FINN kernel inference transforms
+    try:
+        finn_kernel_inference_count = register_finn_kernel_inference_transforms()
+        results['finn_kernel_inferences'] = finn_kernel_inference_count
+    except Exception as e:
+        logger.warning(f"Failed to initialize FINN kernel inference integration: {e}")
+        results['finn_kernel_inferences'] = 0
     
     total_registered = sum(results.values())
-    logger.info(f"Framework integration complete: {total_registered} external transforms registered")
+    logger.info(f"Framework integration complete: {total_registered} external plugins registered")
+    logger.info(f"  - QONNX transforms: {results.get('qonnx_transforms', 0)}")
+    logger.info(f"  - FINN transforms: {results.get('finn_transforms', 0)}")  
+    logger.info(f"  - FINN kernels: {results.get('finn_kernels', 0)}")
+    logger.info(f"  - FINN backends: {results.get('finn_backends', 0)}")
+    logger.info(f"  - FINN kernel inferences: {results.get('finn_kernel_inferences', 0)}")
     
     return results
 

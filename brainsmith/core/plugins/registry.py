@@ -69,17 +69,18 @@ class BrainsmithPluginRegistry:
         
         logger.debug(f"Registered transform: {name} (stage={stage}, framework={framework})")
     
-    def register_kernel(self, name: str, kernel_class: Type, **metadata) -> None:
+    def register_kernel(self, name: str, kernel_class: Type, framework: str = 'brainsmith', **metadata) -> None:
         """Register kernel."""
         self.kernels[name] = kernel_class
         self.plugin_metadata[name] = {
             'type': 'kernel',
+            'framework': framework,
             **metadata
         }
         
-        logger.debug(f"Registered kernel: {name}")
+        logger.debug(f"Registered kernel: {name} ({framework})")
     
-    def register_backend(self, name: str, backend_class: Type, kernel: str, **metadata) -> None:
+    def register_backend(self, name: str, backend_class: Type, kernel: str, framework: str = 'brainsmith', **metadata) -> None:
         """Register backend with automatic kernel indexing."""
         # Store in main registry by name
         self.backends[name] = backend_class
@@ -113,10 +114,11 @@ class BrainsmithPluginRegistry:
         self.plugin_metadata[name] = {
             'type': 'backend',
             'kernel': kernel,
+            'framework': framework,
             **metadata
         }
         
-        logger.debug(f"Registered backend: {name} for {kernel} (language={metadata.get('language', 'unknown')})")
+        logger.debug(f"Registered backend: {name} for {kernel} ({framework}, language={metadata.get('language', 'unknown')})")
     
     # Fast lookup methods - direct dict access
     def get_transform(self, name: str, stage: Optional[str] = None, framework: Optional[str] = None) -> Optional[Type]:
@@ -233,6 +235,33 @@ class BrainsmithPluginRegistry:
             'frameworks': list(self.framework_transforms.keys()),
             'indexed_backends': len(self.backends_by_kernel)
         }
+    
+    # Discovery methods for Phase 1 integration
+    def list_available_kernels(self) -> List[str]:
+        """List all registered kernel names."""
+        return list(self.kernels.keys())
+    
+    def list_available_transforms(self) -> List[str]:
+        """List all registered transform names."""
+        return list(self.transforms.keys())
+    
+    def get_valid_stages(self) -> List[str]:
+        """Get list of valid transform stages."""
+        return list(self.transforms_by_stage.keys())
+    
+    def validate_kernel_backends(self, kernel: str, backends: List[str]) -> List[str]:
+        """
+        Validate backends exist for kernel, return list of invalid ones.
+        
+        Args:
+            kernel: Kernel name
+            backends: List of backend names to validate
+            
+        Returns:
+            List of backend names that are not available for the kernel
+        """
+        available = self.list_backends_by_kernel(kernel)
+        return [b for b in backends if b not in available]
     
     def create_subset(self, requirements: Dict[str, List[str]]) -> 'BrainsmithPluginRegistry':
         """Create optimized subset registry for blueprint loading."""
