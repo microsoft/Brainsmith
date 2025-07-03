@@ -127,12 +127,12 @@ class AutoRTLBackend(RTLBackend):
         if kernel_model:
             # Find interface in inputs or outputs
             for inp in kernel_model.input_models:
-                if inp.name == interface_name:
+                if inp.definition.name == interface_name:
                     if dimension_index < len(inp.block_dims):
                         return inp.block_dims[dimension_index]
                     return 1
             for out in kernel_model.output_models:
-                if out.name == interface_name:
+                if out.definition.name == interface_name:
                     if dimension_index < len(out.block_dims):
                         return out.block_dims[dimension_index]
                     return 1
@@ -148,7 +148,7 @@ class AutoRTLBackend(RTLBackend):
         if kernel_model:
             # Find interface in inputs (only inputs have SDIM)
             for inp in kernel_model.input_models:
-                if inp.name == interface_name:
+                if inp.definition.name == interface_name:
                     if dimension_index < len(inp.sdim):
                         return inp.sdim[dimension_index]
                     return 1
@@ -163,10 +163,10 @@ class AutoRTLBackend(RTLBackend):
         if kernel_model:
             # Find interface in inputs or outputs
             for inp in kernel_model.input_models:
-                if inp.name == interface_name:
+                if inp.definition.name == interface_name:
                     return inp.datatype.bitwidth()
             for out in kernel_model.output_models:
-                if out.name == interface_name:
+                if out.definition.name == interface_name:
                     return out.datatype.bitwidth()
         
         # Fallback to node attribute if KernelModel not available
@@ -181,10 +181,10 @@ class AutoRTLBackend(RTLBackend):
         if kernel_model:
             # Find interface in inputs or outputs
             for inp in kernel_model.input_models:
-                if inp.name == interface_name:
+                if inp.definition.name == interface_name:
                     return inp.datatype.signed()
             for out in kernel_model.output_models:
-                if out.name == interface_name:
+                if out.definition.name == interface_name:
                     return out.datatype.signed()
         
         # Fallback to node attribute if KernelModel not available

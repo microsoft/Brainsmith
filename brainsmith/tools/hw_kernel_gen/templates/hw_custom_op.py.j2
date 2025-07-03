@@ -58,7 +58,11 @@ class {{ class_name }}(AutoHWCustomOp):
     
     def get_nodeattr_types(self):
         """Define interface datatypes and BDIM/SDIM parameters from SHAPE pragmas."""
-        return {
+        # Get parent attributes first (includes exec_mode, backend, etc.)
+        attrs = super().get_nodeattr_types()
+        
+        # Add kernel-specific attributes
+        attrs.update({
             # Interface datatype attributes (required by FINN)
             {% for attr in explicit_datatype_attrs %}
             "{{ attr.name }}": {{ attr.attr_spec | replace('null', 'None') | replace('true', 'True') | replace('false', 'False') }},
@@ -72,7 +76,9 @@ class {{ class_name }}(AutoHWCustomOp):
             {% if has_weights %}
             "ram_style": ('s', False, 'auto', {'auto', 'block', 'distributed', 'ultra'}),
             {% endif %}
-        }
+        })
+        
+        return attrs
     
     def _create_kernel_definition(self) -> KernelDefinition:
         """Create simplified KernelDefinition with interface definitions only."""
@@ -158,50 +164,6 @@ class {{ class_name }}(AutoHWCustomOp):
         )
         {% endfor %}
         return kernel_def
-    
-    def _extract_input_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
-        """
-        Extract input specifications from ONNX context.
-        
-        Returns:
-            Dictionary mapping input names to (shape, datatype) tuples
-        """
-        specs = {}
-        
-        {% for i, interface in enumerate(input_interfaces + weight_interfaces) %}
-        # {{ interface.name }} interface
-        # Get shape from ONNX graph context - input shapes must be inferred from graph
-        # For now, use a default shape that will be overridden by the ONNX graph
-        input_shape_{{ i }} = [1, 64]  # Default shape - will be replaced by actual ONNX tensor shape
-        input_dtype_{{ i }} = DataType[self.get_nodeattr("{{ interface.name }}DataType")]
-        specs["{{ interface.name }}"] = (tuple(input_shape_{{ i }}), input_dtype_{{ i }})
-        
-        {% endfor %}
-        return specs
-    
-    def _extract_output_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
-        """
-        Extract output specifications from ONNX context.
-        
-        Returns:
-            Dictionary mapping output names to (shape, datatype) tuples
-        """
-        specs = {}
-        
-        {% for i, interface in enumerate(output_interfaces) %}
-        # {{ interface.name }} interface
-        {% if kernel_type == 'threshold' %}
-        # For thresholding, output shape equals input shape
-        output_shape_{{ i }} = [1, 64]  # Default - equals input shape for thresholding
-        {% else %}
-        # Derive output shape from kernel behavior
-        output_shape_{{ i }} = [1, 64]  # Default shape - derived from kernel logic
-        {% endif %}
-        output_dtype_{{ i }} = DataType[self.get_nodeattr("{{ interface.name }}DataType")]
-        specs["{{ interface.name }}"] = (tuple(output_shape_{{ i }}), output_dtype_{{ i }})
-        
-        {% endfor %}
-        return specs
     
     {% if verification_required %}
     def verify_node(self) -> List[str]:

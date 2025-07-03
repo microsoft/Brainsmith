@@ -21,6 +21,7 @@ import os
 import numpy as np
 import onnx
 import onnx.helper as oh
+from onnx import numpy_helper
 import tempfile
 import shutil
 from pathlib import Path
@@ -98,42 +99,48 @@ class TestThresholdingComparison:
             )
             has_weights = True
         else:
-            # Auto-generated version has different datatype constraints
+            # Auto-generated version now supports weights properly
             node = oh.make_node(
                 "ThresholdingAxi",
-                ["inp"],
+                ["inp", "thresh"],  # Now includes threshold weights
                 ["outp"],
                 CHANNELS=config["channels"],
                 PE=config["pe"],
+                LEVELS=3,  # Number of threshold levels
                 inputDataType=config.get("auto_input_dt", config["input_dt"]),
+                weightDataType="INT8",  # Add weight datatype
                 outputDataType=config.get("auto_output_dt", config["output_dt"]),
                 backend="fpgadataflow"
             )
-            has_weights = False
+            has_weights = True  # Auto version now has weights
 
-        # Create model
+        # Create model with proper tensor info
         inputs = [oh.make_tensor_value_info("inp", onnx.TensorProto.FLOAT, [1, config["channels"]])]
         outputs = [oh.make_tensor_value_info("outp", onnx.TensorProto.FLOAT, [1, config["channels"]])]
         
-        if has_weights:
-            thresh = oh.make_tensor_value_info("thresh", onnx.TensorProto.FLOAT, [config["channels"], 3])
-            inputs.append(thresh)
+        # Add threshold input
+        thresh = oh.make_tensor_value_info("thresh", onnx.TensorProto.FLOAT, [config["channels"], 3])
+        inputs.append(thresh)
         
-        graph = oh.make_graph([node], f"{op_type}_graph", inputs, outputs)
+        # Create graph with initializers
+        thresh_vals = np.array([[-10, 0, 10]] * config["channels"], dtype=np.float32)
+        thresh_init = numpy_helper.from_array(thresh_vals, name="thresh")
+        
+        graph = oh.make_graph([node], f"{op_type}_graph", inputs, outputs, [thresh_init])
         model = oh.make_model(graph)
         model_wrapper = ModelWrapper(model)
         
-        # Set shapes and initializers
-        model_wrapper.set_tensor_shape("inp", [1, config["channels"]])
-        if has_weights:
-            thresh_vals = np.array([[-10, 0, 10]] * config["channels"], dtype=np.float32)
-            model_wrapper.set_initializer("thresh", thresh_vals)
+        # Set datatypes
+        model_wrapper.set_tensor_datatype("inp", DataType[config["input_dt"]])
+        model_wrapper.set_tensor_datatype("thresh", DataType["INT8"])
+        model_wrapper.set_tensor_datatype("outp", DataType[config["output_dt"]])
         
-        # Get the custom op instance
-        # We need to add the node to the model first
-        model_wrapper.graph.node.append(node)
-        # Then instantiate using the node from the model
-        op_inst = op_class(model_wrapper.graph.node[0])
+        # Create custom op instance
+        op_inst = op_class(node)
+        
+        # For auto version, trigger shape extraction via infer_node_datatype
+        if op_type == "auto":
+            op_inst.infer_node_datatype(model_wrapper, node)
         
         return op_inst, model_wrapper
 
@@ -235,9 +242,11 @@ class TestThresholdingComparison:
             
             # Generate test input data
             input_shape = (1, config["channels"])
-            input_range = DataType[config["input_dt"]].allowed_range()
+            dtype = DataType[config["input_dt"]]
+            input_min = dtype.min()
+            input_max = dtype.max()
             test_input = np.random.randint(
-                input_range[0], input_range[1] + 1, 
+                input_min, input_max + 1, 
                 size=input_shape
             ).astype(np.float32)
             

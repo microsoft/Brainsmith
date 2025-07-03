@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: brainsmith/hw_kernels/thresholding/thresholding_axi_bw.sv
-# Generation timestamp: 2025-07-02T18:20:46.514193
+# Generation timestamp: 2025-07-02T23:00:22.709259
 #
 # This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
 # parameter definitions and no runtime CodegenBinding dependencies.
@@ -43,7 +43,11 @@ class ThresholdingAxi(AutoHWCustomOp):
     
     def get_nodeattr_types(self):
         """Define interface datatypes and BDIM/SDIM parameters from SHAPE pragmas."""
-        return {
+        # Get parent attributes first (includes exec_mode, backend, etc.)
+        attrs = super().get_nodeattr_types()
+        
+        # Add kernel-specific attributes
+        attrs.update({
             # Interface datatype attributes (required by FINN)
             "inputDataType": ('s', True, ''),
             "weightDataType": ('s', True, ''),
@@ -53,8 +57,11 @@ class ThresholdingAxi(AutoHWCustomOp):
             "CHANNELS": ('i', True, 0),  # BDIM: input
             "PE": ('i', True, 0),  # SDIM: input
             "LEVELS": ('i', True, 0),  # Number of threshold levels
+            "ActVal": ('i', True, 0),  # Activation bias value
             
-        }
+        })
+        
+        return attrs
     
     def _create_kernel_definition(self) -> KernelDefinition:
         """Create simplified KernelDefinition with interface definitions only."""

@@ -54,9 +54,14 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     2. Runtime: KernelModel instantiated with concrete types and shapes
     3. Dynamic: SDIM configuration for parallelism control
     
+    Initialization Flow:
+        The KernelModel is automatically initialized when InferShapes is run
+        on the model. This happens via the make_shape_compatible_op() hook,
+        ensuring the model is ready before any shape-dependent operations.
+    
     Attributes:
         _kernel_def: KernelDefinition providing static schema
-        _kernel_model: KernelModel with runtime instances (created lazily)
+        _kernel_model: KernelModel with runtime instances (initialized during InferShapes)
         _sdim_config: Cached SDIM configuration
     """
     
@@ -79,24 +84,94 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         # Cache for SDIM configuration
         self._sdim_config = {}
+        
+        # Try to initialize KernelModel immediately if ModelWrapper is available
+        if hasattr(self, 'model') and self.model is not None:
+            try:
+                self._analyze_and_create_model(self.model)
+                self._build_kernel_model()
+            except Exception as e:
+                print(f"DEBUG: Failed to initialize KernelModel in constructor: {e}")
+                # Don't fail construction, will try later
     
     def _ensure_kernel_model(self):
         """
-        Create KernelModel if not already created.
+        Ensure KernelModel exists.
         
-        This method extracts runtime information from the ONNX node
-        and creates a KernelModel instance. It's called lazily because
-        some runtime information may not be available during construction.
+        If KernelModel is not initialized, try to create it using a minimal
+        configuration based on node attributes. This handles cases where
+        the AutoHWCustomOp instance was recreated after transformations.
+        
+        Raises:
+            RuntimeError: If KernelModel cannot be initialized
         """
-        if self._kernel_model is not None:
-            return
+        if self._kernel_model is None:
+            # Try to create a minimal KernelModel from node attributes
+            try:
+                # Create mock specs from datatypes and a minimal shape
+                input_specs = {}
+                output_specs = {}
+                
+                # Get datatypes from node attributes
+                input_dtype = DataType[self.get_nodeattr("inputDataType")]
+                output_dtype = DataType[self.get_nodeattr("outputDataType")]
+                
+                # Use minimal default shape based on channels
+                channels = self.get_nodeattr("CHANNELS") or 8
+                
+                # Get actual levels from node attributes
+                levels = self.get_nodeattr("LEVELS") or 7
+                
+                # Create minimal specs
+                input_specs["input"] = ((1, channels), input_dtype)
+                input_specs["thresholds"] = ((channels, levels), input_dtype)
+                output_specs["output"] = ((1, channels), output_dtype)
+                
+                # Get parameter binding
+                param_binding = self._extract_parameter_binding()
+                
+                # Create KernelModel with minimal specs
+                self._kernel_model = self._kernel_def.create_model(
+                    input_specs=input_specs,
+                    output_specs=output_specs,
+                    parameter_binding=param_binding
+                )
+                
+                # Apply default SDIM configuration
+                self._build_kernel_model()
+                
+            except Exception as e:
+                raise RuntimeError(
+                    f"KernelModel not initialized for {self.onnx_node.name} and "
+                    f"failed to create fallback model: {e}"
+                )
+    
+    def update_node_model(self, model):
+        """
+        Update KernelModel with shapes from ONNX graph.
+        This is called when ModelWrapper is available.
         
-        # Extract runtime specifications
-        input_specs = self._extract_input_specs()
-        output_specs = self._extract_output_specs()
+        Args:
+            model: ModelWrapper with access to ONNX graph
+        """
+        # Create/update our KernelModel with full context
+        self._analyze_and_create_model(model)
+    
+    def _analyze_and_create_model(self, model):
+        """
+        Analyze ONNX tensors and create KernelModel with proper specs.
+        
+        Args:
+            model: ModelWrapper with access to ONNX graph
+        """
+        # Extract interface specifications
+        input_specs = self._extract_input_specs_from_onnx(model)
+        output_specs = self._extract_output_specs_from_onnx(model)
+        
+        # Get parameter binding
         param_binding = self._extract_parameter_binding()
         
-        # Create kernel model with clean tiling system handling SDIM
+        # Create KernelModel with analyzed specs
         self._kernel_model = self._kernel_def.create_model(
             input_specs=input_specs,
             output_specs=output_specs,
@@ -106,41 +181,122 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         # Apply any legacy attribute mappings
         self._apply_legacy_attributes()
     
-    @abstractmethod
+    def _extract_input_specs_from_onnx(self, model) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
+        """
+        Extract input specifications by analyzing ONNX tensors.
+        
+        Assumes ONNX inputs are in the same order as kernel input definitions.
+        Validates that weights have initializers and non-weights don't.
+        
+        Args:
+            model: ModelWrapper with access to ONNX graph
+            
+        Returns:
+            Dictionary mapping input names to (shape, datatype) tuples
+        """
+        specs = {}
+        
+        # Process each input in order
+        for i, inp_def in enumerate(self._kernel_def.input_definitions):
+            if i >= len(self.onnx_node.input):
+                if not inp_def.optional:
+                    raise ValueError(f"Missing required input '{inp_def.name}' at position {i}")
+                continue
+            
+            tensor_name = self.onnx_node.input[i]
+            if not tensor_name:
+                if not inp_def.optional:
+                    raise ValueError(f"Missing required input '{inp_def.name}' at position {i}")
+                continue
+            
+            # Get tensor info
+            shape = model.get_tensor_shape(tensor_name)
+            dtype = model.get_tensor_datatype(tensor_name)
+            has_initializer = model.get_initializer(tensor_name) is not None
+            
+            # Validate weight expectations
+            if inp_def.is_weight and not has_initializer:
+                raise ValueError(
+                    f"Input '{inp_def.name}' at position {i} is defined as a weight "
+                    f"but ONNX tensor '{tensor_name}' has no initializer"
+                )
+            elif not inp_def.is_weight and has_initializer:
+                raise ValueError(
+                    f"Input '{inp_def.name}' at position {i} is not defined as a weight "
+                    f"but ONNX tensor '{tensor_name}' has an initializer"
+                )
+            
+            # Store the spec
+            specs[inp_def.name] = (tuple(shape), dtype)
+        
+        return specs
+    
+    def _extract_output_specs_from_onnx(self, model) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
+        """
+        Extract output specifications by analyzing ONNX tensors.
+        
+        Assumes ONNX outputs are in the same order as kernel output definitions.
+        
+        Args:
+            model: ModelWrapper with access to ONNX graph
+            
+        Returns:
+            Dictionary mapping output names to (shape, datatype) tuples
+        """
+        specs = {}
+        
+        # Process each output in order
+        for i, out_def in enumerate(self._kernel_def.output_definitions):
+            if i >= len(self.onnx_node.output):
+                raise ValueError(f"Missing output '{out_def.name}' at position {i}")
+            
+            tensor_name = self.onnx_node.output[i]
+            if not tensor_name:
+                raise ValueError(f"Missing output '{out_def.name}' at position {i}")
+            
+            # Get tensor info
+            shape = model.get_tensor_shape(tensor_name)
+            dtype = model.get_tensor_datatype(tensor_name)
+            
+            specs[out_def.name] = (tuple(shape), dtype)
+        
+        return specs
+    
     def _extract_input_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
         """
-        Extract input specifications (shape and datatype) from ONNX context.
+        Extract input specifications from KernelModel.
         
-        Subclasses must implement this to extract the actual tensor shapes
-        and datatypes for all inputs defined in the KernelDefinition.
+        This method is provided for compatibility with generated code.
+        It simply returns the specs from the already-created KernelModel.
         
         Returns:
             Dictionary mapping input names to (shape, datatype) tuples
-            
-        Notes:
-            - Keys should match input names from KernelDefinition.input_definitions
-            - Shapes should be extracted from ONNX graph context or node attributes
-            - Datatypes can use the _get_interface_datatype() helper method
         """
-        pass
+        self._ensure_kernel_model()
+        
+        specs = {}
+        for inp_model in self._kernel_model.input_models:
+            name = inp_model.definition.name
+            specs[name] = (inp_model.tensor_dims, inp_model.datatype)
+        return specs
     
-    @abstractmethod
     def _extract_output_specs(self) -> Dict[str, Tuple[Tuple[int, ...], DataType]]:
         """
-        Extract output specifications (shape and datatype) from ONNX context.
+        Extract output specifications from KernelModel.
         
-        Subclasses must implement this to extract the actual tensor shapes
-        and datatypes for all outputs defined in the KernelDefinition.
+        This method is provided for compatibility with generated code.
+        It simply returns the specs from the already-created KernelModel.
         
         Returns:
             Dictionary mapping output names to (shape, datatype) tuples
-            
-        Notes:
-            - Keys should match output names from KernelDefinition.output_definitions
-            - Shapes are often derived from input shapes and kernel parameters
-            - Datatypes can use the _get_interface_datatype() helper method
         """
-        pass
+        self._ensure_kernel_model()
+        
+        specs = {}
+        for out_model in self._kernel_model.output_models:
+            name = out_model.definition.name
+            specs[name] = (out_model.tensor_dims, out_model.datatype)
+        return specs
     
     def _extract_parameter_binding(self) -> ParameterBinding:
         """
@@ -550,6 +706,36 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """
         pass
     
+    def _build_kernel_model(self):
+        """
+        Build and configure the KernelModel for proper initialization.
+        
+        This method ensures the KernelModel has proper SDIM configuration
+        and output rates computed after creation.
+        """
+        if not self._kernel_model:
+            return
+        
+        try:
+            # Configure default SDIM for all inputs (set to 1 for all dimensions)
+            sdim_params = self._kernel_model.get_sdim_parameters()
+            if sdim_params:
+                default_config = {}
+                for intf_name, param_info in sdim_params.items():
+                    # Set SDIM to 1 for all free dimensions (conservative default)
+                    default_config[intf_name] = 1
+                
+                # Apply the default configuration
+                self._kernel_model.configure_sdim(default_config)
+            
+            # Recompute output rates after SDIM configuration
+            self._kernel_model.compute_output_rates()
+        
+        except Exception as e:
+            # Log warning but don't fail
+            import warnings
+            warnings.warn(f"Failed to build KernelModel for {self.onnx_node.name}: {e}")
+    
     def _get_interface_model(self, interface_name: str) -> Union[InputInterface, OutputInterface, None]:
         """
         Get interface model by name.
@@ -779,17 +965,39 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                 # Basic copy - subclasses should implement actual logic
                 context[node.output[0]] = context[node.input[0]].copy()
     
-    def infer_node_datatype(self, model, node):
+    def make_shape_compatible_op(self, model):
+        """
+        Called by QONNX InferShapes to get a shape-compatible op.
+        
+        This is our primary initialization point - we ensure KernelModel
+        exists before shape inference proceeds.
+        
+        Args:
+            model: ONNX ModelWrapper
+            
+        Returns:
+            Shape-compatible ONNX operation
+        """
+        # Ensure KernelModel is initialized with current graph state
+        if not self._kernel_model:
+            self._analyze_and_create_model(model)
+            self._build_kernel_model()
+        
+        # Call parent implementation which creates const shape op
+        return super().make_shape_compatible_op(model)
+    
+    def infer_node_datatype(self, model, node=None):
         """
         Infer node datatypes during graph transformation.
         
-        This is required by FINN's HWCustomOp abstract interface.
-        For AutoHWCustomOp, datatypes are already specified via
-        node attributes, so this is a no-op.
+        This method supports both QONNX (1 arg) and FINN (2 arg) signatures.
+        We use this hook to create/update our KernelModel with shapes.
         
         Args:
-            model: ONNX model
-            node: ONNX node
+            model: ONNX model wrapper
+            node: ONNX node (optional, defaults to self.onnx_node)
         """
-        # Datatypes are already specified via attributes
-        pass
+        # Create/update KernelModel with shapes from ONNX
+        if not self._kernel_model:
+            self._analyze_and_create_model(model)
+            self._build_kernel_model()

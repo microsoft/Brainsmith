@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: brainsmith/hw_kernels/thresholding/thresholding_axi_bw.sv
-# Generation timestamp: 2025-07-02T18:20:46.514193
+# Generation timestamp: 2025-07-02T22:58:02.855361
 #
 # This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
 # parameter definitions and no runtime CodegenBinding dependencies.
@@ -43,18 +43,22 @@ class ThresholdingAxi(AutoHWCustomOp):
     
     def get_nodeattr_types(self):
         """Define interface datatypes and BDIM/SDIM parameters from SHAPE pragmas."""
-        return {
+        # Get parent attributes first (includes exec_mode, backend, etc.)
+        attrs = super().get_nodeattr_types()
+        
+        # Add kernel-specific attributes
+        attrs.update({
             # Interface datatype attributes (required by FINN)
             "inputDataType": ('s', True, ''),
-            "weightDataType": ('s', True, ''),
             "outputDataType": ('s', True, ''),
             
             # BDIM/SDIM parameters from SHAPE pragmas
             "CHANNELS": ('i', True, 0),  # BDIM: input
             "PE": ('i', True, 0),  # SDIM: input
-            "LEVELS": ('i', True, 0),  # Number of threshold levels
             
-        }
+        })
+        
+        return attrs
     
     def _create_kernel_definition(self) -> KernelDefinition:
         """Create simplified KernelDefinition with interface definitions only."""
@@ -76,19 +80,6 @@ class ThresholdingAxi(AutoHWCustomOp):
         kernel_def.add_input(input_def)
         
         # Add weight input definitions
-        threshold_def = InputDefinition(
-            name="thresholds",
-            datatype_constraints=[
-                DatatypeConstraintGroup(
-                    base_type="ANY",
-                    min_width=1,
-                    max_width=32
-                ),
-            ],
-            block_tiling=["CHANNELS", "LEVELS"],
-            is_weight=True
-        )
-        kernel_def.add_input(threshold_def)
         
         # Add output definitions
         output_def = OutputDefinition(

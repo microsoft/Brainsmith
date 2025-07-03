@@ -15,9 +15,9 @@ recho() { echo -e "${RED}$1${NC}"; }
 yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Dependency Git URLs, hashes/branches, and directory names
-QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
-# TAFK TODO: switch back to main FINN repo
+QONNX_URL="https://github.com/tafk7/qonnx.git"
 FINN_URL="https://github.com/tafk7/finn.git"
+# TAFK TODO: switch back to main FINN/QONNX repo
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
@@ -30,8 +30,8 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
-QONNX_COMMIT="custom/brainsmith"
-FINN_COMMIT="custom/dataflow-modeling"
+QONNX_COMMIT="custom/brainsmith-transform-registry"
+FINN_COMMIT="custom/brainsmith-patch"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="95edaa0bdc8e639e39b1164466278c59df4877be"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
