@@ -2,14 +2,52 @@
 
 ## Overview
 
-The Brainsmith plugin system is a high-performance registry-based architecture that manages transforms, kernels, and backends for FPGA compilation. It achieves zero discovery overhead through decoration-time registration and provides O(1) plugin access through direct dictionary lookups.
+The Brainsmith plugin system is a high-performance registry-based architecture that manages transforms, kernels, backends, and steps for FPGA compilation. It achieves zero discovery overhead through decoration-time registration and provides O(1) plugin access through direct class returns.
 
 ## Core Design Principles
 
 1. **Direct Registration** - Plugins register at decoration time, eliminating discovery
 2. **Pre-computed Indexes** - All lookups are optimized through indexing at registration
-3. **Thin Collections** - Access layers delegate directly to registry without caching
-4. **Explicit Integration** - External frameworks integrated through simple wrappers
+3. **Direct Class Access** - Collections return actual classes, not wrapper objects
+4. **Universal Framework Support** - All plugin types support framework qualification
+5. **Perfect Code Simplicity** - Minimal abstraction layers, maximum clarity
+
+## High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Plugin Definition"
+        PD[Plugin Class Definition]
+        DEC[Decorator Application]
+    end
+    
+    subgraph "Registry Core"
+        REG[BrainsmithPluginRegistry]
+        MD[Metadata Storage]
+        IDX[Pre-computed Indexes]
+    end
+    
+    subgraph "Access Layer"
+        COL[Plugin Collections]
+        FW[Framework Accessors]
+        CAT[Category/Stage Accessors]
+    end
+    
+    subgraph "Optimization"
+        BP[Blueprint Loader]
+        SUB[Subset Registry]
+    end
+    
+    PD -->|"@decorator"| DEC
+    DEC -->|"Auto-register"| REG
+    REG --> MD
+    REG --> IDX
+    REG --> COL
+    COL --> FW
+    COL --> CAT
+    BP -->|Creates| SUB
+    SUB -->|Optimized| COL
+```
 
 ## Component Architecture
 
@@ -17,34 +55,41 @@ The Brainsmith plugin system is a high-performance registry-based architecture t
 
 The central component that stores all plugins and maintains indexes for efficient queries.
 
-#### Data Structures
+#### Registry Data Structure
 
-```python
-class BrainsmithPluginRegistry:
-    # Main storage - direct dictionaries
-    transforms: Dict[str, Type]      # name -> class
-    kernels: Dict[str, Type]         # name -> class  
-    backends: Dict[str, Type]        # name -> class (not composite keys!)
-    
-    # Pre-computed indexes for performance
-    transforms_by_stage: Dict[str, Dict[str, Type]]    # stage -> {name -> class}
-    backends_by_kernel: Dict[str, List[str]]           # kernel -> [backend_names]
-    framework_transforms: Dict[str, Dict[str, Type]]   # framework -> {name -> class}
-    
-    # Metadata storage
-    plugin_metadata: Dict[str, Dict[str, Any]]         # name -> metadata
-    default_backends: Dict[str, str]                   # kernel -> default_backend_name
-    
-    # Backend query indexes
-    backend_indexes: Dict[str, Dict[str, List[str]]]  # attribute -> {value -> [names]}
+```mermaid
+classDiagram
+    class BrainsmithPluginRegistry {
+        +"Dict~str,Type~ transforms"
+        +"Dict~str,Type~ kernels"
+        +"Dict~str,Type~ backends"
+        +"Dict~str,Type~ steps"
+        +"Dict~str,Dict~ transforms_by_stage"
+        +"Dict~str,List~ backends_by_kernel"
+        +"Dict~str,Dict~ steps_by_category"
+        +"Dict~str,Dict~ framework_transforms"
+        +"Dict~str,Dict~ framework_kernels"
+        +"Dict~str,Dict~ framework_backends"
+        +"Dict~str,Dict~ framework_steps"
+        +"Dict~str,Dict~ plugin_metadata"
+        +"Dict~str,str~ default_backends"
+        +"Dict~str,Dict~ backend_indexes"
+        +"register_transform()"
+        +"register_kernel()"
+        +"register_backend()"
+        +"register_step()"
+        +"find_backends()"
+        +"get_stats()"
+    }
 ```
 
 #### Key Design Decisions
 
+- **Steps are first-class plugins** - Separate registry, not transforms with metadata
+- **Universal framework support** - All plugin types have framework indexes
 - **Backend names are unique** - Not composite keys like "Kernel_hls"
-- **Backends indexed by kernel** - List of backend names, not types
+- **Direct class storage** - No wrapper objects in registry
 - **Multiple indexes** - Enable O(1) queries by different criteria
-- **Metadata separate** - Allows rich attributes without polluting main storage
 
 ### 2. Decorators (`decorators.py`)
 
@@ -52,177 +97,264 @@ Provide auto-registration at decoration time with validation.
 
 #### Registration Flow
 
-```
-@transform decorator applied
-    ↓
-Validate metadata (stage XOR kernel required)
-    ↓
-Store metadata on class (_plugin_metadata)
-    ↓
-Auto-register with global registry
-    ↓
-Update all relevant indexes
-    ↓
-Plugin immediately available
+```mermaid
+flowchart TD
+    A[Plugin Class Definition] -->|"@decorator"| B[Validate Metadata]
+    B --> C[Auto-register with Registry]
+    C --> D[Update Main Dictionary]
+    C --> E[Update Stage/Category Index]
+    C --> F[Update Framework Index]
+    C --> G[Update Query Indexes]
+    D --> H[Plugin Available]
+    E --> H
+    F --> H
+    G --> H
 ```
 
 #### Decorator Types
 
-- `@transform` - Stage-based or kernel-specific transforms
-- `@kernel` - Hardware operation definitions
-- `@backend` - Kernel implementations (HLS, RTL, etc.)
-- `@step` - High-level operations (internally transforms)
-- `@kernel_inference` - Transform to kernel converters
-- `@plugin` - Generic decorator for any type
-
-### 3. Collections (`collections.py`)
-
-Provide natural access patterns through thin wrappers.
-
-#### Collection Architecture
-
-```
-User Code
-    ↓
-Collection (transforms.MyTransform)
-    ↓
-__getattr__ dynamic resolution
-    ↓
-Direct registry lookup
-    ↓
-Wrapper creation (on-demand)
-    ↓
-Plugin instance
+```mermaid
+graph LR
+    subgraph "Decorator Types"
+        T["@transform"]
+        K["@kernel"]
+        B["@backend"]
+        S["@step"]
+        KI["@kernel_inference"]
+        P["@plugin"]
+    end
+    
+    T -->|"stage-based"| REG[Registry]
+    K -->|"hardware ops"| REG
+    B -->|implementations| REG
+    S -->|"build steps"| REG
+    KI -->|converters| REG
+    P -->|generic| REG
 ```
 
-#### Key Features
+All decorators support `framework` parameter for framework qualification.
 
-- **No caching** - Direct delegation to registry
-- **Dynamic wrappers** - Created on access, not stored
-- **Framework accessors** - `transforms.qonnx.*`, `transforms.finn.*`
-- **Natural methods** - `kernel.hls()`, `kernel.find_backend()`
+### 3. Collections (`plugin_collections.py`)
 
-### 4. Blueprint Loader (`blueprint_loader.py`)
+Provide natural access patterns through direct registry delegation.
+
+#### Collection Access Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Collection
+    participant Registry
+    participant Plugin
+    
+    User->>Collection: "transforms.MyTransform"
+    Collection->>Collection: "__getattr__('MyTransform')"
+    Collection->>Registry: "Direct lookup"
+    Registry->>Collection: "Return class"
+    Collection->>User: "Return actual class"
+    User->>Plugin: "Instantiate directly"
+```
+
+#### Access Patterns
+
+```mermaid
+graph TD
+    subgraph "Access Patterns"
+        A["Direct: collection.PluginName"]
+        B["Dict: collection['PluginName']"]
+        C["Framework: collection.framework.PluginName"]
+        D["Qualified: collection['framework:PluginName']"]
+        E["Category: steps.category.StepName"]
+        F["Stage: transforms.get_by_stage('cleanup')"]
+    end
+    
+    A --> REG[Registry Lookup]
+    B --> REG
+    C --> FW[Framework Index]
+    D --> FW
+    E --> CAT[Category Index]
+    F --> STG[Stage Index]
+    
+    FW --> REG
+    CAT --> REG
+    STG --> REG
+```
+
+### 4. Framework Adapters (`framework_adapters.py`)
+
+Integrate external QONNX and FINN plugins.
+
+#### Framework Integration Flow
+
+```mermaid
+flowchart LR
+    subgraph "External Frameworks"
+        Q[QONNX Transforms]
+        F[FINN Transforms]
+        FK[FINN Kernels]
+    end
+    
+    subgraph "Registration"
+        R[Direct Registration]
+        FI[Framework Index]
+    end
+    
+    subgraph "Access"
+        QA["transforms.qonnx.*"]
+        FA["transforms.finn.*"]
+        KA["kernels.finn.*"]
+    end
+    
+    Q -->|"Import & Register"| R
+    F -->|"Import & Register"| R
+    FK -->|"Import & Register"| R
+    
+    R --> FI
+    FI --> QA
+    FI --> FA
+    FI --> KA
+```
+
+No wrapper classes needed - external classes are registered directly.
+
+### 5. Blueprint Loader (`blueprint_loader.py`)
 
 Optimizes plugin loading for production by creating subset registries.
 
-#### Blueprint Processing
+#### Blueprint Processing Pipeline
 
-```
-YAML Blueprint
-    ↓
-Parse requirements (transforms, kernels, backends)
-    ↓
-Create subset registry with only required plugins
-    ↓
-Maintain all indexes for subset
-    ↓
-Return optimized collections
-```
-
-#### Optimization Benefits
-
-- Load only required plugins (typically 10-20% of total)
-- Reduced memory footprint
-- Faster registry operations
-- Same API as full registry
-
-### 5. Framework Adapters (`framework_adapters.py`)
-
-Integrate external QONNX and FINN transforms/kernels/backends.
-
-#### Integration Pattern
-
-```python
-# Wrapper adapts external API
-class QONNXTransformWrapper:
-    def __init__(self, qonnx_class):
-        self.qonnx_class = qonnx_class
+```mermaid
+flowchart TD
+    subgraph "Input"
+        Y[YAML Blueprint]
+    end
     
-    def apply(self, model):
-        instance = self.qonnx_class()
-        return instance.apply(model)
-
-# Register with framework attribution
-registry.register_transform(
-    name="BatchNormToAffine",
-    transform_class=wrapper,
-    framework="qonnx",
-    stage="topology_opt"
-)
+    subgraph "Processing"
+        P[Parse Requirements]
+        E[Extract Plugin Names]
+        S[Create Subset Registry]
+    end
+    
+    subgraph "Output"
+        O[Optimized Collections]
+        M[Minimal Memory Footprint]
+    end
+    
+    Y --> P
+    P --> E
+    E --> S
+    S --> O
+    S --> M
+    
+    E -->|"transforms: 15→5"| S
+    E -->|"kernels: 10→3"| S
+    E -->|"backends: 20→4"| S
 ```
 
 ## Data Flow
 
 ### Plugin Registration
 
-```
-Plugin Definition → Decorator → Validation → Registry → Indexes
-                                                ↓          ↓
-                                         Main Dict    Stage/Framework/Kernel
+```mermaid
+flowchart LR
+    subgraph "Registration Path"
+        DEF[Plugin Definition]
+        DEC[Decorator]
+        VAL[Validation]
+        REG[Registry]
+        MAIN[Main Dict]
+        IDX[Indexes]
+    end
+    
+    DEF --> DEC
+    DEC --> VAL
+    VAL --> REG
+    REG --> MAIN
+    REG --> IDX
+    
+    IDX --> STG[Stage Index]
+    IDX --> FRM[Framework Index]
+    IDX --> KRN[Kernel Index]
 ```
 
 ### Plugin Access
 
-```
-User Request → Collection → Registry Lookup → Wrapper → Instance
-  tfm.Foo      __getattr__   O(1) dict       on-demand   Foo()
-```
-
-### Backend Selection
-
-```
-Kernel Request → Backend Query → Index Lookup → Backend Class
-  kn.LayerNorm    .hls()         language=hls    LayerNormHLS
-```
-
-## Registry Operations
-
-### Transform Operations
-
-```python
-# Registration updates multiple structures
-register_transform("Foo", FooClass, stage="cleanup")
-    → transforms["Foo"] = FooClass
-    → transforms_by_stage["cleanup"]["Foo"] = FooClass
-    → framework_transforms["brainsmith"]["Foo"] = FooClass
-    → plugin_metadata["Foo"] = {type: "transform", stage: "cleanup", ...}
-```
-
-### Backend Operations
-
-```python
-# Backend registration with proper indexing
-register_backend("LayerNormHLS", LayerNormHLS, kernel="LayerNorm", language="hls")
-    → backends["LayerNormHLS"] = LayerNormHLS  # Note: actual name, not composite
-    → backends_by_kernel["LayerNorm"].append("LayerNormHLS")
-    → backend_indexes["language"]["hls"].append("LayerNormHLS")
-    → plugin_metadata["LayerNormHLS"] = {kernel: "LayerNorm", language: "hls", ...}
+```mermaid
+flowchart LR
+    subgraph "Access Path"
+        USR[User Request]
+        COL[Collection]
+        REG[Registry Lookup]
+        CLS[Direct Class]
+    end
+    
+    USR -->|"tfm.Foo"| COL
+    COL -->|"__getattr__"| REG
+    REG -->|"O(1) dict"| CLS
+    CLS -->|"actual class"| USR
 ```
 
 ### Query Operations
 
-```python
-# Efficient lookups using indexes
-find_backends(kernel="LayerNorm", language="hls")
-    → candidates = backends_by_kernel["LayerNorm"]  # ["LayerNormHLS", "LayerNormRTL"]
-    → filter by backend_indexes["language"]["hls"]  # ["LayerNormHLS", ...]
-    → return intersection
+```mermaid
+graph TD
+    subgraph "Query Examples"
+        Q1["find_backends(kernel='LayerNorm', language='hls')"]
+        Q2["get_framework_kernels('finn')"]
+        Q3["transforms.get_by_stage('cleanup')"]
+    end
+    
+    subgraph "Index Usage"
+        I1["backends_by_kernel['LayerNorm']"]
+        I2["backend_indexes['language']['hls']"]
+        I3["framework_kernels['finn']"]
+        I4["transforms_by_stage['cleanup']"]
+    end
+    
+    subgraph "Results"
+        R1["Intersection of indexes"]
+        R2["Direct O(1) lookup"]
+        R3["Direct O(1) lookup"]
+    end
+    
+    Q1 --> I1
+    Q1 --> I2
+    I1 --> R1
+    I2 --> R1
+    
+    Q2 --> I3
+    I3 --> R2
+    
+    Q3 --> I4
+    I4 --> R3
 ```
 
 ## Performance Characteristics
 
 ### Time Complexity
 
-- **Plugin lookup**: O(1) - Direct dictionary access
-- **Backend query**: O(1) - Pre-computed indexes
-- **Framework lookup**: O(1) - Direct framework dict
-- **Stage lookup**: O(1) - Direct stage dict
+```mermaid
+graph LR
+    subgraph "Operation Complexity"
+        A["Plugin Lookup: O(1)"]
+        B["Backend Query: O(1)"]
+        C["Framework Lookup: O(1)"]
+        D["Stage/Category: O(1)"]
+        E["Registration: O(1)"]
+    end
+    
+    style A fill:#90EE90
+    style B fill:#90EE90
+    style C fill:#90EE90
+    style D fill:#90EE90
+    style E fill:#90EE90
+```
 
 ### Space Complexity
 
 - **Main storage**: O(n) where n = number of plugins
-- **Indexes**: O(m*k) where m = attributes, k = unique values
+- **Framework indexes**: O(f*n) where f = frameworks, n = plugins per framework
+- **Category/stage indexes**: O(c*n) where c = categories/stages
 - **Metadata**: O(n*p) where p = avg properties per plugin
 
 ### Startup Performance
@@ -234,75 +366,86 @@ find_backends(kernel="LayerNorm", language="hls")
 
 ## Integration Points
 
-### QONNX/FINN Integration
+### System Integration
 
+```mermaid
+graph TB
+    subgraph "External Systems"
+        QONNX[QONNX Framework]
+        FINN[FINN Framework]
+        YAML[Blueprint YAML]
+    end
+    
+    subgraph "Plugin System"
+        REG[Registry]
+        COL[Collections]
+        BP[Blueprint Loader]
+    end
+    
+    subgraph "Brainsmith Core"
+        P1["Phase 1: Parser"]
+        P2["Phase 2: DSE"]
+        P3["Phase 3: Backend"]
+    end
+    
+    QONNX -->|"Direct Registration"| REG
+    FINN -->|"Direct Registration"| REG
+    YAML -->|Requirements| BP
+    
+    REG --> COL
+    BP --> COL
+    
+    COL --> P1
+    COL --> P2
+    COL --> P3
 ```
-External Class → Wrapper → Registry → Framework Collection
-  QTransform     QWrapper   qonnx      tfm.qonnx.QTransform
-```
-
-### Blueprint Integration
-
-```
-Blueprint YAML → Requirements → Subset Registry → Optimized Collections
-  15 transforms   only needed    2 transforms      minimal footprint
-```
-
-### Phase 1 DSE Integration
-
-The registry provides discovery methods for Phase 1 compatibility:
-
-- `list_available_kernels()` - All kernel names
-- `list_available_transforms()` - All transform names  
-- `validate_kernel_backends()` - Check backend availability
-- `get_valid_stages()` - Valid transform stages
 
 ## Design Rationale
 
-### Why Decoration-Time Registration?
+### Why Direct Class Access?
 
-1. **Zero discovery overhead** - No scanning, no delays
-2. **Immediate availability** - Use right after import
-3. **Clear registration point** - Visible in code
-4. **Fail-fast** - Registration errors caught early
+1. **Performance** - No wrapper function call overhead
+2. **Simplicity** - What you see is what you get
+3. **Debugging** - Clearer stack traces, no wrapper confusion
+4. **Type Safety** - IDEs can provide proper type hints
 
-### Why Direct Registry Access?
+### Why Universal Framework Support?
 
-1. **Simplicity** - No manager abstraction needed
-2. **Performance** - Direct dictionary lookups
-3. **Clarity** - Data flow is obvious
-4. **Maintainability** - Less code, fewer bugs
+1. **Consistency** - All plugin types work the same way
+2. **Flexibility** - Any plugin can come from any framework
+3. **Future-Proof** - New frameworks easily integrated
+4. **Natural API** - `kernels.finn.SomeKernel` is intuitive
 
-### Why Pre-computed Indexes?
+### Why Steps as Separate Plugin Type?
 
-1. **Query performance** - All lookups are O(1)
-2. **No scanning** - Never iterate all plugins
-3. **Memory efficient** - Computed once at registration
-4. **Flexible queries** - Multiple access patterns
+1. **Clarity** - Steps are not transforms, they're build operations
+2. **Organization** - Category-based organization vs stage-based
+3. **Metadata** - Different metadata requirements than transforms
+4. **API Consistency** - All plugin types should be first-class
 
-### Why Separate Backend Names?
+### Why Multiple Access Patterns?
 
-1. **Uniqueness** - Each backend has unique identity
-2. **Flexibility** - Multiple backends per kernel/language combo
-3. **Rich metadata** - Optimization strategies, resource usage
-4. **Clear queries** - Find by any attribute combination
+1. **Flexibility** - Different use cases prefer different patterns
+2. **Blueprint Compatibility** - String lookup needed for YAML
+3. **Framework Qualification** - Namespace collision resolution
+4. **Developer Experience** - Natural for different contexts
 
 ## Future Considerations
 
 ### Extensibility
 
-- New plugin types can be added by extending decorators
+- New plugin types can be added by extending the base patterns
 - New indexes can be added for new query patterns
 - Framework adapters can integrate any external system
 
 ### Scalability
 
 - Registry scales linearly with plugin count
-- Indexes scale with unique attribute values
+- Framework indexes scale with frameworks * plugins
 - Blueprint optimization reduces production footprint
 
 ### Compatibility
 
-- Backward compatibility through parameter aliases
-- Bridge modules for import compatibility
-- Stable API for external integrations
+- Direct class access maintains type compatibility
+- Framework qualification preserves namespace separation
+- Multiple access patterns provide migration paths

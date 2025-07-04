@@ -12,6 +12,26 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 
+# Metadata filtering configuration
+METADATA_EXCLUDE_MAP = {
+    'transform': ['name', 'type', 'framework', 'stage'],
+    'kernel': ['name', 'type', 'framework'],
+    'backend': ['name', 'type', 'framework', 'kernel'],
+    'step': ['name', 'type', 'framework', 'category'],
+    'kernel_inference': ['name', 'type', 'framework', 'stage']
+}
+
+
+def filter_plugin_metadata(metadata: Dict[str, Any], plugin_type: str) -> Dict[str, Any]:
+    """
+    Extract metadata appropriate for plugin registration.
+    
+    Perfect Code approach: Single utility for consistent metadata filtering.
+    """
+    exclude_fields = METADATA_EXCLUDE_MAP.get(plugin_type, ['name', 'type'])
+    return {k: v for k, v in metadata.items() if k not in exclude_fields}
+
+
 def plugin(
     type: str,
     name: Optional[str] = None,
@@ -58,9 +78,6 @@ def plugin(
             'framework': framework,
             **metadata
         }
-        
-        # Store metadata on class for backward compatibility
-        cls._plugin_metadata = plugin_metadata
         
         # Auto-register with the registry immediately
         _auto_register_plugin(cls, plugin_metadata)
@@ -144,9 +161,8 @@ def _auto_register_plugin(cls: Type, metadata: Dict[str, Any]) -> None:
         # Register based on plugin type
         if plugin_type == "transform":
             stage = metadata.get('stage')
-            # Filter out type-specific metadata
-            transform_metadata = {k: v for k, v in metadata.items() 
-                                if k not in ['name', 'type', 'framework', 'stage']}
+            # Use utility function for metadata filtering
+            transform_metadata = filter_plugin_metadata(metadata, 'transform')
             
             registry.register_transform(
                 plugin_name, 
@@ -157,17 +173,15 @@ def _auto_register_plugin(cls: Type, metadata: Dict[str, Any]) -> None:
             )
             
         elif plugin_type == "kernel":
-            # Filter out type-specific metadata
-            kernel_metadata = {k: v for k, v in metadata.items() 
-                             if k not in ['name', 'type', 'framework']}
+            # Use utility function for metadata filtering
+            kernel_metadata = filter_plugin_metadata(metadata, 'kernel')
             
             registry.register_kernel(plugin_name, cls, framework=framework, **kernel_metadata)
             
         elif plugin_type == "backend":
             kernel = metadata['kernel']
-            # Filter out type-specific metadata
-            backend_metadata = {k: v for k, v in metadata.items() 
-                              if k not in ['name', 'type', 'framework', 'kernel']}
+            # Use utility function for metadata filtering
+            backend_metadata = filter_plugin_metadata(metadata, 'backend')
             
             registry.register_backend(
                 plugin_name, 
@@ -177,12 +191,25 @@ def _auto_register_plugin(cls: Type, metadata: Dict[str, Any]) -> None:
                 **backend_metadata
             )
             
-        elif plugin_type in ["step", "kernel_inference"]:
-            # Treat steps and kernel_inference as special transforms
-            stage = metadata.get('stage') or metadata.get('category', 'general')
-            # Filter out type-specific metadata
-            transform_metadata = {k: v for k, v in metadata.items() 
-                                if k not in ['name', 'type', 'framework', 'stage', 'category']}
+        elif plugin_type == "step":
+            # Register steps separately (not as transforms)
+            category = metadata.get('category', 'general')
+            # Use utility function for metadata filtering
+            step_metadata = filter_plugin_metadata(metadata, 'step')
+            
+            registry.register_step(
+                plugin_name, 
+                cls, 
+                category=category,
+                framework=framework,
+                **step_metadata
+            )
+            
+        elif plugin_type == "kernel_inference":
+            # kernel_inference remains as special transform
+            stage = metadata.get('stage', 'kernel_opt')
+            # Use utility function for metadata filtering
+            transform_metadata = filter_plugin_metadata(metadata, 'transform')
             
             registry.register_transform(
                 plugin_name, 
@@ -213,24 +240,19 @@ def kernel(name: Optional[str] = None, op_type: Optional[str] = None,
 
 
 def backend(name: Optional[str] = None, kernel: Optional[str] = None, 
-            backend_type: Optional[str] = None, language: Optional[str] = None,
-            default: bool = False, framework: str = "brainsmith", **kwargs) -> Callable:
+            language: Optional[str] = None, default: bool = False, 
+            framework: str = "brainsmith", **kwargs) -> Callable:
     """Convenience decorator for backend plugins.
     
     Args:
         name: Backend name (must be unique)
         kernel: Kernel this backend implements
-        backend_type: Deprecated, use 'language' instead
         language: Implementation language (hls, verilog, etc.)
         default: Whether this is the default backend for the kernel
         framework: Framework name
         **kwargs: Additional metadata (optimization, architecture, etc.)
     """
-    # Handle backward compatibility
-    if backend_type and not language:
-        language = backend_type
-    
-    return plugin(type="backend", name=name, kernel=kernel, backend_type=backend_type,
+    return plugin(type="backend", name=name, kernel=kernel,
                   language=language, default=default, framework=framework, **kwargs)
 
 
@@ -244,24 +266,3 @@ def kernel_inference(name: Optional[str] = None, kernel: Optional[str] = None,
                     framework: str = "brainsmith", **kwargs) -> Callable:
     """Convenience decorator for kernel inference plugins."""
     return plugin(type="kernel_inference", name=name, kernel=kernel, framework=framework, **kwargs)
-
-
-# Utility functions for backward compatibility
-def get_plugin_metadata(cls: Type) -> Optional[Dict[str, Any]]:
-    """Get plugin metadata from a class."""
-    return getattr(cls, '_plugin_metadata', None)
-
-
-def is_plugin_class(cls: Type) -> bool:
-    """Check if a class is a plugin class."""
-    return hasattr(cls, '_plugin_metadata')
-
-
-def list_plugin_classes(module) -> List[Type]:
-    """List all plugin classes in a module."""
-    plugins = []
-    for name in dir(module):
-        obj = getattr(module, name)
-        if isinstance(obj, type) and is_plugin_class(obj):
-            plugins.append(obj)
-    return plugins

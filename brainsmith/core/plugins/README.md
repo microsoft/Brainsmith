@@ -1,22 +1,23 @@
 # Brainsmith Plugin System
 
-A high-performance plugin registry system for the Brainsmith FPGA compiler, providing transform, kernel, and backend management with zero discovery overhead.
+A high-performance plugin registry system for the Brainsmith FPGA compiler, providing transform, kernel, backend, and step management with zero discovery overhead.
 
 ## Overview
 
 The Brainsmith plugin system provides:
 - **Decoration-time registration** - Plugins register automatically when decorated
-- **Direct registry lookups** - O(1) access to any plugin without discovery
-- **Natural access patterns** - Use plugins via intuitive dot notation
+- **Direct class access** - No wrapper overhead, return actual classes
+- **Universal framework support** - All plugin types support framework qualification
+- **Multiple access patterns** - Attribute access, dictionary lookup, framework scoping
 - **Blueprint optimization** - Load only required plugins for production
-- **Framework integration** - Seamless QONNX/FINN transform integration
+- **Framework integration** - Seamless QONNX/FINN plugin integration
 
 ## Quick Start
 
-### Creating a Plugin
+### Creating Plugins
 
 ```python
-from brainsmith.core.plugins import transform, kernel, backend
+from brainsmith.core.plugins import transform, kernel, backend, step
 
 # Define a transform
 @transform(name="MyTransform", stage="topology_opt")
@@ -36,22 +37,53 @@ class MyKernel:
 class MyKernelHLS(MyKernel):
     def generate_hls(self):
         return "// HLS implementation"
+
+# Define a step
+@step(name="MyStep", category="build")
+class MyStep:
+    def __call__(self, build_context):
+        # Step logic here
+        return build_context
 ```
 
-### Using Plugins
+### Using Plugins - Multiple Access Patterns
 
 ```python
-from brainsmith.plugins import transforms as tfm, kernels as kn
+from brainsmith.plugins import transforms, kernels, backends, steps
 
-# Use transforms
-model = model.transform(tfm.MyTransform())
-model = model.transform(tfm.qonnx.RemoveIdentityOps())
-model = model.transform(tfm.finn.Streamline())
+# Direct attribute access (returns actual classes)
+transform_cls = transforms.MyTransform
+kernel_cls = kernels.MyKernel
+backend_cls = backends.MyKernelHLS
+step_cls = steps.MyStep
 
-# Use kernels and backends
-kernel = kn.MyKernel
-hls_impl = kernel()  # Gets default backend (HLS)
-hls_impl = kernel.hls()  # Explicitly get HLS backend
+# Dictionary-style access
+transform_cls = transforms["MyTransform"]
+kernel_cls = kernels["MyKernel"]
+backend_cls = backends["MyKernelHLS"]
+step_cls = steps["MyStep"]
+
+# Framework-qualified attribute access
+qonnx_transform = transforms.qonnx.BatchNormToAffine
+finn_kernel = kernels.finn.MatrixVectorUnit
+finn_backend = backends.finn.LayerNormHLS
+finn_step = steps.finn.CreateDataflowPartition
+
+# Framework-qualified dictionary access
+qonnx_transform = transforms["qonnx:BatchNormToAffine"]
+finn_kernel = kernels["finn:MatrixVectorUnit"]
+finn_backend = backends["finn:LayerNormHLS"]
+finn_step = steps["finn:CreateDataflowPartition"]
+
+# Step category access
+build_step = steps.build.MyStep
+test_step = steps.testing.MyTestStep
+
+# Use plugins (direct instantiation)
+model = model.transform(transforms.MyTransform())
+kernel_instance = kernels.MyKernel()
+backend_instance = backends.MyKernelHLS()
+result = steps.MyStep()(build_context)
 ```
 
 ## Plugin Types
@@ -78,24 +110,76 @@ Provide implementation-specific code generation for kernels. Multiple backends c
 - `rtl` or `verilog` - RTL/Verilog implementation
 - `systemc` - SystemC implementation
 
+### Steps
+Build system operations that execute during hardware compilation.
+
+**Common categories:**
+- `build` - Build process steps
+- `testing` - Test and validation steps
+- `analysis` - Analysis and reporting steps
+
 ## Architecture
 
 The plugin system consists of five core components:
 
 1. **Registry** (`registry.py`) - Central storage with pre-computed indexes
 2. **Decorators** (`decorators.py`) - Auto-registration at decoration time
-3. **Collections** (`collections.py`) - Natural access patterns
+3. **Collections** (`plugin_collections.py`) - Natural access patterns
 4. **Blueprint Loader** (`blueprint_loader.py`) - Production optimization
 5. **Framework Adapters** (`framework_adapters.py`) - External integration
 
 ### How It Works
 
-1. **Registration**: When a class is decorated with `@transform`, `@kernel`, or `@backend`, it's immediately registered in the global registry
-2. **Storage**: The registry maintains dictionaries for fast O(1) lookups and pre-computed indexes for efficient queries
-3. **Access**: Collections provide natural dot-notation access that delegates directly to the registry
-4. **Optimization**: Blueprint loader creates subset registries containing only required plugins
+1. **Registration**: When a class is decorated, it's immediately registered in the global registry
+2. **Storage**: The registry maintains dictionaries for fast O(1) lookups and pre-computed indexes
+3. **Access**: Collections provide natural access that delegates directly to the registry
+4. **Direct Classes**: Collections return actual plugin classes, not wrapper objects
 
 ## Advanced Usage
+
+### Backend Search and Selection
+
+```python
+from brainsmith.plugins import backends
+
+# Find backends by criteria
+hls_backends = backends.find(language="hls")
+print(f"HLS backends: {[b.__name__ for b in hls_backends]}")
+
+# Get backends for specific kernel
+kernel_backends = backends.list_for_kernel("LayerNorm")
+print(f"LayerNorm backends: {kernel_backends}")
+
+# Get first matching backend for kernel
+backend_cls = backends.get_for_kernel("LayerNorm", language="hls")
+if backend_cls:
+    backend_instance = backend_cls()
+```
+
+### Registry Queries
+
+```python
+from brainsmith.core.plugins import get_registry
+
+registry = get_registry()
+
+# Get statistics
+stats = registry.get_stats()
+print(f"Total plugins: {stats['total_plugins']}")
+print(f"Frameworks: {stats['frameworks']}")
+
+# List available plugins
+transforms_list = registry.list_available_transforms()
+steps_list = registry.list_available_steps()
+kernels_list = registry.list_available_kernels()
+
+# Get framework-specific plugins
+qonnx_transforms = registry.get_framework_transforms("qonnx")
+finn_kernels = registry.get_framework_kernels("finn")
+
+# Find plugins by criteria
+hls_backend_names = registry.find_backends(language="hls")
+```
 
 ### Blueprint Optimization
 
@@ -112,6 +196,9 @@ hw_compiler:
       - MyTransform
   kernels:
     - LayerNorm
+  steps:
+    - GenerateReferenceIO
+    - CreateDataflowPartition
 ```
 
 ```python
@@ -119,51 +206,31 @@ from brainsmith.core.plugins.blueprint_loader import load_blueprint_plugins
 
 # Load optimized subset
 collections = load_blueprint_plugins('blueprint.yaml')
-tfm = collections['transforms']
+transforms = collections['transforms']
+steps = collections['steps']
 
 # Use normally - only blueprint plugins available
-model = model.transform(tfm.RemoveIdentityOps())
+model = model.transform(transforms.RemoveIdentityOps())
+result = steps.GenerateReferenceIO()(build_context)
 ```
 
-### Registry Queries
+### Multiple Backend Implementations
 
 ```python
-from brainsmith.core.plugins import get_registry
-
-registry = get_registry()
-
-# List backends for a kernel
-backends = registry.list_backends_by_kernel("LayerNorm")
-# Returns: ["LayerNormHLS", "LayerNormRTL"]
-
-# Find backends by criteria
-hls_backends = registry.find_backends(language="hls")
-area_optimized = registry.find_backends(optimization="area")
-
-# Get plugin metadata
-metadata = registry.get_plugin_metadata("MyTransform")
-print(f"Stage: {metadata.get('stage')}")
-print(f"Framework: {metadata.get('framework')}")
-```
-
-### Multiple Backends
-
-```python
-# Register multiple backends for optimization choices
-@backend(name="KernelHLS_Fast", kernel="MyKernel", language="hls", 
+# Register multiple backends for different optimization goals
+@backend(name="LayerNormHLS_Fast", kernel="LayerNorm", language="hls", 
          optimization="throughput", resource_usage="high")
-class KernelHLS_Fast(MyKernel):
+class LayerNormHLS_Fast(LayerNorm):
     pass
 
-@backend(name="KernelHLS_Small", kernel="MyKernel", language="hls",
+@backend(name="LayerNormHLS_Small", kernel="LayerNorm", language="hls",
          optimization="area", resource_usage="low")
-class KernelHLS_Small(MyKernel):
+class LayerNormHLS_Small(LayerNorm):
     pass
 
-# Find backend by criteria
-kernel = kn.MyKernel
-fast_impl = kernel.find_backend(optimization="throughput")
-small_impl = kernel.find_backend(optimization="area")
+# Select backend by criteria
+fast_backend = backends.get_for_kernel("LayerNorm", optimization="throughput")
+small_backend = backends.get_for_kernel("LayerNorm", optimization="area")
 ```
 
 ## API Reference
@@ -172,39 +239,105 @@ small_impl = kernel.find_backend(optimization="area")
 
 - `@transform(name, stage, kernel, framework, **metadata)` - Register a transform
 - `@kernel(name, op_type, framework, **metadata)` - Register a kernel  
-- `@backend(name, kernel, language, default, **metadata)` - Register a backend
+- `@backend(name, kernel, language, default, framework, **metadata)` - Register a backend
+- `@step(name, category, framework, **metadata)` - Register a step
 - `@plugin(type, name, **metadata)` - Generic plugin registration
 
 ### Collections
 
+All collections support:
+- Attribute access: `collection.PluginName`
+- Dictionary access: `collection["PluginName"]`
+- Framework scoping: `collection.framework.PluginName` or `collection["framework:PluginName"]`
+
 - `transforms` - Access transform plugins
 - `kernels` - Access kernel plugins
-- `backends` - Access backend plugins
-- `steps` - Access step plugins (treated as transforms)
+- `backends` - Access backend plugins (with search methods)
+- `steps` - Access step plugins (with category access)
+
+### Collection Methods
+
+**Backend Collection:**
+- `backends.find(**criteria)` - Find backends matching criteria
+- `backends.list_for_kernel(kernel_name)` - List backend names for kernel
+- `backends.get_for_kernel(kernel_name, **criteria)` - Get first matching backend
+
+**Transform Collection:**
+- `transforms.list_by_stage(stage)` - List transforms for stage
+- `transforms.get_by_stage(stage)` - Get transforms for stage as dict
+- `transforms.list_stages()` - List available stages
+
+**Step Collection:**
+- `steps.list_by_category(category)` - List steps for category
+- `steps.list_categories()` - List available categories
+- `steps.category.StepName` - Access steps by category
 
 ### Registry Methods
 
 - `get_registry()` - Get the global registry instance
-- `registry.get_transform(name)` - Get transform by name
-- `registry.get_kernel(name)` - Get kernel by name
-- `registry.get_backend(name)` - Get backend by name
+- `registry.get_transform(name, framework=None)` - Get transform by name
+- `registry.get_kernel(name, framework=None)` - Get kernel by name
+- `registry.get_backend(name, framework=None)` - Get backend by name
+- `registry.get_step(name, framework=None)` - Get step by name
 - `registry.find_backends(**criteria)` - Find backends matching criteria
-- `registry.list_backends_by_kernel(kernel)` - List backend names for kernel
 
-## Backward Compatibility
+## Key Improvements
 
-The system maintains compatibility with existing code through:
-- Bridge module at `brainsmith.plugins` 
-- Support for both `backend_type` and `language` parameters
-- Framework-specific accessors (`transforms.qonnx.*`, `transforms.finn.*`)
+### Direct Class Access
+Collections now return actual plugin classes, not wrapper objects:
 
-## Examples
+```python
+# Returns the actual class, not a wrapper
+transform_cls = transforms.MyTransform
+instance = transform_cls()  # Direct instantiation
+```
 
-See the `examples/` directory for complete examples:
-- `basic_plugin.py` - Simple transform and kernel definition
-- `multi_backend.py` - Multiple backend implementations
-- `blueprint_usage.py` - Production blueprint optimization
-- `framework_integration.py` - QONNX/FINN integration
+### Universal Framework Support
+All plugin types support framework qualification:
+
+```python
+# Before: Only transforms had framework support
+transforms.qonnx.BatchNormToAffine
+
+# Now: All plugin types support frameworks
+kernels.finn.MatrixVectorUnit
+backends.qonnx.LayerNormHLS
+steps.finn.CreateDataflowPartition
+```
+
+### Steps as First-Class Plugins
+Steps are no longer treated as transforms:
+
+```python
+# Before: Steps were transforms with special metadata
+@transform(name="MyStep", stage="build", plugin_type="step")
+
+# Now: Steps have their own registry and decorators
+@step(name="MyStep", category="build")
+```
+
+## Migration Guide
+
+### From Wrapper-Based Access
+```python
+# Before: Wrapper objects with methods
+kernel = kernels.LayerNorm
+backend = kernel.hls()  # Convenience method
+
+# After: Direct class access with explicit backend selection
+kernel_cls = kernels.LayerNorm
+backend_cls = backends.get_for_kernel("LayerNorm", language="hls")
+backend = backend_cls()
+```
+
+### From Step-as-Transform
+```python
+# Before: Steps registered as transforms
+@transform(name="MyStep", stage="build", plugin_type="step")
+
+# After: Steps have their own decorator
+@step(name="MyStep", category="build")
+```
 
 ## Development
 
@@ -221,7 +354,7 @@ python -m brainsmith.core.plugins.debug
 
 **Plugin not found**: Ensure the module containing the plugin is imported
 **Backend not available**: Check that backend is registered with correct kernel name
-**Transform validation warnings**: Ensure either `stage` or `kernel` is specified, not both
+**Step not found**: Ensure steps use `@step` decorator, not `@transform`
 
 ## License
 

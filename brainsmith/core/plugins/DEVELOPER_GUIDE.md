@@ -9,16 +9,18 @@ This guide provides comprehensive documentation for developing with the Brainsmi
 3. [Using Plugins](#using-plugins)
 4. [Registry API](#registry-api)
 5. [Backend System](#backend-system)
-6. [Blueprint Optimization](#blueprint-optimization)
-7. [Debugging](#debugging)
-8. [Best Practices](#best-practices)
+6. [Framework Integration](#framework-integration)
+7. [Blueprint Optimization](#blueprint-optimization)
+8. [Debugging](#debugging)
+9. [Best Practices](#best-practices)
+10. [Migration Guide](#migration-guide)
 
 ## Quick Start
 
 ### Basic Plugin Creation
 
 ```python
-from brainsmith.core.plugins import transform, kernel, backend
+from brainsmith.core.plugins import transform, kernel, backend, step
 
 # Create a transform
 @transform(name="OptimizeModel", stage="topology_opt")
@@ -38,561 +40,607 @@ class CustomOp:
 class CustomOpHLS(CustomOp):
     def generate_hls(self):
         return "// HLS implementation"
+
+# Create a step
+@step(name="ValidateModel", category="testing")
+class ValidateModel:
+    def __call__(self, build_context):
+        # Validation logic
+        return build_context
 ```
 
-### Using Plugins
+### Using Plugins - Multiple Access Patterns
 
 ```python
-from brainsmith.plugins import transforms as tfm, kernels as kn
+from brainsmith.plugins import transforms, kernels, backends, steps
 
-# Use transforms
-model = model.transform(tfm.OptimizeModel())
-model = model.transform(tfm.qonnx.InferDataTypes())
+# Direct attribute access (returns actual classes)
+model = model.transform(transforms.OptimizeModel())
+kernel_cls = kernels.CustomOp
+backend_cls = backends.CustomOpHLS
+step_result = steps.ValidateModel()(build_context)
 
-# Use kernels with backends
-op = kn.CustomOp()  # Gets default backend (HLS)
+# Dictionary access
+model = model.transform(transforms["OptimizeModel"]())
+kernel_cls = kernels["CustomOp"]
+
+# Framework-qualified access
+model = model.transform(transforms.qonnx.InferDataTypes())
+model = model.transform(transforms["finn:Streamline"]())
+
+# Step category access
+validation_step = steps.testing.ValidateModel
+build_step = steps.build.CompileToHardware
 ```
 
 ## Creating Plugins
 
 ### Transform Plugins
 
-Transforms modify ONNX models during compilation. They must specify either a `stage` or `kernel`.
-
-#### Stage-Based Transforms
+Transforms modify ONNX models during compilation.
 
 ```python
-from brainsmith.core.plugins import transform
-
-@transform(
-    name="RemoveRedundantOps",  # Optional, defaults to class name
-    stage="cleanup",            # Required for stage-based
-    framework="brainsmith",     # Optional, defaults to "brainsmith"
-    description="Remove redundant operations",
-    author="dev-team",
-    version="1.0.0"
-)
-class RemoveRedundantOps:
+@transform(name="MyTransform", stage="cleanup", framework="myframework")
+class MyTransform:
+    """Transform that removes unused nodes."""
+    
     def apply(self, model):
         """
         Apply the transform to the model.
         
+        Args:
+            model: ONNX model to transform
+            
         Returns:
             tuple: (modified_model, was_changed)
         """
-        # Implementation
-        changed = False
-        # ... modify model ...
-        return model, changed
+        # Transform logic here
+        modified = False
+        # ... transformation code ...
+        return model, modified
 ```
 
-#### Kernel-Specific Transforms (Inference)
-
-```python
-@transform(
-    name="InferCustomOp",
-    kernel="CustomOp",  # Required for kernel-specific
-    description="Convert patterns to CustomOp kernel"
-)
-class InferCustomOp:
-    def apply(self, model):
-        # Detect patterns and convert to CustomOp
-        nodes_converted = 0
-        # ... pattern matching logic ...
-        return model, nodes_converted > 0
-```
-
-#### Available Stages
-
+**Available stages:**
 - `pre_proc` - Pre-processing operations
-- `cleanup` - Graph cleanup and normalization
-- `topology_opt` - Topology-level optimizations
-- `kernel_opt` - Kernel-specific optimizations  
-- `dataflow_opt` - Dataflow and scheduling optimizations
-- `post_proc` - Post-processing and finalization
+- `cleanup` - Graph cleanup operations
+- `topology_opt` - Topology optimizations
+- `kernel_opt` - Kernel-specific optimizations
+- `dataflow_opt` - Dataflow optimizations
+- `post_proc` - Post-processing operations
 
 ### Kernel Plugins
 
 Kernels define hardware acceleration interfaces.
 
 ```python
-from brainsmith.core.plugins import kernel
-
-@kernel(
-    name="MatrixMultiply",
-    op_type="MatMul",  # ONNX operator type
-    description="Hardware accelerated matrix multiplication"
-)
-class MatrixMultiply:
+@kernel(name="MatMul", op_type="MatMul", framework="brainsmith")
+class MatMul:
+    """Matrix multiplication kernel."""
+    
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
-        # Initialize from ONNX node
+        self.input_shapes = self.get_input_shapes()
+        self.output_shapes = self.get_output_shapes()
     
-    def get_nodeattr_types(self):
-        """Define node attributes and their types."""
-        return {
-            "transA": ("i", False, 0),    # (type, required, default)
-            "transB": ("i", False, 0),
-            "alpha": ("f", False, 1.0)
-        }
-    
-    def make_shape_compatible_op(self, model):
-        """Make operation shape-compatible if needed."""
-        return model
-    
-    def get_input_shapes(self):
-        """Return expected input shapes."""
-        return self.input_shapes
-    
-    def get_output_shapes(self):
-        """Return output shapes."""
-        return self.output_shapes
+    def estimate_resources(self):
+        """Estimate hardware resource usage."""
+        return {"dsps": 100, "brams": 10, "luts": 1000}
 ```
 
 ### Backend Plugins
 
-Backends provide concrete implementations of kernels. Multiple backends can exist per kernel.
+Backends provide implementation-specific code generation.
 
 ```python
-from brainsmith.core.plugins import backend
-
-# HLS Backend (C++ High-Level Synthesis)
-@backend(
-    name="MatrixMultiplyHLS",
-    kernel="MatrixMultiply",
-    language="hls",  # Implementation language
-    default=True,    # Mark as default for this kernel
-    optimization="balanced",
-    resource_usage="medium",
-    description="Balanced HLS implementation"
-)
-class MatrixMultiplyHLS(MatrixMultiply):
+@backend(name="MatMulHLS", kernel="MatMul", language="hls", 
+         optimization="throughput", resource_usage="high", default=True)
+class MatMulHLS(MatMul):
+    """High-throughput HLS implementation of MatMul."""
+    
     def generate_hls(self):
         """Generate HLS C++ code."""
         return """
-        void matmul(stream<T> &a, stream<T> &b, stream<T> &out) {
+        void matmul(
+            hls::stream<ap_fixed<16,6>>& in_a,
+            hls::stream<ap_fixed<16,6>>& in_b,
+            hls::stream<ap_fixed<16,6>>& out
+        ) {
             // HLS implementation
         }
         """
     
-    def get_compile_flags(self):
-        return ["-O3", "-std=c++11"]
+    def get_resource_estimate(self):
+        """Get detailed resource estimates."""
+        return {
+            "dsps": 120,
+            "brams": 15,
+            "luts": 1200,
+            "ff": 2400
+        }
 
-# RTL Backend (Verilog)
-@backend(
-    name="MatrixMultiplyRTL",
-    kernel="MatrixMultiply", 
-    language="verilog",
-    optimization="throughput",
-    resource_usage="high",
-    description="High-throughput RTL implementation"
-)
-class MatrixMultiplyRTL(MatrixMultiply):
-    def generate_verilog(self):
-        """Generate Verilog RTL."""
+@backend(name="MatMulRTL", kernel="MatMul", language="verilog",
+         optimization="area", resource_usage="low")
+class MatMulRTL(MatMul):
+    """Area-optimized RTL implementation of MatMul."""
+    
+    def generate_rtl(self):
+        """Generate Verilog code."""
         return """
-        module matmul(clk, rst, a, b, out);
-            // RTL implementation
+        module matmul (
+            input clk,
+            input rst,
+            // Port definitions
+        );
         endmodule
         """
 ```
 
-## Using Plugins
+### Step Plugins
 
-### Natural Access Patterns
+Steps are build system operations that execute during hardware compilation.
 
 ```python
-from brainsmith.plugins import transforms as tfm, kernels as kn
+@step(name="GenerateTestbench", category="testing", framework="brainsmith")
+class GenerateTestbench:
+    """Generate testbench for hardware validation."""
+    
+    def __call__(self, build_context):
+        """
+        Execute the step.
+        
+        Args:
+            build_context: Current build context
+            
+        Returns:
+            Updated build context
+        """
+        # Generate testbench files
+        testbench_path = build_context.output_dir / "testbench.cpp"
+        with open(testbench_path, 'w') as f:
+            f.write(self.generate_testbench_code(build_context.model))
+        
+        build_context.files["testbench"] = testbench_path
+        return build_context
+    
+    def generate_testbench_code(self, model):
+        """Generate the actual testbench code."""
+        return "// Testbench implementation"
 
-# Direct access
-transform = tfm.RemoveRedundantOps()
-
-# Framework-specific access
-qonnx_transform = tfm.qonnx.InferDataTypes()
-finn_transform = tfm.finn.Streamline()
-
-# Apply transforms
-model = model.transform(transform)
+@step(name="SynthesizeDesign", category="build", framework="xilinx")
+class SynthesizeDesign:
+    """Run Vivado synthesis."""
+    
+    def __call__(self, build_context):
+        """Run synthesis and update build context with results."""
+        # Synthesis logic
+        return build_context
 ```
 
-### Working with Kernels and Backends
+## Using Plugins
+
+### Multiple Access Patterns
+
+The plugin system supports multiple ways to access plugins:
 
 ```python
-# Get kernel with default backend
-kernel = kn.MatrixMultiply()  # Uses MatrixMultiplyHLS (marked as default)
+from brainsmith.plugins import transforms, kernels, backends, steps
 
-# Get specific backend by language
-hls_impl = kn.MatrixMultiply.hls()
-rtl_impl = kn.MatrixMultiply.rtl()
+# 1. Direct attribute access
+transform_cls = transforms.MyTransform
+kernel_cls = kernels.MatMul
+backend_cls = backends.MatMulHLS
+step_cls = steps.GenerateTestbench
 
-# Get backend by name
-specific = kn.MatrixMultiply.get_backend("MatrixMultiplyRTL")
+# 2. Dictionary access (useful for dynamic lookup)
+transform_name = "MyTransform"
+transform_cls = transforms[transform_name]
 
-# Find backend by criteria
-fast_impl = kn.MatrixMultiply.find_backend(optimization="throughput")
-small_impl = kn.MatrixMultiply.find_backend(optimization="area")
+# 3. Framework-qualified attribute access
+qonnx_transform = transforms.qonnx.InferDataTypes
+finn_transform = transforms.finn.Streamline
+custom_kernel = kernels.myframework.CustomKernel
 
-# List available backends
-backends = kn.MatrixMultiply.list_backends()
-# Returns: ["MatrixMultiplyHLS", "MatrixMultiplyRTL"]
+# 4. Framework-qualified dictionary access
+transform_cls = transforms["qonnx:InferDataTypes"]
+kernel_cls = kernels["finn:MatrixVectorUnit"]
+
+# 5. Category/stage access
+# Steps by category
+test_step = steps.testing.GenerateTestbench
+build_step = steps.build.SynthesizeDesign
+
+# Transforms by stage
+cleanup_transforms = transforms.get_by_stage("cleanup")
+```
+
+### Plugin Instantiation
+
+All collections return actual classes, not wrapper objects:
+
+```python
+# Direct instantiation
+transform_instance = transforms.MyTransform()
+result = transform_instance.apply(model)
+
+# With parameters
+backend_instance = backends.MatMulHLS(config={"optimization": "speed"})
+hls_code = backend_instance.generate_hls()
+
+# Step execution
+step_instance = steps.GenerateTestbench()
+updated_context = step_instance(build_context)
 ```
 
 ## Registry API
 
-The registry provides low-level access to all plugins and their metadata.
-
-### Accessing the Registry
+### Basic Registry Operations
 
 ```python
 from brainsmith.core.plugins import get_registry
 
 registry = get_registry()
+
+# Get plugins by name
+transform_cls = registry.get_transform("MyTransform")
+kernel_cls = registry.get_kernel("MatMul")
+backend_cls = registry.get_backend("MatMulHLS")
+step_cls = registry.get_step("GenerateTestbench")
+
+# Get with framework filter
+qonnx_transform = registry.get_transform("InferDataTypes", framework="qonnx")
+finn_kernel = registry.get_kernel("MatrixVectorUnit", framework="finn")
+
+# List available plugins
+transforms_list = registry.list_available_transforms()
+kernels_list = registry.list_available_kernels()
+steps_list = registry.list_available_steps()
+
+# Get framework-specific plugins
+qonnx_transforms = registry.get_framework_transforms("qonnx")
+finn_backends = registry.get_framework_backends("finn")
 ```
 
-### Registry Statistics
+### Metadata and Statistics
 
 ```python
+# Get plugin metadata
+metadata = registry.get_plugin_metadata("MatMulHLS")
+print(f"Type: {metadata['type']}")
+print(f"Kernel: {metadata['kernel']}")
+print(f"Language: {metadata['language']}")
+print(f"Framework: {metadata['framework']}")
+
+# Get registry statistics
 stats = registry.get_stats()
 print(f"Total plugins: {stats['total_plugins']}")
 print(f"Transforms: {stats['transforms']}")
 print(f"Kernels: {stats['kernels']}")
 print(f"Backends: {stats['backends']}")
-print(f"Stages: {stats['stages']}")
+print(f"Steps: {stats['steps']}")
 print(f"Frameworks: {stats['frameworks']}")
-```
-
-### Querying Plugins
-
-```python
-# Check if plugins exist
-if "RemoveRedundantOps" in registry.transforms:
-    cls = registry.get_transform("RemoveRedundantOps")
-
-# List plugins by type
-all_transforms = list(registry.transforms.keys())
-all_kernels = list(registry.kernels.keys())
-all_backends = list(registry.backends.keys())
-
-# List by framework
-qonnx_transforms = list(registry.get_framework_transforms("qonnx").keys())
-finn_transforms = list(registry.get_framework_transforms("finn").keys())
-
-# List by stage
-cleanup_transforms = registry.list_transforms_by_stage("cleanup")
-```
-
-### Plugin Metadata
-
-```python
-# Get metadata for any plugin
-metadata = registry.get_plugin_metadata("MatrixMultiplyHLS")
-print(f"Type: {metadata['type']}")
-print(f"Kernel: {metadata['kernel']}")
-print(f"Language: {metadata['language']}")
-print(f"Optimization: {metadata.get('optimization')}")
-
-# List all plugins with metadata
-for plugin in registry.list_all_plugins():
-    print(f"{plugin['name']}: {plugin['metadata']}")
-```
-
-### Backend Queries
-
-```python
-# List backends for a kernel
-backends = registry.list_backends_by_kernel("MatrixMultiply")
-# Returns: ["MatrixMultiplyHLS", "MatrixMultiplyRTL"]
-
-# Find backends by criteria
-hls_backends = registry.find_backends(language="hls")
-throughput_backends = registry.find_backends(optimization="throughput")
-mm_hls = registry.find_backends(kernel="MatrixMultiply", language="hls")
-
-# Get default backend
-default = registry.get_default_backend("MatrixMultiply")
 ```
 
 ## Backend System
 
-The backend system supports multiple implementations per kernel with rich metadata for selection.
-
-### Backend Registration
+### Backend Discovery and Selection
 
 ```python
-# Multiple optimization variants
-@backend(name="OptimizerHLS_Fast", kernel="Optimizer", 
-         language="hls", optimization="throughput", 
-         resource_usage="high", pipeline_depth=16)
-class OptimizerHLS_Fast(Optimizer):
+from brainsmith.plugins import backends
+
+# Find backends by criteria
+hls_backends = backends.find(language="hls")
+fast_backends = backends.find(optimization="throughput")
+low_resource_backends = backends.find(resource_usage="low")
+
+# Find backends for specific kernel
+matmul_backends = backends.find(kernel="MatMul")
+matmul_hls = backends.find(kernel="MatMul", language="hls")
+
+# Get backends for kernel (name list)
+backend_names = backends.list_for_kernel("MatMul")
+print(f"MatMul backends: {backend_names}")
+
+# Get first matching backend class
+backend_cls = backends.get_for_kernel("MatMul", language="hls")
+if backend_cls:
+    backend = backend_cls()
+```
+
+### Multiple Backend Strategies
+
+```python
+# Register multiple backends with different trade-offs
+@backend(name="MatMul_Fast", kernel="MatMul", language="hls",
+         optimization="throughput", resource_usage="high", latency="low")
+class MatMulFast(MatMul):
     pass
 
-@backend(name="OptimizerHLS_Small", kernel="Optimizer",
-         language="hls", optimization="area",
-         resource_usage="low", pipeline_depth=4)
-class OptimizerHLS_Small(Optimizer):
+@backend(name="MatMul_Small", kernel="MatMul", language="hls", 
+         optimization="area", resource_usage="low", latency="high")
+class MatMulSmall(MatMul):
     pass
 
-@backend(name="OptimizerHLS_Balanced", kernel="Optimizer",
-         language="hls", optimization="balanced", 
-         default=True, pipeline_depth=8)
-class OptimizerHLS_Balanced(Optimizer):
+@backend(name="MatMul_Balanced", kernel="MatMul", language="hls",
+         optimization="balanced", resource_usage="medium", default=True)
+class MatMulBalanced(MatMul):
+    pass
+
+# Select backend based on requirements
+def select_backend(kernel_name, requirements):
+    if requirements.get("optimize_for") == "speed":
+        return backends.get_for_kernel(kernel_name, optimization="throughput")
+    elif requirements.get("optimize_for") == "area":
+        return backends.get_for_kernel(kernel_name, optimization="area")
+    else:
+        return backends.get_for_kernel(kernel_name, optimization="balanced")
+```
+
+## Framework Integration
+
+### Creating Framework-Specific Plugins
+
+```python
+# Register plugins for specific frameworks
+@transform(name="CustomTransform", stage="cleanup", framework="myframework")
+class CustomTransform:
+    pass
+
+@kernel(name="CustomKernel", framework="mycompany")
+class CustomKernel:
+    pass
+
+@backend(name="CustomBackend", kernel="CustomKernel", 
+         language="hls", framework="mycompany")
+class CustomBackend(CustomKernel):
+    pass
+
+@step(name="CustomStep", category="analysis", framework="mytools")
+class CustomStep:
     pass
 ```
 
-### Backend Selection
+### Accessing Framework-Specific Plugins
 
 ```python
-kernel = kn.Optimizer
+# Access by framework
+my_transform = transforms.myframework.CustomTransform
+my_kernel = kernels.mycompany.CustomKernel
+my_backend = backends.mycompany.CustomBackend
+my_step = steps.mytools.CustomStep
 
-# Automatic selection
-default_impl = kernel()  # Gets OptimizerHLS_Balanced
+# Dictionary access with framework qualification
+my_transform = transforms["myframework:CustomTransform"]
+my_kernel = kernels["mycompany:CustomKernel"]
 
-# By optimization strategy
-fast = kernel.find_backend(optimization="throughput")
-small = kernel.find_backend(optimization="area")
-
-# By multiple criteria
-specific = kernel.find_backend(
-    language="hls",
-    optimization="throughput", 
-    pipeline_depth=16
-)
-
-# List all options
-backends_info = kernel.list_backends_with_metadata()
-for info in backends_info:
-    print(f"{info['name']}: {info['metadata']}")
-```
-
-### Backend Discovery Methods
-
-```python
-# Registry-level queries
-all_hls = registry.find_backends(language="hls")
-all_fast = registry.find_backends(optimization="throughput")
-low_resource = registry.find_backends(resource_usage="low")
-
-# Complex queries
-candidates = registry.find_backends(
-    kernel="Optimizer",
-    language="hls",
-    optimization="balanced"
-)
+# List plugins by framework
+my_transforms = registry.get_framework_transforms("myframework")
+my_kernels = registry.get_framework_kernels("mycompany")
 ```
 
 ## Blueprint Optimization
 
-For production deployments, use blueprint loading to include only required plugins.
-
-### Blueprint Format
+### Blueprint Definition
 
 ```yaml
-# production_blueprint.yaml
+# my_design.yaml
 hw_compiler:
   transforms:
     cleanup:
       - RemoveIdentityOps
-      - RemoveUnusedNodes
+      - GiveReadableTensorNames
     topology_opt:
       - OptimizeModel
-      - FuseOperations
     kernel_opt:
-      - ~ConvertToHWLayers  # Optional (~ prefix)
-  
+      - InferKernelShapes
   kernels:
-    - MatrixMultiply
+    - MatMul
     - LayerNorm
-    
   backends:
-    - MatrixMultiply:hls  # Specific backend
-    - LayerNorm:*         # All backends
+    - MatMulHLS
+    - LayerNormHLS
+  steps:
+    - GenerateTestbench
+    - SynthesizeDesign
 ```
 
-### Using Blueprint Loading
+### Loading Optimized Plugin Set
 
 ```python
 from brainsmith.core.plugins.blueprint_loader import load_blueprint_plugins
 
-# Load subset registry with only required plugins
-collections = load_blueprint_plugins('production_blueprint.yaml')
+# Load only plugins needed for this blueprint
+collections = load_blueprint_plugins('my_design.yaml')
 
-# Use optimized collections
-tfm = collections['transforms']
-kn = collections['kernels']
+# Use the optimized collections (same API)
+transforms = collections['transforms']
+kernels = collections['kernels']
+backends = collections['backends']
+steps = collections['steps']
 
 # Only blueprint-specified plugins are available
-model = model.transform(tfm.RemoveIdentityOps())
-model = model.transform(tfm.OptimizeModel())
-
-# Attempting to use non-blueprint plugins will fail
-# tfm.SomeOtherTransform()  # AttributeError
-```
-
-### Blueprint Performance Analysis
-
-```python
-from brainsmith.core.plugins.blueprint_loader import analyze_blueprint_requirements
-
-# Analyze blueprint impact
-stats = analyze_blueprint_requirements('production_blueprint.yaml')
-print(f"Plugins loaded: {stats['total_loaded_plugins']}")
-print(f"Memory reduction: {stats['performance_improvement']}")
+model = model.transform(transforms.OptimizeModel())
+backend = backends.MatMulHLS()
+result = steps.GenerateTestbench()(build_context)
 ```
 
 ## Debugging
 
-### Plugin Status
+### Plugin Registration Debugging
 
 ```python
-from brainsmith.core.plugins import plugin_status
-
-status = plugin_status()
-print(f"Registry stats: {status}")
-```
-
-### Command-Line Debugging
-
-```bash
-# Show plugin summary
-python -m brainsmith.core.plugins.debug
-
-# List all transforms
-python -m brainsmith.core.plugins.debug list
-
-# Search for plugins
-python -m brainsmith.core.plugins.debug search "Optimize"
-
-# Show plugin details
-python -m brainsmith.core.plugins.debug show OptimizeModel
-
-# List by framework
-python -m brainsmith.core.plugins.debug framework qonnx
-
-# List by stage
-python -m brainsmith.core.plugins.debug stage cleanup
-```
-
-### Common Issues
-
-#### Plugin Not Found
-
-```python
-# Check if module is imported
-import my_plugin_module  # Must import to trigger registration
-
-# Verify registration
 from brainsmith.core.plugins import get_registry
+
 registry = get_registry()
-assert "MyPlugin" in registry.transforms
+
+# Check if plugin is registered
+if "MyTransform" in registry.transforms:
+    print("MyTransform is registered")
+else:
+    print("MyTransform not found")
+
+# List all plugins of a type
+print("Registered transforms:")
+for name in registry.list_available_transforms():
+    metadata = registry.get_plugin_metadata(name)
+    print(f"  {name}: stage={metadata.get('stage')}, framework={metadata.get('framework')}")
+
+# Debug backend availability
+kernel_name = "MatMul"
+backends_list = registry.list_backends_by_kernel(kernel_name)
+print(f"Backends for {kernel_name}: {backends_list}")
+
+for backend_name in backends_list:
+    metadata = registry.get_plugin_metadata(backend_name)
+    print(f"  {backend_name}: language={metadata.get('language')}")
 ```
 
-#### Backend Not Available
+### Import and Discovery Issues
 
 ```python
-# Check backend is registered for kernel
-backends = registry.list_backends_by_kernel("MyKernel")
-print(f"Available backends: {backends}")
+# Ensure all plugin modules are imported
+import myproject.transforms  # This will register transforms
+import myproject.kernels     # This will register kernels
+import myproject.backends    # This will register backends
 
-# Verify backend metadata
-metadata = registry.get_plugin_metadata("MyBackendHLS")
-assert metadata['kernel'] == "MyKernel"
-```
+# Check what got registered
+stats = registry.get_stats()
+print(f"After imports: {stats}")
 
-#### Validation Warnings
-
-```python
-# Transform must specify stage XOR kernel
-@transform(name="Bad")  # Warning: no stage or kernel
-class Bad:
-    pass
-
-@transform(name="Bad2", stage="cleanup", kernel="Foo")  # Warning: both specified
-class Bad2:
-    pass
+# Debug missing plugins
+try:
+    plugin_cls = transforms.MyMissingTransform
+except AttributeError as e:
+    print(f"Plugin not found: {e}")
+    print("Available transforms:", transforms.list())
 ```
 
 ## Best Practices
 
-### Plugin Development
+### Plugin Design
 
-1. **Use convenience decorators** - Cleaner than generic `@plugin`
-2. **Unique names** - Especially for backends
-3. **Rich metadata** - Helps with discovery and debugging
-4. **Validate early** - Check requirements in `__init__`
-5. **Document behavior** - Clear docstrings
+1. **Keep plugins focused**: Each plugin should have a single, clear responsibility
+2. **Use descriptive names**: Plugin names should clearly indicate their purpose
+3. **Provide good metadata**: Include framework, optimization strategy, resource usage
+4. **Document interfaces**: Clear docstrings for apply(), generate_*() methods
+5. **Handle errors gracefully**: Plugins should fail fast with clear error messages
 
-### Performance
+### Framework Organization
 
-1. **Import plugins early** - Registration happens at import
-2. **Use blueprint loading** - Reduce memory in production
-3. **Cache registry reference** - `registry = get_registry()`
-4. **Use indexed queries** - `find_backends()` over manual filtering
+```python
+# Good: Organize by functionality
+@transform(name="InferDataTypes", stage="topology_opt", framework="qonnx")
+@transform(name="InferShapes", stage="topology_opt", framework="qonnx")
 
-### Organization
+# Good: Clear backend differentiation
+@backend(name="ConvHLS_Speed", kernel="Conv", language="hls", optimization="throughput")
+@backend(name="ConvHLS_Area", kernel="Conv", language="hls", optimization="area")
 
-1. **Group by type** - Separate files for transforms/kernels/backends
-2. **Framework prefixes** - Clear naming for framework-specific plugins  
-3. **Consistent metadata** - Use standard attributes
-4. **Version plugins** - Track changes over time
+# Avoid: Generic names
+@backend(name="ConvImpl", kernel="Conv", language="hls")  # Not descriptive
+```
+
+### Performance Considerations
+
+1. **Use registry queries efficiently**: Cache backend lookups if used repeatedly
+2. **Leverage blueprint optimization**: Use subset registries for production
+3. **Avoid dynamic plugin creation**: Register all plugins at import time
+4. **Minimize validation overhead**: Plugin validation happens once at registration
 
 ### Testing
 
 ```python
 import pytest
-from brainsmith.core.plugins import transform, get_registry
+from brainsmith.core.plugins import get_registry, reset_plugin_system
 
-def test_plugin_registration():
-    # Define test plugin
-    @transform(name="TestTransform", stage="cleanup")
-    class TestTransform:
-        def apply(self, model):
-            return model, False
+def test_my_transform():
+    # Reset for clean test environment
+    reset_plugin_system()
     
-    # Verify registration
+    # Import your plugins
+    from myproject.transforms import MyTransform
+    
+    # Test registration
     registry = get_registry()
-    assert "TestTransform" in registry.transforms
+    assert "MyTransform" in registry.transforms
     
-    # Test usage
-    from brainsmith.plugins import transforms as tfm
-    instance = tfm.TestTransform()
-    assert instance is not None
+    # Test functionality
+    transform = MyTransform()
+    result_model, changed = transform.apply(test_model)
+    assert changed
+    assert result_model is not None
 ```
 
-## Migration Notes
+## Migration Guide
 
-### From Old Plugin System
+### From Wrapper-Based Access
 
 ```python
-# Old system (no longer supported)
-from brainsmith.plugin.decorators import op_transform
-from brainsmith.plugin import get_plugin_manager
+# Old: Wrapper objects with convenience methods
+kernel = kernels.MatMul
+backend = kernel.hls()  # Convenience method on wrapper
+instance = backend()
 
-# New system
-from brainsmith.core.plugins import transform
-from brainsmith.plugins import transforms as tfm
+# New: Direct class access with explicit backend selection
+kernel_cls = kernels.MatMul
+backend_cls = backends.get_for_kernel("MatMul", language="hls")
+kernel_instance = kernel_cls()
+backend_instance = backend_cls()
 ```
 
-### Import Paths
+### From Steps as Transforms
 
-- Old: `brainsmith.plugin.*`
-- New: `brainsmith.core.plugins.*`
-- Bridge: `brainsmith.plugins` (backward compatible)
+```python
+# Old: Steps registered as transforms
+@transform(name="MyStep", stage="build", plugin_type="step")
+class MyStep:
+    pass
 
-### Key Changes
+# New: Steps have their own decorator and registry
+@step(name="MyStep", category="build")
+class MyStep:
+    pass
+```
 
-1. No discovery needed - plugins register at decoration
-2. No manager layer - direct registry access
-3. No caching - all lookups are O(1)
-4. Cleaner decorators - type-specific options
+### Framework Migration
 
-## Summary
+```python
+# Old: Only transforms had framework support
+transforms.qonnx.BatchNormToAffine
 
-The Brainsmith plugin system provides a high-performance, easy-to-use framework for extending the compiler with custom transforms, kernels, and backends. Key features:
+# New: All plugin types support frameworks
+transforms.qonnx.BatchNormToAffine
+kernels.finn.MatrixVectorUnit
+backends.finn.LayerNormHLS
+steps.finn.CreateDataflowPartition
+```
 
-- **Zero-overhead registration** through decorators
-- **Natural access patterns** with collections
-- **Rich backend system** with metadata-driven selection
-- **Blueprint optimization** for production deployments
-- **Comprehensive debugging** tools
+## Common Issues and Solutions
 
-Focus on your plugin logic - the system handles registration, discovery, and optimization automatically.
+### Plugin Not Found
+
+**Problem**: `AttributeError: Transform 'MyTransform' not found`
+
+**Solutions**:
+1. Ensure the module containing the plugin is imported
+2. Check that the decorator is applied correctly
+3. Verify the plugin name matches exactly
+
+### Backend Not Available
+
+**Problem**: No backend found for kernel
+
+**Solutions**:
+1. Check that backend is registered with correct kernel name
+2. Verify the backend decorator specifies the right kernel
+3. Use `backends.list_for_kernel(kernel_name)` to see available backends
+
+### Framework Qualification Issues
+
+**Problem**: `AttributeError: Transform 'MyTransform' not found in framework`
+
+**Solutions**:
+1. Verify the framework name in the decorator matches access pattern
+2. Check that the plugin is registered with the expected framework
+3. Use `registry.get_framework_transforms(framework)` to see available plugins
+
+This developer guide provides comprehensive information for working with the Brainsmith plugin system. For additional examples and advanced usage patterns, refer to the examples in the repository.

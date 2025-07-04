@@ -24,11 +24,18 @@ class BrainsmithPluginRegistry:
         self.transforms: Dict[str, Type] = {}           # name -> class
         self.kernels: Dict[str, Type] = {}             # name -> class  
         self.backends: Dict[str, Type] = {}            # backend_name -> class
+        self.steps: Dict[str, Type] = {}               # name -> class (NEW: separate from transforms)
         
         # Performance indexes - pre-computed for fast queries
         self.transforms_by_stage: Dict[str, Dict[str, Type]] = {}     # stage -> {name -> class}
         self.backends_by_kernel: Dict[str, List[str]] = {}            # kernel -> [backend_names]
+        self.steps_by_category: Dict[str, Dict[str, Type]] = {}       # category -> {name -> class}
+        
+        # Framework indexes for ALL plugin types
         self.framework_transforms: Dict[str, Dict[str, Type]] = {}    # framework -> {name -> class}
+        self.framework_kernels: Dict[str, Dict[str, Type]] = {}       # framework -> {name -> class}
+        self.framework_backends: Dict[str, Dict[str, Type]] = {}      # framework -> {name -> class}
+        self.framework_steps: Dict[str, Dict[str, Type]] = {}         # framework -> {name -> class}
         
         # Metadata storage for rich plugin information
         self.plugin_metadata: Dict[str, Dict[str, Any]] = {}         # name -> metadata dict
@@ -70,8 +77,16 @@ class BrainsmithPluginRegistry:
         logger.debug(f"Registered transform: {name} (stage={stage}, framework={framework})")
     
     def register_kernel(self, name: str, kernel_class: Type, framework: str = 'brainsmith', **metadata) -> None:
-        """Register kernel."""
+        """Register kernel with framework indexing."""
+        # Store in main registry
         self.kernels[name] = kernel_class
+        
+        # Index by framework
+        if framework not in self.framework_kernels:
+            self.framework_kernels[framework] = {}
+        self.framework_kernels[framework][name] = kernel_class
+        
+        # Store metadata
         self.plugin_metadata[name] = {
             'type': 'kernel',
             'framework': framework,
@@ -81,7 +96,7 @@ class BrainsmithPluginRegistry:
         logger.debug(f"Registered kernel: {name} ({framework})")
     
     def register_backend(self, name: str, backend_class: Type, kernel: str, framework: str = 'brainsmith', **metadata) -> None:
-        """Register backend with automatic kernel indexing."""
+        """Register backend with automatic kernel and framework indexing."""
         # Store in main registry by name
         self.backends[name] = backend_class
         
@@ -89,6 +104,11 @@ class BrainsmithPluginRegistry:
         if kernel not in self.backends_by_kernel:
             self.backends_by_kernel[kernel] = []
         self.backends_by_kernel[kernel].append(name)
+        
+        # Index by framework
+        if framework not in self.framework_backends:
+            self.framework_backends[framework] = {}
+        self.framework_backends[framework][name] = backend_class
         
         # Handle default backend
         if metadata.get('default', False):
@@ -102,13 +122,6 @@ class BrainsmithPluginRegistry:
                     index_dict[value] = []
                 index_dict[value].append(name)
         
-        # Handle backend_type for backward compatibility
-        if 'backend_type' in metadata and 'language' not in metadata:
-            metadata['language'] = metadata['backend_type']
-            # Also index under language
-            if metadata['backend_type'] not in self.backend_indexes['language']:
-                self.backend_indexes['language'][metadata['backend_type']] = []
-            self.backend_indexes['language'][metadata['backend_type']].append(name)
         
         # Store all metadata
         self.plugin_metadata[name] = {
@@ -120,6 +133,33 @@ class BrainsmithPluginRegistry:
         
         logger.debug(f"Registered backend: {name} for {kernel} ({framework}, language={metadata.get('language', 'unknown')})")
     
+    def register_step(self, name: str, step_class: Type, category: Optional[str] = None,
+                     framework: str = 'brainsmith', **metadata) -> None:
+        """Register step with category and framework indexing."""
+        # Store in main registry
+        self.steps[name] = step_class
+        
+        # Index by category
+        if category:
+            if category not in self.steps_by_category:
+                self.steps_by_category[category] = {}
+            self.steps_by_category[category][name] = step_class
+        
+        # Index by framework
+        if framework not in self.framework_steps:
+            self.framework_steps[framework] = {}
+        self.framework_steps[framework][name] = step_class
+        
+        # Store metadata
+        self.plugin_metadata[name] = {
+            'type': 'step',
+            'category': category,
+            'framework': framework,
+            **metadata
+        }
+        
+        logger.debug(f"Registered step: {name} (category={category}, framework={framework})")
+    
     # Fast lookup methods - direct dict access
     def get_transform(self, name: str, stage: Optional[str] = None, framework: Optional[str] = None) -> Optional[Type]:
         """Get transform with optional stage/framework filter."""
@@ -129,13 +169,25 @@ class BrainsmithPluginRegistry:
             return self.transforms_by_stage[stage].get(name)
         return self.transforms.get(name)
     
-    def get_kernel(self, name: str) -> Optional[Type]:
-        """Get kernel by name."""
+    def get_kernel(self, name: str, framework: Optional[str] = None) -> Optional[Type]:
+        """Get kernel by name with optional framework filter."""
+        if framework and framework in self.framework_kernels:
+            return self.framework_kernels[framework].get(name)
         return self.kernels.get(name)
     
-    def get_backend(self, name: str) -> Optional[Type]:
-        """Get backend by name."""
+    def get_backend(self, name: str, framework: Optional[str] = None) -> Optional[Type]:
+        """Get backend by name with optional framework filter."""
+        if framework and framework in self.framework_backends:
+            return self.framework_backends[framework].get(name)
         return self.backends.get(name)
+    
+    def get_step(self, name: str, category: Optional[str] = None, framework: Optional[str] = None) -> Optional[Type]:
+        """Get step with optional category/framework filter."""
+        if framework and framework in self.framework_steps:
+            return self.framework_steps[framework].get(name)
+        if category and category in self.steps_by_category:
+            return self.steps_by_category[category].get(name)
+        return self.steps.get(name)
     
     def get_default_backend(self, kernel: str) -> Optional[Type]:
         """Get default backend for kernel."""
@@ -199,6 +251,18 @@ class BrainsmithPluginRegistry:
         """Get all transforms for a framework."""
         return self.framework_transforms.get(framework, {})
     
+    def get_framework_kernels(self, framework: str) -> Dict[str, Type]:
+        """Get all kernels for a framework."""
+        return self.framework_kernels.get(framework, {})
+    
+    def get_framework_backends(self, framework: str) -> Dict[str, Type]:
+        """Get all backends for a framework."""
+        return self.framework_backends.get(framework, {})
+    
+    def get_framework_steps(self, framework: str) -> Dict[str, Type]:
+        """Get all steps for a framework."""
+        return self.framework_steps.get(framework, {})
+    
     def get_plugin_metadata(self, name: str) -> Dict[str, Any]:
         """Get metadata for a plugin."""
         return self.plugin_metadata.get(name, {})
@@ -221,18 +285,32 @@ class BrainsmithPluginRegistry:
         for name, cls in self.backends.items():
             metadata = self.get_plugin_metadata(name)
             all_plugins.append({'name': name, 'class': cls, 'metadata': metadata})
+            
+        # Add steps
+        for name, cls in self.steps.items():
+            metadata = self.get_plugin_metadata(name)
+            all_plugins.append({'name': name, 'class': cls, 'metadata': metadata})
         
         return all_plugins
     
     def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics."""
+        # Collect all frameworks across all plugin types
+        all_frameworks = set()
+        all_frameworks.update(self.framework_transforms.keys())
+        all_frameworks.update(self.framework_kernels.keys())
+        all_frameworks.update(self.framework_backends.keys())
+        all_frameworks.update(self.framework_steps.keys())
+        
         return {
-            'total_plugins': len(self.transforms) + len(self.kernels) + len(self.backends),
+            'total_plugins': len(self.transforms) + len(self.kernels) + len(self.backends) + len(self.steps),
             'transforms': len(self.transforms),
             'kernels': len(self.kernels),
             'backends': len(self.backends),
+            'steps': len(self.steps),
             'stages': list(self.transforms_by_stage.keys()),
-            'frameworks': list(self.framework_transforms.keys()),
+            'categories': list(self.steps_by_category.keys()),
+            'frameworks': list(all_frameworks),
             'indexed_backends': len(self.backends_by_kernel)
         }
     
@@ -244,6 +322,14 @@ class BrainsmithPluginRegistry:
     def list_available_transforms(self) -> List[str]:
         """List all registered transform names."""
         return list(self.transforms.keys())
+    
+    def list_available_steps(self) -> List[str]:
+        """List all registered step names."""
+        return list(self.steps.keys())
+    
+    def list_steps_by_category(self, category: str) -> List[str]:
+        """List all step names for a category."""
+        return list(self.steps_by_category.get(category, {}).keys())
     
     def get_valid_stages(self) -> List[str]:
         """Get list of valid transform stages."""
@@ -303,6 +389,19 @@ class BrainsmithPluginRegistry:
                     **{k: v for k, v in metadata.items() if k not in ['type', 'kernel']}
                 )
         
+        # Copy only required steps
+        for step_name in requirements.get('steps', []):
+            if step_name in self.steps:
+                step_class = self.steps[step_name]
+                metadata = self.plugin_metadata[step_name]
+                subset.register_step(
+                    step_name,
+                    step_class,
+                    category=metadata.get('category'),
+                    framework=metadata.get('framework', 'brainsmith'),
+                    **{k: v for k, v in metadata.items() if k not in ['type', 'category', 'framework']}
+                )
+        
         return subset
     
     def clear(self) -> None:
@@ -310,9 +409,14 @@ class BrainsmithPluginRegistry:
         self.transforms.clear()
         self.kernels.clear()
         self.backends.clear()
+        self.steps.clear()
         self.transforms_by_stage.clear()
         self.backends_by_kernel.clear()
+        self.steps_by_category.clear()
         self.framework_transforms.clear()
+        self.framework_kernels.clear()
+        self.framework_backends.clear()
+        self.framework_steps.clear()
         self.plugin_metadata.clear()
         self.default_backends.clear()
         for index in self.backend_indexes.values():
