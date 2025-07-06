@@ -2,60 +2,14 @@ version: "3.0"
 name: "BERT Accelerator"
 description: "Blueprint for BERT model acceleration with custom optimizations"
 
-hw_compiler:
-  kernels:
-    # Core compute kernels
-    - ["MatrixVectorUnit", ["rtl"]]
-    - ["LayerNorm", ["hls"]]
-    - ["Softmax", ["hls", "rtl"]]
-    - ["Shuffle", ["hls"]]
-    
-    # Support kernels
-    - ["ElementwiseBinary", ["hls"]]
-    - ["DuplicateStreams", ["hls"]]
-    - ["Thresholding", ["hls"]]
-    
-  transforms:
-    # Using standardized stage names for BERT-specific flow
-    cleanup:
-      # Graph cleanup and preparation
-      - "SortCommutativeInputsInitializerLast"
-      - "RemoveIdentityOps"
-      - "RemoveUnusedTensors"
-      - "GiveReadableTensorNames"
-      - "GiveUniqueNodeNames"
-      
-    topology_opt:
-      # QONNX to FINN conversion with BERT-specific handling
-      - "ExpandNorms"
-      - "FoldConstants"
-      - "ConvertDivToMul"
-      - "ConvertQONNXtoFINN"
-      
-      # Streamlining and absorption transformations
-      - "AbsorbSignBiasIntoMultiThreshold"
-      - "AbsorbAddIntoMultiThreshold"
-      - "AbsorbMulIntoMultiThreshold"
-      - "RoundAndClipThresholds"
-      - "MoveOpPastFork"
-      - "MoveScalarMulPastMatMul"
-      - "MoveScalarLinearPastInvariants"
-      
-    # Note: Hardware inference transforms (InferLayerNorm, InferShuffle, etc.) 
-    # are automatically applied here based on the kernel list
-      
-    kernel_opt:
-      # BERT-specific kernel optimizations
-      - "TempShuffleFixer"
-      - "SetPumpedCompute"
-      
+hw_compiler:      
   build_steps:
     # Using registered step names (not legacy custom_step_* names)
     # === Cleanup and graph surgery ===
     - "cleanup"
     - "remove_head"
     - "remove_tail"
-    - "qonnx_to_finn"
+    - "brainsmith:qonnx_to_finn"
     
     # === Core processing ===
     - "generate_reference_io"

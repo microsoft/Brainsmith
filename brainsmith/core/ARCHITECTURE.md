@@ -34,7 +34,7 @@ graph TB
     subgraph "Phase 1: Design Space Constructor"
         FORGE[ForgeAPI<br/>Main Entry Point]
         PARSER[Blueprint Parser<br/>YAML Processing]
-        VAL[Validator<br/>Constraint Checking]
+        VAL[Validator<br/>Minimal Safety Checks]
         DS[DesignSpace Object<br/>Complete Space Definition]
     end
     
@@ -103,12 +103,12 @@ graph TB
     BR --> ARTIFACTS
     BR --> METRICS
     
-    style FORGE fill:#c8e6c9
-    style DS fill:#e1f5fe
-    style EXP fill:#fff9c4
-    style BR fill:#ffccbc
-    style RESULTS fill:#f3e5f5
-    style PLUGINS fill:#e8f5e8
+    style FORGE fill:#2e7d32,color:#fff
+    style DS fill:#1565c0,color:#fff
+    style EXP fill:#f57c00,color:#fff
+    style BR fill:#d84315,color:#fff
+    style RESULTS fill:#6a1b9a,color:#fff
+    style PLUGINS fill:#388e3c,color:#fff
 ```
 
 ## Complete System Architecture
@@ -158,28 +158,28 @@ graph TB
         SR4[Performance Optimization]
     end
     
-    style P1R1 fill:#c8e6c9
-    style P1R2 fill:#c8e6c9
-    style P1R3 fill:#c8e6c9
-    style P1R4 fill:#c8e6c9
-    style P1R5 fill:#c8e6c9
+    style P1R1 fill:#2e7d32,color:#fff
+    style P1R2 fill:#2e7d32,color:#fff
+    style P1R3 fill:#2e7d32,color:#fff
+    style P1R4 fill:#2e7d32,color:#fff
+    style P1R5 fill:#2e7d32,color:#fff
     
-    style P2R1 fill:#fff9c4
-    style P2R2 fill:#fff9c4
-    style P2R3 fill:#fff9c4
-    style P2R4 fill:#fff9c4
-    style P2R5 fill:#fff9c4
+    style P2R1 fill:#f57c00,color:#fff
+    style P2R2 fill:#f57c00,color:#fff
+    style P2R3 fill:#f57c00,color:#fff
+    style P2R4 fill:#f57c00,color:#fff
+    style P2R5 fill:#f57c00,color:#fff
     
-    style P3R1 fill:#ffccbc
-    style P3R2 fill:#ffccbc
-    style P3R3 fill:#ffccbc
-    style P3R4 fill:#ffccbc
-    style P3R5 fill:#ffccbc
+    style P3R1 fill:#d84315,color:#fff
+    style P3R2 fill:#d84315,color:#fff
+    style P3R3 fill:#d84315,color:#fff
+    style P3R4 fill:#d84315,color:#fff
+    style P3R5 fill:#d84315,color:#fff
     
-    style SR1 fill:#e1f5fe
-    style SR2 fill:#e1f5fe
-    style SR3 fill:#e1f5fe
-    style SR4 fill:#e1f5fe
+    style SR1 fill:#1565c0,color:#fff
+    style SR2 fill:#1565c0,color:#fff
+    style SR3 fill:#1565c0,color:#fff
+    style SR4 fill:#1565c0,color:#fff
 ```
 
 ## End-to-End Data Flow
@@ -235,10 +235,10 @@ flowchart LR
     BACKEND --> ARTIFACTS
     POSTPROCESS --> METRICS
     
-    style BUILD fill:#c8e6c9
-    style GENERATE fill:#fff9c4
-    style PREPROCESS fill:#ffccbc
-    style BEST_CONFIG fill:#f3e5f5
+    style BUILD fill:#2e7d32,color:#fff
+    style GENERATE fill:#f57c00,color:#fff
+    style PREPROCESS fill:#d84315,color:#fff
+    style BEST_CONFIG fill:#6a1b9a,color:#fff
 ```
 
 ### Data Structure Evolution
@@ -248,7 +248,6 @@ flowchart TB
     subgraph "Phase 1 Data Structures"
         BP_DATA[Blueprint Data<br/>Raw YAML Dict]
         HW_SPACE[HWCompilerSpace<br/>Kernel & Transform Options]
-        PROC_SPACE[ProcessingSpace<br/>Pre/Post Processing]
         SEARCH_CFG[SearchConfig<br/>Strategy & Constraints]
         GLOBAL_CFG[GlobalConfig<br/>Environment Settings]
         DS_FINAL[DesignSpace<br/>Complete Definition]
@@ -273,11 +272,9 @@ flowchart TB
     end
     
     BP_DATA --> HW_SPACE
-    BP_DATA --> PROC_SPACE
     BP_DATA --> SEARCH_CFG
     BP_DATA --> GLOBAL_CFG
     HW_SPACE --> DS_FINAL
-    PROC_SPACE --> DS_FINAL
     SEARCH_CFG --> DS_FINAL
     GLOBAL_CFG --> DS_FINAL
     
@@ -292,10 +289,10 @@ flowchart TB
     EXPLORATION --> PARETO
     EXPLORATION --> BEST
     
-    style DS_FINAL fill:#e1f5fe
-    style BUILD_CONFIGS fill:#fff9c4
-    style BUILD_RESULTS fill:#ffccbc
-    style EXPLORATION fill:#f3e5f5
+    style DS_FINAL fill:#1565c0,color:#fff
+    style BUILD_CONFIGS fill:#f57c00,color:#fff
+    style BUILD_RESULTS fill:#d84315,color:#fff
+    style EXPLORATION fill:#6a1b9a,color:#fff
 ```
 
 ## Phase Integration
@@ -313,12 +310,12 @@ graph TB
     subgraph "Phase 2-3 Integration"
         P2P3_HANDOFF[BuildConfig Handoff<br/>Self-Contained Execution Units]
         P2P3_MODEL[Model Path Embedding<br/>No Separate Parameters]
-        P2P3_TRANSFORMS[Transform Organization<br/>By Stage (pre_proc, post_proc)]
+        P2P3_TRANSFORMS["Transform Organization<br/>By Stage (pre_proc, post_proc)"]
         P2P3_RESULTS[BuildResult Collection<br/>Metrics & Artifacts]
     end
     
     subgraph "Plugin Registry Integration"
-        REGISTRY_ACCESS[Direct Registry Access<br/>O(1) Transform Lookup]
+        REGISTRY_ACCESS["Direct Registry Access<br/>O(1) Transform Lookup"]
         STAGE_LOOKUP[Stage-Based Organization<br/>transforms_by_stage]
         PERFECT_CODE[Perfect Code Implementation<br/>ProcessingStep Elimination]
     end
@@ -338,10 +335,10 @@ graph TB
     REGISTRY_ACCESS --> PERFECT_CODE
     BACKEND_INTERFACE --> MULTI_BACKEND
     
-    style P1P2_HANDOFF fill:#c8e6c9
-    style P2P3_HANDOFF fill:#fff9c4
-    style REGISTRY_ACCESS fill:#e8f5e8
-    style BACKEND_INTERFACE fill:#ffccbc
+    style P1P2_HANDOFF fill:#2e7d32,color:#fff
+    style P2P3_HANDOFF fill:#f57c00,color:#fff
+    style REGISTRY_ACCESS fill:#388e3c,color:#fff
+    style BACKEND_INTERFACE fill:#d84315,color:#fff
 ```
 
 ### BuildConfig Self-Containment
@@ -351,7 +348,6 @@ classDiagram
     class DesignSpace {
         +model_path: str
         +hw_compiler_space: HWCompilerSpace
-        +processing_space: ProcessingSpace
         +search_config: SearchConfig
         +global_config: GlobalConfig
     }
@@ -413,7 +409,7 @@ sequenceDiagram
     Parser->>Registry: validate_kernel("MatMul")
     Registry-->>Parser: ✅ Valid
     Parser->>Registry: get_backends_by_kernel("MatMul")
-    Registry-->>Parser: ["hls", "rtl", "dsp"]
+    Registry-->>Parser: ["MatMulHLS", "MatMulRTL", "MatMulDSP"]
     Parser-->>ForgeAPI: DesignSpace with validated plugins
     
     ForgeAPI->>Explorer: explore(design_space)
@@ -475,9 +471,9 @@ graph TB
     ML --> REGISTRY
     NOTIFY --> REGISTRY
     
-    style REGISTRY fill:#fff9c4
-    style LOG fill:#c8e6c9
-    style CACHE fill:#c8e6c9
+    style REGISTRY fill:#f57c00,color:#fff
+    style LOG fill:#2e7d32,color:#fff
+    style CACHE fill:#2e7d32,color:#fff
 ```
 
 ## Backend System Architecture
@@ -488,7 +484,7 @@ The multi-backend architecture enables Phase 3 to support different FPGA compila
 graph TB
     subgraph "Backend Interface Layer"
         INTERFACE[BuildRunnerInterface<br/>Abstract Base Class]
-        CONTRACT[Interface Contract<br/>• run(BuildConfig) → BuildResult<br/>• get_backend_name() → str<br/>• get_supported_output_stages() → List]
+        CONTRACT["Interface Contract<br/>• run(BuildConfig) → BuildResult<br/>• get_backend_name() → str<br/>• get_supported_output_stages() → List"]
     end
     
     subgraph "Backend Implementations"
@@ -504,7 +500,7 @@ graph TB
         
         METRICS[Metrics Collector<br/>• Standardized extraction<br/>• Cross-backend normalization<br/>• Performance validation]
         
-        PIPELINE[Shared Pipelines<br/>• Preprocessing (all backends)<br/>• Postprocessing (all backends)<br/>• Plugin registry integration]
+        PIPELINE["Shared Pipelines<br/>• Preprocessing (all backends)<br/>• Postprocessing (all backends)<br/>• Plugin registry integration"]
     end
     
     subgraph "Backend-Specific Components"
@@ -540,11 +536,11 @@ graph TB
     FUTURE --> METRICS
     MOCK --> METRICS
     
-    style INTERFACE fill:#fff9c4
-    style LEGACY fill:#c8e6c9
-    style FUTURE fill:#e1f5fe
-    style MOCK fill:#ffccbc
-    style PIPELINE fill:#e8f5e8
+    style INTERFACE fill:#f57c00,color:#fff
+    style LEGACY fill:#2e7d32,color:#fff
+    style FUTURE fill:#1565c0,color:#fff
+    style MOCK fill:#d84315,color:#fff
+    style PIPELINE fill:#388e3c,color:#fff
 ```
 
 ### Backend Selection Strategy
@@ -587,10 +583,10 @@ flowchart TB
     MOCK_TYPE -->|Yes| USE_MOCK
     MOCK_TYPE -->|No| ERROR
     
-    style USE_FINN fill:#c8e6c9
-    style USE_FUTURE fill:#e1f5fe
-    style USE_MOCK fill:#ffccbc
-    style ERROR fill:#ffcdd2
+    style USE_FINN fill:#2e7d32,color:#fff
+    style USE_FUTURE fill:#1565c0,color:#fff
+    style USE_MOCK fill:#d84315,color:#fff
+    style ERROR fill:#c62828,color:#fff
 ```
 
 ## Plugin Registry Integration
@@ -600,23 +596,23 @@ Phase 3 demonstrates Perfect Code principles through direct plugin registry inte
 ```mermaid
 graph TB
     subgraph "Perfect Code Transformation"
-        BEFORE[Before: ProcessingStep Objects<br/>❌ Technical debt pattern<br/>❌ Mock/placeholder logic<br/>❌ O(n) processing overhead]
+        BEFORE["Before: Dual System<br/>❌ Transform strings + processing objects<br/>❌ Inconsistent approaches<br/>❌ O(n) processing overhead"]
         
-        AFTER[After: Direct Registry Access<br/>✅ O(1) plugin lookup<br/>✅ Real transform execution<br/>✅ Clean code architecture]
+        AFTER["After: Unified System<br/>✅ Single transforms_by_stage approach<br/>✅ Direct registry access<br/>✅ O(1) plugin lookup"]
         
         BEFORE --> AFTER
     end
     
     subgraph "Registry Integration Pattern"
-        GET_REGISTRY[get_registry()<br/>Global registry instance]
+        GET_REGISTRY["get_registry()<br/>Global registry instance"]
         
-        STAGE_ACCESS[Stage-Based Access<br/>config.transforms_by_stage.get('pre_proc', [])<br/>config.transforms_by_stage.get('post_proc', [])]
+        STAGE_ACCESS["Stage-Based Access<br/>config.transforms_by_stage.get('pre_proc', [])<br/>config.transforms_by_stage.get('post_proc', [])"]
         
-        TRANSFORM_LOOKUP[Transform Lookup<br/>registry.get_transform(name)<br/>O(1) dictionary access]
+        TRANSFORM_LOOKUP["Transform Lookup<br/>registry.get_transform(name)<br/>O(1) dictionary access"]
         
-        INSTANTIATION[Transform Instantiation<br/>transform_class()<br/>Real plugin objects]
+        INSTANTIATION["Transform Instantiation<br/>transform_class()<br/>Real plugin objects"]
         
-        EXECUTION[Transform Execution<br/>transform.apply(model)<br/>QONNX ModelWrapper integration]
+        EXECUTION["Transform Execution<br/>transform.apply(model)<br/>QONNX ModelWrapper integration"]
     end
     
     subgraph "Stage Organization"
@@ -649,10 +645,10 @@ graph TB
     TRANSFORM_LOOKUP --> TRANSFORM_FALLBACK
     EXECUTION --> MODEL_FALLBACK
     
-    style AFTER fill:#c8e6c9
-    style GET_REGISTRY fill:#e8f5e8
-    style STAGE_FIX fill:#fff9c4
-    style QONNX_FALLBACK fill:#ffccbc
+    style AFTER fill:#2e7d32,color:#fff
+    style GET_REGISTRY fill:#388e3c,color:#fff
+    style STAGE_FIX fill:#f57c00,color:#fff
+    style QONNX_FALLBACK fill:#d84315,color:#fff
 ```
 
 ### Perfect Code Implementation Details
@@ -662,15 +658,15 @@ graph TB
     subgraph "LEX PRIMA: Code Quality is Sacred"
         TECH_DEBT[Technical Debt Elimination<br/>ProcessingStep → Direct Registry]
         REAL_IMPL[Real Implementation<br/>QONNX ModelWrapper execution]
-        PERFORMANCE[O(1) Performance<br/>Direct dictionary lookups]
+        PERFORMANCE["O(1) Performance<br/>Direct dictionary lookups"]
     end
     
     subgraph "LEX SECUNDA: Truth Over Comfort"
-        BREAKING_CHANGES[Breaking Changes Accepted<br/>• Stage naming fix<br/>• API cleanup<br/>• ProcessingStep removal]
+        BREAKING_CHANGES[Breaking Changes Accepted<br/>• Stage naming fix<br/>• API cleanup<br/>• Unified transform system]
     end
     
     subgraph "LEX TERTIA: Simplicity is Divine"
-        SIMPLE_ACCESS[Simple Access Pattern<br/>transforms_by_stage.get(stage, [])]
+        SIMPLE_ACCESS["Simple Access Pattern<br/>transforms_by_stage.get(stage, [])"]
         CLEAR_FLOW[Clear Data Flow<br/>Config → Registry → Transform → Result]
         NO_ABSTRACTION[No Unnecessary Layers<br/>Direct plugin access]
     end
@@ -678,9 +674,9 @@ graph TB
     subgraph "Implementation Evidence"
         STAGE_NAMING[Stage Naming Fix<br/>framework_adapters.py lines:<br/>226, 228, 229, 237, 239, 240, 241]
         
-        PIPELINE_REWRITE[Pipeline Rewrite<br/>preprocessing.py & postprocessing.py<br/>Complete elimination of ProcessingStep]
+        PIPELINE_REWRITE[Pipeline Rewrite<br/>preprocessing.py & postprocessing.py<br/>Unified transforms_by_stage approach]
         
-        REGISTRY_USAGE[Direct Registry Usage<br/>• get_registry()<br/>• get_transform(name)<br/>• O(1) lookups]
+        REGISTRY_USAGE["Direct Registry Usage<br/>• get_registry()<br/>• get_transform(name)<br/>• O(1) lookups"]
     end
     
     TECH_DEBT --> STAGE_NAMING
@@ -691,10 +687,10 @@ graph TB
     SIMPLE_ACCESS --> PIPELINE_REWRITE
     CLEAR_FLOW --> REGISTRY_USAGE
     
-    style TECH_DEBT fill:#c8e6c9
-    style BREAKING_CHANGES fill:#e1f5fe
-    style SIMPLE_ACCESS fill:#fff9c4
-    style STAGE_NAMING fill:#e8f5e8
+    style TECH_DEBT fill:#2e7d32,color:#fff
+    style BREAKING_CHANGES fill:#1565c0,color:#fff
+    style SIMPLE_ACCESS fill:#f57c00,color:#fff
+    style STAGE_NAMING fill:#388e3c,color:#fff
 ```
 
 ## API Reference
@@ -843,19 +839,16 @@ print(f"RTL path: {best_result.artifacts.get('rtl')}")
 class DesignSpace:
     model_path: str                    # Validated ONNX model path
     hw_compiler_space: HWCompilerSpace # Hardware configuration options
-    processing_space: ProcessingSpace   # Pre/post processing options
     search_config: SearchConfig         # Exploration strategy
     global_config: GlobalConfig         # Environment settings
 
 @dataclass
 class BuildConfig:
-    id: str                            # Unique identifier
-    design_space_id: str               # Parent design space
-    model_path: str                    # Model path for execution
+    id: str                                # Unique identifier
+    design_space_id: str                   # Parent design space
+    model_path: str                        # Model path for execution
     kernels: List[Tuple[str, List[str]]]   # Selected kernels
-    transforms: Dict[str, List[str]]       # Selected transforms by stage
-    preprocessing: List[ProcessingStep]    # Pre-processing steps
-    postprocessing: List[ProcessingStep]   # Post-processing steps
+    transforms_by_stage: Dict[str, List[str]]   # Selected transforms by stage
     build_steps: List[str]                 # Build pipeline steps
     config_flags: Dict[str, Any]           # Compiler flags
     global_config: GlobalConfig            # Global parameters
@@ -909,35 +902,35 @@ class ExplorationResults:
 ```mermaid
 graph TB
     subgraph "Phase 1 Performance"
-        P1_PARSE[Blueprint Parsing<br/>O(n) where n = blueprint size]
-        P1_VALIDATE[Plugin Validation<br/>O(k) where k = plugin count]
-        P1_BUILD[Space Construction<br/>O(1) object creation]
+        P1_PARSE["Blueprint Parsing<br/>O(n) where n = blueprint size"]
+        P1_VALIDATE["Plugin Validation<br/>O(k) where k = plugin count"]
+        P1_BUILD["Space Construction<br/>O(1) object creation"]
     end
     
     subgraph "Phase 2 Performance"
-        P2_GEN[Combination Generation<br/>O(k×t×p×q) cartesian product]
-        P2_COORD[Coordination Overhead<br/>O(n) where n = configurations]
-        P2_ANALYSIS[Results Analysis<br/>O(n log n) for Pareto frontier]
+        P2_GEN["Combination Generation<br/>O(k×t) cartesian product"]
+        P2_COORD["Coordination Overhead<br/>O(n) where n = configurations"]
+        P2_ANALYSIS["Results Analysis<br/>O(n log n) for Pareto frontier"]
     end
     
     subgraph "Phase 3 Performance"
-        P3_PIPELINE[Pipeline Processing<br/>O(t) where t = transforms per stage]
-        P3_REGISTRY[Plugin Registry Access<br/>O(1) direct dictionary lookup]
-        P3_BUILD[Backend Execution<br/>O(b) where b = build complexity]
-        P3_METRICS[Metrics Collection<br/>O(1) standardized extraction]
+        P3_PIPELINE["Pipeline Processing<br/>O(t) where t = transforms per stage"]
+        P3_REGISTRY["Plugin Registry Access<br/>O(1) direct dictionary lookup"]
+        P3_BUILD["Backend Execution<br/>O(b) where b = build complexity"]
+        P3_METRICS["Metrics Collection<br/>O(1) standardized extraction"]
     end
     
     subgraph "Space Complexity"
-        S_CONFIGS[Configuration Storage<br/>O(n) for n configurations]
-        S_RESULTS[Results Storage<br/>O(n) for build results]
-        S_ARTIFACTS[Artifact Storage<br/>O(n×a) where a = artifacts per build]
-        S_CACHE[Cache Storage<br/>O(n) for persistent caching]
+        S_CONFIGS["Configuration Storage<br/>O(n) for n configurations"]
+        S_RESULTS["Results Storage<br/>O(n) for build results"]
+        S_ARTIFACTS["Artifact Storage<br/>O(n×a) where a = artifacts per build"]
+        S_CACHE["Cache Storage<br/>O(n) for persistent caching"]
     end
     
-    style P1_PARSE fill:#c8e6c9
-    style P2_GEN fill:#fff9c4
-    style P3_REGISTRY fill:#e8f5e8
-    style S_CONFIGS fill:#e1f5fe
+    style P1_PARSE fill:#2e7d32,color:#fff
+    style P2_GEN fill:#f57c00,color:#fff
+    style P3_REGISTRY fill:#388e3c,color:#fff
+    style S_CONFIGS fill:#1565c0,color:#fff
 ```
 
 ### Scalability Patterns
@@ -1121,10 +1114,10 @@ flowchart TB
     GRACEFUL_DEGRADATION --> REPORTING
     RECOVERY --> REPORTING
     
-    style FAIL_FAST fill:#ffcdd2
-    style GRACEFUL_CONTINUATION fill:#fff9c4
-    style GRACEFUL_DEGRADATION fill:#ffccbc
-    style RECOVERY fill:#c8e6c9
+    style FAIL_FAST fill:#c62828,color:#fff
+    style GRACEFUL_CONTINUATION fill:#f57c00,color:#fff
+    style GRACEFUL_DEGRADATION fill:#d84315,color:#fff
+    style RECOVERY fill:#2e7d32,color:#fff
 ```
 
 ### Error Context and Recovery
@@ -1192,7 +1185,7 @@ version: "3.0"
 hw_compiler:
   kernels:
     - "MatMul"                     # Auto-discovery
-    - ("Softmax", ["hls", "rtl"])  # Explicit backends
+    - ("Softmax", ["SoftmaxHLS", "SoftmaxRTL"])  # Explicit backends
   transforms:
     cleanup: ["RemoveIdentity", "FoldConstants"]
     optimization: ["~Streamline", "SetPumped"]
@@ -1338,7 +1331,7 @@ The complete Brainsmith DSE v3 system provides a robust, scalable, end-to-end so
 - **Seamless Data Flow**: DesignSpace → BuildConfig → BuildResult → ExplorationResults
 
 ### Perfect Code Implementation
-- **Technical Debt Elimination**: ProcessingStep objects replaced with direct plugin registry access
+- **Technical Debt Elimination**: Dual transform/processing system unified into transforms_by_stage
 - **O(1) Performance**: Direct dictionary lookups throughout the system
 - **Real Transform Execution**: QONNX ModelWrapper integration with graceful fallbacks
 - **Stage Naming Fix**: Critical bug fix ensuring proper transform stage matching

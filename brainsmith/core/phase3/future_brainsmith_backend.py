@@ -18,7 +18,6 @@ from brainsmith.core.phase1.data_structures import OutputStage
 from brainsmith.core.phase2.data_structures import BuildConfig
 from .data_structures import BuildMetrics, BuildResult, BuildStatus
 from .interfaces import BuildRunnerInterface
-from .step_resolver import StepResolver
 
 
 class FutureBrainsmithBackend(BuildRunnerInterface):
@@ -36,7 +35,6 @@ class FutureBrainsmithBackend(BuildRunnerInterface):
         """
         self.mock_success_rate = mock_success_rate
         self.mock_build_time_range = mock_build_time_range
-        self.step_resolver = StepResolver()
         
     def get_backend_name(self) -> str:
         """Return human-readable backend name."""
@@ -139,69 +137,20 @@ class FutureBrainsmithBackend(BuildRunnerInterface):
         Returns:
             Dictionary with step configuration for the future interface
         """
-        try:
-            # Get base step list
-            if config.build_steps:
-                step_list = config.build_steps
-            else:
-                step_list = self.step_resolver.get_standard_steps()
+        # Simply use the steps from the blueprint
+        step_list = config.build_steps if config.build_steps else []
+        
+        step_config = {
+            # Build steps from blueprint
+            "build_steps": step_list,
+            "output_stage": config.global_config.output_stage.value,
             
-            # Resolve step range
-            global_config = config.global_config
-            start_step, stop_step = self.step_resolver.resolve_step_range(
-                start_step=global_config.start_step,
-                stop_step=global_config.stop_step,
-                input_type=global_config.input_type,
-                output_type=global_config.output_type,
-                step_list=step_list
-            )
-            
-            # Get filtered steps if configured
-            if start_step is not None or stop_step is not None:
-                filtered_steps = self.step_resolver.get_step_slice(
-                    step_list=step_list,
-                    start_step=start_step,
-                    stop_step=stop_step
-                )
-            else:
-                filtered_steps = step_list
-            
-            step_config = {
-                # Original configuration
-                "original_build_steps": config.build_steps,
-                "output_stage": config.global_config.output_stage.value,
-                
-                # Step filtering configuration
-                "start_step": global_config.start_step,
-                "stop_step": global_config.stop_step,
-                "input_type": global_config.input_type,
-                "output_type": global_config.output_type,
-                
-                # Resolved configuration
-                "resolved_start_step": start_step,
-                "resolved_stop_step": stop_step,
-                "resolved_steps": filtered_steps,
-                
-                # Metadata
-                "total_steps": len(step_list),
-                "filtered_steps_count": len(filtered_steps),
-                "step_filtering_applied": start_step is not None or stop_step is not None,
-                
-                # Standard step reference
-                "standard_steps": self.step_resolver.get_standard_steps(),
-                "supported_input_types": self.step_resolver.get_supported_input_types(),
-                "supported_output_types": self.step_resolver.get_supported_output_types(),
-            }
-            
-            return step_config
-            
-        except Exception as e:
-            print(f"[FUTURE BACKEND] Warning: Step configuration preparation failed: {e}")
-            return {
-                "error": str(e),
-                "fallback_steps": config.build_steps or self.step_resolver.get_standard_steps(),
-                "step_filtering_applied": False,
-            }
+            # Metadata
+            "total_steps": len(step_list),
+            "has_custom_steps": bool(config.build_steps),
+        }
+        
+        return step_config
     
     def _execute_finn_brainsmith_build(self, model_path: str, config: Dict[str, Any]) -> bool:
         """Execute future FINN-Brainsmith build (stubbed implementation)."""

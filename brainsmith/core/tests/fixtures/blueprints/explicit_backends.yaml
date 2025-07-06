@@ -5,18 +5,18 @@ description: "Tests explicit backend specification and validation"
 hw_compiler:
   kernels:
     # Explicit backend specifications
-    - ["MatMul", ["rtl", "hls"]]
-    - ["LayerNorm", ["hls"]]
-    - ["Softmax", ["rtl", "hls", "dsp"]]
+    - ["MatMul", ["MatMulRTL", "MatMulHLS"]]
+    - ["LayerNorm", ["LayerNormHLS"]]
+    - ["Softmax", ["SoftmaxRTL", "SoftmaxHLS", "SoftmaxDSP"]]
     
     # Optional with explicit backends
-    - ["~Attention", ["cuda", "triton"]]
+    - ["~Attention", ["AttentionCUDA", "AttentionTriton"]]
     
     # Mutually exclusive group with explicit backends
     - [
-        ["Conv2D", ["rtl", "hls"]],
-        ["DepthwiseConv2D", ["dsp"]],
-        ["GroupedConv2D", ["hls"]],
+        ["Conv2D", ["Conv2DRTL", "Conv2DHLS"]],
+        ["DepthwiseConv2D", ["DepthwiseConv2DDSP"]],
+        ["GroupedConv2D", ["GroupedConv2DHLS"]],
         ~  # Skip option
       ]
   

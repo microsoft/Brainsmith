@@ -57,10 +57,10 @@ graph TB
     EXP --> HS
     AGG --> ER
     
-    style EXP fill:#c8e6c9
-    style ER fill:#e1f5fe
-    style BRI fill:#fff9c4
-    style HS fill:#f8bbd0
+    style EXP fill:#2e7d32,color:#fff
+    style ER fill:#1565c0,color:#fff
+    style BRI fill:#f57c00,color:#fff
+    style HS fill:#ad1457,color:#fff
 ```
 
 ## Component Architecture
@@ -115,11 +115,11 @@ graph TB
     IFACE --> P3
     DS2 --> P1
     
-    style ENG fill:#c8e6c9
-    style AGG fill:#b3e5fc
-    style COMBOGEN fill:#b3e5fc
-    style HOOKS fill:#fff9c4
-    style P3 fill:#f8bbd0
+    style ENG fill:#2e7d32,color:#fff
+    style AGG fill:#0277bd,color:#fff
+    style COMBOGEN fill:#0277bd,color:#fff
+    style HOOKS fill:#f57c00,color:#fff
+    style P3 fill:#ad1457,color:#fff
 ```
 
 ## Data Flow
@@ -208,9 +208,7 @@ classDiagram
         +design_space_id: str
         +model_path: str
         +kernels: List[Tuple[str, List[str]]]
-        +transforms: Dict[str, List[str]]
-        +preprocessing: List[ProcessingStep]
-        +postprocessing: List[ProcessingStep]
+        +transforms_by_stage: Dict[str, List[str]]
         +build_steps: List[str]
         +config_flags: Dict[str, Any]
         +global_config: GlobalConfig
@@ -429,9 +427,9 @@ graph TB
     ML --> REG
     NOTIF --> REG
     
-    style REG fill:#fff9c4
-    style LOG fill:#c8e6c9
-    style CACHE fill:#c8e6c9
+    style REG fill:#f57c00,color:#fff
+    style LOG fill:#2e7d32,color:#fff
+    style CACHE fill:#2e7d32,color:#fff
 ```
 
 ## Progress Tracking
@@ -480,9 +478,9 @@ graph TB
     SUMMARY --> LOGS
     DETAILED --> LOGS
     
-    style PCT fill:#c8e6c9
-    style ETA fill:#e1f5fe
-    style LOGS fill:#fff9c4
+    style PCT fill:#2e7d32,color:#fff
+    style ETA fill:#1565c0,color:#fff
+    style LOGS fill:#f57c00,color:#fff
 ```
 
 ## Results Analysis
@@ -524,9 +522,9 @@ graph TB
     STATS --> SUMMARY
     BR --> FAILURES
     
-    style RECOMMENDATIONS fill:#c8e6c9
-    style FRONTIER fill:#e1f5fe
-    style SUMMARY fill:#fff9c4
+    style RECOMMENDATIONS fill:#2e7d32,color:#fff
+    style FRONTIER fill:#1565c0,color:#fff
+    style SUMMARY fill:#f57c00,color:#fff
 ```
 
 ## Key Design Decisions
@@ -641,7 +639,7 @@ class EarlyStoppingHook(ExplorationHook):
 
 ### Phase 1 Integration
 - Receives validated DesignSpace objects
-- Uses Phase 1 data structures (GlobalConfig, ProcessingStep, BuildMetrics)
+- Uses Phase 1 data structures (GlobalConfig, BuildMetrics)
 - Leverages Phase 1 combination generation methods
 
 ### Phase 3 Integration
@@ -657,7 +655,7 @@ class EarlyStoppingHook(ExplorationHook):
 ## Performance Characteristics
 
 ### Time Complexity
-- **Combination Generation**: O(k × t × p × q) where k=kernels, t=transforms, p=preprocessing, q=postprocessing
+- **Combination Generation**: O(k × t) where k=kernels, t=transforms
 - **Build Execution**: O(n × b) where n=configurations, b=build time
 - **Results Analysis**: O(n log n) for Pareto frontier calculation
 - **Progress Tracking**: O(1) per update

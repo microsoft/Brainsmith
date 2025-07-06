@@ -5,9 +5,7 @@ This module handles parsing blueprints and constructing design spaces.
 """
 
 from .data_structures import (
-    ProcessingStep,
     HWCompilerSpace,
-    ProcessingSpace,
     SearchConstraint,
     SearchConfig,
     GlobalConfig,
@@ -26,9 +24,7 @@ from .forge import ForgeAPI, forge
 
 __all__ = [
     # Data structures
-    "ProcessingStep",
     "HWCompilerSpace",
-    "ProcessingSpace",
     "SearchConstraint",
     "SearchConfig",
     "GlobalConfig",

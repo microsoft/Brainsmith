@@ -35,27 +35,6 @@ class OutputStage(Enum):
 
 
 @dataclass
-class ProcessingStep:
-    """
-    Represents a pre/post-processing step configuration.
-    
-    Attributes:
-        name: Step name
-        type: Either "preprocessing" or "postprocessing"
-        parameters: Configuration parameters for this step
-        enabled: Whether this step is enabled
-    """
-    name: str
-    type: str  # "preprocessing" or "postprocessing"
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    enabled: bool = True
-    
-    def __str__(self) -> str:
-        status = "enabled" if self.enabled else "disabled"
-        return f"{self.name} ({self.type}, {status})"
-
-
-@dataclass
 class HWCompilerSpace:
     """
     Hardware compiler configuration space.
@@ -223,31 +202,6 @@ class HWCompilerSpace:
 
 
 @dataclass
-class ProcessingSpace:
-    """
-    Pre/post-processing configuration space.
-    
-    Attributes:
-        preprocessing: List of preprocessing step alternatives
-        postprocessing: List of postprocessing step alternatives
-    """
-    preprocessing: List[List[ProcessingStep]] = field(default_factory=list)
-    postprocessing: List[List[ProcessingStep]] = field(default_factory=list)
-    
-    def get_preprocessing_combinations(self) -> List[List[ProcessingStep]]:
-        """Get all preprocessing combinations."""
-        if not self.preprocessing:
-            return [[]]
-        return list(itertools.product(*self.preprocessing))
-    
-    def get_postprocessing_combinations(self) -> List[List[ProcessingStep]]:
-        """Get all postprocessing combinations."""
-        if not self.postprocessing:
-            return [[]]
-        return list(itertools.product(*self.postprocessing))
-
-
-@dataclass
 class SearchConstraint:
     """
     A constraint on the search space.
@@ -324,10 +278,6 @@ class GlobalConfig:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         max_combinations: Maximum allowed design space combinations (overrides global default)
         timeout_minutes: Default timeout for DSE jobs in minutes (overrides global default)
-        start_step: Starting build step (string name or integer index)
-        stop_step: Stopping build step (string name or integer index)
-        input_type: Semantic input type for automatic start_step resolution
-        output_type: Semantic output type for automatic stop_step resolution
     """
     output_stage: OutputStage = OutputStage.RTL
     working_directory: str = "/tmp/brainsmith"
@@ -336,10 +286,6 @@ class GlobalConfig:
     log_level: str = "INFO"
     max_combinations: Optional[int] = None
     timeout_minutes: Optional[int] = None
-    start_step: Optional[Union[str, int]] = None
-    stop_step: Optional[Union[str, int]] = None
-    input_type: Optional[str] = None
-    output_type: Optional[str] = None
     
     def __str__(self) -> str:
         return f"Output: {self.output_stage.value}, Dir: {self.working_directory}"
@@ -386,13 +332,11 @@ class DesignSpace:
     Attributes:
         model_path: Path to the ONNX model
         hw_compiler_space: Hardware compiler configuration space
-        processing_space: Pre/post-processing configuration space
         search_config: Search strategy and constraints
         global_config: Global parameters
     """
     model_path: str
     hw_compiler_space: HWCompilerSpace
-    processing_space: ProcessingSpace
     search_config: SearchConfig
     global_config: GlobalConfig
     
@@ -412,13 +356,6 @@ class DesignSpace:
         # Transform combinations
         transform_combos = self.hw_compiler_space.get_transform_combinations()
         total *= len(transform_combos) if transform_combos else 1
-        
-        # Processing combinations
-        preproc_combos = self.processing_space.get_preprocessing_combinations()
-        total *= len(preproc_combos) if preproc_combos else 1
-        
-        postproc_combos = self.processing_space.get_postprocessing_combinations()
-        total *= len(postproc_combos) if postproc_combos else 1
         
         return total
     

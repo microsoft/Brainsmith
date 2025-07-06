@@ -19,37 +19,90 @@ Usage:
 
 # Step decorator is available in the unified plugin system:
 # from brainsmith.core.plugins import step
+from typing import Optional
 from .transform_resolver import resolve_transforms, validate_transform_dependencies, TransformResolutionError
 
-def get_step(name: str):
+def get_step(name: str, framework: Optional[str] = None):
     """
-    Get FINN build step by name using unified plugin system.
+    Get build step by name using unified plugin system with optional framework qualification.
     
     Args:
-        name: Step name (e.g., "shell_metadata_handover")
+        name: Step name (e.g., "shell_metadata_handover") or framework-qualified name (e.g., "finn:qonnx_to_finn")
+        framework: Optional framework filter (e.g., "finn", "brainsmith")
         
     Returns:
         Step function with signature (model, cfg) -> model
+        
+    Examples:
+        get_step("qonnx_to_finn")                    # → Last registered version
+        get_step("qonnx_to_finn", "brainsmith")      # → Brainsmith version specifically  
+        get_step("finn:qonnx_to_finn")               # → FINN version (framework parsed from name)
     """
     from brainsmith.core.plugins import get_registry
+    
+    # Parse framework qualification from name if present
+    parsed_framework = framework
+    parsed_name = name
+    
+    if ':' in name and framework is None:
+        parts = name.split(':', 1)
+        if len(parts) == 2:
+            parsed_framework, parsed_name = parts[0].strip(), parts[1].strip()
+    
     registry = get_registry()
     
-    # Look for steps in unified plugin registry
-    all_plugins = registry.list_all_plugins()
-    for plugin in all_plugins:
-        metadata = plugin['metadata']
-        if metadata.get('type') == 'step' and metadata.get('name') == name:
-            return plugin['class']
+    # If a framework was specified (either via parameter or qualifier), validate it exists
+    if parsed_framework is not None:
+        # Check if framework exists in registry
+        available_frameworks = list(registry.framework_steps.keys())
+        if parsed_framework not in available_frameworks:
+            raise ValueError(
+                f"Framework '{parsed_framework}' not found. "
+                f"Available frameworks: {sorted(available_frameworks)}"
+            )
+        
+        # Try to get step from specified framework
+        step_function = registry.get_step(parsed_name, parsed_framework)
+        if step_function:
+            return step_function
+        
+        # If framework is 'finn', also check built-in steps
+        if parsed_framework == 'finn':
+            try:
+                from finn.builder.build_dataflow_steps import __dict__ as finn_steps
+                # Try with step_ prefix for legacy compatibility
+                step_name_with_prefix = f"step_{parsed_name}"
+                if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
+                    return finn_steps[step_name_with_prefix]
+                # Try without prefix
+                if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
+                    return finn_steps[parsed_name]
+            except ImportError:
+                pass
+        
+        # Step not found in specified framework
+        raise ValueError(f"Step '{parsed_name}' not found in {parsed_framework} framework")
     
-    # Fallback to FINN built-in steps
+    # No framework specified - use default resolution
+    step_function = registry.get_step(parsed_name)
+    if step_function:
+        return step_function
+    
+    # Fallback to FINN built-in steps (only if no framework specified)
     try:
         from finn.builder.build_dataflow_steps import __dict__ as finn_steps
-        if name in finn_steps and callable(finn_steps[name]):
-            return finn_steps[name]
+        # Try with step_ prefix for legacy compatibility
+        step_name_with_prefix = f"step_{parsed_name}"
+        if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
+            return finn_steps[step_name_with_prefix]
+        # Try without prefix
+        if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
+            return finn_steps[parsed_name]
     except ImportError:
         pass
     
-    raise ValueError(f"FINN step '{name}' not found in plugin registry or FINN built-ins")
+    # Step not found anywhere
+    raise ValueError(f"Step '{parsed_name}' not found in plugin registry or FINN built-ins")
 
 def list_finn_steps():
     """List all registered FINN build steps from unified plugin system."""

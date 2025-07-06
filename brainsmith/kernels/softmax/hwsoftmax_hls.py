@@ -20,7 +20,7 @@ from brainsmith.core.plugins import backend
 @backend(
     name="HWSoftmaxHLS",
     kernel="HWSoftmax",
-    backend_type="hls",
+    language="hls",
     description="HLS implementation of HWSoftmax",
     author="shane-fleming",
     version="1.0.0"

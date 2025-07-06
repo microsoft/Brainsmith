@@ -66,10 +66,10 @@ graph TB
     FINN -.-> ONNX
     FINN -.-> FPGA
     
-    style BR fill:#c8e6c9
-    style RESULT fill:#e1f5fe
-    style PLUGIN fill:#fff9c4
-    style FINN fill:#ffccbc
+    style BR fill:#2e7d32,color:#fff
+    style RESULT fill:#1565c0,color:#fff
+    style PLUGIN fill:#f57c00,color:#fff
+    style FINN fill:#d84315,color:#fff
 ```
 
 ## Component Architecture
@@ -127,11 +127,11 @@ graph TB
     POSTP -.-> QONNX
     DS --> P2
     
-    style RUNNER fill:#c8e6c9
-    style PREP fill:#b3e5fc
-    style POSTP fill:#b3e5fc
-    style IFACE fill:#fff9c4
-    style REG fill:#f8bbd0
+    style RUNNER fill:#2e7d32,color:#fff
+    style PREP fill:#0277bd,color:#fff
+    style POSTP fill:#0277bd,color:#fff
+    style IFACE fill:#f57c00,color:#fff
+    style REG fill:#ad1457,color:#fff
 ```
 
 ## Data Flow
@@ -446,7 +446,7 @@ The multi-backend architecture allows Phase 3 to support different FPGA compilat
 graph TB
     subgraph "Backend Interface"
         IFACE[BuildRunnerInterface<br/>Abstract Base Class]
-        CONTRACT[Contract Definition<br/>- run(BuildConfig) → BuildResult<br/>- get_backend_name() → str<br/>- get_supported_output_stages() → List]
+        CONTRACT["Contract Definition<br/>- run(BuildConfig) → BuildResult<br/>- get_backend_name() → str<br/>- get_supported_output_stages() → List"]
     end
     
     subgraph "Backend Implementations"
@@ -500,10 +500,10 @@ graph TB
     FACTORY --> FUTURE
     FACTORY --> MOCK
     
-    style IFACE fill:#fff9c4
-    style LEGACY fill:#c8e6c9
-    style FUTURE fill:#e1f5fe
-    style MOCK fill:#ffccbc
+    style IFACE fill:#f57c00,color:#fff
+    style LEGACY fill:#2e7d32,color:#fff
+    style FUTURE fill:#1565c0,color:#fff
+    style MOCK fill:#d84315,color:#fff
 ```
 
 ## Pipeline Architecture
@@ -536,14 +536,14 @@ graph TB
     end
     
     subgraph "Transform Application Pattern"
-        REGISTRY[Plugin Registry<br/>O(1) Transform Lookup]
+        REGISTRY["Plugin Registry<br/>O(1) Transform Lookup"]
         QONNX[QONNX ModelWrapper<br/>Transform Execution Engine]
         FALLBACK[Graceful Fallbacks<br/>Passthrough & Placeholders]
     end
     
     subgraph "Stage-Based Organization"
         STAGES[Transform Stages<br/>- pre_proc: Model preparation<br/>- post_proc: Analysis & validation]
-        LOOKUP[Stage Lookup<br/>config.transforms_by_stage.get(stage, [])]
+        LOOKUP["Stage Lookup<br/>config.transforms_by_stage.get(stage, [])"]
     end
     
     INPUT --> PRE_GET
@@ -567,29 +567,29 @@ graph TB
     LOOKUP -.-> PRE_GET
     LOOKUP -.-> POST_GET
     
-    style REGISTRY fill:#fff9c4
-    style QONNX fill:#e1f5fe
-    style FALLBACK fill:#ffccbc
+    style REGISTRY fill:#f57c00,color:#fff
+    style QONNX fill:#1565c0,color:#fff
+    style FALLBACK fill:#d84315,color:#fff
 ```
 
 ## Plugin Registry Integration
 
-Phase 3 integrates directly with the plugin registry system for efficient transform access without ProcessingStep technical debt.
+Phase 3 integrates directly with the plugin registry system for efficient transform access using stage-based organization.
 
 ```mermaid
 graph TB
     subgraph "Perfect Code Implementation"
-        BEFORE[Before: ProcessingStep Objects<br/>- name: str<br/>- type: str<br/>- parameters: Dict<br/>- enabled: bool<br/>❌ Technical debt]
+        BEFORE[Before: Dual System<br/>- Transform strings in blueprints<br/>- Separate pre/post processing<br/>- Inconsistent approaches<br/>❌ Technical debt]
         
-        AFTER[After: Direct Registry Access<br/>- O(1) plugin lookup<br/>- Real transform execution<br/>- Stage-based organization<br/>✅ Perfect Code]
+        AFTER[After: Unified System<br/>- transforms_by_stage dict<br/>- Direct registry access<br/>- Stage-based organization<br/>✅ Perfect Code]
     end
     
     subgraph "Registry Integration Points"
-        GET_REG[get_registry()<br/>Global Registry Instance]
-        STAGE_LOOKUP[transforms_by_stage.get(stage, [])<br/>Extract Transform Names by Stage]
-        TRANSFORM_LOOKUP[registry.get_transform(name)<br/>O(1) Transform Class Lookup]
-        INSTANTIATE[transform_class()<br/>Create Transform Instance]
-        APPLY[transform.apply(model)<br/>Execute Real Transform]
+        GET_REG["get_registry()<br/>Global Registry Instance"]
+        STAGE_LOOKUP["transforms_by_stage.get(stage, [])<br/>Extract Transform Names by Stage"]
+        TRANSFORM_LOOKUP["registry.get_transform(name)<br/>O(1) Transform Class Lookup"]
+        INSTANTIATE["transform_class()<br/>Create Transform Instance"]
+        APPLY["transform.apply(model)<br/>Execute Real Transform"]
     end
     
     subgraph "Stage Resolution"
@@ -604,7 +604,7 @@ graph TB
     end
     
     subgraph "Benefits"
-        PERFORMANCE[O(1) Performance<br/>Direct dictionary lookup]
+        PERFORMANCE["O(1) Performance<br/>Direct dictionary lookup"]
         SIMPLICITY[Code Simplicity<br/>Eliminated abstraction layer]
         REAL_TRANSFORMS[Real Execution<br/>No mock/placeholder patterns]
         CONSISTENCY[Consistent Interface<br/>Same registry used everywhere]
@@ -628,10 +628,10 @@ graph TB
     AFTER --> REAL_TRANSFORMS
     AFTER --> CONSISTENCY
     
-    style BEFORE fill:#ffcdd2
-    style AFTER fill:#c8e6c9
-    style STAGE_FIX fill:#fff9c4
-    style PERFORMANCE fill:#e8f5e8
+    style BEFORE fill:#c62828,color:#fff
+    style AFTER fill:#2e7d32,color:#fff
+    style STAGE_FIX fill:#f57c00,color:#fff
+    style PERFORMANCE fill:#388e3c,color:#fff
 ```
 
 ## Error Handling
@@ -690,9 +690,9 @@ graph TB
     LOG --> RESULT
     RESULT --> RETURN
     
-    style GRACEFUL fill:#c8e6c9
-    style FAIL_FAST fill:#ffccbc
-    style CONTEXT fill:#fff9c4
+    style GRACEFUL fill:#2e7d32,color:#fff
+    style FAIL_FAST fill:#d84315,color:#fff
+    style CONTEXT fill:#f57c00,color:#fff
 ```
 
 ## Metrics Collection
@@ -702,11 +702,11 @@ Standardized metrics collection across different backends with normalization and
 ```mermaid
 graph TB
     subgraph "Metrics Categories"
-        PERF[Performance Metrics<br/>- throughput (inf/sec)<br/>- latency (microseconds)<br/>- clock_frequency (MHz)]
+        PERF["Performance Metrics<br/>- throughput (inf/sec)<br/>- latency (microseconds)<br/>- clock_frequency (MHz)"]
         
-        RESOURCE[Resource Metrics<br/>- lut_utilization (0.0-1.0)<br/>- dsp_utilization (0.0-1.0)<br/>- bram_utilization (0.0-1.0)<br/>- uram_utilization (0.0-1.0)<br/>- total_power (watts)]
+        RESOURCE["Resource Metrics<br/>- lut_utilization (0.0-1.0)<br/>- dsp_utilization (0.0-1.0)<br/>- bram_utilization (0.0-1.0)<br/>- uram_utilization (0.0-1.0)<br/>- total_power (watts)"]
         
-        QUALITY[Quality Metrics<br/>- accuracy (0.0-1.0)<br/>- custom metrics]
+        QUALITY["Quality Metrics<br/>- accuracy (0.0-1.0)<br/>- custom metrics"]
     end
     
     subgraph "Backend-Specific Collection"
@@ -746,9 +746,9 @@ graph TB
     BUILD_METRICS --> RAW_STORAGE
     BUILD_METRICS --> ARTIFACTS
     
-    style BUILD_METRICS fill:#c8e6c9
-    style NORMALIZATION fill:#e1f5fe
-    style VALIDATION fill:#fff9c4
+    style BUILD_METRICS fill:#2e7d32,color:#fff
+    style NORMALIZATION fill:#1565c0,color:#fff
+    style VALIDATION fill:#f57c00,color:#fff
 ```
 
 ## Perfect Code Implementation
@@ -758,11 +758,11 @@ Phase 3 exemplifies Perfect Code principles through elimination of technical deb
 ```mermaid
 graph TB
     subgraph "LEX PRIMA: Code Quality is Sacred"
-        TECH_DEBT[Technical Debt Elimination<br/>❌ ProcessingStep objects<br/>✅ Direct plugin registry access]
+        TECH_DEBT[Technical Debt Elimination<br/>❌ Dual processing systems<br/>✅ Unified transforms_by_stage]
         
         REAL_IMPL[Real Implementation<br/>❌ Mock/placeholder patterns<br/>✅ QONNX ModelWrapper execution]
         
-        PERFORMANCE[Performance Excellence<br/>❌ O(n) discovery overhead<br/>✅ O(1) registry lookups]
+        PERFORMANCE["Performance Excellence<br/>❌ O(n) discovery overhead<br/>✅ O(1) registry lookups"]
     end
     
     subgraph "LEX SECUNDA: Truth Over Comfort"
@@ -772,7 +772,7 @@ graph TB
     end
     
     subgraph "LEX TERTIA: Simplicity is Divine"
-        SIMPLE_ACCESS[Simple Access Patterns<br/>config.transforms_by_stage.get('pre_proc', [])]
+        SIMPLE_ACCESS["Simple Access Patterns<br/>config.transforms_by_stage.get('pre_proc', [])"]
         
         CLEAR_FLOW[Clear Data Flow<br/>BuildConfig → Pipeline → Backend → Result]
         
@@ -782,9 +782,9 @@ graph TB
     subgraph "Implementation Evidence"
         STAGE_FIX[Stage Naming Fix<br/>Fixed 7 occurrences<br/>' post_proc' → 'post_proc']
         
-        REGISTRY_INTEGRATION[Registry Integration<br/>- get_registry()<br/>- transforms_by_stage.get()<br/>- registry.get_transform()]
+        REGISTRY_INTEGRATION["Registry Integration<br/>- get_registry()<br/>- transforms_by_stage.get()<br/>- registry.get_transform()"]
         
-        PIPELINE_REWRITE[Pipeline Rewrite<br/>- Eliminated ProcessingStep<br/>- Added QONNX ModelWrapper<br/>- Graceful fallbacks]
+        PIPELINE_REWRITE[Pipeline Rewrite<br/>- Unified transform approach<br/>- Added QONNX ModelWrapper<br/>- Graceful fallbacks]
     end
     
     subgraph "Benefits Achieved"
@@ -810,10 +810,10 @@ graph TB
     REGISTRY_INTEGRATION --> TESTABILITY
     PIPELINE_REWRITE --> EXTENSIBILITY
     
-    style TECH_DEBT fill:#c8e6c9
-    style BREAKING_CHANGES fill:#e1f5fe
-    style SIMPLE_ACCESS fill:#fff9c4
-    style MAINTAINABILITY fill:#e8f5e8
+    style TECH_DEBT fill:#2e7d32,color:#fff
+    style BREAKING_CHANGES fill:#1565c0,color:#fff
+    style SIMPLE_ACCESS fill:#f57c00,color:#fff
+    style MAINTAINABILITY fill:#388e3c,color:#fff
 ```
 
 ## Key Design Decisions
@@ -829,7 +829,7 @@ graph TB
 - Factory pattern enables easy backend selection
 
 ### 3. Perfect Code Principles
-- Eliminated ProcessingStep technical debt
+- Unified transforms_by_stage approach
 - Direct plugin registry access with O(1) performance
 - Real transform execution using QONNX ModelWrapper
 
@@ -974,7 +974,7 @@ print(f"Processed model saved to: {processed_model_path}")
 
 Phase 3 Build Runner provides a robust, extensible execution engine for FPGA compilation that successfully bridges Phase 2 exploration and final hardware implementation. Key strengths include:
 
-- **Perfect Code Implementation** - Eliminated technical debt through direct plugin registry integration
+- **Perfect Code Implementation** - Unified transform system through direct plugin registry integration
 - **Clean Architecture** - Clear separation between orchestration, pipelines, and backend execution
 - **Multiple Backend Support** - Abstract interface enables different FPGA toolchains
 - **Shared Pipelines** - Consistent preprocessing/postprocessing across all backends
@@ -982,4 +982,4 @@ Phase 3 Build Runner provides a robust, extensible execution engine for FPGA com
 - **Comprehensive Error Handling** - Graceful degradation with helpful diagnostics
 - **Standardized Metrics** - Normalized measurement collection across backends
 
-The architecture successfully eliminates ProcessingStep technical debt, implements O(1) plugin registry access, and provides a foundation for future FPGA compilation backends while maintaining clean boundaries with Phase 2 and the plugin system.
+The architecture successfully implements a unified transform system with O(1) plugin registry access, and provides a foundation for future FPGA compilation backends while maintaining clean boundaries with Phase 2 and the plugin system.

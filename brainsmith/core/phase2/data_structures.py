@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 
-from ..phase1.data_structures import ProcessingStep, GlobalConfig, BuildMetrics
+from ..phase1.data_structures import GlobalConfig, BuildMetrics
 
 
 class BuildStatus(Enum):
@@ -37,9 +37,7 @@ class BuildConfig:
     
     # Specific selections from the design space
     kernels: List[Tuple[str, List[str]]] # Selected kernel configurations
-    transforms: Dict[str, List[str]]      # Selected transforms by stage/phase
-    preprocessing: List[ProcessingStep]   # Selected preprocessing steps
-    postprocessing: List[ProcessingStep]  # Selected postprocessing steps
+    transforms_by_stage: Dict[str, List[str]]      # Selected transforms by stage/phase
     
     # Fixed configuration from design space
     build_steps: List[str]               # From hw_compiler_space
@@ -58,7 +56,7 @@ class BuildConfig:
         kernel_str = ", ".join(f"{k[0]}[{','.join(k[1])}]" for k in self.kernels)
         # Format transforms by stage
         transform_parts = []
-        for stage, transforms in self.transforms.items():
+        for stage, transforms in self.transforms_by_stage.items():
             if transforms:
                 transform_parts.append(f"{stage}: {', '.join(transforms)}")
         transform_str = " | ".join(transform_parts) if transform_parts else "none"
@@ -77,15 +75,7 @@ class BuildConfig:
             "design_space_id": self.design_space_id,
             "model_path": self.model_path,
             "kernels": self.kernels,
-            "transforms": self.transforms,
-            "preprocessing": [
-                {"name": s.name, "type": s.type, "parameters": s.parameters, "enabled": s.enabled}
-                for s in self.preprocessing
-            ],
-            "postprocessing": [
-                {"name": s.name, "type": s.type, "parameters": s.parameters, "enabled": s.enabled}
-                for s in self.postprocessing
-            ],
+            "transforms_by_stage": self.transforms_by_stage,
             "build_steps": self.build_steps,
             "config_flags": self.config_flags,
             "global_config": {

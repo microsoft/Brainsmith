@@ -27,7 +27,6 @@ from brainsmith.core.phase2.data_structures import BuildConfig
 from .data_structures import BuildMetrics, BuildResult, BuildStatus
 from .interfaces import BuildRunnerInterface
 from .metrics_collector import MetricsCollector
-from .step_resolver import StepResolver
 
 
 class LegacyFINNBackend(BuildRunnerInterface):
@@ -48,7 +47,6 @@ class LegacyFINNBackend(BuildRunnerInterface):
         self.finn_build_dir = finn_build_dir or tempfile.mkdtemp(prefix="finn_build_")
         self.temp_cleanup = temp_cleanup
         self.preserve_intermediate = preserve_intermediate
-        self.step_resolver = StepResolver()
         
     def get_backend_name(self) -> str:
         """Return human-readable backend name."""
@@ -204,7 +202,7 @@ class LegacyFINNBackend(BuildRunnerInterface):
     
     def _resolve_build_steps(self, config: BuildConfig) -> List[str]:
         """
-        Resolve build steps based on step configuration.
+        Get build steps from configuration.
         
         Args:
             config: Build configuration with step settings
@@ -212,51 +210,14 @@ class LegacyFINNBackend(BuildRunnerInterface):
         Returns:
             List of step names to execute
         """
-        try:
-            # Get base step list (either from config or standard)
-            if config.build_steps:
-                step_list = config.build_steps
-            else:
-                step_list = self.step_resolver.get_standard_steps()
-            
-            # Resolve start/stop steps using global config
-            global_config = config.global_config
-            start_step, stop_step = self.step_resolver.resolve_step_range(
-                start_step=global_config.start_step,
-                stop_step=global_config.stop_step,
-                input_type=global_config.input_type,
-                output_type=global_config.output_type,
-                step_list=step_list
-            )
-            
-            # If no step filtering specified, return original steps
-            if start_step is None and stop_step is None:
-                return step_list
-            
-            # Get filtered step slice
-            filtered_steps = self.step_resolver.get_step_slice(
-                step_list=step_list,
-                start_step=start_step,
-                stop_step=stop_step
-            )
-            
-            print(f"[LEGACY BACKEND] Step filtering:")
-            print(f"  Original steps: {len(step_list)} steps")
-            if start_step is not None:
-                print(f"  Start step: {start_step}")
-            if stop_step is not None:
-                print(f"  Stop step: {stop_step}")
-            print(f"  Filtered steps: {len(filtered_steps)} steps")
-            if len(filtered_steps) < 10:  # Only show if reasonable number
-                for i, step in enumerate(filtered_steps):
-                    print(f"    {i}: {step}")
-            
-            return filtered_steps
-            
-        except Exception as e:
-            print(f"[LEGACY BACKEND] Warning: Step resolution failed: {e}")
-            print(f"[LEGACY BACKEND] Falling back to original build steps")
-            return config.build_steps if config.build_steps else self.step_resolver.get_standard_steps()
+        # Simply use the steps from the blueprint
+        if config.build_steps:
+            print(f"[LEGACY BACKEND] Using {len(config.build_steps)} steps from blueprint")
+            return config.build_steps
+        else:
+            # If no steps specified, return empty list (FINN will use defaults)
+            print(f"[LEGACY BACKEND] No build steps specified, using FINN defaults")
+            return []
     
     def _execute_finn_build(self, model_path: str, finn_config: DataflowBuildConfig) -> int:
         """

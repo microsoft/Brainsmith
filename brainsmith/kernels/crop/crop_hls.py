@@ -19,7 +19,7 @@ from brainsmith.core.plugins import backend
 @backend(
     name="CropHLS",
     kernel="Crop",
-    backend_type="hls",
+    language="hls",
     description="HLS implementation of Crop",
     author="josh-monson",
     version="1.0.0"

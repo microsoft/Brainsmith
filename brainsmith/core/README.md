@@ -39,16 +39,14 @@ print(f"Pareto optimal: {len(results.pareto_optimal)} configs")
 ### Complete Workflow Example
 
 ```python
-from brainsmith.core.phase1 import ForgeAPI
+from brainsmith.core.phase1 import forge
 from brainsmith.core.phase2 import ExplorerEngine, LoggingHook, CachingHook
 from brainsmith.core.phase3 import FinnBuildRunner
 
-# Phase 1: Advanced construction with optimization
-forge_api = ForgeAPI(verbose=True)
-design_space = forge_api.forge_optimized(
+# Phase 1: Simple construction
+design_space = forge(
     model_path="models/resnet18.onnx",
-    blueprint_path="blueprints/resnet_exploration.yaml",
-    optimize_plugins=True
+    blueprint_path="blueprints/resnet_exploration.yaml"
 )
 
 print(f"Design space created with {design_space.get_total_combinations():,} combinations")
@@ -102,7 +100,7 @@ description: "Comprehensive exploration of BERT-base model configurations"
 hw_compiler:
   kernels:
     - "MatMul"                          # Auto-discover all backends
-    - ("Softmax", ["hls", "rtl"])      # Specific backends only
+    - ("Softmax", ["SoftmaxHLS", "SoftmaxRTL"])  # Specific backends only
     - ["LayerNorm", "RMSNorm"]          # Mutually exclusive options
     - ["~", "Dropout"]                  # Optional kernel (skip or include)
     
@@ -123,19 +121,14 @@ hw_compiler:
     target_fps: 1000
     target_platform: "U250"
 
-processing:
-  preprocessing:
-    - - name: "normalize"
-        type: "preprocessing"
-        parameters:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-  
-  postprocessing:
-    - - name: "softmax"
-        type: "postprocessing"
-        parameters:
-          axis: -1
+# Transform stages for pre/post processing
+  transforms:
+    pre_proc:
+      - "Normalize"        # Model normalization
+      - "ConvertFormat"    # Format conversion
+    post_proc:
+      - "VerifyOps"        # Operation verification
+      - "AnalyzeLatency"   # Performance analysis
 
 search:
   strategy: "exhaustive"

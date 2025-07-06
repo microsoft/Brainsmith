@@ -24,8 +24,8 @@ Commonly Useful (15+ used):
 
 Framework Distribution:
   - QONNX: 18+ transforms via manual registry (tfm.qonnx.*)
-  - FINN: 10+ transforms via module scanning (tfm.*)
-  - BrainSmith: 6+ transforms via decorators (tfm.*)
+  - FINN: 10+ transforms via module scanning (tfm.finn.*)
+  - BrainSmith: 6+ transforms via decorators (tfm.brainsmith.*)
 """
 
 import os
@@ -84,7 +84,7 @@ def shell_metadata_handover_step(model, cfg):
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
             # BrainSmith native transform
-            model = model.transform(tfm.ExtractShellIntegrationMetadata(
+            model = model.transform(tfm.brainsmith.ExtractShellIntegrationMetadata(
                 cfg.output_dir + "/stitched_ip/shell_handover.json"
             ))
             # copy over the ref IO *.npy files into the stitched_ip for handover
@@ -337,8 +337,8 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     logger.info("Phase 2: BrainSmith native expansion and folding...")
     
     # BrainSmith native transforms
-    model = model.transform(tfm.ExpandNorms())                 # Expand normalization layers
-    model = model.transform(tfm.FoldConstants())               # Fold constants
+    model = model.transform(tfm.brainsmith.ExpandNorms())      # Expand normalization layers
+    model = model.transform(tfm.qonnx.FoldConstants())         # Fold constants (QONNX)
     
     logger.info("Phase 3: Final QONNX normalization and FINN conversion...")
     
@@ -346,7 +346,7 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     model = model.transform(tfm.qonnx.ConvertDivToMul())       # Normalize division
     
     # FINN native transform for final conversion
-    model = model.transform(tfm.ConvertQONNXtoFINN())
+    model = model.transform(tfm.finn.ConvertQONNXtoFINN())
     
     logger.info("✅ QONNX to FINN conversion completed")
     return model
@@ -378,19 +378,19 @@ def streamlining_step(model, cfg):
     logger.info("Phase 2: FINN absorption and reordering...")
     
     # FINN native transforms for hardware optimization
-    model = model.transform(tfm.AbsorbSignBiasIntoMultiThreshold())
-    model = model.transform(tfm.AbsorbAddIntoMultiThreshold())
-    model = model.transform(tfm.AbsorbMulIntoMultiThreshold())
-    model = model.transform(tfm.RoundAndClipThresholds())
+    model = model.transform(tfm.finn.AbsorbSignBiasIntoMultiThreshold())
+    model = model.transform(tfm.finn.AbsorbAddIntoMultiThreshold())
+    model = model.transform(tfm.finn.AbsorbMulIntoMultiThreshold())
+    model = model.transform(tfm.finn.RoundAndClipThresholds())
     
     # Framework-specific transform (FINN) - handles SoftMax Mul nodes
     model = model.transform(tfm.finn.MoveOpPastFork(node_types=["Mul"]))
     
     # More FINN native transforms
-    model = model.transform(tfm.MoveScalarMulPastMatMul())
-    model = model.transform(tfm.MoveScalarLinearPastInvariants())
-    model = model.transform(tfm.AbsorbMulIntoMultiThreshold())
-    model = model.transform(tfm.AbsorbAddIntoMultiThreshold())
+    model = model.transform(tfm.finn.MoveScalarMulPastMatMul())
+    model = model.transform(tfm.finn.MoveScalarLinearPastInvariants())
+    model = model.transform(tfm.finn.AbsorbMulIntoMultiThreshold())
+    model = model.transform(tfm.finn.AbsorbAddIntoMultiThreshold())
     
     logger.info("Phase 3: Final QONNX type inference and naming...")
     
@@ -419,12 +419,12 @@ def infer_hardware_step(model, cfg):
     for those operations.
     """
     # FINN's comprehensive hardware layer conversion
-    model = model.transform(tfm.ConvertToHWLayers())
+    model = model.transform(tfm.finn.SpecializeLayers())
     
     # BrainSmith native hardware inference transforms
-    model = model.transform(tfm.InferLayerNorm())
-    model = model.transform(tfm.InferShuffle())
-    model = model.transform(tfm.InferHWSoftmax())
+    model = model.transform(tfm.brainsmith.InferLayerNorm())
+    model = model.transform(tfm.brainsmith.InferShuffle())
+    model = model.transform(tfm.brainsmith.InferHWSoftmax())
     
     return model
 
@@ -440,7 +440,7 @@ def infer_hardware_step(model, cfg):
 def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
     # BrainSmith native transform
-    model = model.transform(tfm.RemoveBertHead())
+    model = model.transform(tfm.brainsmith.RemoveBertHead())
     return model
 
 
@@ -453,7 +453,7 @@ def remove_head_step(model, cfg):
 def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
     # BrainSmith native transform
-    model = model.transform(tfm.RemoveBertTail())
+    model = model.transform(tfm.brainsmith.RemoveBertTail())
     return model
 
 
@@ -554,6 +554,6 @@ def onnx_preprocessing_step(model, cfg):
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
     # BrainSmith native transforms
-    model = model.transform(tfm.TempShuffleFixer())
-    model = model.transform(tfm.SetPumpedCompute())
+    model = model.transform(tfm.brainsmith.TempShuffleFixer())
+    model = model.transform(tfm.brainsmith.SetPumpedCompute())
     return model

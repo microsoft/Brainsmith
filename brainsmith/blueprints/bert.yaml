@@ -63,17 +63,17 @@ hw_compiler:
     - "infer_hardware"
     
     # === Standard FINN pipeline ===
-    - "step_create_dataflow_partition"
-    - "step_specialize_layers"
-    - "step_target_fps_parallelization"
-    - "step_apply_folding_config"
-    - "step_minimize_bit_width"
-    - "step_generate_estimate_reports"
-    - "step_hw_codegen"
-    - "step_hw_ipgen"
-    - "step_measure_rtlsim_performance"
-    - "step_set_fifo_depths"
-    - "step_create_stitched_ip"
+    - "create_dataflow_partition"
+    - "specialize_layers"
+    - "target_fps_parallelization"
+    - "apply_folding_config"
+    - "minimize_bit_width"
+    - "generate_estimate_reports"
+    - "hw_codegen"
+    - "hw_ipgen"
+    - "measure_rtlsim_performance"
+    - "set_fifo_depths"
+    - "create_stitched_ip"
     
     # === Final post_proc ===
     - "shell_post_proc_handover"

@@ -11,7 +11,7 @@ from .layernorm import LayerNorm
 @backend(
     name="LayerNormHLS", 
     kernel="LayerNorm",
-    backend_type="hls",
+    language="hls",
     default=True,  # Mark as default backend
     description="High-Level Synthesis backend for LayerNorm kernel",
     author="brainsmith-team",

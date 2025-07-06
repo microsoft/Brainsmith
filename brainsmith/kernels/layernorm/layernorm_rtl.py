@@ -11,7 +11,7 @@ from .layernorm import LayerNorm
 @backend(
     name="LayerNormRTL",
     kernel="LayerNorm",
-    backend_type="rtl",
+    language="rtl",
     description="Optimized RTL backend for LayerNorm kernel",
     author="brainsmith-team",
     version="1.0.0"

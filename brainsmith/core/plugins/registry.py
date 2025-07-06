@@ -349,6 +349,7 @@ class BrainsmithPluginRegistry:
         available = self.list_backends_by_kernel(kernel)
         return [b for b in backends if b not in available]
     
+    
     def create_subset(self, requirements: Dict[str, List[str]]) -> 'BrainsmithPluginRegistry':
         """Create optimized subset registry for blueprint loading."""
         subset = BrainsmithPluginRegistry()

@@ -20,7 +20,7 @@ from brainsmith.core.plugins import backend
 @backend(
     name="ShuffleHLS",
     kernel="Shuffle",
-    backend_type="hls",
+    language="hls",
     description="HLS implementation of Shuffle",
     author="shane-fleming",
     version="1.0.0"

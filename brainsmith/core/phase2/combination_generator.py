@@ -43,21 +43,12 @@ class CombinationGenerator:
         # Get all combinations from each component
         kernel_combos = design_space.hw_compiler_space.get_kernel_combinations()
         transform_combos = design_space.hw_compiler_space.get_transform_combinations_by_stage()
-        preproc_combos = design_space.processing_space.get_preprocessing_combinations()
-        postproc_combos = design_space.processing_space.get_postprocessing_combinations()
         
         logger.debug(f"Kernel combinations: {len(kernel_combos)}")
         logger.debug(f"Transform combinations: {len(transform_combos)}")
-        logger.debug(f"Preprocessing combinations: {len(preproc_combos)}")
-        logger.debug(f"Postprocessing combinations: {len(postproc_combos)}")
         
         # Calculate total combinations
-        total = (
-            len(kernel_combos) * 
-            len(transform_combos) * 
-            len(preproc_combos) * 
-            len(postproc_combos)
-        )
+        total = len(kernel_combos) * len(transform_combos)
         logger.info(f"Total possible combinations: {total}")
         
         # Generate design space ID
@@ -70,18 +61,12 @@ class CombinationGenerator:
         configs = []
         combo_index = 0
         
-        for kernels, transforms, preprocessing, postprocessing in itertools.product(
-            kernel_combos, transform_combos, preproc_combos, postproc_combos
-        ):
+        for kernels, transforms in itertools.product(kernel_combos, transform_combos):
             # Filter out empty/skipped elements
             active_kernels = [k for k in kernels if k[0]]  # Non-empty names
             
             # transforms is now a dict mapping stage -> list of transforms
             # No need to filter since that's already done in get_transform_combinations_by_stage
-            
-            # Filter processing steps by enabled flag
-            active_preprocessing = [step for step in preprocessing if step.enabled]
-            active_postprocessing = [step for step in postprocessing if step.enabled]
             
             # Generate output directory path with dynamic padding
             config_dirname = f"config_{combo_index:0{num_digits}d}"
@@ -98,9 +83,7 @@ class CombinationGenerator:
                 design_space_id=design_space_id,
                 model_path=design_space.model_path,
                 kernels=list(active_kernels),
-                transforms=transforms,  # Now a dict
-                preprocessing=list(active_preprocessing),
-                postprocessing=list(active_postprocessing),
+                transforms_by_stage=transforms,  # Now a dict
                 build_steps=design_space.hw_compiler_space.build_steps,
                 config_flags=design_space.hw_compiler_space.config_flags.copy(),
                 global_config=design_space.global_config,

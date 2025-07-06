@@ -123,7 +123,8 @@ class MockBuildRunner(BuildRunnerInterface):
         base_lut *= (1 + kernel_factor * 0.5)
         
         # More transforms = higher latency
-        transform_factor = len(config.transforms) * 0.05
+        total_transforms = sum(len(transforms) for transforms in config.transforms_by_stage.values())
+        transform_factor = total_transforms * 0.05
         base_latency *= (1 + transform_factor)
         
         # Add randomness
