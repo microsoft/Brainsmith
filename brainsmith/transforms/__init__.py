@@ -11,8 +11,7 @@ from . import (
     topology_opt,
     kernel_opt,
     dataflow_opt,
-    metadata,
-    model_specific
+    metadata
 )
 
 # Force import all submodules to ensure transforms are registered
@@ -33,6 +32,5 @@ __all__ = [
     'topology_opt',
     'kernel_opt', 
     'dataflow_opt',
-    'metadata',
-    'model_specific'
+    'metadata'
 ]

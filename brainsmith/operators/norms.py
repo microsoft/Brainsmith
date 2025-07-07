@@ -20,7 +20,7 @@ from qonnx.custom_op.registry import register_op
 from qonnx.core.datatype import DataType
 
 
-@register_op(domain="brainsmith.libraries.operators", op_type="FuncLayerNorm")
+@register_op(domain="brainsmith.operators", op_type="FuncLayerNorm")
 class FuncLayerNorm(CustomOp):
     """Functional LayerNorm custom operator for ONNX processing.
     

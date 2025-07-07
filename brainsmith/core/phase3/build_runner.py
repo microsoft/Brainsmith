@@ -60,7 +60,7 @@ class BuildRunner:
         try:
             # Step 1: Preprocessing
             logger.info("Executing preprocessing pipeline")
-            processed_model_path = self.preprocessing_pipeline.execute(config)
+            processed_model_path = self.preprocessing_pipeline.execute(config, model_path)
             logger.info(f"Preprocessing complete, processed model at: {processed_model_path}")
             
             # Step 2: Backend execution

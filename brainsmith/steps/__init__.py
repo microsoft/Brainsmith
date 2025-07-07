@@ -20,7 +20,6 @@ Usage:
 # Step decorator is available in the unified plugin system:
 # from brainsmith.core.plugins import step
 from typing import Optional
-from .transform_resolver import resolve_transforms, validate_transform_dependencies, TransformResolutionError
 
 def get_step(name: str, framework: Optional[str] = None):
     """
@@ -159,7 +158,4 @@ __all__ = [
     "list_finn_steps", 
     "register_step",  # DEPRECATED - use @step decorator instead
     "get_step_transforms",  # DEPRECATED - steps access transforms directly
-    "resolve_transforms",
-    "validate_transform_dependencies",
-    "TransformResolutionError"
 ]

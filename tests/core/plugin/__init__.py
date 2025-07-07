@@ -1,1 +1,0 @@
-"""Plugin system test suite."""

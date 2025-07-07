@@ -278,6 +278,10 @@ class GlobalConfig:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         max_combinations: Maximum allowed design space combinations (overrides global default)
         timeout_minutes: Default timeout for DSE jobs in minutes (overrides global default)
+        start_step: Optional starting step for partial builds
+        stop_step: Optional stopping step for partial builds
+        input_type: Optional semantic input type specification
+        output_type: Optional semantic output type specification
     """
     output_stage: OutputStage = OutputStage.RTL
     working_directory: str = "/tmp/brainsmith"
@@ -286,6 +290,10 @@ class GlobalConfig:
     log_level: str = "INFO"
     max_combinations: Optional[int] = None
     timeout_minutes: Optional[int] = None
+    start_step: Optional[str] = None
+    stop_step: Optional[str] = None
+    input_type: Optional[str] = None
+    output_type: Optional[str] = None
     
     def __str__(self) -> str:
         return f"Output: {self.output_stage.value}, Dir: {self.working_directory}"

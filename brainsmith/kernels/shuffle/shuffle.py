@@ -24,7 +24,7 @@ from brainsmith.core.plugins import kernel
     author="shane-fleming",
     version="1.0.0"
 )
-@register_op(domain="brainsmith.libraries.kernels.shuffle", op_type="Shuffle")
+@register_op(domain="brainsmith.kernels.shuffle", op_type="Shuffle")
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
 

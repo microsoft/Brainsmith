@@ -1,26 +1,45 @@
 version: "3.0"
-name: "BERT Accelerator"
-description: "Blueprint for BERT model acceleration with custom optimizations"
+name: "BERT Legacy"
+description: "Blueprint that replicates old_bert.py functionality using Legacy FINN backend with full parity"
 
-hw_compiler:      
+hw_compiler:
+  # Legacy FINN backend only uses build_steps, not kernels/transforms
+  kernels: []
+  transforms: {}
+      
   build_steps:
-    # Using registered step names (not legacy custom_step_* names)
-    # === Cleanup and graph surgery ===
-    - "cleanup"
-    - "remove_head"
-    - "remove_tail"
-    - "brainsmith:qonnx_to_finn"
+    # Full parity with old BUILD_BERT_STEPS (except loop operations)
+    # Step 1-2: Cleanup operations
+    - "cleanup"  # RemoveIdentityOps, SortCommutativeInputsInitializerLast, etc.
+    - "cleanup_advanced"  # GiveUniqueNodeNames, GiveReadableTensorNames, etc.
     
-    # === Core processing ===
-    - "generate_reference_io"
-    - "topology_opt"
-    - "infer_hardware"
+    # Step 3-4: BERT-specific model modifications
+    - "remove_head"  # Remove nodes up to first LayerNorm
+    - "remove_tail"  # Remove from global_out_1 back to LayerNorm
     
-    # === Standard FINN pipeline ===
+    # Step 5: QONNX to FINN conversion with SoftMax handling
+    - "qonnx_to_finn"  # ExpandNorms, FoldConstants, ConvertDivToMul, ConvertQONNXtoFINN
+    
+    # Step 6: Comprehensive streamlining (now with full parity)
+    - "streamlining"  # All absorptions, moves, CollapseRepeatedMul, SortGraph
+    
+    # Step 7: Hardware inference (now with full parity)
+    - "infer_hardware"  # SpecializeLayers + all 7 infer transforms
+    
+    # Step 8-9: FINN standard steps
     - "step_create_dataflow_partition"
     - "step_specialize_layers"
+    
+    # Steps 10-11: Loop operations NOT AVAILABLE
+    # - "custom_step_extract_loop_body"  # Loop-specific optimization
+    # - "custom_step_loop_rolling"  # Loop-specific optimization
+    
+    # Steps 12-14: Optimization and folding
     - "step_target_fps_parallelization"
     - "step_apply_folding_config"
+    - "constrain_folding_and_set_pumped_compute"  # TempShuffleFixer + SetPumpedCompute
+    
+    # Steps 15-21: Backend compilation and IP generation
     - "step_minimize_bit_width"
     - "step_generate_estimate_reports"
     - "step_hw_codegen"
@@ -29,45 +48,32 @@ hw_compiler:
     - "step_set_fifo_depths"
     - "step_create_stitched_ip"
     
-    # === Final post_proc ===
-    - "shell_post_proc_handover"
+    # Step 22: Shell integration metadata
+    - "shell_metadata_handover"  # ExtractShellIntegrationMetadata
     
   config_flags:
-    # Hardware-specific settings for DSE v3
-    target_device: "xczu7ev-ffvc1156-2-e"
-    target_clock_ns: 3.33
-
-# FINN configuration (used by both legacy and DSE v3 backends)
-finn_config:
-  # BERT-specific hardware settings
-  standalone_thresholds: true
-  board: "V80" 
-  clock_period_ns: 3.33
-  auto_fifo_depths: true
-  minimize_bit_width: true
-  split_large_fifos: true
-  
-  # Verification settings
-  verification_atol: 0.1
-  fifosim_n_inferences: 2
-  save_intermediate_models: true
-  
-  # BERT-specific flags
-  enable_pumpedCompute: true
-  shell_flow_type: "vivado_zynq"
-
+    # Configuration from old system
+    board: "Pynq-Z1"
+    clock_period_ns: 10.0
+    shell_flow_type: "vivado_zynq"
+    auto_fifo_depths: true
+    minimize_bit_width: true
+    preserve_intermediate_models: true
+    pumped_compute: true  # SetPumpedCompute attribute
+    
 processing:
-  # BERT requires custom preprocessing steps handled by build_steps
+  # No preprocessing/postprocessing in old system
   preprocessing: []
   postprocessing: []
 
 search:
-  # Single build configuration for BERT (no DSE)
+  # Single configuration like old system
   strategy: "exhaustive"
   constraints: []
-
+  
 global:
-  # Target complete IP generation
+  # Match old system outputs
   output_stage: "stitched_ip"
-  enable_profiling: false
-  working_directory: "./bert_builds"
+  working_directory: "./bert_legacy_output"
+  save_artifacts: true
+  log_level: "DEBUG"

@@ -86,11 +86,19 @@ class LegacyFINNBackend(BuildRunnerInterface):
             # Create FINN DataflowBuildConfig from BuildConfig
             finn_config = self._create_dataflow_config(config)
             
-            # Save FINN config for debugging
+            # Save FINN config for debugging (only if it contains no functions)
             finn_config_path = os.path.join(config.output_dir, "finn_config.json")
-            with open(finn_config_path, 'w') as f:
-                f.write(finn_config.to_json())
-            logger.info(f"FINN config saved to: {finn_config_path}")
+            try:
+                # Check if any steps are functions
+                has_functions = any(callable(step) for step in finn_config.steps)
+                if has_functions:
+                    logger.info("FINN config contains function references, skipping JSON save")
+                else:
+                    with open(finn_config_path, 'w') as f:
+                        f.write(finn_config.to_json())
+                    logger.info(f"FINN config saved to: {finn_config_path}")
+            except Exception as e:
+                logger.warning(f"Could not save FINN config to JSON: {e}")
             
             # Execute FINN build with the preprocessed model
             build_exit_code = self._execute_finn_build(model_path, finn_config)
@@ -175,7 +183,7 @@ class LegacyFINNBackend(BuildRunnerInterface):
             
             # Basic settings
             save_intermediate_models=self.preserve_intermediate,
-            verbose=False,
+            verbose=True,  # Enable verbose to see actual errors
             enable_build_pdb_debug=False,
             
             # Performance settings from config flags
@@ -200,24 +208,46 @@ class LegacyFINNBackend(BuildRunnerInterface):
         
         return finn_config
     
-    def _resolve_build_steps(self, config: BuildConfig) -> List[str]:
+    def _resolve_build_steps(self, config: BuildConfig) -> List:
         """
-        Get build steps from configuration.
+        Get build steps from configuration and resolve to function references.
+        
+        FINN accepts both string names (for standard FINN steps) and callable
+        functions (for custom steps). We need to resolve our custom step names
+        to their function references.
         
         Args:
             config: Build configuration with step settings
             
         Returns:
-            List of step names to execute
+            List of step functions or names to execute
         """
-        # Simply use the steps from the blueprint
-        if config.build_steps:
-            print(f"[LEGACY BACKEND] Using {len(config.build_steps)} steps from blueprint")
-            return config.build_steps
-        else:
-            # If no steps specified, return empty list (FINN will use defaults)
+        from finn.builder.build_dataflow_steps import build_dataflow_step_lookup
+        from brainsmith.steps import get_step
+        
+        if not config.build_steps:
             print(f"[LEGACY BACKEND] No build steps specified, using FINN defaults")
             return []
+            
+        print(f"[LEGACY BACKEND] Resolving {len(config.build_steps)} steps from blueprint")
+        resolved_steps = []
+        
+        for step_name in config.build_steps:
+            # First check if it's a standard FINN step - keep as string name
+            if step_name in build_dataflow_step_lookup:
+                resolved_steps.append(step_name)
+                print(f"  - {step_name} (FINN standard step)")
+            else:
+                # Try to get it from our step registry as a function
+                try:
+                    step_fn = get_step(step_name)
+                    resolved_steps.append(step_fn)
+                    print(f"  - {step_name} (Brainsmith custom step)")
+                except Exception as e:
+                    # If not found in either, raise an error
+                    raise ValueError(f"Step '{step_name}' not found in FINN or Brainsmith registries: {e}")
+                    
+        return resolved_steps
     
     def _execute_finn_build(self, model_path: str, finn_config: DataflowBuildConfig) -> int:
         """

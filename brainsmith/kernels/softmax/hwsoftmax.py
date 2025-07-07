@@ -24,7 +24,7 @@ from brainsmith.core.plugins import kernel
     author="shane-fleming",
     version="1.0.0"
 )
-@register_op(domain="brainsmith.libraries.kernels.softmax", op_type="HWSoftmax")
+@register_op(domain="brainsmith.kernels.softmax", op_type="HWSoftmax")
 class HWSoftmax(HWCustomOp):
     """Abstraction layer for HW implementation of VectorVectorActivation layers."""
 

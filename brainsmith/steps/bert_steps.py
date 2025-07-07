@@ -33,9 +33,38 @@ import shutil
 import logging
 from typing import Any
 
-from brainsmith.core.plugins import step, transforms as tfm
+# Import transforms to ensure they're registered
+import brainsmith.transforms
+
+from brainsmith.core.plugins import step, create_collections
+
+# Create plugin collections
+collections = create_collections()
+tfm = collections['transforms']
 
 logger = logging.getLogger(__name__)
+
+def save_debug_model(model, cfg, step_name):
+    """Save model for debugging if preserve_intermediate_models is enabled."""
+    if getattr(cfg, 'preserve_intermediate_models', False):
+        debug_dir = os.path.join(cfg.output_dir, "debug_models")
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        # Save ONNX model
+        model_path = os.path.join(debug_dir, f"{step_name}.onnx")
+        model.save(model_path)
+        
+        # Log model structure info
+        logger.info(f"Saved debug model: {step_name}")
+        logger.info(f"  - Inputs: {[i.name for i in model.graph.input]}")
+        logger.info(f"  - Outputs: {[o.name for o in model.graph.output]}")
+        logger.info(f"  - Nodes: {len(model.graph.node)}")
+        if model.graph.node:
+            logger.info(f"  - First node: {model.graph.node[0].name} ({model.graph.node[0].op_type})")
+            # Check for LayerNormalization nodes
+            ln_nodes = [n for n in model.graph.node if n.op_type == "LayerNormalization"]
+            if ln_nodes:
+                logger.info(f"  - Found {len(ln_nodes)} LayerNormalization nodes")
 
 def validate_required_transforms():
     """Ensure all BERT-required QONNX transforms are available."""
@@ -174,30 +203,15 @@ def generate_reference_io_step(model, cfg):
     description="Basic cleanup operations using BERT-required and commonly useful QONNX transforms"
 )
 def cleanup_step(model: Any, cfg: Any) -> Any:
-    """
-    Basic cleanup operations for ONNX models using validated QONNX transforms.
-    
-    Uses BERT-required transforms (100% invokable):
-    - RemoveIdentityOps: Remove identity operations 
-    - SortCommutativeInputsInitializerLast: Optimize input ordering
-    
-    Uses commonly useful transforms (100% invokable):
-    - RemoveUnusedTensors: Remove unused tensors
-    - RemoveUnusedNodes: Remove unused nodes
-    - RemoveStaticGraphInputs: Remove constant inputs
-    """
-    logger.info("Applying basic cleanup with QONNX transforms...")
+    """ Some custom cleanup steps for the BERT model """
     
     # BERT-required transforms (100% invokable)
-    model = model.transform(tfm.qonnx.RemoveIdentityOps())
     model = model.transform(tfm.qonnx.SortCommutativeInputsInitializerLast())
+    model = model.transform(tfm.qonnx.RemoveIdentityOps())
     
-    # Commonly useful transforms (100% invokable) 
-    model = model.transform(tfm.qonnx.RemoveUnusedTensors())
-    model = model.transform(tfm.qonnx.RemoveUnusedNodes())
-    model = model.transform(tfm.qonnx.RemoveStaticGraphInputs())
+    # Save debug model
+    save_debug_model(model, cfg, "02_after_cleanup")
     
-    logger.info("✅ Basic cleanup completed")
     return model
 
 
@@ -232,6 +246,10 @@ def cleanup_advanced_step(model: Any, cfg: Any) -> Any:
     model = model.transform(tfm.qonnx.DoubleToSingleFloat())      # Numeric consistency
     
     logger.info("✅ Advanced cleanup completed")
+    
+    # Save debug model
+    save_debug_model(model, cfg, "03_after_cleanup_advanced")
+    
     return model
 
 
@@ -278,6 +296,10 @@ def fix_dynamic_dimensions_step(model, cfg):
                 changes_made += 1
     
     logger.info(f"Fixed {changes_made} dynamic dimensions")
+    
+    # Save debug model
+    save_debug_model(model, cfg, "04_after_fix_dynamic_dimensions")
+    
     return model
 
 
@@ -328,24 +350,19 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     Phase 2: BrainSmith native transforms for expansion and folding  
     Phase 3: Final QONNX normalization and FINN conversion
     """
-    logger.info("Phase 1: Additional QONNX preprocessing...")
-    
-    # Commonly useful QONNX transforms (100% invokable)
-    model = model.transform(tfm.qonnx.ConvertSubToAdd())       # Normalize subtract operations
-    model = model.transform(tfm.qonnx.GiveUniqueParameterTensors())  # Avoid parameter sharing
+    # logger.info("Phase 1: Additional QONNX preprocessing...")
+    # # Commonly useful QONNX transforms (100% invokable)
+    # model = model.transform(tfm.qonnx.ConvertSubToAdd())       # Normalize subtract operations
+    # model = model.transform(tfm.qonnx.GiveUniqueParameterTensors())  # Avoid parameter sharing
     
     logger.info("Phase 2: BrainSmith native expansion and folding...")
     
-    # BrainSmith native transforms
     model = model.transform(tfm.brainsmith.ExpandNorms())      # Expand normalization layers
     model = model.transform(tfm.qonnx.FoldConstants())         # Fold constants (QONNX)
     
     logger.info("Phase 3: Final QONNX normalization and FINN conversion...")
     
-    # BERT-required QONNX transform (100% invokable)
     model = model.transform(tfm.qonnx.ConvertDivToMul())       # Normalize division
-    
-    # FINN native transform for final conversion
     model = model.transform(tfm.finn.ConvertQONNXtoFINN())
     
     logger.info("✅ QONNX to FINN conversion completed")
@@ -368,12 +385,12 @@ def streamlining_step(model, cfg):
     Phase 2: FINN absorption and reordering for SoftMax handling
     Phase 3: Final QONNX type inference and naming
     """
-    logger.info("Phase 1: QONNX preprocessing for streamlining...")
+    # logger.info("Phase 1: QONNX preprocessing for streamlining...")
     
-    # QONNX commonly useful transforms (100% invokable)
-    model = model.transform(tfm.qonnx.InferShapes())                  # Shape inference
-    model = model.transform(tfm.qonnx.InferDataLayouts())             # Layout inference
-    model = model.transform(tfm.qonnx.MovePadAttributeToTensor())     # Pad optimization
+    # # QONNX commonly useful transforms (100% invokable)
+    # model = model.transform(tfm.qonnx.InferShapes())                  # Shape inference
+    # model = model.transform(tfm.qonnx.InferDataLayouts())             # Layout inference
+    # model = model.transform(tfm.qonnx.MovePadAttributeToTensor())     # Pad optimization
     
     logger.info("Phase 2: FINN absorption and reordering...")
     
@@ -384,7 +401,7 @@ def streamlining_step(model, cfg):
     model = model.transform(tfm.finn.RoundAndClipThresholds())
     
     # Framework-specific transform (FINN) - handles SoftMax Mul nodes
-    model = model.transform(tfm.finn.MoveOpPastFork(node_types=["Mul"]))
+    model = model.transform(tfm.finn.MoveOpPastFork(["Mul"]))
     
     # More FINN native transforms
     model = model.transform(tfm.finn.MoveScalarMulPastMatMul())
@@ -398,6 +415,9 @@ def streamlining_step(model, cfg):
     model = model.transform(tfm.qonnx.InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(tfm.qonnx.GiveUniqueNodeNames())
     
+    # # Final topological sort to ensure proper graph ordering
+    # model = model.transform(tfm.qonnx.SortGraph())
+    
     logger.info("✅ Comprehensive streamlining completed")
     return model
 
@@ -407,7 +427,7 @@ def streamlining_step(model, cfg):
 @step(
     name="infer_hardware",
     category="hardware",
-    dependencies=["streamlining"],
+    dependencies=["constrain_folding_and_set_pumped_compute"],
     description="Infer hardware layers for custom operations"
 )
 def infer_hardware_step(model, cfg):
@@ -418,13 +438,21 @@ def infer_hardware_step(model, cfg):
     in this plugin module we need a custom step for infering the hardware 
     for those operations.
     """
-    # FINN's comprehensive hardware layer conversion
-    model = model.transform(tfm.finn.SpecializeLayers())
-    
     # BrainSmith native hardware inference transforms
     model = model.transform(tfm.brainsmith.InferLayerNorm())
+    model = model.transform(tfm.finn.InferDuplicateStreamsLayer())
+    
+    # Debug: Check domains of all custom nodes
+    logger.info("=== Node domains after hardware inference ===")
+    for node in model.graph.node:
+        if node.domain and node.domain != "":
+            logger.info(f"Node '{node.name}' (op_type={node.op_type}) has domain: '{node.domain}'")
+    
+    model = model.transform(tfm.finn.InferElementwiseBinaryOperation())
     model = model.transform(tfm.brainsmith.InferShuffle())
     model = model.transform(tfm.brainsmith.InferHWSoftmax())
+    model = model.transform(tfm.finn.InferThresholdingLayer())
+    model = model.transform(tfm.finn.InferQuantizedMatrixVectorActivation())
     
     return model
 
@@ -439,9 +467,61 @@ def infer_hardware_step(model, cfg):
 )
 def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
-    # BrainSmith native transform
-    model = model.transform(tfm.brainsmith.RemoveBertHead())
+    # Save model before transform
+    save_debug_model(model, cfg, "05_before_remove_head")
+    
+    # Direct implementation from old custom_step_remove_head
+    assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
+    tensor_to_node = {output: node for node in model.graph.node for output in node.output}
+
+    to_remove = []
+
+    current_tensor = model.graph.input[0].name
+    current_node = model.find_consumer(current_tensor)
+    while current_node.op_type != "LayerNormalization":
+        to_remove.append(current_node)
+        assert len(current_node.output) == 1, "Error expected an linear path to the first LN"
+        current_tensor = current_node.output[0]
+        current_node = model.find_consumer(current_tensor)
+
+    # Send the global input to the consumers of the layernorm output
+    LN_output = current_node.output[0]
+    consumers = model.find_consumers(LN_output)
+
+    # Remove nodes
+    to_remove.append(current_node)
+    for node in to_remove:
+        model.graph.node.remove(node)
+
+    in_vi = model.get_tensor_valueinfo(LN_output)
+    model.graph.input.pop()
+    model.graph.input.append(in_vi)
+    model.graph.value_info.remove(in_vi)
+
+    # Reconnect input
+    for con in consumers:
+        for i,ip in enumerate(con.input):
+            if ip == LN_output:
+                con.input[i] = model.graph.input[0].name
+
+    model = model.transform(tfm.qonnx.RemoveUnusedTensors())
+    model = model.transform(tfm.qonnx.GiveReadableTensorNames())
+    
+    # Save model after transform
+    save_debug_model(model, cfg, "06_after_remove_head")
+    
     return model
+
+
+def _recurse_model_tail_removal(model, to_remove, node):
+    """Helper function for recursively walking the BERT graph from the second
+    output up to the last LayerNorm to remove it"""
+    if node is not None:
+        if node.op_type != "LayerNormalization":
+            to_remove.append(node)
+            for tensor in node.input:
+                _recurse_model_tail_removal(model, to_remove, model.find_producer(tensor))
+    return
 
 
 @step(
@@ -452,8 +532,18 @@ def remove_head_step(model, cfg):
 )
 def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
-    # BrainSmith native transform
-    model = model.transform(tfm.brainsmith.RemoveBertTail())
+    # Direct implementation from old custom_step_remove_tail
+    out_names = [x.name for x in model.graph.output]
+    assert "global_out_1" in out_names, "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
+
+    to_remove = []
+    current_node = model.find_producer('global_out_1')
+    _recurse_model_tail_removal(model, to_remove, current_node)
+
+    for node in to_remove:
+        model.graph.node.remove(node)
+    del model.graph.output[out_names.index('global_out_1')]
+
     return model
 
 
@@ -548,8 +638,8 @@ def onnx_preprocessing_step(model, cfg):
 @step(
     name="constrain_folding_and_set_pumped_compute",
     category="optimization", 
-    dependencies=[],
-    description="Apply optimizations including folding constraints and pumped compute"
+    dependencies=["streamlining"],
+    description="Apply optimizations including folding constraints and pumped compute (MUST run before infer_hardware)"
 )
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
