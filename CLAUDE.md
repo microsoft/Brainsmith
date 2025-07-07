@@ -33,6 +33,12 @@ All development happens inside Docker containers managed by the `smithy` script:
 
 # Clean up container
 ./smithy cleanup
+
+# View container logs
+./smithy logs
+
+# Debug container startup
+BSMITH_SHOW_INIT_LOGS=true ./smithy daemon
 ```
 
 ### Running Tests
@@ -61,6 +67,12 @@ All development happens inside Docker containers managed by the `smithy` script:
 
 # Run tests with output capture disabled (see print statements)
 ./smithy exec "pytest -s brainsmith/core/dataflow/tests/"
+
+# Run tests with coverage
+./smithy exec "pytest --cov=brainsmith brainsmith/core/dataflow/tests/"
+
+# Run RTL parser tests specifically
+./smithy exec "pytest brainsmith/tools/hw_kernel_gen/rtl_parser/tests/"
 ```
 
 ### Hardware Kernel Generator
@@ -232,6 +244,8 @@ Dependencies are managed in `docker/fetch-repos.sh`. To update FINN:
 - **FINN integration**: The project extends FINN's HWCustomOp framework for custom hardware kernels
 - **Breaking changes preferred**: Per user preferences, prefer breaking refactors over compatibility layers
 - **Python package installed in dev mode**: Changes to code are immediately reflected without rebuilding container
+- **Git operations**: This is the `experimental/hwkg` branch, main branch is used for PRs
+- **Testing focus**: E2E tests in `run_e2e_test.sh` are critical for validating RTL generation pipeline
 
 ### Container Management Notes
 
@@ -292,6 +306,16 @@ from brainsmith.tools.hw_kernel_gen import RTLParser
 ./smithy logs              # View container logs
 ./smithy status           # Check container state
 BSMITH_SHOW_INIT_LOGS=true ./smithy daemon  # Debug container startup
+
+# Common debugging scenarios
+# Check generated Python HWCustomOp
+./smithy exec "cat output/<module_name>_hw_custom_op.py"
+
+# Verify pragma extraction
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen.rtl_parser.pragma_analyzer <rtl_file>"
+
+# Test individual kernel model
+./smithy exec "python -c 'from brainsmith.core.dataflow import KernelModel; print(KernelModel.__doc__)'"
 ```
 
 ## Memories

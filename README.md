@@ -1,31 +1,28 @@
-## Brainsmith - Kernel Integrator Development Branch
+# Brainsmith - Hardware Kernel Generator Branch
 
-**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch dedicated exclusively to **Kernel Integrator** (Hardware Kernel Generator) development. Many core Brainsmith features have been removed for streamlined development.
+**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch focused on **Hardware Kernel Generator** development. For the full Brainsmith platform, use the main branch.
 
-### About This Branch
+## Overview
 
-This branch focuses on developing the **Hardware Kernel Generator (HKG)** component of Brainsmith, which converts SystemVerilog RTL modules into FINN-compatible HWCustomOp implementations.
+The Hardware Kernel Generator (HWKG) converts SystemVerilog RTL modules into FINN-compatible Python operators. It enables hardware engineers to integrate custom RTL implementations into ML compiler flows.
 
-**Available Features:**
-- RTL Parser with pragma system for SystemVerilog analysis
-- Kernel Modeling system with BDIM/SDIM architecture for parallelism
-- FINN integration via AutoHWCustomOp and AutoRTLBackend base classes
-- Template-based code generation for HWCustomOp and RTLBackend classes
-- Complete SystemVerilog → FINN HWCustomOp conversion pipeline
+**Key Features:**
+- 🔍 **RTL Parser** - Tree-sitter based SystemVerilog analysis with pragma support
+- 📐 **Kernel Modeling** - Interface-wise dataflow modeling with BDIM/SDIM architecture
+- 🔌 **FINN Integration** - AutoHWCustomOp and AutoRTLBackend base classes
+- 🏗️ **Template Generation** - Automated Python class generation from RTL
 
-**Removed for Streamlined Development:**
-- End-to-end BERT compilation demos
-- QuantSoftMax and Shuffle hardware operations
-- Full AI model compilation pipeline
-- Production deployment and optimization tools
+## Documentation
 
-### Relationship to Main Brainsmith
+- **[Hardware Kernel Generator Architecture](brainsmith/tools/hw_kernel_gen/ARCHITECTURE.md)** - System design and components
+- **[RTL Parser Design](brainsmith/tools/hw_kernel_gen/rtl_parser/README.md)** - Comprehensive parser documentation
+- **[Pragma Guide](brainsmith/tools/hw_kernel_gen/rtl_parser/PRAGMA_GUIDE.md)** - RTL annotation reference
+- **[CLAUDE.md](CLAUDE.md)** - Development guidelines and project structure
 
-This development branch will be merged back into the main Brainsmith platform once the Kernel Integrator reaches maturity. For the full Brainsmith platform with complete AI model compilation capabilities, use the main branch.
+## Quick Start
 
-### Quick start
+### 1. Environment Setup
 
-1. Set environment variables (separate from FINN variables), example below:
 ```bash
 export BSMITH_ROOT="~/brainsmith"
 export BSMITH_BUILD_DIR="~/builds/brainsmith"
@@ -34,74 +31,130 @@ export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-2. Clone this repository:
+### 2. Clone and Build
+
 ```bash
-git clone git@github.com:microsoft/Brainsmith.git
+git clone -b experimental/hwkg git@github.com:microsoft/Brainsmith.git
+cd Brainsmith
+./smithy build  # Builds Docker container with dependencies
 ```
 
-3. **Dependencies**: Dependencies are automatically fetched during Docker container initialization:
-   - **FINN**: Fetched from `custom/transformer` branch to `deps/finn/`
-   - **Other dependencies**: Managed via `docker/fetch-repos.sh`
-   
-   To update FINN to a newer commit, edit `docker/fetch-repos.sh` and change the `FINN_COMMIT` variable:
+### 3. Start Development Environment
+
+```bash
+# Start persistent container
+./smithy daemon
+
+# Open shell for interactive work
+./smithy shell
+
+# Or run commands directly
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen --help"
+```
+
+## Usage Examples
+
+### Basic RTL Conversion
+
+```bash
+# Convert SystemVerilog to FINN HWCustomOp
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen mykernel.sv -o output/"
+
+# With specific module selection
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen complex.sv -m target_module -o output/"
+```
+
+### Running Tests
+
+```bash
+# Hardware Kernel Generator tests
+./smithy exec "pytest brainsmith/tools/hw_kernel_gen/tests/"
+
+# RTL Parser tests
+./smithy exec "pytest brainsmith/tools/hw_kernel_gen/rtl_parser/tests/"
+
+# Kernel Modeling tests
+./smithy exec "pytest brainsmith/core/dataflow/tests/"
+
+# End-to-end test
+./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
+```
+
+### Working with Examples
+
+```bash
+# Thresholding example
+./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
+
+# View generated files
+./smithy exec "ls -la output/"
+./smithy exec "cat output/thresholding_axi_hw_custom_op.py"
+```
+
+## Key Concepts
+
+### RTL Pragmas
+
+Annotate SystemVerilog with semantic information:
+
+```systemverilog
+// @brainsmith DATATYPE input0 UINT 8 32
+// @brainsmith BDIM input0 [TILE_H, TILE_W]
+// @brainsmith ALIAS PE parallelism_factor
+// @brainsmith DERIVED_PARAMETER MEM_DEPTH self.calc_memory_depth()
+```
+
+### Automatic Parameter Linking
+
+The parser automatically links parameters based on naming conventions:
+- `{interface}_WIDTH` → Interface bit width
+- `{interface}_SIGNED` → Signedness flag
+- `{interface}_BDIM` → Block dimensions
+- `{interface}_SDIM` → Stream dimensions
+
+### Generated Outputs
+
+Each RTL module generates:
+- `*_hw_custom_op.py` - FINN operator class
+- `*_rtl.py` - RTL compilation backend
+- `*_wrapper.v` - SystemVerilog wrapper
+- `generation_metadata.json` - Build information
+
+## Development Workflow
+
+1. **Design RTL** - Create SystemVerilog module with standard interfaces
+2. **Add Pragmas** - Annotate with `@brainsmith` directives
+3. **Generate** - Run HWKG to create FINN integration files
+4. **Test** - Validate in FINN compilation flow
+5. **Iterate** - Refine pragmas and parameters as needed
+
+## Container Management
+
+The `smithy` tool provides efficient Docker container management:
+
+```bash
+./smithy daemon   # Start persistent container
+./smithy status   # Check container status
+./smithy shell    # Interactive shell
+./smithy exec     # Run commands
+./smithy logs     # View container logs
+./smithy stop     # Stop container
+./smithy cleanup  # Remove container
+```
+
+## Updating Dependencies
+
+Dependencies are fetched during container build. To update FINN:
+
 ```bash
 # Edit docker/fetch-repos.sh
-FINN_COMMIT="new-commit-hash-or-branch"
+# Change FINN_COMMIT variable
 
-# Rebuild container to fetch updated dependencies
+# Rebuild container
 ./smithy cleanup
 ./smithy build
 ```
 
-4. Launch the docker container. Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc. and run the changes in docker without rebuilding the container.
+## License
 
-```bash
-# Start persistent container (one-time setup)
-./smithy daemon
-
-# Get instant shell access anytime
-./smithy shell
-
-# Or execute commands quickly
-./smithy exec "python script.py"
-
-# Check status
-./smithy status
-
-# Stop when done
-./smithy stop
-```
-
-> **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
-
-5. **Hardware Kernel Generator Usage**:
-
-Convert SystemVerilog RTL to FINN HWCustomOp:
-```bash
-# Basic conversion
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen <rtl_file> -o <output_dir>"
-
-# Example with thresholding kernel
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
-```
-
-6. **Run Hardware Kernel Generator Tests**:
-```bash
-# Run HKG-specific tests
-./smithy exec "pytest brainsmith/tools/hw_kernel_gen/tests/"
-
-# Run end-to-end generation test
-./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
-
-# Test Kernel Modeling system
-./smithy exec "pytest brainsmith/core/dataflow/tests/"
-```
-
-7. **Explore Examples**:
-```bash
-# View example implementations
-./smithy exec "python examples/auto_hw_custom_op/thresholding_km.py"
-
-# Check RTL parser capabilities  
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen.rtl_parser.parser --help"
-```
+Copyright (c) Microsoft Corporation. Licensed under the MIT License.

@@ -4,7 +4,7 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: brainsmith/hw_kernels/thresholding/thresholding_axi_bw.sv
-# Generation timestamp: 2025-07-02T18:20:46.514193
+# Generation timestamp: 2025-07-07T16:13:11.737561
 #
 # This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
 # parameter definitions and no runtime CodegenBinding dependencies.
@@ -43,18 +43,22 @@ class ThresholdingAxi(AutoHWCustomOp):
     
     def get_nodeattr_types(self):
         """Define interface datatypes and BDIM/SDIM parameters from SHAPE pragmas."""
-        return {
+        # Get parent attributes first (includes exec_mode, backend, etc.)
+        attrs = super().get_nodeattr_types()
+        
+        # Add kernel-specific attributes
+        attrs.update({
             # Interface datatype attributes (required by FINN)
             "inputDataType": ('s', True, ''),
-            "weightDataType": ('s', True, ''),
             "outputDataType": ('s', True, ''),
             
             # BDIM/SDIM parameters from SHAPE pragmas
             "CHANNELS": ('i', True, 0),  # BDIM: input
             "PE": ('i', True, 0),  # SDIM: input
-            "LEVELS": ('i', True, 0),  # Number of threshold levels
             
-        }
+        })
+        
+        return attrs
     
     def _create_kernel_definition(self) -> KernelDefinition:
         """Create simplified KernelDefinition with interface definitions only."""
@@ -76,19 +80,6 @@ class ThresholdingAxi(AutoHWCustomOp):
         kernel_def.add_input(input_def)
         
         # Add weight input definitions
-        threshold_def = InputDefinition(
-            name="thresholds",
-            datatype_constraints=[
-                DatatypeConstraintGroup(
-                    base_type="ANY",
-                    min_width=1,
-                    max_width=32
-                ),
-            ],
-            block_tiling=["CHANNELS", "LEVELS"],
-            is_weight=True
-        )
-        kernel_def.add_input(threshold_def)
         
         # Add output definitions
         output_def = OutputDefinition(
@@ -106,6 +97,71 @@ class ThresholdingAxi(AutoHWCustomOp):
         # Add relationships
         return kernel_def
     
+    
+    def execute_node(self, context, graph):
+        """
+        Execute the hardware kernel in simulation.
+        
+        TODO: Implement this method for your specific kernel.
+        This should handle both 'cppsim' and 'rtlsim' execution modes.
+        
+        For reference implementation, see:
+        deps/finn/src/finn/custom_op/fpgadataflow/rtl/thresholding_rtl.py
+        """
+        raise NotImplementedError(
+            f"execute_node() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to support simulation."
+        )
+    
+    def bram_estimation(self):
+        """
+        Estimate BRAM usage for this kernel.
+        
+        TODO: Implement based on your kernel's memory requirements.
+        Return the number of BRAM blocks needed.
+        
+        For kernels without memory requirements, return 0.
+        For kernels with weights/parameters, calculate based on:
+        - Weight tensor dimensions
+        - Parallelism factors (PE)
+        - Memory packing efficiency
+        """
+        raise NotImplementedError(
+            f"bram_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
+    
+    def uram_estimation(self):
+        """
+        Estimate URAM usage for this kernel.
+        
+        TODO: Implement based on your kernel's memory requirements.
+        Return the number of URAM blocks needed.
+        
+        For kernels without memory requirements, return 0.
+        For kernels with large weight tensors, consider URAM usage.
+        """
+        raise NotImplementedError(
+            f"uram_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
+    
+    def lut_estimation(self):
+        """
+        Estimate LUT usage for this kernel.
+        
+        TODO: Implement based on your kernel's logic requirements.
+        Return the number of LUTs needed.
+        
+        Consider:
+        - Computational complexity
+        - Data path width
+        - Control logic overhead
+        """
+        raise NotImplementedError(
+            f"lut_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
 
 
 # Convenience function for FINN integration

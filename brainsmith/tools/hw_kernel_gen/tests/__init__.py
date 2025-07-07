@@ -1,1 +1,0 @@
-"""Hardware Kernel Generator test suite."""

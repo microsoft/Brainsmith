@@ -181,6 +181,71 @@ class {{ class_name }}(AutoHWCustomOp):
         
         return messages
     {% endif %}
+    
+    def execute_node(self, context, graph):
+        """
+        Execute the hardware kernel in simulation.
+        
+        TODO: Implement this method for your specific kernel.
+        This should handle both 'cppsim' and 'rtlsim' execution modes.
+        
+        For reference implementation, see:
+        deps/finn/src/finn/custom_op/fpgadataflow/rtl/thresholding_rtl.py
+        """
+        raise NotImplementedError(
+            f"execute_node() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to support simulation."
+        )
+    
+    def bram_estimation(self):
+        """
+        Estimate BRAM usage for this kernel.
+        
+        TODO: Implement based on your kernel's memory requirements.
+        Return the number of BRAM blocks needed.
+        
+        For kernels without memory requirements, return 0.
+        For kernels with weights/parameters, calculate based on:
+        - Weight tensor dimensions
+        - Parallelism factors (PE)
+        - Memory packing efficiency
+        """
+        raise NotImplementedError(
+            f"bram_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
+    
+    def uram_estimation(self):
+        """
+        Estimate URAM usage for this kernel.
+        
+        TODO: Implement based on your kernel's memory requirements.
+        Return the number of URAM blocks needed.
+        
+        For kernels without memory requirements, return 0.
+        For kernels with large weight tensors, consider URAM usage.
+        """
+        raise NotImplementedError(
+            f"uram_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
+    
+    def lut_estimation(self):
+        """
+        Estimate LUT usage for this kernel.
+        
+        TODO: Implement based on your kernel's logic requirements.
+        Return the number of LUTs needed.
+        
+        Consider:
+        - Computational complexity
+        - Data path width
+        - Control logic overhead
+        """
+        raise NotImplementedError(
+            f"lut_estimation() not implemented for {self.__class__.__name__}. "
+            "Please implement this method to provide resource estimates."
+        )
 
 
 # Convenience function for FINN integration

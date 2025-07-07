@@ -98,53 +98,17 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """
         Ensure KernelModel exists.
         
-        If KernelModel is not initialized, try to create it using a minimal
-        configuration based on node attributes. This handles cases where
-        the AutoHWCustomOp instance was recreated after transformations.
-        
         Raises:
-            RuntimeError: If KernelModel cannot be initialized
+            RuntimeError: If KernelModel is not initialized
         """
         if self._kernel_model is None:
-            # Try to create a minimal KernelModel from node attributes
-            try:
-                # Create mock specs from datatypes and a minimal shape
-                input_specs = {}
-                output_specs = {}
-                
-                # Get datatypes from node attributes
-                input_dtype = DataType[self.get_nodeattr("inputDataType")]
-                output_dtype = DataType[self.get_nodeattr("outputDataType")]
-                
-                # Use minimal default shape based on channels
-                channels = self.get_nodeattr("CHANNELS") or 8
-                
-                # Get actual levels from node attributes
-                levels = self.get_nodeattr("LEVELS") or 7
-                
-                # Create minimal specs
-                input_specs["input"] = ((1, channels), input_dtype)
-                input_specs["thresholds"] = ((channels, levels), input_dtype)
-                output_specs["output"] = ((1, channels), output_dtype)
-                
-                # Get parameter binding
-                param_binding = self._extract_parameter_binding()
-                
-                # Create KernelModel with minimal specs
-                self._kernel_model = self._kernel_def.create_model(
-                    input_specs=input_specs,
-                    output_specs=output_specs,
-                    parameter_binding=param_binding
-                )
-                
-                # Apply default SDIM configuration
-                self._build_kernel_model()
-                
-            except Exception as e:
-                raise RuntimeError(
-                    f"KernelModel not initialized for {self.onnx_node.name} and "
-                    f"failed to create fallback model: {e}"
-                )
+            raise RuntimeError(
+                f"KernelModel not initialized for {self.__class__.__name__}. "
+                f"The node must be properly initialized with tensor shapes from the ONNX graph. "
+                f"This typically happens during shape inference (InferShapes transformation) "
+                f"or when make_shape_compatible_op() is called. "
+                f"Ensure the node has been added to a ModelWrapper and shapes have been inferred."
+            )
     
     def update_node_model(self, model):
         """
@@ -156,6 +120,27 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """
         # Create/update our KernelModel with full context
         self._analyze_and_create_model(model)
+        self._build_kernel_model()
+    
+    def set_model_context(self, model):
+        """
+        Set the model context and initialize KernelModel.
+        
+        This should be called when the node is added to a model or
+        after transformations that recreate nodes.
+        
+        Args:
+            model: ModelWrapper containing this node
+        """
+        self.model = model
+        if self._kernel_model is None:
+            try:
+                self._analyze_and_create_model(model)
+                self._build_kernel_model()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to initialize KernelModel for {self.__class__.__name__}: {e}"
+                )
     
     def _analyze_and_create_model(self, model):
         """
