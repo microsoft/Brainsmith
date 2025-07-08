@@ -437,7 +437,4 @@ def initialize_framework_integrations() -> Dict[str, int]:
 
 # Initialize frameworks on import for immediate availability
 # This is a one-time operation that populates the registry
-try:
-    initialize_framework_integrations()
-except Exception as e:
-    logger.warning(f"Framework initialization failed: {e}")
+initialize_framework_integrations()

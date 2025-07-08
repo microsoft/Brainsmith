@@ -67,17 +67,14 @@ def get_step(name: str, framework: Optional[str] = None):
         
         # If framework is 'finn', also check built-in steps
         if parsed_framework == 'finn':
-            try:
-                from finn.builder.build_dataflow_steps import __dict__ as finn_steps
-                # Try with step_ prefix for legacy compatibility
-                step_name_with_prefix = f"step_{parsed_name}"
-                if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
-                    return finn_steps[step_name_with_prefix]
-                # Try without prefix
-                if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
-                    return finn_steps[parsed_name]
-            except ImportError:
-                pass
+            from finn.builder.build_dataflow_steps import __dict__ as finn_steps
+            # Try with step_ prefix for legacy compatibility
+            step_name_with_prefix = f"step_{parsed_name}"
+            if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
+                return finn_steps[step_name_with_prefix]
+            # Try without prefix
+            if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
+                return finn_steps[parsed_name]
         
         # Step not found in specified framework
         raise ValueError(f"Step '{parsed_name}' not found in {parsed_framework} framework")
@@ -88,17 +85,14 @@ def get_step(name: str, framework: Optional[str] = None):
         return step_function
     
     # Fallback to FINN built-in steps (only if no framework specified)
-    try:
-        from finn.builder.build_dataflow_steps import __dict__ as finn_steps
-        # Try with step_ prefix for legacy compatibility
-        step_name_with_prefix = f"step_{parsed_name}"
-        if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
-            return finn_steps[step_name_with_prefix]
-        # Try without prefix
-        if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
-            return finn_steps[parsed_name]
-    except ImportError:
-        pass
+    from finn.builder.build_dataflow_steps import __dict__ as finn_steps
+    # Try with step_ prefix for legacy compatibility
+    step_name_with_prefix = f"step_{parsed_name}"
+    if step_name_with_prefix in finn_steps and callable(finn_steps[step_name_with_prefix]):
+        return finn_steps[step_name_with_prefix]
+    # Try without prefix
+    if parsed_name in finn_steps and callable(finn_steps[parsed_name]):
+        return finn_steps[parsed_name]
     
     # Step not found anywhere
     raise ValueError(f"Step '{parsed_name}' not found in plugin registry or FINN built-ins")

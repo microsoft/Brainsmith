@@ -39,30 +39,8 @@ class InferFinnLoopOp(Transformation):
         Returns:
             Tuple[ModelWrapper, bool]: (transformed_model, graph_modified)
         """
-        try:
-            # Import and delegate to actual FINN transform
-            import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-            
-            finn_transform = to_hw.InferFinnLoopOp()
-            return finn_transform.apply(model)
-            
-        except ImportError as e:
-            # If FINN transform is not available, return model unchanged
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"FINN InferFinnLoopOp not available: {e}")
-            logger.warning("Returning model unchanged - consider updating FINN dependency")
-            return (model, False)
-        except AttributeError as e:
-            # If the specific transform class doesn't exist
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"FINN InferFinnLoopOp class not found: {e}")
-            logger.warning("This may be expected if using a FINN version without loop support")
-            return (model, False)
-        except Exception as e:
-            # Handle any other errors gracefully
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error in InferFinnLoopOp stub: {e}")
-            return (model, False)
+        # Import and delegate to actual FINN transform
+        import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
+        
+        finn_transform = to_hw.InferFinnLoopOp()
+        return finn_transform.apply(model)

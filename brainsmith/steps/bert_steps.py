@@ -87,11 +87,7 @@ def validate_required_transforms():
     logger.info(f"✅ Validated all {len(required_transforms)} BERT-required transforms are available")
 
 # Validate transforms are available when module is imported
-try:
-    validate_required_transforms()
-except Exception as e:
-    logger.warning(f"Transform validation failed: {e}")
-    logger.warning("Some BERT steps may fail - ensure plugin system is properly initialized")
+validate_required_transforms()
 
 # === Metadata Steps ===
 

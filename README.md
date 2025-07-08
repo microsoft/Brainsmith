@@ -1,9 +1,57 @@
 ## Brainsmith
 
 Brainsmith is an open-source platform for FPGA AI accelerators.
-This repository is in a pre-release state and under active co-devlopment by Microsoft and AMD.
+This repository is in a pre-release state and under active co-development by Microsoft and AMD.
 
-### Quick start
+## Overview
+
+Brainsmith uses a Blueprint-driven Design Space Exploration (DSE) approach to explore different hardware configurations:
+- Transform combinations for model optimization
+- Hardware configuration parameters
+- Build step variations
+- Future support for multiple kernel implementations (RTL, HLS, C++)
+
+The system currently uses the Legacy FINN backend for compilation, as FINN does not yet support the new entrypoint-based plugin system. The architecture is designed to support future backends with kernel-level customization.
+
+## Core Pipeline
+
+```
+PyTorch Model → Brevitas Quantization → ONNX → Blueprint YAML → DSE v3 → Hardware Implementation → FPGA
+                                                        ↓
+                                            Systematic exploration of:
+                                            • Kernel implementations
+                                            • Transform pipelines  
+                                            • Build configurations
+                                            • Hardware parameters
+```
+
+## Architecture
+
+The DSE system consists of three phases:
+
+### Phase 1: Design Space Constructor
+- Parses Blueprint YAML specifications
+- Validates model compatibility
+- Generates valid configuration combinations
+
+### Phase 2: Design Space Explorer  
+- Iterates through configurations
+- Manages build execution
+- Collects and analyzes results
+
+### Phase 3: Build Runner
+- Executes individual builds
+- Applies preprocessing and postprocessing transforms
+- Primary backend: Legacy FINN (current FINN toolchain)
+- Extensible for future backends
+
+For detailed documentation, see:
+- [Phase 1 Architecture](docs/PHASE1_ARCHITECTURE.md)
+- [Phase 2 Architecture](docs/PHASE2_ARCHITECTURE.md)  
+- [Phase 3 Architecture](docs/PHASE3_ARCHITECTURE.md)
+- [Plugin System Architecture](brainsmith/core/plugins/ARCHITECTURE.md)
+
+## Quick Start
 
 1. Set environment variables (separate from FINN variables), example below:
 ```bash
@@ -20,10 +68,12 @@ git clone git@github.com:microsoft/Brainsmith.git
 ```
 
 3. **Dependencies**: Dependencies are automatically fetched during Docker container initialization:
-   - **FINN**: Fetched from `custom/transformer` branch to `deps/finn/`
+   - **FINN**: Current FINN compiler (fetched from `custom/brainsmith-patch` branch to `deps/finn/`)
+   - **QONNX**: Quantized ONNX framework (fetched from `custom/brainsmith` branch to `deps/qonnx/`)
+   - **Brevitas**: PyTorch quantization library (fetched to `deps/brevitas/`)
    - **Other dependencies**: Managed via `docker/fetch-repos.sh`
    
-   To update FINN to a newer commit, edit `docker/fetch-repos.sh` and change the `FINN_COMMIT` variable:
+   To update dependencies to newer commits, edit `docker/fetch-repos.sh` and change the relevant commit variables:
 ```bash
 # Edit docker/fetch-repos.sh
 FINN_COMMIT="new-commit-hash-or-branch"
@@ -67,47 +117,236 @@ python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/
 python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
 ```
 
-7. Alternatively, you can also run a suite of tests on the brainsmith repository which will check:
- 
-* Shuffle hardware generation and correctness
-* QuantSoftMax hardware generation and correctness
-* EndtoEnd flow
+## Usage Examples
+
+### Blueprint-Based DSE (Recommended)
+
+Create a Blueprint YAML to define your design space. Note that the configuration differs based on the backend:
+
+#### For Legacy FINN Backend (Current Default)
+
+```yaml
+# bert_blueprint_legacy.yaml
+blueprint:
+  name: "BERT Layer Optimization"
+  description: "Explore BERT configurations with legacy FINN"
+  
+  model: "bert_layer.onnx"
+  
+  # For legacy FINN, use stages to organize transforms
+  stages:
+    - stage: "streamline"
+      transforms:
+        - "ConvertDivToMul"
+        - "BatchNormToAffine"
+    - stage: "convert_to_hw"
+      transforms:
+        - "ConvertBipolarMatMulToXnorPopcount"
+    - stage: "specialize_layers"
+      transforms:
+        - "SpecializeLayers"
+      
+  build_steps:
+    - "step_tidy_up"
+    - "step_streamline"
+    - "step_convert_to_hw"
+    - "step_specialize_layers"
+```
+
+#### For Future Backends (Experimental)
+
+```yaml
+# bert_blueprint_future.yaml
+blueprint:
+  name: "BERT Layer Optimization"
+  description: "Future backend configuration"
+  
+  model: "bert_layer.onnx"
+  
+  # For future backends, specify kernels and transforms separately
+  kernels:
+    - kernel: "LayerNorm"
+      backends: ["finn_hls", "finn_rtl"]
+    - kernel: "MVAU" 
+      backends: ["finn_hls"]
+      
+  transforms:
+    pre_proc:
+      - "ConvertDivToMul"
+      - "BatchNormToAffine"
+    cleanup:
+      - "RemoveIdentityOps"
+      
+  build_steps:
+    - "SpecializeLayers"
+    - "MinimizeBitWidth"
+```
+
+Then explore the design space:
+
+```python
+from brainsmith import forge, explore
+
+# Parse blueprint and create design space
+design_space = forge("bert_layer.onnx", "bert_blueprint.yaml")
+
+# Explore all configurations
+results = explore(design_space)
+
+# Get best configuration
+print(f"Best config: {results.best_config.id}")
+print(f"Throughput: {results.best_config.metrics.throughput} inf/sec")
+print(f"Pareto optimal configs: {len(results.pareto_optimal)}")
+```
+
+### Legacy Direct Usage
+
+For backward compatibility, you can still use the direct approach:
+
+```bash
+cd demos/bert
+python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
+python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
+```
+
+### Running Tests
+
+Run the comprehensive test suite:
 
 ```bash
 cd tests
 pytest ./
 ```
 
-### Plugin System
+This validates:
+- Plugin system functionality
+- Transform and kernel correctness
+- End-to-end compilation flow
+- DSE exploration capabilities
 
-Brainsmith uses an optimized plugin architecture with three-pronged discovery:
+## Plugin System
 
-1. **Module Scanning** - Automatic registration of internal plugins via decorators
-2. **Stevedore Entry Points** - Standard Python plugin distribution for external packages
-3. **Framework Adapters** - Conditional loading of QONNX/FINN transforms
+Brainsmith uses a plugin architecture to manage transforms, kernels, backends, and build steps.
 
-#### Performance Optimization
+### Features
 
-The plugin system provides significant performance improvements:
-- **80% faster startup** with blueprint-driven loading (5ms vs 25ms)
-- **90% memory reduction** by loading only required plugins (50MB vs 500MB)
-- **<1ms cache hits** with TTL-based discovery caching
+- Plugins register at decoration time via decorators
+- Direct class access through collections
+- Integration with QONNX and FINN transforms
+- Pre-computed indexes for fast lookups
 
-#### Usage
+### Usage Patterns
 
 ```python
-# Development - Zero-friction plugin access with concise imports
-from brainsmith.plugins import transforms as tfm, kernels as kn, backends as bk
+# Natural access patterns
+from brainsmith.plugins import transforms as tfm, kernels as kn, backends as bk, steps
 
-# Apply transforms using QONNX model.transform() method
-model = model.transform(tfm.MyTransform())
-model = model.transform(tfm.qonnx.RemoveIdentityOps())
+# Direct attribute access
+model = model.transform(tfm.ConvertDivToMul())
+model = model.transform(tfm.qonnx.RemoveIdentityOps())  # Framework-qualified
 
-# Production - Blueprint-driven loading
-from brainsmith.plugin import load_blueprint_plugins
-plugins = load_blueprint_plugins('bert_model.yaml')
-tfm = plugins['transforms']
-model = model.transform(tfm.ExpandNorms())
+# Dictionary-style access (for dynamic plugin names)
+transform_class = tfm['BatchNormToAffine']
+model = model.transform(transform_class())
+
+# Framework-specific collections
+finn_kernels = kn.finn.all()  # All FINN kernels
+qonnx_transforms = tfm.qonnx.all()  # All QONNX transforms
+
+# Query backends for specific kernels
+backends = bk.find(kernel='LayerNorm', language='hls')
+
+# Category-based step access
+estimates = steps.estimates.GenerateEstimateReports()
 ```
 
-See [docs/unified_plugin_system_final.md](docs/unified_plugin_system_final.md) for detailed documentation.
+### Creating Custom Plugins
+
+```python
+from brainsmith.core.plugins import transform, kernel, backend, step
+
+@transform(stage="optimization")
+class MyCustomTransform:
+    def apply(self, model):
+        # Transform implementation
+        return model
+
+@kernel(operation="MyOp", frameworks=["pytorch", "onnx"])
+class MyCustomKernel:
+    def infer(self, node):
+        # Kernel implementation
+        pass
+
+@backend(kernel="MyOp", language="hls")
+class MyOpHLSBackend:
+    def generate(self, node):
+        # Backend implementation
+        pass
+```
+
+For more details, see [Plugin System Architecture](brainsmith/core/plugins/ARCHITECTURE.md).
+
+## Project Structure
+
+```
+brainsmith/
+├── brainsmith/                 # Main source code
+│   ├── core/                   # Core DSE v3 implementation
+│   │   ├── phase1/            # Design Space Constructor
+│   │   ├── phase2/            # Design Space Explorer
+│   │   ├── phase3/            # Build Runner
+│   │   └── plugins/           # Plugin registry system
+│   ├── transforms/            # Transform implementations
+│   ├── kernels/              # Kernel implementations
+│   ├── backends/             # Backend implementations
+│   └── steps/                # Build step implementations
+├── docs/                      # Architecture and design documentation
+├── demos/                     # Example applications
+├── tests/                     # Test suite
+├── docker/                    # Container configuration
+└── deps/                      # External dependencies (auto-fetched)
+```
+
+## Documentation
+
+### Architecture Documents
+- [Phase 1: Design Space Constructor](docs/PHASE1_ARCHITECTURE.md) - Blueprint parsing and validation
+- [Phase 2: Design Space Explorer](docs/PHASE2_ARCHITECTURE.md) - Systematic exploration engine
+- [Phase 3: Build Runner](docs/PHASE3_ARCHITECTURE.md) - Build execution and backends
+- [Plugin System Architecture](brainsmith/core/plugins/ARCHITECTURE.md) - Plugin registry design
+
+### Additional Resources
+- Blueprint YAML examples in `demos/` directory
+- Test examples in `tests/` directory
+- Plugin implementations in `brainsmith/transforms/`, `brainsmith/kernels/`, etc.
+
+## Contributing
+
+We welcome contributions! Please follow these guidelines:
+- Code style and standards
+- Development workflow
+- Testing requirements
+- Pull request process
+
+Also review our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/microsoft/Brainsmith/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/microsoft/Brainsmith/discussions)
+- **Security**: See [SECURITY.md](SECURITY.md) for reporting vulnerabilities
+
+For additional support resources, see [SUPPORT.md](SUPPORT.md).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Brainsmith is developed through a collaboration between Microsoft and AMD.
+
+The project builds upon:
+- [FINN](https://github.com/Xilinx/finn) - Dataflow compiler for quantized neural networks on FPGAs
+- [QONNX](https://github.com/fastmachinelearning/qonnx) - Quantized ONNX model representation
+- [Brevitas](https://github.com/Xilinx/brevitas) - PyTorch quantization library
