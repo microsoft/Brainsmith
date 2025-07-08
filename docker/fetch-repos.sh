@@ -17,6 +17,7 @@ yecho() { echo -e "${YELLOW}$1${NC}"; }
 # Dependency Git URLs, hashes/branches, and directory names
 QONNX_URL="https://github.com/tafk7/qonnx.git"
 FINN_URL="https://github.com/tafk7/finn.git"
+# TAFK TODO: Switch to main QONNX & FINN branches when merged
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
