@@ -1,3 +1,3 @@
 # Brainsmith CI/CD System
 
-Temporarily removed while refining HWKG
+Temporarily removed while refining KI

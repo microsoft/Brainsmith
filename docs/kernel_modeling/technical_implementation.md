@@ -15,7 +15,7 @@ The framework follows a layered architecture with clear separation of concerns:
 │                    Application Layer                        │
 ├─────────────────────┬─────────────────────┬─────────────────┤
 │   Phase 3: DSE     │   Integration       │    Examples     │
-│   - Explorer        │   - hw_kernel_gen   │   - CNN         │
+│   - Explorer        │   - kernel_integrator│   - CNN         │
 │   - Evaluator       │   - ONNX Import     │   - BERT        │
 │   - Configuration   │   - RTL Generation  │   - Custom      │
 ├─────────────────────┼─────────────────────┴─────────────────┤
@@ -934,17 +934,17 @@ class FrameworkBenchmark:
 
 ## Integration Guide
 
-### Connecting to hw_kernel_gen
+### Connecting to kernel_integrator
 
-The framework integrates with the existing hw_kernel_gen system:
+The framework integrates with the existing kernel_integrator system:
 
 ```python
-class HWKGIntegration:
+class KIIntegration:
     def __init__(self, dse_result: DSEResult):
         self.optimized_config = dse_result
     
     def generate_hwkg_metadata(self) -> Dict[str, Any]:
-        """Generate metadata for hw_kernel_gen"""
+        """Generate metadata for kernel_integrator"""
         metadata = {}
         
         for kernel_name, kernel in self.optimized_config.configured_graph.kernels.items():
@@ -960,7 +960,7 @@ class HWKGIntegration:
                 }
             }
             
-            # Convert interfaces to hw_kernel_gen format
+            # Convert interfaces to kernel_integrator format
             for intf in kernel.interfaces:
                 intf_metadata = {
                     "name": intf.name,
@@ -1047,7 +1047,7 @@ def algorithm_to_hardware_workflow(onnx_model_path: str,
     print(f"Best config: {best.metrics.throughput:.1f} GOPS @ {best.metrics.power_estimate:.1f}W")
     
     # Step 5: Generate hardware
-    hwkg_integration = HWKGIntegration(best)
+    ki_integration = KIIntegration(best)
     metadata = hwkg_integration.generate_hwkg_metadata()
     
     rtl_generator = RTLGenerator(best)

@@ -1,10 +1,10 @@
-# Brainsmith - Hardware Kernel Generator Branch
+# Brainsmith - Kernel Integrator Branch
 
-**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch focused on **Hardware Kernel Generator** development. For the full Brainsmith platform, use the main branch.
+**⚠️ DEVELOPMENT BRANCH**: This is the `experimental/hwkg` branch focused on **Kernel Integrator** development. For the full Brainsmith platform, use the main branch.
 
 ## Overview
 
-The Hardware Kernel Generator (HWKG) converts SystemVerilog RTL modules into FINN-compatible Python operators. It enables hardware engineers to integrate custom RTL implementations into ML compiler flows.
+The Kernel Integrator (KI) converts SystemVerilog RTL modules into FINN-compatible Python operators. It enables hardware engineers to integrate custom RTL implementations into ML compiler flows.
 
 **Key Features:**
 - 🔍 **RTL Parser** - Tree-sitter based SystemVerilog analysis with pragma support
@@ -14,9 +14,9 @@ The Hardware Kernel Generator (HWKG) converts SystemVerilog RTL modules into FIN
 
 ## Documentation
 
-- **[Hardware Kernel Generator Architecture](brainsmith/tools/hw_kernel_gen/ARCHITECTURE.md)** - System design and components
-- **[RTL Parser Design](brainsmith/tools/hw_kernel_gen/rtl_parser/README.md)** - Comprehensive parser documentation
-- **[Pragma Guide](brainsmith/tools/hw_kernel_gen/rtl_parser/PRAGMA_GUIDE.md)** - RTL annotation reference
+- **[Kernel Integrator Architecture](brainsmith/tools/kernel_integrator/ARCHITECTURE.md)** - System design and components
+- **[RTL Parser Design](brainsmith/tools/kernel_integrator/rtl_parser/README.md)** - Comprehensive parser documentation
+- **[Pragma Guide](brainsmith/tools/kernel_integrator/rtl_parser/PRAGMA_GUIDE.md)** - RTL annotation reference
 - **[CLAUDE.md](CLAUDE.md)** - Development guidelines and project structure
 
 ## Quick Start
@@ -49,7 +49,7 @@ cd Brainsmith
 ./smithy shell
 
 # Or run commands directly
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen --help"
+./smithy exec "python -m brainsmith.tools.kernel_integrator --help"
 ```
 
 ## Usage Examples
@@ -58,33 +58,33 @@ cd Brainsmith
 
 ```bash
 # Convert SystemVerilog to FINN HWCustomOp
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen mykernel.sv -o output/"
+./smithy exec "python -m brainsmith.tools.kernel_integrator mykernel.sv -o output/"
 
 # With specific module selection
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen complex.sv -m target_module -o output/"
+./smithy exec "python -m brainsmith.tools.kernel_integrator complex.sv -m target_module -o output/"
 ```
 
 ### Running Tests
 
 ```bash
-# Hardware Kernel Generator tests
-./smithy exec "pytest brainsmith/tools/hw_kernel_gen/tests/"
+# Kernel Integrator tests
+./smithy exec "pytest brainsmith/tools/kernel_integrator/tests/"
 
 # RTL Parser tests
-./smithy exec "pytest brainsmith/tools/hw_kernel_gen/rtl_parser/tests/"
+./smithy exec "pytest brainsmith/tools/kernel_integrator/rtl_parser/tests/"
 
 # Kernel Modeling tests
 ./smithy exec "pytest brainsmith/core/dataflow/tests/"
 
 # End-to-end test
-./smithy exec "./brainsmith/tools/hw_kernel_gen/tests/run_e2e_test.sh"
+./smithy exec "./brainsmith/tools/kernel_integrator/tests/run_e2e_test.sh"
 ```
 
 ### Working with Examples
 
 ```bash
 # Thresholding example
-./smithy exec "python -m brainsmith.tools.hw_kernel_gen brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
+./smithy exec "python -m brainsmith.tools.kernel_integrator brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
 
 # View generated files
 ./smithy exec "ls -la output/"
@@ -124,7 +124,7 @@ Each RTL module generates:
 
 1. **Design RTL** - Create SystemVerilog module with standard interfaces
 2. **Add Pragmas** - Annotate with `@brainsmith` directives
-3. **Generate** - Run HWKG to create FINN integration files
+3. **Generate** - Run KI to create FINN integration files
 4. **Test** - Validate in FINN compilation flow
 5. **Iterate** - Refine pragmas and parameters as needed
 

@@ -8,7 +8,7 @@
 Shared constraint types for dataflow modeling.
 
 This module contains constraint types that are shared between the kernel
-modeling system and the hardware kernel generator, preventing circular
+modeling system and the kernel integrator, preventing circular
 dependencies.
 """
 
