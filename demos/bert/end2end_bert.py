@@ -193,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--param', type=str, default=None, help='Use a preconfigured file for the folding parameters')
     parser.add_argument('-x', '--run_fifo_sizing', action='store_true', help='Run the fifo-sizing step')
     parser.add_argument('-q', '--seqlen', type=int, default=128, help='Sets the sequence length parameter')
-    parser.add_argument('-d', '--dcp', type=bool, default=True, help='Generate a DCP')
+    parser.add_argument('-d', '--dcp', type=bool, default=False, help='Generate a DCP')
     args = parser.parse_args()
 
     # TODO: Properly parameterize these currently hardcoded values

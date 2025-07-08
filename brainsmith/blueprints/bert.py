@@ -225,6 +225,7 @@ def custom_step_generate_reference_io(model, cfg):
     out_name = model.graph.output[0].name
 
     y_ref = oxe.execute_onnx(model, input_t, True)
+    print("output directory is ", cfg.output_dir)
     np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
     np.savez(cfg.output_dir+"/expected_context.npz", **y_ref)
     return model
@@ -525,7 +526,7 @@ BUILD_BERT_STEPS = [
         custom_step_remove_tail,
         custom_step_qonnx2finn,
 
-        #custom_step_generate_reference_io,
+        custom_step_generate_reference_io,
         custom_streamlining_step,
         custom_step_infer_hardware,
         step_create_dataflow_partition,

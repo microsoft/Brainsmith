@@ -96,11 +96,13 @@ def forge(blueprint, model, args):
         generate_outputs=[
             build_cfg.DataflowOutputType.STITCHED_IP,
             ],
-        #verify_input_npy=build_dir+"/input.npy",
-        verify_input_npy="/home/joshmonson/Projects/repos/brainsmith/dev/joshmonson/bert-large-mlo/demos/bert/input.npy",
-        #verify_expected_output_npy=build_dir+"/expected_output.npy",
-        verify_expected_output_npy="/home/joshmonson/Projects/repos/brainsmith/dev/joshmonson/bert-large-mlo/demos/bert/expected_output.npy",
+        verbose=True,
+        verify_input_npy=build_dir+"/input.npy",
+        #verify_input_npy="/home/joshmonson/Projects/repos/brainsmith/dev/joshmonson/bert-large-mlo/demos/bert/input.npy",
+        verify_expected_output_npy=build_dir+"/expected_output.npy",
+        #verify_expected_output_npy="/home/joshmonson/Projects/repos/brainsmith/dev/joshmonson/bert-large-mlo/demos/bert/expected_output.npy",
         verify_save_full_context=args.save_intermediate,
+        verify_save_rtlsim_waveforms=True,
         verify_steps=[
             build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
             build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
