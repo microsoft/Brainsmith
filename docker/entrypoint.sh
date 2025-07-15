@@ -236,5 +236,14 @@ else
     if ! packages_already_installed; then
         install_packages_with_progress
     fi
-    exec bash
+    # Start bash with proper environment by sourcing setup_env.sh in bashrc
+    # First copy existing bashrc if it exists
+    if [ -f "$HOME/.bashrc" ]; then
+        cp "$HOME/.bashrc" /tmp/.bashrc_brainsmith
+    else
+        echo "# Brainsmith interactive shell" > /tmp/.bashrc_brainsmith
+    fi
+    # Then append setup_env.sh sourcing
+    echo "source /usr/local/bin/setup_env.sh" >> /tmp/.bashrc_brainsmith
+    exec bash --rcfile /tmp/.bashrc_brainsmith
 fi
