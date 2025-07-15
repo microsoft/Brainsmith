@@ -16,7 +16,6 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-from string import Template
 
 import numpy as np
 import onnx
@@ -174,49 +173,9 @@ def generate_bert_model(args):
     return model
 
 
-def create_blueprint_config(args):
-    """Create blueprint configuration with variable substitutions."""
-    # Read blueprint template
-    blueprint_path = Path(__file__).parent / "bert_modern.yaml"
-    with open(blueprint_path, 'r') as f:
-        blueprint_template = f.read()
-    
-    # Prepare substitutions
-    substitutions = {
-        'BOARD': args.board,
-        'CLK_PERIOD': str(args.clk),
-        'SHELL_TYPE': 'alveo_u250' if args.board == 'U250' else 'vivado_zynq',
-        'FOLDING_CONFIG': os.path.abspath(args.param) if args.param else '',
-        'TARGET_FPS': str(args.fps),
-        'AUTO_FIFO': str(args.run_fifo_sizing).lower(),
-        'FIFOSIM_N': str(args.fifosim_n_inferences),
-        'SPLIT_FIFOS': str(args.split_large_fifos).lower(),
-        'VERIFICATION_ATOL': str(args.verification_atol),
-        'SAVE_INTERMEDIATE': str(args.save_intermediate).lower(),
-        'GEN_DCP': str(args.dcp).lower(),
-        'STOP_STEP': args.stop_step or '',
-        'WORKING_DIR': args.output_dir,
-        'BERT_WORKING_DIR': args.output_dir,  # Additional substitution
-        'LOG_LEVEL': 'DEBUG' if args.verbose else 'INFO',
-        'HIDDEN_SIZE': str(args.hidden_size),
-        'NUM_LAYERS': str(args.num_hidden_layers),
-        'NUM_HEADS': str(args.num_attention_heads),
-        'INTERMEDIATE_SIZE': str(args.intermediate_size),
-        'BITWIDTH': str(args.bitwidth),
-        'SEQ_LEN': str(args.seqlen),
-    }
-    
-    # Apply substitutions
-    blueprint_content = Template(blueprint_template).safe_substitute(substitutions)
-    
-    # Save substituted blueprint for debugging
-    if args.save_intermediate:
-        debug_path = Path(args.output_dir) / "bert_modern_substituted.yaml"
-        os.makedirs(args.output_dir, exist_ok=True)
-        with open(debug_path, 'w') as f:
-            f.write(blueprint_content)
-    
-    return blueprint_content
+def get_blueprint_path():
+    """Get path to the static blueprint file."""
+    return Path(__file__).parent / "bert_modern.yaml"
 
 
 def generate_reference_io(model, output_dir):
@@ -255,7 +214,7 @@ def generate_reference_io(model, output_dir):
     return in_tensor, y_ref[out_name]
 
 
-def run_brainsmith_dse(model, blueprint_config, args):
+def run_brainsmith_dse(model, args):
     """Run Brainsmith DSE v3 pipeline."""
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
@@ -306,16 +265,40 @@ def run_brainsmith_dse(model, blueprint_config, args):
     # Parse blueprint and create design space
     print("Parsing blueprint and constructing design space...")
     
-    # Save blueprint config to file
-    blueprint_path = os.path.join(args.output_dir, "bert_modern_runtime.yaml")
-    with open(blueprint_path, 'w') as f:
-        f.write(blueprint_config)
+    # Get static blueprint path
+    blueprint_path = get_blueprint_path()
     
     # Construct design space from blueprint
     design_space = forge(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
-        blueprint_path=blueprint_path
+        blueprint_path=str(blueprint_path)
     )
+    
+    # Update config flags with runtime values
+    design_space.hw_compiler_space.config_flags.update({
+        'board': args.board,
+        'clock_period_ns': args.clk,
+        'shell_flow_type': 'alveo_u250' if args.board == 'U250' else 'vivado_zynq',
+        'folding_config_file': os.path.abspath(args.param) if args.param else '',
+        'target_fps': args.fps,
+        'auto_fifo_depths': args.run_fifo_sizing,
+        'fifosim_n_inferences': args.fifosim_n_inferences,
+        'split_large_fifos': args.split_large_fifos,
+        'verification_atol': args.verification_atol,
+        'standalone_thresholds': args.standalone_thresholds,
+        'minimize_bit_width': True,
+        'preserve_intermediate_models': args.save_intermediate,
+        'pumped_compute': True,
+        'stitched_ip_gen_dcp': args.dcp,
+        'stop_step': args.stop_step or '',
+        'verify_input_npy': os.path.join(args.output_dir, "input.npy"),
+        'verify_expected_output_npy': os.path.join(args.output_dir, "expected_output.npy"),
+        'verify_save_full_context': args.save_intermediate,
+    })
+    
+    # Update global config with runtime values
+    design_space.global_config.working_directory = args.output_dir
+    design_space.global_config.log_level = 'DEBUG' if args.verbose else 'INFO'
     
     # Run exploration (single configuration for parity)
     print("Running design space exploration...")
@@ -341,7 +324,7 @@ def run_brainsmith_dse(model, blueprint_config, args):
     # Copy final model (matches old hw_compiler.py)
     if args.stop_step is None:
         # Get last build step from design space
-        final_step = design_space.hw_compiler.build_steps[-1]
+        final_step = design_space.hw_compiler_space.build_steps[-1]
     else:
         final_step = args.stop_step
         
@@ -394,8 +377,8 @@ def main():
                        help='Preconfigured folding parameters file')
     parser.add_argument('-x', '--run_fifo_sizing', action='store_true', 
                        help='Run FIFO sizing step')
-    parser.add_argument('-d', '--dcp', type=bool, default=True, 
-                       help='Generate DCP file')
+    parser.add_argument('-d', '--dcp', action='store_true',
+                       help='Generate DCP file (default: disabled for quicktest)')
     parser.add_argument('--board', type=str, default='V80', 
                        help='Target board (V80, Pynq-Z1, U250)')
     parser.add_argument('-v', '--verbose', action='store_true', 
@@ -435,13 +418,9 @@ def main():
         print("\nStep 1: Generating quantized BERT model...")
         model = generate_bert_model(args)
         
-        # Step 2: Create blueprint configuration
-        print("\nStep 2: Creating blueprint configuration...")
-        blueprint_config = create_blueprint_config(args)
-        
-        # Step 3: Run Brainsmith DSE
-        print("\nStep 3: Running Brainsmith DSE pipeline...")
-        result = run_brainsmith_dse(model, blueprint_config, args)
+        # Step 2: Run Brainsmith DSE
+        print("\nStep 2: Running Brainsmith DSE pipeline...")
+        result = run_brainsmith_dse(model, args)
         
         print("\n" + "=" * 70)
         print("BUILD COMPLETED SUCCESSFULLY")

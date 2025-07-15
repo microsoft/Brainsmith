@@ -11,6 +11,9 @@ export LANGUAGE="en_US:en"
 export PS1='\[\033[1;36m\]\u\[\033[1;31m\]@\[\033[1;32m\]\h:\[\033[1;35m\]\w\[\033[1;31m\]\$\[\033[0m\] '
 export PATH=$PATH:$OHMYXILINX
 
+# Ensure Python output is unbuffered for real-time output
+export PYTHONUNBUFFERED=1
+
 # Set up key FINN environment variables
 export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
 export FINN_DEPS_DIR="${BSMITH_DIR}/deps"

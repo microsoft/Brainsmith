@@ -423,7 +423,6 @@ def streamlining_step(model, cfg):
 @step(
     name="infer_hardware",
     category="hardware",
-    dependencies=["constrain_folding_and_set_pumped_compute"],
     description="Infer hardware layers for custom operations"
 )
 def infer_hardware_step(model, cfg):

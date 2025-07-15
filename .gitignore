@@ -479,3 +479,4 @@ old/
 deps/
 *.egg-info/
 *.egg
+CLAUDE.md

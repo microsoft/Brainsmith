@@ -19,64 +19,91 @@ Brainsmith DSE v3 is a three-phase design space exploration system for FPGA AI a
 
 ## System Architecture
 
+
+---
+
 ```mermaid
+%%{ init: { "flowchart": { "rankSpacing": 40, "nodeSpacing": 24 } } }%%
 flowchart TB
-    %% Input Layer
-    subgraph "Input"
-        MODEL[ONNX Model]
-        BLUEPRINT[Blueprint YAML]
-        CONFIG[Environment Config]
+    %%──────────────────────── INPUT ────────────────────────
+    subgraph INPUT["Input"]
+        direction TB
+        MODEL[[ONNX Model]]
+        BLUEPRINT[[Blueprint YAML]]
+        CONFIG[[Environment Config]]
     end
 
-    %% Core System - Three Phases
-    subgraph "Phase 1: Design Space Constructor"
-        FORGE[ForgeAPI]
+    %%─────────────── PHASE 1 · DESIGN-SPACE CONSTRUCTOR ────────────
+    subgraph P1["Phase 1 · Constructor"]
+        direction TB
+        FORGE[Forge API]
         PARSER[Blueprint Parser]
-        VALIDATOR[Validator]
+        VALIDATOR[Schema Validator]
         SPACE[Design Space]
+
+        %% intra-phase flow
+        FORGE --> PARSER --> VALIDATOR --> SPACE
     end
 
-    subgraph "Phase 2: Design Space Explorer"
+    %%──────────────── PHASE 2 · DESIGN-SPACE EXPLORER ──────────────
+    subgraph P2["Phase 2 · Explorer"]
+        direction TB
         EXPLORER[Explorer Engine]
         GENERATOR[Combination Generator]
         AGGREGATOR[Results Aggregator]
+
+        EXPLORER --> GENERATOR --> AGGREGATOR
     end
 
-    subgraph "Phase 3: Build Runner"
+    %%──────────────────── PHASE 3 · BUILD RUNNER ───────────────────
+    subgraph P3["Phase 3 · Runner"]
+        direction TB
         RUNNER[Build Runner]
         FACTORY[Backend Factory]
         METRICS[Metrics Collector]
+
+        RUNNER --> FACTORY --> METRICS
     end
 
-    %% Plugin Layer
-    subgraph "Plugins"
-        REGISTRY[Plugin Registry]
-        PLUGINS[Transforms, Kernels, Backends, Steps]
+    %%──────────────────────── PLUG-INS ────────────────────────
+    subgraph PLUGS["Plugin Registry"]
+        direction TB
+        REGISTRY[Registry]
+        PLUGINS[Transforms / Kernels / Backends]
+
+        REGISTRY --> PLUGINS
     end
 
-    %% Output Layer
-    subgraph "Output"
-        RESULTS[Exploration Results]
-        ARTIFACTS[Build Artifacts]
+    %%──────────────────────── OUTPUT ────────────────────────
+    subgraph OUTPUT["Output"]
+        direction TB
+        RESULTS[[Exploration Results]]
+        ARTIFACTS[[Build Artifacts]]
     end
 
-    %% Main Flow
-    BLUEPRINT --> PARSER --> FORGE --> VALIDATOR --> SPACE
-    SPACE --> EXPLORER --> GENERATOR --> RUNNER
-    RUNNER --> FACTORY --> METRICS --> AGGREGATOR
-    AGGREGATOR --> RESULTS
+    %%────────────── cross-phase conduits ──────────────
+    MODEL --> FORGE
+    CONFIG --> FORGE
+    BLUEPRINT --> PARSER
+    SPACE --> EXPLORER
+    GENERATOR --> RUNNER
+    RUNNER --> RESULTS
     RUNNER --> ARTIFACTS
 
-    %% Plugin connections
+    %%────────────── plugin integration points ──────────────
     FORGE -.-> REGISTRY
     RUNNER -.-> REGISTRY
-    REGISTRY --> PLUGINS
 
-    %% Styles
-    style FORGE fill:#1f2937,color:#fff,stroke:#374151
-    style EXPLORER fill:#7c3aed,color:#fff,stroke:#6d28d9
-    style RUNNER fill:#0891b2,color:#fff,stroke:#0e7490
-    style REGISTRY fill:#059669,color:#fff,stroke:#047857
+    %%──────────────── aesthetic classes ────────────────
+    classDef core fill:#1f2937,stroke:#334155,color:#ffffff;
+    classDef accent1 fill:#7c3aed,stroke:#6d28d9,color:#ffffff;
+    classDef accent2 fill:#0891b2,stroke:#0e7490,color:#ffffff;
+    classDef accent3 fill:#059669,stroke:#047857,color:#ffffff;
+
+    class FORGE,PARSER,VALIDATOR,SPACE core;
+    class EXPLORER,GENERATOR,AGGREGATOR accent1;
+    class RUNNER,FACTORY,METRICS accent2;
+    class REGISTRY accent3;
 ```
 
 ### Core Concepts
@@ -129,7 +156,7 @@ stateDiagram-v2
     CollectMetrics --> [*]
 ```
 
-Selects appropriate backend (FINN/Future/Mock), applies preprocessing transforms, executes hardware build, runs postprocessing steps, and collects standardized metrics. \n
+Selects appropriate backend (FINN/Future/Mock), applies preprocessing transforms, executes hardware build, runs postprocessing steps, and collects standardized metrics.
 
 ## Data Structure Flow
 

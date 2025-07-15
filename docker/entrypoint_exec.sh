@@ -23,6 +23,9 @@ log_error() {
 
 cd $BSMITH_DIR
 
+# Ensure Python output is unbuffered for real-time output
+export PYTHONUNBUFFERED=1
+
 # Quick check for dependency readiness
 # The new log monitoring system should ensure container is ready before exec is called
 READINESS_MARKER="/tmp/.brainsmith_deps_ready"

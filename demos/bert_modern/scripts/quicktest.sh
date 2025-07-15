@@ -3,6 +3,9 @@
 
 set -e
 
+# Set longer timeout for RTL simulation (BERT models can take longer)
+export LIVENESS_THRESHOLD=10000000
+
 echo "Running BERT Modern Demo Quick Test"
 echo "==================================="
 
@@ -26,8 +29,6 @@ python bert_demo.py \
     -l 1 \
     -z 384 \
     -i 1536 \
-    -x \
-    -p ./configs/l1_simd12_pe8.json \
-    -d False
+    -p ./configs/l1_simd12_pe8.json
 
 echo "Quick test completed!"
