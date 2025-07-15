@@ -18,7 +18,39 @@ recho() { echo -e "${RED}$1${NC}"; }
 yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Auto-detect brainsmith directory (where this script lives)
+# Legacy-compatible wrapper for run-docker.sh that uses smithy under the hood
+# Maintains one-off container behavior to encourage migration to smithy
+
+# Define color functions (matching original run-docker.sh)
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+gecho() { echo -e "${GREEN}$1${NC}"; }
+recho() { echo -e "${RED}$1${NC}"; }
+yecho() { echo -e "${YELLOW}$1${NC}"; }
+
+# Auto-detect brainsmith directory (where this script lives)
 BSMITH_DIR="$(readlink -f -- "${BASH_SOURCE[0]%/*}")"
+SMITHY_PATH="$BSMITH_DIR/smithy"
+
+# Verify smithy exists
+if [ ! -x "$SMITHY_PATH" ]; then
+    recho "ERROR: smithy script not found at $SMITHY_PATH"
+    recho "Please ensure you're running this from the brainsmith root directory"
+    exit 1
+fi
+
+# Export environment variables that smithy expects (matching original run-docker.sh)
+export BSMITH_DIR
+export BSMITH_HW_COMPILER="${BSMITH_HW_COMPILER:-finn}"
+export BSMITH_DOCKER_TAG="${BSMITH_DOCKER_TAG:-microsoft/brainsmith:$(git describe --always --tags --dirty 2>/dev/null || echo 'dev')}"
+export LOCALHOST_URL="${LOCALHOST_URL:-localhost}"
+export NETRON_PORT="${NETRON_PORT:-8080}"
+export NUM_DEFAULT_WORKERS="${NUM_DEFAULT_WORKERS:-4}"
+export NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES:-}"
+
 SMITHY_PATH="$BSMITH_DIR/smithy"
 
 # Verify smithy exists
@@ -42,7 +74,25 @@ export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/brainsmith_dev_0}"
 export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
 export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-/opt/xilinx/platforms}"
 
+export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/brainsmith_dev_0}"
+export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
+export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-/opt/xilinx/platforms}"
+
 # Xilinx specific variables
+export OHMYXILINX="${OHMYXILINX:-${BSMITH_DIR}/deps/oh-my-xilinx}"
+export VIVADO_HLS_LOCAL="${VIVADO_HLS_LOCAL:-$VIVADO_PATH}"
+export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-$BSMITH_BUILD_DIR/vivado_ip_cache}"
+
+# Docker build options
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
+export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
+export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
+export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
+
+# Docker run options
+export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
+export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-$(docker info 2>/dev/null | grep nvidia | wc -l || echo 0)}"
+
 export OHMYXILINX="${OHMYXILINX:-${BSMITH_DIR}/deps/oh-my-xilinx}"
 export VIVADO_HLS_LOCAL="${VIVADO_HLS_LOCAL:-$VIVADO_PATH}"
 export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-$BSMITH_BUILD_DIR/vivado_ip_cache}"

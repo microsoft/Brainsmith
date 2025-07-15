@@ -15,9 +15,7 @@ pandas==1.5.3
 scikit-learn==1.2.1
 tqdm==4.64.1
 -e git+https://github.com/fbcotter/dataset_loading.git@0.0.4#egg=dataset_loading
-# RTL simulation dependencies for FINN - not needed for transformer branch
-# -e git+https://github.com/maltanar/pyverilator.git@master#egg=pyverilator
-# these versions of pytest and associated plugins allow for stable collection of
+# These versions of pytest and associated plugins allow for stable collection of
 # test reports and code coverage reports in HTML
 pytest==6.2.5
 pytest-metadata==1.7.0

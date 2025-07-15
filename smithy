@@ -167,8 +167,8 @@ monitor_container_startup() {
                             gecho "→ Installing packages..."
                         fi
                         ;;
-                    "BUILDING_PYXSI")
-                        gecho "→ Building pyxsi extension..."
+                    "BUILDING_FINNXSI")
+                        gecho "→ Building finnxsi extension..."
                         ;;
                     "READY")
                         gecho "✓ Container is ready!"

@@ -36,12 +36,13 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         log_error "Expected marker file: $READINESS_MARKER"
         log_error "Check container logs with: docker logs <container-name>"
         log_error "Or wait for initialization to complete and try again."
+        log_info "Debug: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS, READINESS_MARKER=$READINESS_MARKER"
         exit 1
     fi
     
-    # Since container is ready, dependencies should exist - check for pyxsi directory
-    if [ ! -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-        log_error "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
+    # Since container is ready, dependencies should exist - check for finnxsi directory
+    if [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
+        log_error "finnxsi directory not found at ${BSMITH_DIR}/deps/finn/finn_xsi"
         log_error "This suggests dependencies were not fetched properly in daemon mode"
         exit 1
     fi

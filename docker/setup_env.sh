@@ -60,23 +60,23 @@ else
 fi
 
 if [ -z "${XILINX_VIVADO}" ]; then
-  yecho "pyxsi is unavailable since Vivado was not found"
+  yecho "finnxsi is unavailable since Vivado was not found"
 else
-  if [ -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
-    gecho "Found pyxsi at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
+  if [ -f "${FINN_ROOT}/finn_xsi/xsi.so" ]; then
+    gecho "Found finnxsi at ${FINN_ROOT}/finn_xsi/xsi.so"
   else
-    if [ -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-      # pyxsi directory exists but .so not built yet
-      yecho "pyxsi.so not found at ${BSMITH_DIR}/deps/pyxsi/pyxsi.so"
+    if [ -d "${FINN_ROOT}/finn_xsi" ]; then
+      # finnxsi directory exists but .so not built yet
+      yecho "finnxsi.so not found at ${FINN_ROOT}/finn_xsi/xsi.so"
       yecho "Some functionality may be limited. Check that Vivado is properly installed and accessible."
     else
-      # pyxsi directory doesn't exist - but this is now checked earlier in entrypoint_exec.sh
-      yecho "pyxsi directory not found at ${BSMITH_DIR}/deps/pyxsi"
+      # finnxsi directory doesn't exist - but this is now checked earlier in entrypoint_exec.sh
+      yecho "finnxsi directory not found at ${FINN_ROOT}/finn_xsi"
       yecho "Some functionality may be limited."
     fi
   fi
   
-  export PYTHONPATH=$PYTHONPATH:${BSMITH_DIR}/deps/pyxsi:${BSMITH_DIR}/deps/pyxsi/py
+  export PYTHONPATH=$PYTHONPATH:${FINN_ROOT}/finn_xsi
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/:${XILINX_VIVADO}/lib/lnx64.o
 fi
 

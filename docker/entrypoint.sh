@@ -62,36 +62,36 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ] && [ ! -f "$BSMITH_DIR/deps/finn/setup.py"
     exit 1
 fi
 
-# Function to build pyxsi if needed
-build_pyxsi_if_needed() {
-    if [ ! -z "${XILINX_VIVADO}" ] && [ -d "${BSMITH_DIR}/deps/pyxsi" ] && [ ! -f "${BSMITH_DIR}/deps/pyxsi/pyxsi.so" ]; then
-        emit_status "BUILDING_PYXSI"
-        log_info "Building pyxsi (Vivado available and pyxsi source exists)"
+# Function to build finnxsi if needed
+build_finnxsi_if_needed() {
+    if [ ! -z "${XILINX_VIVADO}" ] && [ -d "${BSMITH_DIR}/deps/finn/finn_xsi" ] && [ ! -f "${BSMITH_DIR}/deps/finn/xsi.so" ]; then
+        emit_status "BUILDING_FINNXSI"
+        log_info "Building finnxsi (Vivado available and finnxsi source exists)"
         OLDPWD=$(pwd)
-        cd ${BSMITH_DIR}/deps/pyxsi || {
-            emit_status "ERROR" "Failed to enter pyxsi directory"
-            log_error "Failed to enter pyxsi directory"
+        cd ${BSMITH_DIR}/deps/finn/finn_xsi || {
+            emit_status "ERROR" "Failed to enter finnxsi directory"
+            log_error "Failed to enter finnxsi directory"
             exit 1
         }
         if make; then
-            log_info "pyxsi built successfully"
+            log_info "finnxsi built successfully"
         else
-            emit_status "ERROR" "Failed to build pyxsi"
-            log_error "Failed to build pyxsi"
+            emit_status "ERROR" "Failed to build finnxsi"
+            log_error "Failed to build finnxsi"
             exit 1
         fi
         cd $OLDPWD
     elif [ -z "${XILINX_VIVADO}" ]; then
-        log_info "Skipping pyxsi build - Vivado not available"
-    elif [ ! -d "${BSMITH_DIR}/deps/pyxsi" ]; then
-        log_info "Skipping pyxsi build - pyxsi source not available"
+        log_info "Skipping finnxsi build - Vivado not available"
+    elif [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
+        log_info "Skipping finnxsi build - finnxsi source not available"
     else
-        log_info "pyxsi already built - skipping"
+        log_info "finnxsi already built - skipping"
     fi
 }
 
-# Third: Build pyxsi if needed (both daemon and one-shot mode)
-build_pyxsi_if_needed
+# Third: Build finnxsi if needed (both daemon and one-shot mode)
+build_finnxsi_if_needed
 
 # Smart package management with persistent state
 CACHE_FILE="/tmp/.brainsmith_packages_installed"
@@ -121,6 +121,9 @@ install_packages_with_progress() {
     
     # Ensure deps directory exists
     mkdir -p "$BSMITH_DIR/deps"
+    
+    # Ensure Python output is unbuffered for real-time package installation output
+    export PYTHONUNBUFFERED=1
     
     local install_success=true
     local failed_packages=""

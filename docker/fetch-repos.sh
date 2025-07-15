@@ -15,9 +15,8 @@ recho() { echo -e "${RED}$1${NC}"; }
 yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Dependency Git URLs, hashes/branches, and directory names
-QONNX_URL="https://github.com/tafk7/qonnx.git"
-FINN_URL="https://github.com/tafk7/finn.git"
-# TAFK TODO: Switch to main QONNX & FINN branches when merged
+QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
+FINN_URL="https://github.com/Xilinx/finn.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 CNPY_URL="https://github.com/maltanar/cnpy.git"
@@ -27,10 +26,9 @@ AVNET_BDF_URL="https://github.com/Avnet/bdf.git"
 XIL_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
-PYXSI_URL="https://github.com/maltanar/pyxsi.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
-QONNX_COMMIT="custom/brainsmith-transform-registry"
+QONNX_COMMIT="custom/brainsmith"
 FINN_COMMIT="custom/brainsmith-patch"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="95edaa0bdc8e639e39b1164466278c59df4877be"
@@ -42,7 +40,6 @@ XIL_BDF_COMMIT="8cf4bb674a919ac34e3d99d8d71a9e60af93d14e"
 RFSOC4x2_BDF_COMMIT="13fb6f6c02c7dfd7e4b336b18b959ad5115db696"
 KV260_BDF_COMMIT="98e0d3efc901f0b974006bc4370c2a7ad8856c79"
 EXP_BOARD_FILES_MD5="226ca927a16ea4ce579f1332675e9e9a"
-PYXSI_COMMIT="941bb62a4a3cc2c8cf2a9b89187c60bb0b776658"
 ONNXSCRIPT_COMMIT="62c7110aba46554432ce8e82ba2d8a086bd6227c"
 
 QONNX_DIR="qonnx"
@@ -56,7 +53,6 @@ AVNET_BDF_DIR="avnet-bdf"
 XIL_BDF_DIR="xil-bdf"
 RFSOC4x2_BDF_DIR="rfsoc4x2-bdf"
 KV260_SOM_BDF_DIR="kv260-som-bdf"
-PYXSI_DIR="pyxsi"
 ONNXSCRIPT_DIR="onnxscript"
 
 # Validate environment variables for licensed Xilinx tools
@@ -170,7 +166,6 @@ fetch_repo $AVNET_BDF_URL $AVNET_BDF_COMMIT $AVNET_BDF_DIR
 fetch_repo $XIL_BDF_URL $XIL_BDF_COMMIT $XIL_BDF_DIR
 fetch_repo $RFSOC4x2_BDF_URL $RFSOC4x2_BDF_COMMIT $RFSOC4x2_BDF_DIR
 fetch_repo $KV260_BDF_URL $KV260_BDF_COMMIT $KV260_SOM_BDF_DIR
-fetch_repo $PYXSI_URL $PYXSI_COMMIT $PYXSI_DIR
 fetch_repo $ONNXSCRIPT_URL $ONNXSCRIPT_COMMIT $ONNXSCRIPT_DIR
 
 # Can skip downloading of board files entirely if desired
