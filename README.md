@@ -3,25 +3,31 @@
 Brainsmith is an open-source platform for FPGA AI accelerators.
 This repository is in a pre-release state and under active co-development by Microsoft and AMD.
 
+## Pre-Release 
+
+This repository is in a ***pre-release state*** with many features under active development.
+
+TAFK TODO: Put "works" vs "doesn't work" orientation guide for collaborators.
+
 ## Overview
 
-Brainsmith uses a Blueprint-driven Design Space Exploration (DSE) approach to explore different hardware configurations:
-- Transform combinations for model optimization
-- Hardware configuration parameters
-- Build step variations
-- Future support for multiple kernel implementations (RTL, HLS, C++)
+Brainsmith uses Blueprints that define a Design Space to explore different configurations for a given neural network definition to be implemented on FPGAs. A Blueprint is a yaml file which can configure the following:
+- Model optimization and network surgery by specifying combinations of graph transformations, such as expanding / fusing multiple ONNX-level operations
+- Hardware configuration parameters, e.g., different FPGA targets
+- FPGA compiler step variations, e.g., assembly of FINN compiler build steps
+- Future support for multiple kernel implementations for the same layer, e.g. optimized RTL or HLS for specific network settings
 
 The system currently uses the Legacy FINN backend for compilation, as FINN does not yet support the new entrypoint-based plugin system. The architecture is designed to support future backends with kernel-level customization.
 
 ## Core Pipeline
 
 ```
-PyTorch Model → Brevitas Quantization → ONNX → Blueprint YAML → DSE v3 → Hardware Implementation → FPGA
+PyTorch Model → Brevitas Quantization → quantized ONNX (e.g., QONNX) → Blueprint YAML → Brainsmith DSE (uses FINN under the hood) → Hardware Implementation (selected by Brainsmith DSE) → FPGA
                                                         ↓
                                             Systematic exploration of:
                                             • Kernel implementations
-                                            • Transform pipelines  
-                                            • Build configurations
+                                            • Graph transformations  
+                                            • Compiler build configurations
                                             • Hardware parameters
 ```
 
@@ -41,7 +47,7 @@ The DSE system consists of three phases:
 
 ### Phase 3: Build Runner
 - Executes individual builds
-- Applies preprocessing and postprocessing transforms
+- Applies preprocessing and postprocessing transformsls
 - Primary backend: Legacy FINN (current FINN toolchain)
 - Extensible for future backends
 
@@ -55,7 +61,6 @@ For detailed documentation, see:
 
 1. Set environment variables (separate from FINN variables), example below:
 ```bash
-```bash
 export BSMITH_ROOT="~/brainsmith"
 export BSMITH_BUILD_DIR="~/builds/brainsmith"
 export BSMITH_XILINX_PATH="/tools/Xilinx"
@@ -63,7 +68,6 @@ export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-2. Clone this repository:
 2. Clone this repository:
 ```bash
 git clone git@github.com:microsoft/Brainsmith.git
@@ -104,43 +108,14 @@ FINN_COMMIT="new-commit-hash-or-branch"
 ./smithy stop
 ```
 
-> **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
-
-```bash
-# Start persistent container (one-time setup)
-./smithy daemon
-
-# Get instant shell access anytime
-./smithy shell
-
-# Or execute commands quickly
-./smithy exec "python script.py"
-
-# Check status
-./smithy status
-
-# Stop when done
-./smithy stop
-```
-
-> **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
-
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
 ```bash
-```bash
-cd tests/end2end/bert
-make single_layer
+# TAFK TODO: Update with new demo instructions
 ```
 
 6. Alternatively, run a simplified test skipping DCP gen:
 ```bash
-cd demos/bert
-python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
-```bash
-cd demos/bert
-python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
+# TAFK TODO: Update with new demo instructions
 ```
 
 ## Usage Examples
@@ -238,6 +213,7 @@ python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./c
 ### Running Tests
 
 Run the comprehensive test suite:
+TAFK TODO: Verify, plans
 
 ```bash
 cd tests
@@ -355,14 +331,6 @@ We welcome contributions! Please follow these guidelines:
 - Pull request process
 
 Also review our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/microsoft/Brainsmith/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/microsoft/Brainsmith/discussions)
-- **Security**: See [SECURITY.md](SECURITY.md) for reporting vulnerabilities
-
-For additional support resources, see [SUPPORT.md](SUPPORT.md).
 
 ## License
 
