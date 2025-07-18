@@ -131,7 +131,7 @@ fi
 # Helper to run one-off containers using smithy daemon pattern
 run_oneoff_container() {
     local CMD="$1"
-    
+
     if [ -z "$CMD" ]; then
         # Interactive shell - use smithy start (creates temporary container with --rm)
         exec "$SMITHY_PATH" start
@@ -139,7 +139,7 @@ run_oneoff_container() {
         # For commands, use smithy daemon->exec->stop pattern for optimal performance
         # This ensures we get the full container environment and proper cleanup
         gecho "Starting temporary daemon container..."
-        
+
         # Start daemon if not already running
         if ! "$SMITHY_PATH" status >/dev/null 2>&1 | grep -q "is running"; then
             "$SMITHY_PATH" daemon >/dev/null 2>&1 || {
@@ -147,14 +147,14 @@ run_oneoff_container() {
                 exit 1
             }
         fi
-        
+
         # Execute command in the daemon
         local EXIT_CODE=0
         "$SMITHY_PATH" exec "$CMD" || EXIT_CODE=$?
-        
+
         # Stop daemon after execution
         "$SMITHY_PATH" stop >/dev/null 2>&1
-        
+
         exit $EXIT_CODE
     fi
 }
@@ -163,25 +163,25 @@ run_oneoff_container() {
 if [ -z "$1" ]; then
     gecho "Running Brainsmith docker container"
     run_oneoff_container ""
-    
+
 elif [ "$1" = "pytest" ]; then
     gecho "Running Brainsmith pytest suite"
     # Use basic import test instead of broken pytest suite
     CMD="python -c \"import sys; import brainsmith; import finn; import qonnx; print('✓ All imports successful')\""
     run_oneoff_container "$CMD"
-    
+
 elif [ "$1" = "e2e" ]; then
     gecho "Running Brainsmith end-to-end validation test"
     run_oneoff_container "cd demos/bert && make single_layer"
-    
+
 elif [ "$1" = "bert-large-biweekly" ] || [ "$1" = "e2e-bert-large" ]; then
     gecho "Running BERT Large test"
     run_oneoff_container "cd demos/bert && make bert_large_single_layer"
-    
+
 elif [ "$1" = "debugtest" ]; then
     gecho "Running debug test - importing all editable installed packages"
     run_oneoff_container "python3 debug_imports.py"
-    
+
 else
     gecho "Running Brainsmith docker container with passed arguments"
     # Build command string properly handling quotes and arguments

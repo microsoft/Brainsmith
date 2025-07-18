@@ -84,7 +84,7 @@ class InferCropFromGather(Transformation):
                     "Crop",
                     [n.input[0]],  # input tensor(s)
                     [n.output[0]],  # output tensor(s)
-                    domain="brainsmith.kernels.crop",
+                    domain="brainsmith.kernels",
                     backend="fpgadataflow",
                     data_type=idt0.name,
                     name="Crop" + n.name,

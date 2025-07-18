@@ -61,7 +61,7 @@ class InferLayerNorm(Transformation):
                     "LayerNorm",
                     [act_in],
                     [act_out],
-                    domain="brainsmith.kernels.layernorm",
+                    domain="brainsmith.kernels",
                     backend="fpgadataflow",
                     SIMD=simd,
                     ifm_dim=shape_in,

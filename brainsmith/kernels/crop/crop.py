@@ -10,7 +10,7 @@ import warnings
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from qonnx.custom_op.registry import register_op
+from qonnx.custom_op.registry import register_custom_op
 from brainsmith.core.plugins import kernel
 
 @kernel(
@@ -19,7 +19,7 @@ from brainsmith.core.plugins import kernel
     author="josh-monson",
     version="1.0.0"
 )
-@register_op(domain="brainsmith.kernels.crop", op_type="Crop")
+@register_custom_op("brainsmith.kernels")
 class Crop(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
 

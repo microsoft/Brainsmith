@@ -4,7 +4,7 @@
 # Modifications copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 
-# Fast exec entrypoint for Brainsmith development environment
+# Fast entrypoint for Brainsmith development environment
 # This script is optimized for quick command execution in persistent containers
 
 # Enhanced logging for debugging
@@ -27,7 +27,7 @@ cd $BSMITH_DIR
 export PYTHONUNBUFFERED=1
 
 # Quick check for dependency readiness
-# The new log monitoring system should ensure container is ready before exec is called
+# The log monitoring system should ensure container is ready before exec is called
 READINESS_MARKER="/tmp/.brainsmith_deps_ready"
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
     # First check if marker exists (fast path)

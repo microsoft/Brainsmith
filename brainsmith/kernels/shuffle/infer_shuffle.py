@@ -117,7 +117,7 @@ class InferShuffle(Transformation):
                             "Shuffle",
                             [new_in_tensor],
                             [new_out_tensor],
-                            domain="brainsmith.kernels.shuffle",
+                            domain="brainsmith.kernels",
                             backend="fpgadataflow",
                             in_shape=in_shape,
                             in_reshaped=in_reshaped,

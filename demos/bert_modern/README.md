@@ -27,7 +27,7 @@ The modern BERT demo demonstrates:
 - **Parallel exploration**: Ready for multi-configuration DSE
 
 ### 3. Blueprint-Driven Approach
-The `bert_modern.yaml` blueprint defines the entire compilation flow:
+The `bert_legacy.yaml` blueprint (located in `brainsmith/blueprints/`) defines the entire compilation flow:
 - Build steps in order
 - Configuration flags with variable substitution
 - Verification settings
@@ -38,7 +38,7 @@ The `bert_modern.yaml` blueprint defines the entire compilation flow:
 ```
 bert_modern/
 ├── bert_demo.py          # Main entry point
-├── bert_modern.yaml      # Blueprint configuration
+├── bert_modern_template.yaml  # Template for custom blueprints
 ├── gen_folding_config.py # Folding config generator
 ├── configs/              # Pre-generated folding configs
 ├── scripts/              # Test and utility scripts
@@ -147,7 +147,7 @@ Parameters:
 
 ## Blueprint Customization
 
-The `bert_modern.yaml` blueprint supports variable substitution:
+The `bert_legacy.yaml` blueprint supports variable substitution:
 
 ```yaml
 config_flags:
@@ -176,7 +176,7 @@ This will:
 
 ### Custom Build Steps
 
-To modify the build flow, edit `bert_modern.yaml`:
+To modify the build flow, copy `brainsmith/blueprints/bert_legacy.yaml` and edit:
 
 ```yaml
 build_steps:

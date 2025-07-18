@@ -16,11 +16,11 @@ Canonical Op objects combining operators and transforms.
 import numpy as np
 from onnx import helper
 from qonnx.custom_op.base import CustomOp
-from qonnx.custom_op.registry import register_op
+from qonnx.custom_op.registry import register_custom_op
 from qonnx.core.datatype import DataType
 
 
-@register_op(domain="brainsmith.operators", op_type="FuncLayerNorm")
+@register_custom_op("brainsmith.operators.general")
 class FuncLayerNorm(CustomOp):
     """Functional LayerNorm custom operator for ONNX processing.
     

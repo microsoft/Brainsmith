@@ -33,6 +33,14 @@ class ExpandNorms(Transformation):
         graph = model.graph
         node_ind = 0
         graph_modified = False
+        
+        # Check if we need to add the brainsmith.operators.general domain
+        existing_domains = {op.domain for op in model.model.opset_import}
+        if "brainsmith.operators.general" not in existing_domains:
+            model.model.opset_import.append(
+                oh.make_opsetid("brainsmith.operators.general", 1)
+            )
+        
         for node in graph.node:
             node_ind += 1
             # Handle LayerNorm

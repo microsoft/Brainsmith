@@ -13,7 +13,7 @@ import warnings
 import textwrap
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from qonnx.custom_op.registry import register_op
+from qonnx.custom_op.registry import register_custom_op
 from brainsmith.core.plugins import kernel
 
 # TODO: Explain any shape assumptions -- TAFK
@@ -24,7 +24,7 @@ from brainsmith.core.plugins import kernel
     author="thomas-keller",
     version="1.0.0"
 )
-@register_op(domain="brainsmith.kernels.layernorm", op_type="LayerNorm")
+@register_custom_op("brainsmith.kernels")
 class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""
 

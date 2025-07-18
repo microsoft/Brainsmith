@@ -15,7 +15,7 @@ recho() { echo -e "${RED}$1${NC}"; }
 yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Dependency Git URLs, hashes/branches, and directory names
-QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
+QONNX_URL="https://github.com/tafk7/qonnx.git"
 FINN_URL="https://github.com/tafk7/finn.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
@@ -28,7 +28,7 @@ RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
-QONNX_COMMIT="custom/brainsmith"
+QONNX_COMMIT="custom/brainsmith-transform-registry"
 FINN_COMMIT="custom/brainsmith-patch"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="95edaa0bdc8e639e39b1164466278c59df4877be"
@@ -82,14 +82,14 @@ fetch_repo() {
     CLONE_TO=$BSMITH_DIR/deps/$REPO_DIR
 
     echo "Fetching $REPO_DIR from $REPO_URL..."
-    
+
     # clone repo if dir not found
     if [ ! -d "$CLONE_TO" ]; then
         echo "Cloning $REPO_DIR..."
         # Use retry logic for git clone in CI (but with full clone for dependency resolution)
         local attempt=1
         local max_attempts=3
-        
+
         while [ $attempt -le $max_attempts ]; do
             if git clone $REPO_URL $CLONE_TO; then
                 echo "Successfully cloned $REPO_DIR on attempt $attempt"
@@ -104,22 +104,22 @@ fetch_repo() {
                 attempt=$((attempt + 1))
             fi
         done
-        
+
         if [ $attempt -gt $max_attempts ]; then
             echo "ERROR: Failed to clone $REPO_DIR after $max_attempts attempts"
             return 1
         fi
     fi
-    
+
     # verify and try to pull repo if not at correct commit
     CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD 2>/dev/null || echo "unknown")
     if [ "$CURRENT_COMMIT" != "$REPO_COMMIT" ]; then
         echo "Current commit $CURRENT_COMMIT != expected $REPO_COMMIT for $REPO_DIR"
-        
+
         # Try to pull first to get latest refs
         echo "Pulling latest changes for $REPO_DIR..."
         git -C $CLONE_TO pull || echo "Pull failed, continuing with checkout..."
-        
+
         # checkout the expected commit
         echo "Checking out commit $REPO_COMMIT for $REPO_DIR..."
         if ! git -C $CLONE_TO checkout $REPO_COMMIT; then
@@ -127,7 +127,7 @@ fetch_repo() {
             return 1
         fi
     fi
-    
+
     # verify one last time
     CURRENT_COMMIT=$(git -C $CLONE_TO rev-parse HEAD 2>/dev/null || echo "unknown")
     if [ "$CURRENT_COMMIT" = "$REPO_COMMIT" ]; then

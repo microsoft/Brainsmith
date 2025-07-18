@@ -37,9 +37,7 @@ import brevitas.onnx as bo
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith.core.phase1.forge import forge
-from brainsmith.core.phase2 import explore, BuildStatus
-from brainsmith.core.phase3 import create_build_runner_factory
+from brainsmith import forge, explore, create_build_runner_factory, BuildStatus
 
 warnings.simplefilter("ignore")
 
@@ -175,7 +173,8 @@ def generate_bert_model(args):
 
 def get_blueprint_path():
     """Get path to the static blueprint file."""
-    return Path(__file__).parent / "bert_modern.yaml"
+    # Blueprint is now in the main blueprints library
+    return Path(__file__).parent.parent.parent / "brainsmith" / "blueprints" / "bert_legacy.yaml"
 
 
 def generate_reference_io(model, output_dir):

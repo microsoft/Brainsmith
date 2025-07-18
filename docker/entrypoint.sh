@@ -117,7 +117,7 @@ install_packages_with_progress() {
     log_info "Starting package installation process"
     emit_status "INSTALLING_PACKAGES" "starting"
     
-    gecho "Installing development packages (this may take a moment)..."
+    [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing development packages (this may take a moment)..."
     
     # Ensure deps directory exists
     mkdir -p "$BSMITH_DIR/deps"
@@ -131,7 +131,7 @@ install_packages_with_progress() {
     # qonnx (using workaround for https://github.com/pypa/pip/issues/7953)
     if [ -d "${BSMITH_DIR}/deps/qonnx" ]; then
         emit_status "INSTALLING_PACKAGES" "qonnx"
-        gecho "Installing qonnx..."
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing qonnx..."
         mv ${BSMITH_DIR}/deps/qonnx/pyproject.toml ${BSMITH_DIR}/deps/qonnx/pyproject.tmp 2>/dev/null || true
         if ! pip install --user -e ${BSMITH_DIR}/deps/qonnx; then
             install_success=false
@@ -143,7 +143,7 @@ install_packages_with_progress() {
     # finn-experimental
     if [ -d "${BSMITH_DIR}/deps/finn-experimental" ]; then
         emit_status "INSTALLING_PACKAGES" "finn-experimental"
-        gecho "Installing finn-experimental..."
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing finn-experimental..."
         if ! pip install --user -e ${BSMITH_DIR}/deps/finn-experimental; then
             install_success=false
             failed_packages+="finn-experimental "
@@ -153,7 +153,7 @@ install_packages_with_progress() {
     # brevitas
     if [ -d "${BSMITH_DIR}/deps/brevitas" ]; then
         emit_status "INSTALLING_PACKAGES" "brevitas"
-        gecho "Installing brevitas..."
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing brevitas..."
         if ! pip install --user -e ${BSMITH_DIR}/deps/brevitas; then
             install_success=false
             failed_packages+="brevitas "
@@ -163,7 +163,7 @@ install_packages_with_progress() {
     # finn
     if [ -d "${BSMITH_DIR}/deps/finn" ]; then
         emit_status "INSTALLING_PACKAGES" "finn"
-        gecho "Installing finn..."
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing finn..."
         if ! pip install --user -e ${BSMITH_DIR}/deps/finn; then
             install_success=false
             failed_packages+="finn "
@@ -173,7 +173,7 @@ install_packages_with_progress() {
     # brainsmith
     if [ -f "${BSMITH_DIR}/setup.py" ]; then
         emit_status "INSTALLING_PACKAGES" "brainsmith"
-        gecho "Installing brainsmith..."
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Installing brainsmith..."
         if ! pip install --user -e ${BSMITH_DIR}; then
             install_success=false
             failed_packages+="brainsmith "
@@ -188,7 +188,7 @@ install_packages_with_progress() {
     if [ "$install_success" = true ]; then
         # Mark packages as successfully installed
         touch "$CACHE_FILE"
-        gecho "Development packages installed and cached successfully!"
+        [ "$BSMITH_CONTAINER_MODE" != "daemon" ] && gecho "Development packages installed and cached successfully!"
         return 0
     else
         emit_status "ERROR" "Package installation failed: $failed_packages"
@@ -198,22 +198,14 @@ install_packages_with_progress() {
     fi
 }
 
-# Install packages only if not already cached and working
-if ! packages_already_installed; then
-    install_packages_with_progress
-else
-    gecho "Development packages already installed - using cached setup"
-fi
-
 # For daemon mode, complete ALL setup before going into background
-# For direct command execution, only install packages if needed for that command
 if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
     log_info "Daemon mode: ensuring all packages are installed before going into background"
-    # Force package installation/verification in daemon mode
+    # Install packages if needed
     if ! packages_already_installed; then
         install_packages_with_progress
     else
-        gecho "Development packages already installed - using cached setup"
+        log_info "Development packages already installed - using cached setup"
     fi
     
     # Create readiness marker ONLY after everything is truly ready
@@ -223,7 +215,7 @@ if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
     # Emit final ready status for log monitoring
     emit_status "READY"
     log_info "All setup complete - container is now fully ready for exec commands"
-    # Industry standard: use tail -f /dev/null to keep container alive
+    # Common approach: use tail -f /dev/null to keep container alive
     exec tail -f /dev/null
 fi
 
@@ -238,6 +230,8 @@ else
     # For interactive mode, install packages
     if ! packages_already_installed; then
         install_packages_with_progress
+    else
+        gecho "Development packages already installed - using cached setup"
     fi
     exec bash
 fi

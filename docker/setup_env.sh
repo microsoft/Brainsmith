@@ -70,7 +70,7 @@ else
       yecho "finnxsi.so not found at ${FINN_ROOT}/finn_xsi/xsi.so"
       yecho "Some functionality may be limited. Check that Vivado is properly installed and accessible."
     else
-      # finnxsi directory doesn't exist - but this is now checked earlier in entrypoint_exec.sh
+      # finnxsi directory doesn't exist
       yecho "finnxsi directory not found at ${FINN_ROOT}/finn_xsi"
       yecho "Some functionality may be limited."
     fi
@@ -117,7 +117,7 @@ fi
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$VITIS_PATH/lnx64/tools/fpo_v7_1"
 export PATH=$PATH:$HOME/.local/bin
 
-# Ensure python symlink exists (workaround for missing python-is-python3 symlink)
+# Ensure python symlink exists (fallback in case python-is-python3 package doesn't create it)
 if [ ! -L /usr/bin/python ] && [ -x /usr/bin/python3 ]; then
     if [ -w /usr/bin ]; then
         ln -sf /usr/bin/python3 /usr/bin/python

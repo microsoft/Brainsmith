@@ -41,8 +41,6 @@ class BlueprintParser:
     - Both flat and phase-based transform organization
     """
     
-    SUPPORTED_VERSION = "3.0"
-    
     def __init__(self):
         """Initialize parser."""
         self.plugin_registry = get_registry()
@@ -62,9 +60,6 @@ class BlueprintParser:
             BlueprintParseError: If parsing fails
         """
         try:
-            # Validate version
-            self._validate_version(blueprint_data)
-            
             # Parse each section
             hw_compiler_space = self._parse_hw_compiler(
                 blueprint_data.get("hw_compiler", {})
@@ -102,11 +97,6 @@ class BlueprintParser:
             if isinstance(e, BlueprintParseError):
                 raise
             raise BlueprintParseError(f"Failed to parse blueprint: {str(e)}")
-    
-    def _validate_version(self, blueprint_data: Dict[str, Any]):
-        """Check blueprint version."""
-        if blueprint_data.get("version") != self.SUPPORTED_VERSION:
-            raise BlueprintParseError(f"Unsupported version")
     
     # ========== Removed validation helpers - let Python handle errors ==========
     

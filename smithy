@@ -1,6 +1,20 @@
 #!/bin/bash
 # Brainsmith Container Management Script
 # Provides utilities for managing persistent Brainsmith containers
+#
+# Key commands:
+#   daemon - Start persistent container in background for development
+#   exec   - Run commands in the container with proper environment
+#   shell  - Open interactive shell in running container
+#   clean  - Remove container and build artifacts (use --deep for full reset)
+#
+# Typical workflow:
+#   ./smithy daemon                    # Start container once
+#   ./smithy exec "python script.py"   # Run commands
+#   ./smithy shell                     # Interactive development
+#   ./smithy stop                      # Pause work (container persists)
+#   ./smithy daemon                    # Resume quickly
+#   ./smithy clean --deep              # Full cleanup when needed
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -102,13 +116,18 @@ Commands:
     build          Build Docker image
     start          Interactive shell (one-time container)
     stop           Stop container
+    restart        Stop and start container
     status         Show container status
-    cleanup        Remove container
+    cleanup        Remove container only
+    clean          Clean build artifacts, container, and optionally images
+    clean --deep   Deep clean including Docker images and dependency repos
     logs           Show container logs
 
 Examples:
     $0 daemon && $0 exec "python script.py"    # Typical workflow
-    $0 shell                                         # Interactive development
+    $0 shell                                    # Interactive development
+    $0 clean                                    # Clean container and build files
+    $0 clean --deep                             # Full reset (removes everything)
 EOF
 }
 
@@ -117,7 +136,7 @@ check_disk_space() {
     local required_gb="${1:-10}"  # Default 10GB
     local available_kb=$(df "$BSMITH_DIR" | tail -1 | awk '{print $4}')
     local available_gb=$((available_kb / 1024 / 1024))
-    
+
     if [ $available_gb -lt $required_gb ]; then
         recho "ERROR: Insufficient disk space"
         recho "Required: ${required_gb}GB, Available: ${available_gb}GB"
@@ -133,22 +152,25 @@ monitor_container_startup() {
     local container_name="$1"
     local timeout="${2:-300}"  # Default 5 minutes
     local start_time=$(date +%s)
-    
+
     gecho "Starting container and monitoring initialization..."
-    
+
     # Create a temporary file to track completion
     local completion_file="/tmp/.monitor_${container_name}_$$"
-    
+
+    # Get current time for log filtering (slightly before to catch startup)
+    local log_since=$(date --iso-8601=seconds -d '2 seconds ago')
+
     # Start log monitoring in background
     {
-        docker logs -f "$container_name" 2>&1 | while IFS= read -r line; do
+        docker logs -f --since="$log_since" "$container_name" 2>&1 | while IFS= read -r line; do
             # Check for status messages (with more flexible matching)
             if [[ "$line" =~ BRAINSMITH_STATUS:(.+)$ ]]; then
                 local status="${BASH_REMATCH[1]}"
                 local status_parts=(${status//:/ })
                 local status_type="${status_parts[0]}"
                 local status_detail="${status_parts[1]:-}"
-                
+
                 case "$status_type" in
                     "INITIALIZING")
                         gecho "→ Container initializing..."
@@ -192,9 +214,9 @@ monitor_container_startup() {
             fi
         done
     } &
-    
+
     local monitor_pid=$!
-    
+
     # Wait for completion or timeout
     local elapsed=0
     while [ $elapsed -lt $timeout ]; do
@@ -203,7 +225,7 @@ monitor_container_startup() {
             kill $monitor_pid 2>/dev/null || true
             wait $monitor_pid 2>/dev/null || true
             rm -f "$completion_file"
-            
+
             if [ "$result" = "SUCCESS" ]; then
                 return 0
             else
@@ -211,7 +233,7 @@ monitor_container_startup() {
                 return 1
             fi
         fi
-        
+
         # Check if container is still running
         if ! docker inspect "$container_name" --format='{{.State.Running}}' 2>/dev/null | grep -q "true"; then
             kill $monitor_pid 2>/dev/null || true
@@ -220,11 +242,11 @@ monitor_container_startup() {
             recho "Container stopped unexpectedly during initialization"
             return 1
         fi
-        
+
         sleep 2
         elapsed=$((elapsed + 2))
     done
-    
+
     # Timeout reached
     kill $monitor_pid 2>/dev/null || true
     wait $monitor_pid 2>/dev/null || true
@@ -251,20 +273,20 @@ is_container_running() {
 build_image() {
     # Check disk space before building (requires 15GB for builds)
     check_disk_space 15
-    
+
     gecho "Building Docker image $BSMITH_DOCKER_TAG"
-    
+
     OLD_PWD=$(pwd)
     cd $BSMITH_DIR
-    
+
     [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && BSMITH_DOCKER_BUILD_FLAGS+="--no-cache "
-    
+
     docker build -f docker/Dockerfile \
         --build-arg BACKEND=$BSMITH_HW_COMPILER \
         --build-arg ENTRYPOINT=docker/entrypoint.sh \
         --tag=$BSMITH_DOCKER_TAG \
         $BSMITH_DOCKER_BUILD_FLAGS .
-    
+
     cd $OLD_PWD
 }
 
@@ -282,7 +304,7 @@ check_container_conflicts() {
 # Common container setup logic
 setup_container_if_needed() {
     STATUS=$(get_container_status)
-    
+
     if [ "$STATUS" = "running" ]; then
         return 0
     elif [ "$STATUS" = "exited" ]; then
@@ -290,12 +312,12 @@ setup_container_if_needed() {
         docker start "$DOCKER_INST_NAME"
         return $?
     fi
-    
+
     # Build image if it doesn't exist or if not using prebuilt
     if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
         build_image
     fi
-    
+
     # Create the container but don't start it yet
     create_container "$1"
     return $?
@@ -304,37 +326,37 @@ setup_container_if_needed() {
 # Create container with the specified mode
 create_container() {
     MODE="$1"
-    
+
     # Validate Docker flags for security before proceeding
     validate_docker_flags
-    
+
     # Check for container name conflicts
     check_container_conflicts
-    
+
     gecho "Creating new container $DOCKER_INST_NAME"
-    
+
     # Create necessary directories
     mkdir -p $BSMITH_BUILD_DIR
     mkdir -p $BSMITH_SSH_KEY_DIR
-    
+
     # Build Docker command with all required options
     DOCKER_CMD="docker run"
-    
+
     if [ "$MODE" = "daemon" ]; then
         DOCKER_CMD+=" -d -t"
     else
         DOCKER_CMD+=" -it --rm"
     fi
-    
+
     DOCKER_CMD+=" --name $DOCKER_INST_NAME"
     DOCKER_CMD+=" --init --hostname $DOCKER_INST_NAME"
     DOCKER_CMD+=" -e SHELL=/bin/bash"
     DOCKER_CMD+=" -w $BSMITH_DIR"
-    
+
     # Essential volume mounts
     DOCKER_CMD+=" -v $BSMITH_DIR:$BSMITH_DIR"
     DOCKER_CMD+=" -v $BSMITH_BUILD_DIR:$BSMITH_BUILD_DIR"
-    
+
     # Essential environment variables
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
@@ -342,7 +364,7 @@ create_container() {
     DOCKER_CMD+=" -e LOCALHOST_URL=$LOCALHOST_URL"
     DOCKER_CMD+=" -e NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
-    
+
     # User/permission setup (unless running as root)
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
         # Only mount system files if they exist and are readable
@@ -351,7 +373,7 @@ create_container() {
         # REMOVED: [ -r /etc/shadow ] && DOCKER_CMD+=" -v /etc/shadow:/etc/shadow:ro"
         # Security: /etc/shadow contains password hashes and should not be mounted
         [ -d /etc/sudoers.d ] && DOCKER_CMD+=" -v /etc/sudoers.d:/etc/sudoers.d:ro"
-        
+
         # SSH key directory mount for non-root user
         if [ -d "$BSMITH_SSH_KEY_DIR" ]; then
             DOCKER_CMD+=" -v $BSMITH_SSH_KEY_DIR:$HOME/.ssh"
@@ -363,22 +385,22 @@ create_container() {
             DOCKER_CMD+=" -v $BSMITH_SSH_KEY_DIR:/root/.ssh"
         fi
     fi
-    
+
     # Dependency and Xilinx setup (if not skipping deps)
     if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
         DOCKER_CMD+=" -e OHMYXILINX=$OHMYXILINX"
-        
+
         # Xilinx workarounds
         DOCKER_CMD+=" -e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1"
         DOCKER_CMD+=" -e XILINX_LOCAL_USER_DATA=no"
-        
+
         # Xilinx tools (if available)
         if [ ! -z "$BSMITH_XILINX_PATH" ]; then
             VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
             VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
             HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
-            
+
             DOCKER_CMD+=" -v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH"
             [ -d "$VIVADO_PATH" ] && DOCKER_CMD+=" -e XILINX_VIVADO=$VIVADO_PATH -e VIVADO_PATH=$VIVADO_PATH"
             [ -d "$HLS_PATH" ] && DOCKER_CMD+=" -e HLS_PATH=$HLS_PATH"
@@ -386,7 +408,7 @@ create_container() {
             [ -d "$PLATFORM_REPO_PATHS" ] && DOCKER_CMD+=" -v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS -e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS"
         fi
     fi
-    
+
     # GPU support
     if [ "$BSMITH_DOCKER_GPU" != 0 ]; then
         gecho "nvidia-docker detected, enabling GPUs"
@@ -396,24 +418,24 @@ create_container() {
             DOCKER_CMD+=" --gpus all"
         fi
     fi
-    
+
     # Additional flags from BSMITH_DOCKER_EXTRA and other sources
     DOCKER_CMD+=" $BSMITH_DOCKER_EXTRA $BSMITH_DOCKER_FLAGS"
-    
+
     # Image and command
     if [ "$MODE" = "daemon" ]; then
-        # Use proper entrypoint with daemon mode - industry standard approach
+        # Use entrypoint with daemon mode to keep container running
         DOCKER_CMD+=" -e BSMITH_CONTAINER_MODE=daemon"
         DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
         gecho "Starting daemon container..."
         # Execute with explicit empty command to trigger daemon mode
         RESULT=$($DOCKER_CMD "")
         DOCKER_EXIT_CODE=$?
-        
+
         # Wait a moment and check if container actually started
         sleep 2
         FINAL_STATUS=$(get_container_status)
-        
+
         if [ "$FINAL_STATUS" != "running" ]; then
             recho "Container failed to start properly. Status: $FINAL_STATUS"
             echo "=== Container logs ===" >&2
@@ -424,7 +446,7 @@ create_container() {
         else
             # Use new log monitoring system instead of polling
             local init_timeout="${BSMITH_INIT_TIMEOUT:-300}"
-            
+
             if monitor_container_startup "$DOCKER_INST_NAME" "$init_timeout"; then
                 gecho "Container started successfully in daemon mode"
                 return 0
@@ -451,7 +473,7 @@ start_interactive() {
     if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
         build_image
     fi
-    
+
     # For interactive mode, always create new container with --rm
     create_container "interactive"
 }
@@ -500,12 +522,12 @@ exec_in_container() {
         recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
         return 1
     fi
-    
+
     if [ $# -eq 0 ]; then
         recho "No command specified for exec"
         return 1
     fi
-    
+
     # Build command with proper quoting
     CMD=""
     for arg in "$@"; do
@@ -515,21 +537,22 @@ exec_in_container() {
             CMD="$CMD $arg"
         fi
     done
-    
+
     # Use the fast exec entrypoint for optimized performance
     # Also ensure unbuffered output is set for exec commands
-    docker exec -e PYTHONUNBUFFERED=1 "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_exec.sh bash -c "$CMD"
+    docker exec -e PYTHONUNBUFFERED=1 "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash -c "$CMD"
     return $?
 }
 
 open_shell() {
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start daemon"
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
         return 1
     fi
-    
+
     gecho "Opening shell in container $DOCKER_INST_NAME"
-    docker exec -it "$DOCKER_INST_NAME" bash
+    # Use entrypoint_fast.sh to get proper environment setup
+    docker exec -it "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash
 }
 
 show_logs() {
@@ -543,6 +566,100 @@ cleanup_container() {
         docker rm -f "$DOCKER_INST_NAME"
     else
         yecho "Container $DOCKER_INST_NAME does not exist"
+    fi
+}
+
+# Clean build artifacts only
+clean_build_artifacts() {
+    gecho "Cleaning build artifacts..."
+    
+    # Clean build directory
+    if [ -d "$BSMITH_BUILD_DIR" ]; then
+        gecho "Removing build directory: $BSMITH_BUILD_DIR"
+        rm -rf "$BSMITH_BUILD_DIR"
+    fi
+    
+    # Clean Vivado IP cache
+    if [ -d "$VIVADO_IP_CACHE" ]; then
+        gecho "Removing Vivado IP cache: $VIVADO_IP_CACHE"
+        rm -rf "$VIVADO_IP_CACHE"
+    fi
+    
+    # Clean temporary markers
+    local temp_files=(
+        "/tmp/.brainsmith_packages_installed"
+        "/tmp/.brainsmith_deps_ready"
+        "/tmp/.monitor_${DOCKER_INST_NAME}_*"
+    )
+    
+    for file in "${temp_files[@]}"; do
+        if ls $file 2>/dev/null 1>&2; then
+            gecho "Removing temporary files: $file"
+            rm -f $file
+        fi
+    done
+    
+    gecho "Build artifacts cleaned"
+}
+
+# Comprehensive clean with optional deep clean
+clean_all() {
+    local deep_clean=0
+    if [ "$1" = "--deep" ] || [ "$1" = "-d" ]; then
+        deep_clean=1
+    fi
+    
+    yecho "Starting comprehensive clean..."
+    
+    # 1. Stop container if running
+    if is_container_running; then
+        gecho "Stopping running container..."
+        stop_container
+    fi
+    
+    # 2. Remove container
+    cleanup_container
+    
+    # 3. Clean build artifacts
+    clean_build_artifacts
+    
+    # 4. Deep clean (if requested)
+    if [ $deep_clean -eq 1 ]; then
+        yecho "Performing deep clean..."
+        
+        # Remove Docker image
+        if docker images | grep -q "$BSMITH_DOCKER_TAG"; then
+            gecho "Removing Docker image: $BSMITH_DOCKER_TAG"
+            docker rmi -f "$BSMITH_DOCKER_TAG"
+        fi
+        
+        # Remove dangling images
+        local dangling_images=$(docker images -f "dangling=true" -q)
+        if [ -n "$dangling_images" ]; then
+            gecho "Removing dangling Docker images..."
+            docker rmi $dangling_images
+        fi
+        
+        # Prune Docker build cache (with confirmation)
+        gecho "Pruning Docker build cache..."
+        docker builder prune -f
+        
+        # Clean dependency repos (optional, with confirmation)
+        read -p "Remove dependency repositories (deps/)? This will require re-fetching on next run [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [ -d "$BSMITH_DIR/deps" ]; then
+                gecho "Removing dependency repositories..."
+                rm -rf "$BSMITH_DIR/deps"
+            fi
+        fi
+    fi
+    
+    gecho "Clean complete!"
+    
+    # Show disk space recovered
+    if command -v du >/dev/null 2>&1; then
+        gecho "Disk space available: $(df -h "$BSMITH_DIR" | tail -1 | awk '{print $4}')"
     fi
 }
 
@@ -579,6 +696,10 @@ case "${1:-help}" in
         ;;
     "cleanup")
         cleanup_container
+        ;;
+    "clean")
+        shift
+        clean_all "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

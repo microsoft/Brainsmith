@@ -421,6 +421,38 @@ def streamlining_step(model, cfg):
 # === Hardware Steps ===
 
 @step(
+    name="specialize_layers",
+    category="hardware",
+    description="Specialize layers with proper opset handling"
+)
+def specialize_layers_step(model, cfg):
+    """
+    Custom specialize layers step that ensures opset imports are handled correctly.
+    """
+    # Import needed transforms
+    from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+    from finn.transformation.fpgadataflow.make_pynq_driver import ApplyConfig
+    from finn.transformation.general import GiveUniqueNodeNames
+    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.transformation.infer_datatypes import InferDataTypes
+    
+    if cfg.specialize_layers_config_file is not None:
+        model = model.transform(GiveUniqueNodeNames())
+        model = model.transform(ApplyConfig(cfg.specialize_layers_config_file))
+    
+    # Run the specialization
+    model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
+    
+    # Ensure custom opset imports before shape inference
+    model = model.transform(tfm.brainsmith.EnsureCustomOpsetImports())
+    
+    model = model.transform(GiveUniqueNodeNames())
+    model = model.transform(InferShapes())
+    model = model.transform(InferDataTypes())
+    
+    return model
+
+@step(
     name="infer_hardware",
     category="hardware",
     description="Infer hardware layers for custom operations"
@@ -448,6 +480,9 @@ def infer_hardware_step(model, cfg):
     model = model.transform(tfm.brainsmith.InferHWSoftmax())
     model = model.transform(tfm.finn.InferThresholdingLayer())
     model = model.transform(tfm.finn.InferQuantizedMatrixVectorActivation())
+    
+    # Ensure all custom domains have opset imports
+    model = model.transform(tfm.brainsmith.EnsureCustomOpsetImports())
     
     return model
 

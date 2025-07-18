@@ -114,7 +114,7 @@ flowchart TB
 
 ## Three-Phase Pipeline
 
-### [Phase 1: Design Space Constructor](../../docs/PHASE2_ARCHITECTURE.md)
+### [Phase 1: Design Space Constructor](../../docs/PHASE1_ARCHITECTURE.md)
 
 ```mermaid
 stateDiagram-v2
@@ -330,11 +330,19 @@ environment:
 ### Core API
 
 ```python
-# Simple usage
-from brainsmith.core import explore
-results = explore("model.onnx", "blueprint.yaml")
+# Simple usage (recommended)
+from brainsmith import forge, explore, create_build_runner_factory
 
-# Advanced usage
+# Step 1: Parse blueprint and create design space
+design_space = forge("model.onnx", "blueprint.yaml")
+
+# Step 2: Create build runner
+build_runner = create_build_runner_factory()
+
+# Step 3: Explore design space
+results = explore(design_space, build_runner)
+
+# Advanced usage (internal APIs for framework developers)
 from brainsmith.core.phase1 import ForgeAPI
 from brainsmith.core.phase2 import ExplorerEngine
 
@@ -444,14 +452,25 @@ explorer.register_hooks(CustomHooks())
 ```python
 # MLflow integration
 import mlflow
+from brainsmith import forge, explore, create_build_runner_factory
+
 with mlflow.start_run():
-    results = explore("model.onnx", "blueprint.yaml")
-    mlflow.log_metric("best_fps", results.get_best().metrics.performance.fps)
+    design_space = forge("model.onnx", "blueprint.yaml")
+    build_runner = create_build_runner_factory()
+    results = explore(design_space, build_runner)
+    
+    best = results.get_best()
+    if best.metrics:
+        mlflow.log_metric("best_fps", best.metrics.performance.throughput_ips)
 
 # CI/CD testing
 def test_model_meets_requirements():
-    results = explore("model.onnx", "ci_blueprint.yaml")
-    assert results.get_best().metrics.performance.fps >= 1000
+    design_space = forge("model.onnx", "ci_blueprint.yaml")
+    build_runner = create_build_runner_factory()
+    results = explore(design_space, build_runner)
+    
+    best = results.get_best()
+    assert best.metrics and best.metrics.performance.throughput_ips >= 1000
 ```
 
 ---

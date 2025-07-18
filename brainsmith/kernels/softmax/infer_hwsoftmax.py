@@ -35,7 +35,7 @@ class InferHWSoftmax(Transformation):
                     "HWSoftmax",
                     [n.input[0]],  # input tensor(s)
                     [n.output[0]],  # output tensor(s)
-                    domain="brainsmith.kernels.softmax",
+                    domain="brainsmith.kernels",
                     backend="fpgadataflow",
                     ifm_dim=input_shape,
                     input_data_type=idt0.name,

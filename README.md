@@ -85,7 +85,7 @@ git clone git@github.com:microsoft/Brainsmith.git
 FINN_COMMIT="new-commit-hash-or-branch"
 
 # Rebuild container to fetch updated dependencies
-./smithy cleanup
+./smithy clean  # Removes container and build artifacts
 ./smithy build
 ```
 
@@ -104,8 +104,12 @@ FINN_COMMIT="new-commit-hash-or-branch"
 # Check status
 ./smithy status
 
-# Stop when done
+# Stop when done (container persists for quick restart)
 ./smithy stop
+
+# Clean up when needed
+./smithy clean       # Remove container and build artifacts
+./smithy clean --deep  # Full reset: removes images and optionally deps/
 ```
 
 5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
@@ -119,6 +123,19 @@ FINN_COMMIT="new-commit-hash-or-branch"
 ```
 
 ## Usage Examples
+
+### Import Structure
+
+Brainsmith provides a clean public API through the top-level module:
+
+```python
+# User-facing imports (recommended)
+from brainsmith import forge, explore, create_build_runner_factory, BuildStatus
+
+# Internal imports (for advanced use only)
+from brainsmith.core.phase1 import ForgeAPI  # Direct access to forge internals
+from brainsmith.core.phase2 import ExplorerEngine  # Direct access to explorer
+```
 
 ### Blueprint-Based DSE (Recommended)
 
@@ -186,18 +203,28 @@ blueprint:
 Then explore the design space:
 
 ```python
-from brainsmith import forge, explore
+from brainsmith import forge, explore, create_build_runner_factory
 
 # Parse blueprint and create design space
 design_space = forge("bert_layer.onnx", "bert_blueprint.yaml")
 
+# Create build runner for the backend
+build_runner = create_build_runner_factory()
+
 # Explore all configurations
-results = explore(design_space)
+results = explore(design_space, build_runner)
 
 # Get best configuration
-print(f"Best config: {results.best_config.id}")
-print(f"Throughput: {results.best_config.metrics.throughput} inf/sec")
-print(f"Pareto optimal configs: {len(results.pareto_optimal)}")
+best = results.get_best()
+print(f"Best config: {best.config_id}")
+print(f"Status: {best.status}")
+if best.metrics:
+    print(f"LUTs: {best.metrics.resources.lut}")
+    print(f"Throughput: {best.metrics.performance.throughput_ips} inf/sec")
+
+# Get Pareto optimal configurations
+pareto = results.get_pareto_frontier()
+print(f"Pareto optimal configs: {len(pareto)}")
 ```
 
 ### Legacy Direct Usage
@@ -240,8 +267,13 @@ Brainsmith uses a plugin architecture to manage transforms, kernels, backends, a
 ### Usage Patterns
 
 ```python
-# Natural access patterns
-from brainsmith.plugins import transforms as tfm, kernels as kn, backends as bk, steps
+# Create plugin collections
+from brainsmith.core.plugins import create_collections
+collections = create_collections()
+tfm = collections['transforms']
+kn = collections['kernels']
+bk = collections['backends']
+steps = collections['steps']
 
 # Direct attribute access
 model = model.transform(tfm.ConvertDivToMul())

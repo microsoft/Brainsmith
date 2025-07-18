@@ -133,7 +133,6 @@ FINN_TRANSFORMS = [
     ('MoveScalarMulPastConvTranspose', f'{FT}.streamline.reorder.MoveScalarMulPastConvTranspose', 'topology_opt'),
     ('MoveMulPastDWConv', f'{FT}.streamline.reorder.MoveMulPastDWConv', 'topology_opt'),
     ('MoveMulPastMaxPool', f'{FT}.streamline.reorder.MoveMulPastMaxPool', 'topology_opt'),
-    ('MoveLinearPastEltwiseAdd', f'{FT}.streamline.reorder.MoveLinearPastEltwiseAdd', 'topology_opt'),
     ('MoveScalarLinearPastInvariants', f'{FT}.streamline.reorder.MoveScalarLinearPastInvariants', 'topology_opt'),
     ('MakeMaxPoolNHWC', f'{FT}.streamline.reorder.MakeMaxPoolNHWC', 'topology_opt'),
     ('MakeScaleResizeNHWC', f'{FT}.streamline.reorder.MakeScaleResizeNHWC', 'topology_opt'),
