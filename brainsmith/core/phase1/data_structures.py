@@ -12,15 +12,6 @@ from enum import Enum
 import itertools
 
 
-class SearchStrategy(Enum):
-    """Available search strategies for design space exploration."""
-    EXHAUSTIVE = "exhaustive"
-    # Future strategies can be added here:
-    # ADAPTIVE = "adaptive"
-    # ML_GUIDED = "ml_guided"
-    # RANDOM_SAMPLING = "random_sampling"
-
-
 class OutputStage(Enum):
     """Target output stage for the compilation process."""
     DATAFLOW_GRAPH = "dataflow_graph"
@@ -78,17 +69,15 @@ class HWCompilerSpace:
             options.append((item, ["*"]))
         
         elif isinstance(item, (tuple, list)) and len(item) == 2 and isinstance(item[1], list):
-            # Tuple/List format: (name, backends) or [name, backends]
+            # Tuple/List format: [name, backends] - single kernel with backend list
             name, backends = item
             if name and isinstance(name, str) and name.startswith("~"):
                 # Optional kernel - add both enabled and disabled
-                for backend in backends:
-                    options.append((name[1:], [backend]))
+                options.append((name[1:], backends))  # Kernel with all backends
                 options.append(("", []))  # Empty name = skipped
             elif name and isinstance(name, str):
-                # Generate separate options for each backend
-                for backend in backends:
-                    options.append((name, [backend]))
+                # Single kernel option with its backends
+                options.append((name, backends))
             else:
                 # This is actually a mutually exclusive list, not a tuple
                 for subitem in item:
@@ -202,70 +191,6 @@ class HWCompilerSpace:
 
 
 @dataclass
-class SearchConstraint:
-    """
-    A constraint on the search space.
-    
-    Attributes:
-        metric: Name of the metric to constrain (e.g., "lut_utilization")
-        operator: Comparison operator ("<=", ">=", "==", "<", ">")
-        value: Target value for the constraint
-    """
-    metric: str
-    operator: str
-    value: Union[float, int]
-    
-    def __str__(self) -> str:
-        return f"{self.metric} {self.operator} {self.value}"
-    
-    def evaluate(self, metric_value: Union[float, int]) -> bool:
-        """
-        Evaluate whether a metric value satisfies this constraint.
-        
-        Args:
-            metric_value: The actual metric value to check
-            
-        Returns:
-            True if the constraint is satisfied, False otherwise
-        """
-        if self.operator == "<=":
-            return metric_value <= self.value
-        elif self.operator == ">=":
-            return metric_value >= self.value
-        elif self.operator == "==":
-            return metric_value == self.value
-        elif self.operator == "<":
-            return metric_value < self.value
-        elif self.operator == ">":
-            return metric_value > self.value
-        else:
-            raise ValueError(f"Unknown operator: {self.operator}")
-
-
-@dataclass
-class SearchConfig:
-    """
-    Configuration for design space exploration.
-    
-    Attributes:
-        strategy: Search strategy to use
-        constraints: List of constraints to apply
-        max_evaluations: Maximum number of configurations to evaluate
-        timeout_minutes: Maximum time to spend on exploration
-        parallel_builds: Number of parallel builds to run
-    """
-    strategy: SearchStrategy
-    constraints: List[SearchConstraint] = field(default_factory=list)
-    max_evaluations: Optional[int] = None
-    timeout_minutes: Optional[int] = None
-    parallel_builds: int = 1
-    
-    def __str__(self) -> str:
-        constraint_str = f", {len(self.constraints)} constraints" if self.constraints else ""
-        return f"{self.strategy.value} search{constraint_str}"
-
-
-@dataclass
 class GlobalConfig:
     """
     Global configuration parameters that apply to all exploration runs.
@@ -331,48 +256,86 @@ class BuildMetrics:
 
 @dataclass
 class DesignSpace:
-    """
-    Complete definition of the exploration space.
+    """Complete design space specification.
     
-    This is the main output of the Design Space Constructor phase,
-    containing all information needed for exploration.
-    
-    Attributes:
-        model_path: Path to the ONNX model
-        hw_compiler_space: Hardware compiler configuration space
-        search_config: Search strategy and constraints
-        global_config: Global parameters
+    Represents all possible hardware configurations to explore.
+    Always uses exhaustive search up to max_combinations limit.
     """
     model_path: str
     hw_compiler_space: HWCompilerSpace
-    search_config: SearchConfig
     global_config: GlobalConfig
     
+    # Direct limits (no SearchConfig)
+    max_combinations: int = 100000
+    timeout_minutes: int = 60
+    
+    def __post_init__(self):
+        """Validate design space size on creation."""
+        estimated_size = self._estimate_size()
+        if estimated_size > self.max_combinations:
+            raise ValueError(
+                f"Design space too large: {estimated_size:,} combinations exceeds "
+                f"limit of {self.max_combinations:,}. Reduce design space or increase "
+                f"max_combinations."
+            )
+    
+    def _estimate_size(self) -> int:
+        """Estimate total number of combinations."""
+        size = 1
+        
+        # Kernels: product of backend choices
+        kernel_combos = self.hw_compiler_space.get_kernel_combinations()
+        size *= len(kernel_combos) if kernel_combos else 1
+        
+        # Transforms: product of choices per stage
+        if isinstance(self.hw_compiler_space.transforms, dict):
+            for stage, transforms in self.hw_compiler_space.transforms.items():
+                stage_choices = 1
+                for t in transforms:
+                    if isinstance(t, list):
+                        # Mutually exclusive options
+                        stage_choices *= len([opt for opt in t if opt != "~"])
+                    else:
+                        # Required transform
+                        stage_choices *= 1
+                size *= stage_choices
+        else:
+            # Flat list of transforms
+            transform_combos = self.hw_compiler_space.get_transform_combinations()
+            size *= len(transform_combos) if transform_combos else 1
+        
+        return size
+    
     def get_total_combinations(self) -> int:
-        """
-        Calculate the total number of possible configurations.
+        """Calculate the total number of possible configurations.
         
         Returns:
             Total number of unique configurations in the design space
         """
-        total = 1
-        
-        # Kernel combinations
-        kernel_combos = self.hw_compiler_space.get_kernel_combinations()
-        total *= len(kernel_combos) if kernel_combos else 1
-        
-        # Transform combinations
-        transform_combos = self.hw_compiler_space.get_transform_combinations()
-        total *= len(transform_combos) if transform_combos else 1
-        
-        return total
+        return self._estimate_size()
     
-    def __str__(self) -> str:
-        return (
-            f"DesignSpace(\n"
-            f"  Model: {self.model_path}\n"
-            f"  Total combinations: {self.get_total_combinations():,}\n"
-            f"  Search: {self.search_config}\n"
-            f"  Global: {self.global_config}\n"
-            f")"
-        )
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "hw_compiler_space": {
+                "kernels": self.hw_compiler_space.kernels,
+                "transforms": self.hw_compiler_space.transforms,
+                "build_steps": self.hw_compiler_space.build_steps,
+                "config_flags": self.hw_compiler_space.config_flags,
+            },
+            "global_config": {
+                "output_stage": self.global_config.output_stage.value,
+                "working_directory": self.global_config.working_directory,
+                "cache_results": self.global_config.cache_results,
+                "save_artifacts": self.global_config.save_artifacts,
+                "log_level": self.global_config.log_level,
+                "max_combinations": self.global_config.max_combinations,
+                "timeout_minutes": self.global_config.timeout_minutes,
+                "start_step": self.global_config.start_step,
+                "stop_step": self.global_config.stop_step,
+                "input_type": self.global_config.input_type,
+                "output_type": self.global_config.output_type,
+            },
+            "max_combinations": self.max_combinations,
+            "timeout_minutes": self.timeout_minutes,
+        }

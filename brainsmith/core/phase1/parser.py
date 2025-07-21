@@ -1,49 +1,50 @@
 """
-Blueprint parser for DSE V3 - Refactored version.
+Blueprint parser for v4.0 format.
 
 This module handles parsing Blueprint YAML files into structured DesignSpace objects.
-It supports various kernel and transform formats including simple strings, tuples,
-mutually exclusive groups, and optional elements.
+Supports blueprint inheritance and dynamic transform stage registration.
 """
 
+import os
 import yaml
-from typing import Dict, List, Any, Union
+import logging
+from typing import Dict, List, Any, Union, Tuple
+from pathlib import Path
 
 from .data_structures import (
     DesignSpace,
     HWCompilerSpace,
-    SearchConfig,
-    SearchConstraint,
-    SearchStrategy,
     GlobalConfig,
     OutputStage,
 )
 from .exceptions import BlueprintParseError
-from ..config import get_config
-from ..plugins import get_registry
+
+logger = logging.getLogger(__name__)
 
 
-# Removed FieldSpec - not used in this refactoring
-
-
-# Removed wrap_parse_errors decorator - let errors bubble up naturally
+def load_blueprint(blueprint_path: str) -> Dict[str, Any]:
+    """Load a blueprint YAML file."""
+    try:
+        with open(blueprint_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        raise BlueprintParseError(f"Failed to load blueprint {blueprint_path}: {e}")
 
 
 class BlueprintParser:
     """
     Parse Blueprint YAML files into DesignSpace objects.
     
-    This parser handles the V3 blueprint format with support for:
-    - Simple kernel names that auto-import all backends
-    - Explicit kernel backend lists
-    - Mutually exclusive kernel/transform groups
-    - Optional elements marked with ~
-    - Both flat and phase-based transform organization
+    This parser handles the V4 blueprint format with support for:
+    - Blueprint inheritance via 'extends'
+    - Direct kernel format: ["KernelName", ["backend1", "backend2"]]
+    - Transform stages with dynamic registration
+    - Direct limits on design space
     """
     
     def __init__(self):
         """Initialize parser."""
-        self.plugin_registry = get_registry()
+        pass
     
     def parse(self, blueprint_data: Dict[str, Any], model_path: str) -> DesignSpace:
         """
@@ -60,37 +61,50 @@ class BlueprintParser:
             BlueprintParseError: If parsing fails
         """
         try:
-            # Parse each section
-            hw_compiler_space = self._parse_hw_compiler(
-                blueprint_data.get("hw_compiler", {})
-            )
-            search_config = self._parse_search(
-                blueprint_data.get("search", {})
-            )
-            global_config = self._parse_global(
-                blueprint_data.get("global", {})
+            # For v4.0, we expect a different structure
+            # The blueprint_data passed in is just the initial load,
+            # but we need the path for inheritance
+            # This is a limitation - for now assume no inheritance
+            
+            # Parse transforms including custom stages
+            all_transforms = self._parse_all_transforms(blueprint_data)
+            
+            # Register transform stages as steps
+            self._register_transform_stages(all_transforms)
+            
+            # Parse and expand build pipeline
+            build_steps = self._parse_build_pipeline(blueprint_data, all_transforms)
+            
+            # Parse kernels (simple format)
+            kernels = self._parse_kernels(blueprint_data)
+            
+            # Create HWCompilerSpace
+            hw_compiler_space = HWCompilerSpace(
+                kernels=kernels,
+                transforms=all_transforms,
+                build_steps=build_steps,
+                config_flags=blueprint_data.get("finn_config", {})
             )
             
-            # Resolve effective timeout with proper priority
-            # Priority: search.timeout_minutes > global.timeout_minutes > global library config
-            if search_config.timeout_minutes is None:
-                if global_config.timeout_minutes is not None:
-                    # Use blueprint's global timeout
-                    search_config.timeout_minutes = global_config.timeout_minutes
-                else:
-                    # Use library global config default
-                    library_config = get_config()
-                    search_config.timeout_minutes = library_config.timeout_minutes
+            # Create GlobalConfig
+            global_config = GlobalConfig(
+                output_stage=OutputStage(blueprint_data.get("output_stage", "rtl")),
+                working_directory=blueprint_data.get("working_directory", "./dse_work"),
+                cache_results=blueprint_data.get("preserve_intermediate_models", False),
+                save_artifacts=blueprint_data.get("preserve_intermediate_models", False),
+                start_step=blueprint_data.get("start_step"),
+                stop_step=blueprint_data.get("stop_step")
+            )
             
-            # Create and return DesignSpace
+            # Create DesignSpace with direct limits
             design_space = DesignSpace(
                 model_path=model_path,
                 hw_compiler_space=hw_compiler_space,
-                search_config=search_config,
-                global_config=global_config
+                global_config=global_config,
+                max_combinations=blueprint_data.get("max_combinations", 100000),
+                timeout_minutes=blueprint_data.get("timeout_minutes", 60)
             )
             
-            # Successfully parsed
             return design_space
             
         except Exception as e:
@@ -98,137 +112,144 @@ class BlueprintParser:
                 raise
             raise BlueprintParseError(f"Failed to parse blueprint: {str(e)}")
     
-    # ========== Removed validation helpers - let Python handle errors ==========
+    def parse_with_inheritance(self, blueprint_path: str, model_path: str) -> DesignSpace:
+        """Parse blueprint with inheritance support."""
+        blueprint = self._load_blueprint_with_inheritance(blueprint_path)
+        return self.parse(blueprint, model_path)
     
-    # ========== Main Parsing Methods ==========
-    
-    def _parse_hw_compiler(self, hw_data: Dict[str, Any]) -> HWCompilerSpace:
-        """Parse hardware compiler configuration space."""
-        # Get kernels and transforms
-        kernels_data = hw_data.get("kernels", [])
-        kernels = self._process_kernels(kernels_data)
-        transforms_data = hw_data.get("transforms", [])
-        
-        return HWCompilerSpace(
-            kernels=kernels,
-            transforms=transforms_data,
-            build_steps=hw_data.get("build_steps", []),
-            config_flags=hw_data.get("config_flags", {})
-        )
-    
-    def _parse_search(self, search_data: Dict[str, Any]) -> SearchConfig:
-        """Parse search configuration."""
-        # Parse strategy and constraints
-        strategy = SearchStrategy(search_data.get("strategy", "exhaustive"))
-        constraints_data = search_data.get("constraints", [])
-        constraints = [self._parse_constraint(c, i) for i, c in enumerate(constraints_data)]
-        
-        timeout_minutes = search_data.get("timeout_minutes")
-        
-        return SearchConfig(
-            strategy=strategy,
-            constraints=constraints,
-            max_evaluations=search_data.get("max_evaluations"),
-            timeout_minutes=timeout_minutes,
-            parallel_builds=search_data.get("parallel_builds", 1)
-        )
-    
-    def _parse_constraint(self, constraint_data: Dict[str, Any], index: int) -> SearchConstraint:
-        """Parse a single constraint."""
-        return SearchConstraint(
-            metric=constraint_data["metric"],
-            operator=constraint_data["operator"],
-            value=constraint_data["value"]
-        )
-    
-    def _parse_global(self, global_data: Dict[str, Any]) -> GlobalConfig:
-        """Parse global configuration."""
-        # Parse output stage
-        output_stage = OutputStage(global_data.get("output_stage", "rtl"))
-        
-        # Get optional fields
-        max_combinations = global_data.get("max_combinations")
-        timeout_minutes = global_data.get("timeout_minutes")
-        
-        return GlobalConfig(
-            output_stage=output_stage,
-            working_directory=global_data.get("working_directory", "./builds"),
-            cache_results=global_data.get("cache_results", True),
-            save_artifacts=global_data.get("save_artifacts", True),
-            log_level=global_data.get("log_level", "INFO"),
-            max_combinations=max_combinations,
-            timeout_minutes=timeout_minutes
-        )
-    
-    # ========== Simplified Processing Methods ==========
-    
-    def _process_kernels(self, kernels_data: List) -> List:
-        """Process kernel specifications and auto-discover backends when needed."""
-        processed_kernels = []
-        
-        for kernel_spec in kernels_data:
-            if isinstance(kernel_spec, str):
-                # Simple kernel name - auto-discover backends
-                kernel_name = kernel_spec.strip("~")
-                # Get backends from registry
-                backends = list(self.plugin_registry.backends_by_kernel.get(kernel_name, []))
-                processed_kernels.append((kernel_spec, backends))
-                
-            elif isinstance(kernel_spec, (tuple, list)) and len(kernel_spec) == 2:
-                # Check if this is a kernel with explicit backends
-                if isinstance(kernel_spec[0], str) and isinstance(kernel_spec[1], list):
-                    # Explicit backend specification
-                    processed_kernels.append(tuple(kernel_spec))
-                else:
-                    # Mutually exclusive group
-                    group = []
-                    for item in kernel_spec:
-                        if item is not None:
-                            group.extend(self._process_kernels([item]))
-                        else:
-                            group.append(None)
-                    processed_kernels.append(group)
-                
-            elif isinstance(kernel_spec, list):
-                # Mutually exclusive group
-                group = []
-                for item in kernel_spec:
-                    group.extend(self._process_kernels([item]))
-                processed_kernels.append(group)
-                
-            else:
-                processed_kernels.append(kernel_spec)
-        
-        return processed_kernels
-
-
-def load_blueprint(blueprint_path: str) -> Dict[str, Any]:
-    """
-    Load and parse a blueprint YAML file.
-    
-    Args:
-        blueprint_path: Path to the blueprint YAML file
-        
-    Returns:
-        Parsed YAML data as a dictionary
-        
-    Raises:
-        BlueprintParseError: If file cannot be loaded or parsed
-    """
-    try:
+    def _load_blueprint_with_inheritance(self, blueprint_path: str) -> Dict[str, Any]:
+        """Load blueprint with inheritance support."""
         with open(blueprint_path, 'r') as f:
-            data = yaml.safe_load(f)
+            blueprint = yaml.safe_load(f)
         
-        if not isinstance(data, dict):
-            raise BlueprintParseError(
-                "Blueprint file must contain a YAML dictionary at the top level"
-            )
+        # Handle inheritance
+        if "extends" in blueprint:
+            # Resolve parent path relative to child
+            parent_path = self._resolve_path(blueprint["extends"], blueprint_path)
+            parent = self._load_blueprint_with_inheritance(parent_path)
+            
+            # Deep merge parent and child
+            blueprint = self._deep_merge(parent, blueprint)
         
-        return data
+        return blueprint
+    
+    def _resolve_path(self, path: str, relative_to: str) -> str:
+        """Resolve a path relative to another file."""
+        base_dir = os.path.dirname(relative_to)
+        return os.path.join(base_dir, path)
+    
+    def _deep_merge(self, parent: Dict, child: Dict) -> Dict:
+        """Deep merge child blueprint into parent."""
+        result = parent.copy()
         
-    except FileNotFoundError:
-        raise BlueprintParseError(f"Blueprint file not found: {blueprint_path}")
-    except yaml.YAMLError as e:
-        raise BlueprintParseError(f"Invalid YAML syntax: {str(e)}")
-    except Exception as e:
-        raise BlueprintParseError(f"Failed to load blueprint: {str(e)}")
+        for key, value in child.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        
+        return result
+    
+    def _parse_all_transforms(self, blueprint: Dict) -> Dict[str, List]:
+        """Parse all transforms including custom stages."""
+        # Start with standard stages
+        transforms = blueprint.get("design_space", {}).get("transforms", {})
+        
+        # Add custom stages
+        if "custom_stages" in blueprint:
+            for stage_name, config in blueprint["custom_stages"].items():
+                transforms[stage_name] = config["transforms"]
+        
+        return transforms
+    
+    def _register_transform_stages(self, all_transforms: Dict[str, List]):
+        """Register each transform stage as a build step."""
+        try:
+            from brainsmith.core.plugins import register_step, get_transform
+        except ImportError:
+            logger.warning("Plugin system not available, skipping transform registration")
+            return
+        
+        for stage_name, stage_transforms in all_transforms.items():
+            step_name = f"brainsmith_stage_{stage_name}"
+            
+            def make_stage_step(stage, transforms):
+                def step_func(model, cfg):
+                    # Get selected transforms or use all
+                    if hasattr(cfg, 'transform_selections'):
+                        selected = cfg.transform_selections.get(stage, transforms)
+                    else:
+                        selected = transforms
+                    
+                    # Apply each transform
+                    for t in selected:
+                        if t and t != "~":
+                            transform = get_transform(t)
+                            if transform:
+                                model = model.transform(transform())
+                    
+                    return model
+                
+                # Set function name for debugging
+                step_func.__name__ = f"stage_{stage}"
+                return step_func
+            
+            # Register the step
+            try:
+                register_step(step_name, make_stage_step(stage_name, stage_transforms))
+            except Exception as e:
+                logger.warning(f"Failed to register stage {stage_name}: {e}")
+    
+    def _parse_build_pipeline(self, blueprint: Dict, all_transforms: Dict) -> List[str]:
+        """Parse build pipeline with stage expansion."""
+        steps = blueprint.get("build_pipeline", {}).get("steps", [])
+        custom_stages = blueprint.get("custom_stages", {})
+        
+        # Track positions for custom stages
+        insertions = []
+        for stage_name, config in custom_stages.items():
+            if "after" in config:
+                insertions.append((stage_name, "after", config["after"]))
+            elif "before" in config:
+                insertions.append((stage_name, "before", config["before"]))
+        
+        # Expand steps
+        expanded_steps = []
+        for step in steps:
+            # Add the step
+            expanded_steps.append(step)
+            
+            # Check for insertions after this step
+            step_stage = step.strip("{}")
+            for stage_name, position, target in insertions:
+                if position == "after" and target == step_stage:
+                    expanded_steps.append(f"{{{stage_name}}}")
+        
+        # Replace placeholders with actual step names
+        final_steps = []
+        for step in expanded_steps:
+            if step.startswith("{") and step.endswith("}"):
+                stage = step[1:-1]
+                if stage in all_transforms:
+                    final_steps.append(f"brainsmith_stage_{stage}")
+            else:
+                final_steps.append(step)
+        
+        return final_steps
+    
+    def _parse_kernels(self, blueprint: Dict) -> List[Tuple[str, Any]]:
+        """Parse kernel specifications."""
+        kernels = []
+        kernel_specs = blueprint.get("design_space", {}).get("kernels", [])
+        
+        for spec in kernel_specs:
+            if isinstance(spec, list) and len(spec) == 2:
+                kernel_name, backends = spec
+                kernels.append((kernel_name, backends))
+            else:
+                raise BlueprintParseError(
+                    f"Invalid kernel specification: {spec}. "
+                    f"Expected format: ['KernelName', ['backend1', 'backend2']]"
+                )
+        
+        return kernels
