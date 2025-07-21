@@ -13,7 +13,7 @@ import itertools
 import logging
 
 from .data_structures import BuildConfig
-from ..phase1.data_structures import DesignSpace, SearchConstraint
+from ..phase1.data_structures import DesignSpace
 
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ class CombinationGenerator:
     def _satisfies_constraints(
         self, 
         config: BuildConfig, 
-        constraints: List[SearchConstraint]
+        constraints: List
     ) -> bool:
         """
         Check if a configuration satisfies all constraints.
