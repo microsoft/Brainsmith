@@ -29,14 +29,22 @@ def build_execution_tree(space: DesignSpace) -> ExecutionNode:
     active_nodes = [root]
     
     for step in space.build_pipeline:
-        if step.startswith("{") and step.endswith("}"):
-            # Transform stage - may branch
-            stage_name = step[1:-1]
-            stage = space.transform_stages.get(stage_name)
+        # Handle both string "{stage}" and dict {stage: null} formats
+        if isinstance(step, str):
+            if step.startswith("{") and step.endswith("}"):
+                stage_name = step[1:-1]
+            else:
+                # Regular step name without braces
+                stage_name = step
+        elif isinstance(step, dict):
+            # YAML dict format {stage_name: null}
+            stage_name = list(step.keys())[0]
+        else:
+            continue
             
-            if not stage:
-                # Stage not in design space, skip
-                continue
+        if stage_name in space.transform_stages:
+            # Transform stage - may branch
+            stage = space.transform_stages[stage_name]
             
             # Get all combinations for this stage
             stage_combinations = stage.get_combinations()
@@ -59,8 +67,12 @@ def build_execution_tree(space: DesignSpace) -> ExecutionNode:
                 for node in active_nodes:
                     for transforms in stage_combinations:
                         if not transforms:
-                            # Empty combination - continue with current node
-                            next_nodes.append(node)
+                            # Empty combination - create a skip marker node
+                            child = node.find_or_create_child(
+                                f"stage_{stage_name}_skip",
+                                {"skipped": True}
+                            )
+                            next_nodes.append(child)
                         else:
                             child = node.find_or_create_child(
                                 f"stage_{stage_name}",
@@ -69,7 +81,7 @@ def build_execution_tree(space: DesignSpace) -> ExecutionNode:
                             next_nodes.append(child)
                 active_nodes = next_nodes
                 
-        elif step == "infer_kernels":
+        elif stage_name == "infer_kernels":
             # Kernel inference step - no branching in new design
             next_nodes = []
             for node in active_nodes:
@@ -84,7 +96,7 @@ def build_execution_tree(space: DesignSpace) -> ExecutionNode:
             # Regular pipeline step
             next_nodes = []
             for node in active_nodes:
-                child = node.find_or_create_child(step, {})
+                child = node.find_or_create_child(stage_name, {})
                 next_nodes.append(child)
             active_nodes = next_nodes
     

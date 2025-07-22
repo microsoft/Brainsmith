@@ -1,7 +1,7 @@
 """
-Forge V2 - Clean Blueprint to Execution Tree Pipeline
+Forge - Blueprint to Execution Tree Pipeline
 
-This module provides the new forge API that creates execution trees
+This module provides the forge API that creates execution trees
 directly from blueprints with automatic prefix sharing.
 """
 
@@ -17,12 +17,9 @@ from .tree_builder import build_execution_tree, validate_tree_size
 logger = logging.getLogger(__name__)
 
 
-def forge_tree(model_path: str, blueprint_path: str) -> Tuple[DesignSpace, ExecutionNode]:
+def forge(model_path: str, blueprint_path: str) -> Tuple[DesignSpace, ExecutionNode]:
     """
     Create execution tree from model and blueprint.
-    
-    This is the new entry point that replaces the complex 3-phase system
-    with a direct blueprint → tree transformation.
     
     Args:
         model_path: Path to ONNX model file

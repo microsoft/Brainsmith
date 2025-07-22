@@ -13,12 +13,12 @@ from datetime import datetime
 from typing import Callable, List, Optional
 
 from .data_structures import BuildConfig, BuildResult, BuildStatus, ExplorationResults
-from .combination_generator import CombinationGenerator
+# from .combination_generator import CombinationGenerator  # Removed - obsolete with execution tree
 from .results_aggregator import ResultsAggregator
 from .interfaces import BuildRunnerInterface
 from .progress import ProgressTracker
 from .hooks import ExplorationHook
-from ..phase1.data_structures import DesignSpace, SearchStrategy
+from ..design_space import DesignSpace
 
 
 logger = logging.getLogger(__name__)
@@ -64,104 +64,112 @@ class ExplorerEngine:
         Returns:
             ExplorationResults with all build outcomes and analysis
         """
-        logger.info(f"Starting exploration of design space from {design_space.model_path}")
-        start_time = datetime.now()
-        
-        # Initialize exploration results
-        combination_gen = CombinationGenerator()
-        design_space_id = combination_gen._generate_design_space_id(design_space)
-        
-        self.exploration_results = ExplorationResults(
-            design_space_id=design_space_id,
-            start_time=start_time,
-            end_time=start_time  # Will be updated at the end
+        # TODO: This method needs to be reimplemented to work with ExecutionTree
+        # For now, it's disabled to prevent import errors
+        raise NotImplementedError(
+            "ExplorerEngine.explore() is temporarily disabled. "
+            "It will be reimplemented to work with ExecutionTree instead of CombinationGenerator."
         )
         
-        # Create directory structure for exploration
-        exploration_dir = os.path.join(
-            design_space.global_config.working_directory,
-            design_space_id
-        )
-        builds_dir = os.path.join(exploration_dir, "builds")
-        
-        # Create directories
-        os.makedirs(exploration_dir, exist_ok=True)
-        os.makedirs(builds_dir, exist_ok=True)
-        logger.info(f"Created exploration directory: {exploration_dir}")
-        
-        # Fire exploration start hook
-        self._fire_hook("on_exploration_start", design_space, self.exploration_results)
-        
-        # Generate all combinations
-        logger.info("Generating combinations from design space")
-        all_configs = combination_gen.generate_all(design_space)
-        self.exploration_results.total_combinations = len(all_configs)
-        
-        # Store all configs for later reference
-        for config in all_configs:
-            self.exploration_results.add_config(config)
-        
-        # Apply resume if requested
-        if resume_from:
-            logger.info(f"Resuming from configuration {resume_from}")
-            configs_to_evaluate = combination_gen.filter_by_resume(all_configs, resume_from)
-        else:
-            configs_to_evaluate = all_configs
-        
-        # Fire combination generated hook
-        self._fire_hook("on_combinations_generated", configs_to_evaluate)
-        
-        # Initialize progress tracker
-        self.progress_tracker = ProgressTracker(
-            total_configs=len(configs_to_evaluate),
-            start_time=datetime.now()
-        )
-        
-        # Create build runner
-        build_runner = self.build_runner_factory()
-        
-        # Initialize results aggregator
-        aggregator = ResultsAggregator(self.exploration_results)
-        
-        # Main exploration loop
-        logger.info(f"Evaluating {len(configs_to_evaluate)} configurations")
-        
-        for i, config in enumerate(configs_to_evaluate):
-            # Check early stopping conditions
-            if self._should_stop_early(design_space, i):
-                logger.info("Early stopping conditions met")
-                break
-            
-            # Log progress
-            if i % 10 == 0:
-                progress_summary = self.progress_tracker.get_summary()
-                logger.info(progress_summary)
-            
-            # Evaluate configuration
-            logger.debug(f"Evaluating configuration {config.id}")
-            result = self._evaluate_config(config, build_runner)
-            
-            # Add to results
-            aggregator.add_result(result)
-            
-            # Update progress
-            self.progress_tracker.update(result)
-            
-            # Fire build complete hook
-            self._fire_hook("on_build_complete", config, result)
-        
-        # Finalize results
-        logger.info("Finalizing exploration results")
-        self.exploration_results.end_time = datetime.now()
-        aggregator.finalize()
-        
-        # Fire exploration complete hook
-        self._fire_hook("on_exploration_complete", self.exploration_results)
-        
-        # Log final summary
-        logger.info("\n" + self.exploration_results.get_summary_string())
-        
-        return self.exploration_results
+        # Original implementation commented out - uses obsolete CombinationGenerator
+        # logger.info(f"Starting exploration of design space from {design_space.model_path}")
+        # start_time = datetime.now()
+        # 
+        # # Initialize exploration results
+        # combination_gen = CombinationGenerator()
+        # design_space_id = combination_gen._generate_design_space_id(design_space)
+        # 
+        # self.exploration_results = ExplorationResults(
+        #     design_space_id=design_space_id,
+        #     start_time=start_time,
+        #     end_time=start_time  # Will be updated at the end
+        # )
+        # 
+        # # Create directory structure for exploration
+        # exploration_dir = os.path.join(
+        #     design_space.global_config.working_directory,
+        #     design_space_id
+        # )
+        # builds_dir = os.path.join(exploration_dir, "builds")
+        # 
+        # # Create directories
+        # os.makedirs(exploration_dir, exist_ok=True)
+        # os.makedirs(builds_dir, exist_ok=True)
+        # logger.info(f"Created exploration directory: {exploration_dir}")
+        # 
+        # # Fire exploration start hook
+        # self._fire_hook("on_exploration_start", design_space, self.exploration_results)
+        # 
+        # # Generate all combinations
+        # logger.info("Generating combinations from design space")
+        # all_configs = combination_gen.generate_all(design_space)
+        # self.exploration_results.total_combinations = len(all_configs)
+        # 
+        # # Store all configs for later reference
+        # for config in all_configs:
+        #     self.exploration_results.add_config(config)
+        # 
+        # # Apply resume if requested
+        # if resume_from:
+        #     logger.info(f"Resuming from configuration {resume_from}")
+        #     configs_to_evaluate = combination_gen.filter_by_resume(all_configs, resume_from)
+        # else:
+        #     configs_to_evaluate = all_configs
+        # 
+        # # Fire combination generated hook
+        # self._fire_hook("on_combinations_generated", configs_to_evaluate)
+        # 
+        # # Initialize progress tracker
+        # self.progress_tracker = ProgressTracker(
+        #     total_configs=len(configs_to_evaluate),
+        #     start_time=datetime.now()
+        # )
+        # 
+        # # Create build runner
+        # build_runner = self.build_runner_factory()
+        # 
+        # # Initialize results aggregator
+        # aggregator = ResultsAggregator(self.exploration_results)
+        # 
+        # # Main exploration loop
+        # logger.info(f"Evaluating {len(configs_to_evaluate)} configurations")
+        # 
+        # for i, config in enumerate(configs_to_evaluate):
+        #     # Check early stopping conditions
+        #     if self._should_stop_early(design_space, i):
+        #         logger.info("Early stopping conditions met")
+        #         break
+        #     
+        #     # Log progress
+        #     if i % 10 == 0:
+        #         progress_summary = self.progress_tracker.get_summary()
+        #         logger.info(progress_summary)
+        #     
+        #     # Evaluate configuration
+        #     logger.debug(f"Evaluating configuration {config.id}")
+        #     result = self._evaluate_config(config, build_runner)
+        #     
+        #     # Add to results
+        #     aggregator.add_result(result)
+        #     
+        #     # Update progress
+        #     self.progress_tracker.update(result)
+        #     
+        #     # Fire build complete hook
+        #     self._fire_hook("on_build_complete", config, result)
+        # 
+        # # Finalize results
+        # logger.info("Finalizing exploration results")
+        # self.exploration_results.end_time = datetime.now()
+        # aggregator.finalize()
+        # 
+        # # Fire exploration complete hook
+        # self._fire_hook("on_exploration_complete", self.exploration_results)
+        # 
+        # # Log final summary
+        # logger.info("\n" + self.exploration_results.get_summary_string())
+        # 
+        # return self.exploration_results
     
     def _evaluate_config(
         self,

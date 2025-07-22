@@ -1,0 +1,14 @@
+extends: base.yaml
+name: "Child Config"
+global_config:
+  max_combinations: 5000
+design_space:
+  transforms:
+    optimize:
+      - FoldConstants
+  kernels:
+    - MatrixVectorActivation: mvau_hls
+build_pipeline:
+  steps:
+    - "{cleanup}"
+    - "{optimize}"

@@ -5,6 +5,7 @@ This module defines the new DesignSpace that holds resolved plugin objects
 from the blueprint, ready for tree construction.
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Type
 from enum import Enum
@@ -25,8 +26,10 @@ class GlobalConfig:
     output_stage: OutputStage = OutputStage.COMPILE_AND_PACKAGE
     working_directory: str = "work"
     save_intermediate_models: bool = False
-    max_combinations: int = 100000
-    timeout_minutes: int = 60
+    max_combinations: int = field(default_factory=lambda: 
+        int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000")))
+    timeout_minutes: int = field(default_factory=lambda: 
+        int(os.environ.get("BRAINSMITH_TIMEOUT_MINUTES", "60")))
 
 
 @dataclass

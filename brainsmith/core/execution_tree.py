@@ -121,7 +121,9 @@ def print_tree(node: ExecutionNode, indent: str = "", last: bool = True):
         
         # Format config
         config_str = ""
-        if "transforms" in node.config:
+        if "skipped" in node.config:
+            config_str = " (skipped)"
+        elif "transforms" in node.config:
             transforms = node.config["transforms"]
             if transforms:
                 names = [t.__name__ for t in transforms]

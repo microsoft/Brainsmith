@@ -12,7 +12,7 @@ from .data_structures import (
 )
 from .interfaces import BuildRunnerInterface, MockBuildRunner
 from .explorer import ExplorerEngine
-from .combination_generator import CombinationGenerator
+# from .combination_generator import CombinationGenerator  # Removed - obsolete with execution tree
 from .results_aggregator import ResultsAggregator
 from .hooks import ExplorationHook, LoggingHook, CachingHook, HookRegistry
 from .progress import ProgressTracker
@@ -45,7 +45,7 @@ __all__ = [
     "BuildRunnerInterface",
     "MockBuildRunner",
     "ExplorerEngine",
-    "CombinationGenerator",
+    # "CombinationGenerator",  # Removed - obsolete with execution tree
     "ResultsAggregator",
     # Hooks
     "ExplorationHook",

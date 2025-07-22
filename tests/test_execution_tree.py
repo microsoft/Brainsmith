@@ -13,7 +13,7 @@ import pytest
 from typing import List, Type
 
 from brainsmith.core.execution_tree import (
-    ExecutionNode, TransformStage, count_leaves, count_nodes, get_tree_stats
+    ExecutionNode, TransformStage, count_leaves, count_nodes, get_tree_stats, print_tree
 )
 from brainsmith.core.design_space import DesignSpace, GlobalConfig
 from brainsmith.core.tree_builder import build_execution_tree
@@ -138,6 +138,29 @@ def test_simple_linear_tree():
     assert count_nodes(tree) == 5  # Not counting root
 
 
+def test_simple_optional_stage():
+    """Test tree building with a simple optional stage."""
+    transforms = get_real_transforms()
+    
+    # Create design space with one optional stage
+    design_space = DesignSpace(
+        model_path="test.onnx",
+        transform_stages={
+            "opt": TransformStage("opt", [
+                [transforms["fold_constants"], None]
+            ]),  # 2 options: do or skip
+        },
+        kernel_backends=[],
+        build_pipeline=["{opt}"],
+        global_config=GlobalConfig()
+    )
+    
+    tree = build_execution_tree(design_space)
+    
+    # Should have 2 paths: one with fold_constants, one without
+    assert count_leaves(tree) == 2
+    
+
 def test_branching_tree():
     """Test tree building with branching."""
     transforms = get_real_transforms()
@@ -149,10 +172,10 @@ def test_branching_tree():
             "stage1": TransformStage("stage1", [[transforms["fold_constants"]]]),  # No branch
             "stage2": TransformStage("stage2", [
                 [transforms["remove_identity"], transforms["remove_unused"]]
-            ]),  # 2 options
+            ]),  # 2 options for one step
             "stage3": TransformStage("stage3", [
                 [transforms["infer_shapes"], None]
-            ]),  # 2 options
+            ]),  # 2 options (do or skip)
         },
         kernel_backends=[],
         build_pipeline=["{stage1}", "{stage2}", "{stage3}"],

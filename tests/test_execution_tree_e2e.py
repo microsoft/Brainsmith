@@ -10,8 +10,8 @@ import tempfile
 import os
 from pathlib import Path
 
-from brainsmith.core.forge_v2 import forge_tree
-from brainsmith.core.execution_tree import count_leaves, count_nodes, get_tree_stats
+from brainsmith.core.forge import forge
+from brainsmith.core.execution_tree import count_leaves, count_nodes, get_tree_stats, print_tree
 from brainsmith.core.plugins.registry import get_registry
 
 
@@ -52,7 +52,7 @@ build_pipeline:
             f.write(blueprint_yaml)
         
         # Parse blueprint to tree
-        design_space, tree = forge_tree(model_path, blueprint_path)
+        design_space, tree = forge(model_path, blueprint_path)
         
         # Verify structure
         assert tree.step_name == "root"
@@ -110,7 +110,12 @@ build_pipeline:
         with open(blueprint_path, "w") as f:
             f.write(blueprint_yaml)
         
-        design_space, tree = forge_tree(model_path, blueprint_path)
+        design_space, tree = forge(model_path, blueprint_path)
+        
+        # Print the tree structure
+        print("\nExecution Tree Structure:")
+        print("=" * 60)
+        print_tree(tree)
         
         # Calculate expected paths:
         # imports: 1 option
@@ -121,6 +126,10 @@ build_pipeline:
         
         # Verify sharing
         stats = get_tree_stats(tree)
+        print(f"\nTree Statistics:")
+        print(f"Total paths: {stats['total_paths']}")
+        print(f"Total nodes: {stats['total_nodes']}")
+        print(f"Sharing factor: {stats['sharing_factor']:.2f}x")
         assert stats['sharing_factor'] > 1.0
         
         # The imports stage should be shared (only one node)
@@ -202,7 +211,7 @@ build_pipeline:
         with open(blueprint_path, "w") as f:
             f.write(blueprint_yaml)
         
-        design_space, tree = forge_tree(model_path, blueprint_path)
+        design_space, tree = forge(model_path, blueprint_path)
         
         # Verify global config was parsed
         assert design_space.global_config.working_directory == "work"
@@ -271,7 +280,7 @@ build_pipeline:
         
         # Should fail during parsing
         with pytest.raises(ValueError) as exc_info:
-            forge_tree(model_path, blueprint_path)
+            forge(model_path, blueprint_path)
         
         assert "Transform 'ThisTransformDoesNotExist' not found" in str(exc_info.value)
 
@@ -304,7 +313,7 @@ build_pipeline:
             f.write(blueprint_yaml)
         
         with pytest.raises(ValueError) as exc_info:
-            forge_tree(model_path, blueprint_path)
+            forge(model_path, blueprint_path)
         
         assert "Backend 'NonExistentBackend' not found" in str(exc_info.value)
 
@@ -356,7 +365,7 @@ build_pipeline:
         
         # Should fail due to size limit (4 * 4 * 4 = 64 > 10)
         with pytest.raises(ValueError) as exc_info:
-            forge_tree(model_path, blueprint_path)
+            forge(model_path, blueprint_path)
         
         assert "exceeds limit" in str(exc_info.value)
 
@@ -395,7 +404,7 @@ build_pipeline:
         with open(blueprint_path, "w") as f:
             f.write(blueprint_yaml)
         
-        design_space, tree = forge_tree(model_path, blueprint_path)
+        design_space, tree = forge(model_path, blueprint_path)
         
         # Should skip the optional stage entirely
         # Tree: root -> required_stage -> infer_kernels
@@ -434,7 +443,7 @@ build_pipeline:
             f.write(blueprint_yaml)
         
         with pytest.raises(ValueError) as exc_info:
-            forge_tree(model_path, blueprint_path)
+            forge(model_path, blueprint_path)
         
         assert "Pipeline references stage 'this_stage_does_not_exist'" in str(exc_info.value)
 
@@ -472,7 +481,7 @@ build_pipeline:
         with open(blueprint_path, "w") as f:
             f.write(blueprint_yaml)
         
-        design_space, tree = forge_tree(model_path, blueprint_path)
+        design_space, tree = forge(model_path, blueprint_path)
         
         # Get execution order
         from brainsmith.core.tree_builder import get_execution_order

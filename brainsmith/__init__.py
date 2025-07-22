@@ -15,25 +15,16 @@ except ImportError:
     pass
 
 # Re-export the main API functions
-from .core.phase1 import forge
-from .core.phase2 import explore
-from .core.phase3 import create_build_runner_factory
+from .core.forge import forge
 
 # Re-export key data structures users need
-from .core.phase1 import DesignSpace
-from .core.phase2 import BuildConfig, BuildResult, BuildStatus, ExplorationResults
+from .core.design_space import DesignSpace
 
 __all__ = [
     # Main API
     'forge',
-    'explore', 
-    'create_build_runner_factory',
     # Data structures
     'DesignSpace',
-    'BuildConfig',
-    'BuildResult',
-    'BuildStatus',
-    'ExplorationResults',
 ]
 
 __version__ = "1.0.0"
