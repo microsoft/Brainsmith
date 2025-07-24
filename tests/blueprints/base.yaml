@@ -1,9 +1,9 @@
-version: "4.0"
 name: "Base Config"
-global_config:
-  max_combinations: 10000
-  timeout_minutes: 30
-  working_directory: "work"
+# Flat global configuration
+max_combinations: 10000
+timeout_minutes: 30
+working_directory: "work"
+
 design_space:
   transforms:
     cleanup:

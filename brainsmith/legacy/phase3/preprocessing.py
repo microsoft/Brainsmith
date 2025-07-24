@@ -9,7 +9,7 @@ import os
 import shutil
 from typing import Dict
 
-from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.legacy.phase2.data_structures import BuildConfig
 from brainsmith.core.plugins.registry import get_registry
 
 

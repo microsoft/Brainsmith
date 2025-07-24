@@ -1,7 +1,8 @@
 extends: base.yaml
 name: "Child Config"
-global_config:
-  max_combinations: 5000
+# Override parent's max_combinations
+max_combinations: 5000
+
 design_space:
   transforms:
     optimize:

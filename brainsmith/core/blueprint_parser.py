@@ -12,7 +12,9 @@ from typing import (
 )
 
 from .design_space import DesignSpace, GlobalConfig, OutputStage
-from .execution_tree import TransformStage
+from .execution_tree import TransformStage, ExecutionNode
+from .explorer.utils import StageWrapperFactory
+from .plugins.registry import BrainsmithPluginRegistry
 
 if TYPE_CHECKING:
     from qonnx.transformation.base import Transformation
@@ -22,67 +24,8 @@ class BlueprintParser:
     """Parse blueprint YAML into DesignSpace with resolved plugins."""
     
 
-    def parse(self, blueprint_path: str, model_path: str) -> DesignSpace:
-        """
-        Parse blueprint and create design space.
-        
-        Args:
-            blueprint_path: Path to blueprint YAML file
-            model_path: Path to ONNX model
-            
-        Returns:
-            DesignSpace with all plugins resolved
-        """
-        with open(blueprint_path, 'r') as f:
-            data = yaml.safe_load(f)
-        
-        # Parse global config
-        global_config = self._parse_global_config(data.get('global_config', {}))
-        
-        # Parse transform stages
-        transform_stages = self._parse_transform_stages(
-            data.get('design_space', {}).get('transforms', {})
-        )
-        
-        # Parse kernels with backend resolution
-        kernel_backends = self._parse_kernels(
-            data.get('design_space', {}).get('kernels', [])
-        )
-        
-        # Get build pipeline
-        build_pipeline = data.get('build_pipeline', {}).get('steps', [])
-        
-        # Validate pipeline references
-        for step in build_pipeline:
-            # Extract stage name from various formats
-            stage_name = None
-            if isinstance(step, str) and step.startswith("{") and step.endswith("}"):
-                stage_name = step[1:-1]
-            elif isinstance(step, dict) and len(step) == 1:
-                stage_name = next(iter(step.keys()))
-            
-            # Validate if it's a stage reference
-            if stage_name and stage_name not in transform_stages:
-                raise ValueError(
-                    f"Pipeline references stage '{stage_name}' which is not defined. "
-                    f"Available stages: {list(transform_stages.keys())}"
-                )
-        
-        # Create design space
-        design_space = DesignSpace(
-            model_path=model_path,
-            transform_stages=transform_stages,
-            kernel_backends=kernel_backends,
-            build_pipeline=build_pipeline,
-            global_config=global_config
-        )
-        
-        # Validate size constraints
-        design_space.validate_size()
-        
-        return design_space
     
-    def parse_with_inheritance(self, blueprint_path: str, model_path: str) -> DesignSpace:
+    def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ExecutionNode]:
         """
         Parse blueprint with inheritance support.
         
@@ -91,14 +34,15 @@ class BlueprintParser:
             model_path: Path to ONNX model
             
         Returns:
-            DesignSpace with all plugins resolved
+            Tuple of (DesignSpace, ExecutionNode root) with all plugins resolved
         """
         blueprint_data = self._load_with_inheritance(blueprint_path)
         
-        # Use regular parse but with loaded data
-        # Extract just the parse logic
-        # Parse global config
-        global_config = self._parse_global_config(blueprint_data.get('global_config', {}))
+        # Extract flat config and smithy mappings
+        flat_config, finn_mappings = self._extract_flat_config(blueprint_data)
+        
+        # Parse global config from flat parameters
+        global_config = self._parse_global_config(flat_config)
         
         # Parse transform stages
         transform_stages = self._parse_transform_stages(
@@ -129,19 +73,36 @@ class BlueprintParser:
                     f"Available stages: {list(transform_stages.keys())}"
                 )
         
+        # Extract FINN config and merge with smart mappings
+        finn_config = blueprint_data.get('finn_config', {}).copy()
+        finn_config.update(finn_mappings)
+        
+        # Validate required FINN fields only when needed for synthesis
+        if global_config.output_stage != OutputStage.GENERATE_REPORTS:
+            if 'synth_clk_period_ns' not in finn_config:
+                raise ValueError("Hardware synthesis requires synth_clk_period_ns (or target_clk)")
+            if 'board' not in finn_config:
+                raise ValueError("Hardware synthesis requires board (or platform)")
+        
         # Create design space
         design_space = DesignSpace(
             model_path=model_path,
             transform_stages=transform_stages,
             kernel_backends=kernel_backends,
             build_pipeline=build_pipeline,
-            global_config=global_config
+            global_config=global_config,
+            finn_config=finn_config
         )
         
         # Validate size constraints
         design_space.validate_size()
         
-        return design_space
+        # Build execution tree with pre-computed wrappers
+        registry = BrainsmithPluginRegistry()
+        wrapper_factory = StageWrapperFactory(registry)
+        tree = self._build_execution_tree(design_space, wrapper_factory)
+        
+        return design_space, tree
     
     def _load_with_inheritance(self, blueprint_path: str) -> Dict[str, Any]:
         """
@@ -191,6 +152,74 @@ class BlueprintParser:
         
         return result
     
+    def _parse_time_with_units(self, value: Union[str, float, int]) -> float:
+        """Parse time value with unit suffix to nanoseconds.
+        
+        Supports: ns, us, ms, ps
+        Default unit is ns if no suffix.
+        
+        Examples:
+            "5" -> 5.0
+            "5ns" -> 5.0
+            "5000ps" -> 5.0
+            "0.005us" -> 5.0
+            "0.000005ms" -> 5.0
+        """
+        if isinstance(value, (int, float)):
+            return float(value)
+        
+        value_str = str(value).strip()
+        
+        # Unit conversion map to nanoseconds
+        units = {
+            'ps': 0.001,
+            'ns': 1.0,
+            'us': 1000.0,
+            'ms': 1000000.0
+        }
+        
+        # Check for unit suffix
+        for unit, multiplier in units.items():
+            if value_str.endswith(unit):
+                numeric_part = value_str[:-len(unit)].strip()
+                return float(numeric_part) * multiplier
+        
+        # No unit suffix, assume ns
+        return float(value_str)
+    
+    def _extract_flat_config(self, data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Extract flat top-level parameters as global config.
+        
+        Maps smithy parameters:
+        - platform -> board
+        - target_clk -> synth_clk_period_ns (with unit conversion)
+        """
+        # Start with explicit global_config if present
+        config = data.get('global_config', {}).copy()
+        
+        # Top-level parameters that map directly to global config
+        direct_params = [
+            'output_stage', 'working_directory', 'save_intermediate_models',
+            'max_combinations', 'timeout_minutes', 'fail_fast'
+        ]
+        
+        for param in direct_params:
+            if param in data and param not in config:
+                config[param] = data[param]
+        
+        # Smithy parameter mappings for FINN config
+        finn_mappings = {}
+        
+        # platform -> board
+        if 'platform' in data:
+            finn_mappings['board'] = data['platform']
+        
+        # target_clk -> synth_clk_period_ns with unit conversion
+        if 'target_clk' in data:
+            finn_mappings['synth_clk_period_ns'] = self._parse_time_with_units(data['target_clk'])
+        
+        return config, finn_mappings
+    
     def _parse_global_config(self, config_data: Dict[str, Any]) -> GlobalConfig:
         """Parse global configuration section."""
         global_config = GlobalConfig()
@@ -198,23 +227,11 @@ class BlueprintParser:
         # Map string to enum for output_stage
         if 'output_stage' in config_data:
             stage_str = config_data['output_stage']
-            try:
-                global_config.output_stage = OutputStage(stage_str)
-            except ValueError:
-                # Try to map old names to new ones
-                stage_map = {
-                    'stitched_ip': OutputStage.SYNTHESIZE_BITSTREAM,
-                    'dataflow_graph': OutputStage.COMPILE_AND_PACKAGE,
-                    'rtl': OutputStage.COMPILE_AND_PACKAGE
-                }
-                if stage_str in stage_map:
-                    global_config.output_stage = stage_map[stage_str]
-                else:
-                    raise ValueError(f"Unknown output stage: {stage_str}")
+            global_config.output_stage = OutputStage(stage_str)
         
         # Set other fields
         for field in ['working_directory', 'save_intermediate_models', 
-                      'max_combinations', 'timeout_minutes']:
+                      'max_combinations', 'timeout_minutes', 'fail_fast']:
             if field in config_data:
                 setattr(global_config, field, config_data[field])
         
@@ -293,3 +310,168 @@ class BlueprintParser:
             kernel_backends.append((kernel_name, backend_classes))
         
         return kernel_backends
+    
+    def _build_execution_tree(self, space: DesignSpace, wrapper_factory: StageWrapperFactory) -> ExecutionNode:
+        """Build execution tree with segments at branch points."""
+        # Track all wrapped functions for FINN registration
+        wrapped_functions = {}
+        
+        # Root node starts empty, will accumulate initial steps
+        root = ExecutionNode(
+            segment_steps=[],
+            finn_config=self._extract_finn_config(space.global_config)
+        )
+        
+        current_segments = [root]
+        pending_steps = []
+        
+        for pipeline_step in space.build_pipeline:
+            step_name = self._extract_step_name(pipeline_step)
+            
+            if step_name in space.transform_stages:
+                stage = space.transform_stages[step_name]
+                combinations = stage.get_combinations()
+                
+                if len(combinations) <= 1:
+                    # Linear - accumulate with pre-computed wrapper
+                    transforms = combinations[0] if combinations else []
+                    transform_names = [t.__name__ if t else None for t in transforms]
+                    wrapper_name, wrapper_fn = wrapper_factory.create_stage_wrapper(
+                        step_name, transform_names, 0
+                    )
+                    wrapped_functions[wrapper_name] = wrapper_fn
+                    
+                    pending_steps.append({
+                        "transforms": transforms,
+                        "stage_name": step_name,
+                        "finn_step_name": wrapper_name
+                    })
+                else:
+                    # Branch point - flush pending and split
+                    self._flush_steps(current_segments, pending_steps)
+                    current_segments = self._create_branches_with_wrappers(
+                        current_segments, stage, step_name, combinations,
+                        wrapper_factory, wrapped_functions
+                    )
+                    pending_steps = []
+                    
+            elif step_name == "infer_kernels":
+                if self._has_kernel_choices(space.kernel_backends):
+                    # Branch for kernel choices
+                    self._flush_steps(current_segments, pending_steps)
+                    current_segments = self._create_kernel_branches(
+                        current_segments, space.kernel_backends
+                    )
+                    pending_steps = []
+                else:
+                    # Linear kernel assignment
+                    pending_steps.append({
+                        "kernel_backends": space.kernel_backends,
+                        "name": "infer_kernels"
+                    })
+            else:
+                # Regular step
+                pending_steps.append({"name": step_name})
+        
+        # Flush final steps
+        self._flush_steps(current_segments, pending_steps)
+        
+        # Register all wrapped functions with FINN at once
+        self._register_wrapped_functions(wrapped_functions)
+        
+        # Validate tree size
+        self._validate_tree_size(root, space.global_config.max_combinations)
+        
+        return root
+    
+    def _extract_step_name(self, pipeline_step) -> str:
+        """Extract step name from pipeline step format."""
+        if isinstance(pipeline_step, str):
+            if pipeline_step.startswith("{") and pipeline_step.endswith("}"):
+                return pipeline_step[1:-1]
+            return pipeline_step
+        elif isinstance(pipeline_step, dict):
+            # YAML dict format {stage_name: null}
+            return list(pipeline_step.keys())[0]
+        else:
+            raise ValueError(f"Unknown pipeline step format: {pipeline_step}")
+    
+    def _extract_finn_config(self, global_config) -> Dict[str, Any]:
+        """Extract FINN-relevant configuration from global config."""
+        # Convert GlobalConfig to dict, excluding non-FINN fields
+        config_dict = {}
+        
+        if hasattr(global_config, '__dict__'):
+            for key, value in global_config.__dict__.items():
+                # Skip internal fields and non-FINN config
+                if not key.startswith('_') and key not in ['max_combinations']:
+                    config_dict[key] = value
+        
+        return config_dict
+    
+    def _flush_steps(self, segments: List[ExecutionNode], steps: List[Dict]) -> None:
+        """Add accumulated steps to segments."""
+        if steps:
+            for segment in segments:
+                segment.segment_steps.extend(steps)
+    
+    def _create_branches_with_wrappers(self, segments: List[ExecutionNode], stage, 
+                                      step_name: str, combinations: List,
+                                      wrapper_factory: StageWrapperFactory,
+                                      wrapped_functions: Dict[str, callable]) -> List[ExecutionNode]:
+        """Create child segments for each combination with pre-computed wrappers."""
+        new_segments = []
+        
+        for segment in segments:
+            for i, transforms in enumerate(combinations):
+                # Create wrapper with simple numeric index
+                transform_names = [t.__name__ if t else None for t in transforms]
+                wrapper_name, wrapper_fn = wrapper_factory.create_stage_wrapper(
+                    step_name, transform_names, i
+                )
+                wrapped_functions[wrapper_name] = wrapper_fn
+                
+                # Use simple opt{i} naming for branches
+                branch_id = f"{step_name}_opt{i}"
+                child = segment.add_child(branch_id, [{
+                    "transforms": transforms,
+                    "stage_name": step_name,
+                    "finn_step_name": wrapper_name
+                }])
+                new_segments.append(child)
+        
+        return new_segments
+    
+    def _has_kernel_choices(self, kernel_backends: List[Tuple[str, List[Type]]]) -> bool:
+        """Check if kernel configuration has multiple choices."""
+        # For now, we don't branch on kernel backends
+        return False
+    
+    def _create_kernel_branches(self, segments: List[ExecutionNode], 
+                               kernel_backends: List[Tuple[str, List[Type]]]) -> List[ExecutionNode]:
+        """Create branches for kernel choices (if any)."""
+        # Currently not implemented as kernels don't branch in current design
+        raise NotImplementedError("Kernel branching not yet implemented")
+    
+    def _register_wrapped_functions(self, wrapped_functions: Dict[str, callable]) -> None:
+        """Register all wrapped transform stages with FINN."""
+        if not wrapped_functions:
+            return
+            
+        from finn.builder.build_dataflow_steps import build_dataflow_step_lookup
+        
+        # Batch register all wrappers at once
+        build_dataflow_step_lookup.update(wrapped_functions)
+        
+        print(f"Registered {len(wrapped_functions)} transform stage wrappers with FINN")
+    
+    def _validate_tree_size(self, root: ExecutionNode, max_combinations: int) -> None:
+        """Validate tree doesn't exceed maximum combinations."""
+        from .execution_tree import count_leaves
+        
+        leaf_count = count_leaves(root)
+        if leaf_count > max_combinations:
+            raise ValueError(
+                f"Execution tree has {leaf_count} paths, exceeds limit of "
+                f"{max_combinations}. Reduce design space or increase limit."
+            )

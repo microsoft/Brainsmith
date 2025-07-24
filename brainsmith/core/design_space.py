@@ -7,7 +7,7 @@ from the blueprint, ready for tree construction.
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Type
+from typing import Dict, List, Tuple, Type, Any
 from enum import Enum
 
 from .execution_tree import TransformStage
@@ -26,6 +26,7 @@ class GlobalConfig:
     output_stage: OutputStage = OutputStage.COMPILE_AND_PACKAGE
     working_directory: str = "work"
     save_intermediate_models: bool = False
+    fail_fast: bool = False
     max_combinations: int = field(default_factory=lambda: 
         int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000")))
     timeout_minutes: int = field(default_factory=lambda: 
@@ -46,6 +47,7 @@ class DesignSpace:
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
     build_pipeline: List[str]
     global_config: GlobalConfig
+    finn_config: Dict[str, Any] = field(default_factory=dict)
     
     def validate_size(self) -> None:
         """Validate that design space doesn't exceed max combinations."""

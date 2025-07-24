@@ -7,8 +7,8 @@ This module defines the abstract interface that all build backends must implemen
 from abc import ABC, abstractmethod
 from typing import List
 
-from brainsmith.core.phase1.data_structures import OutputStage
-from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.core.design_space import OutputStage
+from brainsmith.legacy.phase2.data_structures import BuildConfig
 from .data_structures import BuildResult
 
 

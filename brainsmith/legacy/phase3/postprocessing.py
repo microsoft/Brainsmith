@@ -9,7 +9,7 @@ import json
 import os
 from typing import Dict
 
-from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.legacy.phase2.data_structures import BuildConfig
 from brainsmith.core.plugins.registry import get_registry
 from .data_structures import BuildResult
 

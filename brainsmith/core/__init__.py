@@ -8,7 +8,7 @@ This package implements the DSE architecture for FPGA accelerator design.
 from .forge import forge, print_tree_summary
 from .execution_tree import ExecutionNode, TransformStage, print_tree, get_tree_stats
 from .design_space import DesignSpace, GlobalConfig
-from .tree_builder import build_execution_tree
+from .blueprint_parser import BlueprintParser
 
 __all__ = [
     # Execution Tree API
@@ -18,7 +18,7 @@ __all__ = [
     "TransformStage",
     "DesignSpace",
     "GlobalConfig",
-    "build_execution_tree",
+    "BlueprintParser",
     "print_tree",
     "get_tree_stats",
 ]

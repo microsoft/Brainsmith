@@ -7,7 +7,7 @@ for build failures.
 
 from typing import Dict, List
 
-from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.legacy.phase2.data_structures import BuildConfig
 
 
 class BuildErrorHandler:

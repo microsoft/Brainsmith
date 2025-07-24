@@ -8,7 +8,7 @@ build process, including preprocessing, backend execution, and postprocessing.
 import logging
 from typing import Optional
 
-from brainsmith.core.phase2.data_structures import BuildConfig
+from brainsmith.legacy.phase2.data_structures import BuildConfig
 from .data_structures import BuildResult, BuildStatus
 from .interfaces import BuildRunnerInterface
 from .preprocessing import PreprocessingPipeline

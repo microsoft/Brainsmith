@@ -16,6 +16,7 @@ def test_blueprint_inheritance():
 version: "4.0"
 name: "Parent Blueprint"
 global_config:
+  output_stage: "generate_reports"
   max_combinations: 10000
   timeout_minutes: 30
   working_directory: "parent_work"
@@ -70,7 +71,7 @@ build_pipeline:
             
         # Parse with inheritance
         parser = BlueprintParser()
-        design_space = parser.parse_with_inheritance(child_path, model_path)
+        design_space, _ = parser.parse(child_path, model_path)
         
         # Verify inheritance worked correctly
         

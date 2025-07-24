@@ -1,24 +1,22 @@
 """
-Execution Tree Implementation - Direct Blueprint to Tree Construction
+Segment-based Execution Tree Implementation
 
-This module implements the execution tree architecture that transforms
-blueprints into optimized execution trees with automatic prefix sharing.
+This module implements the new segment-based execution tree architecture where
+each node represents a segment of execution between branch points.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Type, Any
+from typing import Dict, List, Optional, Any, Type
 from pathlib import Path
-
-from qonnx.transformation.base import Transformation
 
 
 @dataclass
 class TransformStage:
     """A stage containing multiple transform steps with branching options."""
     name: str
-    transform_steps: List[List[Optional[Type[Transformation]]]]
+    transform_steps: List[List[Optional[Type]]]
     
-    def get_combinations(self) -> List[List[Type[Transformation]]]:
+    def get_combinations(self) -> List[List[Type]]:
         """Get all valid combinations of transforms for this stage."""
         if not self.transform_steps:
             return [[]]
@@ -43,103 +41,192 @@ class TransformStage:
 
 
 @dataclass
+class ArtifactState:
+    """Track artifact locations and sharing."""
+    source_dir: Optional[Path] = None
+    size_bytes: Optional[int] = None
+    copied_to: List[Path] = field(default_factory=list)
+
+
+@dataclass
 class ExecutionNode:
-    """Node in execution tree representing a pipeline step."""
-    step_name: str
-    config: Dict[str, Any]
-    parent: Optional['ExecutionNode'] = None
-    children: List['ExecutionNode'] = field(default_factory=list)
+    """
+    A segment of execution between branch points.
     
-    # Execution state (for future use)
-    status: str = "pending"
+    Each segment is executed as a single FINN build, containing all
+    steps from the last branch point (or root) to the next branch point
+    (or leaf).
+    """
+    # Core identity
+    segment_steps: List[Dict[str, Any]]
+    branch_decision: Optional[str] = None  # How we got here from parent
+    
+    # Tree structure
+    parent: Optional['ExecutionNode'] = None
+    children: Dict[str, 'ExecutionNode'] = field(default_factory=dict)
+    
+    # Execution state
+    status: str = "pending"  # pending, running, completed, failed
     output_dir: Optional[Path] = None
     error: Optional[str] = None
+    execution_time: Optional[float] = None
     
-    def find_or_create_child(self, step_name: str, config: Dict) -> 'ExecutionNode':
-        """Get existing child with matching config or create new one."""
-        config_key = self._make_config_key(config)
-        
-        for child in self.children:
-            if child.step_name == step_name and self._make_config_key(child.config) == config_key:
-                return child
-        
-        child = ExecutionNode(step_name, config, parent=self)
-        self.children.append(child)
+    # Artifact management
+    artifacts: ArtifactState = field(default_factory=ArtifactState)
+    
+    # FINN configuration
+    finn_config: Dict[str, Any] = field(default_factory=dict)
+    
+    @property
+    def segment_id(self) -> str:
+        """Deterministic ID from content."""
+        # Build ID from branch decisions in path
+        path_parts = []
+        node = self
+        while node and node.branch_decision:
+            path_parts.append(node.branch_decision)
+            node = node.parent
+        path_parts.reverse()
+        return "/".join(path_parts) if path_parts else "root"
+    
+    @property
+    def is_branch_point(self) -> bool:
+        """Check if this segment branches."""
+        return len(self.children) > 1
+    
+    @property
+    def is_leaf(self) -> bool:
+        """Check if this is a complete path endpoint."""
+        return len(self.children) == 0
+    
+    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> 'ExecutionNode':
+        """Create a child segment for a branch."""
+        child = ExecutionNode(
+            segment_steps=steps,
+            branch_decision=branch_id,
+            parent=self,
+            finn_config=self.finn_config.copy()
+        )
+        self.children[branch_id] = child
         return child
     
-    def _make_config_key(self, config: Dict) -> str:
-        """Create comparable key from config for deduplication."""
-        items = []
-        for k, v in sorted(config.items()):
-            if k == "transforms" and isinstance(v, list):
-                # Transform class names
-                items.append((k, tuple(t.__name__ for t in v)))
-            elif k == "kernel_backends" and isinstance(v, list):
-                # Backend class names
-                items.append((k, tuple((kn, tuple(b.__name__ for b in bc)) for kn, bc in v)))
-            else:
-                items.append((k, str(v)))
-        return str(items)
-    
-    def get_path_to_root(self) -> List['ExecutionNode']:
-        """Get path from this node to root."""
+    def get_path(self) -> List['ExecutionNode']:
+        """Get all segments from root to here."""
         path = []
         node = self
-        while node.parent is not None:
+        while node:
             path.append(node)
             node = node.parent
         path.reverse()
         return path
     
+    def get_all_steps(self) -> List[Dict[str, Any]]:
+        """Get all steps from root to end of this segment."""
+        steps = []
+        for segment in self.get_path():
+            steps.extend(segment.segment_steps)
+        return steps
+    
+    def get_cache_key(self) -> str:
+        """Simple, deterministic cache key."""
+        return self.segment_id
+    
     def count_descendants(self) -> int:
         """Count total number of descendant nodes."""
         count = len(self.children)
-        for child in self.children:
+        for child in self.children.values():
             count += child.count_descendants()
         return count
+
+
+def get_leaf_segments(root: ExecutionNode) -> List[ExecutionNode]:
+    """Get all complete execution paths (leaf segments)."""
+    leaves = []
+    
+    def collect_leaves(node: ExecutionNode):
+        if node.is_leaf:
+            leaves.append(node)
+        else:
+            for child in node.children.values():
+                collect_leaves(child)
+    
+    collect_leaves(root)
+    return leaves
 
 
 def count_leaves(node: ExecutionNode) -> int:
     """Count leaf nodes in tree."""
     if not node.children:
         return 1
-    return sum(count_leaves(child) for child in node.children)
+    return sum(count_leaves(child) for child in node.children.values())
 
 
 def count_nodes(node: ExecutionNode) -> int:
     """Count all nodes in tree."""
-    count = 0 if node.step_name == "root" else 1
-    for child in node.children:
+    count = 0 if node.segment_id == "root" else 1
+    for child in node.children.values():
         count += count_nodes(child)
     return count
 
 
 def print_tree(node: ExecutionNode, indent: str = "", last: bool = True):
-    """Pretty print the execution tree."""
-    if node.step_name != "root":
+    """Pretty print the execution tree with segment information."""
+    if node.segment_id != "root":
         prefix = "└── " if last else "├── "
         
-        # Format config
-        config_str = ""
-        if "skipped" in node.config:
-            config_str = " (skipped)"
-        elif "transforms" in node.config:
-            transforms = node.config["transforms"]
-            if transforms:
-                names = [t.__name__ for t in transforms]
-                config_str = f" ({', '.join(names)})"
-        elif "kernel_backends" in node.config:
-            backend_info = []
-            for kernel_name, backend_classes in node.config["kernel_backends"]:
-                backend_names = [b.__name__ for b in backend_classes]
-                backend_info.append(f"{kernel_name}[{','.join(backend_names)}]")
-            config_str = f" ({'; '.join(backend_info)})"
+        # Format segment info
+        segment_info = f"{node.branch_decision or 'root'}"
+        if node.segment_steps:
+            step_count = len(node.segment_steps)
+            segment_info += f" ({step_count} steps)"
         
-        print(f"{indent}{prefix}{node.step_name}{config_str}")
+        # Add status if not pending
+        if node.status != "pending":
+            segment_info += f" [{node.status}]"
+        
+        print(f"{indent}{prefix}{segment_info}")
     
     extension = "    " if last else "│   "
-    for i, child in enumerate(node.children):
-        print_tree(child, indent + extension, i == len(node.children) - 1)
+    child_items = list(node.children.items())
+    
+    for i, (branch_id, child) in enumerate(child_items):
+        is_last = i == len(child_items) - 1
+        new_indent = indent + extension if node.segment_id != "root" else indent
+        print_tree(child, new_indent, is_last)
+
+
+def get_execution_order(root: ExecutionNode) -> List[ExecutionNode]:
+    """
+    Get breadth-first execution order for the tree.
+    
+    This ensures parent nodes are executed before children,
+    enabling proper result sharing.
+    
+    Args:
+        root: Root node of execution tree
+        
+    Returns:
+        List of nodes in execution order
+    """
+    if root.segment_id == "root" and not root.segment_steps:
+        # Skip empty root node in execution
+        queue = list(root.children.values())
+    else:
+        queue = [root]
+    
+    order = []
+    seen = set()
+    
+    while queue:
+        node = queue.pop(0)
+        if id(node) in seen:
+            continue
+            
+        seen.add(id(node))
+        order.append(node)
+        queue.extend(node.children.values())
+    
+    return order
 
 
 def get_tree_stats(root: ExecutionNode) -> Dict[str, Any]:
@@ -152,23 +239,38 @@ def get_tree_stats(root: ExecutionNode) -> Dict[str, Any]:
     
     def calculate_depth(node: ExecutionNode, depth: int = 0):
         nonlocal max_depth
-        if node.step_name != "root":
+        if node.segment_id != "root":
             max_depth = max(max_depth, depth)
-        for child in node.children:
+        for child in node.children.values():
             calculate_depth(child, depth + 1)
     
     calculate_depth(root)
     
-    # Estimate sharing factor (how much work we save)
-    # Without sharing, we'd have leaf_count * max_depth nodes
-    theoretical_nodes = leaf_count * max_depth
-    actual_nodes = node_count
-    sharing_factor = theoretical_nodes / actual_nodes if actual_nodes > 0 else 1.0
+    # Count total steps
+    total_steps = 0
+    
+    def count_steps(node: ExecutionNode):
+        nonlocal total_steps
+        total_steps += len(node.segment_steps)
+        for child in node.children.values():
+            count_steps(child)
+    
+    count_steps(root)
+    
+    # Calculate segment efficiency
+    # Without segments, we'd execute all steps for each path
+    steps_without_segments = 0
+    for leaf in get_leaf_segments(root):
+        steps_without_segments += len(leaf.get_all_steps())
+    
+    segment_efficiency = 1 - (total_steps / steps_without_segments) if steps_without_segments > 0 else 0
     
     return {
         'total_paths': leaf_count,
-        'total_nodes': node_count,
+        'total_segments': node_count,
         'max_depth': max_depth,
-        'sharing_factor': round(sharing_factor, 2),
-        'saved_nodes': theoretical_nodes - actual_nodes
+        'total_steps': total_steps,
+        'steps_without_segments': steps_without_segments,
+        'segment_efficiency': round(segment_efficiency * 100, 1),  # As percentage
+        'avg_steps_per_segment': round(total_steps / node_count, 1) if node_count > 0 else 0
     }
