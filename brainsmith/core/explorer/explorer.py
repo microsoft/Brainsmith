@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Main entry point for exploring an execution tree with FINN."""
 
 from pathlib import Path
@@ -15,7 +18,14 @@ def explore_execution_tree(
     output_dir: Union[str, Path],
     blueprint_config: Dict[str, Any]
 ) -> TreeExecutionResult:
-    """Execute exploration of the tree."""
+    """Execute exploration of the tree.
+    
+    Args:
+        tree: Execution tree to explore
+        model_path: Path to input model
+        output_dir: Output directory
+        blueprint_config: Blueprint configuration
+    """
     
     # Ensure Path objects
     model_path = Path(model_path)

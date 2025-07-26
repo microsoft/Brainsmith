@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 BrainSmith Transforms
 
@@ -24,7 +27,7 @@ for loader, module_name, is_pkg in pkgutil.walk_packages(__path__, __name__ + '.
         importlib.import_module(module_name)
     except ImportError as e:
         import logging
-        logging.getLogger(__name__).debug(f"Failed to import {module_name}: {e}")
+        logging.getLogger(__name__).warning(f"Failed to import transform module {module_name}: {e}")
 
 __all__ = [
     'pre_proc',

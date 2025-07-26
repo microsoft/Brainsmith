@@ -1,12 +1,5 @@
-#!/usr/bin/env python3
-############################################################################
-# Copyright (C) 2025, Advanced Micro Devices, Inc.
-# All rights reserved.
-#
-# SPDX-License-Identifier: MIT
-#
-# Modern BERT Demo - Exact parity with old system using Brainsmith DSE
-############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import argparse
 import json
@@ -37,7 +30,8 @@ import brevitas.onnx as bo
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import forge, explore, create_build_runner_factory, BuildStatus
+from brainsmith import forge
+from brainsmith.core.explorer import explore_execution_tree
 
 warnings.simplefilter("ignore")
 
@@ -173,8 +167,8 @@ def generate_bert_model(args):
 
 def get_blueprint_path():
     """Get path to the static blueprint file."""
-    # Blueprint is now in the main blueprints library
-    return Path(__file__).parent.parent.parent / "brainsmith" / "blueprints" / "bert_legacy.yaml"
+    # Use the demo blueprint
+    return Path(__file__).parent / "bert_demo.yaml"
 
 
 def generate_reference_io(model, output_dir):
@@ -214,7 +208,7 @@ def generate_reference_io(model, output_dir):
 
 
 def run_brainsmith_dse(model, args):
-    """Run Brainsmith DSE v3 pipeline."""
+    """Run Brainsmith with new execution tree architecture."""
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     model_dir = os.path.join(args.output_dir, "intermediate_models")
@@ -261,77 +255,75 @@ def run_brainsmith_dse(model, args):
     np.save(os.path.join(args.output_dir, "input.npy"), dummy_input)
     np.save(os.path.join(args.output_dir, "expected_output.npy"), dummy_output)
     
-    # Parse blueprint and create design space
-    print("Parsing blueprint and constructing design space...")
+    # Parse blueprint and create execution tree
+    print("Parsing blueprint and constructing execution tree...")
     
     # Get static blueprint path
     blueprint_path = get_blueprint_path()
     
-    # Construct design space from blueprint
-    design_space = forge(
+    # Construct design space and execution tree from blueprint
+    design_space, execution_tree = forge(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path)
     )
     
-    # Update config flags with runtime values
-    design_space.hw_compiler_space.config_flags.update({
-        'board': args.board,
-        'clock_period_ns': args.clk,
-        'shell_flow_type': 'alveo_u250' if args.board == 'U250' else 'vivado_zynq',
-        'folding_config_file': os.path.abspath(args.param) if args.param else '',
-        'target_fps': args.fps,
-        'auto_fifo_depths': args.run_fifo_sizing,
-        'fifosim_n_inferences': args.fifosim_n_inferences,
-        'split_large_fifos': args.split_large_fifos,
-        'verification_atol': args.verification_atol,
-        'standalone_thresholds': args.standalone_thresholds,
-        'minimize_bit_width': True,
-        'preserve_intermediate_models': args.save_intermediate,
-        'pumped_compute': True,
-        'stitched_ip_gen_dcp': args.dcp,
-        'stop_step': args.stop_step or '',
-        'verify_input_npy': os.path.join(args.output_dir, "input.npy"),
-        'verify_expected_output_npy': os.path.join(args.output_dir, "expected_output.npy"),
-        'verify_save_full_context': args.save_intermediate,
-    })
+    # Create blueprint config for execution
+    blueprint_config = {
+        'global_config': {
+            'working_directory': args.output_dir,
+            'log_level': 'DEBUG' if args.verbose else 'INFO',
+        },
+        'finn_config': {
+            'board': args.board,
+            'synth_clk_period_ns': args.clk,
+            'shell_flow_type': 'alveo_u250' if args.board == 'U250' else 'vivado_zynq',
+            'folding_config_file': os.path.abspath(args.param) if args.param else None,
+            'target_fps': args.fps,
+            'auto_fifo_depths': args.run_fifo_sizing,
+            'fifosim_n_inferences': args.fifosim_n_inferences,
+            'split_large_fifos': args.split_large_fifos,
+            'verification_atol': args.verification_atol,
+            'standalone_thresholds': args.standalone_thresholds,
+            'minimize_bit_width': True,
+            'save_intermediate_models': args.save_intermediate,
+            'stitched_ip_gen_dcp': args.dcp,
+            'stop_step': args.stop_step or None,
+            'verify_input_npy': os.path.join(args.output_dir, "input.npy"),
+            'verify_expected_output_npy': os.path.join(args.output_dir, "expected_output.npy"),
+            'verify_save_full_context': args.save_intermediate,
+        }
+    }
     
-    # Update global config with runtime values
-    design_space.global_config.working_directory = args.output_dir
-    design_space.global_config.log_level = 'DEBUG' if args.verbose else 'INFO'
+    # Run exploration with execution tree
+    print("Running execution tree exploration...")
     
-    # Run exploration (single configuration for parity)
-    print("Running design space exploration...")
+    # Execute the tree
+    results = explore_execution_tree(
+        tree=execution_tree,
+        model_path=os.path.join(args.output_dir, "df_input.onnx"),
+        output_dir=args.output_dir,
+        blueprint_config=blueprint_config
+    )
     
-    # Create build runner factory for Legacy FINN backend
-    build_runner_factory = create_build_runner_factory("legacy_finn")
+    # Check results
+    stats = results.stats
+    if stats['successful'] == 0:
+        raise RuntimeError(f"No successful executions")
     
-    # Run exploration
-    results = explore(design_space, build_runner_factory)
+    print(f"Build completed successfully!")
+    print(f"  Total segments: {stats['total']}")
+    print(f"  Successful segments: {stats['successful']}")
+    print(f"  Failed segments: {stats['failed']}")
+    print(f"  Total time: {results.total_time:.2f}s")
     
-    # Get the results
-    if results.success_count == 0:
-        raise RuntimeError("No valid configurations found")
-    
-    # Get the first successful result
-    successful_results = [r for r in results.results if r.status == BuildStatus.SUCCESS]
-    if successful_results:
-        result = successful_results[0]
-        print(f"Build completed successfully!")
-        print(f"  Success rate: {results.success_count}/{results.total_count}")
-        print(f"  Build time: {result.build_time:.2f}s")
-    
-    # Copy final model (matches old hw_compiler.py)
-    if args.stop_step is None:
-        # Get last build step from design space
-        final_step = design_space.hw_compiler_space.build_steps[-1]
-    else:
-        final_step = args.stop_step
-        
-    final_model_src = os.path.join(model_dir, f"{final_step}.onnx")
+    # The new execution tree handles output automatically
     final_model_dst = os.path.join(args.output_dir, "output.onnx")
     
-    if os.path.exists(final_model_src):
-        shutil.copy2(final_model_src, final_model_dst)
+    # Find the output from the successful execution
+    for segment_id, result in results.segment_results.items():
+        if result.success and result.output_model:
+            shutil.copy2(result.output_model, final_model_dst)
+            break
     
     # Handle shell metadata (matches old hw_compiler.py)
     handover_file = os.path.join(args.output_dir, "stitched_ip", "shell_handover.json")
@@ -342,7 +334,7 @@ def run_brainsmith_dse(model, args):
         with open(handover_file, "w") as fp:
             json.dump(handover, fp, indent=4)
     
-    return result
+    return results
 
 
 def main():

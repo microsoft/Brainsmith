@@ -4,12 +4,8 @@ name: "Child Config"
 max_combinations: 5000
 
 design_space:
-  transforms:
-    optimize:
-      - FoldConstants
+  steps:
+    - "cleanup"
+    - ["optimize_minimal", "optimize_aggressive"]
   kernels:
     - MatrixVectorActivation: mvau_hls
-build_pipeline:
-  steps:
-    - "{cleanup}"
-    - "{optimize}"

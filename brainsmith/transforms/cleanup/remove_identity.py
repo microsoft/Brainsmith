@@ -1,10 +1,13 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Remove Identity Operations Transform
 
 Example transform that removes identity operations from the graph.
 """
 
-from brainsmith.core.plugins.decorators import transform
+from brainsmith.core.plugins import transform
 from qonnx.transformation.base import Transformation
 
 

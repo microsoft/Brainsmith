@@ -1,0 +1,68 @@
+{
+  "stats": {
+    "total": 7,
+    "successful": 2,
+    "failed": 4,
+    "skipped": 0,
+    "cached": 1
+  },
+  "total_time": 2.890441417694092,
+  "segments": {
+    "root": {
+      "success": true,
+      "cached": true,
+      "error": null,
+      "execution_time": 0.0,
+      "output_model": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/root/root_output.onnx",
+      "output_dir": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/root"
+    },
+    "cleanup_opt0": {
+      "success": true,
+      "cached": false,
+      "error": null,
+      "execution_time": 0.0027561187744140625,
+      "output_model": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/cleanup_opt0/cleanup_opt0_output.onnx",
+      "output_dir": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/cleanup_opt0"
+    },
+    "cleanup_opt0/optional_step_opt0": {
+      "success": false,
+      "cached": false,
+      "error": "Build failed with code -1",
+      "execution_time": 0.003838777542114258,
+      "output_model": null,
+      "output_dir": null
+    },
+    "cleanup_opt0/optional_step_opt1": {
+      "success": false,
+      "cached": false,
+      "error": "Build failed with code -1",
+      "execution_time": 0.002187967300415039,
+      "output_model": null,
+      "output_dir": null
+    },
+    "cleanup_opt1": {
+      "success": true,
+      "cached": false,
+      "error": null,
+      "execution_time": 0.0018012523651123047,
+      "output_model": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/cleanup_opt1/cleanup_opt1_output.onnx",
+      "output_dir": "/home/tafk/dev/brainsmith-4/examples/output/definitive_e2e/cleanup_opt1"
+    },
+    "cleanup_opt1/optional_step_opt0": {
+      "success": false,
+      "cached": false,
+      "error": "Build failed with code -1",
+      "execution_time": 0.0024335384368896484,
+      "output_model": null,
+      "output_dir": null
+    },
+    "cleanup_opt1/optional_step_opt1": {
+      "success": false,
+      "cached": false,
+      "error": "Build failed with code -1",
+      "execution_time": 0.0017178058624267578,
+      "output_model": null,
+      "output_dir": null
+    }
+  }
+}

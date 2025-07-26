@@ -1,83 +1,49 @@
-version: "3.0"
-name: "BERT Modern Demo"
-description: "Modern BERT implementation with exact parity to old system using Legacy FINN Backend"
+name: "BERT"
+description: "string"
 
-hw_compiler:
-  # Legacy FINN backend only uses build_steps, not kernels/transforms
+# extends: "base.yaml"
+
+# Global configursation - all fields optional, can be flat or under global_config
+output_stage: "compile_and_package"    # generate_reports | compile_and_package | synthesize_bitstream
+working_directory: "work"               # Default: "work"
+save_intermediate_models: false         # Default: false
+fail_fast: false                        # Default: false
+max_combinations: 100000                # Or env BRAINSMITH_MAX_COMBINATIONS
+timeout_minutes: 60                     # Or env BRAINSMITH_TIMEOUT_MINUTES
+
+# Smithy parameters (mapped to FINN config)
+platform: "V80"                     # Maps to finn_config.board
+target_clk: 5                       # Maps to finn_config.synth_clk_period_ns
+                                       # Supports units: ps, ns, us, ms (default: ns)
+
+design_space:
+  # Legacy FINN backend only uses build_steps, not kernels
   kernels:
     - LayerNorm
+    - DuplicateStreams
     # model = model.transform(to_hw.InferDuplicateStreamsLayer())
     - ElementwiseBinary
     - Shuffle
     - Softmax
     - Thresholding
     - MVAU
-
-  transforms:
-    cleanup:
-      - AbsorbSignBiasIntoMultiThreshold
-      - AbsorbAddIntoMultiThreshold
-      - AbsorbMulIntoMultiThreshold
-      - RoundAndClipThresholds
-      - model = MoveOpPastFork #(["Mul"]))
-      - MoveScalarMulPastMatMul
-      - MoveScalarLinearPastInvariants
-      - AbsorbMulIntoMultiThreshold
-      - AbsorbAddIntoMultiThreshold
-      - InferDataTypes #(allow_scaledint_dtypes=False))
-      - GiveUniqueNodeNames
     
   # Build steps from original bert.py BUILD_STEPS list (lines 380-402)
-  build_steps:
-    # Cleanup and custom graph surgery
-    - "cleanup"  # custom_step_cleanup
-    - "remove_head"  # custom_step_remove_head
-    - "remove_tail"  # custom_step_remove_tail
+  steps:
+    # Note: First step (cleanup) is handled by child blueprints
     - "qonnx_to_finn"  # custom_step_qonnx2finn
-    
-    # - "generate_reference_io"  # custom_step_generate_reference_io (skipped - handled by demo script)
-    - "streamlining"  # custom_streamlining_step
-    
-
-    - "infer_kernels" # - "infer_hardware"  # custom_step_infer_hardware
-
-    - "step_create_dataflow_partition"
-    - "step_specialize_layers"
-    - "step_target_fps_parallelization"
-    - "step_apply_folding_config"
-    - "step_minimize_bit_width"
-    - "step_generate_estimate_reports"
-    - "step_hw_codegen"
-    - "step_hw_ipgen"
-    - "step_set_fifo_depths"
-    - "step_create_stitched_ip"
-    - "step_measure_rtlsim_performance"
-    - "shell_metadata_handover"  # custom_step_shell_metadata_handover
-    
-  config_flags:
-    # Default values matching old system (from hw_compiler.py)
-    # These will be overridden at runtime by the demo script
-    standalone_thresholds: true
-    minimize_bit_width: true
-    pumped_compute: true
-    
-    # Verification steps from old system
-    verify_steps:
-      - "FOLDED_HLS_CPPSIM"
-      - "STITCHED_IP_RTLSIM"
-    
-processing:
-  # No preprocessing/postprocessing steps (handled within build_steps)
-  preprocessing: []
-  postprocessing: []
-
-search:
-  # Single configuration like old system (no exploration)
-  strategy: "exhaustive"
-  constraints: []
-  
-global:
-  # Match old system outputs
-  output_stage: "stitched_ip"
-  save_artifacts: true
-  # working_directory and log_level will be set at runtime
+    # Topology optimization
+    - "bert_streamlining"
+    - "infer_hardware"  # custom_step_infer_hardware
+    # Core FINN steps
+    - "create_dataflow_partition"
+    - "specialize_layers"
+    - "target_fps_parallelization"
+    - "apply_folding_config"
+    - "minimize_bit_width"
+    - "generate_estimate_reports"
+    - "hw_codegen"
+    - "hw_ipgen"
+    - "set_fifo_depths"
+    - "create_stitched_ip"
+    - "measure_rtlsim_performance"

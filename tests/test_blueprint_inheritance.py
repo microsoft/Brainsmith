@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Test blueprint inheritance feature."""
 
 import pytest
@@ -22,16 +25,11 @@ global_config:
   working_directory: "parent_work"
   
 design_space:
-  transforms:
-    cleanup:
-      - RemoveIdentityOps
-      - RemoveUnusedTensors
+  steps:
+    - cleanup
+    - cleanup_advanced
   kernels:
     - MVAU: MVAU_hls
-    
-build_pipeline:
-  steps:
-    - "{cleanup}"
 """
         
         # Create child blueprint that extends parent
@@ -43,18 +41,13 @@ global_config:
   working_directory: "child_work"  # Override parent
   
 design_space:
-  transforms:
-    optimize:  # Add new stage
-      - FoldConstants
-      - [InferDataLayouts, ~]  # Options
+  steps:
+    - cleanup  # From parent
+    - cleanup_advanced  # From parent
+    - [streamlining, ~]  # Add branching step
   kernels:
     - MVAU: MVAU_hls  # Keep parent kernel
     - VVAU: VVAU_hls  # Add new kernel
-    
-build_pipeline:
-  steps:
-    - "{cleanup}"  # From parent
-    - "{optimize}"  # New in child
 """
         
         # Write files
@@ -71,7 +64,7 @@ build_pipeline:
             
         # Parse with inheritance
         parser = BlueprintParser()
-        design_space, _ = parser.parse(child_path, model_path)
+        design_space, execution_tree = parser.parse(child_path, model_path)
         
         # Verify inheritance worked correctly
         
@@ -80,25 +73,20 @@ build_pipeline:
         assert design_space.global_config.timeout_minutes == 30     # From parent
         assert design_space.global_config.working_directory == "child_work"  # From child
         
-        # Transforms: merged from both
-        assert "cleanup" in design_space.transform_stages  # From parent
-        assert "optimize" in design_space.transform_stages  # From child
-        
-        # Check cleanup stage has parent's transforms
-        cleanup_stage = design_space.transform_stages["cleanup"]
-        assert len(cleanup_stage.transform_steps) == 2
-        
-        # Check optimize stage has child's transforms
-        optimize_stage = design_space.transform_stages["optimize"]
-        assert len(optimize_stage.transform_steps) == 2
+        # Steps: should include parent steps plus child's branching
+        assert len(design_space.steps) == 3
+        assert design_space.steps[0] == "cleanup"  # From parent
+        assert design_space.steps[1] == "cleanup_advanced"  # From parent
+        assert design_space.steps[2] == ["streamlining", "~"]  # From child (branching)
         
         # Kernels: should have both parent and child
         kernel_names = [k[0] for k in design_space.kernel_backends]
         assert "MVAU" in kernel_names  # From parent
         assert "VVAU" in kernel_names  # From child
         
-        # Pipeline: should have both stages
-        assert design_space.build_pipeline == ["{cleanup}", "{optimize}"]
+        # Execution tree should have branching
+        from brainsmith.core.execution_tree import count_leaves
+        assert count_leaves(execution_tree) == 2  # Two paths due to branching
 
 
 def test_deep_inheritance_chain():
@@ -123,9 +111,8 @@ global_config:
   max_combinations: 10000  # Override
   save_intermediate_models: true  # Override
 design_space:
-  transforms:
-    stage1:
-      - Transform1
+  steps:
+    - cleanup
 """
         
         # Child extends parent
@@ -135,9 +122,9 @@ name: "Child"
 global_config:
   timeout_minutes: 30  # Override grandparent
 design_space:
-  transforms:
-    stage2:
-      - Transform2
+  steps:
+    - cleanup  # From parent
+    - quantization_preprocessing  # Add new
 """
         
         # Write files
@@ -159,9 +146,8 @@ design_space:
         assert data["global_config"]["timeout_minutes"] == 30      # From child
         assert data["global_config"]["save_intermediate_models"] == True  # From parent
         
-        # Both transform stages should be present
-        assert "stage1" in data["design_space"]["transforms"]  # From parent
-        assert "stage2" in data["design_space"]["transforms"]  # From child
+        # Both steps should be present
+        assert data["design_space"]["steps"] == ["cleanup", "quantization_preprocessing"]
 
 
 if __name__ == "__main__":

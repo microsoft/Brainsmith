@@ -1,0 +1,99 @@
+# Example: BERT Blueprint with Step Inheritance
+
+# base_transformer.yaml - Generic transformer blueprint
+name: "Base Transformer"
+output_stage: "compile_and_package"
+platform: "V80"
+
+design_space:
+  steps:
+    # Standard preprocessing
+    - "onnx_preprocessing"
+    - "cleanup"
+    
+    # Optimization choices
+    - ["streamline_fast", "streamline_thorough"]
+    
+    # Kernel inference
+    - "infer_kernels"
+    
+    # Dataflow
+    - "create_dataflow_partition"
+    
+    # Final steps
+    - "shell_metadata_handover"
+
+---
+
+# bert_enhanced.yaml - BERT-specific enhancements
+name: "BERT Enhanced"
+extends: "base_transformer.yaml"
+
+design_space:
+  steps:
+    # Parent steps are automatically inherited
+    
+    # Add BERT-specific preprocessing after ONNX preprocessing
+    - after: "onnx_preprocessing"
+      insert: "bert_attention_preprocessing"
+    
+    # Replace generic cleanup with BERT-optimized version
+    - replace: "cleanup"
+      with: ["bert_cleanup_minimal", "bert_cleanup_aggressive"]
+    
+    # Add optional quantization before kernel inference
+    - before: "infer_kernels"
+      insert: ["quantize_int8", ~]
+    
+    # Add BERT-specific optimizations after streamline
+    - after: ["streamline_fast", "streamline_thorough"]
+      insert: 
+        - "bert_layer_fusion"
+        - ["attention_optimization", ~]
+
+---
+
+# bert_experimental.yaml - Experimental features on top of BERT
+name: "BERT Experimental"
+extends: "bert_enhanced.yaml"
+
+design_space:
+  steps:
+    # Parent steps from bert_enhanced are automatically inherited
+    
+    # Add experimental preprocessing at the very start
+    - at_start:
+      insert: ["experimental_graph_optimization", ~]
+    
+    # Replace attention optimization with experimental version
+    - replace: ["attention_optimization", ~]
+      with: ["attention_optimization_v1", "attention_optimization_v2", ~]
+    
+    # Add validation after each major phase
+    - after: "bert_cleanup_aggressive"
+      insert: "validate_cleanup"
+      
+    - after: "bert_layer_fusion"  
+      insert: "validate_fusion"
+    
+    # Add experimental verification at the end
+    - at_end:
+      insert: ["experimental_verification", ~]
+
+---
+
+# Result: bert_experimental.yaml expands to these steps:
+# 1. ["experimental_graph_optimization", ~]  # Added at start
+# 2. "onnx_preprocessing"                    # From base
+# 3. "bert_attention_preprocessing"          # From bert_enhanced
+# 4. ["bert_cleanup_minimal", "bert_cleanup_aggressive"]  # Replaced in bert_enhanced
+# 5. "validate_cleanup"                      # Added in experimental
+# 6. ["streamline_fast", "streamline_thorough"]  # From base
+# 7. "bert_layer_fusion"                     # From bert_enhanced
+# 8. ["attention_optimization_v1", "attention_optimization_v2", ~]  # Replaced in experimental
+# 9. "validate_fusion"                       # Added in experimental
+# 10. ["quantize_int8", ~]                   # From bert_enhanced
+# 11. "infer_kernels"                        # From base
+# 12. "create_dataflow_partition"            # From base
+# 13. "shell_metadata_handover"              # From base
+# 14. ["experimental_verification", ~]       # Added at end

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 InferFinnLoopOp Transform
 
@@ -7,7 +10,7 @@ until we add it to the FINN manual registry.
 """
 
 from qonnx.transformation.base import Transformation
-from brainsmith.core.plugins.decorators import transform
+from brainsmith.core.plugins import transform
 
 
 @transform(

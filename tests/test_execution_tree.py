@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Tests for Execution Tree Implementation
 
@@ -15,8 +18,9 @@ from typing import List, Type
 from brainsmith.core.execution_tree import (
     ExecutionNode, count_leaves, count_nodes, get_tree_stats, print_tree, get_leaf_segments
 )
-from brainsmith.core.design_space import DesignSpace, GlobalConfig, TransformStage
+from brainsmith.core.design_space import DesignSpace, GlobalConfig
 from brainsmith.core.blueprint_parser import BlueprintParser
+from brainsmith.core.plugins import get_transform, get_backend
 from brainsmith.core.plugins.registry import get_registry
 
 
@@ -24,35 +28,26 @@ def setup_module():
     """Ensure registry is initialized with real transforms."""
     # This happens automatically on import, but let's be explicit
     registry = get_registry()
-    # Verify we have transforms
-    if not registry.transforms:
-        from brainsmith.core.plugins.framework_adapters import initialize_framework_integrations
-        initialize_framework_integrations()
+    # Registry should be auto-populated on import
 
 
 def build_tree_from_design_space(design_space):
     """Helper to build tree from design space for tests."""
     parser = BlueprintParser()
-    from brainsmith.core.explorer.utils import StageWrapperFactory
-    from brainsmith.core.plugins.registry import BrainsmithPluginRegistry
-    registry = BrainsmithPluginRegistry()
-    wrapper_factory = StageWrapperFactory(registry)
-    return parser._build_execution_tree(design_space, wrapper_factory)
+    return parser._build_execution_tree(design_space)
 
 
 def get_real_transforms():
     """Get real transform classes from registry."""
-    registry = get_registry()
-    
     # Get some common QONNX transforms
-    fold_constants = registry.get_transform("FoldConstants")
-    remove_identity = registry.get_transform("RemoveIdentityOps")
-    remove_unused = registry.get_transform("RemoveUnusedTensors")
-    infer_shapes = registry.get_transform("InferShapes")
+    fold_constants = get_transform("FoldConstants")
+    remove_identity = get_transform("RemoveIdentityOps")
+    remove_unused = get_transform("RemoveUnusedTensors")
+    infer_shapes = get_transform("InferShapes")
     
     # Get some FINN transforms
-    round_thresholds = registry.get_transform("RoundAndClipThresholds")
-    absorb_sign_bias = registry.get_transform("AbsorbSignBiasIntoMultiThreshold")
+    round_thresholds = get_transform("RoundAndClipThresholds")
+    absorb_sign_bias = get_transform("AbsorbSignBiasIntoMultiThreshold")
     
     return {
         "fold_constants": fold_constants,
@@ -66,44 +61,16 @@ def get_real_transforms():
 
 def get_real_backends():
     """Get real backend classes from registry."""
-    registry = get_registry()
-    
     # Get FINN backends
-    mvau_hls = registry.get_backend("MVAU_hls")
-    mvau_rtl = registry.get_backend("MVAU_rtl")
-    thresholding_hls = registry.get_backend("Thresholding_hls")
+    mvau_hls = get_backend("MVAU_hls")
+    mvau_rtl = get_backend("MVAU_rtl")
+    thresholding_hls = get_backend("Thresholding_hls")
     
     return {
         "mvau_hls": mvau_hls,
         "mvau_rtl": mvau_rtl,
         "thresholding_hls": thresholding_hls
     }
-
-
-def test_transform_stage_combinations():
-    """Test that TransformStage generates correct combinations."""
-    transforms = get_real_transforms()
-    
-    # Single required transform
-    stage1 = TransformStage("test1", [[transforms["fold_constants"]]])
-    assert len(stage1.get_combinations()) == 1
-    assert stage1.get_combinations()[0] == [transforms["fold_constants"]]
-    
-    # Optional transform (with None)
-    stage2 = TransformStage("test2", [[transforms["remove_identity"], None]])
-    combos = stage2.get_combinations()
-    assert len(combos) == 2
-    assert [transforms["remove_identity"]] in combos
-    assert [] in combos  # None becomes empty list
-    
-    # Multiple steps
-    stage3 = TransformStage("test3", [
-        [transforms["fold_constants"]],  # Required
-        [transforms["remove_identity"], transforms["remove_unused"]],  # Choose one
-        [None, transforms["infer_shapes"]]  # Optional
-    ])
-    combos = stage3.get_combinations()
-    assert len(combos) == 4  # 1 * 2 * 2
 
 
 def test_execution_node_deduplication():
@@ -128,15 +95,11 @@ def test_simple_linear_tree():
     transforms = get_real_transforms()
     backends = get_real_backends()
     
-    # Create simple design space
+    # Create simple design space using new API
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "imports": TransformStage("imports", [[transforms["fold_constants"]]]),
-            "cleanup": TransformStage("cleanup", [[transforms["remove_identity"]]]),
-        },
+        steps=["cleanup", "fold_constants", "infer_kernels"],  # Direct steps, no variations
         kernel_backends=[("MVAU", [backends["mvau_hls"]])],
-        build_pipeline=["start", "{imports}", "{cleanup}", "infer_kernels", "end"],
         global_config=GlobalConfig()
     )
     
@@ -158,18 +121,13 @@ def test_simple_linear_tree():
 
 def test_simple_optional_stage():
     """Test tree building with a simple optional stage."""
-    transforms = get_real_transforms()
-    
-    # Create design space with one optional stage
+    # Create design space with one optional step using new API
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "opt": TransformStage("opt", [
-                [transforms["fold_constants"], None]
-            ]),  # 2 options: do or skip
-        },
+        steps=[
+            ["fold_constants", "~"]  # 2 options: do or skip
+        ],
         kernel_backends=[],
-        build_pipeline=["{opt}"],
         global_config=GlobalConfig()
     )
     
@@ -177,26 +135,19 @@ def test_simple_optional_stage():
     
     # Should have 2 paths: one with fold_constants, one without
     assert count_leaves(tree) == 2
-    
+
 
 def test_branching_tree():
     """Test tree building with branching."""
-    transforms = get_real_transforms()
-    
-    # Create design space with branching
+    # Create design space with branching using new API
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "stage1": TransformStage("stage1", [[transforms["fold_constants"]]]),  # No branch
-            "stage2": TransformStage("stage2", [
-                [transforms["remove_identity"], transforms["remove_unused"]]
-            ]),  # 2 options for one step
-            "stage3": TransformStage("stage3", [
-                [transforms["infer_shapes"], None]
-            ]),  # 2 options (do or skip)
-        },
+        steps=[
+            "fold_constants",  # No branch
+            ["remove_identity", "remove_unused"],  # 2 options
+            ["infer_shapes", "~"],  # 2 options (do or skip)
+        ],
         kernel_backends=[],
-        build_pipeline=["{stage1}", "{stage2}", "{stage3}"],
         global_config=GlobalConfig()
     )
     
@@ -217,41 +168,20 @@ def test_complex_tree_with_sharing():
     # Design space that creates a tree with sharing
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "A": TransformStage("A", [[transforms["fold_constants"]]]),
-            "B": TransformStage("B", [
-                [transforms["remove_identity"], transforms["remove_unused"]]
-            ]),
-            "C": TransformStage("C", [
-                [transforms["infer_shapes"]],  # Required
-                [transforms["round_thresholds"], None]  # Optional
-            ]),
-        },
+        steps=[
+            "fold_constants",  # A
+            ["remove_identity", "remove_unused"],  # B (2 options)
+            "infer_shapes",  # C1 - required
+            ["round_thresholds", "~"],  # C2 - optional
+        ],
         kernel_backends=[],
-        build_pipeline=["{A}", "{B}", "{C}"],
         global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
     
-    # Paths: A->B1->C1, A->B1->C2, A->B2->C1, A->B2->C2
+    # Paths: A->B1->C1->C2a, A->B1->C1->C2b, A->B2->C1->C2a, A->B2->C1->C2b
     assert count_leaves(tree) == 4
-    
-    # Find stage_A node (should have 1)
-    stage_a_nodes = []
-    
-    def find_nodes_with_stage(node, stage_name, results):
-        # Check if this node has steps from the given stage
-        for step in node.segment_steps:
-            if isinstance(step, dict) and step.get('stage_name') == stage_name:
-                results.append(node)
-                break
-        for child in node.children.values():
-            find_nodes_with_stage(child, stage_name, results)
-    
-    find_nodes_with_stage(tree, "A", stage_a_nodes)
-    # Root contains stage A, so we find it there
-    assert len(stage_a_nodes) >= 1
     
     # Verify branching structure
     stats = get_tree_stats(tree)
@@ -260,59 +190,46 @@ def test_complex_tree_with_sharing():
 
 def test_empty_stages():
     """Test handling of empty transform stages."""
-    transforms = get_real_transforms()
-    
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "empty": TransformStage("empty", [[None]]),  # Only skip option
-            "normal": TransformStage("normal", [[transforms["fold_constants"]]]),
-        },
+        steps=[
+            ["~"],  # Only skip option
+            "fold_constants",  # Normal step
+        ],
         kernel_backends=[],
-        build_pipeline=["{empty}", "{normal}"],
         global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
     
-    # Empty stage gets included in root segment
-    # Tree should have one segment with both stages
-    assert count_nodes(tree) == 0  # Just root, no child segments
-    assert len(tree.segment_steps) > 0  # Root has steps
+    # Even with only skip option, we create a branch
+    # Tree should have one child for the skip branch
+    assert count_nodes(tree) == 1  # Root plus one child
+    assert count_leaves(tree) == 1  # Only one path through the tree
 
 
 def test_real_finn_pipeline():
     """Test with realistic FINN transform pipeline."""
     registry = get_registry()
     
-    # Build realistic stages
+    # Build realistic steps using new API
     design_space = DesignSpace(
         model_path="test.onnx",
-        transform_stages={
-            "cleanup": TransformStage("cleanup", [
-                [registry.get_transform("RemoveIdentityOps")],
-                [registry.get_transform("RemoveUnusedTensors"), None],  # Optional
-                [registry.get_transform("FoldConstants")],
-            ]),
-            "streamline": TransformStage("streamline", [
-                [
-                    registry.get_transform("AbsorbSignBiasIntoMultiThreshold"),
-                    registry.get_transform("AbsorbAddIntoMultiThreshold"),
-                    registry.get_transform("AbsorbMulIntoMultiThreshold")
-                ],  # Choose one absorb variant
-                [registry.get_transform("RoundAndClipThresholds"), None],  # Optional
-            ]),
-        },
-        kernel_backends=[
-            ("MVAU", [registry.get_backend("MVAU_hls"), registry.get_backend("MVAU_rtl")]),
-            ("Thresholding", [registry.get_backend("Thresholding_hls")])
-        ],
-        build_pipeline=[
+        steps=[
             "qonnx_to_finn",
-            "{cleanup}",
-            "{streamline}",
+            # Cleanup stage with variations
+            "cleanup",
+            ["remove_unused", "~"],  # Optional
+            "fold_constants",
+            # Streamline stage with variations
+            ["absorb_sign_bias", "absorb_add_bias", "absorb_mul_bias"],  # Choose one
+            ["round_thresholds", "~"],  # Optional
             "infer_kernels",
             "create_dataflow"
+        ],
+        kernel_backends=[
+            ("MVAU", [get_backend("MVAU_hls"), get_backend("MVAU_rtl")]),
+            ("Thresholding", [get_backend("Thresholding_hls")])
         ],
         global_config=GlobalConfig()
     )
@@ -349,7 +266,8 @@ def test_real_finn_pipeline():
         steps = leaf.get_all_steps()
         # Should have kernel inference step somewhere in the pipeline
         has_kernel_step = any(
-            isinstance(s, dict) and s.get("name") == "infer_kernels" 
+            s == "infer_kernels" if isinstance(s, str) else 
+            (isinstance(s, dict) and s.get("name") == "infer_kernels")
             for s in steps
         )
         assert has_kernel_step

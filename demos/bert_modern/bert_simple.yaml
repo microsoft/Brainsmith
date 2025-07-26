@@ -1,0 +1,33 @@
+name: "BERT Simple Demo"
+description: "Simplified BERT blueprint using standard FINN steps"
+
+# Global configuration
+output_stage: "compile_and_package"
+working_directory: "work"
+save_intermediate_models: true
+
+# Platform configuration
+platform: "V80"
+target_clk: 5
+
+design_space:
+  # Empty kernels list for pure FINN flow
+  kernels: []
+  
+  # Use standard FINN build steps (clean names without prefix)
+  steps:
+    - "qonnx_to_finn"
+    - "tidy_up"
+    - "streamline"
+    - "convert_to_hw"
+    - "create_dataflow_partition"
+    - "specialize_layers"
+    - "target_fps_parallelization"
+    - "apply_folding_config"
+    - "minimize_bit_width"
+    - "generate_estimate_reports"
+    - "hw_codegen"
+    - "hw_ipgen"
+    - "set_fifo_depths"
+    - "create_stitched_ip"
+    - "measure_rtlsim_performance"

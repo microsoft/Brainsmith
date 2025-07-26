@@ -5,10 +5,6 @@ timeout_minutes: 30
 working_directory: "work"
 
 design_space:
-  transforms:
-    cleanup:
-      - RemoveIdentityOps
-  kernels: []
-build_pipeline:
   steps:
-    - "{cleanup}"
+    - "cleanup"
+  kernels: []

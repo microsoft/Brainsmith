@@ -1,34 +1,9 @@
-version: "3.0"
-name: "BERT Modern Demo"
+name: "Baseline FINN"
 description: "Modern BERT implementation with exact parity to old system using Legacy FINN Backend"
 
 hw_compiler:
-  # Legacy FINN backend only uses build_steps, not kernels/transforms
-  kernels:
-    - LayerNorm
-    # model = model.transform(to_hw.InferDuplicateStreamsLayer())
-    - ElementwiseBinary
-    - Shuffle
-    - Softmax
-    - Thresholding
-    - MVAU
 
-  transforms:
-    cleanup:
-      - AbsorbSignBiasIntoMultiThreshold
-      - AbsorbAddIntoMultiThreshold
-      - AbsorbMulIntoMultiThreshold
-      - RoundAndClipThresholds
-      - model = MoveOpPastFork #(["Mul"]))
-      - MoveScalarMulPastMatMul
-      - MoveScalarLinearPastInvariants
-      - AbsorbMulIntoMultiThreshold
-      - AbsorbAddIntoMultiThreshold
-      - InferDataTypes #(allow_scaledint_dtypes=False))
-      - GiveUniqueNodeNames
-    
-  # Build steps from original bert.py BUILD_STEPS list (lines 380-402)
-  build_steps:
+  steps:
     # Cleanup and custom graph surgery
     - "cleanup"  # custom_step_cleanup
     - "qonnx_to_finn"  # custom_step_qonnx2finn

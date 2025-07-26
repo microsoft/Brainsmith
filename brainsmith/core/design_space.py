@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Clean Design Space Implementation
 
@@ -7,10 +10,8 @@ from the blueprint, ready for tree construction.
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Type, Any
+from typing import Dict, List, Tuple, Type, Any, Union, Optional
 from enum import Enum
-
-from .execution_tree import TransformStage
 
 
 class OutputStage(Enum):
@@ -43,9 +44,8 @@ class DesignSpace:
     actual classes from the registry.
     """
     model_path: str
-    transform_stages: Dict[str, TransformStage]
+    steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
-    build_pipeline: List[str]
     global_config: GlobalConfig
     finn_config: Dict[str, Any] = field(default_factory=dict)
     
@@ -62,26 +62,20 @@ class DesignSpace:
         """Estimate total number of combinations without building tree."""
         total = 1
         
-        # Transform stages
-        for stage in self.transform_stages.values():
-            stage_combos = len(stage.get_combinations())
-            if stage_combos > 0:
-                total *= stage_combos
+        # Step variations
+        for step in self.steps:
+            if isinstance(step, list):
+                # Branch point - multiply by number of options
+                # Account for skip options (~, None, or empty string)
+                valid_options = sum(1 for opt in step if opt and opt != "~")
+                if any(opt in [None, "~", ""] for opt in step):
+                    valid_options += 1  # Add one for skip branch
+                total *= max(1, valid_options)
         
-        # Kernel backends (no branching in new design)
+        # Kernel backends (no branching in current design)
         # Each kernel has exactly one backend selected
         
         return total
-    
-    def get_stage_names(self) -> List[str]:
-        """Get all transform stage names in pipeline order."""
-        stage_names = []
-        for step in self.build_pipeline:
-            if step.startswith("{") and step.endswith("}"):
-                stage_name = step[1:-1]
-                if stage_name in self.transform_stages:
-                    stage_names.append(stage_name)
-        return stage_names
     
     def get_kernel_summary(self) -> str:
         """Get human-readable summary of kernels and backends."""
@@ -96,8 +90,7 @@ class DesignSpace:
         return (
             f"DesignSpace(\n"
             f"  model: {self.model_path}\n"
-            f"  stages: {list(self.transform_stages.keys())}\n"
+            f"  steps: {len(self.steps)}\n"
             f"  kernels: {len(self.kernel_backends)}\n"
-            f"  pipeline: {len(self.build_pipeline)} steps\n"
             f")"
         )

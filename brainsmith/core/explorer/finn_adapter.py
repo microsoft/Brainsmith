@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """FINN-specific adapter to isolate workarounds.
 
 All FINN-specific hacks, workarounds, and necessary evils are isolated here.
@@ -24,17 +27,34 @@ class FINNAdapter:
     
     def __init__(self):
         """Initialize FINN adapter."""
-        # Check FINN availability once
-        self._finn_available = self._check_finn_available()
-        if not self._finn_available:
-            raise RuntimeError(
-                "FINN not installed. Please install finn-base: "
-                "pip install git+https://github.com/Xilinx/finn.git"
-            )
+        # Check FINN availability with detailed error reporting
+        self._check_finn_dependencies()
     
-    def _check_finn_available(self) -> bool:
-        """Check if FINN is available."""
-        return importlib.util.find_spec("finn") is not None
+    def _check_finn_dependencies(self) -> None:
+        """Check all FINN dependencies are available.
+        
+        Arete: Fail fast with clear error messages.
+        """
+        missing = []
+        
+        # Check core FINN modules
+        required_modules = [
+            ("finn", "finn-base"),
+            ("finn.builder", "finn-base"),
+            ("finn.builder.build_dataflow", "finn-base"),
+            ("finn.builder.build_dataflow_config", "finn-base"),
+        ]
+        
+        for module, package in required_modules:
+            if importlib.util.find_spec(module) is None:
+                missing.append((module, package))
+        
+        if missing:
+            error_msg = "Missing FINN dependencies:\n"
+            for module, package in missing:
+                error_msg += f"  - {module} (from {package})\n"
+            error_msg += "\nInstall with: pip install git+https://github.com/Xilinx/finn.git"
+            raise RuntimeError(error_msg)
     
     def build(
         self,
@@ -66,9 +86,12 @@ class FINNAdapter:
             os.chdir(output_dir)
             
             # Convert dict to DataflowBuildConfig
+            print(f"Creating DataflowBuildConfig with: {config_dict}")
             config = DataflowBuildConfig(**config_dict)
             
             # Execute build
+            print(f"Executing FINN build with model: {input_model}")
+            print(f"Config steps: {config.steps}")
             exit_code = build_dataflow_cfg(str(input_model), config)
             
             if exit_code != 0:
@@ -84,18 +107,26 @@ class FINNAdapter:
     def _discover_output_model(self, build_dir: Path) -> Optional[Path]:
         """Discover output model from FINN build directory.
         
-        FINN puts the final model in intermediate_models directory
-        with unpredictable naming. We find the last generated model.
+        TECHNICAL DEBT: FINN doesn't return output paths from build_dataflow_cfg.
+        This is a workaround that guesses the output by finding the most recently
+        modified ONNX file in intermediate_models/.
+        
+        TODO: Submit PR to FINN to return output paths properly.
         
         Args:
             build_dir: Directory where build was executed
             
         Returns:
             Path to discovered model or None if not found
+            
+        Raises:
+            RuntimeError: If no models found or discovery is ambiguous
         """
         intermediate_dir = build_dir / "intermediate_models"
         if not intermediate_dir.exists():
-            return None
+            raise RuntimeError(
+                f"FINN build directory missing intermediate_models: {build_dir}"
+            )
         
         # Find all ONNX files, sorted by modification time
         onnx_files = sorted(
@@ -104,10 +135,27 @@ class FINNAdapter:
         )
         
         if not onnx_files:
-            return None
+            raise RuntimeError(
+                f"No ONNX models found in {intermediate_dir}. "
+                "FINN build may have failed silently."
+            )
         
-        # Return the most recently modified model
-        return onnx_files[-1]
+        # Validate the model exists and is readable
+        output_model = onnx_files[-1]
+        if not output_model.exists() or output_model.stat().st_size == 0:
+            raise RuntimeError(
+                f"Output model is invalid or empty: {output_model}"
+            )
+        
+        # Log what we're doing for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(
+            f"TECHNICAL DEBT: Guessing FINN output as {output_model.name} "
+            f"(most recent of {len(onnx_files)} models)"
+        )
+        
+        return output_model
     
     def prepare_model(self, source: Path, destination: Path) -> None:
         """Copy model to build directory.

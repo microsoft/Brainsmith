@@ -1,9 +1,13 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Unified executor for segment-based execution trees."""
 
 import time
 from pathlib import Path
 from typing import Dict, Any, Set
 from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.plugins import get_step
 from .types import SegmentResult, TreeExecutionResult, ExecutionError
 from .finn_adapter import FINNAdapter
 from .utils import share_artifacts_at_branch
@@ -119,13 +123,39 @@ class Executor:
             
             # Execute segment
             print(f"{indent}→ {segment.segment_id}")
-            result = self._execute_segment(segment, input_model, output_dir)
-            results[segment.segment_id] = result
             
-            # Handle failure
-            if not result.success:
+            # Skip empty segments (e.g., root with immediate branches)
+            if not segment.segment_steps:
+                print(f"{indent}  (empty segment, passing through)")
+                # Create a pass-through result
+                results[segment.segment_id] = SegmentResult(
+                    success=True,
+                    segment_id=segment.segment_id,
+                    output_model=input_model,  # Pass input as output
+                    output_dir=output_dir / segment.segment_id,
+                    execution_time=0
+                )
+                # Add children to stack
+                for child in reversed(list(segment.children.values())):
+                    stack.append((child, input_model, depth + 1))
+                continue
+            
+            try:
+                result = self._execute_segment(segment, input_model, output_dir)
+                results[segment.segment_id] = result
+            except ExecutionError as e:
+                # Arete: Handle execution errors properly
                 if self.fail_fast:
-                    raise ExecutionError(f"Failed: {segment.segment_id}")
+                    raise
+                
+                # Create failure result with actual exception
+                results[segment.segment_id] = SegmentResult(
+                    success=False,
+                    segment_id=segment.segment_id,
+                    error=str(e),
+                    execution_time=0
+                )
+                
                 # Mark descendants for skipping
                 self._mark_descendants_skipped(segment, skipped)
                 # Still need to add children to stack so they get marked as skipped
@@ -211,14 +241,15 @@ class Executor:
             else:
                 raise RuntimeError("Build succeeded but no output model generated")
                 
+        except ExecutionError:
+            # Re-raise our own errors
+            raise
         except Exception as e:
-            print(f"✗ Failed: {segment.segment_id} - {e}")
-            return SegmentResult(
-                success=False,
-                segment_id=segment.segment_id,
-                error=str(e),
-                execution_time=time.time() - start_time
-            )
+            # Arete: Wrap external errors with context but preserve stack trace
+            print(f"✗ Failed: {segment.segment_id}")
+            raise ExecutionError(
+                f"Segment '{segment.segment_id}' build failed: {str(e)}"
+            ) from e
     
     def _make_finn_config(self, segment: ExecutionNode, output_dir: Path) -> Dict[str, Any]:
         """Create FINN configuration for segment.
@@ -234,17 +265,20 @@ class Executor:
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_map[self.output_product]
         
-        # Use pre-computed wrapper names
+        # Process steps - resolve to callable functions
         steps = []
         for step in segment.segment_steps:
-            if "finn_step_name" in step:
-                # Pre-computed wrapper from tree building
-                steps.append(step["finn_step_name"])
-            elif "name" in step:
-                # Regular FINN step
-                steps.append(step["name"])
+            if "name" in step:
+                step_name = step["name"]
+                try:
+                    # Try to get callable from plugin registry
+                    step_fn = get_step(step_name)
+                    steps.append(step_fn)
+                except KeyError:
+                    # Not in registry, pass as string for FINN's internal lookup
+                    steps.append(step_name)
             else:
-                raise ValueError(f"Step missing both finn_step_name and name: {step}")
+                raise ValueError(f"Step missing name: {step}")
         
         config["steps"] = steps
         return config

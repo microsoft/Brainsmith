@@ -1,4 +1,4 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
+# Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
 """BrainSmith: FPGA accelerator design space exploration"""
@@ -11,8 +11,11 @@ try:
     from .kernels.shuffle import shuffle
     from .kernels.crop import crop
     from .operators import norms
-except ImportError:
-    pass
+except ImportError as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Failed to import kernel operators: {e}")
+    logger.warning("Some kernel functionality may be unavailable. Install missing dependencies to enable full functionality.")
 
 # Re-export the main API functions
 from .core.forge import forge

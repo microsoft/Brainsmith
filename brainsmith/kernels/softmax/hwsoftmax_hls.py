@@ -16,7 +16,6 @@ from brainsmith.kernels.softmax.hwsoftmax import HWSoftmax
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.core.plugins import backend
-from qonnx.custom_op.registry import register_custom_op
 
 @backend(
     name="HWSoftmaxHLS",
@@ -26,7 +25,6 @@ from qonnx.custom_op.registry import register_custom_op
     author="shane-fleming",
     version="1.0.0"
 )
-@register_custom_op("brainsmith.kernels.hls")
 class HWSoftmax_hls(HWSoftmax, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

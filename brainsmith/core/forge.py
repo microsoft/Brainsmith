@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Forge - Blueprint to Execution Tree Pipeline
 
@@ -44,7 +47,7 @@ def forge(model_path: str, blueprint_path: str) -> Tuple[DesignSpace, ExecutionN
     parser = BlueprintParser()
     design_space, tree = parser.parse(blueprint_path, os.path.abspath(model_path))
     
-    logger.info(f"Parsed design space: {len(design_space.transform_stages)} stages, "
+    logger.info(f"Parsed design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
     
     # Log statistics

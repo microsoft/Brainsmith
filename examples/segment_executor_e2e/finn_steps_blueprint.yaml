@@ -1,0 +1,39 @@
+version: "4.0"
+name: "Blueprint with Real FINN Steps"
+
+global_config:
+  output_stage: generate_reports
+  working_directory: work
+  max_combinations: 10
+  timeout_minutes: 10
+
+design_space:
+  transforms:
+    # Cleanup with multiple transforms and mutually exclusive option
+    cleanup:
+      - RemoveIdentityOps
+      - RemoveUnusedTensors
+      - [GiveUniqueNodeNames, GiveRandomTensorNames]  # Mutually exclusive: readable vs random names
+      
+    # Optional step with multiple transforms
+    optional_step:
+      - [FoldConstants, ~]  # Either fold or skip
+      - InferShapes
+      - GiveUniqueParameterTensors
+      - RemoveUnusedNodes
+  
+  kernels: []
+
+build_pipeline:
+  steps:
+    - step_qonnx_to_finn
+    - "{cleanup}"
+    - "{optional_step}"
+    - step_create_dataflow_partition
+    - step_generate_estimate_reports
+
+finn_config:
+  synth_clk_period_ns: 5.0
+  board: Pynq-Z1
+  shell_flow_type: vivado_zynq
+  generate_outputs: [estimate_only]

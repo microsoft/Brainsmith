@@ -364,6 +364,7 @@ create_container() {
     DOCKER_CMD+=" -e LOCALHOST_URL=$LOCALHOST_URL"
     DOCKER_CMD+=" -e NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
+    DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
 
     # User/permission setup (unless running as root)
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
@@ -540,7 +541,7 @@ exec_in_container() {
 
     # Use the fast exec entrypoint for optimized performance
     # Also ensure unbuffered output is set for exec commands
-    docker exec -e PYTHONUNBUFFERED=1 "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash -c "$CMD"
+    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash -c "$CMD"
     return $?
 }
 
@@ -552,7 +553,7 @@ open_shell() {
 
     gecho "Opening shell in container $DOCKER_INST_NAME"
     # Use entrypoint_fast.sh to get proper environment setup
-    docker exec -it "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash
+    docker exec -it -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash
 }
 
 show_logs() {

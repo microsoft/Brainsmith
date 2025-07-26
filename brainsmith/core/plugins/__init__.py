@@ -1,70 +1,58 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
-BrainSmith Core Plugin System - Perfect Code Implementation
-
-Zero-discovery plugin registry with O(1) lookups and decoration-time registration.
+Arete Plugin System
 """
-
-# Core registry system
-from .registry import BrainsmithPluginRegistry, get_registry
-
-# Decoration-time registration
-from .decorators import (
-    plugin,
-    transform, 
-    kernel, 
-    backend, 
-    step, 
-    kernel_inference
+from .registry import (
+    get_registry, get_transform, get_kernel, get_backend, get_step,
+    transform, kernel, backend, step, kernel_inference,
+    list_transforms, list_kernels, list_backends, list_steps,
+    has_transform, has_kernel, has_backend, has_step,
+    get_transforms_by_metadata, get_kernels_by_metadata,
+    get_backends_by_metadata, get_steps_by_metadata
 )
 
-# Natural access collections
-from .plugin_collections import create_collections
+# Import framework adapters to register external plugins
+from . import framework_adapters
 
-# Blueprint optimization
-from .blueprint_loader import BlueprintPluginLoader, load_blueprint_plugins
-
-# Framework initialization
-from .framework_adapters import initialize_framework_integrations
-
-
-def plugin_status():
-    """Get status of the plugin system."""
-    registry = get_registry()
-    return registry.get_stats()
-
-
-def reset_plugin_system():
-    """Reset the plugin system (useful for testing)."""
-    from .registry import reset_registry
-    reset_registry()
-
+# Import BrainSmith modules to trigger registrations
+# Arete: Fail fast on missing components - no silent failures
+import brainsmith.transforms
+import brainsmith.kernels  
+import brainsmith.steps
 
 __all__ = [
-    # Core registry
-    "BrainsmithPluginRegistry",
+    # Registry access
     "get_registry",
+    "get_transform",
+    "get_kernel", 
+    "get_backend",
+    "get_step",
+    
     
     # Decorators
-    "plugin",
-    "transform", 
-    "kernel", 
+    "transform",
+    "kernel",
     "backend", 
-    "step", 
+    "step",
     "kernel_inference",
     
-    # Collections
-    "create_collections",
+    # List functions
+    "list_transforms",
+    "list_kernels",
+    "list_backends",
+    "list_steps",
     
-    # Blueprint optimization
-    "BlueprintPluginLoader",
-    "load_blueprint_plugins",
+    # Has functions
+    "has_transform",
+    "has_kernel",
+    "has_backend",
+    "has_step",
     
-    # Framework integration
-    "initialize_framework_integrations",
-    
-    # Utility functions
-    "plugin_status",
-    "reset_plugin_system",
+    # Metadata queries
+    "get_transforms_by_metadata",
+    "get_kernels_by_metadata",
+    "get_backends_by_metadata",
+    "get_steps_by_metadata",
 ]
-
-__version__ = "1.0.0"

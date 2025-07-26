@@ -1,6 +1,9 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Kernel inference step for hardware mapping."""
 import logging
-from brainsmith.core.plugins import step, transforms
+from brainsmith.core.plugins import step, get_transforms_by_metadata, get_transform
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +27,15 @@ def infer_kernels_step(model, cfg):
     # Apply inference for each selected kernel
     for kernel_name, backend in cfg.kernel_selections:
         # Find transforms that infer this kernel
-        inference_transforms = transforms.find(kernel=kernel_name)
+        inference_transforms = get_transforms_by_metadata(kernel=kernel_name)
         
         if inference_transforms:
-            # Use the first matching transform
-            transform = inference_transforms[0]
-            logger.info(f"  {kernel_name} ({backend}) using {transform.__name__}")
-            model = model.transform(transform())
+            # Use the first matching transform name
+            transform_name = list(inference_transforms.keys())[0]
+            Transform = get_transform(transform_name)
+            logger.info(f"  {kernel_name} ({backend}) using {transform_name}")
+            model = model.transform(Transform())
         else:
             logger.warning(f"  No inference transform found for kernel: {kernel_name}")
-    
-    # Ensure custom opsets are imported
-    ensure_imports = transforms.find(name="EnsureCustomOpsetImports")
-    if ensure_imports:
-        model = model.transform(ensure_imports[0]())
-    
+
     return model

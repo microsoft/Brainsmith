@@ -16,7 +16,8 @@ class TestFINNAdapter:
         try:
             adapter = FINNAdapter()
             # If we get here, FINN is installed
-            assert adapter._finn_available
+            # The adapter doesn't expose _finn_available anymore
+            assert adapter is not None
         except RuntimeError as e:
             # Expected when FINN not installed
             assert "FINN not installed" in str(e)
@@ -48,7 +49,9 @@ class TestFINNAdapter:
             build_dir = Path(tmpdir)
             
             # Test when no intermediate_models exists
-            assert adapter._discover_output_model(build_dir) is None
+            with pytest.raises(RuntimeError) as exc_info:
+                adapter._discover_output_model(build_dir)
+            assert "missing intermediate_models" in str(exc_info.value)
             
             # Create intermediate_models with some ONNX files
             inter_dir = build_dir / "intermediate_models"
@@ -57,15 +60,15 @@ class TestFINNAdapter:
             # Create files with different timestamps
             import time
             model1 = inter_dir / "step1.onnx"
-            model1.touch()
+            model1.write_bytes(b"dummy onnx content 1")
             time.sleep(0.01)  # Ensure different mtime
             
             model2 = inter_dir / "step2.onnx"
-            model2.touch()
+            model2.write_bytes(b"dummy onnx content 2")
             time.sleep(0.01)
             
             model3 = inter_dir / "final.onnx"
-            model3.touch()
+            model3.write_bytes(b"dummy onnx content 3")
             
             # Should return the most recent
             result = adapter._discover_output_model(build_dir)
@@ -80,8 +83,10 @@ class TestFINNAdapter:
             inter_dir = build_dir / "intermediate_models"
             inter_dir.mkdir()
             
-            # Empty directory should return None
-            assert adapter._discover_output_model(build_dir) is None
+            # Empty directory should raise RuntimeError
+            with pytest.raises(RuntimeError) as exc_info:
+                adapter._discover_output_model(build_dir)
+            assert "No ONNX models found" in str(exc_info.value)
     
     def test_working_directory_context(self):
         """Test that build would restore working directory."""

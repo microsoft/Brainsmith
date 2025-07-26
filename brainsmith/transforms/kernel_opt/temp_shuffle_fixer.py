@@ -1,8 +1,11 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Temporary shuffle sizing fix for BERT builds."""
 
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.core.plugins.decorators import transform
+from brainsmith.core.plugins import transform
 
 
 @transform(

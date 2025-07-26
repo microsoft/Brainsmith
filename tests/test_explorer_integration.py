@@ -81,7 +81,7 @@ def test_blueprint_parser_with_real_transforms():
         model_path = Path(tmpdir) / "model.onnx"
         model_path.write_bytes(b"dummy_model")
         
-        # Create simple blueprint
+        # Create simple blueprint with new format
         blueprint_path = Path(tmpdir) / "test.yaml"
         blueprint_path.write_text("""
 version: "4.0"
@@ -96,31 +96,20 @@ finn_config:
   board: Pynq-Z1
 
 design_space:
-  transforms:
-    cleanup:
-      - RemoveIdentityOps
-      - ["~", RemoveUnusedTensors]
-    
-    optimize:
-      - FoldConstants
-      - InferShapes
+  steps:
+    - "cleanup"
+    - ["cleanup_advanced", "~"]
+    - "streamlining"
   
   kernels: []
-
-build_pipeline:
-  steps:
-    - "step_qonnx_to_finn"
-    - "{cleanup}"
-    - "{optimize}"
-    - "step_create_dataflow_partition"
 """)
         
         parser = BlueprintParser()
         design_space, tree = parser.parse(str(blueprint_path), str(model_path))
         
         # Verify design space
-        assert "cleanup" in design_space.transform_stages
-        assert "optimize" in design_space.transform_stages
+        assert len(design_space.steps) == 3
+        assert design_space.steps[0] == "cleanup"
         
         # Verify tree structure
         assert tree is not None
@@ -152,30 +141,27 @@ finn_config:
   board: Pynq-Z1
 
 design_space:
-  transforms:
-    multi_option:
-      - [RemoveIdentityOps, RemoveUnusedTensors, GiveUniqueNodeNames]
+  steps:
+    - ["cleanup", "cleanup_advanced", "streamlining"]
   
   kernels: []
-
-build_pipeline:
-  steps:
-    - "{multi_option}"
 """)
         
         parser = BlueprintParser()
         design_space, tree = parser.parse(str(blueprint_path), str(model_path))
         
-        # Should create 3 branches for the 3 transform options
+        # Should create 3 branches for the 3 step options
         assert len(tree.children) == 3
         
-        # Each child should have a finn_step_name
+        # Each child should have a step
         for branch_name, child in tree.children.items():
             assert len(child.segment_steps) > 0
             step = child.segment_steps[0]
-            assert "finn_step_name" in step
-            # Should be simple numeric indices
-            assert step["finn_step_name"] in ["multi_option_0", "multi_option_1", "multi_option_2"]
+            # Step is a dict with 'name' key
+            assert isinstance(step, dict)
+            assert "name" in step
+            # Should be one of the step options
+            assert step["name"] in ["cleanup", "cleanup_advanced", "streamlining"]
 
 
 def test_complex_tree_stats():

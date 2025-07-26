@@ -71,7 +71,6 @@ class TreeExecutionResult:
 **Purpose**: Helper functions for serialization and artifact management.
 
 **Key Functions**:
-- `StageWrapperFactory`: Pre-compute transform wrappers with simple indices
 - `serialize_tree()`: Convert execution tree to JSON
 - `serialize_results()`: Convert results to JSON
 - `share_artifacts_at_branch()`: Copy artifacts for child segments
@@ -92,12 +91,12 @@ Merging TreeExecutor and SegmentExecutor into one class:
 - Makes data flow clearer
 - Eliminates coordination complexity
 
-### 3. Pre-computed Wrappers
-Transform stages are wrapped during tree building:
-- No dynamic wrapper generation during execution
-- Simple numeric indices (cleanup_0, cleanup_1)
-- Stored in segment steps as finn_step_name
-- No global registry mutations
+### 3. Simple Step Execution
+All execution uses registered steps:
+- Steps are referenced by name in the execution tree
+- No dynamic wrapper generation or special handling
+- All steps must be registered in the plugin registry
+- Clean, uniform execution model
 
 ### 4. Simple Caching
 Output file existence determines cache status:

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for unified Executor - testing tree traversal without FINN."""
 
 import pytest
@@ -112,7 +115,7 @@ class TestExecutor:
                 {"fail_fast": True}
             )
             
-            with pytest.raises(ExecutionError, match="Failed: child1"):
+            with pytest.raises(ExecutionError, match="Segment 'child1' build failed"):
                 executor.execute(root, model, output)
     
     def test_skip_on_failure(self):

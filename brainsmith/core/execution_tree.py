@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Segment-based Execution Tree Implementation
 
@@ -8,36 +11,6 @@ each node represents a segment of execution between branch points.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Type
 from pathlib import Path
-
-
-@dataclass
-class TransformStage:
-    """A stage containing multiple transform steps with branching options."""
-    name: str
-    transform_steps: List[List[Optional[Type]]]
-    
-    def get_combinations(self) -> List[List[Type]]:
-        """Get all valid combinations of transforms for this stage."""
-        if not self.transform_steps:
-            return [[]]
-        
-        combinations = [[]]
-        
-        for step_options in self.transform_steps:
-            new_combinations = []
-            
-            for combo in combinations:
-                for option in step_options:
-                    if option is None:
-                        # Skip option
-                        new_combinations.append(combo)
-                    else:
-                        # Add transform
-                        new_combinations.append(combo + [option])
-            
-            combinations = new_combinations
-        
-        return combinations
 
 
 @dataclass

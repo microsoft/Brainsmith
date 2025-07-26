@@ -14,7 +14,6 @@ from qonnx.core.datatype import DataType
 from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from qonnx.custom_op.registry import register_custom_op
 from brainsmith.core.plugins import kernel
 
 
@@ -24,7 +23,6 @@ from brainsmith.core.plugins import kernel
     author="shane-fleming",
     version="1.0.0"
 )
-@register_custom_op("brainsmith.kernels")
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
 
