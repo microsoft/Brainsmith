@@ -10,6 +10,7 @@ with all plugins resolved from the registry.
 
 import os
 import yaml
+from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, Literal
 )
@@ -92,28 +93,30 @@ class BlueprintParser:
         return design_space, tree
 
     def _extract_config_and_mappings(self, data: Dict[str, Any]) -> ForgeConfig:
-        """
-        Unified extraction of forge config from blueprint data.
-        Handles global_config, top-level params, and FINN mappings.
-        """
-        # Extract build control settings
-        config = data.get('global_config', {}).copy()
-        direct_params = ['output_stage', 'working_directory', 'save_intermediate_models', 'max_combinations', 'timeout_minutes', 'fail_fast']
-        for param in direct_params:
-            if param in data and param not in config:
-                config[param] = data[param]
+        """Extract ForgeConfig from blueprint data."""
+        # Merge all config sources
+        all_config = {
+            **data.get('global_config', {}),
+            **{k: v for k, v in data.items() if k not in ['design_space', 'extends']}
+        }
         
-        # Extract FINN parameters
-        finn_params = {**data.get('finn_config', {})}
-        if 'platform' in data:
-            finn_params['board'] = data['platform']
-        if 'target_clk' in data:
-            finn_params['synth_clk_period_ns'] = self._parse_time_with_units(data['target_clk'])
+        # Extract ForgeConfig fields
+        forge_fields = {}
+        for field in ForgeConfig.__dataclass_fields__:
+            if field in all_config:
+                value = all_config.pop(field)
+                if field == 'output_stage' and isinstance(value, str):
+                    value = OutputStage(value)
+                forge_fields[field] = value
         
-        # Create ForgeConfig
-        forge_config = self._parse_forge_config(config)
-        forge_config.finn_params = finn_params
-        return forge_config
+        # Handle legacy mappings
+        finn_params = data.get('finn_config', {})
+        if 'platform' in all_config:
+            finn_params['board'] = all_config.pop('platform')
+        if 'target_clk' in all_config:
+            finn_params['synth_clk_period_ns'] = self._parse_time_with_units(all_config.pop('target_clk'))
+        
+        return ForgeConfig(**forge_fields, finn_params=finn_params)
     
     def _load_with_inheritance(self, blueprint_path: str, return_parent: bool = False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
         """
@@ -135,10 +138,7 @@ class BlueprintParser:
         # Handle inheritance
         if 'extends' in data:
             # Resolve parent path relative to child
-            parent_path = os.path.join(
-                os.path.dirname(blueprint_path), 
-                data['extends']
-            )
+            parent_path = str(Path(blueprint_path).parent / data['extends'])
             parent_data = self._load_with_inheritance(parent_path, return_parent=False)
             
             # Deep merge parent and child
@@ -372,22 +372,6 @@ class BlueprintParser:
         # No unit suffix, assume ns
         return float(value_str)
     
-    def _parse_forge_config(self, config_data: Dict[str, Any]) -> ForgeConfig:
-        """Parse forge configuration from blueprint data."""
-        forge_config = ForgeConfig()
-        
-        # Map string to enum for output_stage
-        if 'output_stage' in config_data:
-            stage_str = config_data['output_stage']
-            forge_config.output_stage = OutputStage(stage_str)
-        
-        # Set other fields
-        for field in ['working_directory', 'save_intermediate_models', 
-                      'max_combinations', 'timeout_minutes', 'fail_fast']:
-            if field in config_data:
-                setattr(forge_config, field, config_data[field])
-        
-        return forge_config
     
     def _extract_kernel_spec(self, spec) -> Tuple[str, Optional[List[str]]]:
         """Extract kernel name and optional backend names from spec."""

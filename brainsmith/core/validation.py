@@ -7,7 +7,7 @@ Validation utilities for blueprint parsing.
 
 from typing import Any, Dict, List, Optional, Union
 
-from .design_space_v2 import BuildConfig, OutputStage
+from .design_space import ForgeConfig, OutputStage
 
 
 # Constants
@@ -37,18 +37,18 @@ def validate_step(step: Optional[str]) -> str:
     return step
 
 
-def validate_finn_config(build_config: BuildConfig, finn_config: Dict[str, Any]) -> None:
+def validate_finn_config(forge_config: ForgeConfig, finn_config: Dict[str, Any]) -> None:
     """
     Validate required FINN fields for synthesis.
     
     Args:
-        build_config: Build configuration
+        forge_config: Forge configuration
         finn_config: FINN-specific configuration
         
     Raises:
         ValueError: If required fields are missing
     """
-    if build_config.output_stage != OutputStage.GENERATE_REPORTS:
+    if forge_config.output_stage != OutputStage.GENERATE_REPORTS:
         if 'synth_clk_period_ns' not in finn_config:
             raise ValueError("Hardware synthesis requires synth_clk_period_ns (or target_clk)")
         if 'board' not in finn_config:

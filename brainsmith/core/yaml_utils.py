@@ -7,6 +7,7 @@ YAML utilities for blueprint loading and merging.
 
 import os
 import yaml
+from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 
 
@@ -31,10 +32,7 @@ def load_blueprint_with_inheritance(
     
     if 'extends' in data:
         # Resolve parent path relative to child
-        parent_path = os.path.join(
-            os.path.dirname(blueprint_path), 
-            data['extends']
-        )
+        parent_path = str(Path(blueprint_path).parent / data['extends'])
         parent_data, _ = load_blueprint_with_inheritance(parent_path, False)
         merged_data = deep_merge(parent_data, data)
         return (merged_data, parent_data if return_parent else None)

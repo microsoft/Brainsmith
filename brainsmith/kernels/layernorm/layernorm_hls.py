@@ -6,6 +6,7 @@
 #
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
+
 import numpy as np
 import os
 
@@ -20,10 +21,8 @@ from brainsmith.core.plugins import backend
     name="LayerNormHLS", 
     kernel="LayerNorm",
     language="hls",
-    default=True,  # Mark as default backend
     description="High-Level Synthesis backend for LayerNorm kernel",
-    author="shane-fleming",
-    version="1.0.0"
+    author="Shane Fleming",
 )
 class LayerNorm_hls(LayerNorm, HLSBackend):
     def __init__(self, onnx_node, **kwargs):

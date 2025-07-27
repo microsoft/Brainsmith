@@ -1,12 +1,9 @@
-"""LayerNorm kernel package."""
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
-# Import kernel
+# Import the main operator, backends, and inference transform for the LayerNorm
 from .layernorm import LayerNorm
-
-# Import backends
 from .layernorm_hls import LayerNorm_hls as LayerNormHLS
-
-# Import inference transform
 from .infer_layernorm import InferLayerNorm
 
 __all__ = ["LayerNorm", "LayerNormHLS", "InferLayerNorm"]

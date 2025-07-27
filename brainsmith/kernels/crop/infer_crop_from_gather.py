@@ -1,4 +1,11 @@
-"""Crop hardware inference transform from Gather operations."""
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
 
 import numpy as np
 from onnx import helper
@@ -17,11 +24,10 @@ def elements_are_consecutive(indices):
         return np.all(np.diff(indices) == 1)
 
 
-@transform(name="InferCropFromGather", kernel="Crop",
+@transform(
+    kernel="Crop",
     description="Convert Gather operations to Crop hardware operations",
-    author="shane.fleming",
-    version="1.0.0",
-    requires=["qonnx", "onnx", "numpy"]
+    author="Shane Fleming"
 )
 class InferCropFromGather(Transformation):
     """

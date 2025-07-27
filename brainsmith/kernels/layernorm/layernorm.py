@@ -20,8 +20,7 @@ from brainsmith.core.plugins import kernel
 @kernel(
     name="LayerNorm",
     description="Hardware implementation of LayerNorm",
-    author="thomas-keller",
-    version="1.0.0"
+    author="Thomas Keller",
 )
 class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""

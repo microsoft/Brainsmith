@@ -1,4 +1,11 @@
-"""LayerNorm hardware inference transform."""
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
 
 import qonnx.core.data_layout as DataLayout
 from onnx import helper
@@ -9,11 +16,10 @@ from qonnx.util.onnx import nchw_to_nhwc
 from brainsmith.core.plugins import transform
 
 
-@transform(name="InferLayerNorm", kernel="LayerNorm",
+@transform(
+    kernel="LayerNorm",
     description="Convert FuncLayerNorm to LayerNorm hardware operations",
-    author="shane.fleming",
-    version="1.0.0",
-    requires=["qonnx", "onnx"]
+    author="Shane Fleming"
 )
 class InferLayerNorm(Transformation):
     """Convert LayerNorm into HW, only norming over channel dim"""

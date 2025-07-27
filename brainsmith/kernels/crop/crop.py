@@ -13,10 +13,8 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.core.plugins import kernel
 
 @kernel(
-    name="Crop",
     description="Hardware cropping operation",
-    author="josh-monson",
-    version="1.0.0"
+    author="Josh Monson",
 )
 class Crop(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""

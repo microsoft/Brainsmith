@@ -5,7 +5,6 @@
 # @author       Josh Monson <joshmonson@microsoft.com>
 ############################################################################
 
-
 import numpy as np
 import os
 
@@ -20,9 +19,7 @@ from brainsmith.core.plugins import backend
     name="CropHLS",
     kernel="Crop",
     language="hls",
-    description="HLS implementation of Crop",
-    author="josh-monson",
-    version="1.0.0"
+    author="Josh Monson"
 )
 class Crop_hls(Crop, HLSBackend):
     def __init__(self, onnx_node, **kwargs):

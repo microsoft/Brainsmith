@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 from pathlib import Path
 
 from .execution_tree import ExecutionNode, count_leaves
-from .design_space_v2 import DesignSpace
+from .design_space import DesignSpace
 
 
 class TreeBuilder:
@@ -63,7 +63,7 @@ class TreeBuilder:
         self._flush_steps(current_segments, pending_steps)
         
         # Validate tree size
-        self._validate_tree_size(root, space.global_config.max_combinations)
+        self._validate_tree_size(root, space.config.max_combinations)
         
         return root
     
@@ -71,19 +71,19 @@ class TreeBuilder:
         """Extract FINN-relevant configuration from design space.
         
         Args:
-            space: DesignSpace containing finn_config and global_config
+            space: DesignSpace containing ForgeConfig with finn_params
             
         Returns:
             Dictionary of FINN configuration values
         """
-        # Start with explicit finn_config
-        config = space.finn_config.copy()
+        # Start with finn_params from ForgeConfig
+        config = space.config.finn_params.copy()
         
-        # Add relevant fields from global config
-        if hasattr(space.global_config, '__dict__'):
-            for key, value in space.global_config.__dict__.items():
-                # Skip internal fields and non-FINN config
-                if not key.startswith('_') and key not in ['max_combinations']:
+        # Add relevant fields from forge config
+        if hasattr(space.config, '__dict__'):
+            for key, value in space.config.__dict__.items():
+                # Skip internal fields and finn_params itself
+                if not key.startswith('_') and key not in ['max_combinations', 'finn_params']:
                     config[key] = value
         
         return config
