@@ -1,13 +1,9 @@
 name: "BERT"
-description: "string"
-
-# extends: "base.yaml"
+description: "BERT Transformer encoder model (no initial embedding)"
 
 # Global configursation - all fields optional, can be flat or under global_config
 output_stage: "compile_and_package"    # generate_reports | compile_and_package | synthesize_bitstream
 working_directory: "work"               # Default: "work"
-save_intermediate_models: false         # Default: false
-fail_fast: false                        # Default: false
 max_combinations: 100000                # Or env BRAINSMITH_MAX_COMBINATIONS
 timeout_minutes: 60                     # Or env BRAINSMITH_TIMEOUT_MINUTES
 
@@ -17,25 +13,21 @@ target_clk: 5                       # Maps to finn_config.synth_clk_period_ns
                                        # Supports units: ps, ns, us, ms (default: ns)
 
 design_space:
-  # Legacy FINN backend only uses build_steps, not kernels
   kernels:
     - LayerNorm
     - DuplicateStreams
-    # model = model.transform(to_hw.InferDuplicateStreamsLayer())
-    - ElementwiseBinary
+    - ElementwiseBinaryOperation
     - Shuffle
-    - Softmax
+    - HWSoftmax
     - Thresholding
     - MVAU
     
-  # Build steps from original bert.py BUILD_STEPS list (lines 380-402)
   steps:
-    # Note: First step (cleanup) is handled by child blueprints
     - "qonnx_to_finn"  # custom_step_qonnx2finn
     # Topology optimization
     - "bert_streamlining"
-    - "infer_hardware"  # custom_step_infer_hardware
     # Core FINN steps
+    - "infer_kernels" # Brainsmith dynamic kernel inference
     - "create_dataflow_partition"
     - "specialize_layers"
     - "target_fps_parallelization"

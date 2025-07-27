@@ -3,6 +3,6 @@ graph_cleanup transforms
 """
 
 # Import all transforms to trigger auto-registration
-from . import remove_identity
+from . import expand_norms
 
-__all__ = ["remove_identity"]
+__all__ = ["expand_norms"]

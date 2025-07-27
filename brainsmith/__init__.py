@@ -17,17 +17,12 @@ except ImportError as e:
     logger.warning(f"Failed to import kernel operators: {e}")
     logger.warning("Some kernel functionality may be unavailable. Install missing dependencies to enable full functionality.")
 
-# Re-export the main API functions
+# Re-export the main API
 from .core.forge import forge
-
-# Re-export key data structures users need
-from .core.design_space import DesignSpace
 
 __all__ = [
     # Main API
     'forge',
-    # Data structures
-    'DesignSpace',
 ]
 
 __version__ = "1.0.0"

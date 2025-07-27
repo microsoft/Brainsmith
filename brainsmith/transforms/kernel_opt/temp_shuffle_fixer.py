@@ -1,5 +1,11 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
 
 """Temporary shuffle sizing fix for BERT builds."""
 
@@ -7,14 +13,11 @@ from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
 from brainsmith.core.plugins import transform
 
-
 @transform(
     name="TempShuffleFixer",
     stage="kernel_opt",
     description="Temporary fix for shuffle sizing in BERT builds",
-    author="brainsmith-team",
-    version="1.0.0",
-    requires=["qonnx"]
+    author="Shane Fleming"
 )
 class TempShuffleFixer(Transformation):
     """A temporary transformation that ensures that shuffles are sized correctly for the

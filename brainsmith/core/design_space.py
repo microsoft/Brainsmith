@@ -22,8 +22,9 @@ class OutputStage(Enum):
 
 
 @dataclass
-class GlobalConfig:
-    """Configuration that applies to all exploration runs."""
+class ForgeConfig:
+    """Configuration for the forge build process."""
+    # Build control settings
     output_stage: OutputStage = OutputStage.COMPILE_AND_PACKAGE
     working_directory: str = "work"
     save_intermediate_models: bool = False
@@ -32,6 +33,9 @@ class GlobalConfig:
         int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000")))
     timeout_minutes: int = field(default_factory=lambda: 
         int(os.environ.get("BRAINSMITH_TIMEOUT_MINUTES", "60")))
+    
+    # FINN-specific parameters (passed through without validation)
+    finn_params: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -46,16 +50,15 @@ class DesignSpace:
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
-    global_config: GlobalConfig
-    finn_config: Dict[str, Any] = field(default_factory=dict)
+    config: ForgeConfig
     
     def validate_size(self) -> None:
         """Validate that design space doesn't exceed max combinations."""
         estimated_size = self._estimate_combinations()
-        if estimated_size > self.global_config.max_combinations:
+        if estimated_size > self.config.max_combinations:
             raise ValueError(
                 f"Design space too large: {estimated_size:,} combinations exceeds "
-                f"limit of {self.global_config.max_combinations:,}"
+                f"limit of {self.config.max_combinations:,}"
             )
     
     def _estimate_combinations(self) -> int:

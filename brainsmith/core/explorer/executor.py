@@ -24,7 +24,8 @@ class Executor:
         self,
         finn_adapter: FINNAdapter,
         base_finn_config: Dict[str, Any],
-        global_config: Dict[str, Any]
+        global_config: Dict[str, Any],
+        kernel_selections: list = None
     ) -> None:
         """Initialize executor.
         
@@ -32,10 +33,12 @@ class Executor:
             finn_adapter: Adapter for FINN-specific operations
             base_finn_config: FINN configuration from blueprint
             global_config: Global configuration including output products
+            kernel_selections: Optional list of (kernel, backend) tuples
         """
         self.finn_adapter = finn_adapter
         self.base_finn_config = base_finn_config
         self.global_config = global_config
+        self.kernel_selections = kernel_selections or []
         
         # Extract settings
         self.fail_fast = global_config.get("fail_fast", False)
@@ -201,14 +204,22 @@ class Executor:
         
         # Simple caching - check if output exists
         if output_model.exists():
-            print(f"✓ Using cached: {segment.segment_id}")
-            return SegmentResult(
-                success=True,
-                segment_id=segment.segment_id,
-                output_model=output_model,
-                output_dir=segment_dir,
-                cached=True
-            )
+            # Verify it's a valid ONNX file before using cache
+            try:
+                import onnx
+                onnx.load(str(output_model))
+                
+                print(f"✓ Using cached: {segment.segment_id}")
+                return SegmentResult(
+                    success=True,
+                    segment_id=segment.segment_id,
+                    output_model=output_model,
+                    output_dir=segment_dir,
+                    cached=True
+                )
+            except Exception:
+                # Invalid cache, remove it and rebuild
+                output_model.unlink()
         
         print(f"\n→ Executing: {segment.segment_id}")
         
@@ -264,6 +275,21 @@ class Executor:
         config = self.base_finn_config.copy()
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_map[self.output_product]
+        
+        # Extract kernel_selections from segment steps if present
+        kernel_selections = []
+        for step in segment.segment_steps:
+            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
+                for kernel_name, backend_classes in step["kernel_backends"]:
+                    if backend_classes:
+                        backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
+                        kernel_selections.append((kernel_name, backend_name))
+        
+        # Add kernel_selections if found in segment or base config
+        if kernel_selections:
+            config["kernel_selections"] = kernel_selections
+        elif "kernel_selections" in self.base_finn_config:
+            config["kernel_selections"] = self.base_finn_config["kernel_selections"]
         
         # Process steps - resolve to callable functions
         steps = []

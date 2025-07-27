@@ -19,7 +19,12 @@ def infer_kernels_step(model, cfg):
     avoiding any name-based guessing.
     """
     if not hasattr(cfg, 'kernel_selections'):
-        logger.debug("No kernel_selections in config, skipping kernel inference")
+        logger.warning("No kernel_selections in config, skipping kernel inference")
+        logger.warning(f"Config attributes: {[attr for attr in dir(cfg) if not attr.startswith('_')]}")
+        return model
+    
+    if cfg.kernel_selections is None:
+        logger.warning("kernel_selections is None, skipping kernel inference")
         return model
     
     logger.info(f"Inferring {len(cfg.kernel_selections)} kernels...")
@@ -31,11 +36,17 @@ def infer_kernels_step(model, cfg):
         
         if inference_transforms:
             # Use the first matching transform name
-            transform_name = list(inference_transforms.keys())[0]
+            transform_name = inference_transforms[0]
             Transform = get_transform(transform_name)
             logger.info(f"  {kernel_name} ({backend}) using {transform_name}")
             model = model.transform(Transform())
         else:
             logger.warning(f"  No inference transform found for kernel: {kernel_name}")
+    
+    # Save model for debugging
+    import os
+    debug_path = os.path.join(cfg.output_dir, "debug_infer_kernels_output.onnx")
+    model.save(debug_path)
+    logger.info(f"Saved infer_kernels output to {debug_path}")
 
     return model

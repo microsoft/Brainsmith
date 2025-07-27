@@ -8,6 +8,14 @@ import tempfile
 import os
 
 from brainsmith.core.blueprint_parser import BlueprintParser
+from brainsmith.core.plugins.registry import get_registry
+
+
+@pytest.fixture(autouse=True, scope="module")
+def ensure_plugins_loaded():
+    """Ensure all plugins are loaded for these tests."""
+    # Reset to ensure we have all plugins
+    get_registry().reset()
 
 
 def test_blueprint_inheritance():

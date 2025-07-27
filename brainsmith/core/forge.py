@@ -2,38 +2,42 @@
 # Licensed under the MIT License.
 
 """
-Forge - Blueprint to Execution Tree Pipeline
+Forge - End-to-End FPGA Accelerator Synthesis
 
-This module provides the forge API that creates execution trees
-directly from blueprints with automatic prefix sharing.
+This module provides the forge API that transforms neural network models
+into FPGA accelerators through blueprint-driven design space exploration.
 """
 
 import os
 import logging
-from typing import Tuple
+from datetime import datetime
+from pathlib import Path
 
 from .blueprint_parser import BlueprintParser
-from .design_space import DesignSpace
-
-from .execution_tree import ExecutionNode, print_tree, get_tree_stats
+from .execution_tree import ExecutionNode, get_tree_stats
 
 logger = logging.getLogger(__name__)
 
 
-def forge(model_path: str, blueprint_path: str) -> Tuple[DesignSpace, ExecutionNode]:
+def forge(model_path: str, blueprint_path: str, output_dir: str = None):
     """
-    Create execution tree from model and blueprint.
+    Forge an FPGA accelerator from model and blueprint.
+    
+    Transforms a neural network model into an FPGA accelerator through
+    blueprint-driven design space exploration and synthesis.
     
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
+        output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/forge_YYYYMMDD_HHMMSS)
         
     Returns:
-        Tuple of (DesignSpace, ExecutionTree root)
+        TreeExecutionResult containing build artifacts and statistics
         
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
+        RuntimeError: If no successful builds were produced
     """
     # Verify files exist
     if not os.path.exists(model_path):
@@ -41,26 +45,64 @@ def forge(model_path: str, blueprint_path: str) -> Tuple[DesignSpace, ExecutionN
     if not os.path.exists(blueprint_path):
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
     
-    logger.info(f"Forging execution tree from {model_path} and {blueprint_path}")
+    # Determine output directory
+    if output_dir is None:
+        build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(build_dir, f"forge_{timestamp}")
     
-    # Parse blueprint and build tree in one step
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Forging FPGA accelerator:")
+    logger.info(f"  Model: {model_path}")
+    logger.info(f"  Blueprint: {blueprint_path}")
+    logger.info(f"  Output: {output_dir}")
+    
+    # Parse blueprint and build tree
     parser = BlueprintParser()
     design_space, tree = parser.parse(blueprint_path, os.path.abspath(model_path))
     
-    logger.info(f"Parsed design space: {len(design_space.steps)} steps, "
+    logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
     
-    # Log statistics
+    # Log tree statistics
     stats = get_tree_stats(tree)
-    logger.info(f"✅ Created execution tree:")
-    logger.info(f"   - Total paths: {stats['total_paths']:,}")
+    logger.info(f"Execution tree:")
+    logger.info(f"  - Total paths: {stats['total_paths']:,}")
+    logger.info(f"  - Total segments: {stats['total_segments']:,}")
+    logger.info(f"  - Segment efficiency: {stats['segment_efficiency']}%")
     
-    # Segment-based statistics
-    logger.info(f"   - Total segments: {stats['total_segments']:,}")
-    logger.info(f"   - Segment efficiency: {stats['segment_efficiency']}%")
-    logger.info(f"   - Avg steps/segment: {stats['avg_steps_per_segment']}")
+    # Explore the execution tree
+    logger.info("Starting design space exploration...")
     
-    return design_space, tree
+    # Import here to avoid circular dependency
+    from .explorer import explore_execution_tree
+    
+    results = explore_execution_tree(
+        tree=tree,
+        model_path=model_path,
+        output_dir=output_dir,
+        forge_config=design_space.config,
+        design_space=design_space
+    )
+    
+    # Check results
+    result_stats = results.stats
+    if result_stats['successful'] == 0:
+        raise RuntimeError(f"Forge failed: No successful builds "
+                         f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
+    
+    logger.info(f"✅ Forge completed successfully!")
+    logger.info(f"   Successful builds: {result_stats['successful']}/{result_stats['total']}")
+    logger.info(f"   Total time: {results.total_time:.2f}s")
+    logger.info(f"   Output directory: {output_dir}")
+    
+    # Attach design space and tree to results for inspection
+    results.design_space = design_space
+    results.execution_tree = tree
+    
+    return results
 
 
 def print_tree_summary(tree: ExecutionNode, max_depth: int = 3) -> None:

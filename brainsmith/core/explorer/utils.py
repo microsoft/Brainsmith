@@ -17,9 +17,24 @@ from .types import SegmentResult, TreeExecutionResult
 def serialize_tree(root: ExecutionNode) -> str:
     """Serialize execution tree to JSON."""
     def node_to_dict(node: ExecutionNode) -> Dict[str, Any]:
+        # Serialize steps, handling kernel_backends specially
+        serialized_steps = []
+        for step in node.segment_steps:
+            if isinstance(step, dict) and "kernel_backends" in step:
+                # Convert backend classes to string names
+                step_copy = step.copy()
+                kernel_backends_str = []
+                for kernel_name, backend_classes in step["kernel_backends"]:
+                    backend_names = [cls.__name__ for cls in backend_classes]
+                    kernel_backends_str.append((kernel_name, backend_names))
+                step_copy["kernel_backends"] = kernel_backends_str
+                serialized_steps.append(step_copy)
+            else:
+                serialized_steps.append(step)
+        
         return {
             "segment_id": node.segment_id,
-            "segment_steps": node.segment_steps,
+            "segment_steps": serialized_steps,
             "branch_decision": node.branch_decision,
             "is_branch_point": node.is_branch_point,
             "children": {

@@ -16,7 +16,8 @@ def explore_execution_tree(
     tree: ExecutionNode,
     model_path: Union[str, Path],
     output_dir: Union[str, Path],
-    blueprint_config: Dict[str, Any]
+    forge_config,
+    design_space=None
 ) -> TreeExecutionResult:
     """Execute exploration of the tree.
     
@@ -24,16 +25,33 @@ def explore_execution_tree(
         tree: Execution tree to explore
         model_path: Path to input model
         output_dir: Output directory
-        blueprint_config: Blueprint configuration
+        forge_config: ForgeConfig with build settings
+        design_space: Optional design space with kernel selections
     """
     
     # Ensure Path objects
     model_path = Path(model_path)
     output_dir = Path(output_dir)
     
-    # Extract configs
-    global_config = blueprint_config.get("global_config", {})
-    finn_config = blueprint_config.get("finn_config", {})
+    # Extract configs from ForgeConfig
+    global_config = {
+        'output_stage': forge_config.output_stage,
+        'working_directory': forge_config.working_directory,
+        'save_intermediate_models': forge_config.save_intermediate_models,
+        'fail_fast': forge_config.fail_fast,
+        'timeout_minutes': forge_config.timeout_minutes
+    }
+    finn_config = forge_config.finn_params.copy()
+    
+    # Add kernel selections from design space if available
+    if design_space and hasattr(design_space, 'kernel_backends'):
+        kernel_selections = []
+        for kernel_name, backend_classes in design_space.kernel_backends:
+            # For now, use the first backend (FINN's default)
+            if backend_classes:
+                backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
+                kernel_selections.append((kernel_name, backend_name))
+        finn_config["kernel_selections"] = kernel_selections
     
     # Save tree structure
     tree_json = output_dir / "tree.json"

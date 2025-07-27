@@ -1,19 +1,11 @@
 name: "Baseline FINN"
-description: "Modern BERT implementation with exact parity to old system using Legacy FINN Backend"
+description: "Core FINN build steps (no kernels)"
 
 hw_compiler:
-
   steps:
-    # Cleanup and custom graph surgery
     - "cleanup"  # custom_step_cleanup
-    - "qonnx_to_finn"  # custom_step_qonnx2finn
-    
-    # - "generate_reference_io"  # custom_step_generate_reference_io (skipped - handled by demo script)
-    - "streamlining"  # custom_streamlining_step
-
-    - "infer_kernels" # - "infer_hardware"  # custom_step_infer_hardware
-
-    
+    - "qonnx_to_finn"
+    - "infer_kernels" # Brainsmith dynamic kernel inference
     - "step_create_dataflow_partition"
     - "step_specialize_layers"
     - "step_target_fps_parallelization"
@@ -25,32 +17,3 @@ hw_compiler:
     - "step_set_fifo_depths"
     - "step_create_stitched_ip"
     - "step_measure_rtlsim_performance"
-    - "shell_metadata_handover"  # custom_step_shell_metadata_handover
-    
-  config_flags:
-    # Default values matching old system (from hw_compiler.py)
-    # These will be overridden at runtime by the demo script
-    standalone_thresholds: true
-    minimize_bit_width: true
-    pumped_compute: true
-    
-    # Verification steps from old system
-    verify_steps:
-      - "FOLDED_HLS_CPPSIM"
-      - "STITCHED_IP_RTLSIM"
-    
-processing:
-  # No preprocessing/postprocessing steps (handled within build_steps)
-  preprocessing: []
-  postprocessing: []
-
-search:
-  # Single configuration like old system (no exploration)
-  strategy: "exhaustive"
-  constraints: []
-  
-global:
-  # Match old system outputs
-  output_stage: "stitched_ip"
-  save_artifacts: true
-  # working_directory and log_level will be set at runtime

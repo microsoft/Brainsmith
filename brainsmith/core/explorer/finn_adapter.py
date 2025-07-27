@@ -10,9 +10,12 @@ workarounds exist.
 
 import os
 import shutil
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 import importlib.util
+
+logger = logging.getLogger(__name__)
 
 
 class FINNAdapter:
@@ -62,7 +65,7 @@ class FINNAdapter:
         config_dict: Dict[str, Any],
         output_dir: Path
     ) -> Optional[Path]:
-        """Execute FINN build with all necessary workarounds.
+        """Execute FINN build with proper path handling.
         
         Args:
             input_model: Path to input ONNX model
@@ -79,83 +82,92 @@ class FINNAdapter:
         from finn.builder.build_dataflow import build_dataflow_cfg
         from finn.builder.build_dataflow_config import DataflowBuildConfig
         
+        # Convert to absolute paths before chdir
+        abs_input = input_model.absolute()
+        abs_output = output_dir.absolute()
+        
+        logger.info(f"FINN build: input={abs_input}, output={abs_output}")
+        
         # FINN requires working directory change
         old_cwd = os.getcwd()
         
         try:
-            os.chdir(output_dir)
+            os.chdir(abs_output)
+            
+            # Update config to use current directory
+            config_dict = config_dict.copy()
+            config_dict["output_dir"] = "."
             
             # Convert dict to DataflowBuildConfig
-            print(f"Creating DataflowBuildConfig with: {config_dict}")
+            logger.debug(f"Creating DataflowBuildConfig with: {config_dict}")
             config = DataflowBuildConfig(**config_dict)
             
             # Execute build
-            print(f"Executing FINN build with model: {input_model}")
-            print(f"Config steps: {config.steps}")
-            exit_code = build_dataflow_cfg(str(input_model), config)
+            logger.info(f"Executing FINN build with {len(config.steps)} steps")
+            exit_code = build_dataflow_cfg(str(abs_input), config)
+            
+            logger.info(f"FINN exit code: {exit_code}")
             
             if exit_code != 0:
                 raise RuntimeError(f"FINN build failed with exit code {exit_code}")
             
-            # FINN doesn't return output path, so we discover it
-            return self._discover_output_model(output_dir)
+            # Discovery now uses absolute path
+            output_model = self._discover_output_model(abs_output)
+            self._verify_output_model(output_model)
+            
+            logger.info(f"Found output: {output_model}")
+            return output_model
             
         finally:
             # Always restore working directory
             os.chdir(old_cwd)
     
     def _discover_output_model(self, build_dir: Path) -> Optional[Path]:
-        """Discover output model from FINN build directory.
-        
-        TECHNICAL DEBT: FINN doesn't return output paths from build_dataflow_cfg.
-        This is a workaround that guesses the output by finding the most recently
-        modified ONNX file in intermediate_models/.
-        
-        TODO: Submit PR to FINN to return output paths properly.
+        """Find the actual output model from FINN build.
         
         Args:
             build_dir: Directory where build was executed
             
         Returns:
-            Path to discovered model or None if not found
+            Path to discovered model
             
         Raises:
-            RuntimeError: If no models found or discovery is ambiguous
+            RuntimeError: If no models found
         """
         intermediate_dir = build_dir / "intermediate_models"
         if not intermediate_dir.exists():
-            raise RuntimeError(
-                f"FINN build directory missing intermediate_models: {build_dir}"
-            )
+            raise RuntimeError(f"No intermediate_models directory found in {build_dir}")
         
-        # Find all ONNX files, sorted by modification time
-        onnx_files = sorted(
-            intermediate_dir.glob("*.onnx"),
-            key=lambda p: p.stat().st_mtime
-        )
-        
+        # Get all ONNX files
+        onnx_files = list(intermediate_dir.glob("*.onnx"))
         if not onnx_files:
-            raise RuntimeError(
-                f"No ONNX models found in {intermediate_dir}. "
-                "FINN build may have failed silently."
-            )
+            raise RuntimeError(f"No ONNX files found in {intermediate_dir}")
         
-        # Validate the model exists and is readable
-        output_model = onnx_files[-1]
-        if not output_model.exists() or output_model.stat().st_size == 0:
-            raise RuntimeError(
-                f"Output model is invalid or empty: {output_model}"
-            )
+        logger.debug(f"ONNX files in {intermediate_dir}: {[f.name for f in onnx_files]}")
         
-        # Log what we're doing for debugging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug(
-            f"TECHNICAL DEBT: Guessing FINN output as {output_model.name} "
-            f"(most recent of {len(onnx_files)} models)"
-        )
+        # Return the last (most recent) file
+        # This is still imperfect but matches FINN's behavior
+        onnx_files.sort(key=lambda p: p.stat().st_mtime)
+        return onnx_files[-1]
+    
+    def _verify_output_model(self, model_path: Path) -> None:
+        """Verify the output model exists and is valid ONNX.
         
-        return output_model
+        Args:
+            model_path: Path to model to verify
+            
+        Raises:
+            RuntimeError: If model is invalid
+        """
+        if not model_path.exists():
+            raise RuntimeError(f"Output model does not exist: {model_path}")
+        
+        # Verify it's a valid ONNX file
+        try:
+            import onnx
+            onnx.load(str(model_path))
+        except Exception as e:
+            raise RuntimeError(f"Invalid ONNX model at {model_path}: {e}")
     
     def prepare_model(self, source: Path, destination: Path) -> None:
         """Copy model to build directory.

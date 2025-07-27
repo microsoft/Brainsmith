@@ -267,29 +267,29 @@ FINN_KERNELS = [
 
 FINN_KERNEL_INFERENCES = [
     # These are transforms that infer/convert ONNX ops to FINN HW layers
-    # Most are in convert_to_hw_layers.py, some in other files
+    # Format: (transform_name, class_path, kernel_name)
     
     # From convert_to_hw_layers.py
-    ('InferQuantizedMatrixVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferQuantizedMatrixVectorActivation'),
-    ('InferConvInpGen', f'{FT}.fpgadataflow.convert_to_hw_layers.InferConvInpGen'),
-    ('InferBinaryMatrixVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferBinaryMatrixVectorActivation'),
-    ('InferVectorVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferVectorVectorActivation'),
-    ('InferThresholdingLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferThresholdingLayer'),
-    ('InferStreamingMaxPool', f'{FT}.fpgadataflow.convert_to_hw_layers.InferStreamingMaxPool'),
-    ('InferAddStreamsLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferAddStreamsLayer'),
-    ('InferDuplicateStreamsLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferDuplicateStreamsLayer'),
-    ('InferChannelwiseLinearLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferChannelwiseLinearLayer'),
-    ('InferLabelSelectLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferLabelSelectLayer'),
-    ('InferGlobalAccPoolLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferGlobalAccPoolLayer'),
-    ('InferPool', f'{FT}.fpgadataflow.convert_to_hw_layers.InferPool'),
-    ('InferConcatLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferConcatLayer'),
-    ('InferElementwiseBinaryOperation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferElementwiseBinaryOperation'),
-    ('InferLookupLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferLookupLayer'),
-    ('InferStreamingEltwise', f'{FT}.fpgadataflow.convert_to_hw_layers.InferStreamingEltwise'),
-    ('InferUpsample', f'{FT}.fpgadataflow.convert_to_hw_layers.InferUpsample'),
+    ('InferQuantizedMatrixVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferQuantizedMatrixVectorActivation', 'MVAU'),
+    ('InferConvInpGen', f'{FT}.fpgadataflow.convert_to_hw_layers.InferConvInpGen', 'ConvolutionInputGenerator'),
+    ('InferBinaryMatrixVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferBinaryMatrixVectorActivation', 'MVAU'),
+    ('InferVectorVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferVectorVectorActivation', 'VVAU'),
+    ('InferThresholdingLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferThresholdingLayer', 'Thresholding'),
+    ('InferStreamingMaxPool', f'{FT}.fpgadataflow.convert_to_hw_layers.InferStreamingMaxPool', 'StreamingMaxPool'),
+    ('InferAddStreamsLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferAddStreamsLayer', 'AddStreams'),
+    ('InferDuplicateStreamsLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferDuplicateStreamsLayer', 'DuplicateStreams'),
+    ('InferChannelwiseLinearLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferChannelwiseLinearLayer', 'ChannelwiseOp'),
+    ('InferLabelSelectLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferLabelSelectLayer', 'LabelSelect'),
+    ('InferGlobalAccPoolLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferGlobalAccPoolLayer', 'GlobalAccPool'),
+    ('InferPool', f'{FT}.fpgadataflow.convert_to_hw_layers.InferPool', 'Pool'),
+    ('InferConcatLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferConcatLayer', 'StreamingConcat'),
+    ('InferElementwiseBinaryOperation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferElementwiseBinaryOperation', 'ElementwiseBinaryOperation'),
+    ('InferLookupLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferLookupLayer', 'Lookup'),
+    ('InferStreamingEltwise', f'{FT}.fpgadataflow.convert_to_hw_layers.InferStreamingEltwise', 'StreamingEltwise'),
+    ('InferUpsample', f'{FT}.fpgadataflow.convert_to_hw_layers.InferUpsample', 'UpsampleNearestNeighbour'),
     
     # From other files
-    ('InferPixelPaddingDeconv', f'{FT}.fpgadataflow.infer_pixel_padding_deconv.InferPixelPaddingDeconv'),
+    ('InferPixelPaddingDeconv', f'{FT}.fpgadataflow.infer_pixel_padding_deconv.InferPixelPaddingDeconv', 'PixelPaddingDeconv'),
 ]
 
 # FINN backends - (name, class_path, kernel, language)
@@ -613,12 +613,12 @@ def initialize_framework_integrations() -> Dict[str, int]:
     validated_inferences = []
     inference_failures = []
     
-    for name, class_path in FINN_KERNEL_INFERENCES:
+    for name, class_path, kernel in FINN_KERNEL_INFERENCES:
         try:
             module_path, class_name = class_path.rsplit('.', 1)
             module = __import__(module_path, fromlist=[class_name])
             transform_class = getattr(module, class_name)
-            validated_inferences.append((name, transform_class, class_path))
+            validated_inferences.append((name, transform_class, class_path, kernel))
         except ImportError as e:
             inference_failures.append((name, f"Module not found: {e}"))
         except AttributeError as e:
@@ -638,15 +638,16 @@ def initialize_framework_integrations() -> Dict[str, int]:
             )
     
     # Register validated kernel inferences
-    for name, transform_class, class_path in validated_inferences:
+    for name, transform_class, class_path, kernel in validated_inferences:
         registry.register(
             'transform',
             name,
             transform_class,
             'finn',
+            kernel=kernel,  # Add kernel metadata
             kernel_inference=True,
             original_class=class_path,
-            description=f"FINN kernel inference transform"
+            description=f"FINN kernel inference transform for {kernel}"
         )
         results['finn_kernel_inferences'] += 1
     

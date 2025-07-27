@@ -11,11 +11,11 @@ with all plugins resolved from the registry.
 import os
 import yaml
 from typing import (
-    TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union, Literal
+    TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, Literal
 )
 from dataclasses import dataclass
 
-from .design_space import DesignSpace, GlobalConfig, OutputStage
+from .design_space import DesignSpace, ForgeConfig, OutputStage
 from .execution_tree import ExecutionNode
 
 if TYPE_CHECKING:
@@ -53,11 +53,6 @@ class StepOperation:
 
 class BlueprintParser:
     """Parse blueprint YAML into DesignSpace with resolved plugins."""
-    
-    def __init__(self):
-        """Initialize parser."""
-        pass
-    
 
     def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ExecutionNode]:
         """
@@ -69,8 +64,8 @@ class BlueprintParser:
         4. Validate required fields
         5. Build DesignSpace and execution tree
         """
-        blueprint_data, parent_data = self._load_with_inheritance_and_parent(blueprint_path)
-        global_config, finn_config = self._extract_config_and_mappings(blueprint_data)
+        blueprint_data, parent_data = self._load_with_inheritance(blueprint_path, return_parent=True)
+        forge_config = self._extract_config_and_mappings(blueprint_data)
         
         # Parse steps with inheritance support
         parent_steps = None
@@ -85,83 +80,52 @@ class BlueprintParser:
         )
         
         kernel_backends = self._parse_kernels(blueprint_data.get('design_space', {}).get('kernels', []))
-        self._validate_finn_config(global_config, finn_config)
+
         design_space = DesignSpace(
             model_path=model_path,
             steps=steps,
             kernel_backends=kernel_backends,
-            global_config=global_config,
-            finn_config=finn_config
+            config=forge_config
         )
         design_space.validate_size()
         tree = self._build_execution_tree(design_space)
         return design_space, tree
 
-    def _extract_config_and_mappings(self, data: Dict[str, Any]) -> Tuple[GlobalConfig, Dict[str, Any]]:
+    def _extract_config_and_mappings(self, data: Dict[str, Any]) -> ForgeConfig:
         """
-        Unified extraction of global config and FINN mappings from blueprint data.
-        Handles explicit global_config, top-level params, and smithy mappings.
+        Unified extraction of forge config from blueprint data.
+        Handles global_config, top-level params, and FINN mappings.
         """
+        # Extract build control settings
         config = data.get('global_config', {}).copy()
         direct_params = ['output_stage', 'working_directory', 'save_intermediate_models', 'max_combinations', 'timeout_minutes', 'fail_fast']
         for param in direct_params:
             if param in data and param not in config:
                 config[param] = data[param]
-        finn_config = {**data.get('finn_config', {})}
+        
+        # Extract FINN parameters
+        finn_params = {**data.get('finn_config', {})}
         if 'platform' in data:
-            finn_config['board'] = data['platform']
+            finn_params['board'] = data['platform']
         if 'target_clk' in data:
-            finn_config['synth_clk_period_ns'] = self._parse_time_with_units(data['target_clk'])
-        global_config = self._parse_global_config(config)
-        return global_config, finn_config
-
-    def _validate_finn_config(self, global_config: GlobalConfig, finn_config: Dict[str, Any]) -> None:
-        """
-        Validate required FINN fields for synthesis.
-        Raises ValueError if required fields are missing when output_stage is not GENERATE_REPORTS.
-        """
-        if global_config.output_stage != OutputStage.GENERATE_REPORTS:
-            if 'synth_clk_period_ns' not in finn_config:
-                raise ValueError("Hardware synthesis requires synth_clk_period_ns (or target_clk)")
-            if 'board' not in finn_config:
-                raise ValueError("Hardware synthesis requires board (or platform)")
+            finn_params['synth_clk_period_ns'] = self._parse_time_with_units(data['target_clk'])
+        
+        # Create ForgeConfig
+        forge_config = self._parse_forge_config(config)
+        forge_config.finn_params = finn_params
+        return forge_config
     
-    def _load_with_inheritance(self, blueprint_path: str) -> Dict[str, Any]:
+    def _load_with_inheritance(self, blueprint_path: str, return_parent: bool = False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
         """
         Load blueprint and merge with parent if extends is specified.
         
         Args:
             blueprint_path: Path to blueprint YAML file
+            return_parent: If True, also return the parent data
             
         Returns:
-            Merged blueprint data
-        """
-        with open(blueprint_path, 'r') as f:
-            data = yaml.safe_load(f)
-        
-        # Handle inheritance
-        if 'extends' in data:
-            # Resolve parent path relative to child
-            parent_path = os.path.join(
-                os.path.dirname(blueprint_path), 
-                data['extends']
-            )
-            parent_data = self._load_with_inheritance(parent_path)
-            
-            # Deep merge parent and child
-            return self._deep_merge(parent_data, data)
-        
-        return data
-    
-    def _load_with_inheritance_and_parent(self, blueprint_path: str) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
-        """
-        Load blueprint and merge with parent, also returning parent data.
-        
-        Args:
-            blueprint_path: Path to blueprint YAML file
-            
-        Returns:
-            Tuple of (merged blueprint data, parent data if any)
+            If return_parent is False: Merged blueprint data
+            If return_parent is True: Tuple of (merged data, parent data)
         """
         with open(blueprint_path, 'r') as f:
             data = yaml.safe_load(f)
@@ -175,13 +139,19 @@ class BlueprintParser:
                 os.path.dirname(blueprint_path), 
                 data['extends']
             )
-            parent_data = self._load_with_inheritance(parent_path)
+            parent_data = self._load_with_inheritance(parent_path, return_parent=False)
             
             # Deep merge parent and child
             merged = self._deep_merge(parent_data, data)
-            return merged, parent_data
+            
+            if return_parent:
+                return merged, parent_data
+            return merged
         
-        return data, None
+        # No inheritance
+        if return_parent:
+            return data, None
+        return data
     
     def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -214,23 +184,22 @@ class BlueprintParser:
         from .plugins.registry import get_registry
         registry = get_registry()
         
-        # If skip_operations is True, just parse direct steps (for parent parsing)
+        # Helper to validate a single step specification
+        def validate_spec(spec):
+            if isinstance(spec, str):
+                return self._validate_step(spec, registry)
+            elif isinstance(spec, list):
+                return [self._validate_step(opt, registry) for opt in spec]
+            else:
+                raise ValueError(f"Invalid step specification: {spec}")
+        
+        # Skip operations for parent parsing
         if skip_operations:
-            parsed_steps = []
-            for step_spec in steps_data:
-                if isinstance(step_spec, str):
-                    parsed_steps.append(self._validate_step(step_spec, registry))
-                elif isinstance(step_spec, list):
-                    validated_options = [self._validate_step(option, registry) for option in step_spec]
-                    parsed_steps.append(validated_options)
-                elif not isinstance(step_spec, dict):
-                    raise ValueError(f"Invalid step specification: {step_spec}")
-            return parsed_steps
+            return [validate_spec(spec) for spec in steps_data if not isinstance(spec, dict)]
         
         # Separate operations from direct steps
-        operations: List[StepOperation] = []
-        direct_steps: List[StepDef] = []
-        
+        operations = []
+        direct_steps = []
         for item in steps_data:
             if isinstance(item, dict):
                 op = StepOperation.from_dict(item)
@@ -239,64 +208,23 @@ class BlueprintParser:
             else:
                 direct_steps.append(item)
         
-        # Determine starting point
-        if operations and not direct_steps:
-            # Only operations: start with parent steps (or empty if no parent)
-            result = parent_steps.copy() if parent_steps else []
-        elif direct_steps and not operations:
-            # Only direct steps: legacy behavior
-            if parent_steps is not None:
-                # With parent: child steps replace parent steps
-                result = []
-                for step_spec in direct_steps:
-                    if isinstance(step_spec, str):
-                        result.append(self._validate_step(step_spec, registry))
-                    elif isinstance(step_spec, list):
-                        validated_options = [self._validate_step(option, registry) for option in step_spec]
-                        result.append(validated_options)
-                    else:
-                        raise ValueError(f"Invalid step specification: {step_spec}")
-                return result
-            else:
-                # No parent: just validate the direct steps
-                result = []
-                for step_spec in direct_steps:
-                    if isinstance(step_spec, str):
-                        result.append(self._validate_step(step_spec, registry))
-                    elif isinstance(step_spec, list):
-                        validated_options = [self._validate_step(option, registry) for option in step_spec]
-                        result.append(validated_options)
-                    else:
-                        raise ValueError(f"Invalid step specification: {step_spec}")
-                return result
+        # Determine base steps
+        if direct_steps:
+            # Direct steps specified: use them (child replaces parent)
+            result = [validate_spec(spec) for spec in direct_steps]
+        elif parent_steps:
+            # No direct steps but have parent: start with parent
+            result = parent_steps.copy()
         else:
-            # Mix of steps and operations: direct steps are the base
+            # No steps at all: empty
             result = []
-            for step_spec in direct_steps:
-                if isinstance(step_spec, str):
-                    result.append(self._validate_step(step_spec, registry))
-                elif isinstance(step_spec, list):
-                    validated_options = [self._validate_step(option, registry) for option in step_spec]
-                    result.append(validated_options)
-                else:
-                    raise ValueError(f"Invalid step specification: {step_spec}")
         
-        # Apply operations in order
+        # Apply operations
         for op in operations:
             result = self._apply_step_operation(result, op)
         
-        # Validate all steps in final result
-        final_result = []
-        for step_spec in result:
-            if isinstance(step_spec, str):
-                final_result.append(self._validate_step(step_spec, registry))
-            elif isinstance(step_spec, list):
-                validated_options = [self._validate_step(option, registry) for option in step_spec]
-                final_result.append(validated_options)
-            else:
-                raise ValueError(f"Invalid step specification: {step_spec}")
-        
-        return final_result
+        # Validate result (operations might have added unvalidated steps)
+        return [validate_spec(spec) for spec in result]
 
     def _apply_step_operation(self, steps: List[StepDef], op: StepOperation) -> List[StepDef]:
         """Apply a single operation to the step list"""
@@ -444,63 +372,62 @@ class BlueprintParser:
         # No unit suffix, assume ns
         return float(value_str)
     
-    # _extract_flat_config is now merged into _extract_config_and_mappings
-    
-    def _parse_global_config(self, config_data: Dict[str, Any]) -> GlobalConfig:
-        """Parse global configuration section."""
-        global_config = GlobalConfig()
+    def _parse_forge_config(self, config_data: Dict[str, Any]) -> ForgeConfig:
+        """Parse forge configuration from blueprint data."""
+        forge_config = ForgeConfig()
         
         # Map string to enum for output_stage
         if 'output_stage' in config_data:
             stage_str = config_data['output_stage']
-            global_config.output_stage = OutputStage(stage_str)
+            forge_config.output_stage = OutputStage(stage_str)
         
         # Set other fields
         for field in ['working_directory', 'save_intermediate_models', 
                       'max_combinations', 'timeout_minutes', 'fail_fast']:
             if field in config_data:
-                setattr(global_config, field, config_data[field])
+                setattr(forge_config, field, config_data[field])
         
-        return global_config
+        return forge_config
+    
+    def _extract_kernel_spec(self, spec) -> Tuple[str, Optional[List[str]]]:
+        """Extract kernel name and optional backend names from spec."""
+        if isinstance(spec, str):
+            return spec, None
+        elif isinstance(spec, dict) and len(spec) == 1:
+            kernel_name, backend_specs = next(iter(spec.items()))
+            backend_names = backend_specs if isinstance(backend_specs, list) else [backend_specs]
+            return kernel_name, backend_names
+        else:
+            raise ValueError(f"Invalid kernel spec: {spec}")
     
     def _parse_kernels(self, kernels_data: list) -> list:
         """Parse kernels section."""
-        from .plugins.registry import get_registry, list_backends_by_kernel
-        registry = get_registry()
+        from .plugins.registry import list_backends_by_kernel, get_backend
         kernel_backends = []
         
         for spec in kernels_data:
-            if isinstance(spec, str):
-                kernel_name = spec
-                backend_names = list_backends_by_kernel(kernel_name)
-            elif isinstance(spec, dict) and len(spec) == 1:
-                kernel_name, backend_specs = next(iter(spec.items()))
-                backend_names = backend_specs if isinstance(backend_specs, list) else [backend_specs]
-            else:
-                raise ValueError(f"Invalid kernel spec: {spec}")
+            kernel_name, backend_names = self._extract_kernel_spec(spec)
             
+            # If no backends specified, get all available
             if not backend_names:
-                raise ValueError(f"No backends found for kernel '{kernel_name}'")
-            kernel_backends.append((kernel_name, self._validate_kernels(backend_names, kernel_name, registry)))
+                backend_names = list_backends_by_kernel(kernel_name)
+            
+            # Skip if no backends available
+            if not backend_names:
+                continue
+            
+            # Resolve backend classes
+            backend_classes = []
+            for name in backend_names:
+                backend_class = get_backend(name)
+                if not backend_class:
+                    raise ValueError(f"Backend '{name}' not found in registry")
+                backend_classes.append(backend_class)
+            
+            kernel_backends.append((kernel_name, backend_classes))
+        
         return kernel_backends
 
-    def _validate_kernels(self, backend_names, kernel_name, registry):
-        """Validate and resolve backend classes for a kernel."""
-        from .plugins.registry import list_backends_by_kernel, get_backend
-        available = list_backends_by_kernel(kernel_name)
-        backend_classes = []
-        for name in backend_names:
-            backend_class = get_backend(name)
-            if not backend_class:
-                raise ValueError(f"Backend '{name}' not found in registry")
-            if name not in available:
-                raise ValueError(
-                    f"Backend '{name}' does not support kernel '{kernel_name}'. "
-                    f"Available backends: {available}"
-                )
-            backend_classes.append(backend_class)
-        return backend_classes
-    
     def _build_execution_tree(self, space: DesignSpace) -> ExecutionNode:
         """Build execution tree with unified branching.
         
@@ -509,7 +436,7 @@ class BlueprintParser:
         # Root node starts empty, will accumulate initial steps
         root = ExecutionNode(
             segment_steps=[],
-            finn_config=self._extract_finn_config(space.global_config)
+            finn_config=self._extract_finn_config(space.config)
         )
         
         current_segments = [root]
@@ -537,7 +464,7 @@ class BlueprintParser:
         self._flush_steps(current_segments, pending_steps)
         
         # Validate tree size
-        self._validate_tree_size(root, space.global_config.max_combinations)
+        self._validate_tree_size(root, space.config.max_combinations)
         
         return root
     
@@ -553,16 +480,17 @@ class BlueprintParser:
         else:
             raise ValueError(f"Unknown pipeline step format: {pipeline_step}")
     
-    def _extract_finn_config(self, global_config) -> Dict[str, Any]:
-        """Extract FINN-relevant configuration from global config."""
-        # Convert GlobalConfig to dict, excluding non-FINN fields
-        config_dict = {}
-        
-        if hasattr(global_config, '__dict__'):
-            for key, value in global_config.__dict__.items():
-                # Skip internal fields and non-FINN config
-                if not key.startswith('_') and key not in ['max_combinations']:
-                    config_dict[key] = value
+    def _extract_finn_config(self, forge_config: ForgeConfig) -> Dict[str, Any]:
+        """Extract FINN-relevant configuration from ForgeConfig."""
+        # Build FINN config from ForgeConfig fields and finn_params
+        config_dict = {
+            'output_stage': forge_config.output_stage,
+            'working_directory': forge_config.working_directory,
+            'save_intermediate_models': forge_config.save_intermediate_models,
+            'fail_fast': forge_config.fail_fast,
+            'timeout_minutes': forge_config.timeout_minutes,
+            **forge_config.finn_params  # Include all FINN-specific params
+        }
         
         return config_dict
     
