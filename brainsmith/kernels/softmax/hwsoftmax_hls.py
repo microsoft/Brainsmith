@@ -22,8 +22,7 @@ from brainsmith.core.plugins import backend
     kernel="HWSoftmax",
     language="hls",
     description="HLS implementation of HWSoftmax",
-    author="shane-fleming",
-    version="1.0.0"
+    author="Shane Fleming"
 )
 class HWSoftmax_hls(HWSoftmax, HLSBackend):
     def __init__(self, onnx_node, **kwargs):

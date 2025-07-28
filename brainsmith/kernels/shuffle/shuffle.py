@@ -11,17 +11,14 @@ import numpy as np
 import warnings
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
-from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.core.plugins import kernel
 
 
 @kernel(
-    name="Shuffle",
     description="Hardware shuffle (rearrange and transpose) operation",
-    author="shane-fleming",
-    version="1.0.0"
+    author="Shane Fleming"
 )
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""

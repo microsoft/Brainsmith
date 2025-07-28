@@ -10,7 +10,6 @@ import numpy as np
 import torch.nn.functional as F
 from qonnx.core.datatype import DataType
 import warnings
-import textwrap
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.core.plugins import kernel
@@ -18,9 +17,8 @@ from brainsmith.core.plugins import kernel
 # TODO: Explain any shape assumptions -- TAFK
 
 @kernel(
-    name="LayerNorm",
     description="Hardware implementation of LayerNorm",
-    author="Thomas Keller",
+    author="Thomas Keller"
 )
 class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""

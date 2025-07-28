@@ -22,8 +22,7 @@ from brainsmith.core.plugins import backend
     kernel="Shuffle",
     language="hls",
     description="HLS implementation of Shuffle",
-    author="shane-fleming",
-    version="1.0.0"
+    author="Shane Fleming"
 )
 class Shuffle_hls(Shuffle, HLSBackend):
     def __init__(self, onnx_node, **kwargs):

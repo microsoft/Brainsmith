@@ -21,7 +21,7 @@ from brainsmith.core.plugins import backend
     name="LayerNormHLS", 
     kernel="LayerNorm",
     language="hls",
-    description="High-Level Synthesis backend for LayerNorm kernel",
+    description="HLS backend for LayerNorm kernel",
     author="Shane Fleming",
 )
 class LayerNorm_hls(LayerNorm, HLSBackend):

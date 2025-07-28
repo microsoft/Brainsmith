@@ -14,9 +14,7 @@ from brainsmith.core.plugins import transform
 
 @transform(name="InferShuffle", kernel="Shuffle",
     description="Convert Transpose+Reshape patterns to Shuffle hardware operations",
-    author="shane.fleming",
-    version="1.0.0",
-    requires=["qonnx", "onnx"]
+    author="Shane Fleming"
 )
 class InferShuffle(Transformation):
     """
