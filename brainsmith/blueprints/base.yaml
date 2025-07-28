@@ -1,7 +1,10 @@
 name: "Baseline FINN"
 description: "Core FINN build steps (no kernels)"
 
-hw_compiler:
+# Minimal configuration for estimates only
+clock_ns: 5.0                       # Target clock period in nanoseconds
+
+design_space:
   steps:
     - "cleanup"  # custom_step_cleanup
     - "qonnx_to_finn"
@@ -17,3 +20,4 @@ hw_compiler:
     - "step_set_fifo_depths"
     - "step_create_stitched_ip"
     - "step_measure_rtlsim_performance"
+  kernels: []

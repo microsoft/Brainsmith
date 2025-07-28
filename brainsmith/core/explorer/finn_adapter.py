@@ -98,9 +98,13 @@ class FINNAdapter:
             config_dict = config_dict.copy()
             config_dict["output_dir"] = "."
             
+            # Remove parameters that are not for DataflowBuildConfig
+            finn_config = config_dict.copy()
+            finn_config.pop("output_products", None)  # This is handled by generate_outputs
+            
             # Convert dict to DataflowBuildConfig
-            logger.debug(f"Creating DataflowBuildConfig with: {config_dict}")
-            config = DataflowBuildConfig(**config_dict)
+            logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
+            config = DataflowBuildConfig(**finn_config)
             
             # Execute build
             logger.info(f"Executing FINN build with {len(config.steps)} steps")

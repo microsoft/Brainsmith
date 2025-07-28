@@ -73,9 +73,7 @@ if [ -z "$BSMITH_DOCKER_TAG" ]; then
         BSMITH_DOCKER_TAG="microsoft/brainsmith:ci-$COMMIT_HASH"
     fi
 fi
-: ${LOCALHOST_URL="localhost"}
 : ${NETRON_PORT=8080}
-: ${NUM_DEFAULT_WORKERS=4}
 : ${NVIDIA_VISIBLE_DEVICES=""}
 
 : ${BSMITH_BUILD_DIR="/tmp/$DOCKER_INST_NAME"}
@@ -361,10 +359,12 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
-    DOCKER_CMD+=" -e LOCALHOST_URL=$LOCALHOST_URL"
-    DOCKER_CMD+=" -e NUM_DEFAULT_WORKERS=$NUM_DEFAULT_WORKERS"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
+    
+    # FINN-specific environment variables
+    DOCKER_CMD+=" -e FINN_BUILD_DIR=$BSMITH_BUILD_DIR"
+    DOCKER_CMD+=" -e FINN_ROOT=$BSMITH_DIR"
 
     # User/permission setup (unless running as root)
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then

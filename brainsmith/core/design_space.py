@@ -8,34 +8,8 @@ This module defines the new DesignSpace that holds resolved plugin objects
 from the blueprint, ready for tree construction.
 """
 
-import os
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Type, Any, Union, Optional
-from enum import Enum
-
-
-class OutputStage(Enum):
-    """Target output stage for the compilation process."""
-    COMPILE_AND_PACKAGE = "compile_and_package"
-    SYNTHESIZE_BITSTREAM = "synthesize_bitstream"
-    GENERATE_REPORTS = "generate_reports"
-
-
-@dataclass
-class ForgeConfig:
-    """Configuration for the forge build process."""
-    # Build control settings
-    output_stage: OutputStage = OutputStage.COMPILE_AND_PACKAGE
-    working_directory: str = "work"
-    save_intermediate_models: bool = False
-    fail_fast: bool = False
-    max_combinations: int = field(default_factory=lambda: 
-        int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000")))
-    timeout_minutes: int = field(default_factory=lambda: 
-        int(os.environ.get("BRAINSMITH_TIMEOUT_MINUTES", "60")))
-    
-    # FINN-specific parameters (passed through without validation)
-    finn_params: Dict[str, Any] = field(default_factory=dict)
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Type, Union
 
 
 @dataclass
@@ -50,15 +24,15 @@ class DesignSpace:
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
-    config: ForgeConfig
+    max_combinations: int = 100000  # Maximum allowed design space combinations
     
     def validate_size(self) -> None:
         """Validate that design space doesn't exceed max combinations."""
         estimated_size = self._estimate_combinations()
-        if estimated_size > self.config.max_combinations:
+        if estimated_size > self.max_combinations:
             raise ValueError(
                 f"Design space too large: {estimated_size:,} combinations exceeds "
-                f"limit of {self.config.max_combinations:,}"
+                f"limit of {self.max_combinations:,}"
             )
     
     def _estimate_combinations(self) -> int:

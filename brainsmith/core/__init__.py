@@ -12,7 +12,8 @@ from .forge import forge
 
 # Internal APIs - needed by other parts of brainsmith
 from .execution_tree import ExecutionNode, print_tree, get_tree_stats
-from .design_space import DesignSpace, ForgeConfig
+from .design_space import DesignSpace
+from .config import ForgeConfig
 from .blueprint_parser import BlueprintParser
 from .utils import apply_transforms, apply_transforms_with_params
 

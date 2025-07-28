@@ -6,9 +6,16 @@ It systematically explores hardware implementation options for neural networks, 
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
 
+Pre-release features:
+- Component library - define 
+- Blueprint interface -  
+- BERT Demo - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
+
+
 Planned features:
-- FINN Kernel backend rework (from RTLBackend/HLSBackend to generic Kernel backend )
-- Automated Kernel Integrator (generate full compiler integration python code from RTL code alone)
+- FINN Kernel backend rework - from RTLBackend/HLSBackend to generic Kernel backend
+- Automated Kernel Integrator - Generate full compiler integration python code from RTL code alone
+- Branching tree execution - Execute multiple builds in parallel, intelligently re-using build artefacts
 
 
 

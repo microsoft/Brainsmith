@@ -11,51 +11,47 @@ with all plugins resolved from the registry.
 import os
 import yaml
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, Literal
-)
+from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 from dataclasses import dataclass
 
-from .design_space import DesignSpace, ForgeConfig, OutputStage
+from .design_space import DesignSpace
+from .config import ForgeConfig
 from .execution_tree import ExecutionNode
-
-if TYPE_CHECKING:
-    from qonnx.transformation.base import Transformation
+from .plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
 
 # Type definitions
-StepDef = Union[str, List[str]]
+StepSpec = Union[str, List[Optional[str]]]
 
 @dataclass
 class StepOperation:
     """Represents a step manipulation operation"""
     op_type: Literal["after", "before", "replace", "remove", "at_start", "at_end"]
-    target: Optional[StepDef] = None
-    insert: Optional[StepDef] = None
-    with_step: Optional[StepDef] = None
+    target: Optional[StepSpec] = None
+    insert: Optional[StepSpec] = None
+    with_step: Optional[StepSpec] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Optional['StepOperation']:
         """Parse operation from YAML dict"""
-        if "after" in data:
-            return cls(op_type="after", target=data["after"], insert=data.get("insert"))
-        elif "before" in data:
-            return cls(op_type="before", target=data["before"], insert=data.get("insert"))
-        elif "replace" in data:
-            return cls(op_type="replace", target=data["replace"], with_step=data.get("with"))
-        elif "remove" in data:
-            return cls(op_type="remove", target=data["remove"])
-        elif "at_start" in data:
-            return cls(op_type="at_start", insert=data["at_start"]["insert"])
-        elif "at_end" in data:
-            return cls(op_type="at_end", insert=data["at_end"]["insert"])
-        else:
-            return None
+        op_mappings = {
+            "after": lambda d: cls(op_type="after", target=d["after"], insert=d.get("insert")),
+            "before": lambda d: cls(op_type="before", target=d["before"], insert=d.get("insert")),
+            "replace": lambda d: cls(op_type="replace", target=d["replace"], with_step=d.get("with")),
+            "remove": lambda d: cls(op_type="remove", target=d["remove"]),
+            "at_start": lambda d: cls(op_type="at_start", insert=d["at_start"]["insert"]),
+            "at_end": lambda d: cls(op_type="at_end", insert=d["at_end"]["insert"]),
+        }
+        
+        for key, factory in op_mappings.items():
+            if key in data:
+                return factory(data)
+        return None
 
 
 class BlueprintParser:
     """Parse blueprint YAML into DesignSpace with resolved plugins."""
 
-    def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ExecutionNode]:
+    def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ExecutionNode, ForgeConfig]:
         """
         Parse blueprint YAML and return DesignSpace and ExecutionNode root.
         Steps:
@@ -73,7 +69,7 @@ class BlueprintParser:
         if parent_data:
             parent_steps_data = parent_data.get('design_space', {}).get('steps', [])
             if parent_steps_data:
-                parent_steps = self._parse_steps(parent_steps_data, skip_operations=True)
+                parent_steps = self._parse_steps_raw(parent_steps_data)
         
         steps = self._parse_steps(
             blueprint_data.get('design_space', {}).get('steps', []),
@@ -82,41 +78,39 @@ class BlueprintParser:
         
         kernel_backends = self._parse_kernels(blueprint_data.get('design_space', {}).get('kernels', []))
 
+        # Get max_combinations from environment or use default
+        max_combinations = int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000"))
+        
         design_space = DesignSpace(
             model_path=model_path,
             steps=steps,
             kernel_backends=kernel_backends,
-            config=forge_config
+            max_combinations=max_combinations
         )
         design_space.validate_size()
-        tree = self._build_execution_tree(design_space)
-        return design_space, tree
+        tree = self._build_execution_tree(design_space, forge_config)
+        return design_space, tree, forge_config
 
     def _extract_config_and_mappings(self, data: Dict[str, Any]) -> ForgeConfig:
         """Extract ForgeConfig from blueprint data."""
-        # Merge all config sources
-        all_config = {
-            **data.get('global_config', {}),
-            **{k: v for k, v in data.items() if k not in ['design_space', 'extends']}
-        }
+        # Extract config - check both flat and global_config
+        config_data = {**data.get('global_config', {}), **data}
         
-        # Extract ForgeConfig fields
-        forge_fields = {}
-        for field in ForgeConfig.__dataclass_fields__:
-            if field in all_config:
-                value = all_config.pop(field)
-                if field == 'output_stage' and isinstance(value, str):
-                    value = OutputStage(value)
-                forge_fields[field] = value
+        # Validate required field
+        if 'clock_ns' not in config_data:
+            raise ValueError("Missing required field 'clock_ns' in blueprint")
         
-        # Handle legacy mappings
-        finn_params = data.get('finn_config', {})
-        if 'platform' in all_config:
-            finn_params['board'] = all_config.pop('platform')
-        if 'target_clk' in all_config:
-            finn_params['synth_clk_period_ns'] = self._parse_time_with_units(all_config.pop('target_clk'))
-        
-        return ForgeConfig(**forge_fields, finn_params=finn_params)
+        return ForgeConfig(
+            clock_ns=float(config_data['clock_ns']),
+            output=config_data.get('output', 'estimates'),
+            board=config_data.get('board'),
+            verify=config_data.get('verify', False),
+            verify_data=Path(config_data['verify_data']) if 'verify_data' in config_data else None,
+            parallel_builds=config_data.get('parallel_builds', 4),
+            debug=config_data.get('debug', False),
+            save_intermediate_models=config_data.get('save_intermediate_models', False),
+            finn_overrides=data.get('finn_config', {})
+        )
     
     def _load_with_inheritance(self, blueprint_path: str, return_parent: bool = False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
         """
@@ -174,28 +168,18 @@ class BlueprintParser:
         
         return result
     
+    def _parse_steps_raw(self, steps_data: List[Any]) -> List[Union[str, List[Optional[str]]]]:
+        """Parse steps without operations (for parent blueprints)."""
+        registry = get_registry()
+        return [self._validate_spec(spec, registry) for spec in steps_data if not isinstance(spec, dict)]
+    
     def _parse_steps(
         self, 
         steps_data: List[Any], 
-        parent_steps: Optional[List[Union[str, List[Optional[str]]]]] = None,
-        skip_operations: bool = False
+        parent_steps: Optional[List[Union[str, List[Optional[str]]]]] = None
     ) -> List[Union[str, List[Optional[str]]]]:
         """Parse steps from design_space, preserving variations and supporting operations."""
-        from .plugins.registry import get_registry
         registry = get_registry()
-        
-        # Helper to validate a single step specification
-        def validate_spec(spec):
-            if isinstance(spec, str):
-                return self._validate_step(spec, registry)
-            elif isinstance(spec, list):
-                return [self._validate_step(opt, registry) for opt in spec]
-            else:
-                raise ValueError(f"Invalid step specification: {spec}")
-        
-        # Skip operations for parent parsing
-        if skip_operations:
-            return [validate_spec(spec) for spec in steps_data if not isinstance(spec, dict)]
         
         # Separate operations from direct steps
         operations = []
@@ -211,7 +195,7 @@ class BlueprintParser:
         # Determine base steps
         if direct_steps:
             # Direct steps specified: use them (child replaces parent)
-            result = [validate_spec(spec) for spec in direct_steps]
+            result = [self._validate_spec(spec, registry) for spec in direct_steps]
         elif parent_steps:
             # No direct steps but have parent: start with parent
             result = parent_steps.copy()
@@ -224,9 +208,9 @@ class BlueprintParser:
             result = self._apply_step_operation(result, op)
         
         # Validate result (operations might have added unvalidated steps)
-        return [validate_spec(spec) for spec in result]
+        return [self._validate_spec(spec, registry) for spec in result]
 
-    def _apply_step_operation(self, steps: List[StepDef], op: StepOperation) -> List[StepDef]:
+    def _apply_step_operation(self, steps: List[StepSpec], op: StepOperation) -> List[StepSpec]:
         """Apply a single operation to the step list"""
         
         if op.op_type == "remove":
@@ -236,14 +220,7 @@ class BlueprintParser:
             new_steps = []
             for step in steps:
                 if self._step_matches(step, op.target):
-                    # If replacing with a list of steps that are all strings (no ~), extend
-                    # Otherwise keep as branching list
-                    if (isinstance(op.with_step, list) and 
-                        all(isinstance(s, str) for s in op.with_step) and
-                        "~" not in op.with_step):
-                        new_steps.extend(op.with_step)
-                    else:
-                        new_steps.append(op.with_step)
+                    self._insert_steps(new_steps, op.with_step, check_skip=True)
                 else:
                     new_steps.append(step)
             return new_steps
@@ -253,66 +230,47 @@ class BlueprintParser:
             for step in steps:
                 new_steps.append(step)
                 if self._step_matches(step, op.target):
-                    # Handle list inserts carefully
-                    if isinstance(op.insert, list):
-                        if all(isinstance(item, str) for item in op.insert):
-                            # Sequential steps
-                            new_steps.extend(op.insert)
-                        else:
-                            # Branch
-                            new_steps.append(op.insert)
-                    else:
-                        new_steps.append(op.insert)
+                    self._insert_steps(new_steps, op.insert)
             return new_steps
         
         elif op.op_type == "before":
             new_steps = []
             for step in steps:
                 if self._step_matches(step, op.target):
-                    # Handle list inserts carefully
-                    if isinstance(op.insert, list):
-                        if all(isinstance(item, str) for item in op.insert):
-                            # Sequential steps
-                            new_steps.extend(op.insert)
-                        else:
-                            # Branch
-                            new_steps.append(op.insert)
-                    else:
-                        new_steps.append(op.insert)
+                    self._insert_steps(new_steps, op.insert)
                 new_steps.append(step)
             return new_steps
         
         elif op.op_type == "at_start":
-            # Handle list inserts carefully:
-            # - ["a", "b", "c"] -> insert 3 sequential steps
-            # - [["a", "b", "c"]] -> insert 1 branch with 3 options
-            if isinstance(op.insert, list):
-                # Check if it's a list of strings (sequential) or contains lists (branch)
-                if all(isinstance(item, str) for item in op.insert):
-                    # Sequential steps
-                    return op.insert + steps
-                else:
-                    # Contains branches or mixed content
-                    return [op.insert] + steps
-            else:
-                return [op.insert] + steps
+            new_steps = []
+            self._insert_steps(new_steps, op.insert)
+            new_steps.extend(steps)
+            return new_steps
         
         elif op.op_type == "at_end":
-            # Handle list inserts carefully
-            if isinstance(op.insert, list):
-                # Check if it's a list of strings (sequential) or contains lists (branch)
-                if all(isinstance(item, str) for item in op.insert):
-                    # Sequential steps
-                    return steps + op.insert
-                else:
-                    # Contains branches or mixed content
-                    return steps + [op.insert]
-            else:
-                return steps + [op.insert]
+            new_steps = steps.copy()
+            self._insert_steps(new_steps, op.insert)
+            return new_steps
         
         return steps
     
-    def _step_matches(self, step: StepDef, target: Optional[StepDef]) -> bool:
+    def _insert_steps(self, target_list: List[StepSpec], steps: StepSpec, check_skip: bool = False) -> None:
+        """Insert steps as sequential or branch based on content.
+        
+        Args:
+            target_list: List to insert steps into
+            steps: Steps to insert (string or list)
+            check_skip: If True, also check for "~" in list before extending
+        """
+        if isinstance(steps, list) and all(isinstance(s, str) for s in steps):
+            if check_skip and "~" in steps:
+                target_list.append(steps)
+            else:
+                target_list.extend(steps)
+        else:
+            target_list.append(steps)
+    
+    def _step_matches(self, step: StepSpec, target: Optional[StepSpec]) -> bool:
         """Check if a step matches the target pattern"""
         if target is None:
             return False
@@ -327,51 +285,23 @@ class BlueprintParser:
         
         # No match for mismatched types
         return False
+    
+    def _validate_spec(self, spec: Union[str, List[str]], registry=None) -> Union[str, List[str]]:
+        """Validate a step specification (string or list)."""
+        if isinstance(spec, str):
+            return self._validate_step(spec)
+        elif isinstance(spec, list):
+            return [self._validate_step(opt) for opt in spec]
+        else:
+            raise ValueError(f"Invalid step specification: {spec}")
 
-    def _validate_step(self, step: Optional[str], registry) -> str:
+    def _validate_step(self, step: Optional[str]) -> str:
         """Validate a step name against the registry, handle skip."""
         if step in [None, "~", ""]:
             return "~"
-        from .plugins.registry import has_step
         if not has_step(step):
             raise ValueError(f"Step '{step}' not found in registry")
-        return step
-    
-    def _parse_time_with_units(self, value: Union[str, float, int]) -> float:
-        """Parse time value with unit suffix to nanoseconds.
-        
-        Supports: ns, us, ms, ps
-        Default unit is ns if no suffix.
-        
-        Examples:
-            "5" -> 5.0
-            "5ns" -> 5.0
-            "5000ps" -> 5.0
-            "0.005us" -> 5.0
-            "0.000005ms" -> 5.0
-        """
-        if isinstance(value, (int, float)):
-            return float(value)
-        
-        value_str = str(value).strip()
-        
-        # Unit conversion map to nanoseconds
-        units = {
-            'ps': 0.001,
-            'ns': 1.0,
-            'us': 1000.0,
-            'ms': 1000000.0
-        }
-        
-        # Check for unit suffix
-        for unit, multiplier in units.items():
-            if value_str.endswith(unit):
-                numeric_part = value_str[:-len(unit)].strip()
-                return float(numeric_part) * multiplier
-        
-        # No unit suffix, assume ns
-        return float(value_str)
-    
+        return step    
     
     def _extract_kernel_spec(self, spec) -> Tuple[str, Optional[List[str]]]:
         """Extract kernel name and optional backend names from spec."""
@@ -386,7 +316,6 @@ class BlueprintParser:
     
     def _parse_kernels(self, kernels_data: list) -> list:
         """Parse kernels section."""
-        from .plugins.registry import list_backends_by_kernel, get_backend
         kernel_backends = []
         
         for spec in kernels_data:
@@ -412,7 +341,7 @@ class BlueprintParser:
         
         return kernel_backends
 
-    def _build_execution_tree(self, space: DesignSpace) -> ExecutionNode:
+    def _build_execution_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> ExecutionNode:
         """Build execution tree with unified branching.
         
         Steps can now be direct strings or lists for variations.
@@ -420,7 +349,7 @@ class BlueprintParser:
         # Root node starts empty, will accumulate initial steps
         root = ExecutionNode(
             segment_steps=[],
-            finn_config=self._extract_finn_config(space.config)
+            finn_config=self._extract_finn_config(forge_config)
         )
         
         current_segments = [root]
@@ -434,7 +363,7 @@ class BlueprintParser:
                 pending_steps = []
             else:
                 # Linear step - accumulate
-                if step_spec == "infer_kernels" and hasattr(space, 'kernel_backends'):
+                if self._is_kernel_inference_step(step_spec, space):
                     # Special handling for kernel inference
                     pending_steps.append({
                         "kernel_backends": space.kernel_backends,
@@ -448,35 +377,36 @@ class BlueprintParser:
         self._flush_steps(current_segments, pending_steps)
         
         # Validate tree size
-        self._validate_tree_size(root, space.config.max_combinations)
+        self._validate_tree_size(root, space.max_combinations)
         
         return root
     
-    def _extract_step_name(self, pipeline_step) -> str:
-        """Extract step name from pipeline step format."""
-        if isinstance(pipeline_step, str):
-            if pipeline_step.startswith("{") and pipeline_step.endswith("}"):
-                return pipeline_step[1:-1]
-            return pipeline_step
-        elif isinstance(pipeline_step, dict):
-            # YAML dict format {stage_name: null}
-            return list(pipeline_step.keys())[0]
-        else:
-            raise ValueError(f"Unknown pipeline step format: {pipeline_step}")
+    def _is_kernel_inference_step(self, step_spec: str, space: DesignSpace) -> bool:
+        """Check if this is a kernel inference step requiring special handling."""
+        return step_spec == "infer_kernels" and hasattr(space, 'kernel_backends')
     
     def _extract_finn_config(self, forge_config: ForgeConfig) -> Dict[str, Any]:
         """Extract FINN-relevant configuration from ForgeConfig."""
-        # Build FINN config from ForgeConfig fields and finn_params
-        config_dict = {
-            'output_stage': forge_config.output_stage,
-            'working_directory': forge_config.working_directory,
-            'save_intermediate_models': forge_config.save_intermediate_models,
-            'fail_fast': forge_config.fail_fast,
-            'timeout_minutes': forge_config.timeout_minutes,
-            **forge_config.finn_params  # Include all FINN-specific params
+        # Map ForgeConfig to FINN's expected format
+        output_products = []
+        if forge_config.output == "estimates":
+            output_products = ["estimates"]
+        elif forge_config.output == "rtl":
+            output_products = ["rtl_sim", "ip_gen"]  
+        elif forge_config.output == "bitfile":
+            output_products = ["bitfile"]
+        
+        finn_config = {
+            'output_products': output_products,
+            'board': forge_config.board,
+            'synth_clk_period_ns': forge_config.clock_ns,
+            'save_intermediate_models': forge_config.save_intermediate_models
         }
         
-        return config_dict
+        # Apply any finn_config overrides from blueprint
+        finn_config.update(forge_config.finn_overrides)
+        
+        return finn_config
     
     def _flush_steps(self, segments: List[ExecutionNode], steps: List[Dict]) -> None:
         """Add accumulated steps to segments."""

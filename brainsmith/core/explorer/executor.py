@@ -24,7 +24,6 @@ class Executor:
         self,
         finn_adapter: FINNAdapter,
         base_finn_config: Dict[str, Any],
-        global_config: Dict[str, Any],
         kernel_selections: list = None
     ) -> None:
         """Initialize executor.
@@ -32,17 +31,17 @@ class Executor:
         Args:
             finn_adapter: Adapter for FINN-specific operations
             base_finn_config: FINN configuration from blueprint
-            global_config: Global configuration including output products
             kernel_selections: Optional list of (kernel, backend) tuples
         """
         self.finn_adapter = finn_adapter
         self.base_finn_config = base_finn_config
-        self.global_config = global_config
         self.kernel_selections = kernel_selections or []
         
-        # Extract settings
-        self.fail_fast = global_config.get("fail_fast", False)
-        self.output_product = global_config.get("output_products", "df")
+        # Extract settings from FINN config
+        self.fail_fast = False  # Always fail fast - Arete principle
+        output_products = base_finn_config.get("output_products", ["estimates"])
+        # Take first output product as primary target
+        self.output_product = output_products[0] if output_products else "estimates"
         
         # Validate required FINN config fields
         if "synth_clk_period_ns" not in base_finn_config:
@@ -52,32 +51,15 @@ class Executor:
         
         # Map output products to FINN types
         self.output_map = {
-            "df": ["ESTIMATE_REPORTS"],
-            "rtl": [
-                "ESTIMATE_REPORTS",
-                "RTLSIM_PERFORMANCE",
-                "STITCHED_IP"
-            ],
-            "dcp": [
-                "ESTIMATE_REPORTS",
-                "RTLSIM_PERFORMANCE",
-                "STITCHED_IP",
-                "BITFILE",
-                "DEPLOYMENT_PACKAGE"
-            ],
-            # Also support OutputStage enum values
-            "generate_reports": ["ESTIMATE_REPORTS"],
-            "synthesize_bitstream": [
-                "ESTIMATE_REPORTS",
-                "RTLSIM_PERFORMANCE",
-                "STITCHED_IP"
-            ],
-            "compile_and_package": [
-                "ESTIMATE_REPORTS",
-                "RTLSIM_PERFORMANCE",
-                "STITCHED_IP",
-                "BITFILE",
-                "DEPLOYMENT_PACKAGE"
+            "estimates": ["estimate_reports"],
+            "rtl_sim": ["estimate_reports", "rtlsim_performance"],
+            "ip_gen": ["estimate_reports", "rtlsim_performance", "stitched_ip"],
+            "bitfile": [
+                "estimate_reports",
+                "rtlsim_performance",
+                "stitched_ip",
+                "bitfile",
+                "deployment_package"
             ]
         }
     
@@ -148,6 +130,8 @@ class Executor:
                 results[segment.segment_id] = result
             except ExecutionError as e:
                 # Arete: Handle execution errors properly
+                print(f"✗ Failed: {segment.segment_id}")
+                print(f"  Error: {str(e)}")
                 if self.fail_fast:
                     raise
                 
@@ -162,6 +146,26 @@ class Executor:
                 # Mark descendants for skipping
                 self._mark_descendants_skipped(segment, skipped)
                 # Still need to add children to stack so they get marked as skipped
+                for child in reversed(list(segment.children.values())):
+                    stack.append((child, None, depth + 1))
+                continue
+            except Exception as e:
+                # Catch any unexpected errors
+                print(f"✗ Failed: {segment.segment_id}")
+                print(f"  Unexpected error: {type(e).__name__}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                
+                # Create failure result
+                results[segment.segment_id] = SegmentResult(
+                    success=False,
+                    segment_id=segment.segment_id,
+                    error=f"{type(e).__name__}: {str(e)}",
+                    execution_time=0
+                )
+                
+                # Mark descendants for skipping
+                self._mark_descendants_skipped(segment, skipped)
                 for child in reversed(list(segment.children.values())):
                     stack.append((child, None, depth + 1))
                 continue

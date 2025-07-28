@@ -33,15 +33,27 @@ def explore_execution_tree(
     model_path = Path(model_path)
     output_dir = Path(output_dir)
     
-    # Extract configs from ForgeConfig
-    global_config = {
-        'output_stage': forge_config.output_stage,
-        'working_directory': forge_config.working_directory,
-        'save_intermediate_models': forge_config.save_intermediate_models,
-        'fail_fast': forge_config.fail_fast,
-        'timeout_minutes': forge_config.timeout_minutes
+    # Map ForgeConfig to FINN's expected format
+    output_products = []
+    if forge_config.output == "estimates":
+        output_products = ["estimates"]
+    elif forge_config.output == "rtl":
+        output_products = ["rtl_sim", "ip_gen"]  
+    elif forge_config.output == "bitfile":
+        output_products = ["bitfile"]
+    
+    finn_config = {
+        'output_products': output_products,
+        'board': forge_config.board,
+        'synth_clk_period_ns': forge_config.clock_ns,
+        'save_intermediate_models': forge_config.save_intermediate_models
     }
-    finn_config = forge_config.finn_params.copy()
+    
+    # Add verification config if enabled
+    if forge_config.verify and forge_config.verify_data:
+        finn_config['verify_steps'] = ['initial_python']
+        finn_config['verify_input_npy'] = str(forge_config.verify_data / 'input.npy')
+        finn_config['verify_expected_output_npy'] = str(forge_config.verify_data / 'expected_output.npy')
     
     # Add kernel selections from design space if available
     if design_space and hasattr(design_space, 'kernel_backends'):
@@ -53,6 +65,10 @@ def explore_execution_tree(
                 kernel_selections.append((kernel_name, backend_name))
         finn_config["kernel_selections"] = kernel_selections
     
+    # Apply any finn_overrides from forge config
+    if hasattr(forge_config, 'finn_overrides') and forge_config.finn_overrides:
+        finn_config.update(forge_config.finn_overrides)
+    
     # Save tree structure
     tree_json = output_dir / "tree.json"
     tree_json.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +76,7 @@ def explore_execution_tree(
     
     # Create adapter and executor
     finn_adapter = FINNAdapter()
-    executor = Executor(finn_adapter, finn_config, global_config)
+    executor = Executor(finn_adapter, finn_config)
     result = executor.execute(tree, Path(model_path), output_dir)
     
     # Save summary

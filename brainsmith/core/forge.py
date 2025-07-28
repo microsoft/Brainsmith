@@ -62,7 +62,7 @@ def forge(model_path: str, blueprint_path: str, output_dir: str = None):
     
     # Parse blueprint and build tree
     parser = BlueprintParser()
-    design_space, tree = parser.parse(blueprint_path, str(Path(model_path).absolute()))
+    design_space, tree, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
     
     logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
@@ -81,7 +81,7 @@ def forge(model_path: str, blueprint_path: str, output_dir: str = None):
         tree=tree,
         model_path=model_path,
         output_dir=output_dir,
-        forge_config=design_space.config,
+        forge_config=forge_config,
         design_space=design_space
     )
     
