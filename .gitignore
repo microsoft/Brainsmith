@@ -341,11 +341,6 @@ volumes/
 perf.data
 perf.data.old
 
-# Core dumps
-core
-core.*
-vgcore.*
-
 # Editor backups
 \#*\#
 .emacs.desktop
