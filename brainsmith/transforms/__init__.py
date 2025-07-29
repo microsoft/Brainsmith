@@ -8,22 +8,7 @@ Plugin-based transforms organized by compilation stage.
 """
 
 # Import all stage modules to trigger transform registration
-from . import (
-    cleanup,
-    kernel_opt,
-    post_proc
-)
+from . import cleanup
+from . import kernel_opt
+from . import post_proc
 
-# Force import all submodules to ensure transforms are registered
-import pkgutil
-import importlib
-
-# Import all submodules recursively
-for loader, module_name, is_pkg in pkgutil.walk_packages(__path__, __name__ + '.'):
-    try:
-        importlib.import_module(module_name)
-    except ImportError as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Failed to import transform module {module_name}: {e}")
-
-# All transforms are registered via decorators and discovered through the plugin system

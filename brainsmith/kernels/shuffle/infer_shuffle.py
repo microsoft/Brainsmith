@@ -1,14 +1,10 @@
 """Shuffle hardware inference transform."""
 
 import numpy as np
-from onnx import TensorProto, helper
-from qonnx.core.datatype import DataType
-from qonnx.custom_op.registry import getCustomOp
+from onnx import helper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.util.basic import get_by_name
-from qonnx.util.onnx import nchw_to_nhwc
 from brainsmith.core.plugins import transform
 
 

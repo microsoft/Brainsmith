@@ -23,7 +23,7 @@ import numpy as np
 import brainsmith.transforms
 
 from brainsmith.core.plugins import step, get_transform
-from brainsmith.core import apply_transforms
+from brainsmith.utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 

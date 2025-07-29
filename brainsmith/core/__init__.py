@@ -15,12 +15,8 @@ from .execution_tree import ExecutionSegment, print_tree, get_tree_stats
 from .design_space import DesignSpace
 from .config import ForgeConfig
 from .blueprint_parser import BlueprintParser
-from .utils import apply_transforms, apply_transforms_with_params
 
 __all__ = [
     # Main API
     "forge",
-    # Internal APIs - needed by steps
-    "apply_transforms",
-    "apply_transforms_with_params",
 ]

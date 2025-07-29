@@ -16,10 +16,8 @@ from .registry import (
 # Import framework adapters to register external plugins
 from . import framework_adapters
 
-# Import BrainSmith modules to trigger registrations
-import brainsmith.transforms
-import brainsmith.kernels  
-import brainsmith.steps
+# Plugins are discovered lazily on first access to avoid circular imports
+# See discovery.py for the implementation
 
 __all__ = [
     # Registry access
@@ -52,5 +50,5 @@ __all__ = [
     "get_transforms_by_metadata",
     "get_kernels_by_metadata",
     "get_backends_by_metadata",
-    "get_steps_by_metadata",
+    "get_steps_by_metadata"
 ]

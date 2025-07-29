@@ -26,38 +26,45 @@ class Registry:
         key = f"{framework}:{name}" if framework != 'brainsmith' else name
         self._plugins[plugin_type][key] = (cls, {**metadata, 'framework': framework})
     
-    def _ensure_external_plugins(self):
-        """Ensure external plugins are loaded."""
-        if 'brainsmith.core.plugins.framework_adapters' in sys.modules:
-            from . import framework_adapters
-            framework_adapters.ensure_initialized()
+    def _load_plugins(self):
+        """Ensure all plugins are discovered (both external and internal)."""
+        if not hasattr(self, '_discovered'):
+            self._discovered = True
+            
+            # 1. External framework plugins (FINN, QONNX)
+            if 'brainsmith.core.plugins.framework_adapters' in sys.modules:
+                from . import framework_adapters
+                framework_adapters.ensure_initialized()
+            
+            # 2. BrainSmith plugins
+                modules = ['transforms', 'kernels', 'steps', 'operators']
     
+            for module in modules:
+                full_name = f'brainsmith.{module}'
+                if full_name not in sys.modules:
+                    try:
+                        __import__(full_name)
+                        logger.debug(f"Imported {full_name}")
+                    except ImportError as e:
+                        logger.debug(f"Could not import {full_name}: {e}")
+
     def get(self, plugin_type: str, name: str) -> Type:
         """Get plugin by name (with or without framework prefix).
         """
-        self._ensure_external_plugins()
+        self._load_plugins()
         
         # Direct lookup first
-        entry = self._plugins[plugin_type].get(name)
-        if entry:
-            return entry[0]
+        plugins = self._plugins[plugin_type]
+        if name in plugins:
+            return plugins[name][0]
         
-        # If no colon, try each framework
+        # If no colon, try with framework prefixes
         if ':' not in name:
-            # First try without any prefix (for brainsmith plugins registered without framework)
-            for key, value in self._plugins[plugin_type].items():
-                if key == name:
-                    return value[0]
-            
-            # Then try with brainsmith prefix
-            for key, value in self._plugins[plugin_type].items():
-                if key == f'brainsmith:{name}':
-                    return value[0]
-            
-            # Finally try other frameworks
-            for key, value in self._plugins[plugin_type].items():
-                if ':' in key and key.endswith(f':{name}'):
-                    return value[0]
+            # Try common prefixes
+            for prefix in ['brainsmith:', 'finn:', 'qonnx:']:
+                full_name = f'{prefix}{name}'
+                if full_name in plugins:
+                    return plugins[full_name][0]
         
         # Plugin not found - fail fast
         available = list(self._plugins[plugin_type].keys())
@@ -89,46 +96,7 @@ class Registry:
             'transform': {}, 'kernel': {}, 'backend': {}, 'step': {}
         }
         
-        # Force reload of plugin modules to re-register everything
-        import importlib
-        import sys
-        
-        # List of modules that register plugins
-        # Need to reload child modules before parent modules
-        plugin_modules = [
-            # Transform modules
-            'brainsmith.transforms.cleanup.remove_identity',
-            'brainsmith.transforms.dataflow_opt.infer_finn_loop_op',
-            'brainsmith.transforms.kernel_opt.set_pumped_compute',
-            'brainsmith.transforms.kernel_opt.temp_shuffle_fixer',
-            'brainsmith.transforms.metadata.extract_shell_integration_metadata',
-            'brainsmith.transforms.metadata.ensure_custom_opset_imports',
-            'brainsmith.transforms.topology_opt.expand_norms',
-            'brainsmith.transforms',
-            # Kernel modules
-            'brainsmith.kernels.crop.crop',
-            'brainsmith.kernels.crop.crop_hls',
-            'brainsmith.kernels.layernorm.layernorm',
-            'brainsmith.kernels.layernorm.layernorm_hls',
-            'brainsmith.kernels.shuffle.shuffle',
-            'brainsmith.kernels.shuffle.shuffle_hls',
-            'brainsmith.kernels.softmax.hwsoftmax',
-            'brainsmith.kernels.softmax.hwsoftmax_hls',
-            'brainsmith.kernels',
-            # Step modules
-            'brainsmith.steps.core_steps',
-            'brainsmith.steps.bert_custom_steps',
-            'brainsmith.steps.kernel_inference',
-            'brainsmith.steps',
-            # Framework adapters
-            'brainsmith.core.plugins.framework_adapters'
-        ]
-        
-        for module_name in plugin_modules:
-            if module_name in sys.modules:
-                # Reload the module to trigger re-registration
-                module = sys.modules[module_name]
-                importlib.reload(module)
+        self._load_plugins()
                 
         logger.debug("Registry reset and plugins reloaded")
     
@@ -172,18 +140,22 @@ kernel_inference = lambda **kw: plugin('transform', kernel_inference=True, **kw)
 # List functions
 def list_transforms() -> List[str]:
     """List all transform names."""
+    _registry._load_plugins()
     return list(_registry._plugins['transform'].keys())
 
 def list_kernels() -> List[str]:
     """List all kernel names."""
+    _registry._load_plugins()
     return list(_registry._plugins['kernel'].keys())
 
 def list_backends() -> List[str]:
     """List all backend names."""
+    _registry._load_plugins()
     return list(_registry._plugins['backend'].keys())
 
 def list_steps() -> List[str]:
     """List all step names."""
+    _registry._load_plugins()
     return list(_registry._plugins['step'].keys())
 
 # "Has" functions

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Core utilities for BrainSmith operations.
+Transform utilities for BrainSmith operations.
 """
 from typing import List, Optional, Any
 import logging
