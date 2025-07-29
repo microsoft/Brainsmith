@@ -9,7 +9,7 @@ Brainsmith is a platform with the goal of fully automated design space explorati
 ### Pre-release features:
 - **Component library** - Register hardware designs and algorithms as components in the Brainsmith library for use in DSE
 - **Blueprint interface** - Define the components, algorithms, and parameters for a single build
-- **BERT Demo** - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
+- **BERT demo** - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
 
 ### Planned major features:
 - **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
