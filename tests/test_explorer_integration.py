@@ -3,7 +3,7 @@
 import tempfile
 import json
 from pathlib import Path
-from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.execution_tree import ExecutionSegment
 from brainsmith.core.blueprint_parser import BlueprintParser
 from brainsmith.core.explorer import explore_execution_tree
 from brainsmith.core.plugins.registry import get_registry
@@ -15,7 +15,7 @@ def test_tree_serialization():
         output_dir = Path(tmpdir) / "output"
         
         # Create simple tree
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         child = root.add_child("branch1", [{"name": "step2"}])
         
         # Create minimal blueprint config
@@ -49,7 +49,7 @@ def test_branching_tree_structure():
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Create branching tree
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         branch1 = root.add_child("option1", [{"name": "step2a"}])
         branch2 = root.add_child("option2", [{"name": "step2b"}])
         
@@ -169,7 +169,7 @@ def test_complex_tree_stats():
     from brainsmith.core.execution_tree import get_tree_stats
     
     # Build a tree manually
-    root = ExecutionNode(segment_steps=[{"name": "step1"}])
+    root = ExecutionSegment(segment_steps=[{"name": "step1"}])
     
     # First level branches
     a1 = root.add_child("a1", [{"name": "transform_a1"}])

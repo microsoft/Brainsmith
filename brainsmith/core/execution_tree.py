@@ -22,7 +22,7 @@ class ArtifactState:
 
 
 @dataclass
-class ExecutionNode:
+class ExecutionSegment:
     """
     A segment of execution between branch points.
     
@@ -35,8 +35,8 @@ class ExecutionNode:
     branch_decision: Optional[str] = None  # How we got here from parent
     
     # Tree structure
-    parent: Optional['ExecutionNode'] = None
-    children: Dict[str, 'ExecutionNode'] = field(default_factory=dict)
+    parent: Optional['ExecutionSegment'] = None
+    children: Dict[str, 'ExecutionSegment'] = field(default_factory=dict)
     
     # Execution state
     status: str = "pending"  # pending, running, completed, failed
@@ -72,9 +72,9 @@ class ExecutionNode:
         """Check if this is a complete path endpoint."""
         return len(self.children) == 0
     
-    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> 'ExecutionNode':
+    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> 'ExecutionSegment':
         """Create a child segment for a branch."""
-        child = ExecutionNode(
+        child = ExecutionSegment(
             segment_steps=steps,
             branch_decision=branch_id,
             parent=self,
@@ -83,7 +83,7 @@ class ExecutionNode:
         self.children[branch_id] = child
         return child
     
-    def get_path(self) -> List['ExecutionNode']:
+    def get_path(self) -> List['ExecutionSegment']:
         """Get all segments from root to here."""
         path = []
         node = self
@@ -112,11 +112,11 @@ class ExecutionNode:
         return count
 
 
-def get_leaf_segments(root: ExecutionNode) -> List[ExecutionNode]:
+def get_leaf_segments(root: ExecutionSegment) -> List[ExecutionSegment]:
     """Get all complete execution paths (leaf segments)."""
     leaves = []
     
-    def collect_leaves(node: ExecutionNode):
+    def collect_leaves(node: ExecutionSegment):
         if node.is_leaf:
             leaves.append(node)
         else:
@@ -127,14 +127,14 @@ def get_leaf_segments(root: ExecutionNode) -> List[ExecutionNode]:
     return leaves
 
 
-def count_leaves(node: ExecutionNode) -> int:
+def count_leaves(node: ExecutionSegment) -> int:
     """Count leaf nodes in tree."""
     if not node.children:
         return 1
     return sum(count_leaves(child) for child in node.children.values())
 
 
-def count_nodes(node: ExecutionNode) -> int:
+def count_nodes(node: ExecutionSegment) -> int:
     """Count all nodes in tree."""
     count = 0 if node.segment_id == "root" else 1
     for child in node.children.values():
@@ -142,7 +142,7 @@ def count_nodes(node: ExecutionNode) -> int:
     return count
 
 
-def print_tree(node: ExecutionNode, indent: str = "", last: bool = True):
+def print_tree(node: ExecutionSegment, indent: str = "", last: bool = True):
     """Pretty print the execution tree with segment information."""
     if node.segment_id != "root":
         prefix = "└── " if last else "├── "
@@ -168,7 +168,7 @@ def print_tree(node: ExecutionNode, indent: str = "", last: bool = True):
         print_tree(child, new_indent, is_last)
 
 
-def get_execution_order(root: ExecutionNode) -> List[ExecutionNode]:
+def get_execution_order(root: ExecutionSegment) -> List[ExecutionSegment]:
     """
     Get breadth-first execution order for the tree.
     
@@ -202,7 +202,7 @@ def get_execution_order(root: ExecutionNode) -> List[ExecutionNode]:
     return order
 
 
-def get_tree_stats(root: ExecutionNode) -> Dict[str, Any]:
+def get_tree_stats(root: ExecutionSegment) -> Dict[str, Any]:
     """Get statistics about the execution tree."""
     leaf_count = count_leaves(root)
     node_count = count_nodes(root)
@@ -210,7 +210,7 @@ def get_tree_stats(root: ExecutionNode) -> Dict[str, Any]:
     # Calculate depth
     max_depth = 0
     
-    def calculate_depth(node: ExecutionNode, depth: int = 0):
+    def calculate_depth(node: ExecutionSegment, depth: int = 0):
         nonlocal max_depth
         if node.segment_id != "root":
             max_depth = max(max_depth, depth)
@@ -222,7 +222,7 @@ def get_tree_stats(root: ExecutionNode) -> Dict[str, Any]:
     # Count total steps
     total_steps = 0
     
-    def count_steps(node: ExecutionNode):
+    def count_steps(node: ExecutionSegment):
         nonlocal total_steps
         total_steps += len(node.segment_steps)
         for child in node.children.values():

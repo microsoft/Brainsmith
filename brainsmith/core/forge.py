@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .blueprint_parser import BlueprintParser
-from .execution_tree import ExecutionNode, get_tree_stats
+from .tree_builder import TreeBuilder
+from .execution_tree import ExecutionSegment, get_tree_stats
 from .interfaces import run_exploration
 
 logger = logging.getLogger(__name__)
@@ -60,9 +61,13 @@ def forge(model_path: str, blueprint_path: str, output_dir: str = None):
     logger.info(f"  Blueprint: {blueprint_path}")
     logger.info(f"  Output: {output_dir}")
     
-    # Parse blueprint and build tree
+    # Parse blueprint
     parser = BlueprintParser()
-    design_space, tree, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
+    design_space, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
+    
+    # Build execution tree
+    tree_builder = TreeBuilder()
+    tree = tree_builder.build_tree(design_space, forge_config)
     
     logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")

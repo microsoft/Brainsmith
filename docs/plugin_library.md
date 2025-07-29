@@ -10,9 +10,9 @@ The plugin system is the backbone of BrainSmith's extensibility. It allows devel
 
 ### 1. Transforms
 
-Transforms an ONNX model as input, apply specific modifications, and return the transformed model along with a flag indicating whether any changes were made. Transforms can range from simple graph optimizations (like constant folding) to complex pattern matching and replacement operations (like converting high-level operations into hardware-friendly primitives). They form the core of Brainsmith's ability to adapt models for FPGA deployment by progressively lowering high-level operations into hardware-implementable forms.
-
 **Purpose**: Modify ONNX graphs for optimization, hardware mapping, or preprocessing
+
+Transforms an ONNX model as input, apply specific modifications, and return the transformed model along with a flag indicating whether any changes were made. Transforms can range from simple graph optimizations (like constant folding) to complex pattern matching and replacement operations (like converting high-level operations into hardware-friendly primitives). They form the core of Brainsmith's ability to adapt models for FPGA deployment by progressively lowering high-level operations into hardware-implementable forms.
 
 **Interface**:
 ```python
@@ -47,9 +47,9 @@ class ExpandNorms(Transformation):
 
 ### 2. Build Steps
 
-Build steps are higher-level orchestrators that coordinate multiple transforms and other operations to achieve specific compilation goals. While transforms focus on individual graph modifications, steps represent logical stages in the compilation pipeline. A step might apply several transforms in sequence, perform validation checks, or prepare the model for subsequent processing stages. The brainsmith compiler constructs an execution tree of steps based on the input blueprint.
-
 **Purpose**: Define reusable sequences of operations in the compilation flow
+
+Build steps are higher-level orchestrators that coordinate multiple transforms and other operations to achieve specific compilation goals. While transforms focus on individual graph modifications, steps represent logical stages in the compilation pipeline. A step might apply several transforms in sequence, perform validation checks, or prepare the model for subsequent processing stages. The brainsmith compiler constructs an execution tree of steps based on the input blueprint.
 
 **Interface**:
 ```python
@@ -84,11 +84,11 @@ def qonnx_to_finn_step(model, cfg):
 
 ### 3. Kernels
 
+**Purpose**: Define custom hardware operators with specific attributes and behavior
+
 Kernels are hardware implementations of neural network operations, and are composed of a variety of files (as described in kernels documentation). The head of each kernel is the HWCustomOp, a custom ONNX operator that models the behavior and resource requirements of FPGA-specific implementations.
 
-TAFK TODO: Scope description based on Kernel Integrator timeline.
-
-**Purpose**: Define custom hardware operators with specific attributes and behavior
+***TAFK TODO: Scope description based on Kernel Integrator timeline.***
 
 **Important Note**: While only the HWCustomOp class is required for kernel registration, a fully functional kernel also requires an associated kernel inference transform for pattern matching ONNX operations and converting them to the kernel's HWCustomOp.
 
@@ -126,9 +126,9 @@ class LayerNorm(HWCustomOp):
 
 ### 4. Backends
 
-Backends separate the logical description of hardware operations (kernels) from their physical implementation (generated code). This separation allows multiple implementation strategies for the same kernel - for instance, different backends might optimize for latency, throughput, or resource usage. Backends must understand both the kernel's semantics and the target synthesis tool's requirements to generate efficient, correct code.
-
 **Purpose**: Generate synthesizable code (C++ for HLS, Verilog for RTL) from kernel specifications
+
+Backends separate the logical description of hardware operations (kernels) from their physical implementation (generated code). This separation allows multiple implementation strategies for the same kernel - for instance, different backends might optimize for latency, throughput, or resource usage. Backends must understand both the kernel's semantics and the target synthesis tool's requirements to generate efficient, correct code.
 
 **Important Note**: While only the backend class is required for registration, a fully functional backend also requires:
 - Associated RTL or HLS source implementation files
@@ -222,9 +222,7 @@ finn_transforms = [t for t in list_transforms() if t.startswith("finn:")]
 
 ### Kernel Inference Transforms
 
-Kernel inference transforms are a special category that bridge standard ONNX operations and custom hardware kernels. They analyze the graph to find patterns that can be implemented using specific kernels, then replace those patterns with kernel instances. This pattern matching can be simple (one-to-one operation replacement) or complex (identifying multi-operation patterns that map to a single kernel).
-
-These transforms are essential for kernel functionality because kernels themselves don't specify how to identify applicable operations in a graph. The inference transform encodes the mapping logic, including any constraints on tensor shapes, data types, or operation attributes. Without an inference transform, a kernel definition alone cannot be applied to real models.
+Kernel inference transforms are a special category that bridge standard ONNX operations and custom hardware kernels. They analyze the graph to find patterns that can be implemented using specific kernels, then replace those patterns with kernel instances.
 
 ```python
 from brainsmith.core.plugins import kernel_inference

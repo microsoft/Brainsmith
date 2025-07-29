@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Arete Plugin System
+Plugin System
 """
 from .registry import (
     get_registry, get_transform, get_kernel, get_backend, get_step,
@@ -17,7 +17,6 @@ from .registry import (
 from . import framework_adapters
 
 # Import BrainSmith modules to trigger registrations
-# Arete: Fail fast on missing components - no silent failures
 import brainsmith.transforms
 import brainsmith.kernels  
 import brainsmith.steps
@@ -29,7 +28,6 @@ __all__ = [
     "get_kernel", 
     "get_backend",
     "get_step",
-    
     
     # Decorators
     "transform",

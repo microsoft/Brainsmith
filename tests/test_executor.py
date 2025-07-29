@@ -6,7 +6,7 @@
 import pytest
 import tempfile
 from pathlib import Path
-from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.execution_tree import ExecutionSegment
 from brainsmith.core.explorer.executor import Executor
 from brainsmith.core.explorer.finn_adapter import FINNAdapter
 from brainsmith.core.explorer.types import ExecutionError
@@ -40,7 +40,7 @@ class TestExecutor:
     def test_tree_traversal_order(self):
         """Test depth-first traversal order."""
         # Build test tree
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         child1 = root.add_child("branch1", [{"name": "step2"}])
         child2 = root.add_child("branch2", [{"name": "step3"}])
         grandchild = child1.add_child("leaf", [{"name": "step4"}])
@@ -83,7 +83,7 @@ class TestExecutor:
     
     def test_fail_fast_mode(self):
         """Test fail-fast stops execution."""
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         child1 = root.add_child("child1", [{"name": "step2"}])
         child2 = root.add_child("child2", [{"name": "step3"}])
         
@@ -120,7 +120,7 @@ class TestExecutor:
     
     def test_skip_on_failure(self):
         """Test descendants are skipped on failure."""
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         parent = root.add_child("parent", [{"name": "step2"}])
         child = parent.add_child("child", [{"name": "step3"}])
         
@@ -163,7 +163,7 @@ class TestExecutor:
     
     def test_caching_behavior(self):
         """Test that existing outputs are cached."""
-        root = ExecutionNode(segment_steps=[{"name": "step1"}])
+        root = ExecutionSegment(segment_steps=[{"name": "step1"}])
         child = root.add_child("child", [{"name": "step2"}])
         
         with tempfile.TemporaryDirectory() as tmpdir:

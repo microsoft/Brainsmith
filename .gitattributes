@@ -1,130 +1,213 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
-# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
-
-# Handle line endings automatically for files detected as text and leave all files detected as binary untouched
 # Auto detect text files and perform LF normalization
 * text=auto
 
-### git
-.gitattributes      text export-ignore
-.gitignore          text export-ignore
-.gitmodules         text export-ignore
-.gitkeep            text export-ignore
+# Programming Languages
+*.py     text diff=python
+*.pyw    text diff=python
+*.pyx    text diff=python
+*.pxd    text diff=python
+*.pxi    text diff=python
 
-### Console Scripts
-*.bat               text eol=crlf
-*.cmd               text eol=crlf
-*.ps1               text eol=crlf
-*.csh               text eol=lf
-*.sh                text eol=lf diff=bash
-*.bash              text eol=lf diff=bash
-*.bats              text eol=lf diff=bash
-*.tcl               text
-*.awk               text eol=lf
-*.m4                text eol=lf
-*.py                text        diff=python
-*.conf              text
-*.pl                text        diff=perl
-*.pm                text        diff=perl
+# C/C++ Source
+*.c      text diff=cpp
+*.cc     text diff=cpp
+*.cxx    text diff=cpp
+*.cpp    text diff=cpp
+*.c++    text diff=cpp
+*.h      text diff=cpp
+*.hh     text diff=cpp
+*.hpp    text diff=cpp
+*.hxx    text diff=cpp
+*.h++    text diff=cpp
 
-### C C++ files
-*.cmake             text
-*.makefile          text
-*.mk                text
-CmakeLists.txt      text
-Makefile            text
+# HDL Files
+*.v      text
+*.sv     text
+*.vhd    text
+*.vhdl   text
 
-*.c                 text        diff=cpp
-*.cc                text        diff=cpp
-*.cpp               text        diff=cpp
-*.cxx               text        diff=cpp
-*.h                 text        diff=cpp
-*.hh                text        diff=cpp
-*.hpp               text        diff=cpp
+# Scripts
+*.sh     text eol=lf
+*.bash   text eol=lf
+*.tcl    text
+*.xdc    text
 
-*.a                 binary
-*.dat               text
-*.la                binary
-*.lib               binary
-*.o                 binary
-*.obj               binary
-*.out               binary
-*.so                binary
+# Web/Documentation
+*.js     text
+*.html   text diff=html
+*.htm    text diff=html
+*.css    text diff=css
+*.md     text diff=markdown
+*.rst    text
 
-#### HDL
-*.v                 text
-*.f                 text
-*.vh                text
-*.sv                text
-*.svh               text
-*.opt               text
+# Data Files
+*.json   text
+*.xml    text
+*.csv    text
+*.txt    text
+*.ini    text
+*.cfg    text
+*.conf   text
 
-### Vivado files
-*.xdc               text
-*.xcf               text
-*.sdc               text
-*.xpr               text
-*.xci               text
-*.do                text
-*.mem               -binary
+# YAML
+*.yml    text
+*.yaml   text
 
-### Documents
-README              text
-*.md                text diff=markdown
-*.markdown          text diff=markdown
-*.txt               text
-*.csv               text eol=crlf
-*.rst               text
-*.list              text
-*.json              text
+# Templates
+*.j2        text
+*.template  text
 
-# Text files where line endings should be preserved
-*.patch             -text
+# Jupyter Notebooks
+*.ipynb  text eol=lf
 
-### Graphics
-*.png               text
-*.jpg               text
-*.jpeg              binary diff=exif
-*.gif               binary diff=exif
-*.svg               text
+# Makefiles
+Makefile    text
+makefile    text
+*.mk        text
+*.make      text
 
-### Office Documents
-### meta
+# Docker
+Dockerfile  text
+.dockerignore text
 
-### These files are binary and should be left untouched
-### (binary is a macro for -text -diff)
+# Git Configuration
+.gitignore   text
+.gitmodules  text
+.gitattributes text
 
-*.pdf  -binary
-*.ps   -binary
-*.xml  -binary
+# Editor configs
+.editorconfig text
 
-# Documents
-*.pdi   -binary
+# Requirements files
+requirements.txt text
+requirements-*.txt text
+setup.py    text
+setup.cfg   text
+pyproject.toml text
 
-*.pdf   -binary
-*.PDF   -binary
-*.doc   -binary
-*.dot   -binary
-*.DOT   -binary
-*.DOC   -binary
-*.docx  -binary
-*.xsl   -binary
-*.xslx  -binary
-*.gz    -binary
-*.tgz   -binary
-*.bz2   -binary
-*.tar   -binary
-*.zip   -binary
-*.rar   -binary
-*.7z    -binary
+# Binary Files
+*.pyc    binary
+*.pyo    binary
+*.pyd    binary
+*.so     binary
+*.dll    binary
+*.dylib  binary
 
+# ML Model Files
+*.pb     binary
+*.pth    binary
+*.pt     binary
+*.onnx   binary
+*.h5     binary
+*.hdf5   binary
+*.pkl    binary
+*.pickle binary
+*.joblib binary
 
-################################################################################
-# RELEASE FILES
-################################################################################
+# Images
+*.jpg    binary
+*.jpeg   binary
+*.png    binary
+*.gif    binary
+*.bmp    binary
+*.tiff   binary
+*.tif    binary
+*.ico    binary
+*.svg    text
 
-# Here we can define what files or directories are excluded from the
-# release zip archive
+# Archives
+*.zip    binary
+*.tar    binary
+*.gz     binary
+*.bz2    binary
+*.7z     binary
+*.xz     binary
 
-# excluded directories
-/.github                    export-ignore
+# Xilinx/FPGA Files
+*.prj    text
+*.xpr    binary
+*.bit    binary
+*.bin    binary
+*.mcs    binary
+*.mem    text
+*.coe    text
+
+# Fonts
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+
+# Audio
+*.mp3    binary
+*.wav    binary
+*.flac   binary
+
+# Video
+*.mp4    binary
+*.avi    binary
+*.mov    binary
+*.mkv    binary
+
+# Office Documents
+*.pdf    binary
+*.doc    binary
+*.docx   binary
+*.xls    binary
+*.xlsx   binary
+*.ppt    binary
+*.pptx   binary
+
+# Compiled Object files
+*.o      binary
+*.obj    binary
+*.a      binary
+*.lib    binary
+*.exe    binary
+*.out    binary
+
+# Package files
+*.egg    binary
+*.whl    binary
+*.deb    binary
+*.rpm    binary
+
+# Database
+*.db     binary
+*.sqlite binary
+
+# Special handling for specific paths
+demos/**/*.sample text
+tests/**/*.txt    text eol=lf
+
+# Vendor/Dependencies - treat as binary to avoid merge conflicts
+deps/**          -text -diff
+vendor/**        -text -diff
+third_party/**   -text -diff
+
+# Build outputs
+build/**         -text -diff
+dist/**          -text -diff
+_build/**        -text -diff
+*.egg-info/**    -text -diff
+
+# IDE specific files
+.idea/**         -text -diff
+.vscode/**       text
+*.swp            binary
+*~               binary
+.DS_Store        binary
+
+# Coverage reports
+.coverage        binary
+*.coverage       binary
+htmlcov/**       -text -diff
+
+# Cache directories
+__pycache__/**   -text -diff
+*.pytest_cache/** -text -diff
+.mypy_cache/**   -text -diff
+.tox/**          -text -diff

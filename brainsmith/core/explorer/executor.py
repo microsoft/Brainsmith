@@ -6,7 +6,7 @@
 import time
 from pathlib import Path
 from typing import Dict, Any, Set
-from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.execution_tree import ExecutionSegment
 from brainsmith.core.plugins import get_step
 from .types import SegmentResult, TreeExecutionResult, ExecutionError
 from .finn_adapter import FINNAdapter
@@ -38,7 +38,7 @@ class Executor:
         self.kernel_selections = kernel_selections or []
         
         # Extract settings from FINN config
-        self.fail_fast = False  # Always fail fast - Arete principle
+        self.fail_fast = False  # TODO: Add more robust tree exit options
         output_products = base_finn_config.get("output_products", ["estimates"])
         # Take first output product as primary target
         self.output_product = output_products[0] if output_products else "estimates"
@@ -65,7 +65,7 @@ class Executor:
     
     def execute(
         self,
-        root: ExecutionNode,
+        root: ExecutionSegment,
         initial_model: Path,
         output_dir: Path
     ) -> TreeExecutionResult:
@@ -129,7 +129,7 @@ class Executor:
                 result = self._execute_segment(segment, input_model, output_dir)
                 results[segment.segment_id] = result
             except ExecutionError as e:
-                # Arete: Handle execution errors properly
+                # Handle execution errors properly
                 print(f"✗ Failed: {segment.segment_id}")
                 print(f"  Error: {str(e)}")
                 if self.fail_fast:
@@ -187,7 +187,7 @@ class Executor:
     
     def _execute_segment(
         self,
-        segment: ExecutionNode,
+        segment: ExecutionSegment,
         input_model: Path,
         base_output_dir: Path
     ) -> SegmentResult:
@@ -260,13 +260,13 @@ class Executor:
             # Re-raise our own errors
             raise
         except Exception as e:
-            # Arete: Wrap external errors with context but preserve stack trace
+            # Wrap external errors with context but preserve stack trace
             print(f"✗ Failed: {segment.segment_id}")
             raise ExecutionError(
                 f"Segment '{segment.segment_id}' build failed: {str(e)}"
             ) from e
     
-    def _make_finn_config(self, segment: ExecutionNode, output_dir: Path) -> Dict[str, Any]:
+    def _make_finn_config(self, segment: ExecutionSegment, output_dir: Path) -> Dict[str, Any]:
         """Create FINN configuration for segment.
         
         Args:
@@ -313,7 +313,7 @@ class Executor:
         config["steps"] = steps
         return config
     
-    def _mark_descendants_skipped(self, segment: ExecutionNode, skipped: Set[str]) -> None:
+    def _mark_descendants_skipped(self, segment: ExecutionSegment, skipped: Set[str]) -> None:
         """Mark all descendants as skipped."""
         for child in segment.children.values():
             skipped.add(child.segment_id)

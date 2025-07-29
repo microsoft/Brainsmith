@@ -10,13 +10,13 @@ import json
 import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.execution_tree import ExecutionSegment
 from .types import SegmentResult, TreeExecutionResult
 
 
-def serialize_tree(root: ExecutionNode) -> str:
+def serialize_tree(root: ExecutionSegment) -> str:
     """Serialize execution tree to JSON."""
-    def node_to_dict(node: ExecutionNode) -> Dict[str, Any]:
+    def node_to_dict(node: ExecutionSegment) -> Dict[str, Any]:
         # Serialize steps, handling kernel_backends specially
         serialized_steps = []
         for step in node.segment_steps:
@@ -68,7 +68,7 @@ def serialize_results(result: TreeExecutionResult) -> str:
 
 def share_artifacts_at_branch(
     parent_result: SegmentResult,
-    child_segments: List[ExecutionNode],
+    child_segments: List[ExecutionSegment],
     base_output_dir: Path
 ) -> None:
     """

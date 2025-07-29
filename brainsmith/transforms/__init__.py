@@ -26,12 +26,4 @@ for loader, module_name, is_pkg in pkgutil.walk_packages(__path__, __name__ + '.
         import logging
         logging.getLogger(__name__).warning(f"Failed to import transform module {module_name}: {e}")
 
-# Commented out catagories don't have any transforms yet
-__all__ = [
-    # 'pre_proc',
-    'cleanup',
-    # 'topology_opt',
-    'kernel_opt', 
-    # 'dataflow_opt',
-    'post_proc'
-]
+# All transforms are registered via decorators and discovered through the plugin system

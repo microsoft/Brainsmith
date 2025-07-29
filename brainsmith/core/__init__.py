@@ -11,7 +11,7 @@ This package implements the DSE architecture for FPGA accelerator design.
 from .forge import forge
 
 # Internal APIs - needed by other parts of brainsmith
-from .execution_tree import ExecutionNode, print_tree, get_tree_stats
+from .execution_tree import ExecutionSegment, print_tree, get_tree_stats
 from .design_space import DesignSpace
 from .config import ForgeConfig
 from .blueprint_parser import BlueprintParser

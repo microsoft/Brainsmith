@@ -5,7 +5,7 @@
 
 from pathlib import Path
 from typing import Dict, Any, Union
-from brainsmith.core.execution_tree import ExecutionNode
+from brainsmith.core.execution_tree import ExecutionSegment
 from .types import TreeExecutionResult
 from .executor import Executor
 from .finn_adapter import FINNAdapter
@@ -13,7 +13,7 @@ from .utils import serialize_tree, serialize_results
 
 
 def explore_execution_tree(
-    tree: ExecutionNode,
+    tree: ExecutionSegment,
     model_path: Union[str, Path],
     output_dir: Union[str, Path],
     forge_config,

@@ -34,10 +34,7 @@ class FINNAdapter:
         self._check_finn_dependencies()
     
     def _check_finn_dependencies(self) -> None:
-        """Check all FINN dependencies are available.
-        
-        Arete: Fail fast with clear error messages.
-        """
+        """Check all FINN dependencies are available."""
         missing = []
         
         # Check core FINN modules

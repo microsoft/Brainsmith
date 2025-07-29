@@ -12,23 +12,33 @@ echo "==================================="
 # Change to demo directory
 cd "$(dirname "$0")/.."
 
+# Clean up any existing quicktest build directory
+if [ -d "../../build/bert/quicktest" ]; then
+    echo "Removing existing quicktest build directory..."
+    rm -rf ../../build/bert/quicktest
+fi
+
 # Generate folding config
 echo "Generating folding configuration..."
 python gen_folding_config.py \
-    --simd 12 \
-    --pe 8 \
+    --simd 4 \
+    --pe 4 \
     --num_layers 1 \
     -t 1 \
-    -o ./configs/l1_simd12_pe8.json
+    -o ./configs/quicktest_folding.json
 
 # Run BERT demo
 echo "Running BERT demo with 1 layer..."
 python bert_demo.py \
     -o quicktest \
-    -n 12 \
+    -n 4 \
     -l 1 \
-    -z 384 \
-    -i 1536 \
-    -p ./configs/l1_simd12_pe8.json
+    -z 64 \
+    -i 256 \
+    -b 4 \
+    -q 32 \
+    -f 1 \
+    -c 3.0 \
+    -p ./configs/quicktest_folding.json
 
 echo "Quick test completed!"

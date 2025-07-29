@@ -16,7 +16,6 @@ from dataclasses import dataclass
 
 from .design_space import DesignSpace
 from .config import ForgeConfig
-from .execution_tree import ExecutionNode
 from .plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
 
 # Type definitions
@@ -51,15 +50,15 @@ class StepOperation:
 class BlueprintParser:
     """Parse blueprint YAML into DesignSpace with resolved plugins."""
 
-    def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ExecutionNode, ForgeConfig]:
+    def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ForgeConfig]:
         """
-        Parse blueprint YAML and return DesignSpace and ExecutionNode root.
+        Parse blueprint YAML and return DesignSpace and ForgeConfig.
         Steps:
         1. Load blueprint YAML (with inheritance)
         2. Extract global config and FINN mappings
         3. Parse steps and kernels
         4. Validate required fields
-        5. Build DesignSpace and execution tree
+        5. Build DesignSpace
         """
         blueprint_data, parent_data = self._load_with_inheritance(blueprint_path, return_parent=True)
         forge_config = self._extract_config_and_mappings(blueprint_data)
@@ -88,8 +87,7 @@ class BlueprintParser:
             max_combinations=max_combinations
         )
         design_space.validate_size()
-        tree = self._build_execution_tree(design_space, forge_config)
-        return design_space, tree, forge_config
+        return design_space, forge_config
 
     def _extract_config_and_mappings(self, data: Dict[str, Any]) -> ForgeConfig:
         """Extract ForgeConfig from blueprint data."""
@@ -340,109 +338,3 @@ class BlueprintParser:
             kernel_backends.append((kernel_name, backend_classes))
         
         return kernel_backends
-
-    def _build_execution_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> ExecutionNode:
-        """Build execution tree with unified branching.
-        
-        Steps can now be direct strings or lists for variations.
-        """
-        # Root node starts empty, will accumulate initial steps
-        root = ExecutionNode(
-            segment_steps=[],
-            finn_config=self._extract_finn_config(forge_config)
-        )
-        
-        current_segments = [root]
-        pending_steps = []
-        
-        for step_spec in space.steps:
-            if isinstance(step_spec, list):
-                # Branch point - flush and split
-                self._flush_steps(current_segments, pending_steps)
-                current_segments = self._create_branches(current_segments, step_spec)
-                pending_steps = []
-            else:
-                # Linear step - accumulate
-                if self._is_kernel_inference_step(step_spec, space):
-                    # Special handling for kernel inference
-                    pending_steps.append({
-                        "kernel_backends": space.kernel_backends,
-                        "name": "infer_kernels"
-                    })
-                else:
-                    # Regular step
-                    pending_steps.append({"name": step_spec})
-        
-        # Flush final steps
-        self._flush_steps(current_segments, pending_steps)
-        
-        # Validate tree size
-        self._validate_tree_size(root, space.max_combinations)
-        
-        return root
-    
-    def _is_kernel_inference_step(self, step_spec: str, space: DesignSpace) -> bool:
-        """Check if this is a kernel inference step requiring special handling."""
-        return step_spec == "infer_kernels" and hasattr(space, 'kernel_backends')
-    
-    def _extract_finn_config(self, forge_config: ForgeConfig) -> Dict[str, Any]:
-        """Extract FINN-relevant configuration from ForgeConfig."""
-        # Map ForgeConfig to FINN's expected format
-        output_products = []
-        if forge_config.output == "estimates":
-            output_products = ["estimates"]
-        elif forge_config.output == "rtl":
-            output_products = ["rtl_sim", "ip_gen"]  
-        elif forge_config.output == "bitfile":
-            output_products = ["bitfile"]
-        
-        finn_config = {
-            'output_products': output_products,
-            'board': forge_config.board,
-            'synth_clk_period_ns': forge_config.clock_ns,
-            'save_intermediate_models': forge_config.save_intermediate_models
-        }
-        
-        # Apply any finn_config overrides from blueprint
-        finn_config.update(forge_config.finn_overrides)
-        
-        return finn_config
-    
-    def _flush_steps(self, segments: List[ExecutionNode], steps: List[Dict]) -> None:
-        """Add accumulated steps to segments."""
-        if steps:
-            for segment in segments:
-                segment.segment_steps.extend(steps)
-    
-    def _create_branches(self, segments: List[ExecutionNode], 
-                        branch_options: List[str]) -> List[ExecutionNode]:
-        """Create child segments for branch options.
-        
-        Unified handling for all branches - no special transform stage logic.
-        """
-        new_segments = []
-        
-        for segment in segments:
-            for i, option in enumerate(branch_options):
-                if option == "~":
-                    # Skip branch
-                    branch_id = f"skip_{i}"
-                    child = segment.add_child(branch_id, [])
-                else:
-                    # Regular branch with step
-                    branch_id = option  # Use step name as branch ID
-                    child = segment.add_child(branch_id, [{"name": option}])
-                new_segments.append(child)
-        
-        return new_segments
-    
-    def _validate_tree_size(self, root: ExecutionNode, max_combinations: int) -> None:
-        """Validate tree doesn't exceed maximum combinations."""
-        from .execution_tree import count_leaves
-        
-        leaf_count = count_leaves(root)
-        if leaf_count > max_combinations:
-            raise ValueError(
-                f"Execution tree has {leaf_count} paths, exceeds limit of "
-                f"{max_combinations}. Reduce design space or increase limit."
-            )

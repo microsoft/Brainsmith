@@ -17,9 +17,6 @@ custom_op = {
     'FuncLayerNorm': FuncLayerNorm,
 }
 
-# Export for QONNX discovery
-__all__ = ['custom_op', 'FuncLayerNorm']
-
 # Log operator discovery for debugging
 import logging
 logger = logging.getLogger(__name__)

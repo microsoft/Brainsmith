@@ -158,7 +158,7 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
         builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
         utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
-        builder.append_includes(f"-I{kernel_dir}/hls")
+        builder.append_includes(f"-I{kernel_dir}")
         builder.append_includes(f"-I{utils_dir}")
         builder.append_includes("-I{}/include".format(os.environ["HLS_PATH"]))
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
@@ -224,4 +224,4 @@ class HWSoftmax_hls(HWSoftmax, HLSBackend):
         import os
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
         utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
-        return f"-I{kernel_dir}/hls -I{utils_dir}"
+        return f"-I{kernel_dir} -I{utils_dir}"

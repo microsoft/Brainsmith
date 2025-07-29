@@ -13,5 +13,4 @@ custom_op = {
     'FuncLayerNorm': FuncLayerNorm,
 }
 
-# Export for legacy domain discovery
-__all__ = ['custom_op', 'FuncLayerNorm']
+# Legacy domain discovery uses the custom_op dict above

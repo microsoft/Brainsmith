@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests for the Arete plugin system after heresy extermination."""
+"""Tests for the plugin system after heresy extermination."""
 
 import pytest
 import os
@@ -47,7 +47,7 @@ class TestRegistry:
             registry.get('transform', 'brainsmith:TestTransform')
     
     def test_get_raises_key_error(self):
-        """Test that get() raises KeyError for missing plugins (Arete: fail fast)."""
+        """Test that get() raises KeyError for missing plugins (fail fast)."""
         registry = Registry()
         
         with pytest.raises(KeyError, match="Plugin transform:NonExistent not found"):
@@ -152,7 +152,7 @@ class TestConvenienceFunctions:
     """Test the convenience functions that now raise KeyError."""
     
     def test_get_functions_raise_key_error(self):
-        """Test that get_* functions raise KeyError (Arete: fail fast)."""
+        """Test that get_* functions raise KeyError (fail fast)."""
         with pytest.raises(KeyError):
             get_transform('NonExistent')
         
@@ -167,7 +167,6 @@ class TestConvenienceFunctions:
     
     def test_get_optional_pattern(self):
         """Test the pattern for optional getting (has + get)."""
-        # The Arete way: check existence first, then get
         if has_transform('NonExistent'):
             _ = get_transform('NonExistent')
         
@@ -291,7 +290,7 @@ class TestPluginSystemIntegration:
         assert 'BrainsmithTransform' in list_transforms()
     
     def test_error_message_quality(self):
-        """Test that error messages are helpful (Arete: clear failures)."""
+        """Test that error messages are helpful (clear failures)."""
         try:
             get_transform('NonExistentTransform')
         except KeyError as e:
@@ -314,33 +313,6 @@ class TestPluginSystemIntegration:
         
         assert reg1.get('transform', 'SingletonTest') is SingletonTest
         assert reg2.get('transform', 'SingletonTest') is SingletonTest
-
-
-class TestAretePattern:
-    """Test the Arete pattern for plugin access."""
-    
-    def test_arete_pattern_check_then_get(self):
-        """Test the Arete pattern: check existence, then get."""
-        # Non-existent plugin
-        assert not has_transform('DoesNotExist')
-        with pytest.raises(KeyError):
-            get_transform('DoesNotExist')
-        
-        # Register a plugin
-        @transform(name='AreteTest')
-        class AreteTest:
-            pass
-        
-        # Now it exists
-        assert has_transform('AreteTest')
-        assert get_transform('AreteTest') is AreteTest
-        
-        # This is the pattern that replaces get_*_optional:
-        # Instead of: plugin = get_transform_optional('name')
-        # Use: plugin = get_transform('name') if has_transform('name') else None
-        plugin = get_transform('AreteTest') if has_transform('AreteTest') else None
-        assert plugin is AreteTest
-
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -16,10 +16,11 @@ import pytest
 from typing import List, Type
 
 from brainsmith.core.execution_tree import (
-    ExecutionNode, count_leaves, count_nodes, get_tree_stats, print_tree, get_leaf_segments
+    ExecutionSegment, count_leaves, count_nodes, get_tree_stats, print_tree, get_leaf_segments
 )
-from brainsmith.core.design_space import DesignSpace, GlobalConfig
-from brainsmith.core.blueprint_parser import BlueprintParser
+from brainsmith.core.design_space import DesignSpace
+from brainsmith.core.tree_builder import TreeBuilder
+from brainsmith.core.config import ForgeConfig
 from brainsmith.core.plugins import get_transform, get_backend
 from brainsmith.core.plugins.registry import get_registry
 
@@ -33,8 +34,9 @@ def setup_module():
 
 def build_tree_from_design_space(design_space):
     """Helper to build tree from design space for tests."""
-    parser = BlueprintParser()
-    return parser._build_execution_tree(design_space)
+    builder = TreeBuilder()
+    forge_config = ForgeConfig(clock_ns=5.0)  # Use default config for tests
+    return builder.build_tree(design_space, forge_config)
 
 
 def get_real_transforms():
@@ -76,7 +78,7 @@ def get_real_backends():
 def test_execution_node_deduplication():
     """Test that nodes are created correctly."""
     transforms = get_real_transforms()
-    root = ExecutionNode(segment_steps=[], branch_decision=None)
+    root = ExecutionSegment(segment_steps=[], branch_decision=None)
     
     # Create children with add_child
     child1 = root.add_child("step1_opt1", [{"transforms": [transforms["fold_constants"]]}])
@@ -100,7 +102,6 @@ def test_simple_linear_tree():
         model_path="test.onnx",
         steps=["cleanup", "fold_constants", "infer_kernels"],  # Direct steps, no variations
         kernel_backends=[("MVAU", [backends["mvau_hls"]])],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -128,7 +129,6 @@ def test_simple_optional_stage():
             ["fold_constants", "~"]  # 2 options: do or skip
         ],
         kernel_backends=[],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -148,7 +148,6 @@ def test_branching_tree():
             ["infer_shapes", "~"],  # 2 options (do or skip)
         ],
         kernel_backends=[],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -175,7 +174,6 @@ def test_complex_tree_with_sharing():
             ["round_thresholds", "~"],  # C2 - optional
         ],
         kernel_backends=[],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -197,7 +195,6 @@ def test_empty_stages():
             "fold_constants",  # Normal step
         ],
         kernel_backends=[],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -231,7 +228,6 @@ def test_real_finn_pipeline():
             ("MVAU", [get_backend("MVAU_hls"), get_backend("MVAU_rtl")]),
             ("Thresholding", [get_backend("Thresholding_hls")])
         ],
-        global_config=GlobalConfig()
     )
     
     tree = build_tree_from_design_space(design_space)
@@ -276,7 +272,7 @@ def test_real_finn_pipeline():
 def test_tree_stats():
     """Test tree statistics calculation."""
     # Create a tree with known structure
-    root = ExecutionNode(segment_steps=[], branch_decision=None)
+    root = ExecutionSegment(segment_steps=[], branch_decision=None)
     a = root.add_child("a", [{"name": "step_a"}])
     b1 = a.add_child("b1", [{"name": "step_b", "variant": 1}])
     b2 = a.add_child("b2", [{"name": "step_b", "variant": 2}])
@@ -293,7 +289,7 @@ def test_tree_stats():
 
 def test_segment_id_generation():
     """Test that segment IDs are generated correctly."""
-    root = ExecutionNode(segment_steps=[], branch_decision=None)
+    root = ExecutionSegment(segment_steps=[], branch_decision=None)
     assert root.segment_id == "root"
     
     child1 = root.add_child("opt1", [{"name": "step1"}])

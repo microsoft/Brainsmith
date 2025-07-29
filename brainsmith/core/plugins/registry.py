@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Arete Plugin System - 80 lines replacing 2000 lines of complexity.
+Plugin System
 """
 from typing import Dict, Any, Type, List, Optional, Tuple
 import logging
@@ -34,8 +34,6 @@ class Registry:
     
     def get(self, plugin_type: str, name: str) -> Type:
         """Get plugin by name (with or without framework prefix).
-        
-        Arete: Fail fast - raise KeyError if plugin not found.
         """
         self._ensure_external_plugins()
         
@@ -142,7 +140,7 @@ _registry = Registry()
 def get_registry() -> Registry:
     return _registry
 
-# Convenience functions - Arete: These now raise KeyError if not found
+# Convenience functions
 def get_transform(name: str) -> Type:
     return _registry.get('transform', name)
 
@@ -188,7 +186,7 @@ def list_steps() -> List[str]:
     """List all step names."""
     return list(_registry._plugins['step'].keys())
 
-# Has functions - Arete: These use try/except internally
+# "Has" functions
 def has_transform(name: str) -> bool:
     """Check if transform exists."""
     try:

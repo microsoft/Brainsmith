@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 # Brainsmith Environment Setup Script
 # Handles environment setup that was previously in entrypoint.sh
 

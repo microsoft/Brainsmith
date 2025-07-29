@@ -11,13 +11,13 @@ between forge and explorer modules.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .execution_tree import ExecutionNode
+    from .execution_tree import ExecutionSegment
     from .design_space import DesignSpace, ForgeConfig
     from .explorer.types import TreeExecutionResult
 
 
 def run_exploration(
-    tree: 'ExecutionNode',
+    tree: 'ExecutionSegment',
     model_path: str,
     output_dir: str,
     forge_config: 'ForgeConfig',

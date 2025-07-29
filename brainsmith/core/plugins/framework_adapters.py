@@ -333,8 +333,6 @@ FINN_BACKENDS = [
 def _register_transforms(transforms: List[Tuple[str, str]], framework: str) -> int:
     """
     Register transforms directly with the registry.
-    
-    Arete: Atomic registration - all succeed or all fail.
     """
     from .registry import get_registry
     import os
@@ -390,8 +388,6 @@ def _register_transforms(transforms: List[Tuple[str, str]], framework: str) -> i
 def _register_backends(backends: List[Tuple[str, str, str, str]], framework: str) -> int:
     """
     Register backends directly with the registry.
-    
-    Arete: Atomic registration - all succeed or all fail.
     """
     from .registry import get_registry
     import os
@@ -473,8 +469,6 @@ FINN_STEPS = [
 def _register_steps(steps: List[Tuple[str, str]], framework: str) -> int:
     """
     Register build steps directly with the registry.
-    
-    Arete: Atomic registration - all succeed or all fail.
     """
     from .registry import get_registry
     import os

@@ -2,23 +2,29 @@
 
 Brainsmith is a platform with the goal of fully automated design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
 
-
-## Pre-Release 
+## Pre-Release
 
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**.
 
 ### Pre-release features:
-- Component library - Register hardware designs and algorithms as components in the Brainsmith library for use in DSE
-- Blueprint interface - Define the components, algorithms, and parameters for a single build
-- BERT Demo - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
+- **Component library** - Register hardware designs and algorithms as components in the Brainsmith library for use in DSE
+- **Blueprint interface** - Define the components, algorithms, and parameters for a single build
+- **BERT Demo** - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
 
 ### Planned major features:
-- FINN Kernel backend rework - from RTLBackend/HLSBackend to generic Kernel backend
-- Branching tree execution - Execute multiple builds in parallel, intelligently re-using build artefacts
-- Automated Design Space Exploration (DSE) - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
-- Automated RTL Kernel Integrator - Generate full compiler integration python code from RTL code alon
+- **FINN Kernel backend rework** - from RTLBackend/HLSBackend to generic Kernel backend
+- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artefacts
+- **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
+- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represent +90% of runtime (not including Vivado Synthesize + Implementation). This will be significantly accelerated in future releases.
+- **Automated RTL Kernel Integrator** - Generate full compiler integration python code from RTL code alone
 
 ## Quick Start
+
+### Dependencies
+1. Ubuntu 22.04+
+2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
+3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
 
 ### 1. Set key environment variables
 
@@ -35,7 +41,8 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 
 ```bash
 # Start environment container
-./smithy daemon 
+./smithy daemon
+
 # Attach shell to container 
 ./smithy shell
 # Run example
@@ -45,9 +52,6 @@ make quicktest
 # OR execute one-off command 
 ./smithy exec cd demos/bert && make quicktest
 ```
-
-# TAFK TODO: Add more, link to docs
-
 
 ## License
 
