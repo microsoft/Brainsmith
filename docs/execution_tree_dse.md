@@ -5,7 +5,7 @@ The execution tree organizes how Brainsmith explores different points in the Des
 ## Tiered Design Space Exploration
 
 - **Global Design Space** - All potential dataflow *architectures* to implement a neural network on FPGA
-- **Build Search Space** - All potenital *implementations* of a single dataflow architecture.
+- **Build Search Space** - All potential *implementations* of a single dataflow architecture.
 
 | Local Search Space (FINN)                  | Global Design Space (Brainsmith)             |
 | ------------------------------------------ | -------------------------------------------- |
