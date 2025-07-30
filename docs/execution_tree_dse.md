@@ -11,9 +11,9 @@ The execution tree organizes how Brainsmith explores different points in the Des
 | ------------------------------------------ | -------------------------------------------- |
 | Network optimizations                      | Platform (board, `fpga_part`)                |
 | FIFO sizing                                | Kernel implementations                       |
-| Kernel parallelism (PE, SIMD, Tiling)      | DSE model transforms (streamlining)          |
+| Kernel parallelism                         | DSE model transforms (streamlining)          |
 | Kernel variations (RTL vs HLS, LUT vs DSP) | DSE HW transforms (auto‑folding)             |
-|                                            | HW targets (target `clk`, `mvau_wwidth_max`) |
+|                                            | HW targets (e.g., `target clk`) |
 
 ## What is the Execution Tree?
 
