@@ -17,7 +17,7 @@ The execution tree organizes how Brainsmith explores different points in the Des
 
 ## What is the Execution Tree?
 
-When exploring a model's design space, most search spaces will have a significant amount of overlap, only varying in single kernel or optimization transform. To exploit this, build pipelines with shared beginnings are merged, splitting at a *branch point*. This enables artefact reuse between branching builds, cutting down redundant compute.
+When exploring a model's design space, most search spaces will have a significant amount of overlap, only varying in single kernel or optimization transform. To exploit this, build pipelines with shared beginnings are merged, splitting at a *branch point*. This enables artifact reuse between branching builds, cutting down redundant compute.
 
 ```
                                  ┌→ streamline → fold_constants → finalize
