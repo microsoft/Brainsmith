@@ -16,7 +16,7 @@ Brainsmith is a platform with the goal of fully automated design space explorati
 - **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artefacts
 - **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
 - **FINN Kernel backend rework** - Flexible backends for FINN kernels, currently you can only select between HLS or RTL backend, in the future releases multiple RTL or HLS backends will be supported to allow for more optimization
-- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represent +90% of runtime (not including Vivado Synthesize + Implementation). This will be significantly accelerated in future releases.
+- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represent +90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
 
 ## Quick Start
 
