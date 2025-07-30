@@ -8,15 +8,24 @@ This package implements the DSE architecture for FPGA accelerator design.
 """
 
 # Main API
-from .forge import forge
+from .dse_api import explore_design_space
 
-# Internal APIs - needed by other parts of brainsmith
-from .execution_tree import ExecutionSegment, print_tree, get_tree_stats
-from .design_space import DesignSpace
+# Key components exported for external use
+from .dse import DSESegment, DSETree, SegmentRunner
+from .design import DesignSpace, BlueprintParser, DSETreeBuilder
 from .config import ForgeConfig
-from .blueprint_parser import BlueprintParser
 
 __all__ = [
     # Main API
-    "forge",
+    "explore_design_space",
+    # DSE components
+    "DSESegment",
+    "DSETree", 
+    "SegmentRunner",
+    # Design components
+    "DesignSpace",
+    "BlueprintParser",
+    "DSETreeBuilder",
+    # Config
+    "ForgeConfig",
 ]

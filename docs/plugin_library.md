@@ -1,10 +1,10 @@
-# BrainSmith Plugin System Guide
+# Brainsmith Plugin System Guide
 
-The BrainSmith plugin system provides a unified way to extend the framework with new transformations, hardware kernels, code generators, and build steps. All plugins are managed through a central registry using decorator-based registration, accessible via blueprint or direct look-up.
+The Brainsmith plugin system provides a unified way to extend the framework with new transformations, hardware kernels, code generators, and build steps. All plugins are managed through a central registry using decorator-based registration, accessible via blueprint or direct look-up.
 
 ## Overview
 
-The plugin system is the backbone of BrainSmith's extensibility. It allows developers to register new functionality that can be discovered and used dynamically at runtime. The system is built around a singleton registry that maintains a catalog of all available plugins, organized by type and tagged with metadata for easy discovery. When you register a plugin using decorators, it becomes immediately available to the entire BrainSmith ecosystem - from blueprint configurations to programmatic access.
+The plugin system is the backbone of Brainsmith's extensibility. It allows developers to register new functionality that can be discovered and used dynamically at runtime. The system is built around a singleton registry that maintains a catalog of all available plugins, organized by type and tagged with metadata for easy discovery. When you register a plugin using decorators, it becomes immediately available to the entire Brainsmith ecosystem - from blueprint configurations to programmatic access.
 
 ## Plugin Types
 
@@ -209,7 +209,7 @@ kernel_transforms = get_transforms_by_metadata(kernel="LayerNorm")
 
 ### Framework Plugins
 
-BrainSmith integrates plugins from external frameworks like FINN and QONNX, making their transformations and kernels available through the same unified interface. This is currently a highly manual and fragile process on the backend, and will be refactored before release.
+Brainsmith integrates plugins from external frameworks like FINN and QONNX, making their transformations and kernels available through the same unified interface. This is currently a highly manual and fragile process on the backend, and will be refactored before release.
 
 ```python
 # Both work if "MVAU" is unique

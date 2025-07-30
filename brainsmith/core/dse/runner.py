@@ -1,52 +1,53 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unified executor for segment-based execution trees."""
+"""DSE segment runner for executing segment builds."""
 
 import time
 from pathlib import Path
 from typing import Dict, Any, Set
-from brainsmith.core.execution_tree import ExecutionSegment
+from brainsmith.core.dse.segment import DSESegment
+from brainsmith.core.dse.tree import DSETree
 from brainsmith.core.plugins import get_step
 from .types import SegmentResult, TreeExecutionResult, ExecutionError
-from .finn_adapter import FINNAdapter
+from .finn_runner import FINNRunner
 from .utils import share_artifacts_at_branch
 
 
-class Executor:
-    """Unified executor handling both tree traversal and segment execution.
+class SegmentRunner:
+    """Runs DSE segments using FINN.
     
-    Combines the functionality of TreeExecutor and SegmentExecutor into
-    a single, streamlined class that uses FINNAdapter for all FINN interactions.
+    Handles both tree traversal and individual segment execution
+    using FINNRunner for all FINN interactions.
     """
     
     def __init__(
         self,
-        finn_adapter: FINNAdapter,
-        base_finn_config: Dict[str, Any],
+        finn_runner: FINNRunner,
+        base_config: Dict[str, Any],
         kernel_selections: list = None
     ) -> None:
-        """Initialize executor.
+        """Initialize runner.
         
         Args:
-            finn_adapter: Adapter for FINN-specific operations
-            base_finn_config: FINN configuration from blueprint
+            finn_runner: Runner for FINN-specific operations
+            base_config: FINN configuration from blueprint
             kernel_selections: Optional list of (kernel, backend) tuples
         """
-        self.finn_adapter = finn_adapter
-        self.base_finn_config = base_finn_config
+        self.finn_runner = finn_runner
+        self.base_config = base_config
         self.kernel_selections = kernel_selections or []
         
         # Extract settings from FINN config
         self.fail_fast = False  # TODO: Add more robust tree exit options
-        output_products = base_finn_config.get("output_products", ["estimates"])
+        output_products = base_config.get("output_products", ["estimates"])
         # Take first output product as primary target
         self.output_product = output_products[0] if output_products else "estimates"
         
         # Validate required FINN config fields
-        if "synth_clk_period_ns" not in base_finn_config:
+        if "synth_clk_period_ns" not in base_config:
             raise ValueError("finn_config must specify synth_clk_period_ns")
-        if "board" not in base_finn_config:
+        if "board" not in base_config:
             raise ValueError("finn_config must specify board")
         
         # Map output products to FINN types
@@ -63,16 +64,16 @@ class Executor:
             ]
         }
     
-    def execute(
+    def run_tree(
         self,
-        root: ExecutionSegment,
+        tree: DSETree,
         initial_model: Path,
         output_dir: Path
     ) -> TreeExecutionResult:
-        """Execute all segments depth-first.
+        """Run all segments in the DSE tree.
         
         Args:
-            root: Root node of execution tree
+            tree: DSE tree to execute
             initial_model: Path to initial ONNX model
             output_dir: Base output directory
             
@@ -90,7 +91,7 @@ class Executor:
         start_time = time.time()
         
         # Use a stack for cleaner iteration
-        stack = [(root, initial_model, 0)]
+        stack = [(tree.root, initial_model, 0)]
         
         while stack:
             segment, input_model, depth = stack.pop()
@@ -110,7 +111,7 @@ class Executor:
             print(f"{indent}→ {segment.segment_id}")
             
             # Skip empty segments (e.g., root with immediate branches)
-            if not segment.segment_steps:
+            if not segment.transforms:
                 print(f"{indent}  (empty segment, passing through)")
                 # Create a pass-through result
                 results[segment.segment_id] = SegmentResult(
@@ -126,7 +127,7 @@ class Executor:
                 continue
             
             try:
-                result = self._execute_segment(segment, input_model, output_dir)
+                result = self.run_segment(segment, input_model, output_dir)
                 results[segment.segment_id] = result
             except ExecutionError as e:
                 # Handle execution errors properly
@@ -185,13 +186,13 @@ class Executor:
         
         return result
     
-    def _execute_segment(
+    def run_segment(
         self,
-        segment: ExecutionSegment,
+        segment: DSESegment,
         input_model: Path,
         base_output_dir: Path
     ) -> SegmentResult:
-        """Execute FINN build for one segment.
+        """Run a single DSE segment.
         
         Args:
             segment: Segment to execute
@@ -206,7 +207,6 @@ class Executor:
         safe_name = segment.segment_id.replace("/", "_")
         output_model = segment_dir / f"{safe_name}_output.onnx"
         
-        # Simple caching - check if output exists
         if output_model.exists():
             # Verify it's a valid ONNX file before using cache
             try:
@@ -233,18 +233,18 @@ class Executor:
         # Prepare directory and model
         segment_dir.mkdir(parents=True, exist_ok=True)
         segment_input = segment_dir / "input.onnx"
-        self.finn_adapter.prepare_model(input_model, segment_input)
+        self.finn_runner.prepare_model(input_model, segment_input)
         
         # Execute build
         start_time = time.time()
         
         try:
-            # Use adapter for clean FINN interaction
-            final_model = self.finn_adapter.build(segment_input, finn_config, segment_dir)
+            # Use runner for clean FINN interaction
+            final_model = self.finn_runner.build(segment_input, finn_config, segment_dir)
             
             if final_model:
                 # Copy to expected location
-                self.finn_adapter.prepare_model(final_model, output_model)
+                self.finn_runner.prepare_model(final_model, output_model)
                 print(f"✓ Completed: {segment.segment_id}")
                 return SegmentResult(
                     success=True,
@@ -266,7 +266,7 @@ class Executor:
                 f"Segment '{segment.segment_id}' build failed: {str(e)}"
             ) from e
     
-    def _make_finn_config(self, segment: ExecutionSegment, output_dir: Path) -> Dict[str, Any]:
+    def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> Dict[str, Any]:
         """Create FINN configuration for segment.
         
         Args:
@@ -276,15 +276,15 @@ class Executor:
         Returns:
             FINN configuration dictionary
         """
-        config = self.base_finn_config.copy()
+        config = self.base_config.copy()
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_map[self.output_product]
         
-        # Extract kernel_selections from segment steps if present
+        # Extract kernel_selections from segment transforms if present
         kernel_selections = []
-        for step in segment.segment_steps:
-            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
-                for kernel_name, backend_classes in step["kernel_backends"]:
+        for transform in segment.transforms:
+            if transform.get("name") == "infer_kernels" and "kernel_backends" in transform:
+                for kernel_name, backend_classes in transform["kernel_backends"]:
                     if backend_classes:
                         backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
                         kernel_selections.append((kernel_name, backend_name))
@@ -292,28 +292,28 @@ class Executor:
         # Add kernel_selections if found in segment or base config
         if kernel_selections:
             config["kernel_selections"] = kernel_selections
-        elif "kernel_selections" in self.base_finn_config:
-            config["kernel_selections"] = self.base_finn_config["kernel_selections"]
+        elif "kernel_selections" in self.base_config:
+            config["kernel_selections"] = self.base_config["kernel_selections"]
         
-        # Process steps - resolve to callable functions
+        # Process transforms - resolve to callable functions
         steps = []
-        for step in segment.segment_steps:
-            if "name" in step:
-                step_name = step["name"]
+        for transform in segment.transforms:
+            if "name" in transform:
+                transform_name = transform["name"]
                 try:
                     # Try to get callable from plugin registry
-                    step_fn = get_step(step_name)
-                    steps.append(step_fn)
+                    transform_fn = get_step(transform_name)
+                    steps.append(transform_fn)
                 except KeyError:
                     # Not in registry, pass as string for FINN's internal lookup
-                    steps.append(step_name)
+                    steps.append(transform_name)
             else:
-                raise ValueError(f"Step missing name: {step}")
+                raise ValueError(f"Transform missing name: {transform}")
         
         config["steps"] = steps
         return config
     
-    def _mark_descendants_skipped(self, segment: ExecutionSegment, skipped: Set[str]) -> None:
+    def _mark_descendants_skipped(self, segment: DSESegment, skipped: Set[str]) -> None:
         """Mark all descendants as skipped."""
         for child in segment.children.values():
             skipped.add(child.segment_id)

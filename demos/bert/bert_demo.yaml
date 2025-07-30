@@ -21,6 +21,7 @@ design_space:
           - "bert_cleanup"
           - "remove_head"
           - "remove_tail"
+          - "generate_reference_io"
 
     - at_end:
         insert: "shell_metadata_handover"

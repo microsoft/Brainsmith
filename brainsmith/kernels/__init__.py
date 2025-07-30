@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-BrainSmith Kernels
+Brainsmith Kernels
 
 Plugin-based hardware kernel implementations.
 """

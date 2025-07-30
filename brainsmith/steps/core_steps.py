@@ -84,7 +84,7 @@ def specialize_layers_step(model, cfg):
 )
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
-    # BrainSmith native transforms
+    # Brainsmith native transforms
     model = apply_transforms(model, [
         'TempShuffleFixer',
         'SetPumpedCompute'

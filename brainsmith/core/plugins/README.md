@@ -1,6 +1,6 @@
-# BrainSmith Plugin System
+# Brainsmith Plugin System
 
-Unified registry for transforms, kernels, backends, and build steps from FINN, QONNX, and BrainSmith.
+Unified registry for transforms, kernels, backends, and build steps from FINN, QONNX, and Brainsmith.
 
 ## Plugin Types
 
@@ -24,7 +24,7 @@ step = get_step('tidy_up')                             # Finds finn:tidy_up
 
 # Use framework prefix to disambiguate or be explicit
 transform = get_transform('qonnx:RemoveIdentityOps')    # QONNX version
-transform = get_transform('RemoveIdentityOps')          # BrainSmith version (default)
+transform = get_transform('RemoveIdentityOps')          # Brainsmith version (default)
 
 # List available plugins
 transforms = list_transforms()  # ['RemoveIdentityOps', 'qonnx:InferShapes', 'finn:Streamline', ...]
@@ -58,7 +58,7 @@ def my_step(model, cfg):
 Plugins are automatically namespaced by framework, but the prefix is optional when names are unique:
 - `InferShapes` or `qonnx:InferShapes` - QONNX transform (unique name)
 - `MVAU` or `finn:MVAU` - FINN kernel (unique name)
-- `RemoveIdentityOps` - BrainSmith version (exists in multiple frameworks)
+- `RemoveIdentityOps` - Brainsmith version (exists in multiple frameworks)
 - `qonnx:RemoveIdentityOps` - QONNX version (explicit prefix required)
 
 ## Advanced Usage

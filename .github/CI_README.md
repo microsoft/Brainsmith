@@ -5,7 +5,7 @@
 ```
 .github/
 ├── actions/          # 8 modular composite actions
-│   ├── build-docker/         # Docker build with verification
+│   ├── build-docker/        # Docker build with verification
 │   ├── check-disk/          # Disk space validation
 │   ├── collect-artifacts/   # Safe artifact collection
 │   ├── docker-cleanup/      # Container & build cleanup
@@ -13,7 +13,7 @@
 │   ├── smithy-exec/         # Command execution with daemon
 │   └── workflow-setup/      # Standard initialization
 └── workflows/        # 2 focused workflows
-    ├── pr-validation.yml     # BERT Single Layer E2E Test
+    ├── pr-validation.yml     # BERT Quicktest
     └── biweekly-tests.yml    # BERT Large Model Test
 ```
 
@@ -24,13 +24,12 @@ Fast validation for pull requests and develop branch pushes.
 
 **Triggers**: Push to `develop`, Pull Requests  
 **Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)  
-**Job**: `bert-single-layer-test` (BERT Single Layer E2E Test)
+**Job**: `bert-quicktest` (BERT Quicktest)
 
 **Steps**:
 1. Checkout repository
 2. Setup workflow (disk check, cleanup, build)
-3. Debug dependency fetching
-4. Run E2E test with artifact collection
+3. Run E2E test with artifact collection using `./demos/bert/scripts/quicktest.sh`
 
 ### Biweekly Tests (`biweekly-tests.yml`)
 Comprehensive testing for large model validation.

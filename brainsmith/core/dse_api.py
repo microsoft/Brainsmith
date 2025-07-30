@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 """
-Forge - End-to-End FPGA Accelerator Synthesis
+DSE API - Design Space Exploration for FPGA Accelerator Synthesis
 
-This module provides the forge API that transforms neural network models
+This module provides the DSE API that transforms neural network models
 into FPGA accelerators through blueprint-driven design space exploration.
 """
 
@@ -13,17 +13,19 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from .blueprint_parser import BlueprintParser
-from .tree_builder import TreeBuilder
-from .execution_tree import ExecutionSegment, get_tree_stats
-from .interfaces import run_exploration
+from .design.parser import BlueprintParser
+from .design.builder import DSETreeBuilder
+from .dse.tree import DSETree
+from .dse.runner import SegmentRunner
+from .dse.finn_runner import FINNRunner
+from .dse.types import TreeExecutionResult
 
 logger = logging.getLogger(__name__)
 
 
-def forge(model_path: str, blueprint_path: str, output_dir: str = None):
+def explore_design_space(model_path: str, blueprint_path: str, output_dir: str = None):
     """
-    Forge an FPGA accelerator from model and blueprint.
+    Explore the design space for an FPGA accelerator.
     
     Transforms a neural network model into an FPGA accelerator through
     blueprint-driven design space exploration and synthesis.
@@ -51,12 +53,12 @@ def forge(model_path: str, blueprint_path: str, output_dir: str = None):
     if output_dir is None:
         build_dir = Path(os.environ.get("BSMITH_BUILD_DIR", "./build"))
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = str(build_dir / f"forge_{timestamp}")
+        output_dir = str(build_dir / f"dse_{timestamp}")
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    logger.info(f"Forging FPGA accelerator:")
+    logger.info(f"Exploring design space for FPGA accelerator:")
     logger.info(f"  Model: {model_path}")
     logger.info(f"  Blueprint: {blueprint_path}")
     logger.info(f"  Output: {output_dir}")
@@ -65,45 +67,46 @@ def forge(model_path: str, blueprint_path: str, output_dir: str = None):
     parser = BlueprintParser()
     design_space, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
     
-    # Build execution tree
-    tree_builder = TreeBuilder()
+    # Build DSE tree
+    tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, forge_config)
     
     logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
     
     # Log tree statistics
-    stats = get_tree_stats(tree)
-    logger.info(f"Execution tree:")
+    stats = tree.get_statistics()
+    logger.info(f"DSE tree:")
     logger.info(f"  - Total paths: {stats['total_paths']:,}")
     logger.info(f"  - Total segments: {stats['total_segments']:,}")
     logger.info(f"  - Segment efficiency: {stats['segment_efficiency']}%")
     
-    # Explore the execution tree
+    # Explore the DSE tree
     logger.info("Starting design space exploration...")
     
-    results = run_exploration(
+    # Create runner and execute
+    finn_runner = FINNRunner()
+    runner = SegmentRunner(finn_runner, tree.root.finn_config)
+    results = runner.run_tree(
         tree=tree,
-        model_path=model_path,
-        output_dir=output_dir,
-        forge_config=forge_config,
-        design_space=design_space
+        initial_model=Path(model_path),
+        output_dir=Path(output_dir)
     )
     
     # Check results
     result_stats = results.stats
     if result_stats['successful'] == 0:
-        raise RuntimeError(f"Forge failed: No successful builds "
+        raise RuntimeError(f"DSE failed: No successful builds "
                          f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
     
-    logger.info(f"✅ Forge completed successfully!")
+    logger.info(f"✅ Design space exploration completed successfully!")
     logger.info(f"   Successful builds: {result_stats['successful']}/{result_stats['total']}")
     logger.info(f"   Total time: {results.total_time:.2f}s")
     logger.info(f"   Output directory: {output_dir}")
     
     # Attach design space and tree to results for inspection
     results.design_space = design_space
-    results.execution_tree = tree
+    results.dse_tree = tree
     
     return results
 

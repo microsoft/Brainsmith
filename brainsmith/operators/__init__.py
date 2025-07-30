@@ -1,5 +1,5 @@
 """
-BrainSmith Pure QONNX Operators Library
+Brainsmith Pure QONNX Operators Library
 
 Pure QONNX-compatible custom operators (not hardware-specific).
 Hardware-specific operators (HWCustomOps) are now in brainsmith.libraries.kernels.

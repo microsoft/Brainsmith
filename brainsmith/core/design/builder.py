@@ -2,24 +2,25 @@
 # Licensed under the MIT License.
 
 """
-Tree Builder - Constructs ExecutionSegment tree from DesignSpace
+DSE Tree Builder - Constructs DSESegment tree from DesignSpace
 
-This module is responsible for building the segment-based execution tree
+This module is responsible for building the segment-based DSE tree
 from a parsed DesignSpace. Separated from parsing for single responsibility.
 """
 
 from typing import Dict, Any, List
 
-from .execution_tree import ExecutionSegment, count_leaves
-from .design_space import DesignSpace
-from .config import ForgeConfig
+from brainsmith.core.dse.segment import DSESegment
+from brainsmith.core.dse.tree import DSETree
+from .space import DesignSpace
+from brainsmith.core.config import ForgeConfig
 
 
-class TreeBuilder:
-    """Builds execution trees from design spaces."""
+class DSETreeBuilder:
+    """Builds DSE trees from design spaces."""
     
-    def build_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> ExecutionSegment:
-        """Build execution tree with unified branching.
+    def build_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> DSETree:
+        """Build DSE tree with unified branching.
         
         Steps can now be direct strings or lists for variations.
         
@@ -28,14 +29,14 @@ class TreeBuilder:
             forge_config: ForgeConfig with FINN parameters
             
         Returns:
-            Root ExecutionSegment of the built tree
+            DSETree containing the built tree
             
         Raises:
             ValueError: If tree exceeds max_combinations
         """
         # Root node starts empty, will accumulate initial steps
-        root = ExecutionSegment(
-            segment_steps=[],
+        root = DSESegment(
+            transforms=[],
             finn_config=self._extract_finn_config(forge_config)
         )
         
@@ -64,9 +65,10 @@ class TreeBuilder:
         self._flush_steps(current_segments, pending_steps)
         
         # Validate tree size
-        self._validate_tree_size(root, space.max_combinations)
+        tree = DSETree(root)
+        self._validate_tree_size(tree, space.max_combinations)
         
-        return root
+        return tree
     
     def _is_kernel_inference_step(self, step_spec: str, space: DesignSpace) -> bool:
         """Check if this is a kernel inference step requiring special handling."""
@@ -102,19 +104,19 @@ class TreeBuilder:
         
         return finn_config
     
-    def _flush_steps(self, segments: List[ExecutionSegment], steps: List[Dict]) -> None:
+    def _flush_steps(self, segments: List[DSESegment], steps: List[Dict]) -> None:
         """Add accumulated steps to segments.
         
         Args:
-            segments: List of ExecutionSegment segments to update
+            segments: List of DSESegment segments to update
             steps: List of step dictionaries to add
         """
         if steps:
             for segment in segments:
-                segment.segment_steps.extend(steps)
+                segment.transforms.extend(steps)
     
-    def _create_branches(self, segments: List[ExecutionSegment], 
-                        branch_options: List[str]) -> List[ExecutionSegment]:
+    def _create_branches(self, segments: List[DSESegment], 
+                        branch_options: List[str]) -> List[DSESegment]:
         """Create child segments for branch options.
         
         Unified handling for all branches - no special transform stage logic.
@@ -142,17 +144,17 @@ class TreeBuilder:
         
         return new_segments
     
-    def _validate_tree_size(self, root: ExecutionSegment, max_combinations: int) -> None:
+    def _validate_tree_size(self, tree: DSETree, max_combinations: int) -> None:
         """Validate tree doesn't exceed maximum combinations.
         
         Args:
-            root: Root node of the tree
+            tree: DSE tree to validate
             max_combinations: Maximum allowed leaf nodes
             
         Raises:
             ValueError: If tree has too many paths
         """
-        leaf_count = count_leaves(root)
+        leaf_count = tree.count_leaves()
         if leaf_count > max_combinations:
             raise ValueError(
                 f"Execution tree has {leaf_count} paths, exceeds limit of "

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-BrainSmith Transforms
+Brainsmith Transforms
 
 Plugin-based transforms organized by compilation stage.
 """

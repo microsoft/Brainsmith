@@ -46,11 +46,10 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 # Attach shell to container 
 ./smithy shell
 # Run example
-cd demos/bert
-make quicktest
+./demos/bert/scripts/quicktest.sh
 
 # OR execute one-off command 
-./smithy exec cd demos/bert && make quicktest
+./smithy exec ./demos/bert/scripts/quicktest.sh
 ```
 
 ## License

@@ -32,12 +32,14 @@ class Registry:
             self._discovered = True
             
             # 1. External framework plugins (FINN, QONNX)
-            if 'brainsmith.core.plugins.framework_adapters' in sys.modules:
+            try:
                 from . import framework_adapters
                 framework_adapters.ensure_initialized()
+            except ImportError as e:
+                logger.debug(f"Could not import framework_adapters: {e}")
             
-            # 2. BrainSmith plugins
-                modules = ['transforms', 'kernels', 'steps', 'operators']
+            # 2. Brainsmith plugins
+            modules = ['transforms', 'kernels', 'steps', 'operators']
     
             for module in modules:
                 full_name = f'brainsmith.{module}'
@@ -234,3 +236,43 @@ def get_default_backend(kernel: str) -> Optional[str]:
             return name.split(':')[-1]
     backends = list_backends_by_kernel(kernel)
     return backends[0] if backends else None
+
+
+def list_all_steps() -> List[str]:
+    """List all registered steps."""
+    _registry._load_plugins()
+    # Extract just the step names, removing framework prefixes
+    steps = []
+    for key in _registry._plugins['step'].keys():
+        if ':' in key:
+            _, name = key.split(':', 1)
+        else:
+            name = key
+        steps.append(name)
+    return sorted(list(set(steps)))
+
+
+def list_all_kernels() -> Dict[str, List[str]]:
+    """List all kernels and their backends."""
+    _registry._load_plugins()
+    result = {}
+    # Get unique kernel names from backends
+    for backend_key, (cls, metadata) in _registry._plugins['backend'].items():
+        kernel_name = metadata.get('kernel')
+        if kernel_name:
+            if kernel_name not in result:
+                result[kernel_name] = []
+            # Extract backend name from key
+            if ':' in backend_key:
+                _, backend_name = backend_key.split(':', 1)
+            else:
+                backend_name = backend_key
+            # Keep the full backend name with _hls/_rtl suffix
+            if backend_name not in result[kernel_name]:
+                result[kernel_name].append(backend_name)
+    
+    # Sort backends for each kernel
+    for kernel in result:
+        result[kernel] = sorted(result[kernel])
+    
+    return dict(sorted(result.items()))

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-BrainSmith Steps Module
+Brainsmith Steps Module
 
 Auto-imports step modules to trigger @step decorator registrations.
 All step functionality is available through the unified plugin system:

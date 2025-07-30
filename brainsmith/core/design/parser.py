@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 from dataclasses import dataclass
 
-from .design_space import DesignSpace
-from .config import ForgeConfig
-from .plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
+from .space import DesignSpace
+from brainsmith.core.config import ForgeConfig
+from brainsmith.core.plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]
@@ -272,16 +272,10 @@ class BlueprintParser:
         """Check if a step matches the target pattern"""
         if target is None:
             return False
-            
-        # Simple string match
-        if isinstance(step, str) and isinstance(target, str):
+        elif isinstance(step, str) and isinstance(target, str):
             return step == target
-        
-        # List match (for branching steps)
-        if isinstance(step, list) and isinstance(target, list):
+        elif isinstance(step, list) and isinstance(target, list):
             return set(step) == set(target)
-        
-        # No match for mismatched types
         return False
     
     def _validate_spec(self, spec: Union[str, List[str]], registry=None) -> Union[str, List[str]]:

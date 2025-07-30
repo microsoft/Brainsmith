@@ -29,7 +29,7 @@ emit_status() {
     log_info "Status: $status${detail:+ - $detail}"
 }
 
-log_info "Starting BrainSmith entrypoint"
+log_info "Starting Brainsmith entrypoint"
 emit_status "INITIALIZING"
 
 cd $BSMITH_DIR

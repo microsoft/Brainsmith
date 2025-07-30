@@ -42,7 +42,7 @@ RUN apt-get update && \
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN locale-gen "en_US.UTF-8"
 
-# Install pip dependencies for BrainSmith
+# Install pip dependencies for Brainsmith
 COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt
 RUN rm /tmp/requirements.txt

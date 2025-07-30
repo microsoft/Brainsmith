@@ -672,6 +672,5 @@ def ensure_initialized():
         initialize_framework_integrations()
         _initialized = True
 
-# Initialize frameworks on import for immediate availability
-# This is a one-time operation that populates the registry
-ensure_initialized()
+# Frameworks are initialized lazily when first accessed through the registry
+# This avoids slow startup times for CLI tools that don't need all plugins

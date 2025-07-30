@@ -10,14 +10,13 @@ from .registry import (
     list_transforms, list_kernels, list_backends, list_steps,
     has_transform, has_kernel, has_backend, has_step,
     get_transforms_by_metadata, get_kernels_by_metadata,
-    get_backends_by_metadata, get_steps_by_metadata
+    get_backends_by_metadata, get_steps_by_metadata,
+    list_all_steps, list_all_kernels
 )
 
-# Import framework adapters to register external plugins
-from . import framework_adapters
-
+# Framework adapters are loaded lazily when needed to avoid slow startup
 # Plugins are discovered lazily on first access to avoid circular imports
-# See discovery.py for the implementation
+# See registry.py _load_plugins() for the implementation
 
 __all__ = [
     # Registry access
@@ -50,5 +49,9 @@ __all__ = [
     "get_transforms_by_metadata",
     "get_kernels_by_metadata",
     "get_backends_by_metadata",
-    "get_steps_by_metadata"
+    "get_steps_by_metadata",
+    
+    # CLI helpers
+    "list_all_steps",
+    "list_all_kernels"
 ]

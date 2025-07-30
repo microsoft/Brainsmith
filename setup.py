@@ -5,16 +5,15 @@ from setuptools import setup, find_packages
 
 setup(
     name="brainsmith",
-    version="0.0.0",
+    version="0.1.0",
     description="From PyTorch to RTL with no brakes",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Thomas Keller",
     author_email="thomaskeller@microsoft.com",
-    url="https://github.com/microsoft/BrainSmith/",
+    url="https://github.com/microsoft/Brainsmith/",
     packages=find_packages(include=["brainsmith", "brainsmith.*"]),
     install_requires=[
-        # All dependencies from requirements.txt - fail-fast approach
         "bitstring==4.2.3",
         "clize==5.0.1",
         "dataclasses-json==0.5.7",
@@ -50,6 +49,10 @@ setup(
         "Operating System :: POSIX :: Linux",
     ],
     license="MIT",
-    # TODO: Setup HW compilers as entry_points
+    entry_points={
+        'console_scripts': [
+            'forge=brainsmith.cli.forge:main',
+        ],
+    },
     python_requires=">=3.8",
 )

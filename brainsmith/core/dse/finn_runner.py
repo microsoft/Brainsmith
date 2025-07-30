@@ -18,7 +18,7 @@ import importlib.util
 logger = logging.getLogger(__name__)
 
 
-class FINNAdapter:
+class FINNRunner:
     """Adapter for FINN build system.
     
     Isolates all FINN-specific workarounds:
@@ -97,7 +97,7 @@ class FINNAdapter:
             
             # Remove parameters that are not for DataflowBuildConfig
             finn_config = config_dict.copy()
-            finn_config.pop("output_products", None)  # This is handled by generate_outputs
+            finn_config.pop("output_products", None)
             
             # Convert dict to DataflowBuildConfig
             logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
@@ -147,7 +147,6 @@ class FINNAdapter:
         logger.debug(f"ONNX files in {intermediate_dir}: {[f.name for f in onnx_files]}")
         
         # Return the last (most recent) file
-        # This is still imperfect but matches FINN's behavior
         onnx_files.sort(key=lambda p: p.stat().st_mtime)
         return onnx_files[-1]
     
@@ -171,10 +170,8 @@ class FINNAdapter:
             raise RuntimeError(f"Invalid ONNX model at {model_path}: {e}")
     
     def prepare_model(self, source: Path, destination: Path) -> None:
-        """Copy model to build directory.
-        
-        NECESSARY EVIL: FINN modifies input models in-place,
-        so we must copy them to avoid corrupting originals.
+        """
+        Copy model to build directory.
         
         Args:
             source: Source model path

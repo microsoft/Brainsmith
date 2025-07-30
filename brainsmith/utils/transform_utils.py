@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Transform utilities for BrainSmith operations.
+Transform utilities for Brainsmith operations.
 """
 from typing import List, Optional, Any
 import logging
@@ -14,7 +14,7 @@ def apply_transforms(model: Any, transform_names: List[str], debug_path: Optiona
     """Apply a sequence of transforms to a model.
     
     This helper function retrieves and applies transforms in order, following
-    the common pattern used throughout BrainSmith steps.
+    the common pattern used throughout Brainsmith steps.
     
     Args:
         model: The model to transform (typically QONNX ModelWrapper)

@@ -27,7 +27,7 @@ from transformers.utils.fx import symbolic_trace
 import brevitas.nn as qnn
 import brevitas.onnx as bo
 
-import custom_steps  # Import custom steps for BERT
+import custom_steps  # Import custom steps to trigger registration
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -166,12 +166,6 @@ def generate_bert_model(args):
     return model
 
 
-def get_blueprint_path():
-    """Get path to the static blueprint file."""
-    # Use the demo blueprint
-    return Path(__file__).parent / "bert_demo.yaml"
-
-
 def generate_reference_io(model, output_dir):
     """Generate reference input/output for verification.
     
@@ -216,7 +210,6 @@ def run_brainsmith_dse(model, args):
     os.makedirs(model_dir, exist_ok=True)
     
     # Simplify model (matches old hw_compiler.py)
-    print("Simplifying ONNX model...")
     model, check = simplify(model)
     if not check:
         raise RuntimeError("Unable to simplify the Brevitas BERT model")
@@ -230,7 +223,6 @@ def run_brainsmith_dse(model, args):
         print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
     
     # Run cleanup
-    print("Running QONNX cleanup...")
     cleanup(
         in_file=os.path.join(model_dir, "simp.onnx"),
         out_file=os.path.join(args.output_dir, "df_input.onnx")
@@ -244,20 +236,15 @@ def run_brainsmith_dse(model, args):
         os.path.join(args.output_dir, "df_input.onnx"),
         os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
     )
-    print(f"Saved QONNX cleaned model to debug_models/02_after_qonnx_cleanup.onnx")
     
-    # Skip reference I/O generation for now - the model still expects int64 inputs
-    # In a real scenario, this would be handled after the model is converted to FINN-ONNX
-    print("Skipping reference I/O generation (will be handled by build steps)...")
-    
-    # Create dummy reference files for compatibility
-    dummy_input = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
-    dummy_output = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
-    np.save(os.path.join(args.output_dir, "input.npy"), dummy_input)
-    np.save(os.path.join(args.output_dir, "expected_output.npy"), dummy_output)
+    # # Create dummy reference files for compatibility
+    # dummy_input = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
+    # dummy_output = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
+    # np.save(os.path.join(args.output_dir, "input.npy"), dummy_input)
+    # np.save(os.path.join(args.output_dir, "expected_output.npy"), dummy_output)
     
     # Get static blueprint path
-    blueprint_path = get_blueprint_path()
+    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
