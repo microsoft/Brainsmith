@@ -3,17 +3,16 @@
 # Provides utilities for managing persistent Brainsmith containers
 #
 # Key commands:
-#   daemon - Start persistent container in background for development
-#   exec   - Run commands in the container with proper environment
+#   start  - Start persistent container in background for development
 #   shell  - Open interactive shell in running container
 #   clean  - Remove container and build artifacts (use --deep for full reset)
 #
 # Typical workflow:
-#   ./smithy daemon                    # Start container once
-#   ./smithy exec "python script.py"   # Run commands
+#   ./smithy start                     # Start container once
+#   ./smithy "python script.py"        # Run commands
 #   ./smithy shell                     # Interactive development
 #   ./smithy stop                      # Pause work (container persists)
-#   ./smithy daemon                    # Resume quickly
+#   ./smithy start                     # Resume quickly
 #   ./smithy clean --deep              # Full cleanup when needed
 
 RED='\033[0;31m'
@@ -108,11 +107,9 @@ Brainsmith Container Management
 Usage: $0 COMMAND [OPTIONS]
 
 Commands:
-    daemon         Start persistent container in background
-    exec CMD       Execute command in running container
+    start          Start persistent container in background
     shell          Interactive shell in running container
     build          Build Docker image
-    start          Interactive shell (one-time container)
     stop           Stop container
     restart        Stop and start container
     status         Show container status
@@ -122,7 +119,7 @@ Commands:
     logs           Show container logs
 
 Examples:
-    $0 daemon && $0 exec "python script.py"    # Typical workflow
+    $0 start && $0 "python script.py"          # Typical workflow
     $0 shell                                    # Interactive development
     $0 clean                                    # Clean container and build files
     $0 clean --deep                             # Full reset (removes everything)
@@ -468,17 +465,6 @@ create_container() {
     fi
 }
 
-# Build image if needed, create container if needed, open interactive shell
-start_interactive() {
-    # Build image if it doesn't exist or if not using prebuilt
-    if [ "$BSMITH_DOCKER_PREBUILT" = "0" ]; then
-        build_image
-    fi
-
-    # For interactive mode, always create new container with --rm
-    create_container "interactive"
-}
-
 # Build image if needed, create container if needed, start daemon in background
 start_daemon() {
     setup_container_if_needed "daemon"
@@ -520,7 +506,7 @@ show_status() {
 
 exec_in_container() {
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start"
         return 1
     fi
 
@@ -547,7 +533,7 @@ exec_in_container() {
 
 open_shell() {
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 daemon"
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start"
         return 1
     fi
 
@@ -670,14 +656,7 @@ case "${1:-help}" in
         build_image
         ;;
     "start")
-        start_interactive
-        ;;
-    "daemon")
         start_daemon
-        ;;
-    "exec")
-        shift
-        exec_in_container "$@"
         ;;
     "shell")
         open_shell
@@ -706,8 +685,7 @@ case "${1:-help}" in
         show_help
         ;;
     *)
-        recho "Unknown command: $1"
-        show_help
-        exit 1
+        # Default to exec if no recognized command
+        exec_in_container "$@"
         ;;
 esac

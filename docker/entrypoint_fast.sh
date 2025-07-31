@@ -32,7 +32,7 @@ READINESS_MARKER="/tmp/.brainsmith_deps_ready"
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
     # First check if marker exists (fast path)
     if [ ! -f "$READINESS_MARKER" ]; then
-        log_error "Container dependencies not ready. The daemon container may still be initializing."
+        log_error "Container dependencies not ready. The container may still be initializing."
         log_error "Expected marker file: $READINESS_MARKER"
         log_error "Check container logs with: docker logs <container-name>"
         log_error "Or wait for initialization to complete and try again."
@@ -43,7 +43,7 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
     # Since container is ready, dependencies should exist - check for finnxsi directory
     if [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
         log_error "finnxsi directory not found at ${BSMITH_DIR}/deps/finn/finn_xsi"
-        log_error "This suggests dependencies were not fetched properly in daemon mode"
+        log_error "This suggests dependencies were not fetched properly during container initialization"
         exit 1
     fi
 fi

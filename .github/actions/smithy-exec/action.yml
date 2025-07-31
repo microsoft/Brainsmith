@@ -1,5 +1,5 @@
 name: 'Smithy Execute'
-description: 'Execute commands in smithy container with daemon lifecycle management'
+description: 'Execute commands in smithy container with lifecycle management'
 inputs:
   command:
     description: 'Command to execute in the container'
@@ -22,18 +22,18 @@ runs:
         # Make smithy executable
         chmod +x smithy
         
-        # Start smithy daemon
-        echo "Starting smithy daemon..."
-        ./smithy daemon
+        # Start smithy container
+        echo "Starting smithy container..."
+        ./smithy start
         
-        # Wait for daemon to be ready
-        echo "Waiting for daemon to be ready..."
+        # Wait for container to be ready
+        echo "Waiting for container to be ready..."
         sleep 5
         
         # Execute command with timeout
         TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
         
-        if timeout ${TIMEOUT_SECONDS}s ./smithy exec "${{ inputs.command }}"; then
+        if timeout ${TIMEOUT_SECONDS}s ./smithy "${{ inputs.command }}"; then
             echo "✓ Command executed successfully"
             EXIT_CODE=0
         else
@@ -43,8 +43,8 @@ runs:
             EXIT_CODE=1
         fi
         
-        # Always stop smithy daemon
-        echo "Stopping smithy daemon..."
+        # Always stop smithy container
+        echo "Stopping smithy container..."
         ./smithy stop || true
         
         exit $EXIT_CODE

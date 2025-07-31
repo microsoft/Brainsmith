@@ -1,6 +1,6 @@
-# Design Space Exploration
+# Execution Tree and Design Space Exploration
 
-The execution tree organizes how Brainsmith explores different points in the Design Space for a neural network accelerator. Each path through the tree represents different design choices (optimizations, hardware implementations, parallelization).
+The execution tree organizes how Brainsmith explores the design space for neural network accelerators. Each path through the tree represents different design choices (kernel implementations, optimization strategies, parallelization parameters).
 
 ## Tiered Design Space Exploration
 
@@ -15,9 +15,9 @@ The execution tree organizes how Brainsmith explores different points in the Des
 | Kernel variations (RTL vs HLS, LUT vs DSP) | DSE HW transforms (auto‑folding)             |
 |                                            | HW targets (e.g., `target clk`) |
 
-## What is the Execution Tree?
+## Execution Tree Architecture
 
-When exploring a model's design space, most search spaces will have a significant amount of overlap, only varying in single kernel or optimization transform. To exploit this, build pipelines with shared beginnings are merged, splitting at a *branch point*. This enables artifact reuse between branching builds, cutting down redundant compute.
+Design space exploration often involves paths with significant overlap, differing only in specific optimizations or kernel choices. The execution tree exploits this by merging shared pipeline segments and splitting at *branch points*, enabling artifact reuse and reducing redundant computation.
 
 ```
                                  ┌→ streamline → fold_constants → finalize

@@ -1,22 +1,23 @@
 ## Brainsmith
 
-Brainsmith is a platform with the goal of fully automated design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
+Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
 
 ## Pre-Release
 
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**.
 
 ### Pre-release features:
-- **Component library** - Register hardware designs and algorithms as components in the Brainsmith library for use in DSE
-- **Blueprint interface** - Define the components, algorithms, and parameters for a single build
-- **BERT demo** - Example end-to-end demo (PyTorch to stitched-IP RTL accelerator)
+- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
+- **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
+- **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
 
 ### Planned major features:
 - **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
-- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artefacts
+- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artifacts
 - **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
 - **FINN Kernel backend rework** - Flexible backends for FINN kernels, currently you can only select between HLS or RTL backend, in the future releases multiple RTL or HLS backends will be supported to allow for more optimization
-- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represent +90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
+- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represents >90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
 
 ## Quick Start
 
@@ -40,8 +41,8 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 ### 2. Run end-to-end test to validate environment 
 
 ```bash
-# Start environment container
-./smithy daemon
+# Start persistent development container
+./smithy start
 
 # Attach shell to container 
 ./smithy shell
@@ -49,7 +50,7 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 ./demos/bert/scripts/quicktest.sh
 
 # OR execute one-off command 
-./smithy exec ./demos/bert/scripts/quicktest.sh
+./smithy ./demos/bert/scripts/quicktest.sh
 ```
 
 ## License

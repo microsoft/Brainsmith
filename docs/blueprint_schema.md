@@ -1,6 +1,6 @@
 # Blueprint Schema Reference
 
-Blueprint files define the configuration and design space for FPGA accelerator generation using Brainsmith and FINN.
+Blueprints are YAML files that declaratively define the design space for FPGA accelerator generation, including hardware kernels, build steps, and exploration parameters.
 
 ## Schema Structure
 
@@ -169,7 +169,7 @@ steps:
 
 ### Step Operations
 
-Step operations allow you to modify the step list dynamically. This is especially useful with inheritance but can also organize complex pipelines.
+Step operations allow you to modify the step list when inheriting from parent blueprints or organizing complex pipelines.
 
 #### Operation Types
 
@@ -252,7 +252,7 @@ design_space:
 
 1. **Simple fields** (name, clock_ns, etc.) - Child overrides parent
 2. **finn_config** - Deep merged (child fields override parent fields)
-3. **steps** - If child specifies any direct steps, parent steps are replaced entirely. Use operations to modify inherited steps.
+3. **steps** - Parent steps are inherited. Use step operations to modify them. If child specifies direct steps without operations, parent steps are replaced entirely.
 4. **kernels** - Child replaces parent entirely (no merge)
 
 ## Execution Semantics
@@ -288,4 +288,4 @@ To optimize performance, Brainsmith groups sequential steps into segments:
 - Each segment is executed as one FINN build
 - Artifacts are shared at branch points to avoid redundant computation
 
-TAFK TODO: Clarify state of segment-based execution functionality after testing
+**Pre-Release Note**: Segment-based execution is functional but requires further testing and refinement for large design spaces.

@@ -99,6 +99,11 @@ class FINNRunner:
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
             
+            # TODO: Improve FINN/Brainsmith coupling to get output model path directly
+            # For now, we mandate save_intermediate_models=True to ensure we can find
+            # the transformed model that needs to be passed to the next DSE segment
+            finn_config["save_intermediate_models"] = True
+            
             # Convert dict to DataflowBuildConfig
             logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
             config = DataflowBuildConfig(**finn_config)
@@ -126,6 +131,10 @@ class FINNRunner:
     def _discover_output_model(self, build_dir: Path) -> Optional[Path]:
         """Find the actual output model from FINN build.
         
+        Since we mandate save_intermediate_models=True, FINN will save
+        one ONNX file per transform step in the intermediate_models directory.
+        We return the most recent file as the final output.
+        
         Args:
             build_dir: Directory where build was executed
             
@@ -139,14 +148,14 @@ class FINNRunner:
         if not intermediate_dir.exists():
             raise RuntimeError(f"No intermediate_models directory found in {build_dir}")
         
-        # Get all ONNX files
+        # Get all ONNX files from intermediate_models
         onnx_files = list(intermediate_dir.glob("*.onnx"))
         if not onnx_files:
             raise RuntimeError(f"No ONNX files found in {intermediate_dir}")
         
         logger.debug(f"ONNX files in {intermediate_dir}: {[f.name for f in onnx_files]}")
         
-        # Return the last (most recent) file
+        # Return the last (most recent) file - this is the output of the last transform
         onnx_files.sort(key=lambda p: p.stat().st_mtime)
         return onnx_files[-1]
     

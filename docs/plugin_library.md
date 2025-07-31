@@ -4,7 +4,7 @@ The Brainsmith plugin system provides a unified way to extend the framework with
 
 ## Overview
 
-The plugin system is the backbone of Brainsmith's extensibility. It allows developers to register new functionality that can be discovered and used dynamically at runtime. The system is built around a singleton registry that maintains a catalog of all available plugins, organized by type and tagged with metadata for easy discovery. When you register a plugin using decorators, it becomes immediately available to the entire Brainsmith ecosystem - from blueprint configurations to programmatic access.
+The plugin system enables extensibility by allowing developers to register new functionality that can be discovered and used dynamically at runtime. The system uses a singleton registry that maintains a catalog of all available plugins, organized by type and tagged with metadata. Plugins registered via decorators become immediately available throughout Brainsmith.
 
 ## Plugin Types
 
@@ -12,7 +12,7 @@ The plugin system is the backbone of Brainsmith's extensibility. It allows devel
 
 **Purpose**: Modify ONNX graphs for optimization, hardware mapping, or preprocessing
 
-Transforms an ONNX model as input, apply specific modifications, and return the transformed model along with a flag indicating whether any changes were made. Transforms can range from simple graph optimizations (like constant folding) to complex pattern matching and replacement operations (like converting high-level operations into hardware-friendly primitives). They form the core of Brainsmith's ability to adapt models for FPGA deployment by progressively lowering high-level operations into hardware-implementable forms.
+Transforms take an ONNX model as input, apply specific modifications, and return the transformed model along with a flag indicating whether any changes were made. They form the core of Brainsmith's ability to adapt models for FPGA deployment.
 
 **Interface**:
 ```python
@@ -49,7 +49,7 @@ class ExpandNorms(Transformation):
 
 **Purpose**: Define reusable sequences of operations in the compilation flow
 
-Build steps are higher-level orchestrators that coordinate multiple transforms and other operations to achieve specific compilation goals. While transforms focus on individual graph modifications, steps represent logical stages in the compilation pipeline. A step might apply several transforms in sequence, perform validation checks, or prepare the model for subsequent processing stages. The brainsmith compiler constructs an execution tree of steps based on the input blueprint.
+Build steps orchestrate multiple transforms and operations to achieve specific compilation goals. While transforms focus on individual graph modifications, steps represent logical stages in the compilation pipeline. Brainsmith constructs an execution tree of steps based on the blueprint configuration.
 
 **Interface**:
 ```python
@@ -86,9 +86,7 @@ def qonnx_to_finn_step(model, cfg):
 
 **Purpose**: Define custom hardware operators with specific attributes and behavior
 
-Kernels are hardware implementations of neural network operations, and are composed of a variety of files (as described in kernels documentation). The head of each kernel is the HWCustomOp, a custom ONNX operator that models the behavior and resource requirements of FPGA-specific implementations.
-
-***TAFK TODO: Scope description based on Kernel Integrator timeline.***
+Kernels are hardware implementations of neural network operations. The HWCustomOp class serves as the top-level abstraction that models the dataflow behavior and exposes key hardware parameters.
 
 **Important Note**: While only the HWCustomOp class is required for kernel registration, a fully functional kernel also requires an associated kernel inference transform for pattern matching ONNX operations and converting them to the kernel's HWCustomOp.
 
@@ -128,7 +126,7 @@ class LayerNorm(HWCustomOp):
 
 **Purpose**: Generate synthesizable code (C++ for HLS, Verilog for RTL) from kernel specifications
 
-Backends separate the logical description of hardware operations (kernels) from their physical implementation (generated code). This separation allows multiple implementation strategies for the same kernel - for instance, different backends might optimize for latency, throughput, or resource usage. Backends must understand both the kernel's semantics and the target synthesis tool's requirements to generate efficient, correct code.
+Backends translate kernel specifications into synthesizable code. This separation allows multiple implementation strategies for the same kernel - for instance, different backends might optimize for latency, throughput, or resource usage.
 
 **Important Note**: While only the backend class is required for registration, a fully functional backend also requires:
 - Associated RTL or HLS source implementation files
@@ -174,7 +172,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
 ### Getting Plugins
 
-The plugin system provides a straightforward API for retrieving registered plugins. For plugins from external frameworks like FINN or QONNX, you can use either the full namespaced name (e.g., "finn:ConvertBipolarMatMulToXnorPopcount") or just the simple name if it's unique across all frameworks. This flexibility makes it easy to use external plugins while avoiding naming conflicts when necessary.
+The plugin system provides a straightforward API for retrieving registered plugins. For plugins from external frameworks like FINN or QONNX, you can use either the full namespaced name (e.g., "finn:ConvertBipolarMatMulToXnorPopcount") or just the simple name if it's unique.
 
 ```python
 from brainsmith.core.plugins import (
@@ -195,7 +193,7 @@ all_kernels = list_kernels()
 
 ### Finding Plugins by Metadata
 
-Beyond simple name-based lookup, the plugin system supports metadata-based discovery. For example, you might want all transforms that belong to a specific optimization stage, or all kernel inference transforms for a particular kernel. The metadata system makes plugins self-documenting and discoverable.
+The plugin system supports metadata-based discovery. You can find all transforms for a specific optimization stage or all kernel inference transforms for a particular kernel.
 
 ```python
 from brainsmith.core.plugins import get_transforms_by_metadata
@@ -209,7 +207,9 @@ kernel_transforms = get_transforms_by_metadata(kernel="LayerNorm")
 
 ### Framework Plugins
 
-Brainsmith integrates plugins from external frameworks like FINN and QONNX, making their transformations and kernels available through the same unified interface. This is currently a highly manual and fragile process on the backend, and will be refactored before release.
+Brainsmith integrates plugins from external frameworks like FINN and QONNX, making their transformations and kernels available through the same unified interface.
+
+**Pre-Release Note**: Framework plugin integration is currently manual and will be automated in future releases.
 
 ```python
 # Both work if "MVAU" is unique
@@ -222,7 +222,7 @@ finn_transforms = [t for t in list_transforms() if t.startswith("finn:")]
 
 ### Kernel Inference Transforms
 
-Kernel inference transforms are a special category that bridge standard ONNX operations and custom hardware kernels. They analyze the graph to find patterns that can be implemented using specific kernels, then replace those patterns with kernel instances.
+Kernel inference transforms are a special category of transform that bridge standard ONNX operations and custom hardware kernels. They analyze the graph to find patterns that can be implemented using specific kernels, then replace those patterns with kernel instances. These transforms typically reside within their kernel's directory rather than the general transforms folder.
 
 ```python
 from brainsmith.core.plugins import kernel_inference
@@ -235,5 +235,7 @@ class InferMyKernel(Transformation):
     def apply(self, model):
         # Pattern matching and conversion logic
 ```
+
+**Note**: The `kernel_inference` decorator is an alias for the `transform` decorator that automatically tags the transform with kernel metadata for discovery.
 ---
 For more details, see the plugin registry implementation at `brainsmith/core/plugins/registry.py`.

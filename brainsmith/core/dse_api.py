@@ -95,9 +95,18 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
     
     # Check results
     result_stats = results.stats
-    if result_stats['successful'] == 0:
+    
+    # Consider both successful and cached builds as valid outcomes
+    valid_builds = result_stats['successful'] + result_stats['cached']
+    
+    if valid_builds == 0:
         raise RuntimeError(f"DSE failed: No successful builds "
                          f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
+    
+    # Warn if only cached results were used
+    if result_stats['successful'] == 0 and result_stats['cached'] > 0:
+        logger.warning(f"⚠️  All builds used cached results ({result_stats['cached']} cached). "
+                      f"No new builds were executed.")
     
     logger.info(f"✅ Design space exploration completed successfully!")
     logger.info(f"   Successful builds: {result_stats['successful']}/{result_stats['total']}")

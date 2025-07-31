@@ -79,6 +79,18 @@ class DSETree:
             new_indent = indent + extension if node.segment_id != "root" else indent
             self._print_node(child, new_indent, is_last)
     
+    def get_all_segments(self) -> List[DSESegment]:
+        """Get all segments in the tree."""
+        all_segments = []
+        
+        def collect_segments(node: DSESegment):
+            all_segments.append(node)
+            for child in node.children.values():
+                collect_segments(child)
+        
+        collect_segments(self.root)
+        return all_segments
+    
     def get_execution_order(self) -> List[DSESegment]:
         """
         Get breadth-first execution order for the tree.

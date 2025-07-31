@@ -260,12 +260,17 @@ class BlueprintParser:
             steps: Steps to insert (string or list)
             check_skip: If True, also check for "~" in list before extending
         """
-        if isinstance(steps, list) and all(isinstance(s, str) for s in steps):
-            if check_skip and "~" in steps:
-                target_list.append(steps)
-            else:
-                target_list.extend(steps)
+        if isinstance(steps, list):
+            # Handle lists that may contain mixed types (strings and sublists)
+            for step in steps:
+                if isinstance(step, list):
+                    # This is a branch point - append as-is
+                    target_list.append(step)
+                else:
+                    # This is a regular step - append directly
+                    target_list.append(step)
         else:
+            # Single step (string)
             target_list.append(steps)
     
     def _step_matches(self, step: StepSpec, target: Optional[StepSpec]) -> bool:
@@ -278,12 +283,19 @@ class BlueprintParser:
             return set(step) == set(target)
         return False
     
-    def _validate_spec(self, spec: Union[str, List[str]], registry=None) -> Union[str, List[str]]:
+    def _validate_spec(self, spec: Union[str, List[str]], registry=None) -> Union[str, List[Optional[str]]]:
         """Validate a step specification (string or list)."""
         if isinstance(spec, str):
             return self._validate_step(spec)
         elif isinstance(spec, list):
-            return [self._validate_step(opt) for opt in spec]
+            # Handle lists that may contain strings or None/~ for skip
+            validated = []
+            for opt in spec:
+                if isinstance(opt, str) or opt is None:
+                    validated.append(self._validate_step(opt))
+                else:
+                    raise ValueError(f"Invalid option in branch point: {opt}. Expected string or None, got {type(opt)}")
+            return validated
         else:
             raise ValueError(f"Invalid step specification: {spec}")
 
