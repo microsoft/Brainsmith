@@ -28,30 +28,21 @@ start → tidy_up → convert_to_hw →┤
 Steps are collected into *segments* of contiguous, non-branching steps that are run as a single FINN build.
 
 ### Segments
-Groups of FINN transformations that execute together in a single build. Reduces overhead by batching related operations.
+
+Segments group contiguous transformations that execute together in a single FINN build, reducing overhead and enabling efficient caching.
 
 ```python
 @dataclass
-class ExecutionSegment:
-    segment_id: str                    # "root_0_1"
-    steps: List[str]                   # ["Streamline", "ConvertBipolarToXnor"]
-    parent: Optional['ExecutionSegment']
-    children: List['ExecutionSegment']
-    is_branch_point: bool
-    input_artifact: Optional[Path]
-    output_artifact: Optional[Path]
-```
-```python
-def build(self, model_path, output_dir, config_dict):
-    finn_config = DataflowBuildConfig(**config_dict)
-    os.chdir(output_dir)  # FINN requirement
+class DSESegment:
+    transforms: List[Dict[str, Any]]     # Steps to execute
+    branch_choice: Optional[str]         # Which branch was taken
+    parent: Optional['DSESegment']
+    children: Dict[str, 'DSESegment']    # branch_id → child
     
-    model = ModelWrapper(model_path)
-    for step_name in segment.steps:
-        transform = get_step(step_name)
-        model = transform(model, finn_config)
-    
-    return self._discover_output_model(output_dir)
+    @property
+    def segment_id(self) -> str:        # Path-based ID like "root" or "streamline/fold"
+    @property
+    def is_branch_point(self) -> bool:  # Has multiple children
 ```
 
 
@@ -79,14 +70,19 @@ kernels:
 - Expands kernel inference into transforms
 
 ### 2. Traversal
-`executor.py` runs depth-first:
+`runner.py` executes segments using a stack-based approach:
 ```python
-stack = [(root, initial_model, 0)]
+stack = [(tree.root, initial_model, 0)]
 while stack:
     segment, input_model, depth = stack.pop()
+    
+    # Execute segment (or use cached result)
     result = self._execute_segment(segment, input_model, output_dir)
-    for child in segment.children:
-        stack.append((child, result.output_model, depth + 1))
+    
+    # Queue children for execution
+    if result.success:
+        for child in segment.children.values():
+            stack.append((child, result.output_model, depth + 1))
 ```
 
 ### 3. Segment Execution
@@ -97,10 +93,13 @@ Each segment = one FINN build:
 4. Run transformations
 5. Discover output in `intermediate_models/`
 
-### 4. Branch Points
-Full artifact copy for each child (FINN modifies in-place):
+### 4. Artifact Sharing
+At branch points, the parent's output is shared with all children to avoid redundant computation:
 ```python
-if parent.is_branch_point:
-    for child in parent.children:
-        shutil.copytree(parent.output_artifact, child_output_dir)
+def share_artifacts_at_branch(self, parent: DSESegment, children: List[DSESegment]):
+    """Share parent output with all children."""
+    parent_out = parent.output_dir / "output.onnx"
+    for child in children:
+        child_out = child.output_dir / "output.onnx"
+        shutil.copy2(parent_out, child_out)
 ```
