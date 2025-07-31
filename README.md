@@ -4,7 +4,7 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 
 ## Pre-Release
 
-**This repository is in a pre-release state and under active co-development by Microsoft and AMD.**.
+**This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
 ### Pre-release features:
 - **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
