@@ -5,7 +5,6 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-# /home/tafk/dev/brainsmith/brainsmith/tools/hw_kernel_gen/data.py
 """
 Data structures shared across Hardware Kernel Generator components.
 """

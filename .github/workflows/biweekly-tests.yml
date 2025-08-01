@@ -40,7 +40,7 @@ jobs:
       - name: Run BERT Large test
         uses: ./.github/actions/run-test-with-artifacts
         with:
-          command: "cd demos/bert && make bert_large_single_layer"
+          command: "cd examples/bert && make bert_large_single_layer"
           timeout-minutes: 1400
           artifact-name: "biweekly-artifacts"
           collect-on: "always"

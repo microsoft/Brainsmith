@@ -1,14 +1,10 @@
-############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-#
-# @author       Thomas Keller <thomaskeller@microsoft.com>
-############################################################################
 
 FROM ubuntu:22.04
 LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahdi.Ghandi@microsoft.com>"
 
-ARG ENTRYPOINT
+# ARG ENTRYPOINT - removed: no longer used for backward compatibility
 
 # Install system dependencies
 RUN apt-get update && \
@@ -46,7 +42,7 @@ RUN apt-get update && \
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN locale-gen "en_US.UTF-8"
 
-# Install pip dependencies for BrainSmith
+# Install pip dependencies for Brainsmith
 COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt
 RUN rm /tmp/requirements.txt
@@ -62,10 +58,10 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Copy all entrypoint scripts
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY docker/entrypoint_exec.sh /usr/local/bin/entrypoint_exec.sh
+COPY docker/entrypoint_fast.sh /usr/local/bin/entrypoint_fast.sh
 COPY docker/setup_env.sh /usr/local/bin/setup_env.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_exec.sh /usr/local/bin/setup_env.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint_fast.sh /usr/local/bin/setup_env.sh
 
-# Set default entrypoint (can be overridden by ENTRYPOINT build arg for backward compatibility)
+# Set default entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]

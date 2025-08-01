@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  bert-single-layer-test:
-    name: BERT Single Layer E2E Test
+  bert-quicktest:
+    name: BERT Quicktest
     runs-on: pre-release
     timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:
@@ -40,7 +40,7 @@ jobs:
       - name: Run E2E test
         uses: ./.github/actions/run-test-with-artifacts
         with:
-          command: "cd demos/bert && make single_layer"
+          command: "./examples/bert/quicktest.sh"
           timeout-minutes: 240
           artifact-name: "pr-failure-artifacts"
           collect-on: "failure"
