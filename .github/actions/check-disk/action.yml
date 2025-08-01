@@ -1,0 +1,25 @@
+name: 'Check Disk Space'
+description: 'Validate available disk space'
+inputs:
+  threshold-gb:
+    description: 'Required disk space in GB'
+    type: number
+    default: 20
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check disk space
+      shell: bash
+      run: |
+        REQUIRED=${{ inputs.threshold-gb }}
+        if ! AVAILABLE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//'); then
+            echo "ERROR: Failed to check disk space"
+            exit 1
+        fi
+        echo "Disk space: ${AVAILABLE}GB available (need ${REQUIRED}GB)"
+        if [ "$AVAILABLE" -lt "$REQUIRED" ]; then
+            echo "ERROR: Insufficient disk space"
+            exit 1
+        fi
+        echo "✓ Disk space check passed"

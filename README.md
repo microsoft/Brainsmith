@@ -1,33 +1,68 @@
-# Project
+## Brainsmith
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
 
-As the maintainer of this project, please make a few updates:
+## Pre-Release
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+**This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
-## Contributing
+### Pre-release features:
+- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
+- **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
+- **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+### Planned major features:
+- **Multi-Layer Offload** - Implement a repeating slice of a model (e.g. 1 transformer encoder) and cycle weights through DRAM/HBM, enabling drastically larger model support.
+- **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
+- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artifacts
+- **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
+- **FINN Kernel backend rework** - Flexible backends for FINN kernels, currently you can only select between HLS or RTL backend, in the future releases multiple RTL or HLS backends will be supported to allow for more optimization
+- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represents >90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+## Quick Start
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+### Dependencies
+1. Ubuntu 22.04+
+2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
+3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
 
-## Trademarks
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+### 1. Set key environment variables
+
+```bash
+# Brainsmith env vars with example paths
+export BSMITH_ROOT=/home/user/brainsmith/
+export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
+export BSMITH_XILINX_PATH="/tools/Xilinx"
+export BSMITH_XILINX_VERSION="2024.2"
+export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+```
+
+### 2. Run end-to-end test to validate environment 
+
+```bash
+# Start persistent development container
+./smithy start
+
+# Attach shell to container 
+./smithy shell
+# Run example
+./examples/bert/quicktest.sh
+
+# OR execute one-off command 
+./smithy ./examples/bert/quicktest.sh
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Brainsmith is developed through a collaboration between Microsoft and AMD.
+
+The project builds upon:
+- [FINN](https://github.com/Xilinx/finn) - Dataflow compiler for quantized neural networks on FPGAs
+- [QONNX](https://github.com/fastmachinelearning/qonnx) - Quantized ONNX model representation
+- [Brevitas](https://github.com/Xilinx/brevitas) - PyTorch quantization library
