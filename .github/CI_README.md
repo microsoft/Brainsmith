@@ -5,15 +5,15 @@
 ```
 .github/
 ├── actions/          # 8 modular composite actions
-│   ├── build-docker/         # Docker build with verification
+│   ├── build-docker/        # Docker build with verification
 │   ├── check-disk/          # Disk space validation
 │   ├── collect-artifacts/   # Safe artifact collection
 │   ├── docker-cleanup/      # Container & build cleanup
 │   ├── run-test-with-artifacts/  # Complete test lifecycle
-│   ├── smithy-exec/         # Command execution with daemon
+│   ├── smithy-exec/         # Command execution with container lifecycle
 │   └── workflow-setup/      # Standard initialization
 └── workflows/        # 2 focused workflows
-    ├── pr-validation.yml     # BERT Single Layer E2E Test
+    ├── pr-validation.yml     # BERT Quicktest
     └── biweekly-tests.yml    # BERT Large Model Test
 ```
 
@@ -24,13 +24,12 @@ Fast validation for pull requests and develop branch pushes.
 
 **Triggers**: Push to `develop`, Pull Requests  
 **Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)  
-**Job**: `bert-single-layer-test` (BERT Single Layer E2E Test)
+**Job**: `bert-quicktest` (BERT Quicktest)
 
 **Steps**:
 1. Checkout repository
 2. Setup workflow (disk check, cleanup, build)
-3. Debug dependency fetching
-4. Run E2E test with artifact collection
+3. Run E2E test with artifact collection using `./examples/bert/quicktest.sh`
 
 ### Biweekly Tests (`biweekly-tests.yml`)
 Comprehensive testing for large model validation.
@@ -62,7 +61,7 @@ Complete test lifecycle with conditional artifact collection.
 ```yaml
 - uses: ./.github/actions/run-test-with-artifacts
   with:
-    command: "cd demos/bert && make single_layer"
+    command: "cd examples/bert && make single_layer"
     timeout-minutes: 240
     artifact-name: "test-results"
     collect-on: "failure"  # or "always"
@@ -79,7 +78,7 @@ Complete test lifecycle with conditional artifact collection.
 
 #### Docker Actions  
 - `build-docker` - Builds image with verification and timing fixes
-- `smithy-exec` - Executes commands with daemon lifecycle management
+- `smithy-exec` - Executes commands with container lifecycle management
 
 ## Adding New Workflows
 

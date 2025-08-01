@@ -1,1 +1,0 @@
-This folder is largely prompts and artifacts for development with LLMs, will be removed in the future.

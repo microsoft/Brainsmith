@@ -1,79 +1,68 @@
 ## Brainsmith
 
-Brainsmith is an open-source platform for FPGA AI accelerators.
-This repository is in a pre-release state and under active co-devlopment by Microsoft and AMD.
+Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
 
-### Quick start
+## Pre-Release
 
-1. Set environment variables (separate from FINN variables), example below:
+**This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
+
+### Pre-release features:
+- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
+- **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
+- **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
+
+### Planned major features:
+- **Multi-Layer Offload** - Implement a repeating slice of a model (e.g. 1 transformer encoder) and cycle weights through DRAM/HBM, enabling drastically larger model support.
+- **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
+- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artifacts
+- **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
+- **FINN Kernel backend rework** - Flexible backends for FINN kernels, currently you can only select between HLS or RTL backend, in the future releases multiple RTL or HLS backends will be supported to allow for more optimization
+- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represents >90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
+
+## Quick Start
+
+### Dependencies
+1. Ubuntu 22.04+
+2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
+3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
+
+### 1. Set key environment variables
+
 ```bash
-export BSMITH_ROOT="~/brainsmith"
-export BSMITH_BUILD_DIR="~/builds/brainsmith"
+# Brainsmith env vars with example paths
+export BSMITH_ROOT=/home/user/brainsmith/
+export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
 export BSMITH_XILINX_PATH="/tools/Xilinx"
 export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-2. Clone this repository:
-```bash
-git clone git@github.com:microsoft/Brainsmith.git
-```
-
-3. **Dependencies**: Dependencies are automatically fetched during Docker container initialization:
-   - **FINN**: Fetched from `custom/transformer` branch to `deps/finn/`
-   - **Other dependencies**: Managed via `docker/fetch-repos.sh`
-   
-   To update FINN to a newer commit, edit `docker/fetch-repos.sh` and change the `FINN_COMMIT` variable:
-```bash
-# Edit docker/fetch-repos.sh
-FINN_COMMIT="new-commit-hash-or-branch"
-
-# Rebuild container to fetch updated dependencies
-./smithy cleanup
-./smithy build
-```
-
-4. Launch the docker container. Since the Python repo is installed in developer mode in the docker container, you can edit the files, push to git, etc. and run the changes in docker without rebuilding the container.
+### 2. Run end-to-end test to validate environment 
 
 ```bash
-# Start persistent container (one-time setup)
-./smithy daemon
+# Start persistent development container
+./smithy start
 
-# Get instant shell access anytime
+# Attach shell to container 
 ./smithy shell
+# Run example
+./examples/bert/quicktest.sh
 
-# Or execute commands quickly
-./smithy exec "python script.py"
-
-# Check status
-./smithy status
-
-# Stop when done
-./smithy stop
+# OR execute one-off command 
+./smithy ./examples/bert/quicktest.sh
 ```
 
-> **Note for existing users**: If you previously used `./run-docker.sh`, it now automatically redirects to `smithy` for compatibility. The new `smithy` tool provides 73% faster container operations with persistent containers. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
+## License
 
-5. Validate with a 1 layer end-to-end build (generates DCP image, multi-hour build):
-```bash
-cd tests/end2end/bert
-make single_layer
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-6. Alternatively, run a simplified test skipping DCP gen:
-```bash
-cd demos/bert
-python gen_initial_folding.py --simd 12 --pe 8 --num_layers 1 -t 1 -o ./configs/l1_simd12_pe8.json
-python end2end_bert.py -o l1_simd12_pe8 -n 12 -l 1 -z 384 -i 1536 -x True -p ./configs/l1_simd12_pe8.json -d False
-```
+## Acknowledgments
 
-7. Alternatively, you can also run a suite of tests on the brainsmith repository which will check:
- 
-* Shuffle hardware generation and correctness
-* QuantSoftMax hardware generation and correctness
-* EndtoEnd flow
+Brainsmith is developed through a collaboration between Microsoft and AMD.
 
-```bash
-cd tests
-pytest ./
-```
+The project builds upon:
+- [FINN](https://github.com/Xilinx/finn) - Dataflow compiler for quantized neural networks on FPGAs
+- [QONNX](https://github.com/fastmachinelearning/qonnx) - Quantized ONNX model representation
+- [Brevitas](https://github.com/Xilinx/brevitas) - PyTorch quantization library
