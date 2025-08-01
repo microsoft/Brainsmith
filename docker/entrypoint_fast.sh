@@ -1,8 +1,6 @@
 #!/bin/bash
-# Copyright (c) Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: BSD-3-Clause
-# Modifications copyright (c) Microsoft Corporation.
-# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 # Fast entrypoint for Brainsmith development environment
 # This script is optimized for quick command execution in persistent containers

@@ -5,8 +5,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# Modern folding config generator - Exact parity with old system
+# @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
+
 """
 Generate folding configurations for BERT model DSE.
 
@@ -107,14 +108,21 @@ def generate_config(args) -> dict:
     
     # Generate configuration for each layer
     for n in range(args.num_layers):
-        # MVAUs - 6 per layer
-        # Note: MVAU 4 and 5 get double SIMD/PE (FFN layers)
-        for m in range(6):
-            if m == 4 or m == 5:
+        # Generate all MVAUs
+        for m in range(0, 8):
+            if m == 7 or m == 8:
                 d = mvau(2 * args.simd, 2 * args.pe, args.runtime_writeable_weights)
+            # dyn mvau
+            elif m == 3 or m == 4:
+                if args.simd % 3 == 0:
+                    d = dynmvu(args.pe, int(args.simd/3))
+                elif args.simd % 4 == 0:
+                    d = dynmvu(args.pe, int(args.simd/4))
+                else:
+                    d = dynmvu(args.pe, args.simd)
             else:
                 d = mvau(args.simd, args.pe, args.runtime_writeable_weights)
-            config[f"MVAU_rtl_{m + (6 * n)}"] = d
+            config[f"MVAU_rtl_{m + (8 * n)}"] = d
         
         # DuplicateStreams - 3 per layer
         for m in range(3):
@@ -130,17 +138,6 @@ def generate_config(args) -> dict:
         for m in range(9):
             d = thresholding(args.other, 0)
             config[f"Thresholding_rtl_{m + (9 * n)}"] = d
-        
-        # # DynMVUs - 2 per layer (for attention)
-        # for m in range(2):
-        #     # Special SIMD calculation for DynMVU based on divisibility
-        #     if args.simd % 3 == 0:
-        #         d = dynmvu(args.pe, int(args.simd / 3))
-        #     elif args.simd % 4 == 0:
-        #         d = dynmvu(args.pe, int(args.simd / 4))
-        #     else:
-        #         d = dynmvu(args.pe, args.simd)
-        #     config[f"DynMVU_rtl_{m + (2 * n)}"] = d
         
         # ElementwiseAdds - 2 per layer
         for m in range(2):

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Minimal data structures for segment execution."""
 
 from dataclasses import dataclass

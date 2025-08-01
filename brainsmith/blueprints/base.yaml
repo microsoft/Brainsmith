@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 name: "Baseline FINN"
 description: "Core FINN build steps (no kernels)"
 
@@ -5,6 +8,7 @@ description: "Core FINN build steps (no kernels)"
 clock_ns: 5.0                       # Target clock period in nanoseconds
 
 design_space:
+  kernels: []
   steps:
     - "cleanup"  # custom_step_cleanup
     - "qonnx_to_finn"
@@ -20,4 +24,3 @@ design_space:
     - "step_set_fifo_depths"
     - "step_create_stitched_ip"
     - "step_measure_rtlsim_performance"
-  kernels: []

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 name: "BERT"
 description: "BERT Transformer encoder model (no initial embedding)"
 

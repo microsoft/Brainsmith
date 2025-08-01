@@ -1,4 +1,11 @@
-"""HWSoftmax hardware inference transform."""
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+############################################################################
 
 from onnx import helper
 from qonnx.transformation.base import Transformation
@@ -11,7 +18,6 @@ from brainsmith.core.plugins import transform
     description="Convert Softmax nodes to HWSoftmax hardware operations",
     author="shane.fleming",
     version="1.0.0",
-    requires=["qonnx", "onnx"]
 )
 class InferHWSoftmax(Transformation):
     """

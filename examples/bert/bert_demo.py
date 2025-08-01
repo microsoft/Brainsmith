@@ -1,5 +1,14 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 
 import argparse
 import json
@@ -236,12 +245,6 @@ def run_brainsmith_dse(model, args):
         os.path.join(args.output_dir, "df_input.onnx"),
         os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
     )
-    
-    # # Create dummy reference files for compatibility
-    # dummy_input = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
-    # dummy_output = np.zeros((1, args.seqlen, args.hidden_size), dtype=np.float32)
-    # np.save(os.path.join(args.output_dir, "input.npy"), dummy_input)
-    # np.save(os.path.join(args.output_dir, "expected_output.npy"), dummy_output)
     
     # Get static blueprint path
     blueprint_path = Path(__file__).parent / "bert_demo.yaml"

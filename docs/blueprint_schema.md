@@ -48,14 +48,17 @@ design_space:
     - after: "target_step"
       insert: "new_step"              # Insert single step
     - before: "target_step"  
-      insert: ["step1", "step2"]      # Insert multiple steps
+      insert: 
+        - "step1"                     # Insert multiple steps 
+        - "step2"
+        - ["step3a", "step3b"]        # Insert a branching point
     - replace: "old_step"
-      with: ["new1", "new2"]          # Replace with alternatives
+      with: [["new1", "new2"]]        # Replace with a branching point
     - remove: "unwanted_step"         # Remove a step
     - at_start:
         insert: "first_step"
     - at_end:
-        insert: ["last1", "last2"]
+        insert: ["last1", "last2"]   
 ```
 
 ## Field Definitions
@@ -155,7 +158,6 @@ steps:
   
   # Optional steps - creates paths with and without
   - ["minimize_bit_width", ~]         # ~ means skip this step
-  - ["rtlsim_performance", null]      # null also means skip
   
   # Special step for kernel inference
   - "infer_kernels"                   # Maps layers to hardware kernels

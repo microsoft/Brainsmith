@@ -1,5 +1,14 @@
+############################################################################
+# Copyright (C) 2025, Advanced Micro Devices, Inc.
+# All rights reserved.
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+#
+# SPDX-License-Identifier: MIT
+#
+# @author       Shane T. Fleming <shane.fleming@amd.com>
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 
 """
 BERT-Specific Custom Build Steps

@@ -1,6 +1,6 @@
-"""
-kernel_opt transforms
-"""
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+"""Kernel Optimization transforms"""
 
 # Import all transforms to trigger auto-registration
 from . import set_pumped_compute
