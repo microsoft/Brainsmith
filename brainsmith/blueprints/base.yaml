@@ -1,0 +1,26 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: "Baseline FINN"
+description: "Core FINN build steps (no kernels)"
+
+# Minimal configuration for estimates only
+clock_ns: 5.0                       # Target clock period in nanoseconds
+
+design_space:
+  kernels: []
+  steps:
+    - "cleanup"  # custom_step_cleanup
+    - "qonnx_to_finn"
+    - "infer_kernels" # Brainsmith dynamic kernel inference
+    - "step_create_dataflow_partition"
+    - "step_specialize_layers"
+    - "step_target_fps_parallelization"
+    - "step_apply_folding_config"
+    - "step_minimize_bit_width"
+    - "step_generate_estimate_reports"
+    - "step_hw_codegen"
+    - "step_hw_ipgen"
+    - "step_set_fifo_depths"
+    - "step_create_stitched_ip"
+    - "step_measure_rtlsim_performance"
