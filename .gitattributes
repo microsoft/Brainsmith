@@ -1,0 +1,213 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Programming Languages
+*.py     text diff=python
+*.pyw    text diff=python
+*.pyx    text diff=python
+*.pxd    text diff=python
+*.pxi    text diff=python
+
+# C/C++ Source
+*.c      text diff=cpp
+*.cc     text diff=cpp
+*.cxx    text diff=cpp
+*.cpp    text diff=cpp
+*.c++    text diff=cpp
+*.h      text diff=cpp
+*.hh     text diff=cpp
+*.hpp    text diff=cpp
+*.hxx    text diff=cpp
+*.h++    text diff=cpp
+
+# HDL Files
+*.v      text
+*.sv     text
+*.vhd    text
+*.vhdl   text
+
+# Scripts
+*.sh     text eol=lf
+*.bash   text eol=lf
+*.tcl    text
+*.xdc    text
+
+# Web/Documentation
+*.js     text
+*.html   text diff=html
+*.htm    text diff=html
+*.css    text diff=css
+*.md     text diff=markdown
+*.rst    text
+
+# Data Files
+*.json   text
+*.xml    text
+*.csv    text
+*.txt    text
+*.ini    text
+*.cfg    text
+*.conf   text
+
+# YAML
+*.yml    text
+*.yaml   text
+
+# Templates
+*.j2        text
+*.template  text
+
+# Jupyter Notebooks
+*.ipynb  text eol=lf
+
+# Makefiles
+Makefile    text
+makefile    text
+*.mk        text
+*.make      text
+
+# Docker
+Dockerfile  text
+.dockerignore text
+
+# Git Configuration
+.gitignore   text
+.gitmodules  text
+.gitattributes text
+
+# Editor configs
+.editorconfig text
+
+# Requirements files
+requirements.txt text
+requirements-*.txt text
+setup.py    text
+setup.cfg   text
+pyproject.toml text
+
+# Binary Files
+*.pyc    binary
+*.pyo    binary
+*.pyd    binary
+*.so     binary
+*.dll    binary
+*.dylib  binary
+
+# ML Model Files
+*.pb     binary
+*.pth    binary
+*.pt     binary
+*.onnx   binary
+*.h5     binary
+*.hdf5   binary
+*.pkl    binary
+*.pickle binary
+*.joblib binary
+
+# Images
+*.jpg    binary
+*.jpeg   binary
+*.png    binary
+*.gif    binary
+*.bmp    binary
+*.tiff   binary
+*.tif    binary
+*.ico    binary
+*.svg    text
+
+# Archives
+*.zip    binary
+*.tar    binary
+*.gz     binary
+*.bz2    binary
+*.7z     binary
+*.xz     binary
+
+# Xilinx/FPGA Files
+*.prj    text
+*.xpr    binary
+*.bit    binary
+*.bin    binary
+*.mcs    binary
+*.mem    text
+*.coe    text
+
+# Fonts
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+
+# Audio
+*.mp3    binary
+*.wav    binary
+*.flac   binary
+
+# Video
+*.mp4    binary
+*.avi    binary
+*.mov    binary
+*.mkv    binary
+
+# Office Documents
+*.pdf    binary
+*.doc    binary
+*.docx   binary
+*.xls    binary
+*.xlsx   binary
+*.ppt    binary
+*.pptx   binary
+
+# Compiled Object files
+*.o      binary
+*.obj    binary
+*.a      binary
+*.lib    binary
+*.exe    binary
+*.out    binary
+
+# Package files
+*.egg    binary
+*.whl    binary
+*.deb    binary
+*.rpm    binary
+
+# Database
+*.db     binary
+*.sqlite binary
+
+# Special handling for specific paths
+demos/**/*.sample text
+tests/**/*.txt    text eol=lf
+
+# Vendor/Dependencies - treat as binary to avoid merge conflicts
+deps/**          -text -diff
+vendor/**        -text -diff
+third_party/**   -text -diff
+
+# Build outputs
+build/**         -text -diff
+dist/**          -text -diff
+_build/**        -text -diff
+*.egg-info/**    -text -diff
+
+# IDE specific files
+.idea/**         -text -diff
+.vscode/**       text
+*.swp            binary
+*~               binary
+.DS_Store        binary
+
+# Coverage reports
+.coverage        binary
+*.coverage       binary
+htmlcov/**       -text -diff
+
+# Cache directories
+__pycache__/**   -text -diff
+*.pytest_cache/** -text -diff
+.mypy_cache/**   -text -diff
+.tox/**          -text -diff

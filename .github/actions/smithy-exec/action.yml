@@ -1,0 +1,50 @@
+name: 'Smithy Execute'
+description: 'Execute commands in smithy container with lifecycle management'
+inputs:
+  command:
+    description: 'Command to execute in the container'
+    type: string
+    required: true
+  timeout-minutes:
+    description: 'Command timeout in minutes'
+    type: number
+    default: 60
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Execute command with smithy
+      shell: bash
+      run: |
+        echo "=== Executing: ${{ inputs.command }} ==="
+        echo "Timeout: ${{ inputs.timeout-minutes }} minutes"
+        
+        # Make smithy executable
+        chmod +x smithy
+        
+        # Start smithy container
+        echo "Starting smithy container..."
+        ./smithy start
+        
+        # Wait for container to be ready
+        echo "Waiting for container to be ready..."
+        sleep 5
+        
+        # Execute command with timeout
+        TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
+        
+        if timeout ${TIMEOUT_SECONDS}s ./smithy "${{ inputs.command }}"; then
+            echo "✓ Command executed successfully"
+            EXIT_CODE=0
+        else
+            echo "✗ Command failed or timed out"
+            echo "=== Container logs (last 50 lines) ==="
+            ./smithy logs --tail 50 || echo "No logs available"
+            EXIT_CODE=1
+        fi
+        
+        # Always stop smithy container
+        echo "Stopping smithy container..."
+        ./smithy stop || true
+        
+        exit $EXIT_CODE
