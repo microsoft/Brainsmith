@@ -13,6 +13,7 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 - **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
 
 ### Planned major features:
+- **Multi-Layer Offload** - Implement a repeating slice of a model (e.g. 1 transformer encoder) and cycle weights through DRAM/HBM, enabling drastically larger model support.
 - **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
 - **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artifacts
 - **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
@@ -47,10 +48,10 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 # Attach shell to container 
 ./smithy shell
 # Run example
-./demos/bert/scripts/quicktest.sh
+./examples/bert/quicktest.sh
 
 # OR execute one-off command 
-./smithy ./demos/bert/scripts/quicktest.sh
+./smithy ./examples/bert/quicktest.sh
 ```
 
 ## License

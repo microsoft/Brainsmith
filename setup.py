@@ -23,7 +23,7 @@ setup(
         "ml_dtypes>=0.5.1",
         "numpy==1.24.1",
         "onnx==1.17.0",
-        "onnxoptimizer",
+        "onnxoptimizer==0.3.13",
         "onnxruntime==1.18.1",
         "onnxsim==0.4.36",
         "pre-commit==3.3.2",

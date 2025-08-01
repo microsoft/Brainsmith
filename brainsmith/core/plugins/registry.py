@@ -206,18 +206,22 @@ def _get_names_for_classes(plugin_type: str, classes: List[Type]) -> List[str]:
 
 def get_transforms_by_metadata(**criteria) -> List[str]:
     """Get transforms matching metadata criteria."""
+    _registry._load_plugins()
     return _get_names_for_classes('transform', _registry.find('transform', **criteria))
 
 def get_kernels_by_metadata(**criteria) -> List[str]:
     """Get kernels matching metadata criteria."""
+    _registry._load_plugins()
     return _get_names_for_classes('kernel', _registry.find('kernel', **criteria))
 
 def get_backends_by_metadata(**criteria) -> List[str]:
     """Get backends matching metadata criteria."""
+    _registry._load_plugins()
     return _get_names_for_classes('backend', _registry.find('backend', **criteria))
 
 def get_steps_by_metadata(**criteria) -> List[str]:
     """Get steps matching metadata criteria."""
+    _registry._load_plugins()
     return _get_names_for_classes('step', _registry.find('step', **criteria))
 
 # Blueprint compatibility functions (used by explorer)

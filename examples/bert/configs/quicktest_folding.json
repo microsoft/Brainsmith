@@ -1,48 +1,48 @@
 {
     "Defaults": {},
     "MVAU_rtl_0": {
-        "PE": 8,
-        "SIMD": 12,
+        "PE": 4,
+        "SIMD": 4,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
         "runtime_writeable_weights": 0
     },
     "MVAU_rtl_1": {
-        "PE": 8,
-        "SIMD": 12,
+        "PE": 4,
+        "SIMD": 4,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
         "runtime_writeable_weights": 0
     },
     "MVAU_rtl_2": {
-        "PE": 8,
-        "SIMD": 12,
+        "PE": 4,
+        "SIMD": 4,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
         "runtime_writeable_weights": 0
     },
     "MVAU_rtl_3": {
-        "PE": 8,
-        "SIMD": 12,
+        "PE": 4,
+        "SIMD": 4,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
         "runtime_writeable_weights": 0
     },
     "MVAU_rtl_4": {
-        "PE": 16,
-        "SIMD": 24,
+        "PE": 8,
+        "SIMD": 8,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
         "runtime_writeable_weights": 0
     },
     "MVAU_rtl_5": {
-        "PE": 16,
-        "SIMD": 24,
+        "PE": 8,
+        "SIMD": 8,
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
@@ -122,22 +122,6 @@
         "runtime_writeable_weights": 0,
         "depth_trigger_uram": 0,
         "depth_trigger_bram": 0
-    },
-    "DynMVU_rtl_0": {
-        "PE": 8,
-        "SIMD": 4,
-        "ram_style": "auto",
-        "resType": "auto",
-        "mem_mode": "external",
-        "runtime_writeable_weights": 0
-    },
-    "DynMVU_rtl_1": {
-        "PE": 8,
-        "SIMD": 4,
-        "ram_style": "auto",
-        "resType": "auto",
-        "mem_mode": "external",
-        "runtime_writeable_weights": 0
     },
     "ElementwiseAdd_hls_0": {
         "PE": 1,

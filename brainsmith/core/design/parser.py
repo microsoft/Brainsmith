@@ -49,6 +49,10 @@ class StepOperation:
 
 class BlueprintParser:
     """Parse blueprint YAML into DesignSpace with resolved plugins."""
+    
+    # Skip indicators
+    SKIP_VALUES = frozenset([None, "~", ""])
+    SKIP_NORMALIZED = "~"
 
     def parse(self, blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ForgeConfig]:
         """
@@ -211,54 +215,91 @@ class BlueprintParser:
     def _apply_step_operation(self, steps: List[StepSpec], op: StepOperation) -> List[StepSpec]:
         """Apply a single operation to the step list"""
         
-        if op.op_type == "remove":
-            return [s for s in steps if not self._step_matches(s, op.target)]
+        # Get registry for normalization
+        registry = get_registry()
         
-        elif op.op_type == "replace":
-            new_steps = []
-            for step in steps:
-                if self._step_matches(step, op.target):
-                    self._insert_steps(new_steps, op.with_step, check_skip=True)
-                else:
-                    new_steps.append(step)
-            return new_steps
+        # Normalize the operation target to match already-normalized steps
+        normalized_target = None
+        if op.target is not None:
+            normalized_target = self._validate_spec(op.target, registry)
         
-        elif op.op_type == "after":
-            new_steps = []
-            for step in steps:
-                new_steps.append(step)
-                if self._step_matches(step, op.target):
-                    self._insert_steps(new_steps, op.insert)
-            return new_steps
+        # Validate nested lists in operation specs
+        self._validate_nested_lists(op.insert, registry)
+        self._validate_nested_lists(op.with_step, registry)
         
-        elif op.op_type == "before":
-            new_steps = []
-            for step in steps:
-                if self._step_matches(step, op.target):
-                    self._insert_steps(new_steps, op.insert)
-                new_steps.append(step)
-            return new_steps
+        # Dispatch to specific handler
+        handlers = {
+            "remove": self._apply_remove,
+            "replace": self._apply_replace,
+            "after": self._apply_after,
+            "before": self._apply_before,
+            "at_start": self._apply_at_start,
+            "at_end": self._apply_at_end,
+        }
         
-        elif op.op_type == "at_start":
-            new_steps = []
-            self._insert_steps(new_steps, op.insert)
-            new_steps.extend(steps)
-            return new_steps
-        
-        elif op.op_type == "at_end":
-            new_steps = steps.copy()
-            self._insert_steps(new_steps, op.insert)
-            return new_steps
-        
+        handler = handlers.get(op.op_type)
+        if handler:
+            return handler(steps, op, normalized_target)
         return steps
     
-    def _insert_steps(self, target_list: List[StepSpec], steps: StepSpec, check_skip: bool = False) -> None:
+    def _validate_nested_lists(self, spec: Optional[StepSpec], registry) -> None:
+        """Validate nested lists in step specifications"""
+        if spec is not None and isinstance(spec, list):
+            for item in spec:
+                if isinstance(item, list):
+                    self._validate_spec(item, registry)
+    
+    def _apply_remove(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply remove operation"""
+        return [s for s in steps if not self._step_matches(s, target)]
+    
+    def _apply_replace(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply replace operation"""
+        new_steps = []
+        for step in steps:
+            if self._step_matches(step, target):
+                self._insert_steps(new_steps, op.with_step)
+            else:
+                new_steps.append(step)
+        return new_steps
+    
+    def _apply_after(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply after operation"""
+        new_steps = []
+        for step in steps:
+            new_steps.append(step)
+            if self._step_matches(step, target):
+                self._insert_steps(new_steps, op.insert)
+        return new_steps
+    
+    def _apply_before(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply before operation"""
+        new_steps = []
+        for step in steps:
+            if self._step_matches(step, target):
+                self._insert_steps(new_steps, op.insert)
+            new_steps.append(step)
+        return new_steps
+    
+    def _apply_at_start(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply at_start operation"""
+        new_steps = []
+        self._insert_steps(new_steps, op.insert)
+        new_steps.extend(steps)
+        return new_steps
+    
+    def _apply_at_end(self, steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+        """Apply at_end operation"""
+        new_steps = steps.copy()
+        self._insert_steps(new_steps, op.insert)
+        return new_steps
+    
+    def _insert_steps(self, target_list: List[StepSpec], steps: StepSpec) -> None:
         """Insert steps as sequential or branch based on content.
         
         Args:
             target_list: List to insert steps into
             steps: Steps to insert (string or list)
-            check_skip: If True, also check for "~" in list before extending
         """
         if isinstance(steps, list):
             # Handle lists that may contain mixed types (strings and sublists)
@@ -270,7 +311,7 @@ class BlueprintParser:
                     # This is a regular step - append directly
                     target_list.append(step)
         else:
-            # Single step (string)
+            # Single step (string) or list to be treated as branching point
             target_list.append(steps)
     
     def _step_matches(self, step: StepSpec, target: Optional[StepSpec]) -> bool:
@@ -283,26 +324,64 @@ class BlueprintParser:
             return set(step) == set(target)
         return False
     
-    def _validate_spec(self, spec: Union[str, List[str]], registry=None) -> Union[str, List[Optional[str]]]:
-        """Validate a step specification (string or list)."""
+    def _validate_spec(self, spec: Union[str, List[Optional[str]], None], registry=None) -> Union[str, List[str]]:
+        """Validate a step specification (string or list).
+        
+        Rules:
+        - Strings are regular steps
+        - Lists are branch points (can only contain strings or None/~)
+        - No nested lists allowed within branch points
+        - Branch points must have at least one non-skip option
+        - Branch points can have at most one skip option
+        """
         if isinstance(spec, str):
             return self._validate_step(spec)
         elif isinstance(spec, list):
-            # Handle lists that may contain strings or None/~ for skip
+            # This is a branch point - validate each option
             validated = []
+            skip_count = 0
+            non_skip_count = 0
+            
             for opt in spec:
                 if isinstance(opt, str) or opt is None:
-                    validated.append(self._validate_step(opt))
+                    validated_opt = self._validate_step(opt)
+                    validated.append(validated_opt)
+                    if validated_opt == self.SKIP_NORMALIZED:
+                        skip_count += 1
+                    else:
+                        non_skip_count += 1
+                elif isinstance(opt, list):
+                    raise ValueError(
+                        f"Invalid branch point: contains nested list {opt}. "
+                        "Branch points can only contain strings or skip (~). "
+                        "To insert a branch point via operations, use double brackets: [[option1, option2]]"
+                    )
                 else:
                     raise ValueError(f"Invalid option in branch point: {opt}. Expected string or None, got {type(opt)}")
+            
+            # Validate branch point constraints
+            if skip_count > 1:
+                raise ValueError(
+                    f"Invalid branch point {spec}: contains {skip_count} skip options. "
+                    "Branch points can have at most one skip option."
+                )
+            if non_skip_count == 0:
+                raise ValueError(
+                    f"Invalid branch point {spec}: contains only skip options. "
+                    "Branch points must have at least one non-skip step."
+                )
+            
             return validated
+        elif spec is None:
+            # Handle bare None values
+            return self._validate_step(None)
         else:
             raise ValueError(f"Invalid step specification: {spec}")
 
     def _validate_step(self, step: Optional[str]) -> str:
         """Validate a step name against the registry, handle skip."""
-        if step in [None, "~", ""]:
-            return "~"
+        if step in self.SKIP_VALUES:
+            return self.SKIP_NORMALIZED
         if not has_step(step):
             raise ValueError(f"Step '{step}' not found in registry")
         return step    

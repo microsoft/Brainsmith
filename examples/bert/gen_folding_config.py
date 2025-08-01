@@ -131,16 +131,16 @@ def generate_config(args) -> dict:
             d = thresholding(args.other, 0)
             config[f"Thresholding_rtl_{m + (9 * n)}"] = d
         
-        # DynMVUs - 2 per layer (for attention)
-        for m in range(2):
-            # Special SIMD calculation for DynMVU based on divisibility
-            if args.simd % 3 == 0:
-                d = dynmvu(args.pe, int(args.simd / 3))
-            elif args.simd % 4 == 0:
-                d = dynmvu(args.pe, int(args.simd / 4))
-            else:
-                d = dynmvu(args.pe, args.simd)
-            config[f"DynMVU_rtl_{m + (2 * n)}"] = d
+        # # DynMVUs - 2 per layer (for attention)
+        # for m in range(2):
+        #     # Special SIMD calculation for DynMVU based on divisibility
+        #     if args.simd % 3 == 0:
+        #         d = dynmvu(args.pe, int(args.simd / 3))
+        #     elif args.simd % 4 == 0:
+        #         d = dynmvu(args.pe, int(args.simd / 4))
+        #     else:
+        #         d = dynmvu(args.pe, args.simd)
+        #     config[f"DynMVU_rtl_{m + (2 * n)}"] = d
         
         # ElementwiseAdds - 2 per layer
         for m in range(2):

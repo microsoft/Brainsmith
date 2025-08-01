@@ -10,6 +10,7 @@ from the blueprint, ready for tree construction.
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
+from brainsmith.core.plugins.registry import has_step, list_all_steps
 
 
 @dataclass
@@ -25,6 +26,44 @@ class DesignSpace:
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
     max_combinations: int = 100000  # Maximum allowed design space combinations
+    
+    def __post_init__(self):
+        """Validate steps after initialization."""
+        self.validate_steps()
+    
+    def validate_steps(self) -> None:
+        """Validate that all referenced steps exist in the registry."""
+        invalid_steps = []
+        
+        def check_step(step: Optional[str]) -> None:
+            """Check if a single step is valid."""
+            if step and step not in ["~", ""] and not has_step(step):
+                invalid_steps.append(step)
+        
+        # Check all steps, including those in branch points
+        for step_spec in self.steps:
+            if isinstance(step_spec, list):
+                # Branch point - check each option
+                for option in step_spec:
+                    check_step(option)
+            else:
+                # Single step
+                check_step(step_spec)
+        
+        if invalid_steps:
+            available_steps = list_all_steps()
+            # Find similar steps for suggestions
+            suggestions = []
+            for invalid in invalid_steps[:3]:  # Limit suggestions
+                similar = [s for s in available_steps if invalid.lower() in s.lower() or s.lower() in invalid.lower()]
+                if similar:
+                    suggestions.extend(similar[:2])
+            
+            error_msg = f"Invalid steps found: {', '.join(invalid_steps)}"
+            if suggestions:
+                error_msg += f"\n\nDid you mean one of these? {', '.join(set(suggestions))}"
+            error_msg += f"\n\nAvailable steps: {', '.join(available_steps)}"
+            raise ValueError(error_msg)
     
     def validate_size(self) -> None:
         """Validate that design space doesn't exceed max combinations."""

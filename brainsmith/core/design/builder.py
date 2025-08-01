@@ -14,10 +14,14 @@ from brainsmith.core.dse.segment import DSESegment
 from brainsmith.core.dse.tree import DSETree
 from .space import DesignSpace
 from brainsmith.core.config import ForgeConfig
+from brainsmith.core.plugins.registry import has_step, list_all_steps
 
 
 class DSETreeBuilder:
     """Builds DSE trees from design spaces."""
+    
+    # Skip indicator
+    SKIP_INDICATOR = "~"
     
     def build_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> DSETree:
         """Build DSE tree with unified branching.
@@ -43,23 +47,15 @@ class DSETreeBuilder:
         current_segments = [root]
         pending_steps = []
         
-        for step_spec in space.steps:
+        for step_i, step_spec in enumerate(space.steps):
             if isinstance(step_spec, list):
                 # Branch point - flush and split
                 self._flush_steps(current_segments, pending_steps)
-                current_segments = self._create_branches(current_segments, step_spec)
+                current_segments = self._create_branches(current_segments, step_i, step_spec)
                 pending_steps = []
             else:
                 # Linear step - accumulate
-                if self._is_kernel_inference_step(step_spec, space):
-                    # Special handling for kernel inference
-                    pending_steps.append({
-                        "kernel_backends": space.kernel_backends,
-                        "name": "infer_kernels"
-                    })
-                else:
-                    # Regular step
-                    pending_steps.append({"name": step_spec})
+                pending_steps.append(self._create_step_dict(step_spec, space))
         
         # Flush final steps
         self._flush_steps(current_segments, pending_steps)
@@ -70,9 +66,37 @@ class DSETreeBuilder:
         
         return tree
     
-    def _is_kernel_inference_step(self, step_spec: str, space: DesignSpace) -> bool:
-        """Check if this is a kernel inference step requiring special handling."""
-        return step_spec == "infer_kernels" and hasattr(space, 'kernel_backends')
+    def _create_step_dict(self, step_spec: str, space: DesignSpace) -> Dict[str, Any]:
+        """Create a standardized step dictionary.
+        
+        Args:
+            step_spec: Step specification string
+            space: DesignSpace containing configuration
+            
+        Returns:
+            Dictionary with step configuration
+            
+        Raises:
+            ValueError: If step is not found in registry
+        """
+        # Validate step exists (defensive check - should already be validated in DesignSpace)
+        if not has_step(step_spec):
+            available_steps = list_all_steps()
+            # Find similar steps for helpful error message
+            similar = [s for s in available_steps if step_spec.lower() in s.lower() or s.lower() in step_spec.lower()]
+            
+            error_msg = f"Step '{step_spec}' not found in registry."
+            if similar:
+                error_msg += f" Did you mean one of: {', '.join(similar[:3])}?"
+            error_msg += f"\n\nAvailable steps: {', '.join(available_steps)}"
+            raise ValueError(error_msg)
+        
+        if step_spec == "infer_kernels" and space.kernel_backends:
+            return {
+                "name": step_spec,
+                "kernel_backends": space.kernel_backends
+            }
+        return {"name": step_spec}
     
     def _extract_finn_config(self, forge_config: ForgeConfig) -> Dict[str, Any]:
         """Extract FINN-relevant configuration from ForgeConfig.
@@ -115,7 +139,8 @@ class DSETreeBuilder:
             for segment in segments:
                 segment.transforms.extend(steps)
     
-    def _create_branches(self, segments: List[DSESegment], 
+    def _create_branches(self, segments: List[DSESegment],
+                        branch_index: int,
                         branch_options: List[str]) -> List[DSESegment]:
         """Create child segments for branch options.
         
@@ -123,6 +148,7 @@ class DSETreeBuilder:
         
         Args:
             segments: Parent segments to branch from
+            branch_index: Index of the branch in the step sequence
             branch_options: List of branch options (steps or skip indicators)
             
         Returns:
@@ -132,9 +158,9 @@ class DSETreeBuilder:
         
         for segment in segments:
             for i, option in enumerate(branch_options):
-                if option == "~":
+                if option == self.SKIP_INDICATOR:
                     # Skip branch
-                    branch_id = f"skip_{i}"
+                    branch_id = f"step_{branch_index}_skip"
                     child = segment.add_child(branch_id, [])
                 else:
                     # Regular branch with step

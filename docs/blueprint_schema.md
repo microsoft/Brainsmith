@@ -115,20 +115,20 @@ finn_config:
 
 Kernels define the hardware implementations available for neural network layers. When the `infer_kernels` step is executed, Brainsmith automatically maps layers to these kernels.
 
+**Pre-Release Note**: Backend registration is to support future features in the FINN Kernel backend rework. As of now, specifying backends in the blueprint *has no impact on the build* and it will default based on the `preferred_impl_style` nodeattr in the HWCustomOp.
+
 ```yaml
 kernels:
   # Use all available backends for a kernel
-  - MVAU                              # Matrix-Vector-Activation Unit
   - Thresholding                      # Thresholding layers
   
   # Specify particular backends
   - LayerNorm: LayerNorm_hls          # Use HLS backend only
-  - Conv: [Conv_hls, Conv_rtl]        # Use both HLS and RTL backends
+  - MVAU: [MVAU_hls, MVAU_rtl]        # Use both HLS and RTL backends
 ```
 
 Common FINN kernels:
 - `MVAU` - Matrix-Vector-Activation Unit (dense/linear layers)
-- `Conv` - Convolution layers
 - `Thresholding` - Quantized activation functions
 - `ElementwiseBinaryOperation` - Element-wise operations
 - `Pool` - Pooling layers
@@ -225,7 +225,6 @@ design_space:
     
   kernels:
     - MVAU
-    - Conv
 
 # child.yaml - extends parent
 extends: "parent.yaml"
@@ -244,7 +243,6 @@ design_space:
   # Kernels are replaced entirely (no merge)
   kernels:
     - MVAU
-    - Conv
     - Thresholding                 # Add new kernel
 ```
 

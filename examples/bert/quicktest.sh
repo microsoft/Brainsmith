@@ -10,12 +10,12 @@ echo "Running BERT Modern Demo Quick Test"
 echo "==================================="
 
 # Change to demo directory
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 # Clean up any existing quicktest build directory
-if [ -d "../../build/bert/quicktest" ]; then
+if [ -d "${BSMITH_BUILD_DIR}/quicktest" ]; then
     echo "Removing existing quicktest build directory..."
-    rm -rf ../../build/bert/quicktest
+    rm -rf "${BSMITH_BUILD_DIR}/quicktest"
 fi
 
 # Generate folding config

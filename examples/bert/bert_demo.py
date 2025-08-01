@@ -330,6 +330,7 @@ def main():
     
     # Determine output directory
     build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
+    print(build_dir)
     args.output_dir = os.path.join(build_dir, args.output)
     
     print("=" * 70)
@@ -361,9 +362,6 @@ def main():
         print("BUILD COMPLETED SUCCESSFULLY")
         print("=" * 70)
         print(f"Output directory: {args.output_dir}")
-        print(f"Final model: {os.path.join(args.output_dir, 'output.onnx')}")
-        if os.path.exists(os.path.join(args.output_dir, "stitched_ip")):
-            print(f"Stitched IP: {os.path.join(args.output_dir, 'stitched_ip')}")
         
     except Exception as e:
         print(f"\nERROR: Build failed with error: {e}")

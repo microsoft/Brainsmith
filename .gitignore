@@ -6,6 +6,7 @@ demos/*/output/
 demos/*/results/
 demos/*/checkpoints/
 demos/*/logs/
+demos/*/configs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
