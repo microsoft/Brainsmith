@@ -41,7 +41,7 @@ class InferAutoThresholding(InferAutoHWCustomOp):
     
     def get_domain_base(self) -> str:
         """Return the domain base for auto-generated thresholding kernels."""
-        return "brainsmith.hw_kernels.auto_thresholding"
+        return "brainsmith.kernels.auto_thresholding"
     
     def can_convert_node(self, model: ModelWrapper, node: NodeProto) -> bool:
         """Validate that MultiThreshold node can be converted to AutoHWCustomOp."""

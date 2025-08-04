@@ -70,16 +70,16 @@ def main():
             current_path = args.rtl_file.resolve().parent
             brainsmith_root = None
             while current_path != current_path.parent:
-                if current_path.name == "brainsmith" and (current_path / "hw_kernels").exists():
+                if current_path.name == "brainsmith" and (current_path / "kernels").exists():
                     brainsmith_root = current_path
                     break
                 current_path = current_path.parent
             
             if brainsmith_root:
-                output_dir = brainsmith_root / "hw_kernels" / kernel_metadata.name
+                output_dir = brainsmith_root / "kernels" / kernel_metadata.name
             else:
                 # Fallback: create in current directory
-                output_dir = Path.cwd() / "brainsmith" / "hw_kernels" / kernel_metadata.name
+                output_dir = Path.cwd() / "brainsmith" / "kernels" / kernel_metadata.name
         
         if args.debug:
             print("=== Kernel Integrator ===")

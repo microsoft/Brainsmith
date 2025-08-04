@@ -84,7 +84,7 @@ cd Brainsmith
 
 ```bash
 # Thresholding example
-./smithy exec "python -m brainsmith.tools.kernel_integrator brainsmith/hw_kernels/thresholding/thresholding_axi.sv -o output/"
+./smithy exec "python -m brainsmith.tools.kernel_integrator brainsmith/kernels/thresholding/thresholding_axi.sv -o output/"
 
 # View generated files
 ./smithy exec "ls -la output/"

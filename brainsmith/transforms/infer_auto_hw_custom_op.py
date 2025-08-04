@@ -77,7 +77,7 @@ class InferAutoHWCustomOp(Transformation, ABC):
 
     @abstractmethod
     def get_domain_base(self) -> str:
-        """Return domain base (e.g., 'brainsmith.hw_kernels.auto_thresholding')."""
+        """Return domain base (e.g., 'brainsmith.kernels.auto_thresholding')."""
         pass
 
     @abstractmethod

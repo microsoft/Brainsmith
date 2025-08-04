@@ -856,7 +856,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
 Examples:
   python rtl_parser_demo.py thresholding_axi.sv
   python rtl_parser_demo.py mvu_vvu_axi.sv --format json --output metadata.json
-  python rtl_parser_demo.py ../hw_kernels/*//*.sv --format markdown --output report.md
+  python rtl_parser_demo.py ../kernels/*//*.sv --format markdown --output report.md
   python rtl_parser_demo.py kernel.sv --debug --format all
 
 Supported output formats:
