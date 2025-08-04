@@ -1,18 +1,17 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
 
-"""Brainsmith: FPGA accelerator design space exploration"""
+import logging
+import os
 
-# Re-export the main API
-from .core.dse_api import explore_design_space
+# Set default logging handler to avoid \"No handler found\" warnings.
+# Libraries should NOT add other handlers or call basicConfig.
+# The application using the library is responsible for configuring logging.
+logger = logging.getLogger(__name__) # Get logger for the 'brainsmith' package
+if not logger.hasHandlers():
+    logger.addHandler(logging.NullHandler())
 
-# Keep forge as alias for backward compatibility
-forge = explore_design_space
+# Optional: You could set a default level for the library logger here,
+# but it's often better to let the application control this entirely.
+# logger.setLevel(logging.WARNING) # Example: Default to WARNING
 
-__all__ = [
-    # Main API
-    'explore_design_space',
-    'forge',  # Backward compatibility alias
-]
-
-__version__ = "0.1.0"
+# You can also expose key classes/functions here for easier import
+# e.g., from .core import SomeClass

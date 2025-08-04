@@ -1,14 +1,20 @@
+############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
+#
+# @author       Thomas Keller <thomaskeller@microsoft.com>
+############################################################################
 """
-Brainsmith Transforms
+Brainsmith transformation utilities.
 
-Plugin-based transforms organized by compilation stage.
+This package contains transforms for converting ONNX operations to 
+AutoHWCustomOp implementations and other graph transformations.
 """
 
-# Import all stage modules to trigger transform registration
-from . import cleanup
-from . import kernel_opt
-from . import post_proc
+from .infer_auto_hw_custom_op import InferAutoHWCustomOp
+from .infer_auto_thresholding import InferAutoThresholding
 
+__all__ = [
+    "InferAutoHWCustomOp",
+    "InferAutoThresholding",
+]

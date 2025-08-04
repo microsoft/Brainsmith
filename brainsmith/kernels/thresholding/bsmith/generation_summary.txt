@@ -1,0 +1,12 @@
+Generation Summary for thresholding_axi
+==================================================
+Source File: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
+Output Directory: brainsmith/kernels/thresholding/bsmith
+Success: True
+Validation Passed: True
+Files Generated: 3
+
+Generated Files:
+  - brainsmith/kernels/thresholding/bsmith/thresholding_axi_hw_custom_op.py
+  - brainsmith/kernels/thresholding/bsmith/thresholding_axi_rtl.py
+  - brainsmith/kernels/thresholding/bsmith/thresholding_axi_wrapper.v
