@@ -50,7 +50,7 @@ class RTLToFINNDemo:
     
     def __init__(self):
         self.console = Console() if RICH_AVAILABLE else None
-        self.rtl_file = Path("brainsmith/hw_kernels/thresholding/thresholding_axi_bw.sv")
+        self.rtl_file = Path("brainsmith/kernels/thresholding/thresholding_axi_bw.sv")
         self.output_dir = Path("demo_outputs/rtl_to_finn")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -662,7 +662,7 @@ class RTLToFINNDemo:
         """Compare actual lines of code between manual and automated approaches."""
         
         # Paths to manual FINN integration files
-        manual_dir = Path("brainsmith/hw_kernels/thresholding/finn")
+        manual_dir = Path("brainsmith/kernels/thresholding/finn")
         
         # Count lines in manual files
         manual_files = {

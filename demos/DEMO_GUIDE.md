@@ -35,7 +35,7 @@ python demos/demo_01_rtl_to_finn.py --non-interactive
 
 **With Custom RTL File**:
 ```bash
-python demos/demo_01_rtl_to_finn.py --rtl-file brainsmith/hw_kernels/mvu/mvu_vvu_axi.sv
+python demos/demo_01_rtl_to_finn.py --rtl-file brainsmith/kernels/mvu/mvu_vvu_axi.sv
 ```
 
 ### What You'll See
