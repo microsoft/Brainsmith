@@ -24,8 +24,8 @@ from enum import Enum
 from typing import List, Dict, Optional, Any
 import logging
 
-# Import shared types from main data module
-from ..data import InterfaceType
+# Import shared types from dataflow
+from brainsmith.core.dataflow.types import InterfaceType
 
 
 # Set up logger for this module

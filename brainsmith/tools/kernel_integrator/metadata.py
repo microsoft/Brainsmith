@@ -22,8 +22,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, TYPE_CHECKING
 
 # Import shared types from main data module
-from .data import InterfaceType, BaseDataType
+from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup, validate_datatype_against_constraints
+from qonnx.core.datatype import BaseDataType
 
 if TYPE_CHECKING:
     from .rtl_parser.rtl_data import Parameter

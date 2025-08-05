@@ -1,0 +1,64 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-6.2.5, py-1.11.0, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.10.12', 'Platform': 'Linux-6.8.0-1031-azure-x86_64-with-glibc2.35', 'Packages': {'pytest': '6.2.5', 'py': '1.11.0', 'pluggy': '1.6.0'}, 'Plugins': {'xdist': '3.2.0', 'metadata': '1.7.0', 'parallel': '0.1.1', 'html': '3.0.0', 'dependency': '0.5.1', 'cov': '4.1.0'}}
+rootdir: /home/tafk/dev/brainsmith-1
+plugins: xdist-3.2.0, metadata-1.7.0, parallel-0.1.1, html-3.0.0, dependency-0.5.1, cov-4.1.0
+collecting ... collected 9 items
+
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_simple_module_serialization PASSED [ 11%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_parameterized_module_serialization PASSED [ 22%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_module_with_pragmas_serialization PASSED [ 33%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_malformed_module_serialization PASSED [ 44%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_ast_comparison PASSED [ 55%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_serialization_with_depth_limit PASSED [ 66%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_exclude_node_types PASSED [ 77%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_generate_reference_files PASSED [ 88%]
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_custom_serialization_format FAILED [100%]
+
+=================================== FAILURES ===================================
+____________ TestASTSerialization.test_custom_serialization_format _____________
+
+self = <rtl_parser.test_ast_serialization.TestASTSerialization object at 0x7f83c3788220>
+ast_parser = <brainsmith.tools.kernel_integrator.rtl_parser.ast_parser.ASTParser object at 0x7f83c378b670>
+ast_comparison_dir = PosixPath('/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/fixtures/ast_comparison')
+
+    def test_custom_serialization_format(self, ast_parser, ast_comparison_dir):
+        """Test using AST serializer for custom analysis."""
+        # Read RTL file
+        rtl_file = ast_comparison_dir / "parameterized_module.sv"
+        with open(rtl_file, 'r') as f:
+            rtl_content = f.read()
+    
+        tree = ast_parser.parse_source(rtl_content)
+    
+        # Create custom serializer for specific analysis
+        # For example, only show module structure without implementation details
+        serializer = ASTSerializer(
+            exclude_types={"comment", "always_ff", "blocking_assignment", "nonblocking_assignment"},
+            max_text_length=20
+        )
+    
+        structure_output = serializer.serialize_tree(tree, format="tree")
+    
+        # Should show module structure but not implementation
+        assert "module_declaration" in structure_output
+        assert "parameter_port_list" in structure_output
+        assert "list_of_port_declarations" in structure_output
+        # But not implementation details
+>       assert "always_ff" not in structure_output
+E       assert 'always_ff' not in '└── source_... [47:0-47:9]'
+E         'always_ff' is contained here:
+E           └── source_file "////////////////////..." [0:0-47:9]
+E               └── module_declaration "module parameterized..." [6:0-47:9]
+E                   ├── module_ansi_header "module parameterized..." [6:0-23:2]
+E                   │   ├── module_keyword "module" [6:0-6:6]
+E                   │   │   └── module [6:0-6:6]
+E                   │   ├── simple_identifier "parameterized_module" [6:7-6:27]...
+E         
+E         ...Full output truncated (399 lines hidden), use '-vv' to show
+
+tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py:289: AssertionError
+=========================== short test summary info ============================
+FAILED tests/tools/kernel_integrator/rtl_parser/test_ast_serialization.py::TestASTSerialization::test_custom_serialization_format
+========================= 1 failed, 8 passed in 0.25s ==========================

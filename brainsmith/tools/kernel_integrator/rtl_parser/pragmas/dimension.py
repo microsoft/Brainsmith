@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 import logging
 
 from .base import InterfacePragma, PragmaError
-from ...data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from ...metadata import InterfaceMetadata
 from ..rtl_data import PragmaType, Parameter
 

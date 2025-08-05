@@ -7,14 +7,25 @@
 """AST parsing utilities for SystemVerilog RTL parser.
 
 This module handles all tree-sitter AST operations including parsing,
-syntax checking, and node traversal utilities.
+syntax checking, and node traversal utilities. It uses the tree-sitter-systemverilog
+package from PyPI for grammar support.
+
+Grammar loading is handled directly in this module as of the migration to
+py-tree-sitter >= 0.25.0 with tree-sitter-systemverilog package support.
 """
 
 import logging
 from typing import Optional, List
-from tree_sitter import Parser, Node, Tree
+from tree_sitter import Parser, Node, Tree, Language
 
-from . import grammar
+# Import will fail if tree-sitter-systemverilog is not installed
+try:
+    import tree_sitter_systemverilog as systemverilog
+except ImportError as e:
+    raise ImportError(
+        "tree-sitter-systemverilog package not found. "
+        "Please install it with: pip install tree-sitter-systemverilog"
+    ) from e
 
 logger = logging.getLogger(__name__)
 
@@ -39,31 +50,26 @@ class ASTParser:
     - Node traversal utilities
     """
     
-    def __init__(self, grammar_path: Optional[str] = None, debug: bool = False):
+    def __init__(self, debug: bool = False):
         """Initialize the AST parser with tree-sitter grammar.
         
         Args:
-            grammar_path: Optional path to compiled grammar library.
-                         If None, uses default from grammar.py.
             debug: Enable debug logging.
             
         Raises:
-            FileNotFoundError: If grammar library cannot be loaded.
-            RuntimeError: For other grammar loading errors.
+            RuntimeError: If grammar loading fails.
         """
         self.debug = debug
         self.parser: Optional[Parser] = None
         
         try:
-            language = grammar.load_language(grammar_path)
+            # Create Language object from the systemverilog package
+            language = Language(systemverilog.language())
             self.parser = Parser(language)
-            logger.info("SystemVerilog grammar loaded successfully.")
-        except (FileNotFoundError, AttributeError, RuntimeError) as e:
-            logger.error(f"Failed to load SystemVerilog grammar: {e}")
-            raise FileNotFoundError(f"Failed to load SystemVerilog grammar: {e}")
+            logger.info("SystemVerilog grammar loaded successfully from tree-sitter-systemverilog package.")
         except Exception as e:
-            logger.exception(f"An unexpected error occurred during grammar loading: {e}")
-            raise RuntimeError(f"Unexpected error loading grammar: {e}")
+            logger.error(f"Failed to load SystemVerilog grammar: {e}")
+            raise RuntimeError(f"Failed to load SystemVerilog grammar: {e}") from e
     
     def parse_source(self, content: str) -> Tree:
         """Parse SystemVerilog source code into an AST.

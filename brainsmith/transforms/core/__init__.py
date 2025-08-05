@@ -3,4 +3,5 @@
 """Graph Cleanup transforms"""
 
 # Import all transforms to trigger auto-registration
-from . import expand_norms
+# Note: expand_norms is in cleanup directory, not core
+# from . import expand_norms

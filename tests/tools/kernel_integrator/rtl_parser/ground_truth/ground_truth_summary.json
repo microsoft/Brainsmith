@@ -1,0 +1,34 @@
+{
+  "module_with_pragmas.sv": {
+    "has_errors": false,
+    "root_type": "source_file",
+    "node_count": 292,
+    "tree_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/module_with_pragmas_ground_truth.tree",
+    "json_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/module_with_pragmas_ground_truth.json",
+    "compact_preview": "source_file \"//////////////////////////////////////////////////...\" [0:0-43:9] (comment \"//////////////////////////////////////////////////...\" [0:0-0:76], comment \"// Module with Pragmas for AST Test..."
+  },
+  "malformed_module.sv": {
+    "has_errors": true,
+    "root_type": "source_file",
+    "node_count": 171,
+    "tree_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/malformed_module_ground_truth.tree",
+    "json_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/malformed_module_ground_truth.json",
+    "compact_preview": "source_file \"//////////////////////////////////////////////////...\" [0:0-26:20] (comment \"//////////////////////////////////////////////////...\" [0:0-0:76], comment \"// Malformed Module for AST Error ..."
+  },
+  "simple_module.sv": {
+    "has_errors": false,
+    "root_type": "source_file",
+    "node_count": 79,
+    "tree_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/simple_module_ground_truth.tree",
+    "json_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/simple_module_ground_truth.json",
+    "compact_preview": "source_file \"//////////////////////////////////////////////////...\" [0:0-15:9] (comment \"//////////////////////////////////////////////////...\" [0:0-0:76], comment \"// Simple Module for AST Testing\" [..."
+  },
+  "parameterized_module.sv": {
+    "has_errors": false,
+    "root_type": "source_file",
+    "node_count": 472,
+    "tree_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/parameterized_module_ground_truth.tree",
+    "json_file": "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/ground_truth/parameterized_module_ground_truth.json",
+    "compact_preview": "source_file \"//////////////////////////////////////////////////...\" [0:0-47:9] (comment \"//////////////////////////////////////////////////...\" [0:0-0:76], comment \"// Parameterized Module for AST Tes..."
+  }
+}

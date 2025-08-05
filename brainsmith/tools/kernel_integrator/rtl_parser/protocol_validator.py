@@ -16,7 +16,7 @@ presence of required signals and correct port directions. Protocol definitions
 import logging
 from typing import Dict, Set, List, Tuple
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from .rtl_data import Port, PortGroup, ProtocolValidationResult, PortDirection
 
 # --- Protocol Definitions ---
