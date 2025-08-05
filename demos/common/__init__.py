@@ -18,7 +18,6 @@ from .utils import (
 
 from .visualizer import (
     create_interface_diagram,
-    create_dataflow_diagram,
     create_comparison_chart,
     create_pragma_visualization,
     export_visualization
@@ -33,7 +32,6 @@ __all__ = [
     'highlight_code',
     'save_demo_output',
     'create_interface_diagram',
-    'create_dataflow_diagram',
     'create_comparison_chart',
     'create_pragma_visualization',
     'export_visualization'

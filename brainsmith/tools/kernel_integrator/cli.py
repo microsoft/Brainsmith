@@ -116,7 +116,7 @@ def main():
             print()
         
         # Step 3: Report success
-        if result.is_success():
+        if result.is_success:
             print(f"✅ Successfully generated HWCustomOp for {kernel_metadata.name}")
             print(f"📁 Output directory: {result.output_directory}")
             print(f"⚡ Generated {len(result.generated_files)} files in {result.generation_time_ms:.1f}ms")
@@ -126,7 +126,7 @@ def main():
                 print(f"   Error: {error}")
             return 1
         
-        if args.debug and result.is_success():
+        if args.debug and result.is_success:
             print()
             print("Generated files:")
             for file_path in result.files_written:
@@ -141,7 +141,7 @@ def main():
                     file_size = file_path.stat().st_size
                     print(f"   📋 {file_path.name} ({file_size:,} bytes)")
         
-        elif args.debug and not result.is_success():
+        elif args.debug and not result.is_success:
             print()
             print("Errors encountered:")
             for error in result.errors:

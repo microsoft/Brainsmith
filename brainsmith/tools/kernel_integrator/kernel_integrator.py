@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .types.metadata import KernelMetadata
-from .types.generation import GenerationResult
+from .types.generation import GenerationResult, GeneratedFile
 from .generators import GeneratorManager
 from .templates.context_generator import TemplateContextGenerator
 from .templates.template_context import TemplateContext
@@ -170,15 +170,10 @@ class KernelIntegrator:
             logger.info(f"Starting kernel integration for: {kernel_metadata.name}")
             
             # Create GenerationResult to track everything
-            result = GenerationResult(
-                kernel_name=kernel_metadata.name,
-                source_file=kernel_metadata.source_file,
-                kernel_metadata=kernel_metadata
-            )
+            result = GenerationResult()
             
             # Generate template context
             template_ctx = self.context_generator.generate_template_context(kernel_metadata)
-            result.template_context = template_ctx
             
             # Validate template context
             validation_errors = template_ctx.validate()
@@ -194,7 +189,12 @@ class KernelIntegrator:
             
             # Add generated files to result
             for filename, content in generated_files.items():
-                result.add_generated_file(filename, content)
+                generated_file = GeneratedFile(
+                    path=Path(filename),
+                    content=content,
+                    description=f"Generated for {kernel_metadata.name}"
+                )
+                result.add_file(generated_file)
             
             # Write files if requested
             if write_files:
@@ -203,7 +203,12 @@ class KernelIntegrator:
                 else:
                     try:
                         output_dir = self._determine_output_directory(kernel_metadata.name, output_structure)
-                        written_files = result.write_all_files(output_dir)
+                        # Write files to output directory
+                        for generated_file in result.generated_files:
+                            output_path = output_dir / generated_file.path
+                            output_path.parent.mkdir(parents=True, exist_ok=True)
+                            output_path.write_text(generated_file.content)
+                        written_files = [output_dir / f.path for f in result.generated_files]
                         logger.info(f"Successfully wrote {len(written_files)} files to {output_dir}")
                     except Exception as e:
                         result.add_error(f"File writing failed: {e}")
@@ -212,7 +217,7 @@ class KernelIntegrator:
             generation_time = (time.time() - start_time) * 1000
             result.generation_time_ms = generation_time
             
-            if result.is_success():
+            if result.is_success:
                 logger.info(f"Successfully completed kernel integration for {kernel_metadata.name} in {generation_time:.1f}ms")
             else:
                 logger.error(f"Kernel integration failed for {kernel_metadata.name}: {result.errors}")
