@@ -17,7 +17,7 @@ from typing import List, Optional, Dict, Callable, Any, Tuple
 from tree_sitter import Node
 
 from brainsmith.core.dataflow.types import InterfaceType
-from ..metadata import InterfaceMetadata, DatatypeMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, DatatypeMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
@@ -278,9 +278,8 @@ class PragmaHandler:
                 # Merge with existing metadata
                 property_type = pragma.parsed_data['property_type']
                 parameter_name = pragma.parsed_data['parameter_name']
-                internal_datatypes[target_name] = internal_datatypes[target_name].update(
-                    **{property_type: parameter_name}
-                )
+                # Update the attribute directly on the existing datatype
+                setattr(internal_datatypes[target_name], property_type, parameter_name)
         
         logger.info(f"Collected {len(internal_datatypes)} internal datatype bindings: {list(internal_datatypes.keys())}")
         return list(internal_datatypes.values())

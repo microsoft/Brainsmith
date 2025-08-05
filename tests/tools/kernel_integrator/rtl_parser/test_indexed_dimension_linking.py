@@ -15,7 +15,7 @@ from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.parameter_linker import ParameterLinker
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.core.dataflow.types import InterfaceType
 
 

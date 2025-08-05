@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from brainsmith.tools.kernel_integrator.rtl_parser.parser import RTLParser, ParserError
 from brainsmith.tools.kernel_integrator.rtl_parser.ast_parser import SyntaxError as RTLSyntaxError
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata, DatatypeMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata, DatatypeMetadata
 
 
 class Colors:

@@ -16,7 +16,7 @@ Key Features:
 
 import warnings
 
-from .types.generation import GenerationResult, PerformanceMetrics, GenerationValidationResult
+from .types.generation import GenerationResult, PerformanceMetrics
 from .types.config import Config
 from .cli import main
 from .kernel_integrator import KernelIntegrator, KernelIntegratorError
@@ -29,7 +29,7 @@ __all__ = [
     "GeneratorManager",
     "GeneratorBase",
     "GenerationResult",
-    "GenerationValidationResult", 
+ 
     "PerformanceMetrics",
     "Config",
     "main",

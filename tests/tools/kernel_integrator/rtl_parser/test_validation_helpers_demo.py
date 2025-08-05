@@ -239,7 +239,7 @@ class TestValidationHelpersDemo:
     def test_real_world_validation_pattern(self, rtl_parser):
         """Test validation pattern for real-world hardware kernel."""
         # Use the all_pragmas fixture which demonstrates all pragma types
-        rtl_file = "/home/tafk/dev/brainsmith-2/tests/tools/hw_kernel_gen/rtl_parser/fixtures/pragmas/all_pragmas.sv"
+        rtl_file = "/home/tafk/dev/brainsmith-1/tests/tools/kernel_integrator/rtl_parser/fixtures/pragmas/all_pragmas.sv"
         
         with open(rtl_file, 'r') as f:
             rtl_content = f.read()

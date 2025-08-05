@@ -15,9 +15,9 @@ from typing import Dict, List, Optional, Any, Union
 import logging
 
 from .base import Pragma, PragmaError
-from ...metadata import KernelMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
-from ...metadata import DimensionRelationship, RelationType
+from brainsmith.core.dataflow.relationships import DimensionRelationship, RelationType
 
 logger = logging.getLogger(__name__)
 

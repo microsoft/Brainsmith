@@ -5,7 +5,7 @@ Creates unified CodegenBinding from KernelMetadata for use in templates.
 """
 
 from typing import Dict, List, Set, TYPE_CHECKING
-from ..metadata import KernelMetadata, InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.core.dataflow.types import InterfaceType
 
 if TYPE_CHECKING:

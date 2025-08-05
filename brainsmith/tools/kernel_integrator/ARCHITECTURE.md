@@ -1,11 +1,12 @@
 # Kernel Integrator Architecture
 
-**Version**: 3.2  
-**Status**: Production Ready
+**Version**: 4.0  
+**Status**: Production Ready  
+**Last Updated**: 2025-08-05
 
 ## Overview
 
-Converts SystemVerilog RTL modules into FINN-compatible Python operators.
+Converts SystemVerilog RTL modules into FINN-compatible Python operators with a clean, modular type system designed to eliminate circular dependencies and improve maintainability.
 
 **Input**: SystemVerilog RTL with pragma annotations  
 **Output**: 
@@ -66,6 +67,123 @@ flowchart TD
     style Context fill:#9333ea,color:#fff,stroke:#9333ea,stroke-width:2px
     style GenMgr fill:#1a7f37,color:#fff,stroke:#1a7f37,stroke-width:2px
 ```
+
+## Type System Architecture
+
+The kernel integrator uses a modular type system that eliminates circular dependencies and provides clear separation of concerns:
+
+```mermaid
+flowchart TB
+    subgraph "Shared Types (dataflow)"
+        InterfaceType[InterfaceType enum]
+        ShapeExpr[ShapeExpr/ShapeSpec]
+    end
+    
+    subgraph "Kernel Integrator Types"
+        subgraph "Core Types"
+            PortDirection[PortDirection]
+            DatatypeSpec[DatatypeSpec]
+            DimensionSpec[DimensionSpec]
+        end
+        
+        subgraph "RTL Types"
+            Port[Port]
+            Parameter[Parameter]
+            ParsedModule[ParsedModule]
+            ValidationResult[ValidationResult]
+        end
+        
+        subgraph "Metadata Types"
+            InterfaceMetadata[InterfaceMetadata]
+            KernelMetadata[KernelMetadata]
+        end
+        
+        subgraph "Generation Types"
+            GeneratedFile[GeneratedFile]
+            GenerationContext[GenerationContext]
+            GenerationResult[GenerationResult]
+        end
+        
+        subgraph "Binding Types"
+            IOSpec[IOSpec]
+            AttributeBinding[AttributeBinding]
+            CodegenBinding[CodegenBinding]
+        end
+        
+        subgraph "Config Types"
+            Config[Config]
+        end
+    end
+    
+    subgraph "Integration Layer"
+        Converters[converters.py]
+        ConstraintBuilder[constraint_builder.py]
+    end
+    
+    InterfaceType --> InterfaceMetadata
+    ShapeExpr --> DimensionSpec
+    
+    DatatypeSpec --> InterfaceMetadata
+    DimensionSpec --> InterfaceMetadata
+    InterfaceMetadata --> KernelMetadata
+    
+    Port --> ParsedModule
+    Parameter --> ParsedModule
+    ParsedModule --> KernelMetadata
+    
+    KernelMetadata --> GenerationContext
+    GenerationContext --> CodegenBinding
+    CodegenBinding --> GeneratedFile
+    
+    KernelMetadata --> Converters
+    Converters --> ConstraintBuilder
+    
+    style InterfaceType fill:#2563eb,color:#fff,stroke:#2563eb,stroke-width:2px
+    style Converters fill:#9333ea,color:#fff,stroke:#9333ea,stroke-width:2px
+```
+
+### Type Modules
+
+**Core Types** (`types/core.py`):
+- `PortDirection`: Enum for port directions (INPUT, OUTPUT, INOUT)
+- `DatatypeSpec`: Datatype specifications with width, signedness, and constraints
+- `DimensionSpec`: Dimension specifications supporting both concrete and symbolic shapes
+
+**RTL Types** (`types/rtl.py`):
+- `Port`: RTL port representation with name, direction, and width
+- `Parameter`: RTL parameter with name and optional value
+- `ParsedModule`: Complete parsed RTL module structure
+- `ValidationError/ValidationResult`: Parsing validation results
+
+**Metadata Types** (`types/metadata.py`):
+- `InterfaceMetadata`: Complete interface specification including type, dimensions, datatypes
+- `KernelMetadata`: Full kernel specification with interfaces, parameters, and pragmas
+
+**Generation Types** (`types/generation.py`):
+- `GeneratedFile`: Individual generated file with content and metadata
+- `GenerationContext`: Context for template rendering
+- `GenerationResult`: Collection of all generated artifacts
+
+**Binding Types** (`types/binding.py`):
+- `IOSpec`: Input/output specification for interfaces
+- `AttributeBinding`: Node attribute to RTL parameter binding
+- `CodegenBinding`: Complete codegen binding specification
+
+**Config Types** (`types/config.py`):
+- `Config`: CLI and generation configuration
+
+### Integration Layer
+
+The integration layer provides bidirectional conversion between kernel integrator types and dataflow types:
+
+**Converters** (`converters.py`):
+- `metadata_to_kernel_definition()`: Convert KernelMetadata to dataflow KernelDefinition
+- `kernel_definition_to_metadata()`: Convert back from KernelDefinition to KernelMetadata
+- Preserves all metadata for perfect round-trip conversion
+
+**Constraint Builder** (`constraint_builder.py`):
+- Builds dimension and parameter constraints for dataflow integration
+- Creates relationships between parameters and interfaces
 
 ## Key Components
 
@@ -255,6 +373,65 @@ flowchart LR
 
 Generated files integrate directly with FINN's compilation flow. Multi-stage validation ensures correctness at parsing, building, generation, and output stages with detailed error messages.
 
+## Type System Benefits
+
+The modular type system introduced in v4.0 provides several key benefits:
+
+### 1. No Circular Dependencies
+- Clean separation between dataflow and kernel integrator types
+- Shared types live in dataflow, avoiding import cycles
+- Each type module has clear, single-purpose responsibilities
+
+### 2. Better Maintainability
+- Types organized by functional area (RTL, metadata, generation, etc.)
+- Easy to find and modify type definitions
+- Clear import hierarchy prevents tangled dependencies
+
+### 3. Improved Testing
+- Each type module can be tested in isolation
+- Mock objects easier to create without complex dependencies
+- Type validation happens at the appropriate layer
+
+### 4. Extensibility
+- New types can be added without affecting existing code
+- Integration layer allows for future dataflow API changes
+- Clean interfaces between components
+
+### 5. Type Safety
+- Proper use of TypedDict and dataclasses throughout
+- TYPE_CHECKING guards prevent runtime import issues
+- Strong typing catches errors during development
+
+## Migration Guide
+
+For code using the previous type system:
+
+### Import Changes
+```python
+# Old
+from brainsmith.tools.kernel_integrator.data import InterfaceType, KernelMetadata
+
+# New
+from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
+```
+
+### API Changes
+- `InterfaceMetadata` now uses `interface_type` instead of `type`
+- `KernelMetadata.interfaces` is now a list, not a dict
+- Shape specifications use tuples: `(1, 784)` instead of `Shape([1, 784])`
+
+### New Integration Layer
+```python
+# Convert to dataflow types
+from brainsmith.tools.kernel_integrator.converters import metadata_to_kernel_definition
+kernel_def = metadata_to_kernel_definition(kernel_metadata)
+
+# Convert back if needed
+from brainsmith.tools.kernel_integrator.converters import kernel_definition_to_metadata
+metadata = kernel_definition_to_metadata(kernel_def, source_file)
+```
+
 ## Future Directions
 
 - **Multi-language Support**: VHDL, Chisel generation
@@ -262,3 +439,5 @@ Generated files integrate directly with FINN's compilation flow. Multi-stage val
 - **Incremental Generation**: Only regenerate changed files
 - **IDE Integration**: Real-time pragma validation
 - **Template Library**: Common patterns and examples
+- **Enhanced Type Validation**: Runtime type checking with better error messages
+- **Type Serialization**: Efficient storage and transmission of type information

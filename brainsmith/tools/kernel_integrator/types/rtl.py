@@ -9,7 +9,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from enum import Enum
 
-from .core import PortDirection
+
+class PortDirection(Enum):
+    """Direction of RTL ports."""
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
 
 if TYPE_CHECKING:
     from brainsmith.core.dataflow.types import InterfaceType
@@ -57,18 +62,18 @@ class Port:
         self.array_bounds = None  # Not currently parsed
     
     @property
-    def total_width(self) -> int:
-        """Calculate total width including array dimensions.
+    def total_width(self) -> Optional[int]:
+        """Calculate total width if parseable as integer.
         
-        Note: Currently returns 1 as width is stored as string expression.
+        Returns:
+            Integer width if parseable, None for complex expressions.
         """
-        # TODO: Parse width string to get numeric value
         try:
             # Simple case - just a number
             return int(self.width)
-        except ValueError:
-            # Complex expression, default to 1
-            return 1
+        except (ValueError, TypeError):
+            # Complex expression - return None instead of lying
+            return None
     
     def is_array(self) -> bool:
         """Check if this port is an array."""

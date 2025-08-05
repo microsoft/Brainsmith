@@ -27,15 +27,26 @@ For each kernel, KI generates three complementary files:
 2. **`{kernel}_rtl.py`** - FINN RTL backend with explicit parameter resolution  
 3. **`{kernel}_wrapper.v`** - SystemVerilog wrapper with parameter substitution
 
-## Architecture
+## Documentation
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete documentation of the unified kernel generation architecture, including:
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Complete system architecture including:
+  - System architecture diagrams and data flow
+  - Type system architecture (v4.0)
+  - Code generation pipeline details
+  - Template system and parameter binding
+  - Performance characteristics
 
-- System architecture and data flow
-- Code generation pipeline details
-- Template system and explicit parameter binding
-- Performance characteristics and benefits
-- Migration notes and breaking changes
+- **[API_REFERENCE.md](./API_REFERENCE.md)** - Comprehensive API documentation:
+  - All public types and their usage
+  - Code examples for each component
+  - Integration layer documentation
+  - Best practices and error handling
+
+- **[MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)** - Migration from v3.x to v4.0:
+  - Breaking changes and new import paths
+  - Migration strategies and patterns
+  - Troubleshooting common issues
+  - Complete migration examples
 
 ## Directory Structure
 
