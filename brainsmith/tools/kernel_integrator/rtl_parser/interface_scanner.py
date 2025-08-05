@@ -17,7 +17,7 @@ import logging
 from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from .rtl_data import Port, PortGroup
 from .protocol_validator import (
     GLOBAL_SIGNAL_SUFFIXES,

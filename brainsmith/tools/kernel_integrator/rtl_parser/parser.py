@@ -59,7 +59,7 @@ class RTLParser:
         auto_link_parameters: Enable automatic parameter linking
     """
     
-    def __init__(self, grammar_path: Optional[str] = None, debug: bool = False,
+    def __init__(self, debug: bool = False,
                  auto_link_parameters: bool = True, strict: bool = True):
         """Initializes the RTLParser.
 
@@ -67,8 +67,6 @@ class RTLParser:
         and workflow orchestration.
 
         Args:
-            grammar_path: Optional path to the compiled tree-sitter grammar library.
-                          If None, uses the default path configured in grammar.py.
             debug: If True, enables detailed debug logging.
             auto_link_parameters: If True, enables automatic parameter linking based
                                 on naming conventions. Default is True.
@@ -77,8 +75,7 @@ class RTLParser:
                     requirements. Default is True.
 
         Raises:
-            FileNotFoundError: If the grammar library cannot be found or loaded.
-            RuntimeError: For other unexpected errors during grammar loading.
+            RuntimeError: For unexpected errors during initialization.
         """
         self.debug = debug
         self.auto_link_parameters = auto_link_parameters
@@ -86,7 +83,7 @@ class RTLParser:
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
         # Initialize sub-components
-        self.ast_parser = ASTParser(grammar_path=grammar_path, debug=self.debug)
+        self.ast_parser = ASTParser(debug=self.debug)
         self.module_extractor = ModuleExtractor(self.ast_parser, debug=self.debug)
         self.interface_builder = InterfaceBuilder(debug=self.debug)
         self.pragma_handler = PragmaHandler(debug=self.debug)

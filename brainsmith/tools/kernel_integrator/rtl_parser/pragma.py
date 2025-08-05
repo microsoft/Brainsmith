@@ -16,7 +16,7 @@ from typing import List, Optional, Dict, Callable, Any, Tuple
 
 from tree_sitter import Node
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata, DatatypeMetadata
 from .rtl_data import PragmaType
 from .pragmas import (

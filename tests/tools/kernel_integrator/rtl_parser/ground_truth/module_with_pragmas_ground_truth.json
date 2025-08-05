@@ -1,0 +1,2098 @@
+{
+  "type": "source_file",
+  "text": "//////////////////////////////////////////////////...",
+  "start": "0:0",
+  "end": "43:9",
+  "children": [
+    {
+      "type": "comment",
+      "text": "//////////////////////////////////////////////////...",
+      "start": "0:0",
+      "end": "0:76"
+    },
+    {
+      "type": "comment",
+      "text": "// Module with Pragmas for AST Testing",
+      "start": "1:0",
+      "end": "1:38"
+    },
+    {
+      "type": "comment",
+      "text": "//",
+      "start": "2:0",
+      "end": "2:3"
+    },
+    {
+      "type": "comment",
+      "text": "// This module includes pragma annotations for tes...",
+      "start": "3:0",
+      "end": "3:69"
+    },
+    {
+      "type": "comment",
+      "text": "//////////////////////////////////////////////////...",
+      "start": "4:0",
+      "end": "4:76"
+    },
+    {
+      "type": "module_declaration",
+      "text": "module matrix_multiply #(\\n    parameter int unsig...",
+      "start": "6:0",
+      "end": "43:9",
+      "children": [
+        {
+          "type": "module_ansi_header",
+          "text": "module matrix_multiply #(\\n    parameter int unsig...",
+          "start": "6:0",
+          "end": "39:2",
+          "children": [
+            {
+              "type": "module_keyword",
+              "text": "module",
+              "start": "6:0",
+              "end": "6:6",
+              "children": [
+                {
+                  "type": "module",
+                  "text": "module",
+                  "start": "6:0",
+                  "end": "6:6"
+                }
+              ]
+            },
+            {
+              "type": "simple_identifier",
+              "text": "matrix_multiply",
+              "start": "6:7",
+              "end": "6:22"
+            },
+            {
+              "type": "parameter_port_list",
+              "text": "#(\\n    parameter int unsigned SIMD = 8,\\n    para...",
+              "start": "6:23",
+              "end": "11:1",
+              "children": [
+                {
+                  "type": "#",
+                  "text": "#",
+                  "start": "6:23",
+                  "end": "6:24"
+                },
+                {
+                  "type": "(",
+                  "text": "(",
+                  "start": "6:24",
+                  "end": "6:25"
+                },
+                {
+                  "type": "parameter_port_declaration",
+                  "text": "parameter int unsigned SIMD = 8",
+                  "start": "7:4",
+                  "end": "7:35",
+                  "children": [
+                    {
+                      "type": "parameter_declaration",
+                      "text": "parameter int unsigned SIMD = 8",
+                      "start": "7:4",
+                      "end": "7:35",
+                      "children": [
+                        {
+                          "type": "parameter",
+                          "text": "parameter",
+                          "start": "7:4",
+                          "end": "7:13"
+                        },
+                        {
+                          "type": "data_type_or_implicit",
+                          "text": "int unsigned",
+                          "start": "7:14",
+                          "end": "7:26",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "int unsigned",
+                              "start": "7:14",
+                              "end": "7:26",
+                              "children": [
+                                {
+                                  "type": "integer_atom_type",
+                                  "text": "int",
+                                  "start": "7:14",
+                                  "end": "7:17",
+                                  "children": [
+                                    {
+                                      "type": "int",
+                                      "text": "int",
+                                      "start": "7:14",
+                                      "end": "7:17"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "unsigned",
+                                  "text": "unsigned",
+                                  "start": "7:18",
+                                  "end": "7:26"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_of_param_assignments",
+                          "text": "SIMD = 8",
+                          "start": "7:27",
+                          "end": "7:35",
+                          "children": [
+                            {
+                              "type": "param_assignment",
+                              "text": "SIMD = 8",
+                              "start": "7:27",
+                              "end": "7:35",
+                              "children": [
+                                {
+                                  "type": "simple_identifier",
+                                  "text": "SIMD",
+                                  "start": "7:27",
+                                  "end": "7:31"
+                                },
+                                {
+                                  "type": "=",
+                                  "text": "=",
+                                  "start": "7:32",
+                                  "end": "7:33"
+                                },
+                                {
+                                  "type": "constant_param_expression",
+                                  "text": "8",
+                                  "start": "7:34",
+                                  "end": "7:35",
+                                  "children": [
+                                    {
+                                      "type": "constant_mintypmax_expression",
+                                      "text": "8",
+                                      "start": "7:34",
+                                      "end": "7:35",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "8",
+                                          "start": "7:34",
+                                          "end": "7:35",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "8",
+                                              "start": "7:34",
+                                              "end": "7:35",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "8",
+                                                  "start": "7:34",
+                                                  "end": "7:35",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "8",
+                                                      "start": "7:34",
+                                                      "end": "7:35",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "8",
+                                                          "start": "7:34",
+                                                          "end": "7:35",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "8",
+                                                              "start": "7:34",
+                                                              "end": "7:35"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "7:35",
+                  "end": "7:36"
+                },
+                {
+                  "type": "parameter_port_declaration",
+                  "text": "parameter int unsigned PE = 4",
+                  "start": "8:4",
+                  "end": "8:33",
+                  "children": [
+                    {
+                      "type": "parameter_declaration",
+                      "text": "parameter int unsigned PE = 4",
+                      "start": "8:4",
+                      "end": "8:33",
+                      "children": [
+                        {
+                          "type": "parameter",
+                          "text": "parameter",
+                          "start": "8:4",
+                          "end": "8:13"
+                        },
+                        {
+                          "type": "data_type_or_implicit",
+                          "text": "int unsigned",
+                          "start": "8:14",
+                          "end": "8:26",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "int unsigned",
+                              "start": "8:14",
+                              "end": "8:26",
+                              "children": [
+                                {
+                                  "type": "integer_atom_type",
+                                  "text": "int",
+                                  "start": "8:14",
+                                  "end": "8:17",
+                                  "children": [
+                                    {
+                                      "type": "int",
+                                      "text": "int",
+                                      "start": "8:14",
+                                      "end": "8:17"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "unsigned",
+                                  "text": "unsigned",
+                                  "start": "8:18",
+                                  "end": "8:26"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_of_param_assignments",
+                          "text": "PE = 4",
+                          "start": "8:27",
+                          "end": "8:33",
+                          "children": [
+                            {
+                              "type": "param_assignment",
+                              "text": "PE = 4",
+                              "start": "8:27",
+                              "end": "8:33",
+                              "children": [
+                                {
+                                  "type": "simple_identifier",
+                                  "text": "PE",
+                                  "start": "8:27",
+                                  "end": "8:29"
+                                },
+                                {
+                                  "type": "=",
+                                  "text": "=",
+                                  "start": "8:30",
+                                  "end": "8:31"
+                                },
+                                {
+                                  "type": "constant_param_expression",
+                                  "text": "4",
+                                  "start": "8:32",
+                                  "end": "8:33",
+                                  "children": [
+                                    {
+                                      "type": "constant_mintypmax_expression",
+                                      "text": "4",
+                                      "start": "8:32",
+                                      "end": "8:33",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "4",
+                                          "start": "8:32",
+                                          "end": "8:33",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "4",
+                                              "start": "8:32",
+                                              "end": "8:33",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "4",
+                                                  "start": "8:32",
+                                                  "end": "8:33",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "4",
+                                                      "start": "8:32",
+                                                      "end": "8:33",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "4",
+                                                          "start": "8:32",
+                                                          "end": "8:33",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "4",
+                                                              "start": "8:32",
+                                                              "end": "8:33"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "8:33",
+                  "end": "8:34"
+                },
+                {
+                  "type": "parameter_port_declaration",
+                  "text": "parameter int unsigned INPUT_WIDTH = 16",
+                  "start": "9:4",
+                  "end": "9:43",
+                  "children": [
+                    {
+                      "type": "parameter_declaration",
+                      "text": "parameter int unsigned INPUT_WIDTH = 16",
+                      "start": "9:4",
+                      "end": "9:43",
+                      "children": [
+                        {
+                          "type": "parameter",
+                          "text": "parameter",
+                          "start": "9:4",
+                          "end": "9:13"
+                        },
+                        {
+                          "type": "data_type_or_implicit",
+                          "text": "int unsigned",
+                          "start": "9:14",
+                          "end": "9:26",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "int unsigned",
+                              "start": "9:14",
+                              "end": "9:26",
+                              "children": [
+                                {
+                                  "type": "integer_atom_type",
+                                  "text": "int",
+                                  "start": "9:14",
+                                  "end": "9:17",
+                                  "children": [
+                                    {
+                                      "type": "int",
+                                      "text": "int",
+                                      "start": "9:14",
+                                      "end": "9:17"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "unsigned",
+                                  "text": "unsigned",
+                                  "start": "9:18",
+                                  "end": "9:26"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_of_param_assignments",
+                          "text": "INPUT_WIDTH = 16",
+                          "start": "9:27",
+                          "end": "9:43",
+                          "children": [
+                            {
+                              "type": "param_assignment",
+                              "text": "INPUT_WIDTH = 16",
+                              "start": "9:27",
+                              "end": "9:43",
+                              "children": [
+                                {
+                                  "type": "simple_identifier",
+                                  "text": "INPUT_WIDTH",
+                                  "start": "9:27",
+                                  "end": "9:38"
+                                },
+                                {
+                                  "type": "=",
+                                  "text": "=",
+                                  "start": "9:39",
+                                  "end": "9:40"
+                                },
+                                {
+                                  "type": "constant_param_expression",
+                                  "text": "16",
+                                  "start": "9:41",
+                                  "end": "9:43",
+                                  "children": [
+                                    {
+                                      "type": "constant_mintypmax_expression",
+                                      "text": "16",
+                                      "start": "9:41",
+                                      "end": "9:43",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "16",
+                                          "start": "9:41",
+                                          "end": "9:43",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "16",
+                                              "start": "9:41",
+                                              "end": "9:43",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "16",
+                                                  "start": "9:41",
+                                                  "end": "9:43",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "16",
+                                                      "start": "9:41",
+                                                      "end": "9:43",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "16",
+                                                          "start": "9:41",
+                                                          "end": "9:43",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "16",
+                                                              "start": "9:41",
+                                                              "end": "9:43"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "9:43",
+                  "end": "9:44"
+                },
+                {
+                  "type": "parameter_port_declaration",
+                  "text": "parameter int unsigned OUTPUT_WIDTH = 32",
+                  "start": "10:4",
+                  "end": "10:44",
+                  "children": [
+                    {
+                      "type": "parameter_declaration",
+                      "text": "parameter int unsigned OUTPUT_WIDTH = 32",
+                      "start": "10:4",
+                      "end": "10:44",
+                      "children": [
+                        {
+                          "type": "parameter",
+                          "text": "parameter",
+                          "start": "10:4",
+                          "end": "10:13"
+                        },
+                        {
+                          "type": "data_type_or_implicit",
+                          "text": "int unsigned",
+                          "start": "10:14",
+                          "end": "10:26",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "int unsigned",
+                              "start": "10:14",
+                              "end": "10:26",
+                              "children": [
+                                {
+                                  "type": "integer_atom_type",
+                                  "text": "int",
+                                  "start": "10:14",
+                                  "end": "10:17",
+                                  "children": [
+                                    {
+                                      "type": "int",
+                                      "text": "int",
+                                      "start": "10:14",
+                                      "end": "10:17"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "unsigned",
+                                  "text": "unsigned",
+                                  "start": "10:18",
+                                  "end": "10:26"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_of_param_assignments",
+                          "text": "OUTPUT_WIDTH = 32",
+                          "start": "10:27",
+                          "end": "10:44",
+                          "children": [
+                            {
+                              "type": "param_assignment",
+                              "text": "OUTPUT_WIDTH = 32",
+                              "start": "10:27",
+                              "end": "10:44",
+                              "children": [
+                                {
+                                  "type": "simple_identifier",
+                                  "text": "OUTPUT_WIDTH",
+                                  "start": "10:27",
+                                  "end": "10:39"
+                                },
+                                {
+                                  "type": "=",
+                                  "text": "=",
+                                  "start": "10:40",
+                                  "end": "10:41"
+                                },
+                                {
+                                  "type": "constant_param_expression",
+                                  "text": "32",
+                                  "start": "10:42",
+                                  "end": "10:44",
+                                  "children": [
+                                    {
+                                      "type": "constant_mintypmax_expression",
+                                      "text": "32",
+                                      "start": "10:42",
+                                      "end": "10:44",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "32",
+                                          "start": "10:42",
+                                          "end": "10:44",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "32",
+                                              "start": "10:42",
+                                              "end": "10:44",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "32",
+                                                  "start": "10:42",
+                                                  "end": "10:44",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "32",
+                                                      "start": "10:42",
+                                                      "end": "10:44",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "32",
+                                                          "start": "10:42",
+                                                          "end": "10:44",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "32",
+                                                              "start": "10:42",
+                                                              "end": "10:44"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": ")",
+                  "text": ")",
+                  "start": "11:0",
+                  "end": "11:1"
+                }
+              ]
+            },
+            {
+              "type": "list_of_port_declarations",
+              "text": "(\\n    // Global signals\\n    input  logic        ...",
+              "start": "11:2",
+              "end": "39:1",
+              "children": [
+                {
+                  "type": "(",
+                  "text": "(",
+                  "start": "11:2",
+                  "end": "11:3"
+                },
+                {
+                  "type": "comment",
+                  "text": "// Global signals",
+                  "start": "12:4",
+                  "end": "12:21"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic                            ap_clk",
+                  "start": "13:4",
+                  "end": "13:50",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic",
+                      "start": "13:4",
+                      "end": "13:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "13:4",
+                          "end": "13:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "13:4",
+                              "end": "13:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "13:11",
+                          "end": "13:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "13:11",
+                              "end": "13:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "13:11",
+                                  "end": "13:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "13:11",
+                                      "end": "13:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "ap_clk",
+                      "start": "13:44",
+                      "end": "13:50"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "13:50",
+                  "end": "13:51"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic                            ap_rst_n",
+                  "start": "14:4",
+                  "end": "14:52",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic",
+                      "start": "14:4",
+                      "end": "14:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "14:4",
+                          "end": "14:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "14:4",
+                              "end": "14:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "14:11",
+                          "end": "14:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "14:11",
+                              "end": "14:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "14:11",
+                                  "end": "14:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "14:11",
+                                      "end": "14:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "ap_rst_n",
+                      "start": "14:44",
+                      "end": "14:52"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "14:52",
+                  "end": "14:53"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:INTERFACE input",
+                  "start": "16:4",
+                  "end": "16:40"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:DATATYPE ap_fixed<16,6>",
+                  "start": "17:4",
+                  "end": "17:48"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:BDIM [*, 768]",
+                  "start": "18:4",
+                  "end": "18:38"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:SDIM [1, SIMD]",
+                  "start": "19:4",
+                  "end": "19:39"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic [INPUT_WIDTH-1:0]          s_axis_inp...",
+                  "start": "20:4",
+                  "end": "20:62",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic [INPUT_WIDTH-1:0]",
+                      "start": "20:4",
+                      "end": "20:34",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "20:4",
+                          "end": "20:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "20:4",
+                              "end": "20:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic [INPUT_WIDTH-1:0]",
+                          "start": "20:11",
+                          "end": "20:34",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic [INPUT_WIDTH-1:0]",
+                              "start": "20:11",
+                              "end": "20:34",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "20:11",
+                                  "end": "20:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "20:11",
+                                      "end": "20:16"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "packed_dimension",
+                                  "text": "[INPUT_WIDTH-1:0]",
+                                  "start": "20:17",
+                                  "end": "20:34",
+                                  "children": [
+                                    {
+                                      "type": "[",
+                                      "text": "[",
+                                      "start": "20:17",
+                                      "end": "20:18"
+                                    },
+                                    {
+                                      "type": "constant_range",
+                                      "text": "INPUT_WIDTH-1:0",
+                                      "start": "20:18",
+                                      "end": "20:33",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "INPUT_WIDTH-1",
+                                          "start": "20:18",
+                                          "end": "20:31",
+                                          "children": [
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "INPUT_WIDTH",
+                                              "start": "20:18",
+                                              "end": "20:29",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "INPUT_WIDTH",
+                                                  "start": "20:18",
+                                                  "end": "20:29",
+                                                  "children": [
+                                                    {
+                                                      "type": "simple_identifier",
+                                                      "text": "INPUT_WIDTH",
+                                                      "start": "20:18",
+                                                      "end": "20:29"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "type": "-",
+                                              "text": "-",
+                                              "start": "20:29",
+                                              "end": "20:30"
+                                            },
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "1",
+                                              "start": "20:30",
+                                              "end": "20:31",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "1",
+                                                  "start": "20:30",
+                                                  "end": "20:31",
+                                                  "children": [
+                                                    {
+                                                      "type": "primary_literal",
+                                                      "text": "1",
+                                                      "start": "20:30",
+                                                      "end": "20:31",
+                                                      "children": [
+                                                        {
+                                                          "type": "integral_number",
+                                                          "text": "1",
+                                                          "start": "20:30",
+                                                          "end": "20:31",
+                                                          "children": [
+                                                            {
+                                                              "type": "decimal_number",
+                                                              "text": "1",
+                                                              "start": "20:30",
+                                                              "end": "20:31",
+                                                              "children": [
+                                                                {
+                                                                  "type": "unsigned_number",
+                                                                  "text": "1",
+                                                                  "start": "20:30",
+                                                                  "end": "20:31"
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": ":",
+                                          "text": ":",
+                                          "start": "20:31",
+                                          "end": "20:32"
+                                        },
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "0",
+                                          "start": "20:32",
+                                          "end": "20:33",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "0",
+                                              "start": "20:32",
+                                              "end": "20:33",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "0",
+                                                  "start": "20:32",
+                                                  "end": "20:33",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "0",
+                                                      "start": "20:32",
+                                                      "end": "20:33",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "0",
+                                                          "start": "20:32",
+                                                          "end": "20:33",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "0",
+                                                              "start": "20:32",
+                                                              "end": "20:33"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "]",
+                                      "text": "]",
+                                      "start": "20:33",
+                                      "end": "20:34"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_input_tdata",
+                      "start": "20:44",
+                      "end": "20:62"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "20:62",
+                  "end": "20:63"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic                            s_axis_inp...",
+                  "start": "21:4",
+                  "end": "21:63",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic",
+                      "start": "21:4",
+                      "end": "21:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "21:4",
+                          "end": "21:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "21:4",
+                              "end": "21:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "21:11",
+                          "end": "21:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "21:11",
+                              "end": "21:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "21:11",
+                                  "end": "21:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "21:11",
+                                      "end": "21:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_input_tvalid",
+                      "start": "21:44",
+                      "end": "21:63"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "21:63",
+                  "end": "21:64"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "output logic                            s_axis_inp...",
+                  "start": "22:4",
+                  "end": "22:63",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "output logic",
+                      "start": "22:4",
+                      "end": "22:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "output",
+                          "start": "22:4",
+                          "end": "22:10",
+                          "children": [
+                            {
+                              "type": "output",
+                              "text": "output",
+                              "start": "22:4",
+                              "end": "22:10"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "22:11",
+                          "end": "22:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "22:11",
+                              "end": "22:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "22:11",
+                                  "end": "22:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "22:11",
+                                      "end": "22:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_input_tready",
+                      "start": "22:44",
+                      "end": "22:63"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "22:63",
+                  "end": "22:64"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:INTERFACE weight",
+                  "start": "24:4",
+                  "end": "24:41"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:DATATYPE ap_fixed<16,6>",
+                  "start": "25:4",
+                  "end": "25:48"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:BDIM [768, 512]",
+                  "start": "26:4",
+                  "end": "26:40"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:SDIM [SIMD, PE]",
+                  "start": "27:4",
+                  "end": "27:40"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic [INPUT_WIDTH-1:0]          s_axis_wei...",
+                  "start": "28:4",
+                  "end": "28:63",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic [INPUT_WIDTH-1:0]",
+                      "start": "28:4",
+                      "end": "28:34",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "28:4",
+                          "end": "28:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "28:4",
+                              "end": "28:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic [INPUT_WIDTH-1:0]",
+                          "start": "28:11",
+                          "end": "28:34",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic [INPUT_WIDTH-1:0]",
+                              "start": "28:11",
+                              "end": "28:34",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "28:11",
+                                  "end": "28:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "28:11",
+                                      "end": "28:16"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "packed_dimension",
+                                  "text": "[INPUT_WIDTH-1:0]",
+                                  "start": "28:17",
+                                  "end": "28:34",
+                                  "children": [
+                                    {
+                                      "type": "[",
+                                      "text": "[",
+                                      "start": "28:17",
+                                      "end": "28:18"
+                                    },
+                                    {
+                                      "type": "constant_range",
+                                      "text": "INPUT_WIDTH-1:0",
+                                      "start": "28:18",
+                                      "end": "28:33",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "INPUT_WIDTH-1",
+                                          "start": "28:18",
+                                          "end": "28:31",
+                                          "children": [
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "INPUT_WIDTH",
+                                              "start": "28:18",
+                                              "end": "28:29",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "INPUT_WIDTH",
+                                                  "start": "28:18",
+                                                  "end": "28:29",
+                                                  "children": [
+                                                    {
+                                                      "type": "simple_identifier",
+                                                      "text": "INPUT_WIDTH",
+                                                      "start": "28:18",
+                                                      "end": "28:29"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "type": "-",
+                                              "text": "-",
+                                              "start": "28:29",
+                                              "end": "28:30"
+                                            },
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "1",
+                                              "start": "28:30",
+                                              "end": "28:31",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "1",
+                                                  "start": "28:30",
+                                                  "end": "28:31",
+                                                  "children": [
+                                                    {
+                                                      "type": "primary_literal",
+                                                      "text": "1",
+                                                      "start": "28:30",
+                                                      "end": "28:31",
+                                                      "children": [
+                                                        {
+                                                          "type": "integral_number",
+                                                          "text": "1",
+                                                          "start": "28:30",
+                                                          "end": "28:31",
+                                                          "children": [
+                                                            {
+                                                              "type": "decimal_number",
+                                                              "text": "1",
+                                                              "start": "28:30",
+                                                              "end": "28:31",
+                                                              "children": [
+                                                                {
+                                                                  "type": "unsigned_number",
+                                                                  "text": "1",
+                                                                  "start": "28:30",
+                                                                  "end": "28:31"
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": ":",
+                                          "text": ":",
+                                          "start": "28:31",
+                                          "end": "28:32"
+                                        },
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "0",
+                                          "start": "28:32",
+                                          "end": "28:33",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "0",
+                                              "start": "28:32",
+                                              "end": "28:33",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "0",
+                                                  "start": "28:32",
+                                                  "end": "28:33",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "0",
+                                                      "start": "28:32",
+                                                      "end": "28:33",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "0",
+                                                          "start": "28:32",
+                                                          "end": "28:33",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "0",
+                                                              "start": "28:32",
+                                                              "end": "28:33"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "]",
+                                      "text": "]",
+                                      "start": "28:33",
+                                      "end": "28:34"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_weight_tdata",
+                      "start": "28:44",
+                      "end": "28:63"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "28:63",
+                  "end": "28:64"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic                            s_axis_wei...",
+                  "start": "29:4",
+                  "end": "29:64",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic",
+                      "start": "29:4",
+                      "end": "29:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "29:4",
+                          "end": "29:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "29:4",
+                              "end": "29:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "29:11",
+                          "end": "29:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "29:11",
+                              "end": "29:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "29:11",
+                                  "end": "29:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "29:11",
+                                      "end": "29:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_weight_tvalid",
+                      "start": "29:44",
+                      "end": "29:64"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "29:64",
+                  "end": "29:65"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "output logic                            s_axis_wei...",
+                  "start": "30:4",
+                  "end": "30:64",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "output logic",
+                      "start": "30:4",
+                      "end": "30:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "output",
+                          "start": "30:4",
+                          "end": "30:10",
+                          "children": [
+                            {
+                              "type": "output",
+                              "text": "output",
+                              "start": "30:4",
+                              "end": "30:10"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "30:11",
+                          "end": "30:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "30:11",
+                              "end": "30:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "30:11",
+                                  "end": "30:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "30:11",
+                                      "end": "30:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "s_axis_weight_tready",
+                      "start": "30:44",
+                      "end": "30:64"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "30:64",
+                  "end": "30:65"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:INTERFACE output",
+                  "start": "32:4",
+                  "end": "32:41"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:DATATYPE ap_fixed<32,16>",
+                  "start": "33:4",
+                  "end": "33:49"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:BDIM [*, 512]",
+                  "start": "34:4",
+                  "end": "34:38"
+                },
+                {
+                  "type": "comment",
+                  "text": "// brainsmith:pragma:SDIM [1, PE]",
+                  "start": "35:4",
+                  "end": "35:37"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "output logic [OUTPUT_WIDTH-1:0]         m_axis_out...",
+                  "start": "36:4",
+                  "end": "36:63",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "output logic [OUTPUT_WIDTH-1:0]",
+                      "start": "36:4",
+                      "end": "36:35",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "output",
+                          "start": "36:4",
+                          "end": "36:10",
+                          "children": [
+                            {
+                              "type": "output",
+                              "text": "output",
+                              "start": "36:4",
+                              "end": "36:10"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic [OUTPUT_WIDTH-1:0]",
+                          "start": "36:11",
+                          "end": "36:35",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic [OUTPUT_WIDTH-1:0]",
+                              "start": "36:11",
+                              "end": "36:35",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "36:11",
+                                  "end": "36:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "36:11",
+                                      "end": "36:16"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "packed_dimension",
+                                  "text": "[OUTPUT_WIDTH-1:0]",
+                                  "start": "36:17",
+                                  "end": "36:35",
+                                  "children": [
+                                    {
+                                      "type": "[",
+                                      "text": "[",
+                                      "start": "36:17",
+                                      "end": "36:18"
+                                    },
+                                    {
+                                      "type": "constant_range",
+                                      "text": "OUTPUT_WIDTH-1:0",
+                                      "start": "36:18",
+                                      "end": "36:34",
+                                      "children": [
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "OUTPUT_WIDTH-1",
+                                          "start": "36:18",
+                                          "end": "36:32",
+                                          "children": [
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "OUTPUT_WIDTH",
+                                              "start": "36:18",
+                                              "end": "36:30",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "OUTPUT_WIDTH",
+                                                  "start": "36:18",
+                                                  "end": "36:30",
+                                                  "children": [
+                                                    {
+                                                      "type": "simple_identifier",
+                                                      "text": "OUTPUT_WIDTH",
+                                                      "start": "36:18",
+                                                      "end": "36:30"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "type": "-",
+                                              "text": "-",
+                                              "start": "36:30",
+                                              "end": "36:31"
+                                            },
+                                            {
+                                              "type": "constant_expression",
+                                              "text": "1",
+                                              "start": "36:31",
+                                              "end": "36:32",
+                                              "children": [
+                                                {
+                                                  "type": "constant_primary",
+                                                  "text": "1",
+                                                  "start": "36:31",
+                                                  "end": "36:32",
+                                                  "children": [
+                                                    {
+                                                      "type": "primary_literal",
+                                                      "text": "1",
+                                                      "start": "36:31",
+                                                      "end": "36:32",
+                                                      "children": [
+                                                        {
+                                                          "type": "integral_number",
+                                                          "text": "1",
+                                                          "start": "36:31",
+                                                          "end": "36:32",
+                                                          "children": [
+                                                            {
+                                                              "type": "decimal_number",
+                                                              "text": "1",
+                                                              "start": "36:31",
+                                                              "end": "36:32",
+                                                              "children": [
+                                                                {
+                                                                  "type": "unsigned_number",
+                                                                  "text": "1",
+                                                                  "start": "36:31",
+                                                                  "end": "36:32"
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": ":",
+                                          "text": ":",
+                                          "start": "36:32",
+                                          "end": "36:33"
+                                        },
+                                        {
+                                          "type": "constant_expression",
+                                          "text": "0",
+                                          "start": "36:33",
+                                          "end": "36:34",
+                                          "children": [
+                                            {
+                                              "type": "constant_primary",
+                                              "text": "0",
+                                              "start": "36:33",
+                                              "end": "36:34",
+                                              "children": [
+                                                {
+                                                  "type": "primary_literal",
+                                                  "text": "0",
+                                                  "start": "36:33",
+                                                  "end": "36:34",
+                                                  "children": [
+                                                    {
+                                                      "type": "integral_number",
+                                                      "text": "0",
+                                                      "start": "36:33",
+                                                      "end": "36:34",
+                                                      "children": [
+                                                        {
+                                                          "type": "decimal_number",
+                                                          "text": "0",
+                                                          "start": "36:33",
+                                                          "end": "36:34",
+                                                          "children": [
+                                                            {
+                                                              "type": "unsigned_number",
+                                                              "text": "0",
+                                                              "start": "36:33",
+                                                              "end": "36:34"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "]",
+                                      "text": "]",
+                                      "start": "36:34",
+                                      "end": "36:35"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "m_axis_output_tdata",
+                      "start": "36:44",
+                      "end": "36:63"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "36:63",
+                  "end": "36:64"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "output logic                            m_axis_out...",
+                  "start": "37:4",
+                  "end": "37:64",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "output logic",
+                      "start": "37:4",
+                      "end": "37:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "output",
+                          "start": "37:4",
+                          "end": "37:10",
+                          "children": [
+                            {
+                              "type": "output",
+                              "text": "output",
+                              "start": "37:4",
+                              "end": "37:10"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "37:11",
+                          "end": "37:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "37:11",
+                              "end": "37:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "37:11",
+                                  "end": "37:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "37:11",
+                                      "end": "37:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "m_axis_output_tvalid",
+                      "start": "37:44",
+                      "end": "37:64"
+                    }
+                  ]
+                },
+                {
+                  "type": ",",
+                  "text": ",",
+                  "start": "37:64",
+                  "end": "37:65"
+                },
+                {
+                  "type": "ansi_port_declaration",
+                  "text": "input  logic                            m_axis_out...",
+                  "start": "38:4",
+                  "end": "38:64",
+                  "children": [
+                    {
+                      "type": "variable_port_header",
+                      "text": "input  logic",
+                      "start": "38:4",
+                      "end": "38:16",
+                      "children": [
+                        {
+                          "type": "port_direction",
+                          "text": "input",
+                          "start": "38:4",
+                          "end": "38:9",
+                          "children": [
+                            {
+                              "type": "input",
+                              "text": "input",
+                              "start": "38:4",
+                              "end": "38:9"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "variable_port_type",
+                          "text": "logic",
+                          "start": "38:11",
+                          "end": "38:16",
+                          "children": [
+                            {
+                              "type": "data_type",
+                              "text": "logic",
+                              "start": "38:11",
+                              "end": "38:16",
+                              "children": [
+                                {
+                                  "type": "integer_vector_type",
+                                  "text": "logic",
+                                  "start": "38:11",
+                                  "end": "38:16",
+                                  "children": [
+                                    {
+                                      "type": "logic",
+                                      "text": "logic",
+                                      "start": "38:11",
+                                      "end": "38:16"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "simple_identifier",
+                      "text": "m_axis_output_tready",
+                      "start": "38:44",
+                      "end": "38:64"
+                    }
+                  ]
+                },
+                {
+                  "type": ")",
+                  "text": ")",
+                  "start": "39:0",
+                  "end": "39:1"
+                }
+              ]
+            },
+            {
+              "type": ";",
+              "text": ";",
+              "start": "39:1",
+              "end": "39:2"
+            }
+          ]
+        },
+        {
+          "type": "comment",
+          "text": "// Implementation would go here",
+          "start": "41:4",
+          "end": "41:35"
+        },
+        {
+          "type": "endmodule",
+          "text": "endmodule",
+          "start": "43:0",
+          "end": "43:9"
+        }
+      ]
+    }
+  ]
+}

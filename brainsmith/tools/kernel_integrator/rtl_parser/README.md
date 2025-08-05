@@ -11,6 +11,16 @@ The RTL Parser is a sophisticated SystemVerilog analysis engine that serves as t
 - **Tree-sitter based** parsing with robust error handling and syntax validation
 - **Production-tested** with real-world hardware designs
 
+## Migration Note (December 2024)
+
+The RTL Parser has been migrated from using a pre-compiled `sv.so` grammar file with ctypes workarounds to the official `tree-sitter-systemverilog` package from PyPI. This migration:
+- Requires py-tree-sitter >= 0.25.0
+- Improves cross-platform compatibility
+- Eliminates the need for ctypes workarounds
+- Provides better long-term maintainability
+
+All existing functionality is preserved, with minor improvements in error handling for malformed SystemVerilog files.
+
 ## 1. System Architecture Overview
 
 ### 1.1 Mission Statement
@@ -23,7 +33,7 @@ The RTL Parser enables hardware engineers to integrate custom RTL implementation
 - **Circular Dependencies**: Some circular import issues exist between `metadata.py` and the rtl_parser package, currently mitigated with TYPE_CHECKING imports
 - **Test Infrastructure**: While the parser is production-ready, the test suite is located outside the rtl_parser directory and may not be immediately visible
 - **Performance Benchmarks**: Performance metrics are based on real-world usage but formal benchmarks are pending
-- **Grammar System**: Currently uses a pre-compiled `sv.so` file; migration to dynamic grammar building is planned
+- **Grammar System**: Uses the tree-sitter-systemverilog package from PyPI (requires py-tree-sitter >= 0.25.0)
 
 ### 1.3 High-Level Architecture
 
@@ -144,7 +154,7 @@ class ASTParser:
 - Performance-optimized parsing (handles >10K line files efficiently)
 
 **Implementation Details**:
-- Uses pre-compiled SystemVerilog grammar (`sv.so`) via tree-sitter
+- Uses tree-sitter-systemverilog package for SystemVerilog grammar
 - Implements recursive AST traversal with depth protection
 - Provides line/column error reporting for debugging
 - Maintains source text mapping for node extraction
@@ -1052,11 +1062,7 @@ def export_to_json(kernel_metadata: KernelMetadata) -> str:
 ### 10.1 Planned Enhancements
 
 #### 10.1.1 Grammar System Improvements
-**Dynamic Grammar Building**:
-- Replace static `sv.so` with build-time compilation
-- Use open-source tree-sitter-verilog repository
-- Support multiple SystemVerilog standard versions
-- Custom grammar extensions for Brainsmith-specific constructs
+- Done
 
 #### 10.1.2 Interface System Extensions
 **Additional Protocol Support**:

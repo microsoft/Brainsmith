@@ -23,9 +23,7 @@ Example Usage:
 from typing import Dict, List, Any
 
 # Import shared types
-from ..data import (
-    InterfaceType,
-)
+from brainsmith.core.dataflow.types import InterfaceType
 # Import RTL-specific types
 from .rtl_data import (
     Parameter,

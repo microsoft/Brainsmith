@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Any, Optional, TYPE_CHECKING
 from pathlib import Path
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata, DatatypeMetadata
 from ..rtl_parser.rtl_data import Parameter
 

@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 from pathlib import Path
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import KernelMetadata, InterfaceMetadata
 from ..rtl_parser.rtl_data import Parameter
 from ..parameter_config.parameter_defaults import (

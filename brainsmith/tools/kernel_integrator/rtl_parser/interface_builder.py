@@ -16,7 +16,7 @@ any ports that couldn't be assigned to a valid interface.
 import logging
 from typing import List, Dict, Tuple
 
-from ..data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata
 from .rtl_data import Port, ProtocolValidationResult, PortGroup
 from .interface_scanner import InterfaceScanner
