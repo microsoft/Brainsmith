@@ -1,15 +1,4 @@
-############################################################################
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-#
-# @author       Thomas Keller <thomaskeller@microsoft.com>
-############################################################################
-
 # Kernel Modeling System - Unified Design Document
-
-**Version:** 3.1 (Post-cleanup)  
-**Date:** 2025-01-03  
-**Status:** Implementation Complete
 
 ## Executive Summary
 
@@ -29,20 +18,20 @@ The Kernel Modeling System provides a high-level abstraction for representing ha
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                         │
-│  (PyTorch Models, ONNX Graphs, User Code)                  │
+│                    Application Layer                        │
+│  (PyTorch Models, ONNX Graphs, User Code)                   │
 ├─────────────────────────────────────────────────────────────┤
-│                    Definition Layer                          │
+│                    Definition Layer                         │
 │  InputDefinition    OutputDefinition    KernelDefinition    │
-│  (Schemas with constraints, relationships, validation)       │
+│  (Schemas with constraints, relationships, validation)      │
 ├─────────────────────────────────────────────────────────────┤
-│                      Model Layer                             │
-│  InputInterface     OutputInterface     KernelModel          │
+│                      Model Layer                            │
+│  InputInterface     OutputInterface     KernelModel         │
 │  (Runtime instances with concrete types and SDIM)           │
 ├─────────────────────────────────────────────────────────────┤
-│                     Support Layer                            │
-│  Relationships      Tiling Functions    QONNX Types          │
-│  (Constraints, block decomposition, type system)             │
+│                     Support Layer                           │
+│  Relationships      Tiling Functions    QONNX Types         │
+│  (Constraints, block decomposition, type system)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
