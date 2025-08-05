@@ -27,6 +27,9 @@ from .rtl import (
     ParsedModule,
     ValidationError,
     ValidationResult,
+    ProtocolValidationResult,
+    PortGroup,
+    PragmaType,
 )
 
 # Metadata types
@@ -63,6 +66,9 @@ __all__ = [
     "ParsedModule",
     "ValidationError",
     "ValidationResult",
+    "ProtocolValidationResult",
+    "PortGroup",
+    "PragmaType",
     # Metadata
     "InterfaceMetadata",
     "KernelMetadata",
