@@ -17,7 +17,7 @@ import logging
 from typing import Dict, Set, List, Tuple
 
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.core import PortDirection
+from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup, ProtocolValidationResult
 
 # --- Protocol Definitions ---

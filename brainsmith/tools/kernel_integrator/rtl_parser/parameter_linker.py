@@ -17,7 +17,7 @@ import logging
 from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
 
-from ..metadata import DatatypeMetadata, KernelMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import DatatypeMetadata, KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 
 logger = logging.getLogger(__name__)
@@ -291,7 +291,8 @@ class ParameterLinker:
                     elif auto_linked_dt:
                         # Merge auto-linked with existing metadata (auto-link fills gaps)
                         existing = interface.datatype_metadata
-                        merged = existing.update(
+                        merged = DatatypeMetadata(
+                            name=existing.name,
                             width=existing.width or auto_linked_dt.width,
                             signed=existing.signed or auto_linked_dt.signed,
                             format=existing.format or auto_linked_dt.format,

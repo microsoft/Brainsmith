@@ -71,7 +71,7 @@ class GenerationContext:
     @property
     def module_name(self) -> str:
         """Convenience accessor for module name."""
-        return self.kernel_metadata.module_name
+        return self.kernel_metadata.name
     
     @property
     def output_path(self) -> Path:
@@ -191,30 +191,3 @@ class GenerationResult:
         path.write_text(json.dumps(summary, indent=2))
 
 
-@dataclass
-class GenerationValidationResult:
-    """
-    Result of comprehensive generation validation checks.
-    
-    Used for validating generated code, templates, and configurations
-    before finalizing generation results.
-    """
-    passed: bool = True
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    checks_performed: List[str] = field(default_factory=list)
-    
-    def add_error(self, error: str, check_name: str = "unknown") -> None:
-        """Add a validation error."""
-        self.errors.append(error)
-        self.passed = False
-        self.checks_performed.append(f"{check_name} (FAILED)")
-    
-    def add_warning(self, warning: str, check_name: str = "unknown") -> None:
-        """Add a validation warning."""
-        self.warnings.append(warning)
-        self.checks_performed.append(f"{check_name} (WARNING)")
-    
-    def add_check(self, check_name: str) -> None:
-        """Mark a check as passed."""
-        self.checks_performed.append(f"{check_name} (PASSED)")

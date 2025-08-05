@@ -6,12 +6,11 @@ information at a higher abstraction level than raw RTL.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
-from .core import DatatypeSpec, DimensionSpec
 from .rtl import Port, Parameter
 
 
@@ -22,48 +21,42 @@ class InterfaceMetadata:
     Represents a complete interface with its type, datatype, dimensions,
     and associated ports and parameters.
     """
-    type: InterfaceType
     name: str
-    datatype: DatatypeSpec
-    dimensions: DimensionSpec
-    ports: List[Port]
-    parameters: Dict[str, Parameter] = field(default_factory=dict)
+    interface_type: InterfaceType
+    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
+    description: Optional[str] = None
     
-    # Constraint information
-    datatype_constraints: Optional[DatatypeConstraintGroup] = None
+    # Parameter linkage mappings
+    datatype_metadata: Optional['DatatypeMetadata'] = None
+    bdim_params: Optional[List[str]] = None
+    sdim_params: Optional[List[str]] = None
+    
+    # Shape expressions for new tiling system
+    bdim_shape: Optional[List] = None
+    sdim_shape: Optional[List] = None
+    
+    # Additional attributes from original
+    allowed_datatypes: Optional[List] = None
+    chunking_strategy: Optional[str] = None
+    ports: List[Port] = field(default_factory=list)
+    parameters: Dict[str, Parameter] = field(default_factory=dict)
     
     # Pragma-derived metadata
     is_weight: bool = False
     weight_file: Optional[str] = None
     relationships: Dict[str, str] = field(default_factory=dict)
     
-    # Computed properties
-    @property
-    def width(self) -> Optional[int]:
-        """Total interface width in bits.
-        
-        Returns None if dimensions contain symbolic parameters.
-        """
-        total_elements = self.dimensions.total_elements
-        if total_elements is None:
-            return None
-        return self.datatype.bit_width * total_elements
+    # Keep minimal helper methods
     
-    @property
-    def has_axi_stream(self) -> bool:
-        """Check if interface has AXI-Stream protocol ports."""
-        required_suffixes = {'valid', 'ready', 'data'}
-        port_suffixes = {p.name.split('_')[-1] for p in self.ports}
-        return required_suffixes.issubset(port_suffixes)
-    
-    @property
-    def has_axi_lite(self) -> bool:
-        """Check if interface has AXI-Lite protocol ports."""
-        # AXI-Lite has many signals, just check for key ones
-        required_patterns = {'awaddr', 'wdata', 'araddr', 'rdata'}
-        port_names = {p.name for p in self.ports}
-        matches = sum(1 for pattern in required_patterns if any(pattern in name for name in port_names))
-        return matches >= 2
+    def get_dimension_params(self) -> List[str]:
+        """Get all parameter names used in dimensions."""
+        params = set()
+        for dim_list in [self.bdim_shape, self.sdim_shape]:
+            if dim_list:
+                for d in dim_list:
+                    if isinstance(d, str) and d not in ['*', '1']:
+                        params.add(d)
+        return sorted(params)
     
     def get_port(self, suffix: str) -> Optional[Port]:
         """Get port by suffix (e.g., 'valid', 'ready', 'data')."""
@@ -71,12 +64,6 @@ class InterfaceMetadata:
             if port.name.endswith(suffix):
                 return port
         return None
-    
-    def get_parameter_names(self) -> Set[str]:
-        """Get all parameter names used in this interface."""
-        param_names = set(self.parameters.keys())
-        param_names.update(self.dimensions.get_parameters())
-        return param_names
 
 
 @dataclass
@@ -86,30 +73,38 @@ class KernelMetadata:
     Represents all information about a kernel needed for code generation,
     including interfaces, parameters, and relationships.
     """
-    module_name: str
-    interfaces: Dict[str, InterfaceMetadata]
-    global_parameters: Dict[str, Parameter]
-    
-    # File information
+    # Core attributes matching original structure
+    name: str
+    interfaces: List[InterfaceMetadata]
+    parameters: List[Parameter]
     source_file: str
     
     # Pragma-derived metadata  
+    exposed_parameters: List[str] = field(default_factory=list)
+    internal_datatypes: List['DatatypeMetadata'] = field(default_factory=list)
+    linked_parameters: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    relationships: List = field(default_factory=list)  # List of DimensionRelationship
+    
+    # Additional attributes
     top_module: Optional[str] = None
-    exposed_parameters: Set[str] = field(default_factory=set)
     derived_parameters: Dict[str, str] = field(default_factory=dict)
     axi_lite_parameters: Set[str] = field(default_factory=set)
+    
+    # Parser state tracking (temporary)
+    pragmas: List = field(default_factory=list)
+    parsing_warnings: List = field(default_factory=list)
     
     # Methods for specific queries
     def get_interface(self, interface_type: InterfaceType) -> Optional[InterfaceMetadata]:
         """Get first interface of given type."""
-        for interface in self.interfaces.values():
-            if interface.type == interface_type:
+        for interface in self.interfaces:
+            if interface.interface_type == interface_type:
                 return interface
         return None
     
     def get_interfaces_by_type(self, interface_type: InterfaceType) -> List[InterfaceMetadata]:
         """Get all interfaces of given type."""
-        return [i for i in self.interfaces.values() if i.type == interface_type]
+        return [i for i in self.interfaces if i.interface_type == interface_type]
     
     def get_input_interface(self) -> Optional[InterfaceMetadata]:
         """Get the primary input interface."""
@@ -128,36 +123,109 @@ class KernelMetadata:
         return self.get_interface(InterfaceType.CONFIG)
     
     def get_all_parameters(self) -> Dict[str, Parameter]:
-        """Get all parameters (global and interface-specific)."""
-        all_params = dict(self.global_parameters)
-        for interface in self.interfaces.values():
-            all_params.update(interface.parameters)
-        return all_params
+        """Get all parameters as a dict."""
+        return {p.name: p for p in self.parameters}
     
     def get_exposed_parameters(self) -> Dict[str, Parameter]:
         """Get only exposed parameters."""
         all_params = self.get_all_parameters()
         return {name: param for name, param in all_params.items() if name in self.exposed_parameters}
     
-    def validate(self) -> bool:
-        """Basic validation of kernel metadata.
+    def validate(self) -> List[str]:
+        """Validate kernel metadata.
         
         Returns:
-            True if metadata is valid, False otherwise
+            List of validation error messages (empty if valid)
         """
+        errors = []
+        
         # Must have at least input and output
-        if not self.get_input_interface() or not self.get_output_interface():
-            return False
+        if not self.get_input_interface():
+            errors.append("No input interface found")
+        if not self.get_output_interface():
+            errors.append("No output interface found")
+            
+        # Validate Global Control interface exists
+        has_global_control = any(
+            iface.interface_type == InterfaceType.CONTROL for iface in self.interfaces
+        )
+        if not has_global_control:
+            errors.append(f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)")
             
         # All exposed parameters must exist
         all_param_names = set(self.get_all_parameters().keys())
-        if not self.exposed_parameters.issubset(all_param_names):
-            return False
+        exposed_set = set(self.exposed_parameters)
+        if not exposed_set.issubset(all_param_names):
+            missing = exposed_set - all_param_names
+            errors.append(f"Exposed parameters not found: {missing}")
             
         # All derived parameters must reference existing parameters
         for derived, expr in self.derived_parameters.items():
             # Simple check - more sophisticated expression parsing could be added
             if derived in all_param_names:
-                return False  # Derived param shadows existing param
+                errors.append(f"Derived parameter '{derived}' shadows existing parameter")
                 
-        return True
+        return errors
+
+
+@dataclass
+class DatatypeMetadata:
+    """
+    Explicit binding between RTL parameters and datatype properties.
+    
+    This class provides a structured way to map RTL parameter names to
+    specific datatype properties used in code generation. All properties
+    are optional RTL parameter names, allowing flexible datatype definitions.
+    
+    Attributes:
+        name: Identifier for this datatype (e.g., "in", "accumulator", "threshold")
+        width: RTL parameter name for bit width
+        signed: RTL parameter name for signedness
+        format: RTL parameter name for format type (e.g., "fixed", "float")
+        bias: RTL parameter name for bias value
+        fractional_width: RTL parameter name for fractional width (fixed-point)
+        exponent_width: RTL parameter name for exponent width (floating-point)
+        mantissa_width: RTL parameter name for mantissa width (floating-point)
+        description: Human-readable description
+    """
+    name: str  # Required - identifier for this datatype
+    width: Optional[str] = None
+    signed: Optional[str] = None
+    format: Optional[str] = None
+    bias: Optional[str] = None
+    fractional_width: Optional[str] = None
+    exponent_width: Optional[str] = None
+    mantissa_width: Optional[str] = None
+    description: Optional[str] = None
+    
+    def __post_init__(self):
+        """Validate metadata parameters."""
+        if not self.name:
+            raise ValueError("DatatypeMetadata name cannot be empty")
+    
+    def get_all_parameters(self) -> List[str]:
+        """
+        Get list of all RTL parameter names referenced by this metadata.
+        
+        Returns:
+            List of parameter names (non-None values only)
+        """
+        params = []
+        
+        # Add all non-None parameters
+        if self.width is not None:
+            params.append(self.width)
+        if self.signed is not None:
+            params.append(self.signed)
+        if self.format is not None:
+            params.append(self.format)
+        if self.bias is not None:
+            params.append(self.bias)
+        if self.fractional_width is not None:
+            params.append(self.fractional_width)
+        if self.exponent_width is not None:
+            params.append(self.exponent_width)
+        if self.mantissa_width is not None:
+            params.append(self.mantissa_width)
+            
+        return params

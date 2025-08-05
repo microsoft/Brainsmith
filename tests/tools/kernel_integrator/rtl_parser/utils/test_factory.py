@@ -13,11 +13,11 @@ KernelMetadata objects, making it easier to write comprehensive tests.
 from typing import Tuple, List, Dict, Optional, Union
 from pathlib import Path
 
-from brainsmith.tools.kernel_integrator.metadata import (
-    KernelMetadata, InterfaceMetadata, DatatypeMetadata, DimensionRelationship
+from brainsmith.tools.kernel_integrator.types.metadata import (
+    KernelMetadata, InterfaceMetadata, DatatypeMetadata
 )
+from brainsmith.core.dataflow.relationships import DimensionRelationship
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter, PragmaType
-from brainsmith.tools.kernel_integrator.types.core import PortDirection
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.base import Pragma
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup

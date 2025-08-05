@@ -15,7 +15,7 @@ from typing import Optional, List
 from pathlib import Path
 from tree_sitter import Node, Tree
 
-from ..metadata import KernelMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, Port
 from .pragmas import Pragma
 from .pragma import PragmaHandler

@@ -13,15 +13,9 @@ Modules:
 - config: Configuration types
 """
 
-# Core types
-from .core import (
-    PortDirection,
-    DatatypeSpec,
-    DimensionSpec,
-)
-
 # RTL types
 from .rtl import (
+    PortDirection,
     Port,
     Parameter,
     ParsedModule,
@@ -36,6 +30,7 @@ from .rtl import (
 from .metadata import (
     InterfaceMetadata,
     KernelMetadata,
+    DatatypeMetadata,
 )
 
 # Generation types
@@ -43,7 +38,6 @@ from .generation import (
     GeneratedFile,
     GenerationContext,
     GenerationResult,
-    GenerationValidationResult,
 )
 
 # Binding types
@@ -57,11 +51,8 @@ from .binding import (
 from .config import Config
 
 __all__ = [
-    # Core
-    "PortDirection",
-    "DatatypeSpec", 
-    "DimensionSpec",
     # RTL
+    "PortDirection",
     "Port",
     "Parameter",
     "ParsedModule",
@@ -73,11 +64,11 @@ __all__ = [
     # Metadata
     "InterfaceMetadata",
     "KernelMetadata",
+    "DatatypeMetadata",
     # Generation
     "GeneratedFile",
     "GenerationContext",
     "GenerationResult",
-    "GenerationValidationResult",
     # Binding
     "IOSpec",
     "AttributeBinding",

@@ -15,7 +15,7 @@ import logging
 
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.types import InterfaceType
-from ...metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter
 
 logger = logging.getLogger(__name__)

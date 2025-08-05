@@ -17,7 +17,7 @@ import logging
 from typing import List, Dict, Tuple
 
 from brainsmith.core.dataflow.types import InterfaceType
-from ..metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Port, ProtocolValidationResult, PortGroup
 from .interface_scanner import InterfaceScanner
 from .protocol_validator import ProtocolValidator

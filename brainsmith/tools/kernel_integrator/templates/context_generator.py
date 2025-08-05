@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from brainsmith.core.dataflow.types import InterfaceType
-from ..metadata import KernelMetadata, InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 from ..parameter_config.parameter_defaults import (
     is_parameter_whitelisted,

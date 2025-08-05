@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .metadata import KernelMetadata
+from .types.metadata import KernelMetadata
 from .types.generation import GenerationResult
 from .generators import GeneratorManager
 from .templates.context_generator import TemplateContextGenerator

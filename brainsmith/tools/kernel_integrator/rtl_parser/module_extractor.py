@@ -15,7 +15,7 @@ import logging
 from typing import Optional, List, Tuple, Dict
 from tree_sitter import Node
 
-from brainsmith.tools.kernel_integrator.types.core import PortDirection
+from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, PragmaType
 from .pragmas import Pragma
 from .ast_parser import ASTParser

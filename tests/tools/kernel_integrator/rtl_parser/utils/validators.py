@@ -14,10 +14,10 @@ from typing import Any, List, Optional, Dict, Set, Tuple
 from dataclasses import dataclass, fields
 import difflib
 
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
-from brainsmith.tools.kernel_integrator.metadata import DatatypeMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import DatatypeMetadata
 
 
 @dataclass

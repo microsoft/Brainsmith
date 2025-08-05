@@ -19,8 +19,7 @@ from brainsmith.tools.kernel_integrator.types.rtl import (
 )
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.base import Pragma
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.core import PortDirection
-from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, KernelMetadata
 
 
 class TestDataHelpers:
