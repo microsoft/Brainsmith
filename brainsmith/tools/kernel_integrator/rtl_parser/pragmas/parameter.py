@@ -15,7 +15,7 @@ from typing import Dict, List
 import logging
 
 from .base import Pragma, PragmaError
-from ..rtl_data import PragmaType, Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter
 
 logger = logging.getLogger(__name__)
 

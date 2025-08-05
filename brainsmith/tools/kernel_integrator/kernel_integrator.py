@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .metadata import KernelMetadata
-from .data import GenerationResult
+from .types.generation import GenerationResult
 from .generators import GeneratorManager
 from .templates.context_generator import TemplateContextGenerator
 from .templates.template_context import TemplateContext

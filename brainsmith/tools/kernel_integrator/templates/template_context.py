@@ -11,7 +11,7 @@ from pathlib import Path
 
 from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata, DatatypeMetadata
-from ..rtl_parser.rtl_data import Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 
 if TYPE_CHECKING:
     from ..codegen_binding import CodegenBinding

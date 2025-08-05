@@ -18,7 +18,7 @@ from typing import List, Dict, Tuple
 
 from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata
-from .rtl_data import Port, ProtocolValidationResult, PortGroup
+from brainsmith.tools.kernel_integrator.types.rtl import Port, ProtocolValidationResult, PortGroup
 from .interface_scanner import InterfaceScanner
 from .protocol_validator import ProtocolValidator
 

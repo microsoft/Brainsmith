@@ -15,7 +15,7 @@ from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.parser import RTLParser, ParserError
 from brainsmith.tools.kernel_integrator.rtl_parser.ast_parser import SyntaxError
-from brainsmith.tools.kernel_integrator.data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 
 from .utils.rtl_builder import RTLBuilder
 

@@ -16,7 +16,7 @@ import logging
 
 from .base import Pragma, PragmaError
 from ...metadata import KernelMetadata
-from ..rtl_data import PragmaType
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 from ...metadata import DimensionRelationship, RelationType
 
 logger = logging.getLogger(__name__)

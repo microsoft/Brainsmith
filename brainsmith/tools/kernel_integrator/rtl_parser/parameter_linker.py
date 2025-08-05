@@ -18,7 +18,7 @@ from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
 
 from ..metadata import DatatypeMetadata, KernelMetadata
-from .rtl_data import Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 
 logger = logging.getLogger(__name__)
 

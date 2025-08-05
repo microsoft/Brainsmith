@@ -15,10 +15,8 @@ from dataclasses import dataclass, fields
 import difflib
 
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import RelationshipMetadata
-from brainsmith.tools.kernel_integrator.data import (
-    InterfaceType, DatatypeConstraintGroup
-)
+from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 from brainsmith.tools.kernel_integrator.metadata import DatatypeMetadata
 
 

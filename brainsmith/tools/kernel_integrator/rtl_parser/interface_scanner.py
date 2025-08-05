@@ -18,7 +18,7 @@ from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
 
 from brainsmith.core.dataflow.types import InterfaceType
-from .rtl_data import Port, PortGroup
+from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
 from .protocol_validator import (
     GLOBAL_SIGNAL_SUFFIXES,
     AXI_STREAM_SUFFIXES,

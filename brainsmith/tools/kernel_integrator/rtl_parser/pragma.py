@@ -18,7 +18,7 @@ from tree_sitter import Node
 
 from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import InterfaceMetadata, DatatypeMetadata
-from .rtl_data import PragmaType
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,

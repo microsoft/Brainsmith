@@ -15,7 +15,7 @@ from typing import Dict, List, Any
 import logging
 
 from ...metadata import InterfaceMetadata
-from ..rtl_data import PragmaType
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 
 logger = logging.getLogger(__name__)
 

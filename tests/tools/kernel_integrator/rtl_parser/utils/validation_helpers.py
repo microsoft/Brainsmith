@@ -20,7 +20,7 @@ Functions:
 
 from typing import List, Set, Dict, Optional, Any
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata, DatatypeMetadata
-from brainsmith.tools.kernel_integrator.data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
 

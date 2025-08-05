@@ -16,11 +16,11 @@ from pathlib import Path
 from brainsmith.tools.kernel_integrator.metadata import (
     KernelMetadata, InterfaceMetadata, DatatypeMetadata, DimensionRelationship
 )
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter, PragmaType
+from brainsmith.tools.kernel_integrator.types.core import PortDirection
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.base import Pragma
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import PragmaType
-from brainsmith.tools.kernel_integrator.data import InterfaceType, DatatypeConstraintGroup
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import PortDirection
+from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 from .rtl_builder import RTLBuilder, StrictRTLBuilder
 
 

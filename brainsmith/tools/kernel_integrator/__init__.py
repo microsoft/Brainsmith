@@ -16,8 +16,8 @@ Key Features:
 
 import warnings
 
-from .data import GenerationResult, GenerationValidationResult, PerformanceMetrics
-from .config import Config
+from .types.generation import GenerationResult, PerformanceMetrics, GenerationValidationResult
+from .types.config import Config
 from .cli import main
 from .kernel_integrator import KernelIntegrator, KernelIntegratorError
 from .generators import GeneratorManager, GeneratorBase

@@ -43,6 +43,7 @@ from .generation import (
     GeneratedFile,
     GenerationContext,
     GenerationResult,
+    GenerationValidationResult,
 )
 
 # Binding types
@@ -76,6 +77,7 @@ __all__ = [
     "GeneratedFile",
     "GenerationContext",
     "GenerationResult",
+    "GenerationValidationResult",
     # Binding
     "IOSpec",
     "AttributeBinding",
