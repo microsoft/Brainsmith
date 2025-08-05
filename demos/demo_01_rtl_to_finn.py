@@ -257,8 +257,10 @@ class RTLToFINNDemo:
                         else:
                             sdim = 'None'
                         
-                        dtype_desc = iface.get_constraint_description()
-                        if dtype_desc == "No datatype constraints":
+                        # Get datatype description from constraints
+                        if iface.datatype_constraints:
+                            dtype_desc = f"{len(iface.datatype_constraints)} constraints"
+                        else:
                             dtype_desc = "Any"
                         
                         output_lines.append(f"  - {iface.name:<12} ({iface.interface_type.value:<7}): BDIM={bdim:<15} SDIM={sdim:<15} dtype={dtype_desc}")
@@ -273,16 +275,17 @@ class RTLToFINNDemo:
                         output_lines.append("📊 Parameters extracted:")
                         for i, param in enumerate(kernel_metadata.parameters[:5]):
                             param_str = f"  - {param.name}"
-                            if param.param_type:
-                                param_str += f": {param.param_type}"
-                            if param.default_value:
-                                param_str += f" = {param.default_value}"
+                            if hasattr(param, 'datatype') and param.datatype:
+                                param_str += f": {param.datatype}"
+                            if hasattr(param, 'value') and param.value:
+                                param_str += f" = {param.value}"
                             output_lines.append(param_str)
                         if len(kernel_metadata.parameters) > 5:
                             output_lines.append(f"  ... and {len(kernel_metadata.parameters) - 5} more")
                     
                     # Generate files
-                    integrator = KernelIntegrator(output_dir=self.output_dir)
+                    integrator = KernelIntegrator()
+                    integrator.set_output_dir(self.output_dir)
                     
                     progress.update(task2, advance=50)
                     progress.update(task3, advance=30)
@@ -298,7 +301,7 @@ class RTLToFINNDemo:
                     
                     progress.update(task3, advance=30)
                     
-                    if result.is_success():
+                    if result.is_success:
                         output_lines.append("  ✓ HWCustomOp generated successfully")
                         output_lines.append("  → Creating AutoRTLBackend subclass")
                         output_lines.append("  → Generating RTL wrapper")
@@ -309,7 +312,7 @@ class RTLToFINNDemo:
                     elapsed = time.time() - start_time
                     
                     # Create final output text
-                    if result.is_success():
+                    if result.is_success:
                         output_lines.append(f"\n✅ Conversion completed in {elapsed:.2f} seconds!")
                         output_text = "\n".join(output_lines)
                     else:
@@ -361,8 +364,10 @@ class RTLToFINNDemo:
                     else:
                         sdim = 'None'
                     
-                    dtype_desc = iface.get_constraint_description()
-                    if dtype_desc == "No datatype constraints":
+                    # Get datatype description from constraints
+                    if iface.datatype_constraints:
+                        dtype_desc = f"{len(iface.datatype_constraints)} constraints"
+                    else:
                         dtype_desc = "Any"
                     
                     print(f"  - {iface.name:<12} ({iface.interface_type.value:<7}): BDIM={bdim:<15} SDIM={sdim:<15} dtype={dtype_desc}")
@@ -381,10 +386,10 @@ class RTLToFINNDemo:
                             print(f"  ... and {len(kernel_metadata.parameters) - 5} more")
                             break
                         param_str = f"  - {param.name}"
-                        if param.param_type:
-                            param_str += f": {param.param_type}"
-                        if param.default_value:
-                            param_str += f" = {param.default_value}"
+                        if hasattr(param, 'datatype') and param.datatype:
+                            param_str += f": {param.datatype}"
+                        if hasattr(param, 'value') and param.value:
+                            param_str += f" = {param.value}"
                         print(param_str)
                 
                 print("\n🔧 Stage 3: Generating FINN integration...")
@@ -394,10 +399,11 @@ class RTLToFINNDemo:
                 print("  → Building parameter mappings")
                 
                 # Generate files
-                integrator = KernelIntegrator(output_dir=self.output_dir)
+                integrator = KernelIntegrator()
+                integrator.set_output_dir(self.output_dir)
                 result = integrator.generate_and_write(kernel_metadata)
                 
-                if result.is_success():
+                if result.is_success:
                     print("  ✓ HWCustomOp generated successfully")
                     
                     print("\n🔨 Stage 4: Creating RTL backend...")
@@ -408,7 +414,7 @@ class RTLToFINNDemo:
                 
                 elapsed = time.time() - start_time
                 
-                if result.is_success():
+                if result.is_success:
                     print(f"\n✅ Conversion completed successfully in {elapsed:.2f} seconds!")
                     
                     # Show summary of what was generated
