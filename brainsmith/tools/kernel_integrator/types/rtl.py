@@ -6,49 +6,69 @@ SystemVerilog constructs and validation results.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from enum import Enum
 
 from .core import PortDirection
 
+if TYPE_CHECKING:
+    from brainsmith.core.dataflow.types import InterfaceType
+
 
 class PragmaType(Enum):
-    """Types of pragmas recognized by the RTL parser."""
-    INTERFACE = "INTERFACE"
-    TOP = "TOP"
-    DATATYPE = "DATATYPE"
-    WEIGHT = "WEIGHT"
-    PARAMETER_DATATYPE = "PARAMETER_DATATYPE"
-    ALIAS = "ALIAS"
-    DERIVED_PARAMETER = "DERIVED_PARAMETER"
-    AXI_LITE_PARAMETER = "AXI_LITE_PARAMETER"
-    BDIM = "BDIM"
-    SDIM = "SDIM"
-    RELATIONSHIP = "RELATIONSHIP"
-    MODULE = "MODULE"
-    UNKNOWN = "UNKNOWN"
+    """Valid pragma types recognized by the parser."""
+    TOP_MODULE = "top_module"          # Specify the top module if multiple exist
+    DATATYPE = "datatype"              # Restrict datatype for an interface
+    DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
+    WEIGHT = "weight"                  # Specify interface as a weight
+    BDIM = "bdim"                      # Override block dimensions for an interface
+    SDIM = "sdim"                      # Override stream dimensions for an interface
+    DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
+    ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
+    AXILITE_PARAM = "axilite_param"    # Mark parameter as AXI-Lite configuration related
+    RELATIONSHIP = "relationship"      # Define relationships between interfaces
 
 
 @dataclass
 class Port:
-    """Single RTL port definition.
+    """SystemVerilog port representation.
     
-    Represents a SystemVerilog port with its properties.
+    Attributes:
+        name: Port identifier
+        direction: Port direction (input/output/inout)
+        width: Bit width expression (preserved as string)
+        description: Optional documentation from RTL comments
     """
     name: str
     direction: PortDirection
-    width: int
-    array_bounds: Optional[List[int]] = None
+    width: str = "1"  # Default to single bit
+    description: Optional[str] = None
+    
+    # Legacy compatibility
+    array_bounds: Optional[List[int]] = field(default=None, init=False)
+
+    def __post_init__(self):
+        """Validate port attributes, converting string direction to Enum if needed."""
+        # Convert string direction to enum if needed
+        if isinstance(self.direction, str):
+            self.direction = PortDirection(self.direction.lower())
+        
+        # Legacy compatibility - try to parse array bounds from width
+        self.array_bounds = None  # Not currently parsed
     
     @property
     def total_width(self) -> int:
-        """Calculate total width including array dimensions."""
-        if self.array_bounds:
-            array_size = 1
-            for bound in self.array_bounds:
-                array_size *= bound
-            return self.width * array_size
-        return self.width
+        """Calculate total width including array dimensions.
+        
+        Note: Currently returns 1 as width is stored as string expression.
+        """
+        # TODO: Parse width string to get numeric value
+        try:
+            # Simple case - just a number
+            return int(self.width)
+        except ValueError:
+            # Complex expression, default to 1
+            return 1
     
     def is_array(self) -> bool:
         """Check if this port is an array."""
@@ -57,13 +77,31 @@ class Port:
 
 @dataclass
 class Parameter:
-    """RTL parameter definition.
+    """SystemVerilog parameter representation.
     
-    Represents a SystemVerilog parameter or localparam.
+    Attributes:
+        name: Parameter identifier
+        param_type: Parameter datatype (e.g., "int", "logic", "derived")
+        default_value: Default value if specified
+        description: Optional documentation from RTL comments
+        template_param_name: Name used in the wrapper template (e.g., $NAME$).
     """
     name: str
-    value: str
-    is_local: bool = False
+    param_type: Optional[str] = None  # Parameter datatype (can be None for typeless parameters)
+    default_value: Optional[str] = None
+    description: Optional[str] = None
+    template_param_name: str = field(init=False)  # Computed template parameter name
+    
+    # Legacy compatibility
+    value: Optional[str] = field(init=False)  # Alias for default_value
+    is_local: bool = field(default=False, init=False)  # For localparam
+    
+    def __post_init__(self):
+        """Compute derived fields."""
+        # Template parameter name is uppercase with $ prefix and suffix  
+        self.template_param_name = f"${self.name.upper()}$"
+        # Legacy compatibility
+        self.value = self.default_value
     
     def get_numeric_value(self) -> Optional[int]:
         """Try to parse parameter value as integer.
@@ -71,37 +109,60 @@ class Parameter:
         Returns:
             Integer value or None if not parseable
         """
+        value = self.default_value or self.value
+        if not value:
+            return None
+            
         try:
             # Handle common SystemVerilog number formats
-            if self.value.startswith("'b"):
-                return int(self.value[2:], 2)
-            elif self.value.startswith("'h"):
-                return int(self.value[2:], 16)
-            elif self.value.startswith("'d"):
-                return int(self.value[2:])
+            if value.startswith("'b"):
+                return int(value[2:], 2)
+            elif value.startswith("'h"):
+                return int(value[2:], 16)
+            elif value.startswith("'d"):
+                return int(value[2:])
             else:
-                return int(self.value)
+                return int(value)
         except (ValueError, TypeError):
             return None
 
 
 @dataclass
 class PortGroup:
-    """Group of related ports that may form an interface.
-    
-    Used during interface detection to group ports by naming patterns.
+    """Represents a group of related ports potentially forming an interface.
+
+    This is an intermediate structure created by the InterfaceScanner based on
+    naming conventions, before protocol validation.
     """
-    prefix: str
-    ports: List[Port] = field(default_factory=list)
-    
-    def add_port(self, port: Port) -> None:
-        """Add a port to this group."""
-        self.ports.append(port)
+    interface_type: "InterfaceType"  # Forward reference since imported from dataflow
+    name: Optional[str] = None # e.g., "in0" for AXI-Stream, "config" for AXI-Lite
+    ports: Dict[str, Port] = field(default_factory=dict) # Maps signal suffix (e.g., TDATA) or full name to Port object
+    metadata: Dict[str, Any] = field(default_factory=dict) # e.g., data width for AXI
+
+    def add_port(self, port: Port, key: Optional[str] = None) -> None:
+        """Adds a port to the group, using a specific key or the port name.
+
+        If a key (e.g., signal suffix like 'TDATA') is provided, it's used.
+        Otherwise, the full port name is used as the key.
+        Warns when overriding existing keys.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if key is None:
+            key = port.name
+        if key in self.ports:
+            logger.warning(f"Overwriting port key '{key}' in PortGroup '{self.name}'")
+        self.ports[key] = port
     
     def get_port(self, suffix: str) -> Optional[Port]:
         """Get a port by suffix (e.g., 'valid', 'ready', 'data')."""
-        for port in self.ports:
-            if port.name == f"{self.prefix}_{suffix}" or port.name == f"{self.prefix}{suffix}":
+        # First try direct key lookup
+        if suffix in self.ports:
+            return self.ports[suffix]
+        # Then try finding by port name suffix
+        for key, port in self.ports.items():
+            if port.name.endswith(suffix):
                 return port
         return None
     
@@ -205,3 +266,13 @@ class ValidationResult:
         """Merge another validation result into this one."""
         self.errors.extend(other.errors)
         self.is_valid = self.is_valid and other.is_valid
+
+
+@dataclass
+class ProtocolValidationResult:
+    """Represents the result of a protocol validation check.
+    
+    Simple validation result for RTL protocol validation.
+    """
+    valid: bool
+    message: Optional[str] = None
