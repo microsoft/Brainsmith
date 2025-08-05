@@ -11,7 +11,7 @@ from pathlib import Path
 
 from brainsmith.core.dataflow.types import InterfaceType
 from ..metadata import KernelMetadata, InterfaceMetadata
-from ..rtl_parser.rtl_data import Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 from ..parameter_config.parameter_defaults import (
     is_parameter_whitelisted,
     get_default_value,

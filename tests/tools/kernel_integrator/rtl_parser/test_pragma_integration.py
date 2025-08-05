@@ -12,7 +12,7 @@ KernelMetadata output. Now using PragmaPatterns for consistent test generation.
 """
 
 import pytest
-from brainsmith.tools.kernel_integrator.data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.rtl_parser import RTLParser
 
 from .utils.rtl_builder import RTLBuilder, StrictRTLBuilder

@@ -25,7 +25,7 @@ from typing import Dict, List, Any
 # Import shared types
 from brainsmith.core.dataflow.types import InterfaceType
 # Import RTL-specific types
-from .rtl_data import (
+from brainsmith.tools.kernel_integrator.types.rtl import (
     Parameter,
     Port,
     PortGroup,

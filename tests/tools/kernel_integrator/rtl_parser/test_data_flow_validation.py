@@ -11,7 +11,7 @@ transformation of data structures at each stage.
 """
 
 import pytest
-from brainsmith.tools.kernel_integrator.data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 from .utils.rtl_builder import RTLBuilder
 from .utils.pragma_patterns import PragmaPatterns
 

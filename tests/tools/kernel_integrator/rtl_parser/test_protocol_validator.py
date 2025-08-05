@@ -18,9 +18,9 @@ import pytest
 from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolValidator
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import Port, PortGroup
-from brainsmith.tools.kernel_integrator.data import InterfaceType
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import PortDirection
+from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
+from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 
 from .utils.rtl_builder import RTLBuilder
 

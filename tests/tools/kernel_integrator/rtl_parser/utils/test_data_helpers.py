@@ -14,12 +14,12 @@ consistency.
 from typing import List, Dict, Optional, Union
 from dataclasses import dataclass
 
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import (
+from brainsmith.tools.kernel_integrator.types.rtl import (
     Parameter, Port, PortGroup, PragmaType
 )
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.base import Pragma
-from brainsmith.tools.kernel_integrator.data import InterfaceType
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import PortDirection
+from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.tools.kernel_integrator.types.core import PortDirection
 from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
 
 

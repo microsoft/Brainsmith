@@ -27,7 +27,7 @@ from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup, v
 from qonnx.core.datatype import BaseDataType
 
 if TYPE_CHECKING:
-    from .rtl_parser.rtl_data import Parameter
+    from brainsmith.tools.kernel_integrator.types.rtl import Parameter
     from .rtl_parser.pragmas.base import Pragma
 
 # Import relationship types that are used in pragma implementation

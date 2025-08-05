@@ -17,7 +17,8 @@ import logging
 from typing import Dict, Set, List, Tuple
 
 from brainsmith.core.dataflow.types import InterfaceType
-from .rtl_data import Port, PortGroup, ProtocolValidationResult, PortDirection
+from brainsmith.tools.kernel_integrator.types.core import PortDirection
+from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup, ProtocolValidationResult
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md

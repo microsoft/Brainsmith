@@ -17,7 +17,7 @@ This test module covers complex edge cases and real-world scenarios including:
 import pytest
 import time
 from brainsmith.tools.kernel_integrator.rtl_parser import RTLParser
-from brainsmith.tools.kernel_integrator.data import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType
 
 from .utils.rtl_builder import RTLBuilder, StrictRTLBuilder
 

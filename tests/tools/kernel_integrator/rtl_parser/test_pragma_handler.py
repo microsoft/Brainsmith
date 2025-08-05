@@ -18,7 +18,7 @@ import pytest
 from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.pragma import PragmaHandler
-from brainsmith.tools.kernel_integrator.rtl_parser.rtl_data import PragmaType
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas import (
     TopModulePragma, DatatypePragma, WeightPragma, BDimPragma, SDimPragma,
     AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, DatatypeParamPragma,
