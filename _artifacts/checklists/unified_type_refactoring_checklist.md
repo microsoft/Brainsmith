@@ -3,77 +3,77 @@
 ## Phase 1: Move Core Types to Dataflow [Est: 2-3 hours]
 
 ### 1.1 Extend dataflow/types.py
-- [ ] Back up current dataflow/types.py
-- [ ] Add InterfaceType enum definition from kernel_integrator/data.py
-- [ ] Add ShapeExpr type alias: `Union[int, str]`
-- [ ] Add ShapeSpec type alias: `List[ShapeExpr]`
-- [ ] Run dataflow tests to ensure no breakage
-- [ ] Commit: "feat(dataflow): add InterfaceType and shape expression types"
+- [x] Back up current dataflow/types.py
+- [x] Add InterfaceType enum definition from kernel_integrator/data.py
+- [x] Add ShapeExpr type alias: `Union[int, str]`
+- [x] Add ShapeSpec type alias: `List[ShapeExpr]`
+- [x] Run dataflow tests to ensure no breakage
+- [x] Commit: "feat(dataflow): add InterfaceType and shape expression types"
 
 ### 1.2 Update kernel_integrator imports
-- [ ] Find all usages of InterfaceType in kernel_integrator (use grep/rg)
-- [ ] Update imports to use `from brainsmith.core.dataflow.types import InterfaceType`
-- [ ] Remove InterfaceType definition from kernel_integrator/data.py
-- [ ] Run kernel_integrator tests
-- [ ] Commit: "refactor(kernel_integrator): use InterfaceType from dataflow"
+- [x] Find all usages of InterfaceType in kernel_integrator (use grep/rg)
+- [x] Update imports to use `from brainsmith.core.dataflow.types import InterfaceType`
+- [x] Remove InterfaceType definition from kernel_integrator/data.py
+- [x] Run kernel_integrator tests
+- [x] Commit: "refactor(kernel_integrator): use InterfaceType from dataflow"
 
 ### Verification Point 1
-- [ ] All tests pass
-- [ ] No circular import errors
-- [ ] InterfaceType accessible from both modules
+- [x] All tests pass
+- [x] No circular import errors
+- [x] InterfaceType accessible from both modules
 
 ## Phase 2: Create Kernel Integrator Type Structure [Est: 4-6 hours]
 
 ### 2.1 Create types directory structure
-- [ ] Create `brainsmith/tools/kernel_integrator/types/` directory
-- [ ] Create `__init__.py` with proper exports
-- [ ] Create empty module files:
-  - [ ] `core.py`
-  - [ ] `rtl.py`
-  - [ ] `metadata.py`
-  - [ ] `generation.py`
-  - [ ] `binding.py`
-  - [ ] `config.py`
+- [x] Create `brainsmith/tools/kernel_integrator/types/` directory
+- [x] Create `__init__.py` with proper exports
+- [x] Create empty module files:
+  - [x] `core.py`
+  - [x] `rtl.py`
+  - [x] `metadata.py`
+  - [x] `generation.py`
+  - [x] `binding.py`
+  - [x] `config.py`
 
 ### 2.2 Implement core types
-- [ ] Copy PortDirection enum to types/core.py
-- [ ] Implement DatatypeSpec dataclass
-- [ ] Implement DimensionSpec with ShapeSpec integration
-- [ ] Add validation methods
+- [x] Copy PortDirection enum to types/core.py
+- [x] Implement DatatypeSpec dataclass
+- [x] Implement DimensionSpec with ShapeSpec integration
+- [x] Add validation methods
 - [ ] Write unit tests for core types
 
 ### 2.3 Implement RTL types
-- [ ] Move Port, Parameter dataclasses to types/rtl.py
-- [ ] Move ParsedModule dataclass
-- [ ] Move ValidationError, ValidationResult
+- [x] Move Port, Parameter dataclasses to types/rtl.py
+- [x] Move ParsedModule dataclass
+- [x] Move ValidationError, ValidationResult
 - [ ] Update imports in rtl_parser modules
 - [ ] Run rtl_parser tests
 
 ### 2.4 Implement metadata types
-- [ ] Create streamlined InterfaceMetadata dataclass
-- [ ] Create focused KernelMetadata dataclass
-- [ ] Add computed properties for common queries
+- [x] Create streamlined InterfaceMetadata dataclass
+- [x] Create focused KernelMetadata dataclass
+- [x] Add computed properties for common queries
 - [ ] Remove circular dependencies with data.py
 - [ ] Test metadata creation and access patterns
 
 ### 2.5 Implement generation types
-- [ ] Create GeneratedFile dataclass
-- [ ] Create GenerationContext dataclass
-- [ ] Create simplified GenerationResult
-- [ ] Move file I/O operations to GeneratedFile.write()
+- [x] Create GeneratedFile dataclass
+- [x] Create GenerationContext dataclass
+- [x] Create simplified GenerationResult
+- [x] Move file I/O operations to GeneratedFile.write()
 - [ ] Update generator modules to use new types
 
 ### 2.6 Implement binding types
-- [ ] Create IOSpec dataclass
-- [ ] Create AttributeBinding dataclass
-- [ ] Create CodegenBinding dataclass
-- [ ] Add helper methods for common queries
+- [x] Create IOSpec dataclass
+- [x] Create AttributeBinding dataclass
+- [x] Create CodegenBinding dataclass
+- [x] Add helper methods for common queries
 - [ ] Update codegen_binding.py to use new types
 
 ### 2.7 Implement config types
-- [ ] Move Config dataclass to types/config.py
-- [ ] Add validation in __post_init__
-- [ ] Add helper methods (to_camel_case, etc.)
+- [x] Move Config dataclass to types/config.py
+- [x] Add validation in __post_init__
+- [x] Add helper methods (to_camel_case, etc.)
 - [ ] Update CLI to use new config location
 
 ### Verification Point 2
