@@ -35,7 +35,7 @@ setup(
         "setupext-janitor>=1.1.2",
         "sigtools==4.0.1",
         "toposort==1.7.0",
-        "transformers==4.46.3",
+        "transformers==4.53.0",
         "tree-sitter==0.24.0",
         "typing_extensions>=4.10",
         "vcdvcd==1.0.5",
