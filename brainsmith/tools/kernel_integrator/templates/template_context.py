@@ -53,9 +53,6 @@ class TemplateContext:
     
     # Additional context
     parallelism_info: Dict[str, Any] = field(default_factory=dict)
-    algorithm_info: Dict[str, Any] = field(default_factory=dict)
-    node_attributes: Dict[str, Any] = field(default_factory=dict)
-    resource_estimation_methods: Dict[str, Any] = field(default_factory=dict)
     
     # Datatype parameter information for new architecture
     datatype_linked_params: List[str] = field(default_factory=list)
@@ -76,9 +73,6 @@ class TemplateContext:
     categorized_parameters: Dict[str, Any] = field(default_factory=dict)
     
     
-    # Kernel analysis
-    kernel_complexity: str = "medium"
-    kernel_type: str = "generic"
     
     # Unified CodegenBinding
     codegen_binding: Optional['CodegenBinding'] = None
