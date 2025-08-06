@@ -204,6 +204,37 @@ class RTLParser:
         
         logger.info(f"Pragma application complete. Exposed parameters: {len(kernel_metadata.exposed_parameters)}")
     
+    def _sync_parameter_exposure(self, kernel_metadata: KernelMetadata) -> None:
+        """Sync Parameter objects with exposed_parameters list.
+        
+        Updates is_exposed field on Parameter objects based on the exposed_parameters list
+        after pragma processing. Also sets source and source_ref based on linked_parameters.
+        
+        Args:
+            kernel_metadata: KernelMetadata with updated exposed_parameters.
+        """
+        # Create a set for efficient lookup
+        exposed_set = set(kernel_metadata.exposed_parameters)
+        
+        # Update each Parameter object
+        for param in kernel_metadata.parameters:
+            # Update is_exposed based on exposed_parameters list
+            param.is_exposed = param.name in exposed_set
+            
+            # Update source information based on linked_parameters
+            if param.name in kernel_metadata.linked_parameters.get("aliases", {}):
+                param.source = "alias"
+                param.source_ref = kernel_metadata.linked_parameters["aliases"][param.name]
+            elif param.name in kernel_metadata.linked_parameters.get("derived", {}):
+                param.source = "derived"
+                param.source_ref = kernel_metadata.linked_parameters["derived"][param.name]
+            elif param.name in kernel_metadata.linked_parameters.get("axilite", {}):
+                param.source = "axilite"
+                param.source_ref = kernel_metadata.linked_parameters["axilite"][param.name]
+            # else: source remains "rtl" (default)
+            
+        logger.debug(f"Synced parameter exposure: {len(exposed_set)} exposed out of {len(kernel_metadata.parameters)} total")
+    
     def _apply_autolinking(self, kernel_metadata: KernelMetadata) -> None:
         """Apply auto-linking to kernel metadata.
         
@@ -264,6 +295,9 @@ class RTLParser:
 
             # Apply ALL pragmas to KernelMetadata
             self._apply_pragmas(kernel_metadata)
+            
+            # Update Parameter objects based on pragma results
+            self._sync_parameter_exposure(kernel_metadata)
             
             # Auto-linking with remaining parameters
             self._apply_autolinking(kernel_metadata)

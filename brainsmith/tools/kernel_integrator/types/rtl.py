@@ -82,44 +82,81 @@ class Port:
 
 @dataclass
 class Parameter:
-    """SystemVerilog parameter representation.
+    """Unified parameter representation for kernel integration.
+    
+    Combines RTL parsing, template generation, and code generation needs.
+    Replaces: Parameter, ParameterDefinition, AttributeBinding, ParameterBinding.
     
     Attributes:
-        name: Parameter identifier
-        param_type: Parameter datatype (e.g., "int", "logic", "derived")
-        default_value: Default value if specified
+        name: RTL parameter identifier
+        param_type: SystemVerilog type (legacy name, maps to rtl_type)
+        default_value: Default value from RTL (as string)
         description: Optional documentation from RTL comments
-        template_param_name: Name used in the wrapper template (e.g., $NAME$).
+        line_number: Source location for error reporting
+        is_exposed: Whether parameter is available to user
+        is_required: Whether parameter must be provided
+        min_value: Minimum allowed value for validation
+        max_value: Maximum allowed value for validation
+        allowed_values: List of allowed values for validation
+        source: How parameter gets its value ("rtl", "derived", "alias", "axilite")
+        source_ref: Reference for derived/alias (expression or target parameter)
+        category: Parameter category ("datatype", "dimension", "algorithm", etc.)
     """
+    # Identity
     name: str
-    param_type: Optional[str] = None  # Parameter datatype (can be None for typeless parameters)
-    default_value: Optional[str] = None
-    description: Optional[str] = None
-    template_param_name: str = field(init=False)  # Computed template parameter name
+    param_type: Optional[str] = None  # SystemVerilog type (legacy field name)
     
-    # Legacy compatibility
-    value: Optional[str] = field(init=False)  # Alias for default_value
-    is_local: bool = field(default=False, init=False)  # For localparam
+    # Values
+    default_value: Optional[str] = None  # Raw string value from RTL
+    
+    # Metadata
+    description: Optional[str] = None
+    line_number: Optional[int] = None
+    
+    # Exposure & Policy
+    is_exposed: bool = True  # Available to user
+    is_required: bool = False  # Must be provided
+    
+    # Validation
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    allowed_values: Optional[List[Any]] = None
+    
+    # Binding info
+    source: str = "rtl"  # "rtl", "derived", "alias", "axilite"
+    source_ref: Optional[str] = None  # For derived/alias: expression/target
+    category: Optional[str] = None  # "datatype", "dimension", "algorithm"
+    
+    # Legacy compatibility - will be removed
+    value: Optional[str] = field(init=False)
+    is_local: bool = field(default=False, init=False)
     
     def __post_init__(self):
-        """Compute derived fields."""
-        # Template parameter name is uppercase with $ prefix and suffix  
-        self.template_param_name = f"${self.name.upper()}$"
+        """Initialize computed fields and legacy compatibility."""
         # Legacy compatibility
         self.value = self.default_value
     
-    def get_numeric_value(self) -> Optional[int]:
-        """Try to parse parameter value as integer.
-        
-        Returns:
-            Integer value or None if not parseable
-        """
-        value = self.default_value or self.value
+    @property
+    def rtl_type(self) -> Optional[str]:
+        """Modern name for param_type."""
+        return self.param_type
+    
+    @property
+    def template_param_name(self) -> str:
+        """Template substitution name (e.g., $PE$)."""
+        return f"${self.name.upper()}$"
+    
+    @property
+    def resolved_default(self) -> Optional[Any]:
+        """Get resolved default value (parsed from RTL)."""
+        return self._parse_value(self.default_value)
+    
+    def _parse_value(self, value: Optional[str]) -> Optional[Any]:
+        """Parse RTL string value to Python type."""
         if not value:
             return None
-            
         try:
-            # Handle common SystemVerilog number formats
+            # Handle SystemVerilog formats
             if value.startswith("'b"):
                 return int(value[2:], 2)
             elif value.startswith("'h"):
@@ -129,7 +166,15 @@ class Parameter:
             else:
                 return int(value)
         except (ValueError, TypeError):
-            return None
+            return value  # Return as string if not parseable
+    
+    def get_numeric_value(self) -> Optional[int]:
+        """Legacy method - try to parse parameter value as integer.
+        
+        Returns:
+            Integer value or None if not parseable
+        """
+        return self._parse_value(self.default_value) if isinstance(self._parse_value(self.default_value), int) else None
 
 
 @dataclass

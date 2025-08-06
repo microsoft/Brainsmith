@@ -12,12 +12,7 @@ from pathlib import Path
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
-from ..parameter_config.parameter_defaults import (
-    is_parameter_whitelisted,
-    get_default_value,
-    PARAMETER_DEFAULTS
-)
-from .template_context import TemplateContext, ParameterDefinition
+from .template_context import TemplateContext
 from .codegen_binding_generator import generate_codegen_binding
 
 
@@ -38,41 +33,19 @@ class TemplateContextGenerator:
         """Generate enhanced TemplateContext for Phase 2 code generation."""
         generator = TemplateContextGenerator()
         
-        # Extract parallelism and algorithm parameters from RTL analysis
-        parallelism_info = generator._analyze_parallelism_parameters(kernel_metadata)
+        # Extract algorithm parameters from RTL analysis
         algorithm_info = generator._infer_algorithm_parameters(kernel_metadata)
         
-        # Create enhanced parameter definitions with whitelist info
-        parameter_definitions = []
-        whitelisted_defaults = {}
+        # Use Parameter objects directly
         required_attributes = []
         
         for param in kernel_metadata.parameters:
-            # Use consolidated parameter resolution logic
-            from ..utils import resolve_parameter_defaults
-            default_value, is_required = resolve_parameter_defaults(
-                param, 
-                is_parameter_whitelisted,
-                get_default_value
-            )
+            # Parameters without defaults are required
+            param.is_required = param.default_value is None
             
-            # Track whitelisted defaults and required attributes
-            if default_value is not None:
-                whitelisted_defaults[param.name] = default_value
-            if is_required:
+            # Track required attributes
+            if param.is_required:
                 required_attributes.append(param.name)
-            
-            param_def = ParameterDefinition(
-                name=param.name,
-                param_type=param.param_type,
-                default_value=default_value,
-                description=param.description,
-                line_number=0,  # Parameter object doesn't have line_number
-                template_param_name=param.template_param_name,
-                is_whitelisted=is_parameter_whitelisted(param.name),
-                is_required=is_required
-            )
-            parameter_definitions.append(param_def)
         
         # Categorize interfaces
         input_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)
@@ -98,23 +71,18 @@ class TemplateContextGenerator:
             class_name=generator._get_class_name(kernel_metadata.name),
             source_file=kernel_metadata.source_file,
             interface_metadata=kernel_metadata.interfaces,
-            parameter_definitions=parameter_definitions,
+            parameter_definitions=kernel_metadata.parameters,  # Use Parameter objects directly
             exposed_parameters=kernel_metadata.exposed_parameters,
-            whitelisted_defaults=whitelisted_defaults,
             required_attributes=required_attributes,
             input_interfaces=input_interfaces,
             output_interfaces=output_interfaces,
             weight_interfaces=weight_interfaces,
             config_interfaces=config_interfaces,
             control_interfaces=control_interfaces,
-            parallelism_info=parallelism_info,
+            parallelism_info={},
             algorithm_info=algorithm_info,
-            node_attributes=generator._generate_node_attributes(kernel_metadata, parallelism_info, algorithm_info),
-            resource_estimation_methods=generator._generate_resource_estimation_methods(kernel_metadata, parallelism_info),
-            has_inputs=len(input_interfaces) > 0,
-            has_outputs=len(output_interfaces) > 0,
-            has_weights=len(weight_interfaces) > 0,
-            has_config=len(config_interfaces) > 0,
+            node_attributes=generator._generate_node_attributes(kernel_metadata, {}, algorithm_info),
+            resource_estimation_methods=generator._generate_resource_estimation_methods(kernel_metadata, {}),
             kernel_complexity=generator._estimate_complexity(kernel_metadata),
             kernel_type=generator._infer_kernel_type(kernel_metadata),
             # Add datatype parameter information
@@ -129,7 +97,7 @@ class TemplateContextGenerator:
             # Generate template-time parameter assignments
             datatype_parameter_assignments=generator._generate_datatype_parameter_assignments(kernel_metadata),
             # Add categorized parameters for organized RTL wrapper generation
-            categorized_parameters=generator._categorize_parameters(kernel_metadata, parameter_definitions, datatype_mappings),
+            categorized_parameters=generator._categorize_parameters(kernel_metadata, kernel_metadata.parameters, datatype_mappings),
             # Add unified CodegenBinding
             codegen_binding=codegen_binding,
             # Add SHAPE parameters for HWCustomOp node attributes
@@ -188,75 +156,8 @@ class TemplateContextGenerator:
     def _requires_verification(self, kernel_metadata: KernelMetadata) -> bool:
         """Check if verification is needed."""
         # Enable for kernels with weight interfaces or high complexity
-        has_weights = len(self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0
-        return has_weights or self._estimate_complexity(kernel_metadata) == 'high'
-    
-    def _get_datatype_info(self, interface: InterfaceMetadata):
-        """Extract datatype info from InterfaceMetadata for templates."""
-        # Get the first (primary) datatype constraint
-        if interface.allowed_datatypes:
-            constraint = interface.allowed_datatypes[0]
-            base_type = "INT" if constraint.signed else "UINT"
-            
-            # Create template-compatible datatype object
-            return {
-                "name": constraint.finn_type,
-                "value": constraint.finn_type, 
-                "finn_type": constraint.finn_type,
-                "bitwidth": constraint.bit_width,
-                "bit_width": constraint.bit_width,  # Template compatibility
-                "signed": constraint.signed,
-                "base_type": base_type,
-                "min_bits": constraint.bit_width,
-                "max_bits": constraint.bit_width
-            }
-        else:
-            # Default fallback (should not happen with proper metadata)
-            return {
-                "name": "UINT8",
-                "value": "UINT8", 
-                "finn_type": "UINT8",
-                "bitwidth": 8,
-                "bit_width": 8,
-                "signed": False,
-                "base_type": "UINT",
-                "min_bits": 8,
-                "max_bits": 8
-            }
-    
-    def _analyze_parallelism_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
-        """Extract PE/SIMD equivalent parallelism from RTL analysis."""
-        parallelism = {
-            "inferred_pe": 1,
-            "inferred_simd": 1,
-            "inferred_channels": None,
-            "inferred_width": None,
-            "parallel_elements": []
-        }
-        
-        # Look for PE parameter directly in RTL parameters
-        for param in kernel_metadata.parameters:
-            if param.name.upper() == "PE":
-                parallelism["inferred_pe"] = int(param.default_value) if param.default_value else 1
-            elif param.name.upper() in ["SIMD", "WIDTH"]:
-                parallelism["inferred_simd"] = int(param.default_value) if param.default_value else 1
-            elif param.name.upper() in ["C", "CHANNELS", "NUM_CHANNELS"]:
-                parallelism["inferred_channels"] = int(param.default_value) if param.default_value else 1
-            elif param.name.upper() in ["W", "WIDTH", "DATA_WIDTH"]:
-                parallelism["inferred_width"] = int(param.default_value) if param.default_value else 1
-        
-        # Analyze port arrays for parallel processing patterns
-        for interface in kernel_metadata.interfaces:
-            if interface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT]:
-                # Look for array ports indicating parallelism
-                if "[" in interface.name or "_" in interface.name:
-                    parallelism["parallel_elements"].append({
-                        "interface": interface.name,
-                        "type": interface.interface_type.value,
-                        "inferred_width": 1  # TODO: Parse actual width from port declaration
-                    })
-        
-        return parallelism
+        weight_interfaces = len(self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0
+        return weight_interfaces or self._estimate_complexity(kernel_metadata) == 'high'
     
     def _infer_algorithm_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
         """Extract algorithm-specific parameters from RTL analysis."""
@@ -358,31 +259,46 @@ class TemplateContextGenerator:
                 param_names = dt_meta.get_all_parameters()
                 datatype_linked_params.update(param_names)
                 
-                # Store interface-to-parameter mappings (convert DatatypeMetadata to dict)
-                param_mapping = {}
-                if dt_meta.width:
-                    param_mapping['width'] = dt_meta.width
-                if dt_meta.signed:
-                    param_mapping['signed'] = dt_meta.signed
-                if dt_meta.format:
-                    param_mapping['format'] = dt_meta.format
-                if dt_meta.bias:
-                    param_mapping['bias'] = dt_meta.bias
-                if dt_meta.fractional_width:
-                    param_mapping['fractional_width'] = dt_meta.fractional_width
-                if dt_meta.exponent_width:
-                    param_mapping['exponent_width'] = dt_meta.exponent_width
-                if dt_meta.mantissa_width:
-                    param_mapping['mantissa_width'] = dt_meta.mantissa_width
-                    
-                datatype_param_mappings[interface.name] = param_mapping
+                # Store the datatype metadata directly - templates can access the properties
+                datatype_param_mappings[interface.name] = dt_meta
                 
                 # Generate datatype derivation methods for RTLBackend
-                for property_type, parameter_name in param_mapping.items():
+                # Iterate through all datatype parameters
+                if dt_meta.width:
                     derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
-                        parameter_name, interface.name, property_type
+                        dt_meta.width, interface.name, 'width'
                     )
-                    datatype_derivation_methods[parameter_name] = derivation_method
+                    datatype_derivation_methods[dt_meta.width] = derivation_method
+                if dt_meta.signed:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.signed, interface.name, 'signed'
+                    )
+                    datatype_derivation_methods[dt_meta.signed] = derivation_method
+                if dt_meta.format:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.format, interface.name, 'format'
+                    )
+                    datatype_derivation_methods[dt_meta.format] = derivation_method
+                if dt_meta.bias:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.bias, interface.name, 'bias'
+                    )
+                    datatype_derivation_methods[dt_meta.bias] = derivation_method
+                if dt_meta.fractional_width:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.fractional_width, interface.name, 'fractional_width'
+                    )
+                    datatype_derivation_methods[dt_meta.fractional_width] = derivation_method
+                if dt_meta.exponent_width:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.exponent_width, interface.name, 'exponent_width'
+                    )
+                    datatype_derivation_methods[dt_meta.exponent_width] = derivation_method
+                if dt_meta.mantissa_width:
+                    derivation_method = TemplateContextGenerator._generate_datatype_derivation_method(
+                        dt_meta.mantissa_width, interface.name, 'mantissa_width'
+                    )
+                    datatype_derivation_methods[dt_meta.mantissa_width] = derivation_method
                 
                 # Generate interface datatype attribute for AutoHWCustomOp
                 if interface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
@@ -602,7 +518,7 @@ class TemplateContextGenerator:
         return 1"""
     
     def _categorize_parameters(self, kernel_metadata: KernelMetadata, 
-                             parameter_definitions: List[ParameterDefinition],
+                             parameter_definitions: List[Parameter],
                              datatype_mappings: Dict[str, Any]) -> Dict[str, Any]:
         """
         Categorize parameters for organized RTL wrapper generation.

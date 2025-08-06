@@ -137,7 +137,7 @@ class {{ kernel_name }}_rtl({{ class_name }}, AutoRTLBackend):
         self.set_nodeattr("ipgen_path", code_gen_dir)
         self.set_nodeattr("ip_path", code_gen_dir)
     
-    {% if has_weights %}
+    {% if weight_interfaces %}
     def make_weight_file(self, weights, weight_file_mode, weight_file_name):
         """
         Generate weight initialization file for this kernel.
