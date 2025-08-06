@@ -73,7 +73,7 @@ class {{ class_name }}(AutoHWCustomOp):
             "{{ param.name }}": ('i', True, 0),  # {{ param.source_comment }}
             {% endfor %}
             
-            {% if has_weights %}
+            {% if weight_interfaces %}
             "ram_style": ('s', False, 'auto', {'auto', 'block', 'distributed', 'ultra'}),
             {% endif %}
         })
@@ -263,7 +263,7 @@ def make_{{ kernel_name }}_node(inputs, outputs, **node_attrs):
     - {{ param.name }}: int (required)  # {{ param.source_comment }}
     {% endfor %}
     
-    {% if has_weights %}
+    {% if weight_interfaces %}
     Hardware optimization hints:
     - ram_style: str = 'auto'
     {% endif %}

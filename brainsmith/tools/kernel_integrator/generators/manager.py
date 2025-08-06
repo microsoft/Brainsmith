@@ -285,7 +285,6 @@ class GeneratorManager:
             # Parameters
             "parameter_definitions": template_ctx.parameter_definitions,
             "exposed_parameters": template_ctx.exposed_parameters,
-            "whitelisted_defaults": template_ctx.whitelisted_defaults,
             "required_attributes": template_ctx.required_attributes,
             
             # Linked parameters from CodegenBinding

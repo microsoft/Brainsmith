@@ -197,46 +197,6 @@ def parse_template_variable(template_var: str) -> Optional[str]:
     return None
 
 
-def merge_parameter_defaults(
-    rtl_defaults: Dict[str, Any],
-    whitelist_defaults: Dict[str, Any],
-    pragma_defaults: Dict[str, Any] = None
-) -> Dict[str, Any]:
-    """
-    Merge parameter defaults from multiple sources with proper precedence.
-    
-    Precedence order (highest to lowest):
-    1. Pragma-specified defaults
-    2. RTL-specified defaults
-    3. Whitelist system defaults
-    
-    Args:
-        rtl_defaults: Defaults from RTL parameter declarations
-        whitelist_defaults: System defaults for whitelisted parameters
-        pragma_defaults: Defaults from pragmas (optional)
-        
-    Returns:
-        Merged parameter defaults
-        
-    Examples:
-        >>> merge_parameter_defaults(
-        ...     {"PE": 1, "SIMD": 2},
-        ...     {"PE": 4, "WIDTH": 8},
-        ...     {"SIMD": 8}
-        ... )
-        {"PE": 1, "SIMD": 8, "WIDTH": 8}
-    """
-    # Start with whitelist defaults
-    merged = whitelist_defaults.copy()
-    
-    # Override with RTL defaults
-    merged.update(rtl_defaults)
-    
-    # Override with pragma defaults if provided
-    if pragma_defaults:
-        merged.update(pragma_defaults)
-    
-    return merged
 
 
 def group_parameters_by_interface(
@@ -333,49 +293,6 @@ def validate_shape_expression(
     return True, None
 
 
-def resolve_parameter_defaults(
-    parameter: Any,
-    is_whitelisted_func,
-    get_default_func
-) -> Tuple[Optional[Any], bool]:
-    """
-    Resolve default value and requirement status for a parameter.
-    
-    Args:
-        parameter: Parameter object with name and default_value attributes
-        is_whitelisted_func: Function to check if parameter is whitelisted
-        get_default_func: Function to get system default for whitelisted params
-        
-    Returns:
-        Tuple of (effective_default_value, is_required)
-        
-    Examples:
-        >>> class Param:
-        ...     def __init__(self, name, default_value=None):
-        ...         self.name = name
-        ...         self.default_value = default_value
-        >>> p = Param("PE", "4")
-        >>> resolve_parameter_defaults(p, lambda n: n == "PE", lambda n: 1)
-        (4, False)
-    """
-    is_whitelisted = is_whitelisted_func(parameter.name)
-    has_rtl_default = parameter.default_value is not None
-    
-    # Determine if parameter is required
-    is_required = not has_rtl_default or not is_whitelisted
-    
-    # Get effective default value
-    if is_whitelisted and has_rtl_default:
-        # Use RTL default for whitelisted params
-        default_value = int(parameter.default_value)
-    elif is_whitelisted and not has_rtl_default:
-        # Use system default for whitelisted params without RTL default
-        default_value = get_default_func(parameter.name)
-    else:
-        # No default for non-whitelisted params
-        default_value = None
-    
-    return default_value, is_required
 
 
 def create_parameter_assignment(
@@ -415,9 +332,7 @@ __all__ = [
     "validate_parameter_name",
     "format_template_variable",
     "parse_template_variable",
-    "merge_parameter_defaults",
     "group_parameters_by_interface",
     "validate_shape_expression",
-    "resolve_parameter_defaults",
     "create_parameter_assignment",
 ]

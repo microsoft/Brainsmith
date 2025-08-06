@@ -300,8 +300,15 @@ class ModuleExtractor:
         # Create and return Parameter
         if param_name:
             final_param_type = param_type if param_type else None
-            logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{final_param_type}', Default='{default_value}'")
-            return Parameter(name=param_name, param_type=final_param_type, default_value=default_value)
+            # Get line number from the node if available
+            line_number = node.start_point[0] + 1 if hasattr(node, 'start_point') else None
+            logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{final_param_type}', Default='{default_value}', Line={line_number}")
+            return Parameter(
+                name=param_name, 
+                param_type=final_param_type, 
+                default_value=default_value,
+                line_number=line_number
+            )
         else:
             logger.error(f"Failed to extract parameter details from node: {param_decl_node.text.decode()}")
             return None

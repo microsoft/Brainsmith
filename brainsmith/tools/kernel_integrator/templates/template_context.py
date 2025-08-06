@@ -19,19 +19,6 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ParameterDefinition:
-    """Enhanced parameter definition for template generation."""
-    name: str                              # Parameter name (e.g., "PE", "SIMD")
-    param_type: Optional[str] = None       # Type hint (e.g., "int", "logic")
-    default_value: Optional[int] = None    # Default value from RTL (if whitelisted)
-    description: Optional[str] = None      # Description from comments
-    line_number: int = 0                   # Line number in RTL for error reporting
-    template_param_name: Optional[str] = None  # Template placeholder (e.g., "$PE$")
-    is_whitelisted: bool = False          # Whether parameter can have defaults
-    is_required: bool = True              # Whether FINN must provide value
-
-
-@dataclass
 class TemplateContext:
     """
     Enhanced template context for generating AutoHWCustomOp subclasses.
@@ -52,9 +39,8 @@ class TemplateContext:
     interface_metadata: List[InterfaceMetadata]  # All interfaces with chunking
     
     # Enhanced parameter definitions
-    parameter_definitions: List[ParameterDefinition]  # All module parameters
+    parameter_definitions: List[Parameter]  # All module parameters (unified Parameter type)
     exposed_parameters: List[str] = field(default_factory=list)  # Parameters that should be nodeattr
-    whitelisted_defaults: Dict[str, int] = field(default_factory=dict)  # Default values for whitelisted params
     required_attributes: List[str] = field(default_factory=list)  # Parameters without defaults
     
     # Categorized interfaces for template compatibility
@@ -89,11 +75,6 @@ class TemplateContext:
     # Categorized parameters for organized RTL wrapper generation
     categorized_parameters: Dict[str, Any] = field(default_factory=dict)
     
-    # Template flags
-    has_inputs: bool = False
-    has_outputs: bool = False
-    has_weights: bool = False
-    has_config: bool = False
     
     # Kernel analysis
     kernel_complexity: str = "medium"
@@ -134,12 +115,9 @@ class TemplateContext:
                 errors.append(f"Duplicate parameter name: {param.name}")
             param_names.add(param.name)
             
-            # Check whitelisted parameters have defaults
-            if param.is_whitelisted and param.name not in self.whitelisted_defaults:
-                errors.append(f"Whitelisted parameter {param.name} missing default value")
         
-        # Validate required attributes match non-whitelisted parameters
-        expected_required = {p.name for p in self.parameter_definitions if not p.is_whitelisted}
+        # Validate required attributes match parameters without defaults
+        expected_required = {p.name for p in self.parameter_definitions if p.default_value is None}
         actual_required = set(self.required_attributes)
         if expected_required != actual_required:
             errors.append(f"Required attributes mismatch. Expected: {expected_required}, Got: {actual_required}")
