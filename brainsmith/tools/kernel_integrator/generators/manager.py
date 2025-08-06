@@ -311,8 +311,6 @@ class GeneratorManager:
             # Other data
             "relationships": template_ctx.relationships,
             "internal_datatypes": template_ctx.internal_datatypes,
-            "kernel_complexity": template_ctx.kernel_complexity,
-            "kernel_type": template_ctx.kernel_type,
             "categorized_parameters": template_ctx.categorized_parameters,
             
             # SHAPE parameters for HWCustomOp node attributes

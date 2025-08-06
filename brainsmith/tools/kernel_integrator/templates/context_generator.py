@@ -19,22 +19,11 @@ from .codegen_binding_generator import generate_codegen_binding
 class TemplateContextGenerator:
     """Generates template context from KernelMetadata for Jinja2 templates."""
     
-    @staticmethod
-    def generate_context(kernel_metadata: KernelMetadata) -> Dict[str, Any]:
-        """Generate complete template context for Jinja2 templates."""
-        # First generate the enhanced TemplateContext for Phase 2
-        template_ctx = TemplateContextGenerator.generate_template_context(kernel_metadata)
-        
-        # Then convert to dictionary format for backward compatibility with datatype mapping extraction
-        return TemplateContextGenerator._template_context_to_dict(template_ctx, kernel_metadata)
     
     @staticmethod
     def generate_template_context(kernel_metadata: KernelMetadata) -> TemplateContext:
         """Generate enhanced TemplateContext for Phase 2 code generation."""
         generator = TemplateContextGenerator()
-        
-        # Extract algorithm parameters from RTL analysis
-        algorithm_info = generator._infer_algorithm_parameters(kernel_metadata)
         
         # Use Parameter objects directly
         required_attributes = []
@@ -80,11 +69,6 @@ class TemplateContextGenerator:
             config_interfaces=config_interfaces,
             control_interfaces=control_interfaces,
             parallelism_info={},
-            algorithm_info=algorithm_info,
-            node_attributes=generator._generate_node_attributes(kernel_metadata, {}, algorithm_info),
-            resource_estimation_methods=generator._generate_resource_estimation_methods(kernel_metadata, {}),
-            kernel_complexity=generator._estimate_complexity(kernel_metadata),
-            kernel_type=generator._infer_kernel_type(kernel_metadata),
             # Add datatype parameter information
             datatype_linked_params=datatype_mappings.get('datatype_linked_params', []),
             datatype_param_mappings=datatype_mappings.get('datatype_param_mappings', {}),
@@ -122,117 +106,21 @@ class TemplateContextGenerator:
         return [iface for iface in kernel_metadata.interfaces 
                 if iface.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]]
     
-    def _estimate_complexity(self, kernel_metadata: KernelMetadata) -> str:
-        """Estimate kernel complexity for resource calculations."""
-        interface_count = len(kernel_metadata.interfaces)
-        param_count = len(kernel_metadata.parameters)
-        
-        if interface_count <= 2 and param_count <= 3:
-            return 'low'
-        elif interface_count <= 4 and param_count <= 6:
-            return 'medium'
-        else:
-            return 'high'
     
-    def _infer_kernel_type(self, kernel_metadata: KernelMetadata) -> str:
-        """Infer kernel type from name for resource estimation."""
-        name_lower = kernel_metadata.name.lower()
-        if any(term in name_lower for term in ['matmul', 'gemm', 'dot']):
-            return 'matmul'
-        elif any(term in name_lower for term in ['conv', 'convolution']):
-            return 'conv'
-        elif any(term in name_lower for term in ['threshold', 'compare']):
-            return 'threshold'
-        elif any(term in name_lower for term in ['norm', 'batch', 'layer']):
-            return 'norm'
-        else:
-            return 'generic'
     
     def _requires_resource_estimation(self, kernel_metadata: KernelMetadata) -> bool:
         """Check if resource estimation is needed."""
         # Enable for complex kernels or when multiple interfaces exist
-        return len(kernel_metadata.interfaces) > 2 or self._estimate_complexity(kernel_metadata) != 'low'
+        return len(kernel_metadata.interfaces) > 2
     
     def _requires_verification(self, kernel_metadata: KernelMetadata) -> bool:
         """Check if verification is needed."""
-        # Enable for kernels with weight interfaces or high complexity
+        # Enable for kernels with weight interfaces
         weight_interfaces = len(self._get_interfaces_by_type(kernel_metadata, InterfaceType.WEIGHT)) > 0
-        return weight_interfaces or self._estimate_complexity(kernel_metadata) == 'high'
+        return weight_interfaces
     
-    def _infer_algorithm_parameters(self, kernel_metadata: KernelMetadata) -> Dict[str, Any]:
-        """Extract algorithm-specific parameters from RTL analysis."""
-        algorithm = {
-            "type": self._infer_kernel_type(kernel_metadata),
-            "parameters": {},
-            "constraints": []
-        }
-        
-        # Map RTL parameters to algorithm parameters based on kernel type
-        kernel_type = algorithm["type"]
-        
-        if kernel_type == "threshold":
-            # Thresholding-specific parameters
-            for param in kernel_metadata.parameters:
-                if param.name.upper() in ["N", "NUM_STEPS"]:
-                    algorithm["parameters"]["numSteps"] = int(param.default_value) if param.default_value else 1
-                elif param.name.upper() in ["BIAS"]:
-                    algorithm["parameters"]["ActVal"] = int(param.default_value) if param.default_value else 0
-                elif param.name.upper() in ["SIGNED"]:
-                    algorithm["parameters"]["signed_input"] = bool(int(param.default_value)) if param.default_value else False
-        elif kernel_type == "matmul":
-            # Matrix multiplication parameters
-            for param in kernel_metadata.parameters:
-                if param.name.upper() in ["M", "ROWS"]:
-                    algorithm["parameters"]["rows"] = int(param.default_value) if param.default_value else 1
-                elif param.name.upper() in ["N", "COLS"]:
-                    algorithm["parameters"]["cols"] = int(param.default_value) if param.default_value else 1
-        elif kernel_type == "conv":
-            # Convolution parameters
-            for param in kernel_metadata.parameters:
-                if param.name.upper() in ["K", "KERNEL_SIZE"]:
-                    algorithm["parameters"]["kernel_size"] = int(param.default_value) if param.default_value else 1
-                elif param.name.upper() in ["S", "STRIDE"]:
-                    algorithm["parameters"]["stride"] = int(param.default_value) if param.default_value else 1
-        
-        return algorithm
     
-    def _generate_node_attributes(self, kernel_metadata: KernelMetadata, parallelism_info: Dict, algorithm_info: Dict) -> Dict[str, Any]:
-        """Generate node attribute definitions for HWCustomOp."""
-        node_attrs = {}
-        
-        # Hardware-specific attributes
-        if parallelism_info["inferred_pe"] > 1:
-            node_attrs["PE"] = ("i", True, parallelism_info["inferred_pe"])
-        if parallelism_info["inferred_channels"]:
-            node_attrs["NumChannels"] = ("i", True, parallelism_info["inferred_channels"])
-        
-        # Data type specifications now handled by interface-specific datatype attributes
-        # (e.g., input0DataType, output0DataType) based on compiler_name for consistency
-        # Generic inputDataType/outputDataType/weightDataType removed to avoid redundancy
-        
-        # Algorithm-specific parameters
-        for param_name, param_value in algorithm_info["parameters"].items():
-            if isinstance(param_value, bool):
-                node_attrs[param_name] = ("i", False, 1 if param_value else 0, {0, 1})
-            elif isinstance(param_value, int):
-                node_attrs[param_name] = ("i", True if param_value > 0 else False, param_value)
-            else:
-                node_attrs[param_name] = ("s", False, str(param_value))
-        
-        # Default runtime attributes
-        node_attrs["runtime_writeable_weights"] = ("i", False, 0, {0, 1})
-        node_attrs["numInputVectors"] = ("ints", False, [1])
-        
-        return node_attrs
     
-    def _generate_resource_estimation_methods(self, kernel_metadata: KernelMetadata, parallelism_info: Dict) -> Dict[str, Any]:
-        """Generate simplified resource estimation stubs for template."""
-        methods = {
-            "bram_estimation": "return 1",
-            "lut_estimation": "return 2000", 
-            "dsp_estimation": "return 0"
-        }
-        return methods
     
     @staticmethod
     def _extract_datatype_parameter_mappings(kernel_metadata: KernelMetadata) -> Dict[str, Any]:
