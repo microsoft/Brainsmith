@@ -10,11 +10,10 @@ from typing import Dict, List, Tuple, Any, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, DatatypeMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, DatatypeMetadata, KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 
 if TYPE_CHECKING:
-    from ..codegen_binding import CodegenBinding
     from brainsmith.core.dataflow.relationships import DimensionRelationship
 
 
@@ -30,58 +29,112 @@ class TemplateContext:
     4. Integrates seamlessly with FINN
     """
     
-    # Core module information
-    module_name: str                       # RTL module name
-    class_name: str                        # Generated Python class name
-    source_file: Path                      # Source RTL file path
+    # Core reference to KernelMetadata
+    kernel_metadata: KernelMetadata        # Source of truth for all kernel data
     
-    # Interface metadata with validated symbolic BDIM shapes
-    interface_metadata: List[InterfaceMetadata]  # All interfaces with chunking
+    # Active transformations still used by templates
+    datatype_linked_params: List[str] = field(default_factory=list)  # Used by _categorize_parameters()
+    categorized_parameters: Dict[str, Any] = field(default_factory=dict)  # Used by rtl_wrapper_minimal.v.j2
+    shape_nodeattrs: List[Dict[str, str]] = field(default_factory=list)  # Used by hw_custom_op.py.j2
     
-    # Enhanced parameter definitions
-    parameter_definitions: List[Parameter]  # All module parameters (unified Parameter type)
-    exposed_parameters: List[str] = field(default_factory=list)  # Parameters that should be nodeattr
-    required_attributes: List[str] = field(default_factory=list)  # Parameters without defaults
+    # Simple field properties that delegate to KernelMetadata
+    @property
+    def module_name(self) -> str:
+        """Module name from KernelMetadata."""
+        return self.kernel_metadata.name
     
-    # Categorized interfaces for template compatibility
-    input_interfaces: List[InterfaceMetadata] = field(default_factory=list)
-    output_interfaces: List[InterfaceMetadata] = field(default_factory=list)
-    weight_interfaces: List[InterfaceMetadata] = field(default_factory=list)
-    config_interfaces: List[InterfaceMetadata] = field(default_factory=list)
-    control_interfaces: List[InterfaceMetadata] = field(default_factory=list)
+    @property
+    def class_name(self) -> str:
+        """PascalCase class name from KernelMetadata."""
+        return self.kernel_metadata.class_name
     
+    @property
+    def source_file(self) -> Path:
+        """Source file path from KernelMetadata."""
+        return Path(self.kernel_metadata.source_file)
     
-    # Additional context
-    parallelism_info: Dict[str, Any] = field(default_factory=dict)
+    @property
+    def required_attributes(self) -> List[str]:
+        """Required parameter names from KernelMetadata."""
+        return self.kernel_metadata.required_attributes
     
-    # Datatype parameter information for new architecture
-    datatype_linked_params: List[str] = field(default_factory=list)
-    datatype_param_mappings: Dict[str, Dict[str, str]] = field(default_factory=dict)  
-    interface_datatype_attributes: List[Dict[str, Any]] = field(default_factory=list)
-    datatype_derivation_methods: Dict[str, str] = field(default_factory=dict)
+    @property
+    def relationships(self) -> List:
+        """Relationships from KernelMetadata."""
+        return self.kernel_metadata.relationships if hasattr(self.kernel_metadata, 'relationships') else []
     
-    # Internal datatype metadata from kernel
-    internal_datatypes: List['DatatypeMetadata'] = field(default_factory=list)
+    @property
+    def internal_datatypes(self) -> List['DatatypeMetadata']:
+        """Internal datatypes from KernelMetadata."""
+        return self.kernel_metadata.internal_datatypes
     
-    # Template-time parameter assignments (replaces runtime logic)
-    datatype_parameter_assignments: List[Dict[str, str]] = field(default_factory=list)
+    @property
+    def linked_parameters(self) -> Dict[str, Any]:
+        """Linked parameters from KernelMetadata."""
+        return self.kernel_metadata.linked_parameters
     
-    # Linked parameter data (ALIAS, DERIVED_PARAMETER, AXILITE_PARAM)
-    linked_parameters: Dict[str, Any] = field(default_factory=dict)
+    # Interface properties that delegate to KernelMetadata
+    @property
+    def interface_metadata(self) -> List[InterfaceMetadata]:
+        """All interfaces from KernelMetadata."""
+        return self.kernel_metadata.interfaces
     
-    # Categorized parameters for organized RTL wrapper generation
-    categorized_parameters: Dict[str, Any] = field(default_factory=dict)
+    @property
+    def input_interfaces(self) -> List[InterfaceMetadata]:
+        """Input interfaces from KernelMetadata."""
+        return self.kernel_metadata.input_interfaces
     
+    @property
+    def output_interfaces(self) -> List[InterfaceMetadata]:
+        """Output interfaces from KernelMetadata."""
+        return self.kernel_metadata.output_interfaces
     
+    @property
+    def weight_interfaces(self) -> List[InterfaceMetadata]:
+        """Weight interfaces from KernelMetadata."""
+        return self.kernel_metadata.weight_interfaces
     
-    # Unified CodegenBinding
-    codegen_binding: Optional['CodegenBinding'] = None
+    @property
+    def config_interfaces(self) -> List[InterfaceMetadata]:
+        """Config interfaces from KernelMetadata."""
+        return self.kernel_metadata.config_interfaces
     
-    # Relationships between interfaces
-    relationships: List['DimensionRelationship'] = field(default_factory=list)
+    @property
+    def control_interfaces(self) -> List[InterfaceMetadata]:
+        """Control interfaces from KernelMetadata."""
+        return self.kernel_metadata.control_interfaces
     
-    # SHAPE parameters for HWCustomOp node attributes
-    shape_nodeattrs: List[Dict[str, str]] = field(default_factory=list)
+    # Parameter properties that delegate to KernelMetadata
+    @property
+    def parameter_definitions(self) -> List[Parameter]:
+        """All parameters from KernelMetadata."""
+        return self.kernel_metadata.parameters
+    
+    @property
+    def exposed_parameters(self) -> List[str]:
+        """Exposed parameters from KernelMetadata."""
+        return self.kernel_metadata.exposed_parameters
+    
+    # Convenience properties that delegate to KernelMetadata
+    @property
+    def has_inputs(self) -> bool:
+        """Check if kernel has input interfaces."""
+        return self.kernel_metadata.has_inputs
+    
+    @property
+    def has_outputs(self) -> bool:
+        """Check if kernel has output interfaces."""
+        return self.kernel_metadata.has_outputs
+    
+    @property
+    def has_weights(self) -> bool:
+        """Check if kernel has weight interfaces."""
+        return self.kernel_metadata.has_weights
+    
+    @property
+    def has_config(self) -> bool:
+        """Check if kernel has config interfaces."""
+        return self.kernel_metadata.has_config
     
     def validate(self) -> List[str]:
         """
@@ -92,28 +145,16 @@ class TemplateContext:
         """
         errors = []
         
-        # Check module and class names
-        if not self.module_name:
-            errors.append("Module name is required")
-        if not self.class_name:
-            errors.append("Class name is required")
-            
-        # Check interface metadata
-        if not self.interface_metadata:
-            errors.append("At least one interface is required")
-            
-        # Validate parameter definitions
-        param_names = set()
-        for param in self.parameter_definitions:
-            if param.name in param_names:
-                errors.append(f"Duplicate parameter name: {param.name}")
-            param_names.add(param.name)
-            
+        # Validate KernelMetadata reference
+        if not self.kernel_metadata:
+            errors.append("KernelMetadata reference is required")
+            return errors  # Can't validate further without kernel_metadata
         
-        # Validate required attributes match parameters without defaults
-        expected_required = {p.name for p in self.parameter_definitions if p.default_value is None}
-        actual_required = set(self.required_attributes)
-        if expected_required != actual_required:
-            errors.append(f"Required attributes mismatch. Expected: {expected_required}, Got: {actual_required}")
+        # Delegate most validation to KernelMetadata
+        kernel_errors = self.kernel_metadata.validate()
+        if kernel_errors:
+            errors.extend(kernel_errors)
+        
+        # Template-specific validations can be added here if needed
         
         return errors

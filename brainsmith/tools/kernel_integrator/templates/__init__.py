@@ -9,11 +9,7 @@ for the KI system.
 from .template_context import TemplateContext
 from .context_generator import TemplateContextGenerator
 
-# Export code generation utilities  
-from .codegen_binding_generator import generate_codegen_binding
-
 __all__ = [
     "TemplateContext",
-    "TemplateContextGenerator", 
-    "generate_codegen_binding"
+    "TemplateContextGenerator"
 ]

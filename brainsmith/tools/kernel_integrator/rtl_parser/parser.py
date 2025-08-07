@@ -207,31 +207,31 @@ class RTLParser:
     def _sync_parameter_exposure(self, kernel_metadata: KernelMetadata) -> None:
         """Sync Parameter objects with exposed_parameters list.
         
-        Updates is_exposed field on Parameter objects based on the exposed_parameters list
-        after pragma processing. Also sets source and source_ref based on linked_parameters.
+        Updates source_type and source_detail on Parameter objects based on the 
+        linked_parameters after pragma processing.
         
         Args:
             kernel_metadata: KernelMetadata with updated exposed_parameters.
         """
+        # Import SourceType
+        from brainsmith.tools.kernel_integrator.types.rtl import SourceType
+        
         # Create a set for efficient lookup
         exposed_set = set(kernel_metadata.exposed_parameters)
         
         # Update each Parameter object
         for param in kernel_metadata.parameters:
-            # Update is_exposed based on exposed_parameters list
-            param.is_exposed = param.name in exposed_set
-            
             # Update source information based on linked_parameters
             if param.name in kernel_metadata.linked_parameters.get("aliases", {}):
-                param.source = "alias"
-                param.source_ref = kernel_metadata.linked_parameters["aliases"][param.name]
+                param.source_type = SourceType.NODEATTR_ALIAS
+                param.source_detail = {"nodeattr_name": kernel_metadata.linked_parameters["aliases"][param.name]}
             elif param.name in kernel_metadata.linked_parameters.get("derived", {}):
-                param.source = "derived"
-                param.source_ref = kernel_metadata.linked_parameters["derived"][param.name]
+                param.source_type = SourceType.DERIVED
+                param.source_detail = {"expression": kernel_metadata.linked_parameters["derived"][param.name]}
             elif param.name in kernel_metadata.linked_parameters.get("axilite", {}):
-                param.source = "axilite"
-                param.source_ref = kernel_metadata.linked_parameters["axilite"][param.name]
-            # else: source remains "rtl" (default)
+                param.source_type = SourceType.AXILITE
+                param.source_detail = {"interface_name": kernel_metadata.linked_parameters["axilite"][param.name]}
+            # else: source_type remains SourceType.RTL (default)
             
         logger.debug(f"Synced parameter exposure: {len(exposed_set)} exposed out of {len(kernel_metadata.parameters)} total")
     
@@ -247,6 +247,9 @@ class RTLParser:
         # Delegate all autolinking logic to ParameterLinker
         linker = ParameterLinker(enable_interface_linking=True, enable_internal_linking=True)
         linker.apply_to_kernel_metadata(kernel_metadata)
+        
+        # Assign parameter categories based on usage
+        linker.assign_parameter_categories(kernel_metadata)
 
     def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
         """Core SystemVerilog string parser.

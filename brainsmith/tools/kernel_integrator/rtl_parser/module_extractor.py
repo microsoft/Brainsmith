@@ -305,7 +305,7 @@ class ModuleExtractor:
             logger.info(f"Successfully parsed parameter: Name='{param_name}', Type='{final_param_type}', Default='{default_value}', Line={line_number}")
             return Parameter(
                 name=param_name, 
-                param_type=final_param_type, 
+                rtl_type=final_param_type, 
                 default_value=default_value,
                 line_number=line_number
             )

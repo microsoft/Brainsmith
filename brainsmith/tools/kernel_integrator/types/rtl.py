@@ -16,6 +16,27 @@ class PortDirection(Enum):
     OUTPUT = "output"
     INOUT = "inout"
 
+
+class SourceType(Enum):
+    """How a parameter gets its value during code generation."""
+    RTL = "rtl"                    # Direct from RTL (exposed)
+    NODEATTR_ALIAS = "alias"       # Aliased node attribute
+    DERIVED = "derived"            # Computed from expression
+    INTERFACE_DATATYPE = "if_dtype" # From interface datatype property
+    INTERFACE_SHAPE = "if_shape"   # From interface shape (BDIM/SDIM)
+    INTERNAL_DATATYPE = "int_dtype" # From internal datatype
+    AXILITE = "axilite"           # From AXI-Lite interface
+    CONSTANT = "constant"          # Fixed constant value
+
+
+class ParameterCategory(Enum):
+    """Semantic category of parameter."""
+    ALGORITHM = "algorithm"         # Core algorithm parameter
+    DATATYPE = "datatype"          # Datatype-related (width, signed)
+    SHAPE = "shape"                # Shape-related (BDIM, SDIM)
+    CONTROL = "control"            # Control/config (AXI-Lite)
+    INTERNAL = "internal"          # Internal mechanism
+
 if TYPE_CHECKING:
     from brainsmith.core.dataflow.types import InterfaceType
 
@@ -89,16 +110,17 @@ class Parameter:
     
     Attributes:
         name: RTL parameter identifier
-        param_type: SystemVerilog type (legacy name, maps to rtl_type)
+        rtl_type: SystemVerilog type (e.g., "integer", "logic", etc.)
         default_value: Default value from RTL (as string)
         line_number: Source location for error reporting
-        is_exposed: Whether parameter is available to user
-        source: How parameter gets its value ("rtl", "derived", "alias", "axilite")
-        source_ref: Reference for derived/alias (expression or target parameter)
+        source_type: How parameter gets its value (enum)
+        source_detail: Detailed source information (dict)
+        category: Semantic category of parameter
+        interface_name: Which interface owns this parameter (if applicable)
     """
     # Identity
     name: str
-    param_type: Optional[str] = None  # SystemVerilog type (legacy field name)
+    rtl_type: Optional[str] = None  # SystemVerilog type
     
     # Values
     default_value: Optional[str] = None  # Raw string value from RTL
@@ -106,17 +128,37 @@ class Parameter:
     # Metadata
     line_number: Optional[int] = None
     
-    # Exposure & Policy
-    is_exposed: bool = True  # Available to user
+    # Enhanced source information
+    source_type: SourceType = SourceType.RTL
+    source_detail: Dict[str, Any] = field(default_factory=dict)
+    # Examples:
+    # NODEATTR_ALIAS: {"nodeattr_name": "parallelism_factor"}
+    # INTERFACE_DATATYPE: {"interface": "input0", "property": "width"}
+    # DERIVED: {"expression": "self.get_nodeattr('PE') * 2"}
+    # INTERFACE_SHAPE: {"interface": "input0", "dimension": 0, "shape_type": "bdim"}
     
-    # Binding info
-    source: str = "rtl"  # "rtl", "derived", "alias", "axilite"
-    source_ref: Optional[str] = None  # For derived/alias: expression/target
+    # Semantic categorization
+    category: ParameterCategory = ParameterCategory.ALGORITHM
+    
+    # Relationships
+    interface_name: Optional[str] = None  # Which interface owns this
     
     @property
-    def rtl_type(self) -> Optional[str]:
-        """Modern name for param_type."""
-        return self.param_type
+    def is_exposed(self) -> bool:
+        """Check if exposed as node attribute."""
+        return self.source_type == SourceType.RTL
+    
+    @property
+    def nodeattr_name(self) -> str:
+        """Get the node attribute name for this parameter."""
+        if self.source_type == SourceType.NODEATTR_ALIAS:
+            return self.source_detail.get("nodeattr_name", self.name)
+        return self.name
+    
+    @property
+    def template_var(self) -> str:
+        """Template substitution variable."""
+        return f"${self.name.upper()}$"
     
     @property
     def template_param_name(self) -> str:
