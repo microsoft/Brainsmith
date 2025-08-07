@@ -288,7 +288,7 @@ def _create_parameter_constraint(
         allowed_values=allowed_values,
         default_value=param.default_value,
         is_exposed=is_exposed,
-        description=param.description
+        description=None  # Parameter descriptions not stored
     )
 
 

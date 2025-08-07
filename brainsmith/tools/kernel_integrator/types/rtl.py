@@ -91,16 +91,10 @@ class Parameter:
         name: RTL parameter identifier
         param_type: SystemVerilog type (legacy name, maps to rtl_type)
         default_value: Default value from RTL (as string)
-        description: Optional documentation from RTL comments
         line_number: Source location for error reporting
         is_exposed: Whether parameter is available to user
-        is_required: Whether parameter must be provided
-        min_value: Minimum allowed value for validation
-        max_value: Maximum allowed value for validation
-        allowed_values: List of allowed values for validation
         source: How parameter gets its value ("rtl", "derived", "alias", "axilite")
         source_ref: Reference for derived/alias (expression or target parameter)
-        category: Parameter category ("datatype", "dimension", "algorithm", etc.)
     """
     # Identity
     name: str
@@ -110,31 +104,14 @@ class Parameter:
     default_value: Optional[str] = None  # Raw string value from RTL
     
     # Metadata
-    description: Optional[str] = None
     line_number: Optional[int] = None
     
     # Exposure & Policy
     is_exposed: bool = True  # Available to user
-    is_required: bool = False  # Must be provided
-    
-    # Validation
-    min_value: Optional[int] = None
-    max_value: Optional[int] = None
-    allowed_values: Optional[List[Any]] = None
     
     # Binding info
     source: str = "rtl"  # "rtl", "derived", "alias", "axilite"
     source_ref: Optional[str] = None  # For derived/alias: expression/target
-    category: Optional[str] = None  # "datatype", "dimension", "algorithm"
-    
-    # Legacy compatibility - will be removed
-    value: Optional[str] = field(init=False)
-    is_local: bool = field(default=False, init=False)
-    
-    def __post_init__(self):
-        """Initialize computed fields and legacy compatibility."""
-        # Legacy compatibility
-        self.value = self.default_value
     
     @property
     def rtl_type(self) -> Optional[str]:

@@ -26,15 +26,11 @@ class TemplateContextGenerator:
         generator = TemplateContextGenerator()
         
         # Use Parameter objects directly
-        required_attributes = []
-        
-        for param in kernel_metadata.parameters:
-            # Parameters without defaults are required
-            param.is_required = param.default_value is None
-            
-            # Track required attributes
-            if param.is_required:
-                required_attributes.append(param.name)
+        # Parameters without defaults are required
+        required_attributes = [
+            param.name for param in kernel_metadata.parameters 
+            if param.default_value is None
+        ]
         
         # Categorize interfaces
         input_interfaces = generator._get_interfaces_by_type(kernel_metadata, InterfaceType.INPUT)

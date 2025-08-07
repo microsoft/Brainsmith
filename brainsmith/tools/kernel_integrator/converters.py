@@ -161,7 +161,7 @@ def _convert_parameters_to_dict(kernel_metadata: KernelMetadata) -> Dict[str, An
         param_dict[param.name] = {
             "type": param.param_type or "integer",
             "default": param.default_value,
-            "description": param.description
+            "description": None  # Parameter descriptions not stored
         }
     return param_dict
 
