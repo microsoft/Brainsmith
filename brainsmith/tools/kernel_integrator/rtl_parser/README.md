@@ -376,7 +376,7 @@ module example #(
 @dataclass
 class Parameter:
     name: str
-    param_type: Optional[str] = None
+    rtl_type: Optional[str] = None
     default_value: Optional[str] = None
     description: Optional[str] = None
     template_param_name: str = field(init=False)  # Auto-computed

@@ -18,7 +18,7 @@ from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
 
 from brainsmith.tools.kernel_integrator.types.metadata import DatatypeMetadata, KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter, ParameterCategory, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -396,3 +396,112 @@ class ParameterLinker:
                     for param_name in dt.get_all_parameters():
                         if param_name in kernel_metadata.exposed_parameters:
                             kernel_metadata.exposed_parameters.remove(param_name)
+    
+    def assign_parameter_categories(self, kernel_metadata: 'KernelMetadata') -> None:
+        """Assign semantic categories to parameters based on their usage.
+        
+        This method analyzes how parameters are used and assigns appropriate
+        categories (SHAPE, DATATYPE, CONTROL, INTERNAL, ALGORITHM).
+        
+        Args:
+            kernel_metadata: KernelMetadata with parameters to categorize
+        """
+        logger.debug("Assigning parameter categories")
+        
+        # Collect shape parameters from all interfaces
+        shape_params = set()
+        for interface in kernel_metadata.interfaces:
+            if interface.bdim_params:
+                for i, param in enumerate(interface.bdim_params):
+                    if param != '1' and isinstance(param, str):
+                        shape_params.add(param)
+                        # Find the parameter and update its details
+                        for p in kernel_metadata.parameters:
+                            if p.name == param:
+                                p.interface_name = interface.name
+                                p.source_detail["shape_type"] = "bdim"
+                                p.source_detail["dimension"] = i
+                                break
+                                
+            if interface.sdim_params:
+                for i, param in enumerate(interface.sdim_params):
+                    if param != '1' and isinstance(param, str):
+                        shape_params.add(param)
+                        # Find the parameter and update its details
+                        for p in kernel_metadata.parameters:
+                            if p.name == param:
+                                p.interface_name = interface.name
+                                p.source_detail["shape_type"] = "sdim"
+                                p.source_detail["dimension"] = i
+                                break
+        
+        # Collect datatype parameters from interfaces
+        datatype_params = set()
+        for interface in kernel_metadata.interfaces:
+            if interface.datatype_metadata:
+                dt_params = interface.datatype_metadata.get_all_parameters()
+                datatype_params.update(dt_params)
+                # Update interface_name for these parameters
+                for param_name in dt_params:
+                    for p in kernel_metadata.parameters:
+                        if p.name == param_name:
+                            p.interface_name = interface.name
+                            # Add property info to source_detail if not already set
+                            if p.source_type == SourceType.RTL:
+                                p.source_type = SourceType.INTERFACE_DATATYPE
+                                # Determine which property this parameter controls
+                                dt_meta = interface.datatype_metadata
+                                if dt_meta.width == param_name:
+                                    p.source_detail["property"] = "width"
+                                elif dt_meta.signed == param_name:
+                                    p.source_detail["property"] = "signed"
+                                elif dt_meta.format == param_name:
+                                    p.source_detail["property"] = "format"
+                                elif dt_meta.bias == param_name:
+                                    p.source_detail["property"] = "bias"
+                                elif dt_meta.fractional_width == param_name:
+                                    p.source_detail["property"] = "fractional_width"
+                                p.source_detail["interface"] = interface.name
+                            break
+        
+        # Collect datatype parameters from internal datatypes
+        for dt_meta in kernel_metadata.internal_datatypes:
+            dt_params = dt_meta.get_all_parameters()
+            datatype_params.update(dt_params)
+            # Update source info for these parameters
+            for param_name in dt_params:
+                for p in kernel_metadata.parameters:
+                    if p.name == param_name:
+                        if p.source_type == SourceType.RTL:
+                            p.source_type = SourceType.INTERNAL_DATATYPE
+                            p.source_detail["interface"] = dt_meta.name
+                            # Determine which property
+                            if dt_meta.width == param_name:
+                                p.source_detail["property"] = "width"
+                            elif dt_meta.signed == param_name:
+                                p.source_detail["property"] = "signed"
+                        break
+        
+        # Assign categories to all parameters
+        for param in kernel_metadata.parameters:
+            if param.name in shape_params:
+                param.category = ParameterCategory.SHAPE
+                if param.source_type == SourceType.RTL:
+                    param.source_type = SourceType.INTERFACE_SHAPE
+            elif param.name in datatype_params:
+                param.category = ParameterCategory.DATATYPE
+            elif param.source_type == SourceType.AXILITE:
+                param.category = ParameterCategory.CONTROL
+            elif param.name not in kernel_metadata.exposed_parameters:
+                # Non-exposed parameters linked to internal datatypes
+                param.category = ParameterCategory.INTERNAL
+            else:
+                # Default: exposed parameters are algorithm parameters
+                param.category = ParameterCategory.ALGORITHM
+        
+        logger.info(f"Categorized {len(kernel_metadata.parameters)} parameters: "
+                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.ALGORITHM)} algorithm, "
+                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.SHAPE)} shape, "
+                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.DATATYPE)} datatype, "
+                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.CONTROL)} control, "
+                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.INTERNAL)} internal")

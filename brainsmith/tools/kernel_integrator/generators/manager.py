@@ -264,7 +264,7 @@ class GeneratorManager:
     def _convert_context_to_template_vars(self, template_ctx: TemplateContext) -> Dict[str, Any]:
         """Convert TemplateContext to template variables for Jinja2."""
         from datetime import datetime
-        from ..codegen_binding import SourceType
+        from ..types.rtl import SourceType, ParameterCategory
         
         # Extract variables that templates expect
         vars_dict = {
@@ -292,15 +292,16 @@ class GeneratorManager:
             "derived_parameters": template_ctx.linked_parameters.get("derived", {}),
             "axilite_parameters": template_ctx.linked_parameters.get("axilite", {}),
             
-            # Explicit mappings from CodegenBinding (compile-time)
-            "explicit_datatype_attrs": self._generate_datatype_attributes_from_binding(template_ctx.codegen_binding),
-            "explicit_parameter_assignments": self._generate_parameter_assignments_from_binding(template_ctx.codegen_binding),
+            # Explicit mappings from Parameters (compile-time)
+            "explicit_datatype_attrs": self._generate_datatype_attributes_from_parameters(template_ctx),
+            "explicit_parameter_assignments": self._generate_parameter_assignments_from_parameters(template_ctx),
             
             # Separate RTL-specific node attributes from datatype attributes
-            "rtl_specific_nodeattrs": self._generate_rtl_specific_nodeattrs(template_ctx.codegen_binding),
+            "rtl_specific_nodeattrs": self._generate_rtl_specific_nodeattrs_from_parameters(template_ctx),
             
-            # Enum types for templates (still needed for some legacy logic)
+            # Enum types for templates
             "SourceType": SourceType,
+            "ParameterCategory": ParameterCategory,
             
             # Flags
             "has_inputs": template_ctx.has_inputs,
@@ -320,15 +321,20 @@ class GeneratorManager:
         return vars_dict
     
     
-    def _generate_datatype_attributes_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
-        """Generate interface datatype attribute definitions from CodegenBinding."""
+    def _generate_datatype_attributes_from_parameters(self, template_ctx: TemplateContext) -> List[Dict[str, str]]:
+        """Generate interface datatype attribute definitions from Parameters."""
+        from ..types.rtl import ParameterCategory
+        
         datatype_attrs = []
         
-        if not codegen_binding:
-            return datatype_attrs
+        # Check which interfaces have datatype parameters
+        interfaces_with_datatypes = set()
+        for param in template_ctx.parameter_definitions:
+            if param.category == ParameterCategory.DATATYPE and param.interface_name:
+                interfaces_with_datatypes.add(param.interface_name)
         
-        # Generate datatype attributes for each interface with datatype bindings
-        for interface_name, interface_binding in codegen_binding.interface_bindings.items():
+        # Generate datatype attributes for each interface with datatype parameters
+        for interface_name in interfaces_with_datatypes:
             attr_name = f"{interface_name}DataType"
             datatype_attrs.append({
                 "name": attr_name,
@@ -338,96 +344,70 @@ class GeneratorManager:
         
         return datatype_attrs
     
-    def _generate_parameter_assignments_from_binding(self, codegen_binding) -> List[Dict[str, str]]:
-        """Generate explicit parameter assignment statements from CodegenBinding.
+    def _generate_parameter_assignments_from_parameters(self, template_ctx: TemplateContext) -> List[Dict[str, str]]:
+        """Generate explicit parameter assignment statements from Parameters.
         
         For interface properties (BDIM/SDIM/DataType), generates assignments that
         use KernelModel. For algorithm parameters, uses node attributes.
         """
-        from ..codegen_binding import SourceType, ParameterCategory
         from ..utils import create_parameter_assignment
+        from ..types.rtl import ParameterCategory, SourceType
         
         assignments = []
         
-        if not codegen_binding:
-            return assignments
-        
         # Generate assignment for each parameter based on its source type and category
-        for param_name, binding in codegen_binding.parameter_bindings.items():
+        for param in template_ctx.parameter_definitions:
+            param_name = param.name
+            
             # Handle shape parameters (BDIM/SDIM) via KernelModel
-            if binding.category == ParameterCategory.SHAPE:
-                if binding.source.type == SourceType.INTERFACE_SHAPE:
-                    interface_name = binding.source.interface_name
-                    dimension_index = binding.source.dimension_index or 0
+            if param.category == ParameterCategory.SHAPE:
+                if param.source_type == SourceType.INTERFACE_SHAPE:
+                    interface_name = param.interface_name
+                    dimension_index = param.source_detail.get("dimension", 0)
+                    shape_type = param.source_detail.get("shape_type", "")
                     
-                    # Determine if this is BDIM or SDIM based on parameter name
-                    if "BDIM" in param_name:
-                        # Find interface index and generate KernelModel access
+                    if shape_type == "bdim" or "BDIM" in param_name:
                         assignment = create_parameter_assignment(
                             param_name,
                             f'str(self._get_interface_bdim("{interface_name}", {dimension_index}))',
                             f"Block dimension from KernelModel for {interface_name}"
                         )
                         assignments.append(assignment)
-                    elif "SDIM" in param_name:
+                    elif shape_type == "sdim" or "SDIM" in param_name:
                         assignment = create_parameter_assignment(
                             param_name,
                             f'str(self._get_interface_sdim("{interface_name}", {dimension_index}))',
                             f"Stream dimension from KernelModel for {interface_name}"
                         )
                         assignments.append(assignment)
-                elif binding.source.type == SourceType.NODEATTR:
-                    # BDIM/SDIM exposed as node attributes but we'll use KernelModel
-                    # We need to figure out which interface this belongs to
-                    interface_name = None
-                    for interface in codegen_binding.interface_bindings.values():
-                        if param_name in interface.bdim_params or param_name in interface.sdim_params:
-                            interface_name = interface.interface_name
-                            break
-                    
-                    if interface_name and "BDIM" in param_name:
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f'str(self._get_interface_bdim("{interface_name}", 0))',
-                            "comment": f"Block dimension from KernelModel for {interface_name}"
-                        })
-                    elif interface_name and "SDIM" in param_name:
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f'str(self._get_interface_sdim("{interface_name}", 0))',
-                            "comment": f"Stream dimension from KernelModel for {interface_name}"
-                        })
-                    else:
-                        # Fallback to node attribute
-                        assignments.append({
-                            "param": param_name,
-                            "template_var": f"${param_name.upper()}$",
-                            "assignment": f'str(self.get_nodeattr("{param_name}"))',
-                            "comment": f"Shape parameter {param_name}"
-                        })
+                elif param.source_type == SourceType.RTL:
+                    # Shape parameter exposed as node attribute
+                    assignment = create_parameter_assignment(
+                        param_name,
+                        f'str(self.get_nodeattr("{param_name}"))',
+                        f"Shape parameter {param_name}"
+                    )
+                    assignments.append(assignment)
             
             # Handle algorithm parameters via node attributes
-            elif binding.category == ParameterCategory.ALGORITHM:
-                if binding.source.type == SourceType.NODEATTR:
+            elif param.category == ParameterCategory.ALGORITHM:
+                if param.source_type == SourceType.RTL:
                     assignment = create_parameter_assignment(
                         param_name,
                         f'str(self.get_nodeattr("{param_name}"))',
                         f"Algorithm parameter {param_name}"
                     )
                     assignments.append(assignment)
-                elif binding.source.type == SourceType.NODEATTR_ALIAS:
-                    alias_name = binding.source.nodeattr_name
-                    if alias_name:
-                        assignment = create_parameter_assignment(
-                            param_name,
-                            f'str(self.get_nodeattr("{alias_name}"))',
-                            f"Aliased parameter {param_name} from {alias_name}"
-                        )
-                        assignments.append(assignment)
-                elif binding.source.type == SourceType.DERIVED:
-                    expression = binding.source.expression
+                elif param.source_type == SourceType.NODEATTR_ALIAS:
+                    alias_name = param.source_detail.get("nodeattr_name", param_name)
+                    assignment = create_parameter_assignment(
+                        param_name,
+                        f'str(self.get_nodeattr("{alias_name}"))',
+                        f"Aliased parameter {param_name} from {alias_name}"
+                    )
+                    assignments.append(assignment)
+                elif param.source_type == SourceType.DERIVED:
+                    expression = param.source_detail.get("expression", "")
                     if expression:
                         assignment = create_parameter_assignment(
                             param_name,
@@ -437,10 +417,10 @@ class GeneratorManager:
                         assignments.append(assignment)
             
             # Handle datatype parameters via KernelModel
-            elif binding.category == ParameterCategory.DATATYPE:
-                if binding.source.type == SourceType.INTERFACE_DATATYPE:
-                    interface_name = binding.source.interface_name
-                    property_name = binding.source.property_name
+            elif param.category == ParameterCategory.DATATYPE:
+                if param.source_type == SourceType.INTERFACE_DATATYPE:
+                    interface_name = param.source_detail.get("interface", "")
+                    property_name = param.source_detail.get("property", "")
                     
                     if property_name == "width":
                         assignments.append({
@@ -457,11 +437,11 @@ class GeneratorManager:
                             "comment": f"Interface {interface_name} signed from KernelModel"
                         })
             
-            # Handle internal datatype parameters (still use node attributes for now)
-            elif binding.category == ParameterCategory.INTERNAL:
-                if binding.source.type == SourceType.INTERNAL_DATATYPE:
-                    interface_name = binding.source.interface_name  # Internal datatype name
-                    property_name = binding.source.property_name
+            # Handle internal datatype parameters
+            elif param.category == ParameterCategory.INTERNAL:
+                if param.source_type == SourceType.INTERNAL_DATATYPE:
+                    interface_name = param.source_detail.get("interface", "")  # Internal datatype name
+                    property_name = param.source_detail.get("property", "")
                     
                     if property_name == "width":
                         assignments.append({
@@ -478,40 +458,40 @@ class GeneratorManager:
                             "comment": f"Internal {interface_name} signed parameter"
                         })
         
-        return assignments
-    
-    def _generate_rtl_specific_nodeattrs(self, codegen_binding) -> Dict[str, tuple]:
+        return assignments    
+    def _generate_rtl_specific_nodeattrs_from_parameters(self, template_ctx: TemplateContext) -> Dict[str, tuple]:
         """Generate RTL-specific node attributes for RTLBackend.
         
         Only includes parameters that are exposed as NODEATTR or NODEATTR_ALIAS.
         Excludes all shape, datatype, and derived parameters.
         """
-        from ..codegen_binding import SourceType, ParameterCategory
+        from ..types.rtl import ParameterCategory, SourceType
         
         rtl_nodeattrs = {}
         
-        if not codegen_binding:
-            return rtl_nodeattrs
-        
-        # Process parameter bindings to find exposed algorithm parameters
-        for param_name, binding in codegen_binding.parameter_bindings.items():
+        # Process parameters to find exposed algorithm/control parameters
+        for param in template_ctx.parameter_definitions:
             # Only include algorithm and control parameters that are exposed
-            if binding.category not in [ParameterCategory.ALGORITHM, ParameterCategory.CONTROL]:
+            if param.category not in [ParameterCategory.ALGORITHM, ParameterCategory.CONTROL]:
                 continue
                 
-            if binding.source.type == SourceType.NODEATTR:
+            if param.source_type == SourceType.RTL:
                 # Direct node attribute
                 # Determine type based on parameter name patterns
-                if param_name.endswith("_PATH") or "PATH" in param_name:
+                if param.name.endswith("_PATH") or "PATH" in param.name:
                     # Path parameters are strings
-                    rtl_nodeattrs[param_name] = ("s", False, '')
+                    rtl_nodeattrs[param.name] = ("s", False, '')
                 else:
-                    # Most parameters are integers
-                    rtl_nodeattrs[param_name] = ("i", True, None)
+                    # Most parameters are integers with defaults
+                    default_val = param.default_value
+                    if default_val and default_val.isdigit():
+                        rtl_nodeattrs[param.name] = ("i", True, int(default_val))
+                    else:
+                        rtl_nodeattrs[param.name] = ("i", True, None)
                     
-            elif binding.source.type == SourceType.NODEATTR_ALIAS:
+            elif param.source_type == SourceType.NODEATTR_ALIAS:
                 # Aliased node attribute - use the alias name
-                alias_name = binding.source.nodeattr_name
+                alias_name = param.nodeattr_name
                 if alias_name:
                     # Determine type based on alias name
                     if alias_name.endswith("_PATH") or "PATH" in alias_name:
@@ -521,8 +501,8 @@ class GeneratorManager:
         
         # Add internal datatype attributes if they exist
         # These are for internal mechanisms like accumulator, threshold
-        for internal_name, internal_binding in codegen_binding.internal_bindings.items():
-            attr_name = f"{internal_name}DataType"
+        for internal_dt in template_ctx.internal_datatypes:
+            attr_name = f"{internal_dt.name}DataType"
             rtl_nodeattrs[attr_name] = ("s", False, "INT8")
         
         return rtl_nodeattrs

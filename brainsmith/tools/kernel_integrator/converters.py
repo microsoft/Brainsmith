@@ -159,7 +159,7 @@ def _convert_parameters_to_dict(kernel_metadata: KernelMetadata) -> Dict[str, An
     param_dict = {}
     for param in kernel_metadata.parameters:
         param_dict[param.name] = {
-            "type": param.param_type or "integer",
+            "type": param.rtl_type or "integer",
             "default": param.default_value,
             "description": None  # Parameter descriptions not stored
         }
@@ -233,9 +233,8 @@ def kernel_definition_to_metadata(
         for name, param_info in kernel_def.metadata["parameters"].items():
             param = Parameter(
                 name=name,
-                param_type=param_info.get("type", "integer"),
-                default_value=param_info.get("default"),
-                description=param_info.get("description")
+                rtl_type=param_info.get("type", "integer"),
+                default_value=param_info.get("default")
             )
             parameters.append(param)
     

@@ -94,33 +94,103 @@ class KernelMetadata:
     pragmas: List = field(default_factory=list)
     parsing_warnings: List = field(default_factory=list)
     
-    # Methods for specific queries
+    # Categorized interface properties for efficient access
+    @property
+    def input_interfaces(self) -> List[InterfaceMetadata]:
+        """Get all input interfaces."""
+        return [i for i in self.interfaces if i.interface_type == InterfaceType.INPUT]
+    
+    @property
+    def output_interfaces(self) -> List[InterfaceMetadata]:
+        """Get all output interfaces."""
+        return [i for i in self.interfaces if i.interface_type == InterfaceType.OUTPUT]
+    
+    @property
+    def weight_interfaces(self) -> List[InterfaceMetadata]:
+        """Get all weight interfaces."""
+        return [i for i in self.interfaces if i.interface_type == InterfaceType.WEIGHT]
+    
+    @property
+    def config_interfaces(self) -> List[InterfaceMetadata]:
+        """Get all config interfaces."""
+        return [i for i in self.interfaces if i.interface_type == InterfaceType.CONFIG]
+    
+    @property
+    def control_interfaces(self) -> List[InterfaceMetadata]:
+        """Get all control interfaces."""
+        return [i for i in self.interfaces if i.interface_type == InterfaceType.CONTROL]
+    
+    # Convenience flags
+    @property
+    def has_inputs(self) -> bool:
+        """Check if kernel has input interfaces."""
+        return len(self.input_interfaces) > 0
+    
+    @property
+    def has_outputs(self) -> bool:
+        """Check if kernel has output interfaces."""
+        return len(self.output_interfaces) > 0
+    
+    @property
+    def has_weights(self) -> bool:
+        """Check if kernel has weight interfaces."""
+        return len(self.weight_interfaces) > 0
+    
+    @property
+    def has_config(self) -> bool:
+        """Check if kernel has config interfaces."""
+        return len(self.config_interfaces) > 0
+    
+    # Simple transformations as properties
+    @property
+    def class_name(self) -> str:
+        """Get PascalCase class name from module name."""
+        from brainsmith.tools.kernel_integrator.utils import pascal_case
+        return pascal_case(self.name)
+    
+    @property
+    def required_attributes(self) -> List[str]:
+        """Get parameter names without defaults (required for node creation)."""
+        return [p.name for p in self.parameters if p.default_value is None]
+    
+    # Methods for specific queries (kept for backward compatibility)
     def get_interface(self, interface_type: InterfaceType) -> Optional[InterfaceMetadata]:
-        """Get first interface of given type."""
+        """Get first interface of given type.
+        
+        .. deprecated:: 
+            Use the specific interface properties instead (e.g., input_interfaces[0])
+        """
         for interface in self.interfaces:
             if interface.interface_type == interface_type:
                 return interface
         return None
     
     def get_interfaces_by_type(self, interface_type: InterfaceType) -> List[InterfaceMetadata]:
-        """Get all interfaces of given type."""
+        """Get all interfaces of given type.
+        
+        .. deprecated::
+            Use the specific interface properties instead (e.g., input_interfaces)
+        """
         return [i for i in self.interfaces if i.interface_type == interface_type]
     
     def get_input_interface(self) -> Optional[InterfaceMetadata]:
         """Get the primary input interface."""
-        return self.get_interface(InterfaceType.INPUT)
+        interfaces = self.input_interfaces
+        return interfaces[0] if interfaces else None
     
     def get_output_interface(self) -> Optional[InterfaceMetadata]:
         """Get the primary output interface."""
-        return self.get_interface(InterfaceType.OUTPUT)
+        interfaces = self.output_interfaces
+        return interfaces[0] if interfaces else None
     
     def get_weight_interfaces(self) -> List[InterfaceMetadata]:
         """Get all weight interfaces."""
-        return self.get_interfaces_by_type(InterfaceType.WEIGHT)
+        return self.weight_interfaces
     
     def get_config_interface(self) -> Optional[InterfaceMetadata]:
         """Get the configuration interface."""
-        return self.get_interface(InterfaceType.CONFIG)
+        interfaces = self.config_interfaces
+        return interfaces[0] if interfaces else None
     
     def get_all_parameters(self) -> Dict[str, Parameter]:
         """Get all parameters as a dict."""
@@ -140,16 +210,13 @@ class KernelMetadata:
         errors = []
         
         # Must have at least input and output
-        if not self.get_input_interface():
+        if not self.has_inputs:
             errors.append("No input interface found")
-        if not self.get_output_interface():
+        if not self.has_outputs:
             errors.append("No output interface found")
             
         # Validate Global Control interface exists
-        has_global_control = any(
-            iface.interface_type == InterfaceType.CONTROL for iface in self.interfaces
-        )
-        if not has_global_control:
+        if not self.control_interfaces:
             errors.append(f"Module '{self.name}' is missing a valid Global Control interface (ap_clk, ap_rst_n)")
             
         # All exposed parameters must exist

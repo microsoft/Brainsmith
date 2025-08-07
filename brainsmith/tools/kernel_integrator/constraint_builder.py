@@ -268,7 +268,7 @@ def _create_parameter_constraint(
     max_value = None
     allowed_values = None
     
-    if param.param_type == "integer":
+    if param.rtl_type == "integer":
         constraint_type = "range"
         # Could parse default value for range hints
         if param.default_value:
