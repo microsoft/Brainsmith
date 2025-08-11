@@ -239,8 +239,8 @@ class TestConverters:
                 )
             ],
             parameters=[
-                Parameter(name="WIDTH", default_value="32", description="Data width"),
-                Parameter(name="DEPTH", default_value="1024", description="FIFO depth")
+                Parameter(name="WIDTH", default_value="32"),
+                Parameter(name="DEPTH", default_value="1024")
             ],
             exposed_parameters=["WIDTH"]
         )

@@ -49,7 +49,8 @@ class KernelIntegrator:
         self, 
         generator_dir: Optional[Path] = None,
         template_dir: Optional[Path] = None, 
-        output_dir: Optional[Path] = None
+        output_dir: Optional[Path] = None,
+        use_direct_generators: bool = False
     ):
         """
         Initialize KernelIntegrator with modular generator system.
@@ -61,6 +62,7 @@ class KernelIntegrator:
                          If None, uses default template directory.
             output_dir: Base directory for generated files.
                        If None, file writing capabilities are disabled until set.
+            use_direct_generators: Use new direct generators (V2) that bypass TemplateContext.
         """
         # Set up default directories
         if generator_dir is None:
@@ -71,13 +73,19 @@ class KernelIntegrator:
         self.generator_dir = generator_dir
         self.template_dir = template_dir
         self.output_dir = output_dir
+        self.use_direct_generators = use_direct_generators
         
         # Initialize components
         try:
-            self.generator_manager = GeneratorManager(generator_dir, template_dir)
-            self.context_generator = TemplateContextGenerator()
-            
-            logger.info(f"Initialized KernelIntegrator with {len(self.generator_manager.list_generators())} generators")
+            if use_direct_generators:
+                # Initialize direct generators (V2)
+                self.direct_generators = self._load_direct_generators()
+                logger.info(f"Initialized KernelIntegrator with {len(self.direct_generators)} direct generators")
+            else:
+                # Initialize legacy system
+                self.generator_manager = GeneratorManager(generator_dir, template_dir)
+                self.context_generator = TemplateContextGenerator()
+                logger.info(f"Initialized KernelIntegrator with {len(self.generator_manager.list_generators())} generators")
             
             # Initialize output directory if provided
             if self.output_dir is not None:
@@ -85,6 +93,26 @@ class KernelIntegrator:
                 
         except Exception as e:
             raise KernelIntegratorError(f"Failed to initialize KernelIntegrator: {e}")
+    
+    def _load_direct_generators(self) -> Dict[str, 'GeneratorBase']:
+        """Load direct generators (V2) that bypass TemplateContext."""
+        from .generators.hw_custom_op_v2 import HWCustomOpGeneratorV2
+        from .generators.rtl_backend_v2 import RTLBackendGeneratorV2
+        from .generators.rtl_wrapper_v2 import RTLWrapperGeneratorV2
+        
+        generators = {}
+        
+        # Instantiate generators with template directory
+        hw_gen = HWCustomOpGeneratorV2(self.template_dir)
+        rtl_gen = RTLBackendGeneratorV2(self.template_dir)
+        wrapper_gen = RTLWrapperGeneratorV2(self.template_dir)
+        
+        # Register by name
+        generators[hw_gen.name] = hw_gen
+        generators[rtl_gen.name] = rtl_gen
+        generators[wrapper_gen.name] = wrapper_gen
+        
+        return generators
     
     def _ensure_output_directory(self) -> None:
         """Ensure output directory exists and is writable."""
@@ -172,20 +200,27 @@ class KernelIntegrator:
             # Create GenerationResult to track everything
             result = GenerationResult()
             
-            # Generate template context
-            template_ctx = self.context_generator.generate_template_context(kernel_metadata)
-            
-            # Validate template context
-            validation_errors = template_ctx.validate()
-            if validation_errors:
-                for error in validation_errors:
-                    result.add_error(f"Template context validation: {error}")
-                return result
-            
-            # Generate selected artifacts using GeneratorManager
-            generated_files = self._generate_selected_artifacts(
-                kernel_metadata, template_ctx, include_generators
-            )
+            if self.use_direct_generators:
+                # Direct path - no TemplateContext
+                generated_files = self._generate_direct(
+                    kernel_metadata, include_generators
+                )
+            else:
+                # Legacy path with TemplateContext
+                # Generate template context
+                template_ctx = self.context_generator.generate_template_context(kernel_metadata)
+                
+                # Validate template context
+                validation_errors = template_ctx.validate()
+                if validation_errors:
+                    for error in validation_errors:
+                        result.add_error(f"Template context validation: {error}")
+                    return result
+                
+                # Generate selected artifacts using GeneratorManager
+                generated_files = self._generate_selected_artifacts(
+                    kernel_metadata, template_ctx, include_generators
+                )
             
             # Add generated files to result
             for filename, content in generated_files.items():
@@ -270,6 +305,49 @@ class KernelIntegrator:
         
         return generated_files
     
+    def _generate_direct(
+        self,
+        kernel_metadata: KernelMetadata,
+        include_generators: Optional[List[str]] = None
+    ) -> Dict[str, str]:
+        """
+        Generate artifacts using direct generators (V2).
+        
+        Args:
+            kernel_metadata: Kernel metadata
+            include_generators: List of generator names to include (None = all)
+            
+        Returns:
+            Dictionary of generated files
+        """
+        generated_files = {}
+        
+        # Get generators to process
+        available_generators = list(self.direct_generators.keys())
+        generators_to_use = include_generators or available_generators
+        
+        for generator_name in generators_to_use:
+            if generator_name not in available_generators:
+                logger.warning(f"Unknown generator: {generator_name}")
+                continue
+                
+            try:
+                # Get generator
+                generator = self.direct_generators[generator_name]
+                
+                # Generate content directly from metadata
+                content = generator.generate(kernel_metadata)
+                filename = generator.get_output_filename(kernel_metadata.name)
+                
+                generated_files[filename] = content
+                logger.debug(f"Generated {generator_name}: {filename}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to generate {generator_name}: {e}")
+                # Continue with other generators
+        
+        return generated_files
+    
     def _determine_output_directory(self, kernel_name: str, output_structure: str) -> Path:
         """
         Determine output directory based on structure preference.
@@ -291,7 +369,10 @@ class KernelIntegrator:
         Returns:
             List of generator names
         """
-        return self.generator_manager.list_generators()
+        if self.use_direct_generators:
+            return list(self.direct_generators.keys())
+        else:
+            return self.generator_manager.list_generators()
     
     def validate_generators(self) -> Dict[str, bool]:
         """
