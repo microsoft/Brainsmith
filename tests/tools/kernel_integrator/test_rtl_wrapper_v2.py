@@ -20,7 +20,7 @@ def test_rtl_wrapper_generator_properties():
     """Test generator properties."""
     gen = RTLWrapperGeneratorV2()
     assert gen.name == "rtl_wrapper"
-    assert gen.template_file == "rtl_wrapper_minimal.v.j2"
+    assert gen.template_file == "rtl_wrapper_minimal_v2.v.j2"
     assert gen.output_pattern == "{kernel_name}_wrapper.v"
     assert gen.get_output_filename("test_kernel") == "test_kernel_wrapper.v"
 
@@ -55,7 +55,7 @@ def test_categorize_parameters_general():
     
     # Check template param names were added
     for param in categorized['general_parameters']:
-        assert param['template_param_name'] == f"CONFIG_{param['name']}"
+        assert param['template_param_name'] == f"${param['name'].upper()}$"
 
 
 def test_categorize_parameters_with_interfaces():
@@ -175,55 +175,6 @@ def test_categorize_parameters_with_axilite():
     assert "axi_param2" in axi_names
 
 
-def test_extract_ports():
-    """Test port extraction from interfaces."""
-    gen = RTLWrapperGeneratorV2()
-    
-    # Create interfaces with ports
-    input_ports = [
-        Port(name="input_valid", width="1", direction=PortDirection.INPUT),
-        Port(name="input_data", width="32", direction=PortDirection.INPUT)
-    ]
-    
-    output_ports = [
-        Port(name="output_valid", width="1", direction=PortDirection.OUTPUT),
-        Port(name="output_data", width="64", direction=PortDirection.OUTPUT)
-    ]
-    
-    interfaces = [
-        InterfaceMetadata(
-            name="input",
-            interface_type=InterfaceType.INPUT,
-            ports=input_ports
-        ),
-        InterfaceMetadata(
-            name="output",
-            interface_type=InterfaceType.OUTPUT,
-            ports=output_ports
-        )
-    ]
-    
-    metadata = KernelMetadata(
-        name="test_kernel",
-        interfaces=interfaces,
-        parameters=[],
-        source_file="test.v"
-    )
-    
-    ports = gen._extract_ports(metadata)
-    
-    assert len(ports) == 4
-    
-    # Check first port
-    assert ports[0]['name'] == 'input_valid'
-    assert ports[0]['width'] == '1'
-    assert ports[0]['direction'] == 'input'
-    assert ports[0]['interface_name'] == 'input'
-    
-    # Check output port
-    output_data_port = next(p for p in ports if p['name'] == 'output_data')
-    assert output_data_port['width'] == '64'
-    assert output_data_port['direction'] == 'output'
 
 
 def test_get_specific_vars():
@@ -243,11 +194,10 @@ def test_get_specific_vars():
     
     vars_dict = gen._get_specific_vars(metadata)
     
-    assert vars_dict['source_file'] == 'test.v'
-    assert vars_dict['top_module'] == 'test_top'
+    # Now only returns categorized_parameters and generation_timestamp
     assert 'categorized_parameters' in vars_dict
-    assert 'ports' in vars_dict
     assert 'generation_timestamp' in vars_dict
+    assert len(vars_dict) == 2
     
     # Check categorized parameters structure
     cat_params = vars_dict['categorized_parameters']

@@ -183,10 +183,13 @@ class ModuleExtractor:
         param_type: str = "parameter"  # Default type
         default_value: Optional[str] = None
         
-        # Check if the node itself is local_parameter_declaration
+        # Check if the node itself is local_parameter_declaration or parameter_port_declaration
         param_decl_node = self.ast_parser.find_child(node, ["parameter_declaration", "local_parameter_declaration"])
         if not param_decl_node:
             if node.type == "local_parameter_declaration":
+                param_decl_node = node
+            elif node.type == "parameter_port_declaration":
+                # For ANSI module headers, the node IS the parameter declaration
                 param_decl_node = node
             else:
                 logger.warning(f"Could not find parameter_declaration or local_parameter_declaration within: {node.text.decode()}")

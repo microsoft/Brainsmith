@@ -61,28 +61,8 @@ class GeneratorBase(ABC):
     def _get_common_vars(self, metadata: KernelMetadata) -> Dict[str, Any]:
         """Get variables common to all generators."""
         return {
-            # Direct metadata access
-            'metadata': metadata,
-            'kernel_name': metadata.name,
-            'parameters': metadata.parameters,
-            'interfaces': metadata.interfaces,
-            
-            # Common computed values
-            'binding_name': f"{metadata.name}_cst_binding",
-            'op_name': f"\"tpu.{metadata.name}\"",
-            'kernel_name_upper': metadata.name.upper(),
-            'kernel_name_lower': metadata.name.lower(),
-            
-            # Module info
-            'module_name': metadata.top_module if metadata.top_module else metadata.name,
-            'top_function': metadata.top_module if metadata.top_module else metadata.name,
-            
-            # Interface lists by type (common need)
-            'input_interfaces': metadata.input_interfaces,
-            'output_interfaces': metadata.output_interfaces,
-            'weight_interfaces': metadata.weight_interfaces,
-            'config_interfaces': metadata.config_interfaces,
-            'control_interfaces': metadata.control_interfaces,
+            # Only pass metadata itself, let templates access properties directly
+            'kernel_metadata': metadata,
         }
     
     @abstractmethod

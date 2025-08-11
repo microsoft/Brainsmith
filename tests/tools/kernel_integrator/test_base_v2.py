@@ -23,7 +23,7 @@ class MockGenerator(GeneratorBase):
     def _get_specific_vars(self, metadata: KernelMetadata) -> dict:
         return {
             "mock_var": "test_value",
-            "computed": f"{metadata.kernel_name}_computed"
+            "computed": f"{metadata.name}_computed"
         }
 
 
@@ -54,13 +54,10 @@ def test_common_vars():
     
     common_vars = gen._get_common_vars(metadata)
     
-    assert common_vars["kernel_name"] == "test_kernel"
-    assert common_vars["binding_name"] == "test_kernel_cst_binding"
-    assert common_vars["op_name"] == '"tpu.test_kernel"'
-    assert common_vars["kernel_name_upper"] == "TEST_KERNEL"
-    assert common_vars["kernel_name_lower"] == "test_kernel"
-    assert common_vars["module_name"] == "test_kernel"
-    assert common_vars["top_function"] == "test_kernel"
+    # Now only passes kernel_metadata directly
+    assert "kernel_metadata" in common_vars
+    assert common_vars["kernel_metadata"] == metadata
+    assert len(common_vars) == 1  # Only one key
 
 
 def test_snake_to_camel():
