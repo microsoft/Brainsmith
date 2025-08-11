@@ -24,57 +24,11 @@ class RTLBackendGeneratorV2(GeneratorBase):
     def _get_specific_vars(self, metadata: KernelMetadata) -> Dict[str, Any]:
         """Get RTL Backend-specific template variables."""
         return {
-            # Core attributes
-            'class_name': metadata.class_name,
-            'source_file': metadata.source_file,
-            'finn_rtllib_module': metadata.top_module if metadata.top_module else metadata.name,
-            
-            # RTL-specific node attributes
-            'rtl_specific_nodeattrs': self._extract_rtl_nodeattrs(metadata),
-            
-            # Parameter assignments for code generation
+            # Only the generated code assignments
             'explicit_parameter_assignments': self._generate_assignments(metadata),
-            
-            # Supporting files (empty for now, could be extracted from metadata)
-            'supporting_rtl_files': [],
-            
-            # Optional description (could be extracted from metadata)
-            'operation_description': None,
-            
-            # Import datetime for timestamp
-            'generation_timestamp': self._get_timestamp()
+            'generation_timestamp': self._get_timestamp(),
         }
     
-    def _extract_rtl_nodeattrs(self, metadata: KernelMetadata) -> Dict[str, tuple]:
-        """Extract RTL-specific node attributes from parameters."""
-        rtl_nodeattrs = {}
-        
-        # Process parameters to find exposed algorithm/control parameters
-        for param in metadata.parameters:
-            # Only include algorithm and control parameters that are exposed
-            if param.category not in [ParameterCategory.ALGORITHM, ParameterCategory.CONTROL]:
-                continue
-                
-            if param.source_type == SourceType.RTL:
-                # Direct node attribute
-                # Determine type based on parameter name patterns
-                if param.name.endswith("_PATH") or "PATH" in param.name:
-                    # Path parameters are strings
-                    rtl_nodeattrs[param.name] = ("s", False, '')
-                else:
-                    # Most parameters are integers with defaults
-                    default_val = param.default_value
-                    if default_val and default_val.isdigit():
-                        rtl_nodeattrs[param.name] = ("i", True, int(default_val))
-                    else:
-                        rtl_nodeattrs[param.name] = ("i", True, None)
-                    
-            elif param.source_type == SourceType.NODEATTR_ALIAS:
-                # Aliased node attribute
-                alias_name = param.source_detail.get("nodeattr_name", param.name)
-                rtl_nodeattrs[alias_name] = ("i", True, None)
-        
-        return rtl_nodeattrs
     
     def _generate_assignments(self, metadata: KernelMetadata) -> List[Dict[str, str]]:
         """Generate explicit parameter assignments for code generation."""
@@ -113,6 +67,12 @@ class RTLBackendGeneratorV2(GeneratorBase):
                 assignment = self._create_datatype_assignment(param)
                 if assignment:
                     assignments.append(assignment)
+            
+            # Handle internal datatype parameters
+            elif param.category == ParameterCategory.INTERNAL:
+                assignment = self._create_datatype_assignment(param)
+                if assignment:
+                    assignments.append(assignment)
         
         return assignments
     
@@ -146,13 +106,19 @@ class RTLBackendGeneratorV2(GeneratorBase):
             }
         return None
     
+    def _get_timestamp(self) -> str:
+        """Get current timestamp for generation tracking."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
     def _create_datatype_assignment(self, param) -> Dict[str, str]:
         """Create assignment for datatype parameters."""
         param_name = param.name
         
         if param.source_type == SourceType.INTERFACE_DATATYPE:
             interface_name = param.interface_name
-            detail = param.source_detail.get("detail", "WIDTH")
+            # V1 uses "property", not "detail" - fixing to match parser output
+            detail = param.source_detail.get("property", "WIDTH").upper()
             
             if detail == "WIDTH":
                 return {
@@ -166,11 +132,28 @@ class RTLBackendGeneratorV2(GeneratorBase):
                     'assignment': f'self._get_interface_datatype_name("{interface_name}")',
                     'comment': f'Datatype name from KernelModel for {interface_name}'
                 }
-            elif detail == "IS_SIGNED":
+            elif detail == "SIGNED":
                 return {
                     'template_var': param_name,
                     'assignment': f'"1" if self._get_interface_datatype_is_signed("{interface_name}") else "0"',
                     'comment': f'Datatype signedness from KernelModel for {interface_name}'
+                }
+        elif param.source_type == SourceType.INTERNAL_DATATYPE:
+            # Internal datatype parameter (e.g., T_WIDTH for threshold)
+            dt_name = param.source_detail.get("interface", "")  # Actually datatype name
+            property_name = param.source_detail.get("property", "").upper()
+            
+            if property_name == "WIDTH":
+                return {
+                    'template_var': param_name,
+                    'assignment': f'str(DataType[self.get_nodeattr("{dt_name}DataType")].bitwidth())',
+                    'comment': f'Internal datatype {dt_name} width'
+                }
+            elif property_name == "SIGNED":
+                return {
+                    'template_var': param_name,
+                    'assignment': f'"1" if DataType[self.get_nodeattr("{dt_name}DataType")].signed() else "0"',
+                    'comment': f'Internal datatype {dt_name} signedness'
                 }
         elif param.source_type == SourceType.RTL:
             # Datatype parameter exposed as node attribute
@@ -181,7 +164,3 @@ class RTLBackendGeneratorV2(GeneratorBase):
             }
         return None
     
-    def _get_timestamp(self) -> str:
-        """Get current timestamp for generation tracking."""
-        from datetime import datetime
-        return datetime.now().isoformat()

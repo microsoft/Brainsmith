@@ -284,7 +284,7 @@ class RTLToFINNDemo:
                             output_lines.append(f"  ... and {len(kernel_metadata.parameters) - 5} more")
                     
                     # Generate files
-                    integrator = KernelIntegrator()
+                    integrator = KernelIntegrator(use_direct_generators=True)  # Use V2 generators
                     integrator.set_output_dir(self.output_dir)
                     
                     progress.update(task2, advance=50)
@@ -399,7 +399,7 @@ class RTLToFINNDemo:
                 print("  → Building parameter mappings")
                 
                 # Generate files
-                integrator = KernelIntegrator()
+                integrator = KernelIntegrator(use_direct_generators=True)  # Use V2 generators
                 integrator.set_output_dir(self.output_dir)
                 result = integrator.generate_and_write(kernel_metadata)
                 

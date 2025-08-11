@@ -9,63 +9,9 @@ def test_rtl_backend_generator_properties():
     """Test generator properties."""
     gen = RTLBackendGeneratorV2()
     assert gen.name == "rtl_backend"
-    assert gen.template_file == "rtl_backend.py.j2"
+    assert gen.template_file == "rtl_backend_v2.py.j2"
     assert gen.output_pattern == "{kernel_name}_rtl.py"
     assert gen.get_output_filename("test_kernel") == "test_kernel_rtl.py"
-
-
-def test_extract_rtl_nodeattrs():
-    """Test extraction of RTL-specific node attributes."""
-    gen = RTLBackendGeneratorV2()
-    
-    parameters = [
-        # Algorithm parameter exposed as node attribute
-        Parameter(
-            name="algo_param",
-            category=ParameterCategory.ALGORITHM,
-            source_type=SourceType.RTL,
-            default_value="42"
-        ),
-        # Path parameter (string type)
-        Parameter(
-            name="weights_PATH",
-            category=ParameterCategory.ALGORITHM,
-            source_type=SourceType.RTL
-        ),
-        # Control parameter with alias
-        Parameter(
-            name="ctrl_param",
-            category=ParameterCategory.CONTROL,
-            source_type=SourceType.NODEATTR_ALIAS,
-            source_detail={"nodeattr_name": "control"}
-        ),
-        # Shape parameter (should be excluded)
-        Parameter(
-            name="BDIM",
-            category=ParameterCategory.SHAPE,
-            source_type=SourceType.RTL
-        )
-    ]
-    
-    metadata = KernelMetadata(
-        name="test_kernel",
-        interfaces=[],
-        parameters=parameters,
-        source_file="test.v"
-    )
-    
-    nodeattrs = gen._extract_rtl_nodeattrs(metadata)
-    
-    # Should have 3 attributes (excluding shape parameter)
-    assert len(nodeattrs) == 3
-    assert "algo_param" in nodeattrs
-    assert "weights_PATH" in nodeattrs
-    assert "control" in nodeattrs  # Alias name
-    
-    # Check attribute specs
-    assert nodeattrs["algo_param"] == ("i", True, 42)
-    assert nodeattrs["weights_PATH"] == ("s", False, '')
-    assert nodeattrs["control"] == ("i", True, None)
 
 
 def test_generate_assignments():
@@ -206,11 +152,8 @@ def test_get_specific_vars():
     
     vars_dict = gen._get_specific_vars(metadata)
     
-    assert vars_dict['class_name'] == 'TestKernel'
-    assert vars_dict['source_file'] == 'test.v'
-    assert vars_dict['finn_rtllib_module'] == 'test_top'
-    assert len(vars_dict['rtl_specific_nodeattrs']) == 1
-    assert len(vars_dict['explicit_parameter_assignments']) == 1
-    assert vars_dict['supporting_rtl_files'] == []
-    assert vars_dict['operation_description'] is None
+    # Now only returns explicit_parameter_assignments and generation_timestamp
+    assert 'explicit_parameter_assignments' in vars_dict
     assert 'generation_timestamp' in vars_dict
+    assert len(vars_dict) == 2
+    assert len(vars_dict['explicit_parameter_assignments']) == 1

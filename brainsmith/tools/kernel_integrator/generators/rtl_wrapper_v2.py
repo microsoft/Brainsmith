@@ -25,18 +25,8 @@ class RTLWrapperGeneratorV2(GeneratorBase):
     def _get_specific_vars(self, metadata: KernelMetadata) -> Dict[str, Any]:
         """Get RTL Wrapper-specific template variables."""
         return {
-            # Core attributes
-            'source_file': metadata.source_file,
-            'top_module': metadata.top_module if metadata.top_module else metadata.name,
-            
-            # Categorized parameters for template organization
             'categorized_parameters': self._categorize_parameters(metadata),
-            
-            # Port information (could be extracted from metadata.interfaces)
-            'ports': self._extract_ports(metadata),
-            
-            # Import datetime for timestamp
-            'generation_timestamp': self._get_timestamp()
+            'generation_timestamp': self._get_timestamp(),
         }
     
     def _categorize_parameters(self, metadata: KernelMetadata) -> Dict[str, Any]:
@@ -188,22 +178,6 @@ class RTLWrapperGeneratorV2(GeneratorBase):
             'interface_parameter_groups': interface_groups_with_template
         }
     
-    def _extract_ports(self, metadata: KernelMetadata) -> List[Dict[str, Any]]:
-        """Extract port information from interfaces."""
-        ports = []
-        
-        for interface in metadata.interfaces:
-            # Extract ports from each interface
-            for port in interface.ports:
-                port_info = {
-                    'name': port.name,
-                    'width': port.width,
-                    'direction': port.direction.value,
-                    'interface_name': interface.name
-                }
-                ports.append(port_info)
-        
-        return ports
     
     def _get_timestamp(self) -> str:
         """Get current timestamp for generation tracking."""

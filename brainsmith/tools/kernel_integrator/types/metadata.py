@@ -201,6 +201,27 @@ class KernelMetadata:
         all_params = self.get_all_parameters()
         return {name: param for name, param in all_params.items() if name in self.exposed_parameters}
     
+    @property
+    def module_name(self) -> str:
+        """Get the actual module name for instantiation."""
+        return self.top_module if self.top_module else self.name
+    
+    @property
+    def has_datatype_parameters(self) -> bool:
+        """Check if kernel has any datatype parameters."""
+        from .rtl import ParameterCategory
+        return any(p.category == ParameterCategory.DATATYPE for p in self.parameters)
+    
+    @property
+    def parameters_by_interface(self) -> Dict[str, List[Parameter]]:
+        """Group parameters by their associated interface."""
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for param in self.parameters:
+            if param.interface_name:
+                groups[param.interface_name].append(param)
+        return dict(groups)
+    
     def validate(self) -> List[str]:
         """Validate kernel metadata.
         
