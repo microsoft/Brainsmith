@@ -15,6 +15,31 @@ from .rtl import Port, Parameter
 
 
 @dataclass
+class DatatypeParameters:
+    """Container for datatype-related parameters.
+    
+    Stores Parameter objects for each datatype property, allowing
+    direct access without string lookups or filtering.
+    """
+    width: Optional[Parameter] = None
+    signed: Optional[Parameter] = None
+    format: Optional[Parameter] = None
+    bias: Optional[Parameter] = None
+    fractional_width: Optional[Parameter] = None
+    exponent_width: Optional[Parameter] = None
+    mantissa_width: Optional[Parameter] = None
+    
+    def get_all_parameters(self) -> List[Parameter]:
+        """Get all non-None parameters."""
+        params = []
+        for field_name in self.__dataclass_fields__:
+            param = getattr(self, field_name)
+            if param is not None:
+                params.append(param)
+        return params
+
+
+@dataclass
 class InterfaceMetadata:
     """Metadata for a single interface.
     
@@ -26,10 +51,15 @@ class InterfaceMetadata:
     datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
     description: Optional[str] = None
     
-    # Parameter linkage mappings
+    # Parameter linkage mappings (DEPRECATED - for compatibility)
     datatype_metadata: Optional['DatatypeMetadata'] = None
-    bdim_params: Optional[List[str]] = None
-    sdim_params: Optional[List[str]] = None
+    bdim_params: Optional[List[str]] = None  # DEPRECATED - use bdim_parameters
+    sdim_params: Optional[List[str]] = None  # DEPRECATED - use sdim_parameters
+    
+    # Interface owns its parameters directly (NEW)
+    bdim_parameters: List[Parameter] = field(default_factory=list)
+    sdim_parameters: List[Parameter] = field(default_factory=list)
+    datatype_params: DatatypeParameters = field(default_factory=DatatypeParameters)
     
     # Shape expressions for new tiling system
     bdim_shape: Optional[List] = None
@@ -76,18 +106,22 @@ class KernelMetadata:
     # Core attributes matching original structure
     name: str
     interfaces: List[InterfaceMetadata]
-    parameters: List[Parameter]
+    parameters: List[Parameter]  # DEPRECATED - will be removed after migration
     source_file: str
     
-    # Pragma-derived metadata  
-    exposed_parameters: List[str] = field(default_factory=list)
+    # Pragma-derived metadata (DEPRECATED - for compatibility)
+    exposed_parameters: List[str] = field(default_factory=list)  # DEPRECATED - use exposed_parameters_dict
     internal_datatypes: List['DatatypeMetadata'] = field(default_factory=list)
-    linked_parameters: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    linked_parameters: Dict[str, Dict[str, str]] = field(default_factory=dict)  # DEPRECATED
     relationships: List = field(default_factory=list)  # List of DimensionRelationship
+    
+    # Parameter buckets (NEW)
+    exposed_parameters_dict: Dict[str, Parameter] = field(default_factory=dict)  # nodeattr_name -> Parameter
+    linked_parameters_list: List[Parameter] = field(default_factory=list)  # Kernel-level linked params
     
     # Additional attributes
     top_module: Optional[str] = None
-    derived_parameters: Dict[str, str] = field(default_factory=dict)
+    derived_parameters: Dict[str, str] = field(default_factory=dict)  # DEPRECATED - use linked_parameters_list
     axi_lite_parameters: Set[str] = field(default_factory=set)
     
     # Parser state tracking (temporary)
@@ -222,6 +256,66 @@ class KernelMetadata:
                 groups[param.interface_name].append(param)
         return dict(groups)
     
+    def collect_all_parameters(self) -> List[Parameter]:
+        """Collect all parameters from all buckets.
+        
+        This is primarily for validation and migration purposes.
+        """
+        all_params = []
+        
+        # From exposed parameters
+        all_params.extend(self.exposed_parameters_dict.values())
+        
+        # From linked parameters
+        all_params.extend(self.linked_parameters_list)
+        
+        # From interfaces
+        for interface in self.interfaces:
+            all_params.extend(interface.bdim_parameters)
+            all_params.extend(interface.sdim_parameters)
+            all_params.extend(interface.datatype_params.get_all_parameters())
+            
+        return all_params
+    
+    def validate_parameter_distribution(self) -> List[str]:
+        """Validate that parameters are properly distributed.
+        
+        Returns list of error messages.
+        """
+        errors = []
+        
+        # During migration, check against legacy list
+        if self.parameters:
+            distributed = self.collect_all_parameters()
+            distributed_names = {p.name for p in distributed}
+            legacy_names = {p.name for p in self.parameters}
+            
+            missing = legacy_names - distributed_names
+            if missing:
+                errors.append(f"Parameters not distributed: {missing}")
+                
+            # Check for duplicates
+            param_names = [p.name for p in distributed]
+            duplicates = [name for name in param_names if param_names.count(name) > 1]
+            if duplicates:
+                errors.append(f"Parameters in multiple buckets: {set(duplicates)}")
+        
+        # Import SourceType for validation
+        from .rtl import SourceType
+        
+        # Check exposed parameters have correct source types
+        for name, param in self.exposed_parameters_dict.items():
+            if param.source_type not in [SourceType.RTL, SourceType.NODEATTR_ALIAS]:
+                errors.append(f"Exposed parameter '{name}' has wrong source type: {param.source_type}")
+            
+            # For aliases, check the key matches the alias name
+            if param.source_type == SourceType.NODEATTR_ALIAS:
+                alias_name = param.source_detail.get("nodeattr_name", param.name)
+                if name != alias_name:
+                    errors.append(f"Alias parameter key '{name}' doesn't match alias '{alias_name}'")
+        
+        return errors
+
     def validate(self) -> List[str]:
         """Validate kernel metadata.
         
@@ -252,6 +346,9 @@ class KernelMetadata:
             # Simple check - more sophisticated expression parsing could be added
             if derived in all_param_names:
                 errors.append(f"Derived parameter '{derived}' shadows existing parameter")
+        
+        # Validate parameter distribution
+        errors.extend(self.validate_parameter_distribution())
                 
         return errors
 

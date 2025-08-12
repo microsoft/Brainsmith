@@ -315,13 +315,13 @@ class TestParserIntegration:
                "at least one interface" in str(exc_info.value) or \
                "at least one input interface" in str(exc_info.value)
         
-        # Test missing BDIM - this now passes due to autolinking finding the parameters
-        # The parser now successfully handles missing BDIM by autolinking
+        # Test missing BDIM - with new validation this should fail due to parameters not distributed
         rtl = RTLPatterns.error_case("missing_bdim")
-        result = strict_rtl_parser.parse(rtl, "missing_bdim.sv")
-        # Verify the parser successfully handled the missing BDIM
-        assert result is not None
-        assert result.name == "missing_bdim"
+        with pytest.raises(ParserError) as exc_info:
+            strict_rtl_parser.parse(rtl, "missing_bdim.sv")
+        # The new validation catches that parameters aren't properly distributed
+        assert "Parameters not distributed" in str(exc_info.value) or \
+               "missing_bdim" in str(exc_info.value)
     
     def test_invalid_pragma_application(self, rtl_parser):
         """Test handling of invalid pragma applications."""

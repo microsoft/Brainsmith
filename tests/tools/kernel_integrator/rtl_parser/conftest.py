@@ -21,7 +21,6 @@ import shutil
 from brainsmith.tools.kernel_integrator.rtl_parser import RTLParser, parse_rtl_file
 from brainsmith.tools.kernel_integrator.rtl_parser.ast_parser import ASTParser
 from brainsmith.tools.kernel_integrator.rtl_parser.module_extractor import ModuleExtractor
-from brainsmith.tools.kernel_integrator.rtl_parser.interface_scanner import InterfaceScanner
 from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolValidator
 from brainsmith.tools.kernel_integrator.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.kernel_integrator.rtl_parser.pragma import PragmaHandler
@@ -70,12 +69,6 @@ def ast_parser() -> ASTParser:
 def module_extractor(ast_parser) -> ModuleExtractor:
     """Create a module extractor instance."""
     return ModuleExtractor(ast_parser)
-
-
-@pytest.fixture
-def interface_scanner() -> InterfaceScanner:
-    """Create an interface scanner instance."""
-    return InterfaceScanner()
 
 
 @pytest.fixture

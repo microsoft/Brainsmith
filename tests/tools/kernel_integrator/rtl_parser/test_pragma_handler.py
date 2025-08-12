@@ -6,18 +6,19 @@
 ############################################################################
 """Unit tests for the Pragma Handler component.
 
-Tests pragma extraction and handling including:
-- Pragma extraction from AST
-- All pragma types (TOP_MODULE, DATATYPE, WEIGHT, BDIM, SDIM, etc.)
-- Pragma validation and error handling
-- Complex pragma input parsing
+Tests high-level pragma operations including:
+- Pragma filtering by type
+- Internal datatype pragma collection
 - Integration with kernel metadata
+
+Note: Pragma extraction from AST is now tested in test_module_extractor.py
 """
 
 import pytest
 from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.pragma import PragmaHandler
+from brainsmith.tools.kernel_integrator.rtl_parser.module_extractor import ModuleExtractor
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 from brainsmith.tools.kernel_integrator.rtl_parser.pragmas import (
     TopModulePragma, DatatypePragma, WeightPragma, BDimPragma, SDimPragma,
@@ -43,7 +44,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 2
         
@@ -78,7 +82,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 4
         
@@ -122,7 +129,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 3
         
@@ -157,7 +167,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 3
         
@@ -185,7 +198,10 @@ class TestPragmaHandler:
         rtl = PragmaPatterns.pragma_error_cases("missing_args")
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Only valid pragmas should be returned
         assert len(pragmas) == 0  # All pragmas in this test are invalid
@@ -205,7 +221,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 6
         
@@ -236,7 +255,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 3
         
@@ -278,7 +300,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Test collecting internal datatypes (not matching any interface)
         interface_names = ["s_axis_input", "m_axis_output"]  # Real interfaces to exclude
@@ -309,7 +334,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 2
         
@@ -335,7 +363,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         assert len(pragmas) == 0
         assert pragma_handler.pragmas == []
@@ -354,7 +385,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Find DATATYPE pragmas
         datatype_pragmas = [p for p in pragmas if p.type == PragmaType.DATATYPE]
@@ -388,7 +422,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Empty list should fail validation
         datatype_pragma = next((p for p in pragmas if p.type == PragmaType.DATATYPE), None)
@@ -402,7 +439,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Invalid type should fail validation
         datatype_pragma = next((p for p in pragmas if p.type == PragmaType.DATATYPE), None)
@@ -422,7 +462,10 @@ class TestPragmaHandler:
                .build())
         
         tree = ast_parser.parse_source(rtl)
-        pragmas = pragma_handler.extract_pragmas(tree.root_node)
+        # Use ModuleExtractor for pragma extraction
+        module_extractor = ModuleExtractor(ast_parser)
+        pragmas = module_extractor.extract_pragmas(tree.root_node)
+        pragma_handler.set_pragmas(pragmas)
         
         # Find DATATYPE pragmas
         datatype_pragmas = [p for p in pragmas if p.type == PragmaType.DATATYPE]
