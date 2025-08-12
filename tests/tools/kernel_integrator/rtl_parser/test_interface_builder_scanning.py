@@ -4,7 +4,7 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-"""Unit tests for the Interface Scanner component.
+"""Unit tests for the Interface Builder's scanning functionality.
 
 Tests the interface detection and extraction including:
 - AXI-Stream pattern recognition
@@ -17,7 +17,7 @@ Tests the interface detection and extraction including:
 import pytest
 from pathlib import Path
 
-from brainsmith.tools.kernel_integrator.rtl_parser.interface_scanner import InterfaceScanner
+from brainsmith.tools.kernel_integrator.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
@@ -25,10 +25,10 @@ from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 from .utils.rtl_builder import RTLBuilder
 
 
-class TestInterfaceScanner:
-    """Test cases for Interface Scanner functionality."""
+class TestInterfaceBuilderScanning:
+    """Test cases for Interface Builder's scanning functionality."""
     
-    def test_scan_axi_stream_patterns(self, interface_scanner):
+    def test_scan_axi_stream_patterns(self, interface_builder):
         """Test detecting AXI-Stream interface patterns."""
         ports = [
             Port("s_axis_input_tdata", PortDirection.INPUT, "31:0"),
@@ -42,7 +42,7 @@ class TestInterfaceScanner:
             Port("rst", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Should find 2 AXI-Stream interfaces + global control
         assert len(port_groups) >= 2
@@ -63,7 +63,7 @@ class TestInterfaceScanner:
         master_group = next(g for g in axi_groups if g.name == "m_axis_output")
         assert len(master_group.ports) == 3  # No tlast
     
-    def test_scan_axi_lite_patterns(self, interface_scanner):
+    def test_scan_axi_lite_patterns(self, interface_builder):
         """Test detecting AXI-Lite interface patterns."""
         ports = [
             # AXI-Lite slave interface
@@ -88,7 +88,7 @@ class TestInterfaceScanner:
             Port("rst_n", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Find AXI-Lite interface
         axi_lite_groups = [g for g in port_groups if g.name and g.name.startswith("s_axi")]
@@ -105,7 +105,7 @@ class TestInterfaceScanner:
         assert "s_axi_araddr" in signal_names
         assert "s_axi_rdata" in signal_names
     
-    def test_scan_global_control_signals(self, interface_scanner):
+    def test_scan_global_control_signals(self, interface_builder):
         """Test detecting global control signals."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
@@ -119,7 +119,7 @@ class TestInterfaceScanner:
             Port("data_out", PortDirection.OUTPUT, "31:0")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Global control signals might be grouped together
         # or identified individually
@@ -136,7 +136,7 @@ class TestInterfaceScanner:
         
         assert len(control_ports) >= 6
     
-    def test_scan_multiple_interfaces(self, interface_scanner):
+    def test_scan_multiple_interfaces(self, interface_builder):
         """Test scanning multiple interfaces of same type."""
         ports = [
             # First input stream
@@ -163,7 +163,7 @@ class TestInterfaceScanner:
             Port("rst", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Find all AXI-Stream groups
         axi_groups = [g for g in port_groups if g.name and "axis" in g.name]
@@ -176,7 +176,7 @@ class TestInterfaceScanner:
         assert "s_axis_weights" in names
         assert "m_axis_output" in names
     
-    def test_scan_unmatched_ports(self, interface_scanner):
+    def test_scan_unmatched_ports(self, interface_builder):
         """Test handling of ports that don't match any pattern."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
@@ -189,7 +189,7 @@ class TestInterfaceScanner:
             Port("interrupt", PortDirection.OUTPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Should group some ports, others may be unassigned
         all_grouped_ports = []
@@ -199,7 +199,7 @@ class TestInterfaceScanner:
         # Not all ports may be grouped
         assert len(all_grouped_ports) <= len(ports)
     
-    def test_scan_name_variations(self, interface_scanner):
+    def test_scan_name_variations(self, interface_builder):
         """Test handling various naming conventions."""
         ports = [
             # Uppercase variation
@@ -219,13 +219,13 @@ class TestInterfaceScanner:
             Port("clk", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Scanner should handle case variations
         axi_groups = [g for g in port_groups if g.name and "axis" in g.name.lower()]
         assert len(axi_groups) >= 2
     
-    def test_partial_interface_detection(self, interface_scanner):
+    def test_partial_interface_detection(self, interface_builder):
         """Test detecting incomplete interfaces."""
         ports = [
             # Partial AXI-Stream (missing tready)
@@ -243,7 +243,7 @@ class TestInterfaceScanner:
             Port("clk", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Should detect all groups, even partial ones
         axi_groups = [g for g in port_groups if g.name and "axis" in g.name]
@@ -254,7 +254,7 @@ class TestInterfaceScanner:
         if partial_group:
             assert len(partial_group.ports) == 2
     
-    def test_custom_prefix_patterns(self, interface_scanner):
+    def test_custom_prefix_patterns(self, interface_builder):
         """Test interfaces with custom prefixes."""
         ports = [
             # Custom input stream
@@ -274,7 +274,7 @@ class TestInterfaceScanner:
             Port("clk", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Should find groups based on common prefixes
         assert len(port_groups) >= 2
@@ -284,16 +284,16 @@ class TestInterfaceScanner:
                         if g.name and ("input_stream" in g.name or "output_stream" in g.name)]
         # May or may not group custom patterns depending on implementation
     
-    def test_empty_port_list(self, interface_scanner):
+    def test_empty_port_list(self, interface_builder):
         """Test scanning empty port list."""
         ports = []
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         assert port_groups == []
         assert unassigned == []
     
-    def test_single_port_interface(self, interface_scanner):
+    def test_single_port_interface(self, interface_builder):
         """Test handling single-port interfaces."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
@@ -303,7 +303,7 @@ class TestInterfaceScanner:
             Port("error", PortDirection.OUTPUT, "1")
         ]
         
-        port_groups, unassigned = interface_scanner.scan(ports)
+        port_groups, unassigned = interface_builder._scan(ports)
         
         # Single ports may be grouped as simple interfaces
         # or left ungrouped

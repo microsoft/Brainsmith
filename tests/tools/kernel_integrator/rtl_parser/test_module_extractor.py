@@ -146,16 +146,16 @@ class TestModuleExtractor:
         # Check specific parameters
         width_param = next(p for p in params if p.name == "WIDTH")
         assert width_param.default_value == "32"
-        assert width_param.param_type == "integer"
+        assert width_param.rtl_type == "integer"
         
         signed_param = next(p for p in params if p.name == "SIGNED")
         assert signed_param.default_value == "1"
         # RTLBuilder defaults to "integer" type even when not specified
-        assert signed_param.param_type == "integer"
+        assert signed_param.rtl_type == "integer"
         
         scale_param = next(p for p in params if p.name == "SCALE")
         assert scale_param.default_value == "1.5"
-        assert scale_param.param_type == "real"
+        assert scale_param.rtl_type == "real"
     
     def test_extract_ports_all_directions(self, module_extractor, ast_parser):
         """Test extracting ports with all directions and widths."""

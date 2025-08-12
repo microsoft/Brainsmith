@@ -11,7 +11,7 @@ SystemVerilog files and extract module interfaces, parameters, and pragmas.
 """
 
 import logging
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from pathlib import Path
 from tree_sitter import Node, Tree
 
@@ -19,9 +19,8 @@ from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, Port
 from .pragmas import Pragma
 from .pragma import PragmaHandler
-from .interface_builder import InterfaceBuilder
 from .ast_parser import ASTParser, SyntaxError
-from .module_extractor import ModuleExtractor
+from .kernel_builder import KernelBuilder
 from .parameter_linker import ParameterLinker
 
 # Configure logger
@@ -33,24 +32,12 @@ class ParserError(Exception):
     pass
 
 
-class ParsedData:
-    """Container for parsed module data before KernelMetadata creation."""
-    
-    def __init__(self):
-        self.module_name: Optional[str] = None
-        self.parameters: List[Parameter] = []
-        self.ports: List[Port] = []
-        self.pragmas: List[Pragma] = []
-        self.parsing_warnings: List[str] = []
-
-
 class RTLParser:
     """Parser for SystemVerilog RTL files.
 
     This class orchestrates the parsing of SystemVerilog files using sub-components:
     - ASTParser: Handles tree-sitter operations
-    - ModuleExtractor: Selects modules and extracts parameters/ports
-    - InterfaceBuilder: Builds interface metadata
+    - KernelBuilder: Selects modules, extracts components, and builds KernelMetadata
     - PragmaHandler: Processes pragmas
     - ParameterLinker: Auto-links parameters to interfaces
 
@@ -84,106 +71,8 @@ class RTLParser:
 
         # Initialize sub-components
         self.ast_parser = ASTParser(debug=self.debug)
-        self.module_extractor = ModuleExtractor(self.ast_parser, debug=self.debug)
-        self.interface_builder = InterfaceBuilder(debug=self.debug)
+        self.kernel_builder = KernelBuilder(self.ast_parser, debug=self.debug)
         self.pragma_handler = PragmaHandler(debug=self.debug)
-
-    def _parse_and_extract(self, source: str, source_name: str = "<string>", 
-                          is_file: bool = True, target_module: Optional[str] = None) -> ParsedData:
-        """Parse source and extract components using sub-components.
-
-        Args:
-            source: File path (if is_file=True) or SystemVerilog source code string
-            source_name: Name for logging/error messages (file path or "<string>")
-            is_file: If True, treat source as file path; if False, treat as source code
-            target_module: Optional specific module name to target
-
-        Returns:
-            ParsedData containing extracted information.
-
-        Raises:
-            ParserError: If parsing fails, no modules found, or module selection fails
-            SyntaxError: If SystemVerilog syntax errors detected by tree-sitter
-            FileNotFoundError: If file does not exist
-        """
-        logger.info(f"Parsing and extracting from {source_name}")
-        
-        # Get source content
-        if is_file:
-            try:
-                with open(source, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except Exception as e:
-                logger.exception(f"Failed to read file {source}: {e}")
-                raise ParserError(f"Failed to read file {source}: {e}")
-        else:
-            content = source
-        
-        # Parse AST
-        try:
-            tree = self.ast_parser.parse_source(content)
-        except Exception as e:
-            raise ParserError(f"Core parsing failed for {source_name}: {e}")
-        
-        # Check syntax
-        syntax_error = self.ast_parser.check_syntax_errors(tree)
-        if syntax_error:
-            raise syntax_error
-        
-        # Create parsed data container
-        data = ParsedData()
-        
-        # Find modules
-        module_nodes = self.ast_parser.find_modules(tree)
-        if not module_nodes:
-            raise ParserError(f"No module definitions found in {source_name}")
-        
-        # Extract pragmas
-        logger.debug("Extracting pragmas...")
-        try:
-            data.pragmas = self.pragma_handler.extract_pragmas(tree.root_node)
-        except Exception as e:
-            logger.exception(f"Error during pragma extraction in {source_name}: {e}")
-            raise ParserError(f"Failed during pragma extraction: {e}")
-        logger.debug(f"Found {len(data.pragmas)} potential pragmas.")
-        
-        # Select target module
-        try:
-            module_node = self.module_extractor.select_target_module(
-                module_nodes, data.pragmas, source_name, target_module
-            )
-            logger.info(f"Selected target module node: {module_node.type}")
-        except ValueError as e:
-            logger.error(e)
-            raise ParserError(str(e))
-        
-        # Extract components
-        logger.info("Extracting kernel components (name, parameters, ports)")
-        
-        # Extract module name
-        data.module_name = self.module_extractor.extract_module_name(module_node)
-        if not data.module_name:
-            raise ParserError("Failed to extract module name from header.")
-        logger.debug(f"Extracted module name: '{data.module_name}'")
-        
-        # Extract parameters
-        try:
-            data.parameters = self.module_extractor.extract_parameters(module_node)
-            logger.debug(f"Extracted {len(data.parameters)} parameters.")
-        except Exception as e:
-            logger.exception(f"Error during parameter parsing: {e}")
-            raise ParserError(f"Failed during parameter parsing: {e}")
-        
-        # Extract ports
-        try:
-            data.ports = self.module_extractor.extract_ports(module_node)
-            logger.debug(f"Successfully parsed {len(data.ports)} individual port objects.")
-        except Exception as e:
-            logger.exception(f"Error during port parsing: {e}")
-            raise ParserError(f"Failed during port parsing: {e}")
-        
-        logger.info("Component extraction complete.")
-        return data
 
     def _apply_pragmas(self, kernel_metadata: KernelMetadata) -> None:
         """Apply all pragmas to kernel metadata.
@@ -268,35 +157,32 @@ class RTLParser:
         """
         logger.info(f"Starting string-based parsing for: {source_name}")
         try:
-            # Parse and extract components
-            parsed_data = self._parse_and_extract(
-                systemverilog_code, source_name, is_file=False, target_module=module_name
-            )
+            # Parse AST
+            try:
+                tree = self.ast_parser.parse_source(systemverilog_code)
+            except Exception as e:
+                raise ParserError(f"Core parsing failed for {source_name}: {e}")
             
-            # Initialize exposed parameters - all parameters are initially exposed
-            exposed_parameters = [p.name for p in parsed_data.parameters]
-            logger.debug(f"Initialized {len(exposed_parameters)} exposed parameters: {exposed_parameters}")
+            # Check syntax
+            syntax_error = self.ast_parser.check_syntax_errors(tree)
+            if syntax_error:
+                raise syntax_error
+            
+            # Build KernelMetadata (pragma extraction now happens inside)
+            try:
+                kernel_metadata = self.kernel_builder.build_kernel_metadata(
+                    tree, source_name, module_name
+                )
+            except ValueError as e:
+                raise ParserError(str(e))
+            except Exception as e:
+                logger.exception(f"Error during kernel building: {e}")
+                raise ParserError(f"Failed during kernel building: {e}")
 
-            # Build initial InterfaceMetadata objects (without pragma application)
-            base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
-                parsed_data.ports
-            )
-            logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
-
-            # Build KernelMetadata with initial data
-            kernel_metadata = KernelMetadata(
-                name=parsed_data.module_name,
-                source_file=Path(source_name),
-                interfaces=base_metadata_list,
-                parameters=parsed_data.parameters,
-                exposed_parameters=exposed_parameters,
-                pragmas=parsed_data.pragmas,
-                parsing_warnings=parsed_data.parsing_warnings,
-                linked_parameters={"aliases": {}, "derived": {}, "axilite": {}},
-                internal_datatypes=[]
-            )
-
-            # Apply ALL pragmas to KernelMetadata
+            # Set pragmas in handler for high-level operations
+            self.pragma_handler.set_pragmas(kernel_metadata.pragmas)
+            
+            # Apply all pragmas to KernelMetadata
             self._apply_pragmas(kernel_metadata)
             
             # Update Parameter objects based on pragma results

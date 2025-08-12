@@ -9,15 +9,21 @@
 This module handles:
 - Module selection based on pragmas or explicit targets
 - Extraction of module components (name, parameters, ports) from AST nodes
+- Extraction and validation of @brainsmith pragmas from comment nodes
 """
 
 import logging
-from typing import Optional, List, Tuple, Dict
-from tree_sitter import Node
+from typing import Optional, List, Tuple, Dict, Callable, Any
+from tree_sitter import Node, Tree
 
 from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, PragmaType
-from .pragmas import Pragma
+from .pragmas import (
+    Pragma, PragmaError, InterfacePragma,
+    TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
+    AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma,
+    RelationshipPragma
+)
 from .ast_parser import ASTParser
 
 logger = logging.getLogger(__name__)
@@ -31,6 +37,7 @@ class ModuleExtractor:
     - Module name extraction
     - Parameter extraction (excluding localparams)
     - Port extraction with directions and widths
+    - Pragma extraction and validation from comment nodes
     """
     
     def __init__(self, ast_parser: ASTParser, debug: bool = False):
@@ -42,6 +49,77 @@ class ModuleExtractor:
         """
         self.ast_parser = ast_parser
         self.debug = debug
+        
+        # Map PragmaType to the corresponding Pragma subclass constructor
+        self.pragma_constructors: Dict[PragmaType, Callable[..., Pragma]] = {
+            PragmaType.TOP_MODULE: TopModulePragma,
+            PragmaType.DATATYPE: DatatypePragma,
+            PragmaType.BDIM: BDimPragma,
+            PragmaType.SDIM: SDimPragma,
+            PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
+            PragmaType.WEIGHT: WeightPragma,
+            PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
+            PragmaType.ALIAS: AliasPragma,
+            PragmaType.AXILITE_PARAM: AxiLiteParamPragma,
+            PragmaType.RELATIONSHIP: RelationshipPragma,
+        }
+    
+    def extract_from_tree(self, tree: Tree, source_name: str = "<string>", 
+                         target_module: Optional[str] = None) -> Tuple[str, List[Parameter], List[Port], List[Pragma]]:
+        """Extract module components and pragmas from a parsed AST tree.
+        
+        This is the main extraction method that orchestrates the full extraction workflow:
+        1. Extract all pragmas from the tree
+        2. Find all modules in the tree
+        3. Select the target module based on pragmas or explicit target
+        4. Extract module name, parameters, and ports
+        
+        Args:
+            tree: Parsed AST tree from tree-sitter
+            source_name: Name for logging/error messages
+            target_module: Optional specific module name to target
+            
+        Returns:
+            Tuple of (module_name, parameters, ports, pragmas)
+            
+        Raises:
+            ValueError: If no modules found or module selection fails
+        """
+        # Extract pragmas first
+        logger.info("Extracting pragmas from AST")
+        pragmas = self.extract_pragmas(tree.root_node)
+        logger.info(f"Found {len(pragmas)} valid pragmas")
+        
+        # Find modules
+        module_nodes = self.ast_parser.find_modules(tree)
+        if not module_nodes:
+            raise ValueError(f"No module definitions found in {source_name}")
+        
+        # Select target module
+        module_node = self.select_target_module(
+            module_nodes, pragmas, source_name, target_module
+        )
+        logger.info(f"Selected target module node: {module_node.type}")
+        
+        # Extract components
+        logger.info("Extracting kernel components (name, parameters, ports)")
+        
+        # Extract module name
+        module_name = self.extract_module_name(module_node)
+        if not module_name:
+            raise ValueError("Failed to extract module name from header.")
+        logger.debug(f"Extracted module name: '{module_name}'")
+        
+        # Extract parameters
+        parameters = self.extract_parameters(module_node)
+        logger.debug(f"Extracted {len(parameters)} parameters.")
+        
+        # Extract ports
+        ports = self.extract_ports(module_node)
+        logger.debug(f"Successfully parsed {len(ports)} individual port objects.")
+        
+        logger.info("Component extraction complete.")
+        return module_name, parameters, ports, pragmas
     
     def extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
         """Extract name, parameter nodes, and port nodes from a module_declaration node.
@@ -687,3 +765,179 @@ class ModuleExtractor:
         
         else:
             raise ValueError("Internal error: Inconsistent module node state.")
+    
+    def extract_pragmas(self, root_node: Node) -> List[Pragma]:
+        """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
+
+        Uses pragma validation to parse and validate comments found during the AST traversal.
+
+        Args:
+            root_node: The root node of the tree-sitter AST.
+
+        Returns:
+            A list of validated Pragma objects found in the AST.
+        """
+        pragmas = []
+        comments_found_count = 0
+
+        # Simple recursive walk for comments
+        def find_comments(node: Node):
+            nonlocal comments_found_count
+            if node.type == 'comment':
+                comments_found_count += 1
+                logger.debug(f"Found 'comment' node at line {node.start_point[0]+1}: {node.text.decode('utf8')[:60]}...")
+                # Get line number (0-based)
+                line_number = node.start_point[0]
+                pragma = self._validate_pragma(node, line_number + 1)  # Pass 1-based line number
+                if pragma:
+                    logger.info(f"Found valid pragma: {pragma}")
+                    pragmas.append(pragma)
+
+            for child in node.children:
+                find_comments(child)
+
+        # Log start/end at INFO level
+        logger.info(">>> Starting pragma extraction from AST root.")
+        find_comments(root_node)
+        logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
+        return pragmas
+    
+    def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:
+        """Parses a comment AST node to find and validate a @brainsmith pragma.
+
+        Checks for the '@brainsmith' prefix, extracts the type and inputs,
+        validates the type, and instantiates the appropriate Pragma subclass.
+
+        Args:
+            node: The tree-sitter comment node.
+            line_number: The 1-based line number where the comment starts.
+
+        Returns:
+            A validated Pragma subclass object if a valid pragma is found, otherwise None.
+        """
+        text = node.text.decode('utf8').strip('/ ')
+
+        if not text.startswith('@brainsmith'):
+            return None
+
+        # First split to get pragma type
+        parts = text.split(None, 2)  # Split into at most 3 parts: @brainsmith, type, rest
+        if len(parts) < 2:
+            logger.warning(f"Invalid pragma format at line {line_number}: {text}")
+            return None
+
+        pragma_type_str = parts[1]
+        
+        # Parse remaining arguments with intelligence
+        if len(parts) > 2:
+            parsed_inputs = self._parse_pragma_arguments(parts[2])
+        else:
+            parsed_inputs = {
+                'raw': [],
+                'positional': [],
+                'named': {}
+            }
+
+        pragma_enum_type: Optional[PragmaType] = None
+        pragma_type_lower = pragma_type_str.lower()
+        for member in PragmaType:
+            if member.value == pragma_type_lower:
+                pragma_enum_type = member
+                break
+        
+        if pragma_enum_type is None or pragma_enum_type not in self.pragma_constructors:
+            logger.debug(f"Ignoring comment at line {line_number}: Unknown or unsupported pragma type '@brainsmith {pragma_type_str}'")
+            return None
+
+        # Get the correct Pragma subclass constructor
+        pragma_class = self.pragma_constructors[pragma_enum_type]
+        
+        try:
+            # Instantiate the specific Pragma subclass with parsed inputs
+            return pragma_class(
+                type=pragma_enum_type,
+                inputs=parsed_inputs,
+                line_number=line_number
+            )
+        except PragmaError as e:
+            logger.warning(f"Error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
+            return None
+    
+    def _parse_pragma_arguments(self, text: str) -> Dict[str, Any]:
+        """
+        Parse pragma arguments into structured format.
+        
+        Lists are parsed in-place:
+        - "[A, B, C]" becomes ["A", "B", "C"] in positional args
+        - "key=[A, B]" becomes {"key": ["A", "B"]} in named args
+        
+        Args:
+            text: The argument portion of the pragma (after type)
+            
+        Returns:
+            Dict with:
+            - 'raw': Original tokenized arguments (strings)
+            - 'positional': Positional args with lists parsed
+            - 'named': Named args with lists parsed
+        """
+        # First tokenize respecting brackets
+        tokens = []
+        current_token = ""
+        bracket_depth = 0
+        
+        for char in text + " ":  # Add space to flush last token
+            if char == '[':
+                bracket_depth += 1
+                current_token += char
+            elif char == ']':
+                bracket_depth -= 1
+                current_token += char
+            elif char.isspace() and bracket_depth == 0:
+                if current_token:
+                    tokens.append(current_token)
+                    current_token = ""
+            else:
+                current_token += char
+        
+        # Now parse tokens into structured format
+        result = {
+            'raw': tokens[:],  # Keep original tokens
+            'positional': [],
+            'named': {}
+        }
+        
+        for token in tokens:
+            # Check for key=value syntax
+            if '=' in token and not token.startswith('['):
+                parts = token.split('=', 1)
+                if len(parts) == 2:
+                    key, value = parts
+                    # Check if value is a list
+                    if value.startswith('[') and value.endswith(']'):
+                        # Parse list for named argument
+                        list_content = value[1:-1].strip()
+                        if list_content:
+                            result['named'][key] = [item.strip() for item in list_content.split(',')]
+                        else:
+                            result['named'][key] = []  # Empty list
+                    else:
+                        result['named'][key] = value
+                    continue
+            
+            # Check for list syntax in positional argument
+            if token.startswith('[') and token.endswith(']'):
+                # Parse list directly into positional
+                list_content = token[1:-1].strip()
+                if list_content:
+                    parsed_list = [item.strip() for item in list_content.split(',')]
+                else:
+                    parsed_list = []  # Empty list
+                result['positional'].append(parsed_list)
+            else:
+                # Regular positional argument
+                result['positional'].append(token)
+        
+        return result

@@ -46,7 +46,7 @@ class TestDataFlowValidation:
         # Verify parameter details
         width_param = next(p for p in kernel_metadata.parameters if p.name == "WIDTH")
         assert width_param.default_value == "32"
-        assert width_param.param_type == "integer"
+        assert width_param.rtl_type == "integer"
         
         # Check exposed parameters (may be affected by auto-linking)
         exposed_params = set(kernel_metadata.exposed_parameters)
