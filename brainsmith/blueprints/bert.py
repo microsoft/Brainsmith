@@ -66,6 +66,9 @@ from qonnx.transformation.base import Transformation
 import onnxscript
 from onnxscript.utils import graph_view_utils as gvu
 
+#from finn.transformation.fpgadataflow import LoopExtraction
+from finn.transformation.fpgadataflow import LoopRolling
+
 def custom_step_extract_loop_body(model, cfg):
     """
     BERT custom step for extracting the loop body
@@ -75,33 +78,32 @@ def custom_step_extract_loop_body(model, cfg):
     but it is useful for this model.
     """
     model = model.transform(FoldConstants())
+    # model_ir    = onnxscript.ir.serde.deserialize_model(model.model)
+    # graph       = model_ir.graph
 
-    model_ir    = onnxscript.ir.serde.deserialize_model(model.model)
-    graph       = model_ir.graph
+    # P = gvu.PytorchHierarchyNode()
+    # unadded_nodes = []
+    # for node in graph._nodes:
+    #     added = P.add_node(node)
+    #     if not added:
+    #         unadded_nodes.append(node)
+    # P.print_hierarchy()
+    # print(f"Total nodes: {len(graph._nodes)}")
+    # print(f"Unadded nodes: {len(unadded_nodes)}")
 
-    P = gvu.PytorchHierarchyNode()
-    unadded_nodes = []
-    for node in graph._nodes:
-        added = P.add_node(node)
-        if not added:
-            unadded_nodes.append(node)
-    P.print_hierarchy()
-    print(f"Total nodes: {len(graph._nodes)}")
-    print(f"Unadded nodes: {len(unadded_nodes)}")
-
-    # Handle the unadded Transpose nodes as a special case for BERT
-    # Todo: Make this more robust in the future
-    for node in unadded_nodes:
-        print(f"added metadata for node {node.name}")
-        pred_node = node.predecessors()[0]
-        node.metadata_props['pkg.torch.onnx.name_scopes'] = pred_node.metadata_props['pkg.torch.onnx.name_scopes']
-        node.metadata_props['pkg.torch.onnx.class_hierarchy'] = pred_node.metadata_props['pkg.torch.onnx.class_hierarchy']
-        assert(P.add_node(node))
-    loop_body_graph_view = gvu.bGraphView(f'loop-body', P.get_nodes(cfg.loop_body_hierarchy))
-    print(f"Layer 0 graph view: {len(loop_body_graph_view._nodes)}")
-    loop_body_model = onnxscript.ir.Model(loop_body_graph_view, ir_version=10)
-    proto = onnxscript.ir.serde.serialize_model(loop_body_model)
-    onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
+    # # Handle the unadded Transpose nodes as a special case for BERT
+    # # Todo: Make this more robust in the future
+    # for node in unadded_nodes:
+    #     print(f"added metadata for node {node.name}")
+    #     pred_node = node.predecessors()[0]
+    #     node.metadata_props['pkg.torch.onnx.name_scopes'] = pred_node.metadata_props['pkg.torch.onnx.name_scopes']
+    #     node.metadata_props['pkg.torch.onnx.class_hierarchy'] = pred_node.metadata_props['pkg.torch.onnx.class_hierarchy']
+    #     assert(P.add_node(node))
+    # loop_body_graph_view = gvu.bGraphView(f'loop-body', P.get_nodes(cfg.loop_body_hierarchy))
+    # print(f"Layer 0 graph view: {len(loop_body_graph_view._nodes)}")
+    # loop_body_model = onnxscript.ir.Model(loop_body_graph_view, ir_version=10)
+    # proto = onnxscript.ir.serde.serialize_model(loop_body_model)
+    # onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
     return model
 
 
@@ -119,49 +121,51 @@ def custom_step_loop_rolling(model, cfg):
     """
 
     print("Loading loop body template")
-    LoopBody = pb.LoopBodyTemplate(cfg.output_dir+'/loop-body-template.onnx')
+    loop_extraction = pb.LoopExtraction(cfg.loop_body_hierarchy)
+    model = model.transform(loop_extraction)
+    model = model.transform(LoopRolling(loop_extraction.loop_body_template))
+    # LoopBody = pb.LoopBodyTemplate(cfg.output_dir+'/loop-body-template.onnx')
 
-    # Replace instances of the loop body with a function call to the loop body
-    change_layers_to_function_calls = pattern.RewriteRule(
-      LoopBody.pattern,
-      LoopBody.function_replace
-    )
-    print("Replacing layers with function calls")
+    # # Replace instances of the loop body with a function call to the loop body
+    # change_layers_to_function_calls = pattern.RewriteRule(
+    #   LoopBody.pattern,
+    #   LoopBody.function_replace
+    # )
+    # print("Replacing layers with function calls")
 
-    model_proto = model.model
-    model_ir = onnxscript.ir.serde.deserialize_model(model_proto)
+    # model_proto = model.model
+    # model_ir = onnxscript.ir.serde.deserialize_model(model_proto)
 
-    model_layers_replaced = rewrite(
-        model_ir,
-        pattern_rewrite_rules = [change_layers_to_function_calls]
-    )
+    # model_layers_replaced = rewrite(
+    #     model_ir,
+    #     pattern_rewrite_rules = [change_layers_to_function_calls]
+    # )
 
-    model_layers_replaced.functions[LoopBody.function.identifier()] = LoopBody.function
-    model_layers_replaced.graph.opset_imports['loop']=0
+    # model_layers_replaced.functions[LoopBody.function.identifier()] = LoopBody.function
+    # model_layers_replaced.graph.opset_imports['loop']=0
+    # model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
 
-    model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
+    # model.model = model_proto
 
-    model.model = model_proto
+    # normalized_graph = pb.normalize_io_for_loop_rolling(model_layers_replaced.graph, LoopBody)
 
-    normalized_graph = pb.normalize_io_for_loop_rolling(model_layers_replaced.graph, LoopBody)
+    # print(f"normalized graphs is layer {normalized_graph is model_layers_replaced.graph}")
+    # onnxscript.ir.save(model_layers_replaced, "normalized.onnx")
+    # LoopMatchPattern,nodes = LoopBody.build_function_match_pattern(normalized_graph)
 
-    print(f"normalized graphs is layer {normalized_graph is model_layers_replaced.graph}")
-    onnxscript.ir.save(model_layers_replaced, "normalized.onnx")
-    LoopMatchPattern,nodes = LoopBody.build_function_match_pattern(normalized_graph)
+    # loop_replace_pattern = pb.build_loop_replace_pattern(normalized_graph, LoopBody)
 
-    loop_replace_pattern = pb.build_loop_replace_pattern(normalized_graph, LoopBody)
+    # change_function_calls_to_loop = pattern.RewriteRule(
+    #     LoopMatchPattern,
+    #     loop_replace_pattern
+    # )
+    # rewrite_set = pattern.RewriteRuleSet([change_function_calls_to_loop])
+    # count = rewrite_set.apply_to_model(model_layers_replaced, verbose=None)
+    # print(f"Rolled {count} function calls into a loop operator")
+    # model.model = onnxscript.ir.serde.serialize_model(model_layers_replaced)
 
-    change_function_calls_to_loop = pattern.RewriteRule(
-        LoopMatchPattern,
-        loop_replace_pattern
-    )
-    rewrite_set = pattern.RewriteRuleSet([change_function_calls_to_loop])
-    count = rewrite_set.apply_to_model(model_layers_replaced, verbose=None)
-    print(f"Rolled {count} function calls into a loop operator")
-    model.model = onnxscript.ir.serde.serialize_model(model_layers_replaced)
-
-    model = model.transform(FoldConstants())
-    model = model.transform(to_hw.InferFinnLoopOp())
+    # model = model.transform(FoldConstants())
+    # model = model.transform(to_hw.InferFinnLoopOp())
     return model
 
 
@@ -223,7 +227,6 @@ def custom_step_generate_reference_io(model, cfg):
 
     input_t = { input_m.name : in_tensor}
     out_name = model.graph.output[0].name
-
     y_ref = oxe.execute_onnx(model, input_t, True)
     print("output directory is ", cfg.output_dir)
     np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
