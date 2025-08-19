@@ -7,32 +7,35 @@
 """Kernel metadata builder for SystemVerilog RTL parser.
 
 This module handles:
-- Building complete KernelMetadata objects with interfaces
-- Coordinating module extraction (delegated to ModuleExtractor)
-- Interface building and KernelMetadata assembly
+- Building complete KernelMetadata objects from extracted components
+- Interface detection and validation
+- KernelMetadata assembly with proper interface organization
 """
 
 import logging
-from typing import Optional, List, Tuple, Dict
-from pathlib import Path
-from tree_sitter import Node, Tree
+from typing import Optional, List, Dict
+from collections import defaultdict
+from tree_sitter import Tree
 
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter
-from .pragmas import Pragma
+from brainsmith.core.dataflow.types import ProtocolType, InterfaceType
+from brainsmith.tools.kernel_integrator.types.metadata import (
+    KernelMetadata, InterfaceMetadata, AXIStreamMetadata, 
+    AXILiteMetadata, ControlMetadata
+)
+from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, Direction, ParsedModule
 from .ast_parser import ASTParser
-from .module_extractor import ModuleExtractor
-from .interface_builder import InterfaceBuilder
+from .protocol_validator import ProtocolScanner
+from .pragmas import Pragma
+
 
 logger = logging.getLogger(__name__)
 
 
 class KernelBuilder:
-    """Builds KernelMetadata from SystemVerilog AST nodes.
+    """Builds KernelMetadata from extracted module components.
     
     This class handles:
-    - Coordinating module component extraction (via ModuleExtractor)
-    - Interface building (via InterfaceBuilder)
+    - Interface building and validation (via ProtocolScanner)
     - KernelMetadata assembly from extracted components
     """
     
@@ -44,84 +47,72 @@ class KernelBuilder:
             debug: Enable debug logging.
         """
         self.ast_parser = ast_parser
-        self.module_extractor = ModuleExtractor(ast_parser, debug=debug)
-        self.interface_builder = InterfaceBuilder(debug=debug)
+        self.scanner = ProtocolScanner(debug=debug)
         self.debug = debug
     
-    def build_kernel_metadata(self, tree: Tree, source_name: str = "<string>", 
-                            target_module: Optional[str] = None) -> KernelMetadata:
-        """Build complete KernelMetadata from AST tree.
-        
-        This method handles the complete workflow:
-        1. Uses ModuleExtractor to get module components and pragmas
-        2. Builds interfaces  
-        3. Assembles KernelMetadata
-        
+    def build(self, parsed_module: ParsedModule, source_name: Optional[str] = None) -> KernelMetadata:
+        """Build complete `KernelMetadata` from a ParsedModule.
+
+        Steps:
+            1. Build protocol-grouped interface metadata from ports.
+            2. Enforce required invariants (exactly one control, at least one input & output stream).
+            3. Assemble and return `KernelMetadata` object.
+
         Args:
-            tree: Parsed AST tree.
-            source_name: Source file name for error messages.
-            target_module: Explicit target module name (optional).
-            
+            parsed_module: ParsedModule containing all extracted components.
+            source_name: Optional source file path override (for diagnostics/meta).
+
         Returns:
-            Complete KernelMetadata object with interfaces built.
+            KernelMetadata: Fully assembled kernel description.
+
+        Raises:
+            ValueError: If protocol/interface invariants are violated.
         """
-        # Use ModuleExtractor to get all components including pragmas
-        module_name, parameters, ports, pragmas = self.module_extractor.extract_from_tree(
-            tree, source_name, target_module
-        )
-        
-        # Then build metadata
-        return self._build_from_components(
-            module_name, parameters, ports, pragmas, source_name
-        )
-    
-    def _build_from_components(self, module_name: str, parameters: List[Parameter], 
-                               ports: List[Port], pragmas: List[Pragma], 
-                               source_name: str) -> KernelMetadata:
-        """Build KernelMetadata from already extracted components.
-        
-        Internal method to build KernelMetadata from components.
-        """
-        # Note: This is now a private method
-        
-        # Initialize parsing warnings
-        parsing_warnings: List[str] = []
-        
-        # Build interfaces organized by protocol type
-        interfaces_by_protocol = self.interface_builder.build_from_ports(ports)
-        
-        # Organize interfaces by their specific types
+        # Extract components from ParsedModule
+        module_name = parsed_module.name
+        parameters = parsed_module.parameters
+        ports = parsed_module.ports
+        pragmas = parsed_module.pragmas
+        if source_name is None:
+            source_name = parsed_module.file_path
+
+        # (1) Build interfaces organized by protocol type
+        interfaces_by_protocol = self.scan_and_build_interfaces(ports)
+
+        # (2) Organize / validate interface types
         control_interface = None
         input_interfaces = []
         output_interfaces = []
         config_interfaces = []
-        
-        # Process each protocol type
-        from brainsmith.core.dataflow.types import ProtocolType, InterfaceType
-        
-        # Extract control interface (should be exactly one)
+
+        # Control (exactly one)
         if ProtocolType.CONTROL in interfaces_by_protocol:
-            control_interfaces = interfaces_by_protocol[ProtocolType.CONTROL]
-            if len(control_interfaces) != 1:
-                raise ValueError(f"Expected exactly one control interface, found {len(control_interfaces)}")
-            control_interface = control_interfaces[0]
+            control_candidates = interfaces_by_protocol[ProtocolType.CONTROL]
+            if len(control_candidates) != 1:
+                raise ValueError(f"Expected exactly one control interface, found {len(control_candidates)}")
+            control_interface = control_candidates[0]
         else:
             raise ValueError("No control interface found")
-            
-        # Extract AXI-Stream interfaces and separate by direction
+
+        # AXI-Stream (must have >=1 input and >=1 output)
         if ProtocolType.AXI_STREAM in interfaces_by_protocol:
-            for interface in interfaces_by_protocol[ProtocolType.AXI_STREAM]:
-                if interface.interface_type == InterfaceType.INPUT:
-                    input_interfaces.append(interface)
-                elif interface.interface_type == InterfaceType.OUTPUT:
-                    output_interfaces.append(interface)
-                    
-        # Extract AXI-Lite config interfaces
+            for iface in interfaces_by_protocol[ProtocolType.AXI_STREAM]:
+                if iface.interface_type == InterfaceType.INPUT:
+                    input_interfaces.append(iface)
+                elif iface.interface_type == InterfaceType.OUTPUT:
+                    output_interfaces.append(iface)
+
+        if not input_interfaces:
+            raise ValueError("No AXI-Stream input interfaces found")
+        if not output_interfaces:
+            raise ValueError("No AXI-Stream output interfaces found")
+
+        # AXI-Lite (optional configuration interfaces)
         if ProtocolType.AXI_LITE in interfaces_by_protocol:
             config_interfaces = interfaces_by_protocol[ProtocolType.AXI_LITE]
-        
-        # Build KernelMetadata with properly organized interfaces
-        kernel_metadata = KernelMetadata(
+
+        # (3) Assemble metadata
+        return KernelMetadata(
             name=module_name,
             source_file=str(source_name),
             control=control_interface,
@@ -130,5 +121,98 @@ class KernelBuilder:
             config=config_interfaces,
             parameters=parameters
         )
+
+    def scan_and_build_interfaces(self, ports: List[Port]) -> Dict[ProtocolType, List[InterfaceMetadata]]:
+        """Scan ports for protocol patterns and build validated interface metadata.
         
-        return kernel_metadata
+        This method:
+        1. Scans ports to detect protocol groups using regex patterns
+        2. Validates each group against protocol requirements
+        3. Builds appropriate metadata objects (ControlMetadata, AXIStreamMetadata, etc.)
+        
+        Args:
+            ports: List of Port objects to organize into interfaces.
+            
+        Returns:
+            Dictionary mapping ProtocolType to list of InterfaceMetadata objects.
+            
+        Raises:
+            ValueError: If any ports cannot be assigned to a valid interface.
+        """
+        # Stage 1: Scan ports to detect groups using regex patterns
+        port_groups, unassigned_ports = self.scanner.scan(ports)
+
+        # Fail fast if any ports could not be assigned to an interface
+        if unassigned_ports:
+            missing = ", ".join(p.name for p in unassigned_ports)
+            raise ValueError(f"Unassigned ports after scanning: {missing}")
+
+        # Stage 2: Process each protocol type and build appropriate metadata
+        validated_interfaces = defaultdict(list)
+        for protocol_type, prefix_interfaces in port_groups.items():
+            for prefix, interface in prefix_interfaces.items():
+                if self.debug:
+                    logger.debug(f"Validating group with prefix '{prefix}' and protocol '{protocol_type}'")
+
+                # Build appropriate metadata based on protocol type
+                if protocol_type == ProtocolType.CONTROL:
+                    metadata = self.build_global_control(interface)
+                elif protocol_type == ProtocolType.AXI_STREAM:
+                    metadata = self.build_axi_stream(interface)
+                elif protocol_type == ProtocolType.AXI_LITE:
+                    metadata = self.build_axi_lite(interface)
+                else:
+                    raise ValueError(f"Invalid protocol type: {protocol_type}")
+                
+                validated_interfaces[protocol_type].append(metadata)
+        
+        return validated_interfaces
+
+    def build_global_control(self, interface: InterfaceMetadata) -> ControlMetadata:
+        """Build and validate a control interface."""
+        # Check against required & expected signals
+        _ = self.scanner.check_signals(interface, ProtocolType.CONTROL)
+
+        # Validate direction alignment (must match expected, not inverted or mixed)
+        direction = self.scanner.check_direction(interface, ProtocolType.CONTROL)
+        if direction != Direction.INPUT:
+            raise ValueError(f"Control Interface {interface.name}: Invalid direction: {direction}")
+
+        return ControlMetadata(name=interface.name, ports=interface.ports)
+
+    def build_axi_stream(self, interface: InterfaceMetadata) -> AXIStreamMetadata:
+        """Validate an AXI-Stream interface group."""
+        # Check against required & expected signals
+        _ = self.scanner.check_signals(interface, ProtocolType.AXI_STREAM)
+
+        # Validate direction alignment, determine input or output
+        direction = self.scanner.check_direction(interface, ProtocolType.AXI_STREAM)
+        if direction == Direction.INPUT:
+            interface_type = InterfaceType.INPUT
+        else:
+            interface_type = InterfaceType.OUTPUT
+
+        return AXIStreamMetadata(
+            name=interface.name,
+            ports=interface.ports,
+            direction=direction,
+            interface_type=interface_type
+        )
+
+    def build_axi_lite(self, interface: InterfaceMetadata) -> AXILiteMetadata:
+        """Validate an AXI-Lite interface group."""
+        # Check against required & expected signals
+        metadata = self.scanner.check_signals(interface, ProtocolType.AXI_LITE)
+        
+        # Validate direction alignment
+        direction = self.scanner.check_direction(interface, ProtocolType.AXI_LITE)
+        if direction != Direction.INPUT:
+            raise ValueError(f"AXI-Lite Interface {interface.name}: Invalid direction: {direction}")
+        
+        return AXILiteMetadata(
+            name=interface.name,
+            ports=interface.ports,
+            description=None,
+            has_write=metadata['has_write'],
+            has_read=metadata['has_read']
+        )

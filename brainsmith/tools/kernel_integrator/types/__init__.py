@@ -19,19 +19,15 @@ from .rtl import (
     Port,
     Parameter,
     ParsedModule,
-    ValidationError,
-    ValidationResult,
-    ProtocolValidationResult,
-    PortGroup,
     PragmaType,
 )
 
 # Metadata types
 from .metadata import (
-    Interface,
-    AXIStreamInterface,
-    AXILiteInterface,
-    ControlInterface,
+    InterfaceMetadata,
+    AXIStreamMetadata,
+    AXILiteMetadata,
+    ControlMetadata,
     KernelMetadata
 )
 
@@ -65,9 +61,9 @@ __all__ = [
     "PragmaType",
     # Metadata
     "Interface",
-    "AXIStreamInterface",
-    "AXILiteInterface",
-    "ControlInterface",
+    "AXIStreamMetadata",
+    "AXILiteMetadata",
+    "ControlMetadata",
     "KernelMetadata",
     # Generation
     "GeneratedFile",
