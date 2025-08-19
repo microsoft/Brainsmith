@@ -16,7 +16,7 @@ import logging
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter
+from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, ParameterCategory
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class BDimPragma(InterfacePragma):
                 logger.debug(f"BDIM pragma validating parameter: '{element}'")
                 # This is a parameter name - validate it exists
                 if element not in param_names:
-                    error_msg = (f"BDIM pragma at line {self.line_number} references unknown parameter '{element}'. "
+                    error_msg = (f"BDIM pragma at line {self.inputs.get('line_number', 'unknown')} references unknown parameter '{element}'. "
                                f"Available parameters: {sorted(param_names) if param_names else 'none'}")
                     logger.error(f"BDIM parameter validation failed: {error_msg}")
                     raise PragmaError(error_msg)
@@ -152,7 +152,7 @@ class BDimPragma(InterfacePragma):
         Returns:
             Dict with parsed data including interface name, parameters, and shape
         """
-        logger.debug(f"Parsing BDIM pragma: {self.inputs} at line {self.line_number}")
+        logger.debug(f"Parsing BDIM pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
         pos = self.inputs['positional']
         named = self.inputs['named']
@@ -216,39 +216,54 @@ class BDimPragma(InterfacePragma):
             "bdim_shape": bdim_shape     # Always a list - for TilingSpec
         }
 
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply BDIM pragma to set block dimension parameters and shape."""
-        logger.debug(f"Attempting to apply BDIM pragma to interface '{metadata.name}'")
+
+    
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
+        """Apply BDIM pragma to kernel metadata, moving parameters to interface."""
+        # First validate parameters exist
+        self.validate_with_kernel(kernel)
         
-        # Validate that BDIM pragma is only applied to INPUT, OUTPUT, or WEIGHT interfaces (not CONTROL)
-        if metadata.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-            error_msg = (f"BDIM pragma at line {self.line_number} cannot be applied to "
-                        f"interface '{metadata.name}' of type '{metadata.interface_type.value}'. "
+        interface_name = self.parsed_data.get("interface_name")
+        bdim_params = self.parsed_data.get("bdim_params", [])
+        bdim_shape = self.parsed_data.get("bdim_shape", [])
+        
+        # Find the interface using helper
+        interface = self.find_interface(kernel, interface_name)
+        if not interface:
+            logger.warning(f"BDIM pragma target interface '{interface_name}' not found")
+            return
+        
+        # Validate interface type
+        if hasattr(interface, 'interface_type') and interface.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
+            error_msg = (f"BDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                        f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
                         f"BDIM pragmas are only allowed on INPUT, OUTPUT, or WEIGHT interfaces.")
             logger.error(f"BDIM interface type validation failed: {error_msg}")
             raise PragmaError(error_msg)
         
-        logger.debug(f"BDIM pragma applying to interface '{metadata.name}'")
+        # Move parameters from kernel to interface
+        for param_ref in bdim_params:
+            if param_ref == '1':
+                continue  # Skip singleton dimensions
+                
+            # Find and remove parameter from kernel.parameters
+            param_index = None
+            for i, param in enumerate(kernel.parameters):
+                if param.name == param_ref:
+                    param_index = i
+                    break
+            
+            if param_index is not None:
+                # Move parameter to interface
+                param = kernel.parameters.pop(param_index)
+                interface.bdim_params.append(param)
+                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' bdim_params")
+            else:
+                logger.warning(f"BDIM pragma references parameter '{param_ref}' which is not in kernel.parameters")
         
-        # Get block dimension parameters and shape
-        bdim_params = self.parsed_data.get("bdim_params", [])
-        bdim_shape = self.parsed_data.get("bdim_shape", [])
-        
-        # Update interface metadata in-place
-        metadata.bdim_params = bdim_params      # RTL parameters for CodegenBinding
-        metadata.bdim_shape = bdim_shape        # Shape expressions for TilingSpec
-        
-        logger.debug(f"BDIM pragma successfully applied to interface '{metadata.name}' "
-                    f"with params={bdim_params} and shape={bdim_shape}")
-
-    
-    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
-        """Apply BDIM pragma to kernel metadata with validation."""
-        # First validate parameters exist
-        self.validate_with_kernel(kernel)
-        
-        # Then apply normally
-        super().apply_to_kernel(kernel)
+        # Apply the shape to the interface
+        interface.bdim_shape = bdim_shape
+        logger.debug(f"BDIM pragma successfully applied to interface '{interface_name}' with shape={bdim_shape}")
 
 
 @dataclass
@@ -309,7 +324,7 @@ class SDimPragma(InterfacePragma):
         # Validate each parameter
         for param in sdim_params:
             if param != '1' and param not in param_names:
-                error_msg = (f"SDIM pragma at line {self.line_number} references unknown parameter '{param}'. "
+                error_msg = (f"SDIM pragma at line {self.inputs.get('line_number', 'unknown')} references unknown parameter '{param}'. "
                            f"Available parameters: {sorted(param_names) if param_names else 'none'}")
                 logger.error(f"SDIM parameter validation failed: {error_msg}")
                 raise PragmaError(error_msg)
@@ -381,7 +396,7 @@ class SDimPragma(InterfacePragma):
         Returns:
             Dict with parsed data including interface name, parameters, and shape
         """
-        logger.debug(f"Parsing SDIM pragma: {self.inputs} at line {self.line_number}")
+        logger.debug(f"Parsing SDIM pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
         pos = self.inputs['positional']
         named = self.inputs['named']
@@ -441,35 +456,50 @@ class SDimPragma(InterfacePragma):
             "sdim_shape": sdim_shape     # Always a list - for TilingSpec
         }
 
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply SDIM pragma to set stream dimension parameters and shape."""
-        logger.debug(f"Attempting to apply SDIM pragma to interface '{metadata.name}'")
+    
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
+        """Apply SDIM pragma to kernel metadata, moving parameters to interface."""
+        # First validate parameters exist
+        self.validate_with_kernel(kernel)
         
-        # Validate that SDIM pragma is only applied to INPUT or WEIGHT interfaces
-        if metadata.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
-            error_msg = (f"SDIM pragma at line {self.line_number} cannot be applied to "
-                        f"interface '{metadata.name}' of type '{metadata.interface_type.value}'. "
+        interface_name = self.parsed_data.get("interface_name")
+        sdim_params = self.parsed_data.get("sdim_params", [])
+        sdim_shape = self.parsed_data.get("sdim_shape", [])
+        
+        # Find the interface using helper
+        interface = self.find_interface(kernel, interface_name)
+        if not interface:
+            logger.warning(f"SDIM pragma target interface '{interface_name}' not found")
+            return
+        
+        # Validate interface type - SDIM only applies to INPUT or WEIGHT
+        if hasattr(interface, 'interface_type') and interface.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+            error_msg = (f"SDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                        f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
                         f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
             logger.error(f"SDIM interface type validation failed: {error_msg}")
             raise PragmaError(error_msg)
         
-        logger.debug(f"SDIM pragma applying to interface '{metadata.name}'")
+        # Move parameters from kernel to interface
+        for param_ref in sdim_params:
+            if param_ref == '1':
+                continue  # Skip singleton dimensions
+                
+            # Find and remove parameter from kernel.parameters
+            param_index = None
+            for i, param in enumerate(kernel.parameters):
+                if param.name == param_ref:
+                    param_index = i
+                    break
+            
+            if param_index is not None:
+                # Move parameter to interface
+                param = kernel.parameters.pop(param_index)
+                interface.sdim_params.append(param)
+                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' sdim_params")
+            else:
+                logger.warning(f"SDIM pragma references parameter '{param_ref}' which is not in kernel.parameters")
         
-        # Get stream dimension parameters and shape
-        sdim_params = self.parsed_data.get("sdim_params", [])
-        sdim_shape = self.parsed_data.get("sdim_shape", [])
-        
-        # Update interface metadata in-place
-        metadata.sdim_params = sdim_params      # RTL parameters for CodegenBinding
-        metadata.sdim_shape = sdim_shape        # Shape expressions for TilingSpec
-        
-        logger.debug(f"SDIM pragma successfully applied to interface '{metadata.name}' "
-                    f"with params={sdim_params} and shape={sdim_shape}")
-    
-    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
-        """Apply SDIM pragma to kernel metadata with validation."""
-        # First validate parameters exist
-        self.validate_with_kernel(kernel)
-        
-        # Then apply normally
-        super().apply_to_kernel(kernel)
+        # Apply the shape to the interface
+        interface.sdim_shape = sdim_shape
+        logger.debug(f"SDIM pragma successfully applied to interface '{interface_name}' with shape={sdim_shape}")

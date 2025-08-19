@@ -92,19 +92,20 @@ PortGroup = Dict[str, Port]  # Alias for easier type hints
 
 @dataclass
 class Parameter:
-    """Unified parameter representation for kernel integration.
+    """RTL parameter representation.
     
-    Combines RTL parsing, template generation, and code generation needs.
-    Replaces: Parameter, ParameterDefinition, AttributeBinding, ParameterBinding.
+    Simple parameter object that represents a SystemVerilog parameter.
+    The parameter's role and usage is determined by its location in the
+    data structure, not by fields on the parameter itself.
     
     Attributes:
         name: RTL parameter identifier
         rtl_type: SystemVerilog type (e.g., "integer", "logic", etc.)
         default_value: Default value from RTL (as string)
         line_number: Source location for error reporting
-        source_type: How parameter gets its value (enum)
-        source_detail: Detailed source information (dict)
-        interface_name: Which interface owns this parameter (if applicable)
+        kernel_value: Optional value for special cases:
+                     - For ALIAS parameters: the nodeattr name (e.g., "parallelism_factor")
+                     - For DERIVED parameters: the Python expression (e.g., "self.get_nodeattr('PE') * 2")
     """
     # Identity
     name: str
@@ -112,28 +113,18 @@ class Parameter:
     
     # Values
     default_value: Optional[str] = None  # Raw string value from RTL
+    kernel_value: Optional[str] = None  # For ALIAS names or DERIVED expressions
     
     # Metadata
     line_number: Optional[int] = None
     
-    # Source information
-    source_detail: Dict[str, Any] = field(default_factory=dict)
-    # Examples:
-    # NODEATTR_ALIAS: {"nodeattr_name": "parallelism_factor"}
-    # INTERFACE_DATATYPE: {"interface": "input0", "property": "width"}
-    # DERIVED: {"expression": "self.get_nodeattr('PE') * 2"}
-    # INTERFACE_SHAPE: {"interface": "input0", "dimension": 0, "shape_type": "bdim"}
-    
-    # Relationships
-    interface_name: Optional[str] = None  # Which interface owns this
-    category: Optional[ParameterCategory] = None  # Parameter category
-    
     @property
     def nodeattr_name(self) -> str:
-        """Get the node attribute name for this parameter."""
-        if self.source_type == SourceType.NODEATTR_ALIAS:
-            return self.source_detail.get("nodeattr_name", self.name)
-        return self.name
+        """Get the node attribute name for this parameter.
+        
+        Returns kernel_value if set (ALIAS case), otherwise the parameter name.
+        """
+        return self.kernel_value if self.kernel_value else self.name
     
     @property
     def template_var(self) -> str:

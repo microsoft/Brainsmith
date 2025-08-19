@@ -114,6 +114,7 @@ class KernelMetadata:
     control: ControlMetadata
     # Optional fields with defaults
     parameters: List[Parameter] = field(default_factory=list)
+    linked_parameters: List[Parameter] = field(default_factory=list)  # DERIVED parameters
     inputs: List[AXIStreamMetadata] = field(default_factory=list)
     outputs: List[AXIStreamMetadata] = field(default_factory=list)
     config: List[AXILiteMetadata] = field(default_factory=list)

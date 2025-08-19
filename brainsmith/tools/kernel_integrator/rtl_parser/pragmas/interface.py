@@ -17,7 +17,7 @@ import logging
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class DatatypePragma(InterfacePragma):
         Example: @brainsmith DATATYPE in0 [INT, UINT, FIXED] 1 32
         Example: @brainsmith DATATYPE in0 * 8 32  # Any type from 8-32 bits
         """
-        logger.debug(f"Parsing DATATYPE pragma: {self.inputs} at line {self.line_number}")
+        logger.debug(f"Parsing DATATYPE pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
         pos = self.inputs['positional']
         
@@ -108,14 +108,20 @@ class DatatypePragma(InterfacePragma):
             "max_width": max_bits
         }
 
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply DATATYPE pragma to modify datatype constraints."""
-        logger.debug(f"Attempting to apply DATATYPE pragma to interface '{metadata.name}'")
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
+        """Apply DATATYPE pragma to kernel metadata."""
+        interface_name = self.parsed_data.get("interface_name")
+        
+        # Find the interface using helper
+        interface = self.find_interface(kernel, interface_name)
+        if not interface:
+            logger.warning(f"DATATYPE pragma target interface '{interface_name}' not found")
+            return
         
         # Validate interface type - exclude CONTROL
-        if metadata.interface_type == InterfaceType.CONTROL:
-            error_msg = (f"DATATYPE pragma at line {self.line_number} cannot be applied to "
-                        f"CONTROL interface '{metadata.name}'. DATATYPE pragmas are not "
+        if hasattr(interface, 'interface_type') and interface.interface_type == InterfaceType.CONTROL:
+            error_msg = (f"DATATYPE pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                        f"CONTROL interface '{interface_name}'. DATATYPE pragmas are not "
                         f"applicable to clock/reset signals.")
             logger.error(f"DATATYPE interface type validation failed: {error_msg}")
             raise PragmaError(error_msg)
@@ -131,10 +137,12 @@ class DatatypePragma(InterfacePragma):
             new_constraint_groups.append(constraint_group)
         
         # Combine with existing constraints (pragma adds to constraints, doesn't replace)
-        existing_constraints = metadata.datatype_constraints or []
-        metadata.datatype_constraints = existing_constraints + new_constraint_groups
+        if not hasattr(interface, 'datatype_constraints'):
+            interface.datatype_constraints = []
+        existing_constraints = interface.datatype_constraints or []
+        interface.datatype_constraints = existing_constraints + new_constraint_groups
         
-        logger.debug(f"DATATYPE pragma successfully applied to interface '{metadata.name}' with {len(new_constraint_groups)} constraint groups")
+        logger.debug(f"DATATYPE pragma successfully applied to interface '{interface_name}' with {len(new_constraint_groups)} constraint groups")
 
 
 
@@ -157,20 +165,17 @@ class WeightPragma(InterfacePragma):
 
     def _parse_inputs(self) -> Dict:
         """Handles WEIGHT pragma: @brainsmith WEIGHT <interface_name_0> [<interface_name_1> ...]"""
-        logger.debug(f"Parsing WEIGHT pragma: {self.inputs} at line {self.line_number}")
+        logger.debug(f"Parsing WEIGHT pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
         pos = self.inputs['positional']
         
         if not pos:
-            raise PragmaError(f"WEIGHT pragma at line {self.line_number} requires at least one argument: <interface_name_0> [...]")
+            raise PragmaError(f"WEIGHT pragma at line {self.inputs.get('line_number', 'unknown')} requires at least one argument: <interface_name_0> [...]")
         
         # All inputs are interface names
         interface_names = pos
         return {"interface_names": interface_names}
     
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply WEIGHT pragma to mark interface as weight type."""
-        metadata.interface_type = InterfaceType.WEIGHT  # Override type
 
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
         """Apply WEIGHT pragma to kernel metadata."""
@@ -178,15 +183,15 @@ class WeightPragma(InterfacePragma):
         
         # WeightPragma handles multiple interfaces, so we apply to each one
         for interface_name in interface_names:
-            found = False
-            for interface in kernel.interfaces:
-                if interface.name == interface_name:
-                    self.apply_to_interface(interface)
+            interface = self.find_interface(kernel, interface_name)
+            if interface:
+                # Mark interface as weight type
+                if hasattr(interface, 'is_weight'):
+                    interface.is_weight = True
                     logger.debug(f"Applied WEIGHT pragma to interface '{interface_name}'")
-                    found = True
-                    break
-            
-            if not found:
+                else:
+                    logger.warning(f"Interface '{interface_name}' does not support weight marking")
+            else:
                 logger.warning(f"WEIGHT pragma target interface '{interface_name}' not found")
 
 
@@ -227,105 +232,44 @@ class DatatypeParamPragma(InterfacePragma):
             "parameter_name": parameter_name
         }
     
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """Apply DATATYPE_PARAM pragma to set datatype parameter mapping."""
-        logger.debug(f"Attempting to apply DATATYPE_PARAM pragma to interface '{metadata.name}'")
-        
-        # Validate interface type - exclude CONTROL
-        if metadata.interface_type == InterfaceType.CONTROL:
-            error_msg = (f"DATATYPE_PARAM pragma at line {self.line_number} cannot be applied to "
-                        f"CONTROL interface '{metadata.name}'. Datatype parameters are not "
-                        f"applicable to clock/reset signals.")
-            logger.error(f"DATATYPE_PARAM interface type validation failed: {error_msg}")
-            raise PragmaError(error_msg)
-        
-        property_type = self.parsed_data['property_type']
-        parameter_name = self.parsed_data['parameter_name']
-        
-        # DatatypeMetadata is already imported at module level
-        
-        # Get or create DatatypeMetadata
-        if metadata.datatype_metadata is None:
-            # Create new DatatypeMetadata with interface name
-            # For now, we'll create with just width and update it
-            if property_type == 'width':
-                new_dt = DatatypeMetadata(name=metadata.name, width=parameter_name)
-            else:
-                # Need a width parameter first - use default naming
-                new_dt = DatatypeMetadata(
-                    name=metadata.name, 
-                    width=f"{metadata.name}_WIDTH",
-                    **{property_type: parameter_name}
-                )
-            metadata.datatype_metadata = new_dt
-        else:
-            # Update existing DatatypeMetadata in-place
-            setattr(metadata.datatype_metadata, property_type, parameter_name)
     
     def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
-        """Apply DATATYPE_PARAM pragma to kernel metadata."""
+        """Apply DATATYPE_PARAM pragma to kernel metadata - moves parameter to interface."""
         interface_name = self.parsed_data.get("interface_name")
         property_type = self.parsed_data.get("property_type")
         parameter_name = self.parsed_data.get("parameter_name")
         
-        # Try to find and apply to interface
-        found = False
-        for interface in kernel.interfaces:
-            if interface.name == interface_name:
-                self.apply_to_interface(interface)
-                logger.debug(f"Applied DATATYPE_PARAM pragma to interface '{interface_name}'")
-                found = True
-                # Remove from exposed parameters
-                if parameter_name in kernel.exposed_parameters:
-                    kernel.exposed_parameters.remove(parameter_name)
+        # Find the interface
+        interface = None
+        for iface in kernel.inputs + kernel.outputs + kernel.config:
+            if iface.name == interface_name:
+                interface = iface
                 break
         
-        if found:
+        if not interface:
+            # If interface not found, this might be an internal datatype
+            # For now, just log a warning - internal datatypes handling can be added later if needed
+            logger.warning(f"DATATYPE_PARAM pragma target interface '{interface_name}' not found")
             return
         
-        # If interface not found, this might be an internal datatype
-        # Add to internal datatypes
-        internal_dt = self.create_standalone_datatype()
-        
-        if kernel.internal_datatypes is None:
-            kernel.internal_datatypes = []
-        
-        # Check if we already have this datatype and merge
-        existing_dt = None
-        for dt in kernel.internal_datatypes:
-            if dt.name == interface_name:
-                existing_dt = dt
+        # Find and remove parameter from kernel.parameters
+        param_index = None
+        for i, param in enumerate(kernel.parameters):
+            if param.name == parameter_name:
+                param_index = i
                 break
         
-        if existing_dt:
-            # Update existing datatype
-            setattr(existing_dt, property_type, parameter_name)
+        if param_index is not None:
+            # Move parameter to interface
+            param = kernel.parameters.pop(param_index)
+            
+            # Store the property type in the parameter's source_detail for now
+            # This tells us what property (width/signed/etc) this parameter represents
+            param.kernel_value = property_type  # Store property type in kernel_value
+            
+            interface.dtype_params.append(param)
+            logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' dtype_params (property: {property_type})")
         else:
-            # Add new internal datatype
-            kernel.internal_datatypes.append(internal_dt)
+            logger.warning(f"DATATYPE_PARAM pragma references parameter '{parameter_name}' which is not in kernel.parameters")
         
-        # Remove parameter from exposed list
-        if parameter_name in kernel.exposed_parameters:
-            kernel.exposed_parameters.remove(parameter_name)
-        
-        logger.debug(f"Applied DATATYPE_PARAM pragma to internal datatype '{interface_name}': {property_type}={parameter_name}")
-    
-    def create_standalone_datatype(self) -> 'DatatypeMetadata':
-        """Create a standalone DatatypeMetadata for internal mechanisms."""
-        
-        interface_name = self.parsed_data['interface_name']
-        property_type = self.parsed_data['property_type']
-        parameter_name = self.parsed_data['parameter_name']
-        
-        # Create datatype with only the specified property
-        kwargs = {
-            'name': interface_name,
-            'description': f"Internal datatype binding from pragma at line {self.line_number}"
-        }
-        
-        # Add the specific property
-        if property_type in ['width', 'signed', 'format', 'bias', 'fractional_width', 
-                             'exponent_width', 'mantissa_width']:
-            kwargs[property_type] = parameter_name
-        
-        return DatatypeMetadata(**kwargs)
+        logger.debug(f"DATATYPE_PARAM pragma completed for interface '{interface_name}'")

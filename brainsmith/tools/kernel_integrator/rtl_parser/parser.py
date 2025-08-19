@@ -18,7 +18,6 @@ from tree_sitter import Node, Tree
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, Port
 from .pragmas import Pragma
-from .pragma import PragmaHandler
 from .ast_parser import ASTParser, SyntaxError
 from .kernel_builder import KernelBuilder
 from .module_extractor import ModuleExtractor
@@ -40,7 +39,6 @@ class RTLParser:
     - ASTParser: Handles tree-sitter operations
     - ModuleExtractor: Selects modules and extracts components
     - KernelBuilder: Builds interfaces and assembles KernelMetadata
-    - PragmaHandler: Processes pragmas
     - ParameterLinker: Auto-links parameters to interfaces
 
     Attributes:
@@ -75,7 +73,6 @@ class RTLParser:
         self.ast_parser = ASTParser(debug=self.debug)
         self.module_extractor = ModuleExtractor(self.ast_parser, debug=self.debug)
         self.kernel_builder = KernelBuilder(self.ast_parser, debug=self.debug)
-        self.pragma_handler = PragmaHandler(debug=self.debug)
 
 
 

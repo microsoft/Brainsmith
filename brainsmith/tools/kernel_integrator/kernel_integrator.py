@@ -97,14 +97,14 @@ class KernelIntegrator:
     def _load_direct_generators(self) -> Dict[str, 'GeneratorBase']:
         """Load direct generators (V2) that bypass TemplateContext."""
         from .generators.hw_custom_op_v2 import HWCustomOpGeneratorV2
-        from .generators.rtl_backend_v2 import RTLBackendGeneratorV2
+        from .generators.rtl_backend_generator import RTLBackendGenerator
         from .generators.rtl_wrapper_v2 import RTLWrapperGeneratorV2
         
         generators = {}
         
         # Instantiate generators with template directory
         hw_gen = HWCustomOpGeneratorV2(self.template_dir)
-        rtl_gen = RTLBackendGeneratorV2(self.template_dir)
+        rtl_gen = RTLBackendGenerator(self.template_dir)
         wrapper_gen = RTLWrapperGeneratorV2(self.template_dir)
         
         # Register by name
