@@ -17,8 +17,9 @@ import logging
 from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
 
-from brainsmith.tools.kernel_integrator.types.metadata import DatatypeMetadata, KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import Parameter, ParameterCategory, SourceType
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
+# DatatypeMetadata has been removed in refactoring
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter, ParameterCategory
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,12 @@ PROPERTY_SUFFIXES = [
 STANDALONE_MAPPINGS = {}
 
 
+# Temporarily disabled - DatatypeMetadata has been removed
 class ParameterLinker:
+    pass
+
+# Rest of file commented out
+"""
     """Links RTL parameters to datatype properties using naive prefix grouping."""
     
     def __init__(self, enable_interface_linking: bool = True, 
@@ -55,7 +61,7 @@ class ParameterLinker:
         self.enable_internal_linking = enable_internal_linking
     
     def link_interface_parameters(self, interface_name: str, 
-                                parameters: List[Parameter]) -> Optional[DatatypeMetadata]:
+                                parameters: List[Parameter]) -> Optional[Dict]:
         """
         Link parameters to an interface based on naming patterns.
         
@@ -110,7 +116,7 @@ class ParameterLinker:
         This implementation:
         1. Extracts the prefix from parameters ending with recognized suffixes
         2. Groups parameters by common prefix
-        3. Each prefix becomes a datatype name (e.g., THRESH_* → "THRESH", T_WIDTH → "T")
+        3. Each prefix becomes a datatype name (e.g., THRESH_* -> "THRESH", T_WIDTH -> "T")
         
         Args:
             parameters: List of all module parameters

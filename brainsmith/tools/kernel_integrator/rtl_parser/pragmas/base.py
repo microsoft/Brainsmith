@@ -11,7 +11,7 @@ pragma types in the RTL parser.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
 
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
@@ -69,49 +69,37 @@ class Pragma:
 
 @dataclass
 class InterfacePragma(Pragma):
-    """Base class for pragmas that modify interface metadata.
+    """Base class providing utilities for interface-related pragmas.
     
-    This class provides common functionality for pragmas that target specific
-    interfaces, including interface name matching and base application logic.
+    This class provides helper methods for pragmas that work with interfaces,
+    but does not enforce any particular pattern. Subclasses implement
+    apply_to_kernel directly and can use the provided utilities as needed.
     """
     
-    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
-        """
-        Apply interface pragma to kernel metadata.
-        
-        Default implementation finds interface by name and applies pragma.
-        Subclasses can override for more complex behavior (e.g., WeightPragma
-        for multiple interfaces, DatatypeParamPragma for internal datatypes).
+    def find_interface(self, kernel: KernelMetadata, interface_name: str) -> Optional[InterfaceMetadata]:
+        """Find an interface by name across all interface types in the kernel.
         
         Args:
-            kernel: KernelMetadata object containing interfaces to modify
-        """
-        interface_name = self.parsed_data.get("interface_name")
-        if not interface_name:
-            return
+            kernel: KernelMetadata to search
+            interface_name: Name of the interface to find
             
-        # Find and apply to interface
-        for interface in kernel.interfaces:
+        Returns:
+            The interface if found, None otherwise
+        """
+        # Check stream interfaces (inputs/outputs)
+        for interface in kernel.inputs + kernel.outputs:
             if interface.name == interface_name:
-                self.apply_to_interface(interface)
-                logger.debug(f"Applied {self.type.value} pragma to interface '{interface_name}'")
-                return
-                
-        logger.warning(f"{self.type.value} pragma target interface '{interface_name}' not found")
-
-    def apply_to_interface(self, metadata: InterfaceMetadata) -> None:
-        """
-        Apply pragma effects to InterfaceMetadata in-place.
+                return interface
         
-        Subclasses must override this method to implement their specific effects.
+        # Check config interfaces
+        for interface in kernel.config:
+            if interface.name == interface_name:
+                return interface
         
-        This method enables a clean chain-of-responsibility pattern where each
-        pragma can modify the interface metadata independently and composably.
-        
-        Args:
-            metadata: InterfaceMetadata object to modify in-place
-        """
-        # Subclasses must override this method
-        raise NotImplementedError(f"{self.__class__.__name__} must implement apply_to_interface()")
+        # Check control interface
+        if kernel.control and kernel.control.name == interface_name:
+            return kernel.control
+            
+        return None
 
 
