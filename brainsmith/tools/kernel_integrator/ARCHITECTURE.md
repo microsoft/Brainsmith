@@ -81,7 +81,7 @@ flowchart TB
     
     subgraph "Kernel Integrator Types"
         subgraph "Core Types"
-            PortDirection[PortDirection]
+            Direction[Direction]
             DatatypeSpec[DatatypeSpec]
             DimensionSpec[DimensionSpec]
         end
@@ -145,7 +145,7 @@ flowchart TB
 ### Type Modules
 
 **Core Types** (`types/core.py`):
-- `PortDirection`: Enum for port directions (INPUT, OUTPUT, INOUT)
+- `Direction`: Enum for port directions (INPUT, OUTPUT, INOUT)
 - `DatatypeSpec`: Datatype specifications with width, signedness, and constraints
 - `DimensionSpec`: Dimension specifications supporting both concrete and symbolic shapes
 

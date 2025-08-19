@@ -5,66 +5,68 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Validates interface protocol requirements for identified PortGroups.
+"""Scans and validates interface protocol requirements for ports.
 
-Checks if groups of ports identified by the InterfaceScanner adhere to the
-rules defined for specific protocols (Global, AXI-Stream, AXI-Lite), such as
-presence of required signals and correct port directions. Protocol definitions
-(signal names, requirements) are defined as constants in this module.
+Provides functionality to:
+1. Scan ports and group them by interface patterns (scanning)
+2. Validate if groups adhere to protocol rules (validation)
+
+Protocol definitions (signal names, requirements) are defined as constants in this module.
 """
 
+import re
 import logging
-from typing import Dict, Set, List, Tuple
+from typing import Dict, Set, List, Tuple, Optional
 
-from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
-from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup, ProtocolValidationResult
+from brainsmith.core.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
 GLOBAL_SIGNAL_SUFFIXES = {
-    "clk": {"direction": PortDirection.INPUT, "required": True},
-    "rst_n": {"direction": PortDirection.INPUT, "required": True},
-    "clk2x": {"direction": PortDirection.INPUT, "required": False},
+    "clk": {"direction": Direction.INPUT, "required": True},
+    "rst_n": {"direction": Direction.INPUT, "required": True},
+    "clk2x": {"direction": Direction.INPUT, "required": False},
 }
 
-# Suffixes for AXI-Stream signals (direction defaults to slave, but both supported) 
+# Suffixes for AXI-Stream signals (direction is slave, opposite for master) 
 AXI_STREAM_SUFFIXES = {
-    "TDATA": {"direction": PortDirection.INPUT, "required": True},
-    "TVALID": {"direction": PortDirection.INPUT, "required": True},
-    "TREADY": {"direction": PortDirection.OUTPUT, "required": True},
-    "TLAST": {"direction": PortDirection.INPUT, "required": False}, # Optional
+    "TDATA": {"direction": Direction.INPUT, "required": True},
+    "TVALID": {"direction": Direction.INPUT, "required": True},
+    "TREADY": {"direction": Direction.OUTPUT, "required": True},
+    "TLAST": {"direction": Direction.INPUT, "required": False}, # Optional
 }
 
 # Suffixes for AXI-Lite signals
 AXI_LITE_SUFFIXES = {
     # Write Address Channel
-    "AWADDR": {"direction": PortDirection.INPUT, "required": True},
-    "AWPROT": {"direction": PortDirection.INPUT, "required": False}, # Optional
-    "AWVALID": {"direction": PortDirection.INPUT, "required": True},
-    "AWREADY": {"direction": PortDirection.OUTPUT, "required": True},
+    "AWADDR": {"direction": Direction.INPUT, "required": True},
+    "AWPROT": {"direction": Direction.INPUT, "required": False}, # Optional
+    "AWVALID": {"direction": Direction.INPUT, "required": True},
+    "AWREADY": {"direction": Direction.OUTPUT, "required": True},
     # Write Data Channel
-    "WDATA": {"direction": PortDirection.INPUT, "required": True},
-    "WSTRB": {"direction": PortDirection.INPUT, "required": True},
-    "WVALID": {"direction": PortDirection.INPUT, "required": True},
-    "WREADY": {"direction": PortDirection.OUTPUT, "required": True},
+    "WDATA": {"direction": Direction.INPUT, "required": True},
+    "WSTRB": {"direction": Direction.INPUT, "required": True},
+    "WVALID": {"direction": Direction.INPUT, "required": True},
+    "WREADY": {"direction": Direction.OUTPUT, "required": True},
     # Write Response Channel
-    "BRESP": {"direction": PortDirection.OUTPUT, "required": True},
-    "BVALID": {"direction": PortDirection.OUTPUT, "required": True},
-    "BREADY": {"direction": PortDirection.INPUT, "required": True},
+    "BRESP": {"direction": Direction.OUTPUT, "required": True},
+    "BVALID": {"direction": Direction.OUTPUT, "required": True},
+    "BREADY": {"direction": Direction.INPUT, "required": True},
     # Read Address Channel
-    "ARADDR": {"direction": PortDirection.INPUT, "required": True},
-    "ARPROT": {"direction": PortDirection.INPUT, "required": False}, # Optional
-    "ARVALID": {"direction": PortDirection.INPUT, "required": True},
-    "ARREADY": {"direction": PortDirection.OUTPUT, "required": True},
+    "ARADDR": {"direction": Direction.INPUT, "required": True},
+    "ARPROT": {"direction": Direction.INPUT, "required": False}, # Optional
+    "ARVALID": {"direction": Direction.INPUT, "required": True},
+    "ARREADY": {"direction": Direction.OUTPUT, "required": True},
     # Read Data Channel
-    "RDATA": {"direction": PortDirection.OUTPUT, "required": True},
-    "RRESP": {"direction": PortDirection.OUTPUT, "required": True},
-    "RVALID": {"direction": PortDirection.OUTPUT, "required": True},
-    "RREADY": {"direction": PortDirection.INPUT, "required": True},
+    "RDATA": {"direction": Direction.OUTPUT, "required": True},
+    "RRESP": {"direction": Direction.OUTPUT, "required": True},
+    "RVALID": {"direction": Direction.OUTPUT, "required": True},
+    "RREADY": {"direction": Direction.INPUT, "required": True},
 }
 
-# Helper sets for channel identification (using UPPERCASE keys now)
+# Helper sets for channel identification
 AXI_LITE_WRITE_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AW') or k.startswith('W') or k.startswith('B')}
 AXI_LITE_READ_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AR') or k.startswith('R')}
 
@@ -72,206 +74,169 @@ AXI_LITE_READ_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.starts
 logger = logging.getLogger(__name__)
 
 
-class ProtocolValidator:
-    """Validates PortGroups against defined interface protocol rules."""
+class ProtocolScanner:
+    """Scans ports for interface patterns and validates against protocol rules."""
 
     def __init__(self, debug: bool = False):
-        """Initializes the ProtocolValidator."""
+        """Initializes the ProtocolScanner."""
         self.debug = debug
-        self.input_count = 0
-        self.output_count = 0
-
-    def validate(self, group: PortGroup) -> ProtocolValidationResult:
-        """Dispatches validation to the appropriate method based on group type."""
-        itype = group.interface_type
-        logger.debug(f"Validating {itype} group '{group.name}'. Received ports: {list(group.ports.keys())}")
+        self.suffixes = {
+            ProtocolType.CONTROL: GLOBAL_SIGNAL_SUFFIXES,
+            ProtocolType.AXI_STREAM: AXI_STREAM_SUFFIXES,
+            ProtocolType.AXI_LITE: AXI_LITE_SUFFIXES
+        }
         
-        # Dispatch based on protocol (using interface type properties)
-        if itype == InterfaceType.CONTROL:
-            return self.validate_global_control(group)
-        elif itype in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-            return self.validate_axi_stream(group)
-        elif itype == InterfaceType.CONFIG:
-            return self.validate_axi_lite(group)
-        else:
-            return ProtocolValidationResult(False, f"Unknown interface type '{itype}' for group '{group.name}'.")
+        # Create regex maps for each interface type
+        self.regex_maps = {
+            ProtocolType.CONTROL: self._generate_interface_regex(GLOBAL_SIGNAL_SUFFIXES),
+            ProtocolType.AXI_STREAM: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
+            ProtocolType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES)
+        }
 
-    def _check_required_signals(self, group_ports: Dict[str, Port], required_spec: Dict[str, Dict]) -> Tuple[Set[str], Set[str]]:
-        """Checks if all required signals (keys) are present in the group's ports, and filters for any unexpected signals.
-        
-        Returns:
-            Tuple of (missing_signals, unexpected_signals)
-        """
-        present_keys = {key.upper() for key in group_ports.keys()}
-        required_keys = {key.upper() for key, spec in required_spec.items() if spec["required"] is True}
-        optional_keys = {key.upper() for key, spec in required_spec.items() if spec["required"] is False}
+    def check_signals(self, interface: InterfaceMetadata, protocol: ProtocolType):
+        metadata = {}
+        protocol_suffixes = self.suffixes[protocol]
+        present_keys = {key.upper() for key in interface.ports.keys()}
+        required_keys = {key.upper() for key, spec in protocol_suffixes.items() if spec["required"] is True}
+        optional_keys = {key.upper() for key, spec in protocol_suffixes.items() if spec["required"] is False}
         missing = required_keys - present_keys
         unexpected = present_keys - required_keys - optional_keys
-        return missing, unexpected
 
-    def validate_global_control(self, group: PortGroup) -> ProtocolValidationResult:
-        if group.interface_type != InterfaceType.CONTROL:
-            return ProtocolValidationResult(False, "Invalid group type for Global Control validation.")
-        
-        # Set final interface type to CONTROL (global control signals)
-        group.interface_type = InterfaceType.CONTROL
-        
-        # Check against required & expected signals
-        missing, unexpected = self._check_required_signals(group.ports, GLOBAL_SIGNAL_SUFFIXES)
-        if missing:
-            return ProtocolValidationResult(False, f"Global Control: Missing required signal(s) in '{group.name}': {missing}")
-        if unexpected:
-            return ProtocolValidationResult(False, f"Global Control: Unexpected signal in '{group.name}': {unexpected}")
-
-        # Determine direction
-        incorrect_ports = [
-            f"{port_name} (expected: {GLOBAL_SIGNAL_SUFFIXES[port_name]['direction']}, got: {port.direction})"
-            for port_name, port in group.ports.items()
-            if port_name in GLOBAL_SIGNAL_SUFFIXES and port.direction != GLOBAL_SIGNAL_SUFFIXES[port_name]["direction"]
-        ]
-        
-        direction = len(incorrect_ports) == 0
-        if not direction:
-            return ProtocolValidationResult(False, f"Global Control: Incorrect direction in '{group.name}': {incorrect_ports}")
-
-        logger.debug(f"  Validation successful for Global Control group '{group.name}'")
-        return ProtocolValidationResult(True)
-
-    def validate_axi_stream(self, group: PortGroup) -> ProtocolValidationResult:
-        # Accept any preliminary AXI-Stream type (INPUT, OUTPUT, WEIGHT)
-        if group.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-            return ProtocolValidationResult(False, "Invalid group type for AXI-Stream validation.")
-
-        # Check against required & expected signals
-        missing, unexpected = self._check_required_signals(group.ports, AXI_STREAM_SUFFIXES)
-        if missing:
-            return ProtocolValidationResult(False, f"AXI-Stream: Missing required signal(s) in '{group.name}': {missing}")
-        if unexpected:
-            return ProtocolValidationResult(False, f"AXI-Stream: Unexpected signal in '{group.name}': {unexpected}")
-
-        # Determine direction consistency
-        incorrect_ports = []
-        direction_matches = []
-        
-        for port_name, port in group.ports.items():
-            if port_name in AXI_STREAM_SUFFIXES:
-                expected_dir = AXI_STREAM_SUFFIXES[port_name]["direction"]
-                if port.direction != expected_dir:
-                    incorrect_ports.append(f"{port_name} (expected: {expected_dir}, got: {port.direction})")
-                direction_matches.append(port.direction == expected_dir)
-        
-        # Check if all directions match (forward) or all are inverted (backward)
-        all_forward = all(direction_matches)
-        all_backward = not any(direction_matches)
-        
-        if not (all_forward or all_backward):
-            return ProtocolValidationResult(False, f"AXI-Stream: Invalid signal directions in '{group.name}': {incorrect_ports}")
-        
-        # Set interface direction metadata
-        direction = "input" if all_forward else "output"
-        group.metadata['direction'] = direction
-
-        # Extract data width metadata
-        tdata_port = group.ports.get("TDATA")
-        if tdata_port:
-            group.metadata['data_width_expr'] = tdata_port.width
-        
-        # Determine specific dataflow interface type based on direction and naming
-        group.interface_type = self._determine_dataflow_type(group.name, direction)
-
-        logger.debug(f"  Validation successful for AXI-Stream group '{group.name}' → {group.interface_type}")
-        return ProtocolValidationResult(True)
-
-    def validate_axi_lite(self, group: PortGroup) -> ProtocolValidationResult:
-        if group.interface_type != InterfaceType.CONFIG:
-            return ProtocolValidationResult(False, "Invalid group type for AXI-Lite validation.")
-        
-        # Set final interface type to CONFIG (AXI-Lite always for configuration)
-        group.interface_type = InterfaceType.CONFIG
-        
-        # Check against required & expected signals
-        missing, unexpected = self._check_required_signals(group.ports, AXI_LITE_SUFFIXES)
-        has_write_channel = any(AXI_LITE_WRITE_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_WRITE_SUFFIXES)
-        has_read_channel = any(AXI_LITE_READ_SUFFIXES[sig]['required'] and sig not in missing for sig in AXI_LITE_READ_SUFFIXES)
-        if has_write_channel and any(sig in AXI_LITE_WRITE_SUFFIXES for sig in missing):
-            return ProtocolValidationResult(False, f"AXI-Lite: Partial write, missing required signal(s) in '{group.name}': {missing}")
-        if has_read_channel and any(sig in AXI_LITE_READ_SUFFIXES for sig in missing):
-            return ProtocolValidationResult(False, f"AXI-Lite: Partial read, missing required signal(s) in '{group.name}': {missing}")
-        if not has_write_channel and not has_read_channel:
-            return ProtocolValidationResult(False, f"AXI-Lite: Not enough valid signals in '{group.name}' for read or write.")
-        if unexpected:
-            return ProtocolValidationResult(False, f"AXI-Lite: Unexpected signal in '{group.name}': {unexpected}")
-
-        # Determine direction
-        incorrect_ports = [
-            f"{port_name} (expected: {AXI_LITE_SUFFIXES[port_name]['direction']}, got: {port.direction})"
-            for port_name, port in group.ports.items()
-            if port_name in AXI_LITE_SUFFIXES and port.direction != AXI_LITE_SUFFIXES[port_name]["direction"]
-        ]
-        
-        directions_valid = len(incorrect_ports) == 0
-        if not directions_valid:
-            return ProtocolValidationResult(False, f"AXI-Lite: Incorrect direction in '{group.name}': {incorrect_ports}")
-
-        # TODO: Add checks for response signal widths
-
-        # Extract metadata
-        if has_write_channel:
-            # Validate static channel sizes
-            awaddr_port = group.ports.get("AWADDR")
-            wdata_port = group.ports.get("WDATA")
-            wstrb_port = group.ports.get("WSTRB")
-            group.metadata['write_width_expr'] = {
-                "addr": awaddr_port.width,
-                "data": wdata_port.width,
-                "strobe": wstrb_port.width,
-            }
-            # TODO: Add robust WSTRB width support, allowing it to be better defined by a local param or standard
-        if has_read_channel:
-            # Validate static channel sizes
-            araddr_port = group.ports.get("ARADDR")
-            rdata_port = group.ports.get("RDATA")
-            group.metadata['read_width_expr'] = {
-                "addr": araddr_port.width,
-                "data": rdata_port.width
-            }
-
-        logger.debug(f"  Validation successful for AXI-Lite group '{group.name}'")
-        return ProtocolValidationResult(True)
-
-    def _determine_dataflow_type(self, interface_name: str, direction: str) -> InterfaceType:
-        """Determine dataflow interface type from name patterns and direction."""
-        name_lower = interface_name.lower()
-        
-        # Weight interface patterns
-        if any(pattern in name_lower for pattern in ['weight', 'weights', 'param', 'coeff']):
-            return InterfaceType.WEIGHT
-        
-        # Input/output based on direction
-        if direction == "input":
-            return InterfaceType.INPUT
-        elif direction == "output":
-            return InterfaceType.OUTPUT
+        # Special handling for AXI-Lite: support read-only, write-only, etc.
+        if protocol == ProtocolType.AXI_LITE:   
+            # Check for required signals in write/read channels
+            write_missing = {sig for sig in missing if sig in AXI_LITE_WRITE_SUFFIXES}
+            read_missing = {sig for sig in missing if sig in AXI_LITE_READ_SUFFIXES}
+            has_write_channel = any(sig in interface.ports and AXI_LITE_WRITE_SUFFIXES[sig]['required'] for sig in AXI_LITE_WRITE_SUFFIXES)
+            has_read_channel = any(sig in interface.ports and AXI_LITE_READ_SUFFIXES[sig]['required'] for sig in AXI_LITE_READ_SUFFIXES)
+            if has_write_channel and write_missing:
+                raise ValueError(f"AXI-Lite {interface.name}: Partial write interface, missing required signal(s): {write_missing}")
+            if has_read_channel and read_missing:
+                raise ValueError(f"AXI-Lite {interface.name}: Partial read interface, missing required signal(s): {read_missing}")
+            if not has_write_channel and not has_read_channel:
+                raise ValueError(f"AXI-Lite {interface.name}: Not enough valid signals for read or write, missing: {missing}")
+            if unexpected:
+                raise ValueError(f"AXI-Lite {interface.name}: Unexpected signal(s): {unexpected}")
+            metadata['has_write'] = has_write_channel
+            metadata['has_read'] = has_read_channel
         else:
-            return InterfaceType.INPUT  # Default to input for unknown directions
+            if missing:
+                raise ValueError(f"{protocol.name} {interface.name}: Missing required signal(s): {missing}")
+            if unexpected:
+                raise ValueError(f"{protocol.name} {interface.name}: Unexpected signal(s): {unexpected}")
 
-    def _assign_wrapper_names(self, interfaces: List[PortGroup]) -> None:
-        """Assign wrapper names to interfaces based on their type."""
-        input_count, output_count = 0, 0
+        return metadata
 
-        for group in interfaces:
-            if group.interface_type == InterfaceType.CONTROL:
-                for signal in group.ports:
-                    group.metadata["wrapper_name"] = signal
-            elif group.interface_type in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-                if group.interface_type == InterfaceType.INPUT:
-                    group.metadata["wrapper_name"] = f"in{input_count}"
-                    input_count += 1
-                elif group.interface_type == InterfaceType.OUTPUT:
-                    group.metadata["wrapper_name"] = f"out{output_count}"
-                    output_count += 1
-                elif group.interface_type == InterfaceType.WEIGHT:
-                    group.metadata["wrapper_name"] = f"weight{input_count}"  # Weights count as inputs
-                    input_count += 1
-            elif group.interface_type == InterfaceType.CONFIG:
-                group.metadata["wrapper_name"] = "config"
+    def check_direction(self, group: PortGroup, protocol: ProtocolType) -> int:
+        alignment = {}
+        protocol_suffixes = self.suffixes[protocol]
+        for port_name, port in group.items():
+            expected_direction = protocol_suffixes.get(port_name.upper(), {}).get("direction")
+            alignment[port_name] = port.direction == expected_direction
+        if all(alignment.values()):
+            # All ports are aligned
+            return Direction.INPUT
+        elif not any(alignment.values()):
+            # All ports are aligned but inverted
+            return Direction.OUTPUT
+        else:
+            # Mixed alignment
+            raise ValueError(f"{protocol.name}: Mixed directionality")
+        
+    @staticmethod
+    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
+        """
+        Generates regex patterns for matching interface signals and maps them to canonical suffixes.
+
+        This creates a mapping from regex pattern to canonical suffix, allowing direct retrieval
+        of the correct case when a match is found.
+
+        Args:
+            suffixes (Dict[str, Dict]): Dictionary of signal suffixes and their properties.
+
+        Returns:
+            Dict[str, re.Pattern]: A dictionary mapping canonical suffix to a compiled regex pattern.
+                                  The regex matches both case-insensitive suffixes and other variations.
+        """
+        regex_map = {}
+        for canonical_suffix in suffixes.keys():
+            # Create a case-insensitive pattern for this specific suffix
+            pattern = re.compile(
+                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", 
+                re.IGNORECASE
+            )
+            regex_map[canonical_suffix] = pattern
+        return regex_map
+    
+    def scan(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, PortGroup]], List[Port]]:
+        """
+        Scans ports and groups them by interface patterns.
+
+        Args:
+            ports: List of Port objects extracted from RTL.
+
+        Returns:
+            Tuple containing:
+            - Dictionary mapping ProtocolType to grouped ports by prefix and canonical suffix.
+            - List of unassigned ports that did not match any known interface type regex (will raise if any).
+        """
+
+        # Group ports by protocol type and prefix
+        interfaces_by_protocol, unassigned_ports = self.group_ports(ports)
+        if unassigned_ports:
+            unassigned_list = ", ".join(p.name for p in unassigned_ports)
+            raise ValueError(f"Unassigned ports detected: {unassigned_list}")
+
+        for protocol_type, interfaces in interfaces_by_protocol.items():
+            logger.debug("Port groups for %s: %s", protocol_type, interfaces)
+
+        return interfaces_by_protocol, unassigned_ports
+
+    def group_ports(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, InterfaceMetadata]], List[Port]]:
+        """
+        Group ports by protocol and prefix using regex-matched suffixes.
+
+        Returns a mapping of protocol type to candidate interfaces keyed by prefix,
+        and a list of ports that matched no known protocol.
+        """
+        # Buckets for each protocol type
+        interfaces = {protocol: {} for protocol in self.suffixes}
+        unassigned_ports = []
+
+        for port in ports:
+            port_assigned = False  # Flag to track if the port has been assigned
+            # Check port name against each interface type regex map
+            for protocol_type, regex_map in self.regex_maps.items():
+                # Try each protocol suffix regex until a match is found
+                for protocol_suffix, regex in regex_map.items():
+                    match = regex.match(port.name)
+                    if match:
+                        prefix = match.group("prefix")
+                        logger.debug("Matched '%s' with prefix '%s' and protocol suffix '%s'", port.name, prefix, protocol_suffix)
+                        if not prefix:
+                            prefix = "<NO_PREFIX>"
+                            logger.debug("Port '%s' has no prefix, using '<NO_PREFIX>'", port.name)
+
+                        # Group ports into potential interfaces by signal prefix
+                        if prefix in interfaces[protocol_type].keys():
+                            interfaces[protocol_type][prefix][protocol_suffix] = port
+                            logger.debug("Assigned '%s' to potential %s group '%s'", port.name, protocol_type, prefix)
+                        else:
+                            interfaces[protocol_type][prefix] = InterfaceMetadata(
+                                name=prefix,
+                                interface_type=InterfaceType.UNKNOWN,
+                                ports=[port]
+                            )
+                            logger.debug("Found potential %s group %s with signal '%s'", protocol_type, prefix, port.name)
+                        port_assigned = True  # Mark port as assigned
+                        break  # Skip checking other suffixes for this interface type
+                
+                if port_assigned:
+                    break  # Skip checking other interface types if port is already assigned
+            
+            # If the port was not assigned to any interface type, add to unassigned
+            if not port_assigned:
+                unassigned_ports.append(port)
+                logger.debug("Port '%s' did not match any known interface type regex and is unassigned", port.name)
+
+        return interfaces, unassigned_ports 
