@@ -87,27 +87,48 @@ class KernelBuilder:
         # Initialize parsing warnings
         parsing_warnings: List[str] = []
         
-        # Initialize exposed parameters - all parameters are initially exposed
-        exposed_parameters = [p.name for p in parameters]
-        logger.debug(f"Initialized {len(exposed_parameters)} exposed parameters: {exposed_parameters}")
+        # Build interfaces organized by protocol type
+        interfaces_by_protocol = self.interface_builder.build_from_ports(ports)
         
-        # Build initial InterfaceMetadata objects
-        base_metadata_list, unassigned_ports = self.interface_builder.build_interface_metadata(
-            ports
-        )
-        logger.info(f"Built {len(base_metadata_list)} base interfaces from AST")
+        # Organize interfaces by their specific types
+        control_interface = None
+        input_interfaces = []
+        output_interfaces = []
+        config_interfaces = []
         
-        # Build KernelMetadata with initial data
+        # Process each protocol type
+        from brainsmith.core.dataflow.types import ProtocolType, InterfaceType
+        
+        # Extract control interface (should be exactly one)
+        if ProtocolType.CONTROL in interfaces_by_protocol:
+            control_interfaces = interfaces_by_protocol[ProtocolType.CONTROL]
+            if len(control_interfaces) != 1:
+                raise ValueError(f"Expected exactly one control interface, found {len(control_interfaces)}")
+            control_interface = control_interfaces[0]
+        else:
+            raise ValueError("No control interface found")
+            
+        # Extract AXI-Stream interfaces and separate by direction
+        if ProtocolType.AXI_STREAM in interfaces_by_protocol:
+            for interface in interfaces_by_protocol[ProtocolType.AXI_STREAM]:
+                if interface.interface_type == InterfaceType.INPUT:
+                    input_interfaces.append(interface)
+                elif interface.interface_type == InterfaceType.OUTPUT:
+                    output_interfaces.append(interface)
+                    
+        # Extract AXI-Lite config interfaces
+        if ProtocolType.AXI_LITE in interfaces_by_protocol:
+            config_interfaces = interfaces_by_protocol[ProtocolType.AXI_LITE]
+        
+        # Build KernelMetadata with properly organized interfaces
         kernel_metadata = KernelMetadata(
             name=module_name,
-            source_file=Path(source_name),
-            interfaces=base_metadata_list,
-            parameters=parameters,
-            exposed_parameters=exposed_parameters,
-            pragmas=pragmas,
-            parsing_warnings=parsing_warnings,
-            linked_parameters={"aliases": {}, "derived": {}, "axilite": {}},
-            internal_datatypes=[]
+            source_file=str(source_name),
+            control=control_interface,
+            inputs=input_interfaces,
+            outputs=output_interfaces,
+            config=config_interfaces,
+            parameters=parameters
         )
         
         return kernel_metadata

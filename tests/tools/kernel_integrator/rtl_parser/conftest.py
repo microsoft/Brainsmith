@@ -21,7 +21,7 @@ import shutil
 from brainsmith.tools.kernel_integrator.rtl_parser import RTLParser, parse_rtl_file
 from brainsmith.tools.kernel_integrator.rtl_parser.ast_parser import ASTParser
 from brainsmith.tools.kernel_integrator.rtl_parser.module_extractor import ModuleExtractor
-from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolValidator
+from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolScanner
 from brainsmith.tools.kernel_integrator.rtl_parser.interface_builder import InterfaceBuilder
 from brainsmith.tools.kernel_integrator.rtl_parser.pragma import PragmaHandler
 from brainsmith.tools.kernel_integrator.rtl_parser.parameter_linker import ParameterLinker
@@ -72,9 +72,9 @@ def module_extractor(ast_parser) -> ModuleExtractor:
 
 
 @pytest.fixture
-def protocol_validator() -> ProtocolValidator:
-    """Create a protocol validator instance."""
-    return ProtocolValidator()
+def protocol_validator() -> ProtocolScanner:
+    """Create a protocol scanner instance."""
+    return ProtocolScanner()
 
 
 @pytest.fixture

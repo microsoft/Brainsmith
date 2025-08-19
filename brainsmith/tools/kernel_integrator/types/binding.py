@@ -11,25 +11,6 @@ from enum import Enum
 
 from brainsmith.core.dataflow.types import InterfaceType
 
-
-class ParameterSource(Enum):
-    """Source of a parameter value."""
-    INTERFACE = "interface"      # From interface metadata
-    GLOBAL = "global"           # From global parameters
-    DERIVED = "derived"         # Computed from other parameters
-    DEFAULT = "default"         # Default value
-    USER = "user"              # User-provided
-
-
-class ParameterCategory(Enum):
-    """Category of parameter for organization."""
-    SHAPE = "shape"            # BDIM/SDIM parameters
-    DATATYPE = "datatype"      # Datatype-related parameters
-    ALGORITHM = "algorithm"    # Algorithm-specific parameters
-    PERFORMANCE = "performance" # Performance tuning parameters
-    OTHER = "other"           # Uncategorized
-
-
 @dataclass
 class IOSpec:
     """Specification for operator I/O.
@@ -67,8 +48,6 @@ class AttributeBinding:
     default_value: Optional[str] = None
     
     # Metadata
-    category: ParameterCategory = ParameterCategory.OTHER
-    source: ParameterSource = ParameterSource.GLOBAL
     description: Optional[str] = None
     
     # Validation
@@ -145,22 +124,6 @@ class CodegenBinding:
             if attr.param_name == param_name:
                 return attr
         return None
-    
-    def get_attributes_by_category(self, category: ParameterCategory) -> List[AttributeBinding]:
-        """Get all attributes of a specific category."""
-        return [a for a in self.attributes if a.category == category]
-    
-    def get_required_attributes(self) -> List[AttributeBinding]:
-        """Get attributes without default values."""
-        return [a for a in self.attributes if a.default_value is None]
-    
-    def get_shape_attributes(self) -> List[AttributeBinding]:
-        """Get shape-related attributes."""
-        return self.get_attributes_by_category(ParameterCategory.SHAPE)
-    
-    def get_datatype_attributes(self) -> List[AttributeBinding]:
-        """Get datatype-related attributes."""
-        return self.get_attributes_by_category(ParameterCategory.DATATYPE)
     
     def validate(self) -> bool:
         """Validate binding completeness.

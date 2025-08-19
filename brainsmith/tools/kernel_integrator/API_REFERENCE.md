@@ -14,14 +14,14 @@ This document provides a comprehensive reference for all public types and functi
 
 ## Core Types
 
-### PortDirection
+### Direction
 
 Enumeration for RTL port directions.
 
 ```python
-from brainsmith.tools.kernel_integrator.types.core import PortDirection
+from brainsmith.tools.kernel_integrator.types.core import Direction
 
-class PortDirection(Enum):
+class Direction(Enum):
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
@@ -29,7 +29,7 @@ class PortDirection(Enum):
 
 **Usage Example:**
 ```python
-port = Port(name="data_in", direction=PortDirection.INPUT, width=32)
+port = Port(name="data_in", direction=Direction.INPUT, width=32)
 ```
 
 ### DatatypeSpec
@@ -114,7 +114,7 @@ from brainsmith.tools.kernel_integrator.types.rtl import Port
 @dataclass
 class Port:
     name: str
-    direction: PortDirection
+    direction: Direction
     width: Optional[int] = None
     width_expr: Optional[str] = None
 ```
@@ -122,12 +122,12 @@ class Port:
 **Usage Example:**
 ```python
 # Fixed-width port
-clk = Port(name="clk", direction=PortDirection.INPUT, width=1)
+clk = Port(name="clk", direction=Direction.INPUT, width=1)
 
 # Parameterized width
 data = Port(
     name="data", 
-    direction=PortDirection.INPUT, 
+    direction=Direction.INPUT, 
     width_expr="DATA_WIDTH"
 )
 ```
@@ -173,9 +173,9 @@ class ParsedModule:
 module = ParsedModule(
     name="my_kernel",
     ports=[
-        Port(name="clk", direction=PortDirection.INPUT, width=1),
-        Port(name="data_in", direction=PortDirection.INPUT, width=32),
-        Port(name="data_out", direction=PortDirection.OUTPUT, width=32)
+        Port(name="clk", direction=Direction.INPUT, width=1),
+        Port(name="data_in", direction=Direction.INPUT, width=32),
+        Port(name="data_out", direction=Direction.OUTPUT, width=32)
     ],
     parameters=[
         Parameter(name="DATA_WIDTH", value="32")

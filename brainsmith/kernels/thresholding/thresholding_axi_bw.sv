@@ -83,28 +83,28 @@ module thresholding_axi #(
 
 	//- AXI Lite ------------------------
 	// Writing
-	input	logic                  threhsold_AWVALID,
-	output	logic                  threhsold_AWREADY,
-	input	logic [ADDR_BITS-1:0]  threhsold_AWADDR,	// lowest 2 bits (byte selectors) are ignored
+	input	logic                  threshold_AWVALID,
+	output	logic                  threshold_AWREADY,
+	input	logic [ADDR_BITS-1:0]  threshold_AWADDR,	// lowest 2 bits (byte selectors) are ignored
 
-	input	logic         threhsold_WVALID,
-	output	logic         threhsold_WREADY,
-	input	logic [31:0]  threhsold_WDATA,
-	input	logic [ 3:0]  threhsold_WSTRB,
+	input	logic         threshold_WVALID,
+	output	logic         threshold_WREADY,
+	input	logic [31:0]  threshold_WDATA,
+	input	logic [ 3:0]  threshold_WSTRB,
 
-	output	logic        threhsold_BVALID,
-	input	logic        threhsold_BREADY,
-	output	logic [1:0]  threhsold_BRESP,
+	output	logic        threshold_BVALID,
+	input	logic        threshold_BREADY,
+	output	logic [1:0]  threshold_BRESP,
 
 	// Reading
-	input	logic                  threhsold_ARVALID,
-	output	logic                  threhsold_ARREADY,
-	input	logic [ADDR_BITS-1:0]  threhsold_ARADDR,
+	input	logic                  threshold_ARVALID,
+	output	logic                  threshold_ARREADY,
+	input	logic [ADDR_BITS-1:0]  threshold_ARADDR,
 
-	output	logic         threhsold_RVALID,
-	input	logic         threhsold_RREADY,
-	output	logic [31:0]  threhsold_RDATA,
-	output	logic [ 1:0]  threhsold_RRESP,
+	output	logic         threshold_RVALID,
+	input	logic         threshold_RREADY,
+	output	logic [31:0]  threshold_RDATA,
+	output	logic [ 1:0]  threshold_RRESP,
 
 	//- AXI Stream - Input --------------
 	output	logic  input_tready,
@@ -131,12 +131,12 @@ module thresholding_axi #(
 		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(T_WIDTH)) axi (
 			.aclk(ap_clk), .aresetn(ap_rst_n),
 
-			.awready(threhsold_AWREADY), .awvalid(threhsold_AWVALID), .awaddr(threhsold_AWADDR), .awprot('x),
-			.wready(threhsold_WREADY),   .wvalid(threhsold_WVALID),   .wdata(threhsold_WDATA),   .wstrb(threhsold_WSTRB),
-			.bready(threhsold_BREADY),   .bvalid(threhsold_BVALID),   .bresp(threhsold_BRESP),
+			.awready(threshold_AWREADY), .awvalid(threshold_AWVALID), .awaddr(threshold_AWADDR), .awprot('x),
+			.wready(threshold_WREADY),   .wvalid(threshold_WVALID),   .wdata(threshold_WDATA),   .wstrb(threshold_WSTRB),
+			.bready(threshold_BREADY),   .bvalid(threshold_BVALID),   .bresp(threshold_BRESP),
 
-			.arready(threhsold_ARREADY), .arvalid(threhsold_ARVALID), .araddr(threhsold_ARADDR), .arprot('x),
-			.rready(threhsold_RREADY),   .rvalid(threhsold_RVALID),   .rresp(threhsold_RRESP),   .rdata(threhsold_RDATA),
+			.arready(threshold_ARREADY), .arvalid(threshold_ARVALID), .araddr(threshold_ARADDR), .arprot('x),
+			.rready(threshold_RREADY),   .rvalid(threshold_RVALID),   .rresp(threshold_RRESP),   .rdata(threshold_RDATA),
 
 			.ip_en(cfg_en), .ip_wen(cfg_we), .ip_addr(cfg_a0), .ip_wdata(cfg_d),
 			.ip_rack(cfg_rack), .ip_rdata(cfg_q)

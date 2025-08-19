@@ -34,12 +34,12 @@ from brainsmith.tools.kernel_integrator.types.rtl import (
 )
 from .pragmas import Pragma
 from .parser import RTLParser, ParserError
-from .protocol_validator import ProtocolValidator
+from .protocol_validator import ProtocolScanner
 
 __all__ = [
     "RTLParser",
     "ParserError",
-    "ProtocolValidator",
+    "ProtocolScanner",
     "Parameter",
     "Port",
     "PortGroup",

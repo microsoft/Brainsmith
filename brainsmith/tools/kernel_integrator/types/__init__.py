@@ -15,7 +15,7 @@ Modules:
 
 # RTL types
 from .rtl import (
-    PortDirection,
+    Direction,
     Port,
     Parameter,
     ParsedModule,
@@ -28,9 +28,11 @@ from .rtl import (
 
 # Metadata types
 from .metadata import (
-    InterfaceMetadata,
-    KernelMetadata,
-    DatatypeMetadata,
+    Interface,
+    AXIStreamInterface,
+    AXILiteInterface,
+    ControlInterface,
+    KernelMetadata
 )
 
 # Generation types
@@ -52,7 +54,7 @@ from .config import Config
 
 __all__ = [
     # RTL
-    "PortDirection",
+    "Direction",
     "Port",
     "Parameter",
     "ParsedModule",
@@ -62,9 +64,11 @@ __all__ = [
     "PortGroup",
     "PragmaType",
     # Metadata
-    "InterfaceMetadata",
+    "Interface",
+    "AXIStreamInterface",
+    "AXILiteInterface",
+    "ControlInterface",
     "KernelMetadata",
-    "DatatypeMetadata",
     # Generation
     "GeneratedFile",
     "GenerationContext",

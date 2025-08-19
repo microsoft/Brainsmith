@@ -17,7 +17,7 @@ Tests the protocol validation functionality including:
 import pytest
 from pathlib import Path
 
-from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolValidator
+from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolScanner
 from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
