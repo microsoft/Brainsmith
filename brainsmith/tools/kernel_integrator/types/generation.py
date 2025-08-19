@@ -11,7 +11,6 @@ from typing import Dict, List, Optional, Any
 import json
 
 from .metadata import KernelMetadata
-from .rtl import ValidationResult
 
 
 @dataclass
@@ -117,7 +116,6 @@ class GenerationResult:
     Contains generated files, validation results, and metrics.
     """
     generated_files: List[GeneratedFile] = field(default_factory=list)
-    validation_result: ValidationResult = field(default_factory=ValidationResult)
     performance_metrics: Optional[PerformanceMetrics] = None
     
     # Error tracking
@@ -127,7 +125,7 @@ class GenerationResult:
     @property
     def is_success(self) -> bool:
         """Check if generation succeeded."""
-        return self.validation_result.is_valid and len(self.errors) == 0
+        return len(self.errors) == 0
     
     def add_file(self, file: GeneratedFile) -> None:
         """Add a generated file."""

@@ -78,7 +78,15 @@ class ProtocolScanner:
     """Scans ports for interface patterns and validates against protocol rules."""
 
     def __init__(self, debug: bool = False):
-        """Initializes the ProtocolScanner."""
+        """Initialize scanner state.
+
+        Args:
+            debug: Enable verbose debug logging (callers should also configure logging).
+
+        Side Effects:
+            Builds in-memory lookup structures (suffix dictionaries and compiled regex
+            patterns) used for fast classification of ports during scanning.
+        """
         self.debug = debug
         self.suffixes = {
             ProtocolType.CONTROL: GLOBAL_SIGNAL_SUFFIXES,
@@ -92,8 +100,117 @@ class ProtocolScanner:
             ProtocolType.AXI_STREAM: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
             ProtocolType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES)
         }
+        
+    @staticmethod
+    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
+        """
+        Generates regex patterns for matching interface signals and maps them to canonical suffixes.
+
+        This creates a mapping from regex pattern to canonical suffix, allowing direct retrieval
+        of the correct case when a match is found.
+
+        Args:
+            suffixes (Dict[str, Dict]): Dictionary of signal suffixes and their properties.
+
+        Returns:
+            Dict[str, re.Pattern]: A dictionary mapping canonical suffix to a compiled regex pattern.
+                                  The regex matches both case-insensitive suffixes and other variations.
+        """
+        regex_map = {}
+        for canonical_suffix in suffixes.keys():
+            # Create a case-insensitive pattern for this specific suffix
+            pattern = re.compile(
+                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", 
+                re.IGNORECASE
+            )
+            regex_map[canonical_suffix] = pattern
+        return regex_map
+    
+    def scan(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, InterfaceMetadata]], List[Port]]:
+        """Classify raw `Port` objects into protocol interface candidate groups.
+
+        Performs pattern matching of each port name against the compiled regex map for
+        every supported protocol. A successful match yields a (protocol, prefix, suffix)
+        triple where:
+          * protocol: ProtocolType (CONTROL, AXI_STREAM, AXI_LITE)
+          * prefix:   User / design specific identifier before the canonical suffix
+          * suffix:   Canonical signal name (e.g. TDATA, AWADDR, clk)
+
+        Ports with no match are collected as unassigned. After the full pass an error is
+        raised if any unassigned ports remain (current contract: scan is strict).
+
+        Args:
+            ports: List of parsed RTL `Port` objects from a module.
+
+        Returns:
+            (interfaces_by_protocol, unassigned_ports)
+                interfaces_by_protocol: dict keyed by ProtocolType -> dict[prefix] -> InterfaceMetadata
+                    Each InterfaceMetadata.ports maps canonical suffix -> Port
+                unassigned_ports: list of ports that did not match (always empty on success)
+
+        Raises:
+            ValueError: If one or more ports cannot be classified into a known protocol.
+        """
+        # Buckets for each protocol type
+        interfaces_by_protocol: Dict[ProtocolType, Dict[str, InterfaceMetadata]] = {protocol: {} for protocol in self.suffixes}
+        unassigned_ports: List[Port] = []
+
+        for port in ports:
+            port_assigned = False
+            for protocol_type, regex_map in self.regex_maps.items():
+                for protocol_suffix, regex in regex_map.items():
+                    match = regex.match(port.name)
+                    if not match:
+                        continue
+                    prefix = match.group("prefix") or "<NO_PREFIX>"
+                    logger.debug("Matched '%s' with prefix '%s' and protocol suffix '%s'", port.name, prefix, protocol_suffix)
+
+                    # Fetch / create interface metadata bucket for this prefix
+                    if prefix not in interfaces_by_protocol[protocol_type]:
+                        interfaces_by_protocol[protocol_type][prefix] = InterfaceMetadata(
+                            name=prefix,
+                            ports={},
+                            description=None
+                        )
+                        logger.debug("Created new potential %s group '%s'", protocol_type, prefix)
+
+                    # Record the port keyed by canonical suffix
+                    interfaces_by_protocol[protocol_type][prefix].ports[protocol_suffix] = port
+                    logger.debug("Assigned '%s' (suffix '%s') to %s group '%s'", port.name, protocol_suffix, protocol_type, prefix)
+                    port_assigned = True
+                    break  # Stop after first suffix match for this protocol
+                if port_assigned:
+                    break  # Stop checking other protocols
+
+            if not port_assigned:
+                unassigned_ports.append(port)
+                logger.debug("Port '%s' did not match any known interface type regex and is unassigned", port.name)
+
+        if unassigned_ports:
+            unassigned_list = ", ".join(p.name for p in unassigned_ports)
+            raise ValueError(f"Unassigned ports detected: {unassigned_list}")
+
+        for protocol_type, interfaces in interfaces_by_protocol.items():
+            logger.debug("Port groups for %s: %s", protocol_type, list(interfaces.keys()))
+
+        return interfaces_by_protocol, unassigned_ports
 
     def check_signals(self, interface: InterfaceMetadata, protocol: ProtocolType):
+        """Validate presence / absence of expected protocol signals for a group.
+
+        Args:
+            interface: Candidate interface (ports keyed by canonical suffix).
+            protocol: ProtocolType the interface is assumed to implement.
+
+        Returns:
+            dict with protocol-specific metadata. For AXI-Lite returns keys:
+                has_write (bool), has_read (bool).
+            For other protocols returns an empty dict.
+
+        Raises:
+            ValueError: On missing required signals, unexpected extra signals, or
+                        invalid partial channel composition (AXI-Lite only).
+        """
         metadata = {}
         protocol_suffixes = self.suffixes[protocol]
         present_keys = {key.upper() for key in interface.ports.keys()}
@@ -127,10 +244,23 @@ class ProtocolScanner:
 
         return metadata
 
-    def check_direction(self, group: PortGroup, protocol: ProtocolType) -> int:
+    def check_direction(self, interface: InterfaceMetadata, protocol: ProtocolType) -> int:
+        """Determine overall direction alignment for an interface group.
+
+        Args:
+            interface: Candidate interface metadata.
+            protocol: ProtocolType under evaluation.
+
+        Returns:
+            Direction.INPUT if all ports match expected directions, otherwise
+            Direction.OUTPUT if all are inverted.
+
+        Raises:
+            ValueError: If a mixture of matching and inverted directions is detected.
+        """
         alignment = {}
         protocol_suffixes = self.suffixes[protocol]
-        for port_name, port in group.items():
+        for port_name, port in interface.ports.items():
             expected_direction = protocol_suffixes.get(port_name.upper(), {}).get("direction")
             alignment[port_name] = port.direction == expected_direction
         if all(alignment.values()):
@@ -142,101 +272,3 @@ class ProtocolScanner:
         else:
             # Mixed alignment
             raise ValueError(f"{protocol.name}: Mixed directionality")
-        
-    @staticmethod
-    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
-        """
-        Generates regex patterns for matching interface signals and maps them to canonical suffixes.
-
-        This creates a mapping from regex pattern to canonical suffix, allowing direct retrieval
-        of the correct case when a match is found.
-
-        Args:
-            suffixes (Dict[str, Dict]): Dictionary of signal suffixes and their properties.
-
-        Returns:
-            Dict[str, re.Pattern]: A dictionary mapping canonical suffix to a compiled regex pattern.
-                                  The regex matches both case-insensitive suffixes and other variations.
-        """
-        regex_map = {}
-        for canonical_suffix in suffixes.keys():
-            # Create a case-insensitive pattern for this specific suffix
-            pattern = re.compile(
-                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", 
-                re.IGNORECASE
-            )
-            regex_map[canonical_suffix] = pattern
-        return regex_map
-    
-    def scan(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, PortGroup]], List[Port]]:
-        """
-        Scans ports and groups them by interface patterns.
-
-        Args:
-            ports: List of Port objects extracted from RTL.
-
-        Returns:
-            Tuple containing:
-            - Dictionary mapping ProtocolType to grouped ports by prefix and canonical suffix.
-            - List of unassigned ports that did not match any known interface type regex (will raise if any).
-        """
-
-        # Group ports by protocol type and prefix
-        interfaces_by_protocol, unassigned_ports = self.group_ports(ports)
-        if unassigned_ports:
-            unassigned_list = ", ".join(p.name for p in unassigned_ports)
-            raise ValueError(f"Unassigned ports detected: {unassigned_list}")
-
-        for protocol_type, interfaces in interfaces_by_protocol.items():
-            logger.debug("Port groups for %s: %s", protocol_type, interfaces)
-
-        return interfaces_by_protocol, unassigned_ports
-
-    def group_ports(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, InterfaceMetadata]], List[Port]]:
-        """
-        Group ports by protocol and prefix using regex-matched suffixes.
-
-        Returns a mapping of protocol type to candidate interfaces keyed by prefix,
-        and a list of ports that matched no known protocol.
-        """
-        # Buckets for each protocol type
-        interfaces = {protocol: {} for protocol in self.suffixes}
-        unassigned_ports = []
-
-        for port in ports:
-            port_assigned = False  # Flag to track if the port has been assigned
-            # Check port name against each interface type regex map
-            for protocol_type, regex_map in self.regex_maps.items():
-                # Try each protocol suffix regex until a match is found
-                for protocol_suffix, regex in regex_map.items():
-                    match = regex.match(port.name)
-                    if match:
-                        prefix = match.group("prefix")
-                        logger.debug("Matched '%s' with prefix '%s' and protocol suffix '%s'", port.name, prefix, protocol_suffix)
-                        if not prefix:
-                            prefix = "<NO_PREFIX>"
-                            logger.debug("Port '%s' has no prefix, using '<NO_PREFIX>'", port.name)
-
-                        # Group ports into potential interfaces by signal prefix
-                        if prefix in interfaces[protocol_type].keys():
-                            interfaces[protocol_type][prefix][protocol_suffix] = port
-                            logger.debug("Assigned '%s' to potential %s group '%s'", port.name, protocol_type, prefix)
-                        else:
-                            interfaces[protocol_type][prefix] = InterfaceMetadata(
-                                name=prefix,
-                                interface_type=InterfaceType.UNKNOWN,
-                                ports=[port]
-                            )
-                            logger.debug("Found potential %s group %s with signal '%s'", protocol_type, prefix, port.name)
-                        port_assigned = True  # Mark port as assigned
-                        break  # Skip checking other suffixes for this interface type
-                
-                if port_assigned:
-                    break  # Skip checking other interface types if port is already assigned
-            
-            # If the port was not assigned to any interface type, add to unassigned
-            if not port_assigned:
-                unassigned_ports.append(port)
-                logger.debug("Port '%s' did not match any known interface type regex and is unassigned", port.name)
-
-        return interfaces, unassigned_ports 

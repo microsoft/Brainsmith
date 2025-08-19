@@ -4,7 +4,7 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-"""Unit tests for the Interface Builder's scanning functionality.
+"""Unit tests for the Protocol Scanner's scanning functionality.
 
 Tests the interface detection and extraction including:
 - AXI-Stream pattern recognition
@@ -17,18 +17,18 @@ Tests the interface detection and extraction including:
 import pytest
 from pathlib import Path
 
-from brainsmith.tools.kernel_integrator.rtl_parser.interface_builder import InterfaceBuilder
+from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolScanner
 from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
-from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.core.dataflow.types import InterfaceType, ProtocolType
 from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 
 from .utils.rtl_builder import RTLBuilder
 
 
-class TestInterfaceBuilderScanning:
-    """Test cases for Interface Builder's scanning functionality."""
+class TestProtocolScannerScanning:
+    """Test cases for Protocol Scanner's scanning functionality."""
     
-    def test_scan_axi_stream_patterns(self, interface_builder):
+    def test_scan_axi_stream_patterns(self, protocol_validator):
         """Test detecting AXI-Stream interface patterns."""
         ports = [
             Port("s_axis_input_tdata", PortDirection.INPUT, "31:0"),
@@ -42,28 +42,30 @@ class TestInterfaceBuilderScanning:
             Port("rst", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
         # Should find 2 AXI-Stream interfaces + global control
-        assert len(port_groups) >= 2
+        assert ProtocolType.AXI_STREAM in interfaces_by_protocol
+        assert ProtocolType.CONTROL in interfaces_by_protocol
         
-        # Find AXI-Stream interfaces (they are marked as INPUT type initially)
-        axi_groups = [g for g in port_groups if g.name and ("s_axis" in g.name or "m_axis" in g.name)]
-        assert len(axi_groups) == 2
+        # Check AXI-Stream interfaces
+        axi_stream_interfaces = interfaces_by_protocol[ProtocolType.AXI_STREAM]
+        assert "s_axis_input" in axi_stream_interfaces
+        assert "m_axis_output" in axi_stream_interfaces
         
         # Check slave interface
-        slave_group = next(g for g in axi_groups if g.name == "s_axis_input")
-        assert len(slave_group.ports) == 4
-        assert "TDATA" in slave_group.ports
-        assert "TVALID" in slave_group.ports
-        assert "TREADY" in slave_group.ports
-        assert "TLAST" in slave_group.ports
+        slave_interface = axi_stream_interfaces["s_axis_input"]
+        assert len(slave_interface.ports) == 4
+        assert "TDATA" in slave_interface.ports
+        assert "TVALID" in slave_interface.ports
+        assert "TREADY" in slave_interface.ports
+        assert "TLAST" in slave_interface.ports
         
         # Check master interface
-        master_group = next(g for g in axi_groups if g.name == "m_axis_output")
-        assert len(master_group.ports) == 3  # No tlast
+        master_interface = axi_stream_interfaces["m_axis_output"]
+        assert len(master_interface.ports) == 3  # No tlast
     
-    def test_scan_axi_lite_patterns(self, interface_builder):
+    def test_scan_axi_lite_patterns(self, protocol_validator):
         """Test detecting AXI-Lite interface patterns."""
         ports = [
             # AXI-Lite slave interface
@@ -88,24 +90,23 @@ class TestInterfaceBuilderScanning:
             Port("rst_n", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
         # Find AXI-Lite interface
-        axi_lite_groups = [g for g in port_groups if g.name and g.name.startswith("s_axi")]
-        assert len(axi_lite_groups) == 1
+        assert ProtocolType.AXI_LITE in interfaces_by_protocol
+        axi_lite_interfaces = interfaces_by_protocol[ProtocolType.AXI_LITE]
+        assert "s_axi" in axi_lite_interfaces
         
-        axi_lite = axi_lite_groups[0]
-        assert axi_lite.name == "s_axi"
+        axi_lite = axi_lite_interfaces["s_axi"]
         assert len(axi_lite.ports) == 17
         
         # Check for all required AXI-Lite signals
-        signal_names = [p.name for p in axi_lite.ports.values()]
-        assert "s_axi_awaddr" in signal_names
-        assert "s_axi_wdata" in signal_names
-        assert "s_axi_araddr" in signal_names
-        assert "s_axi_rdata" in signal_names
+        assert "AWADDR" in axi_lite.ports
+        assert "WDATA" in axi_lite.ports
+        assert "ARADDR" in axi_lite.ports
+        assert "RDATA" in axi_lite.ports
     
-    def test_scan_global_control_signals(self, interface_builder):
+    def test_scan_global_control_signals(self, protocol_validator):
         """Test detecting global control signals."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
@@ -119,24 +120,11 @@ class TestInterfaceBuilderScanning:
             Port("data_out", PortDirection.OUTPUT, "31:0")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
-        
-        # Global control signals might be grouped together
-        # or identified individually
-        control_ports = []
-        for group in port_groups:
-            for port in group.ports.values():
-                if port.name in ["clk", "rst", "ap_clk", "ap_rst_n", "aclk", "aresetn"]:
-                    control_ports.append(port)
-        
-        # Also check unassigned ports
-        for port in unassigned:
-            if port.name in ["clk", "rst", "ap_clk", "ap_rst_n", "aclk", "aresetn"]:
-                control_ports.append(port)
-        
-        assert len(control_ports) >= 6
+        # Control signals should fail scan() since not all ports can be classified
+        with pytest.raises(ValueError, match="Unassigned ports detected"):
+            interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
     
-    def test_scan_multiple_interfaces(self, interface_builder):
+    def test_scan_multiple_interfaces(self, protocol_validator):
         """Test scanning multiple interfaces of same type."""
         ports = [
             # First input stream
@@ -163,20 +151,20 @@ class TestInterfaceBuilderScanning:
             Port("rst", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
         # Find all AXI-Stream groups
-        axi_groups = [g for g in port_groups if g.name and "axis" in g.name]
-        assert len(axi_groups) == 4
+        assert ProtocolType.AXI_STREAM in interfaces_by_protocol
+        axi_stream_interfaces = interfaces_by_protocol[ProtocolType.AXI_STREAM]
+        assert len(axi_stream_interfaces) == 4
         
         # Check names
-        names = {g.name for g in axi_groups}
-        assert "s_axis_input0" in names
-        assert "s_axis_input1" in names
-        assert "s_axis_weights" in names
-        assert "m_axis_output" in names
+        assert "s_axis_input0" in axi_stream_interfaces
+        assert "s_axis_input1" in axi_stream_interfaces
+        assert "s_axis_weights" in axi_stream_interfaces
+        assert "m_axis_output" in axi_stream_interfaces
     
-    def test_scan_unmatched_ports(self, interface_builder):
+    def test_scan_unmatched_ports(self, protocol_validator):
         """Test handling of ports that don't match any pattern."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
@@ -189,17 +177,11 @@ class TestInterfaceBuilderScanning:
             Port("interrupt", PortDirection.OUTPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
-        
-        # Should group some ports, others may be unassigned
-        all_grouped_ports = []
-        for group in port_groups:
-            all_grouped_ports.extend(group.ports.values())
-        
-        # Not all ports may be grouped
-        assert len(all_grouped_ports) <= len(ports)
+        # Should raise error for unassigned ports
+        with pytest.raises(ValueError, match="Unassigned ports detected"):
+            interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
     
-    def test_scan_name_variations(self, interface_builder):
+    def test_scan_name_variations(self, protocol_validator):
         """Test handling various naming conventions."""
         ports = [
             # Uppercase variation
@@ -215,17 +197,20 @@ class TestInterfaceBuilderScanning:
             # Underscores in different places
             Port("s_axis__input__tdata", PortDirection.INPUT, "7:0"),
             Port("s_axis__input__tvalid", PortDirection.INPUT, "1"),
+            Port("s_axis__input__tready", PortDirection.OUTPUT, "1"),
             
-            Port("clk", PortDirection.INPUT, "1")
+            Port("clk", PortDirection.INPUT, "1"),
+            Port("rst_n", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
         # Scanner should handle case variations
-        axi_groups = [g for g in port_groups if g.name and "axis" in g.name.lower()]
-        assert len(axi_groups) >= 2
+        assert ProtocolType.AXI_STREAM in interfaces_by_protocol
+        axi_stream_interfaces = interfaces_by_protocol[ProtocolType.AXI_STREAM]
+        assert len(axi_stream_interfaces) >= 2
     
-    def test_partial_interface_detection(self, interface_builder):
+    def test_partial_interface_detection(self, protocol_validator):
         """Test detecting incomplete interfaces."""
         ports = [
             # Partial AXI-Stream (missing tready)
@@ -243,72 +228,45 @@ class TestInterfaceBuilderScanning:
             Port("clk", PortDirection.INPUT, "1")
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        # Scan should succeed, grouping all ports
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
-        # Should detect all groups, even partial ones
-        axi_groups = [g for g in port_groups if g.name and "axis" in g.name]
-        assert len(axi_groups) >= 2
+        # Validation would fail later when building interfaces
+        assert ProtocolType.AXI_STREAM in interfaces_by_protocol
+        axi_stream_interfaces = interfaces_by_protocol[ProtocolType.AXI_STREAM]
         
-        # Check partial interface
-        partial_group = next((g for g in axi_groups if g.name == "s_axis_partial"), None)
-        if partial_group:
-            assert len(partial_group.ports) == 2
+        # Check partial interface was detected
+        assert "s_axis_partial" in axi_stream_interfaces
+        partial_interface = axi_stream_interfaces["s_axis_partial"]
+        assert len(partial_interface.ports) == 2
     
-    def test_custom_prefix_patterns(self, interface_builder):
-        """Test interfaces with custom prefixes."""
-        ports = [
-            # Custom input stream
-            Port("input_stream_data", PortDirection.INPUT, "31:0"),
-            Port("input_stream_valid", PortDirection.INPUT, "1"),
-            Port("input_stream_ready", PortDirection.OUTPUT, "1"),
-            
-            # Custom output stream  
-            Port("output_stream_data", PortDirection.OUTPUT, "31:0"),
-            Port("output_stream_valid", PortDirection.OUTPUT, "1"),
-            Port("output_stream_ready", PortDirection.INPUT, "1"),
-            
-            # Mixed with standard
-            Port("s_axis_standard_tdata", PortDirection.INPUT, "7:0"),
-            Port("s_axis_standard_tvalid", PortDirection.INPUT, "1"),
-            
-            Port("clk", PortDirection.INPUT, "1")
-        ]
-        
-        port_groups, unassigned = interface_builder._scan(ports)
-        
-        # Should find groups based on common prefixes
-        assert len(port_groups) >= 2
-        
-        # Check if custom prefixes were grouped
-        custom_groups = [g for g in port_groups 
-                        if g.name and ("input_stream" in g.name or "output_stream" in g.name)]
-        # May or may not group custom patterns depending on implementation
-    
-    def test_empty_port_list(self, interface_builder):
+    def test_empty_port_list(self, protocol_validator):
         """Test scanning empty port list."""
         ports = []
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
-        assert port_groups == []
+        assert all(len(interfaces) == 0 for interfaces in interfaces_by_protocol.values())
         assert unassigned == []
     
-    def test_single_port_interface(self, interface_builder):
+    def test_single_port_interface(self, protocol_validator):
         """Test handling single-port interfaces."""
         ports = [
             Port("clk", PortDirection.INPUT, "1"),
             Port("rst", PortDirection.INPUT, "1"),
-            Port("enable", PortDirection.INPUT, "1"),
-            Port("done", PortDirection.OUTPUT, "1"),
-            Port("error", PortDirection.OUTPUT, "1")
+            Port("rst_n", PortDirection.INPUT, "1"),
         ]
         
-        port_groups, unassigned = interface_builder._scan(ports)
+        interfaces_by_protocol, unassigned = protocol_validator.scan(ports)
         
-        # Single ports may be grouped as simple interfaces
-        # or left ungrouped
-        assert len(port_groups) >= 0
+        # Control signals should be grouped
+        assert ProtocolType.CONTROL in interfaces_by_protocol
+        control_interfaces = interfaces_by_protocol[ProtocolType.CONTROL]
         
         # All ports should be accounted for
-        total_ports_in_groups = sum(len(g.ports) for g in port_groups)
-        assert total_ports_in_groups + len(unassigned) == len(ports)
+        total_ports_in_interfaces = sum(
+            len(interface.ports) 
+            for interfaces in interfaces_by_protocol.values() 
+            for interface in interfaces.values()
+        )
+        assert total_ports_in_interfaces + len(unassigned) == len(ports)

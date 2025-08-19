@@ -220,9 +220,11 @@ def kernel_definition_to_metadata(
             if "interface" in info:
                 interfaces.append(info["interface"])
             else:
+                # TODO: This is creating a base InterfaceMetadata when it should
+                # create the appropriate subclass based on the type
                 interface = InterfaceMetadata(
                     name=name,
-                    interface_type=InterfaceType(info["type"]),
+                    ports={},
                     description=info.get("description")
                 )
                 interfaces.append(interface)
@@ -281,15 +283,11 @@ def _convert_input_to_interface(input_def: InputDefinition) -> InterfaceMetadata
         description = input_def.metadata.get("description")
         weight_file = input_def.metadata.get("weight_file")
     
+    # TODO: This should probably return AXIStreamMetadata instead
     return InterfaceMetadata(
         name=rtl_name,
-        interface_type=interface_type,
-        datatype_constraints=input_def.datatype_constraints,
-        description=description,
-        bdim_shape=bdim_shape,
-        sdim_shape=sdim_shape,
-        is_weight=input_def.is_weight,
-        weight_file=weight_file
+        ports={},
+        description=description
     )
 
 
@@ -311,13 +309,11 @@ def _convert_output_to_interface(output_def: OutputDefinition) -> InterfaceMetad
         rtl_name = output_def.metadata.get("rtl_name", output_def.name)
         description = output_def.metadata.get("description")
     
+    # TODO: This should probably return AXIStreamMetadata instead
     return InterfaceMetadata(
         name=rtl_name,
-        interface_type=InterfaceType.OUTPUT,
-        datatype_constraints=output_def.datatype_constraints,
-        description=description,
-        bdim_shape=bdim_shape,
-        sdim_shape=sdim_shape
+        ports={},
+        description=description
     )
 
 

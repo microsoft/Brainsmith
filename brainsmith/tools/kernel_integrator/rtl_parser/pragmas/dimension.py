@@ -15,7 +15,7 @@ import logging
 
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class BDimPragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
     
-    def validate_with_kernel(self, kernel: 'KernelMetadata') -> None:
+    def validate_with_kernel(self, kernel: KernelMetadata) -> None:
         """Validate that all parameter names in bdim_params exist in module parameters.
         
         This is called after the kernel metadata is available, allowing us to check
@@ -242,7 +242,7 @@ class BDimPragma(InterfacePragma):
                     f"with params={bdim_params} and shape={bdim_shape}")
 
     
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
         """Apply BDIM pragma to kernel metadata with validation."""
         # First validate parameters exist
         self.validate_with_kernel(kernel)
@@ -287,7 +287,7 @@ class SDimPragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
     
-    def validate_with_kernel(self, kernel: 'KernelMetadata') -> None:
+    def validate_with_kernel(self, kernel: KernelMetadata) -> None:
         """Validate that all parameter names exist in module parameters.
         
         This is called after the kernel metadata is available, allowing us to check
@@ -466,7 +466,7 @@ class SDimPragma(InterfacePragma):
         logger.debug(f"SDIM pragma successfully applied to interface '{metadata.name}' "
                     f"with params={sdim_params} and shape={sdim_shape}")
     
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
         """Apply SDIM pragma to kernel metadata with validation."""
         # First validate parameters exist
         self.validate_with_kernel(kernel)

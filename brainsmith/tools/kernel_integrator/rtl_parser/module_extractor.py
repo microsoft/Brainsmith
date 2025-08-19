@@ -17,7 +17,7 @@ from typing import Optional, List, Tuple, Dict, Callable, Any
 from tree_sitter import Node, Tree
 
 from brainsmith.tools.kernel_integrator.types.rtl import Direction
-from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, PragmaType
+from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, PragmaType, ParsedModule
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
@@ -64,23 +64,21 @@ class ModuleExtractor:
             PragmaType.RELATIONSHIP: RelationshipPragma,
         }
     
-    def extract_from_tree(self, tree: Tree, source_name: str = "<string>", 
-                         target_module: Optional[str] = None) -> Tuple[str, List[Parameter], List[Port], List[Pragma]]:
+    def extract_from_tree(self, tree: Tree, source_name: str = "<string>") -> ParsedModule:
         """Extract module components and pragmas from a parsed AST tree.
         
         This is the main extraction method that orchestrates the full extraction workflow:
         1. Extract all pragmas from the tree
         2. Find all modules in the tree
-        3. Select the target module based on pragmas or explicit target
+        3. Select the target module based on pragmas (TOP_MODULE pragma if multiple modules)
         4. Extract module name, parameters, and ports
         
         Args:
             tree: Parsed AST tree from tree-sitter
             source_name: Name for logging/error messages
-            target_module: Optional specific module name to target
             
         Returns:
-            Tuple of (module_name, parameters, ports, pragmas)
+            ParsedModule containing all extracted components
             
         Raises:
             ValueError: If no modules found or module selection fails
@@ -97,7 +95,7 @@ class ModuleExtractor:
         
         # Select target module
         module_node = self.select_target_module(
-            module_nodes, pragmas, source_name, target_module
+            module_nodes, pragmas, source_name
         )
         logger.info(f"Selected target module node: {module_node.type}")
         
@@ -119,7 +117,18 @@ class ModuleExtractor:
         logger.debug(f"Successfully parsed {len(ports)} individual port objects.")
         
         logger.info("Component extraction complete.")
-        return module_name, parameters, ports, pragmas
+        
+        # Get line number from module node
+        line_number = module_node.start_point[0] if module_node else 0
+        
+        return ParsedModule(
+            name=module_name,
+            ports=ports,
+            parameters=parameters,
+            pragmas=pragmas,
+            file_path=source_name,
+            line_number=line_number
+        )
     
     def extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
         """Extract name, parameter nodes, and port nodes from a module_declaration node.
@@ -674,14 +683,13 @@ class ModuleExtractor:
         return list(dict.fromkeys(identifiers))
     
     def select_target_module(self, module_nodes: List[Node], pragmas: List[Pragma], 
-                           source_name: str, target_module: Optional[str] = None) -> Node:
-        """Select the target module based on pragmas or explicit target.
+                           source_name: str) -> Node:
+        """Select the target module based on pragmas.
         
         Args:
             module_nodes: List of module nodes found in AST.
             pragmas: List of extracted pragmas.
             source_name: Name of source for error messages.
-            target_module: Optional explicit module name to target.
             
         Returns:
             Selected module node.
@@ -700,19 +708,7 @@ class ModuleExtractor:
             else:
                 logger.warning(f"Could not extract module name from node: {node.text.decode()[:50]}...")
         
-        # Priority 1: Explicit target_module parameter
-        if target_module:
-            if module_names_map and target_module in module_names_map:
-                logger.info(f"Found explicitly requested module '{target_module}'.")
-                return module_names_map[target_module]
-            else:
-                available = list(module_names_map.keys()) if module_names_map else []
-                raise ValueError(
-                    f"Requested module '{target_module}' not found in {source_name}. "
-                    f"Available modules: {available}"
-                )
-        
-        # Priority 2: Single module (with or without TOP_MODULE pragma)
+        # Priority 1: Single module (with or without TOP_MODULE pragma)
         if len(module_nodes) == 1:
             if top_module_pragmas:
                 # Verify the TOP_MODULE pragma matches
@@ -737,7 +733,7 @@ class ModuleExtractor:
             
             return module_nodes[0]
         
-        # Priority 3: Multiple modules (requires TOP_MODULE pragma)
+        # Priority 2: Multiple modules (requires TOP_MODULE pragma)
         elif len(module_nodes) > 1:
             if len(top_module_pragmas) == 1:
                 target_name = top_module_pragmas[0].parsed_data.get("module_name")

@@ -21,6 +21,7 @@ from .pragmas import Pragma
 from .pragma import PragmaHandler
 from .ast_parser import ASTParser, SyntaxError
 from .kernel_builder import KernelBuilder
+from .module_extractor import ModuleExtractor
 from .parameter_linker import ParameterLinker
 
 # Configure logger
@@ -37,7 +38,8 @@ class RTLParser:
 
     This class orchestrates the parsing of SystemVerilog files using sub-components:
     - ASTParser: Handles tree-sitter operations
-    - KernelBuilder: Selects modules, extracts components, and builds KernelMetadata
+    - ModuleExtractor: Selects modules and extracts components
+    - KernelBuilder: Builds interfaces and assembles KernelMetadata
     - PragmaHandler: Processes pragmas
     - ParameterLinker: Auto-links parameters to interfaces
 
@@ -71,8 +73,84 @@ class RTLParser:
 
         # Initialize sub-components
         self.ast_parser = ASTParser(debug=self.debug)
+        self.module_extractor = ModuleExtractor(self.ast_parser, debug=self.debug)
         self.kernel_builder = KernelBuilder(self.ast_parser, debug=self.debug)
         self.pragma_handler = PragmaHandler(debug=self.debug)
+
+
+
+
+
+    def parse(self, systemverilog_code: str, source_name: str = "<string>") -> KernelMetadata:
+        """Core SystemVerilog string parser.
+        
+        Args:
+            systemverilog_code: SystemVerilog module source code
+            source_name: Name for logging/error messages (default: "<string>")
+            
+        Returns:
+            KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
+            
+        Raises:
+            SyntaxError: Invalid SystemVerilog syntax
+            ParserError: Parser configuration or runtime error
+        """
+        logger.info(f"Starting string-based parsing for: {source_name}")
+        try:
+            # Parse AST
+            try:
+                tree = self.ast_parser.parse_source(systemverilog_code)
+            except Exception as e:
+                raise ParserError(f"Core parsing failed for {source_name}: {e}")
+            
+            # Extract module components
+            parsed_module = self.module_extractor.extract_from_tree(
+                tree, source_name
+            )
+            
+            # Build KernelMetadata from parsed module
+            kernel_metadata = self.kernel_builder.build(parsed_module, source_name)
+            
+            # Apply all pragmas to KernelMetadata
+            self._apply_pragmas(kernel_metadata)
+            
+            # Update Parameter objects based on pragma results
+            self._sync_parameter_exposure(kernel_metadata)
+            
+            # Auto-linking with remaining parameters
+            self._apply_autolinking(kernel_metadata)
+            
+            # Validate the complete KernelMetadata only if strict mode is enabled
+            if self.strict:
+                try:
+                    logger.info("Starting KernelMetadata validation...")
+                    validation_errors = kernel_metadata.validate()
+                    logger.info(f"Validation returned {len(validation_errors)} errors")
+                    if validation_errors:
+                        logger.error(f"Validation errors: {validation_errors}")
+                        raise ValueError(f"KernelMetadata validation failed: {'; '.join(validation_errors)}")
+                except ValueError as e:
+                    logger.error(f"Validation raised ValueError: {e}")
+                    raise ParserError(str(e))
+            else:
+                logger.info("Skipping validation (strict mode disabled)")
+            
+            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
+            logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
+            return kernel_metadata
+
+        except (SyntaxError, ParserError) as e:
+            logger.error(f"String parsing failed for {source_name}: {e}")
+            raise
+        except Exception as e:
+            logger.exception(f"Unexpected error during string parsing for {source_name}: {e}")
+            raise ParserError(f"Unexpected error during string parsing: {e}")
+
+
+
+
+
+        
 
     def _apply_pragmas(self, kernel_metadata: KernelMetadata) -> None:
         """Apply all pragmas to kernel metadata.
@@ -140,82 +218,6 @@ class RTLParser:
         # Assign parameter categories based on usage
         linker.assign_parameter_categories(kernel_metadata)
 
-    def parse(self, systemverilog_code: str, source_name: str = "<string>", module_name: Optional[str] = None) -> KernelMetadata:
-        """Core SystemVerilog string parser.
-        
-        Args:
-            systemverilog_code: SystemVerilog module source code
-            source_name: Name for logging/error messages (default: "<string>")
-            module_name: Optional target module name (auto-detect if None)
-            
-        Returns:
-            KernelMetadata: Parsed kernel metadata with InterfaceMetadata objects
-            
-        Raises:
-            SyntaxError: Invalid SystemVerilog syntax
-            ParserError: Parser configuration or runtime error
-        """
-        logger.info(f"Starting string-based parsing for: {source_name}")
-        try:
-            # Parse AST
-            try:
-                tree = self.ast_parser.parse_source(systemverilog_code)
-            except Exception as e:
-                raise ParserError(f"Core parsing failed for {source_name}: {e}")
-            
-            # Check syntax
-            syntax_error = self.ast_parser.check_syntax_errors(tree)
-            if syntax_error:
-                raise syntax_error
-            
-            # Build KernelMetadata (pragma extraction now happens inside)
-            try:
-                kernel_metadata = self.kernel_builder.build_kernel_metadata(
-                    tree, source_name, module_name
-                )
-            except ValueError as e:
-                raise ParserError(str(e))
-            except Exception as e:
-                logger.exception(f"Error during kernel building: {e}")
-                raise ParserError(f"Failed during kernel building: {e}")
-
-            # Set pragmas in handler for high-level operations
-            self.pragma_handler.set_pragmas(kernel_metadata.pragmas)
-            
-            # Apply all pragmas to KernelMetadata
-            self._apply_pragmas(kernel_metadata)
-            
-            # Update Parameter objects based on pragma results
-            self._sync_parameter_exposure(kernel_metadata)
-            
-            # Auto-linking with remaining parameters
-            self._apply_autolinking(kernel_metadata)
-            
-            # Validate the complete KernelMetadata only if strict mode is enabled
-            if self.strict:
-                try:
-                    logger.info("Starting KernelMetadata validation...")
-                    validation_errors = kernel_metadata.validate()
-                    logger.info(f"Validation returned {len(validation_errors)} errors")
-                    if validation_errors:
-                        logger.error(f"Validation errors: {validation_errors}")
-                        raise ValueError(f"KernelMetadata validation failed: {'; '.join(validation_errors)}")
-                except ValueError as e:
-                    logger.error(f"Validation raised ValueError: {e}")
-                    raise ParserError(str(e))
-            else:
-                logger.info("Skipping validation (strict mode disabled)")
-            
-            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
-            logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
-            return kernel_metadata
-
-        except (SyntaxError, ParserError) as e:
-            logger.error(f"String parsing failed for {source_name}: {e}")
-            raise
-        except Exception as e:
-            logger.exception(f"Unexpected error during string parsing for {source_name}: {e}")
-            raise ParserError(f"Unexpected error during string parsing: {e}")
 
     def parse_file(self, file_path: str) -> KernelMetadata:
         """Parse a SystemVerilog file by reading it and calling the core parse method.

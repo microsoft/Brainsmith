@@ -6,7 +6,8 @@ information at a higher abstraction level than raw RTL.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Set, Union, Iterator
+from collections.abc import MutableMapping
 
 from brainsmith.core.dataflow.types import Direction, InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
@@ -15,28 +16,15 @@ from .rtl import Port, PortGroup, Parameter, Direction
 
 
 @dataclass
-class InterfaceMetadata:
+class InterfaceMetadata(MutableMapping[str, Port]):
     """Base metadata for all interfaces."""
     name: str
-    interface_type: InterfaceType = InterfaceType.UNKNOWN
-    ports: Dict[str, Port] = field(default_factory=dict)
-    description: Optional[str] = None
+    ports: Dict[str, Port]
+    description: Optional[str]
 
     def add_port(self, port: Port):
         """Add a port to the interface."""
         self.ports[port.name] = port
-
-
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Any, Iterator
-from collections.abc import MutableMapping
-from brainsmith.core.dataflow.types import InterfaceType
-
-@dataclass
-class InterfaceMetadata(MutableMapping[str, Port]):
-    name: Optional[str] = None
-    interface_type: Optional[InterfaceType] = None
-    ports: Dict[str, Port] = field(default_factory=dict)
 
     # MutableMapping methods
     def __getitem__(self, key: str) -> Port: return self.ports[key]
@@ -60,6 +48,7 @@ class InterfaceMetadata(MutableMapping[str, Port]):
 @dataclass
 class AXIStreamMetadata(InterfaceMetadata):
     """Metadata for a AXI-Stream interface."""
+    # interface_type is determined by direction: INPUT or OUTPUT
     direction: Direction
     is_weight: bool = False
 
@@ -75,6 +64,13 @@ class AXIStreamMetadata(InterfaceMetadata):
     # TAFK TODO: Fix/add these
     relationships: Dict[str, str] = field(default_factory=dict)
     datatype_constraints: DatatypeConstraintGroup = field(default_factory=DatatypeConstraintGroup)
+    
+    @property
+    def interface_type(self) -> InterfaceType:
+        """Interface type based on direction."""
+        if self.is_weight:
+            return InterfaceType.WEIGHT
+        return InterfaceType.INPUT if self.direction == Direction.INPUT else InterfaceType.OUTPUT
 
 @dataclass
 class AXILiteMetadata(InterfaceMetadata):
@@ -113,15 +109,14 @@ class KernelMetadata:
     """
     # Core attributes matching original structure
     name: str # Module/Kernel name
-    parameters: List[Parameter] = field(default_factory=list)
-    # Interface metadata
+    source_file: str
+    # Interface metadata (required)
     control: ControlMetadata
+    # Optional fields with defaults
+    parameters: List[Parameter] = field(default_factory=list)
     inputs: List[AXIStreamMetadata] = field(default_factory=list)
     outputs: List[AXIStreamMetadata] = field(default_factory=list)
     config: List[AXILiteMetadata] = field(default_factory=list)
-
-    # Debugging metadata
-    source_file: str
 
     # Simple transformations as properties
     @property

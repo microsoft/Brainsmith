@@ -29,7 +29,6 @@ from brainsmith.tools.kernel_integrator.types.rtl import (
     Parameter,
     Port,
     PortGroup,
-    ProtocolValidationResult,
     PragmaType,
 )
 from .pragmas import Pragma

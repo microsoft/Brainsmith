@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Any
 import logging
 
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
 
 logger = logging.getLogger(__name__)
@@ -36,32 +36,11 @@ class Pragma:
     Attributes:
         type: Pragma type identifier (using PragmaType enum)
         inputs: Dict with 'raw', 'positional', and 'named' arguments
-        line_number: Source line number for error reporting
         parsed_data: Optional processed data from pragma handler
     """
     type: PragmaType
     inputs: Dict[str, Any]
-    line_number: int
     parsed_data: Dict = field(init=False)  # Stores the result of _parse_inputs
-
-    def __post_init__(self):
-        # For backward compatibility - convert list to dict format
-        if isinstance(self.inputs, list):
-            self.inputs = {
-                'raw': self.inputs,
-                'positional': self.inputs,
-                'named': {}
-            }
-        
-        try:
-            self.parsed_data = self._parse_inputs()
-        except PragmaError as e:
-            logger.error(f"Error processing pragma {self.type.name} at line {self.line_number} with inputs {self.inputs}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error processing pragma {self.type.name} at line {self.line_number} with inputs {self.inputs}: {e}")
-            # Wrap unexpected errors in PragmaError to ensure consistent error handling upstream
-            raise PragmaError(f"Unexpected error during pragma {self.type.name} processing: {e}")
 
     def _parse_inputs(self) -> Dict:
         """
@@ -70,7 +49,7 @@ class Pragma:
         """
         raise NotImplementedError(f"Pragma type {self.type.name} must implement _parse_inputs.")
 
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
         """
         Apply this pragma to kernel metadata.
         
@@ -96,7 +75,7 @@ class InterfacePragma(Pragma):
     interfaces, including interface name matching and base application logic.
     """
     
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
         """
         Apply interface pragma to kernel metadata.
         

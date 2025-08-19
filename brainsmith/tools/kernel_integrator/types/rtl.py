@@ -7,10 +7,13 @@ SystemVerilog constructs and validation results.
 
 from collections.abc import MutableMapping
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Iterator
+from typing import Dict, List, Optional, Any, Iterator, TYPE_CHECKING
 from enum import Enum
 
 from brainsmith.core.dataflow.types import  Direction, ProtocolType, InterfaceType
+
+if TYPE_CHECKING:
+    from ..rtl_parser.pragmas import Pragma
 
 
 class PragmaType(Enum):
@@ -25,6 +28,24 @@ class PragmaType(Enum):
     ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
     AXILITE_PARAM = "axilite_param"    # Mark parameter as AXI-Lite configuration related
     RELATIONSHIP = "relationship"      # Define relationships between interfaces
+
+
+class ParamSourceType(Enum):
+    """How a parameter gets its value during code generation."""
+    NODEATTR = "nodeattr"                        # Direct from RTL module parameter
+    NODEATTR_ALIAS = "nodeattr_alias"  # Via alias pragma
+    DERIVED = "derived"                # Via derived_parameter pragma expression
+    AXILITE = "axilite"               # From AXI-Lite interface
+    INTERFACE_DATATYPE = "interface_datatype"  # From interface datatype properties
+    INTERFACE_SHAPE = "interface_shape"  # From interface shape (BDIM/SDIM)
+
+
+class ParameterCategory(Enum):
+    """Categories for parameter classification."""
+    SHAPE = "shape"                    # Shape-related (BDIM/SDIM)
+    ALGORITHM = "algorithm"            # Algorithm/computation parameters
+    DATATYPE = "datatype"             # Datatype-related parameters
+    INTERNAL = "internal"             # Internal/derived parameters
 
 
 @dataclass
@@ -66,39 +87,7 @@ class Port:
             return None
 
 
-@dataclass
-class PortGroup(MutableMapping[str, Port]):
-    name: Optional[str] = None
-    interface_type: Optional[InterfaceType] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    ports: Dict[str, Port] = field(default_factory=dict)
-
-    # MutableMapping methods
-    def __getitem__(self, key: str) -> Port: return self.ports[key]
-    def __setitem__(self, key: str, value: Port) -> None: self.ports[key] = value
-    def __delitem__(self, key: str) -> None: del self.ports[key]
-    def __iter__(self) -> Iterator[str]: return iter(self.ports)
-    def __len__(self) -> int: return len(self.ports)
-
-    # Helpers
-    def add(self, suffix: str, port: Port) -> None:
-        self.ports[suffix] = port
-
-    def get_port(self, suffix: str) -> Optional[Port]:
-        return self.ports.get(suffix)
-
 PortGroup = Dict[str, Port]  # Alias for easier type hints
-
-@dataclass
-class Interface:
-    name: str
-    ports: PortGroup = field(default_factory=dict)
-
-    def add(self, prefix: str, suffix: str, port: Port) -> None:
-        self.ports.setdefault(prefix, {})[suffix] = port
-
-    def get(self, prefix: str, suffix: str) -> Optional[Port]:
-        return self.ports.get(prefix, {}).get(suffix)
 
 
 @dataclass
@@ -127,7 +116,7 @@ class Parameter:
     # Metadata
     line_number: Optional[int] = None
     
-    # Enhanced source information
+    # Source information
     source_detail: Dict[str, Any] = field(default_factory=dict)
     # Examples:
     # NODEATTR_ALIAS: {"nodeattr_name": "parallelism_factor"}
@@ -137,6 +126,7 @@ class Parameter:
     
     # Relationships
     interface_name: Optional[str] = None  # Which interface owns this
+    category: Optional[ParameterCategory] = None  # Parameter category
     
     @property
     def nodeattr_name(self) -> str:
@@ -195,8 +185,9 @@ class ParsedModule:
     name: str
     ports: List[Port]
     parameters: List[Parameter]
-    file_path: str
-    line_number: int
+    pragmas: List['Pragma']
+    file_path: str = "<string>"
+    line_number: int = 0
     
     def get_port(self, name: str) -> Optional[Port]:
         """Get a port by name."""
