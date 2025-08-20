@@ -15,8 +15,7 @@ import logging
 
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, ParameterCategory
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +228,7 @@ class BDimPragma(InterfacePragma):
         
         # Find the interface using helper
         interface = self.find_interface(kernel, interface_name)
-        if not interface:
+        if interface is None:
             logger.warning(f"BDIM pragma target interface '{interface_name}' not found")
             return
         
@@ -468,7 +467,7 @@ class SDimPragma(InterfacePragma):
         
         # Find the interface using helper
         interface = self.find_interface(kernel, interface_name)
-        if not interface:
+        if interface is None:
             logger.warning(f"SDIM pragma target interface '{interface_name}' not found")
             return
         

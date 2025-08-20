@@ -16,7 +16,7 @@ from pathlib import Path
 from tree_sitter import Node, Tree
 
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType, Parameter, Port
+from brainsmith.tools.kernel_integrator.types.rtl import ParsedModule, PragmaType, Parameter, Port
 from .pragmas import Pragma
 from .ast_parser import ASTParser, SyntaxError
 from .kernel_builder import KernelBuilder
@@ -43,11 +43,9 @@ class RTLParser:
 
     Attributes:
         debug: Enable debug output
-        auto_link_parameters: Enable automatic parameter linking
     """
     
-    def __init__(self, debug: bool = False,
-                 auto_link_parameters: bool = True, strict: bool = True):
+    def __init__(self, debug: bool = False):
         """Initializes the RTLParser.
 
         Creates sub-components for AST parsing, component extraction,
@@ -55,24 +53,17 @@ class RTLParser:
 
         Args:
             debug: If True, enables detailed debug logging.
-            auto_link_parameters: If True, enables automatic parameter linking based
-                                on naming conventions. Default is True.
-            strict: If True, enables strict validation of parsed metadata. When False,
-                    validation is skipped allowing parsing of files that don't meet all
-                    requirements. Default is True.
-
         Raises:
             RuntimeError: For unexpected errors during initialization.
         """
         self.debug = debug
-        self.auto_link_parameters = auto_link_parameters
-        self.strict = strict
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
         # Initialize sub-components
         self.ast_parser = ASTParser(debug=self.debug)
         self.module_extractor = ModuleExtractor(self.ast_parser, debug=self.debug)
         self.kernel_builder = KernelBuilder(self.ast_parser, debug=self.debug)
+        self.linker = ParameterLinker()
 
 
 
@@ -109,30 +100,12 @@ class RTLParser:
             kernel_metadata = self.kernel_builder.build(parsed_module, source_name)
             
             # Apply all pragmas to KernelMetadata
-            self._apply_pragmas(kernel_metadata)
+            self._apply_pragmas(kernel_metadata, parsed_module)
+
+            # Auto-linking with remaining parameters            
+            self.linker.link_parameters(kernel_metadata)
             
-            # Update Parameter objects based on pragma results
-            self._sync_parameter_exposure(kernel_metadata)
-            
-            # Auto-linking with remaining parameters
-            self._apply_autolinking(kernel_metadata)
-            
-            # Validate the complete KernelMetadata only if strict mode is enabled
-            if self.strict:
-                try:
-                    logger.info("Starting KernelMetadata validation...")
-                    validation_errors = kernel_metadata.validate()
-                    logger.info(f"Validation returned {len(validation_errors)} errors")
-                    if validation_errors:
-                        logger.error(f"Validation errors: {validation_errors}")
-                        raise ValueError(f"KernelMetadata validation failed: {'; '.join(validation_errors)}")
-                except ValueError as e:
-                    logger.error(f"Validation raised ValueError: {e}")
-                    raise ParserError(str(e))
-            else:
-                logger.info("Skipping validation (strict mode disabled)")
-            
-            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params ({len(kernel_metadata.exposed_parameters)} exposed), {len(kernel_metadata.interfaces)} interfaces.")
+            logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")
             return kernel_metadata
 
@@ -145,19 +118,16 @@ class RTLParser:
 
 
 
-
-
-        
-
-    def _apply_pragmas(self, kernel_metadata: KernelMetadata) -> None:
+    def _apply_pragmas(self, kernel_metadata: KernelMetadata, parsed_module: ParsedModule) -> None:
         """Apply all pragmas to kernel metadata.
         
         Args:
             kernel_metadata: KernelMetadata to modify.
+            parsed_module: ParsedModule containing pragmas to apply.
         """
-        logger.info(f"Applying {len(kernel_metadata.pragmas)} pragmas to kernel metadata")
-        
-        for pragma in kernel_metadata.pragmas:
+        logger.info(f"Applying {len(parsed_module.pragmas)} pragmas to kernel metadata")
+
+        for pragma in parsed_module.pragmas:
             try:
                 pragma.apply_to_kernel(kernel_metadata)
             except Exception as e:
@@ -166,54 +136,8 @@ class RTLParser:
                     f"at line {pragma.line_number}: {e}"
                 )
         
-        logger.info(f"Pragma application complete. Exposed parameters: {len(kernel_metadata.exposed_parameters)}")
+        logger.info(f"Pragma application complete.")
     
-    def _sync_parameter_exposure(self, kernel_metadata: KernelMetadata) -> None:
-        """Sync Parameter objects with exposed_parameters list.
-        
-        Updates source_type and source_detail on Parameter objects based on the 
-        linked_parameters after pragma processing.
-        
-        Args:
-            kernel_metadata: KernelMetadata with updated exposed_parameters.
-        """
-        # Import SourceType
-        from brainsmith.tools.kernel_integrator.types.rtl import SourceType
-        
-        # Create a set for efficient lookup
-        exposed_set = set(kernel_metadata.exposed_parameters)
-        
-        # Update each Parameter object
-        for param in kernel_metadata.parameters:
-            # Update source information based on linked_parameters
-            if param.name in kernel_metadata.linked_parameters.get("aliases", {}):
-                param.source_type = SourceType.NODEATTR_ALIAS
-                param.source_detail = {"nodeattr_name": kernel_metadata.linked_parameters["aliases"][param.name]}
-            elif param.name in kernel_metadata.linked_parameters.get("derived", {}):
-                param.source_type = SourceType.DERIVED
-                param.source_detail = {"expression": kernel_metadata.linked_parameters["derived"][param.name]}
-            elif param.name in kernel_metadata.linked_parameters.get("axilite", {}):
-                param.source_type = SourceType.AXILITE
-                param.source_detail = {"interface_name": kernel_metadata.linked_parameters["axilite"][param.name]}
-            # else: source_type remains SourceType.RTL (default)
-            
-        logger.debug(f"Synced parameter exposure: {len(exposed_set)} exposed out of {len(kernel_metadata.parameters)} total")
-    
-    def _apply_autolinking(self, kernel_metadata: KernelMetadata) -> None:
-        """Apply auto-linking to kernel metadata.
-        
-        Args:
-            kernel_metadata: KernelMetadata to modify.
-        """
-        if not self.auto_link_parameters:
-            return
-        
-        # Delegate all autolinking logic to ParameterLinker
-        linker = ParameterLinker(enable_interface_linking=True, enable_internal_linking=True)
-        linker.apply_to_kernel_metadata(kernel_metadata)
-        
-        # Assign parameter categories based on usage
-        linker.assign_parameter_categories(kernel_metadata)
 
 
     def parse_file(self, file_path: str) -> KernelMetadata:

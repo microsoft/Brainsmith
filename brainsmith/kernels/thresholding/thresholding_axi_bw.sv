@@ -45,7 +45,7 @@
 // @brainsmith BDIM input input_BDIM SHAPE=[CHANNELS]
 // @brainsmith SDIM input input_SDIM SHAPE=[PE]
 // *NOTE: This PE should really be SIMD
-// @brainsmith AXILITE_PARAM threshold USE_AXILITE
+// @brainsmith AXILITE_PARAM USE_AXILITE threshold enable
 
 module thresholding_axi #(
     // Interface Parallelism

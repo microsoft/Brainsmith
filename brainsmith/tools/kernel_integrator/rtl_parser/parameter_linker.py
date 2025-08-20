@@ -5,509 +5,385 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Parameter linking service for automatic datatype parameter detection.
+"""Modular parameter linking service for automatic parameter assignment.
 
-This module provides automatic linking of RTL parameters to datatype properties
-based on naming conventions. It uses a naive prefix-based approach where
-parameters with the same prefix are grouped together.
+This module provides automatic linking of RTL parameters to interface properties
+based on naming conventions. Parameters are moved from kernel.parameters to 
+appropriate interface fields based on pattern matching.
 """
 
 import re
 import logging
-from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import List, Optional, Pattern, Callable, Union
 from collections import defaultdict
 
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
-# DatatypeMetadata has been removed in refactoring
-from brainsmith.tools.kernel_integrator.types.rtl import Parameter, ParameterCategory
+from brainsmith.tools.kernel_integrator.types.metadata import (
+    KernelMetadata, AXIStreamMetadata, AXILiteMetadata, DatatypeParameters
+)
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter
+from brainsmith.core.dataflow.types import InterfaceType
 
 logger = logging.getLogger(__name__)
 
 
-# Suffix patterns for datatype properties
-PROPERTY_SUFFIXES = [
-    ("_WIDTH", "width"),
-    ("_SIGNED", "signed"),
-    ("_BIAS", "bias"),
-    ("_FORMAT", "format"),
-    ("_FRACTIONAL_WIDTH", "fractional_width"),
-    ("_EXPONENT_WIDTH", "exponent_width"),
-    ("_MANTISSA_WIDTH", "mantissa_width"),
+# Pattern definitions for each parameter type
+BDIM_PATTERNS = [
+    (r'^(.+)_BDIM$', 'single'),
+    (r'^(.+)_BDIM(\d+)$', 'indexed')
 ]
 
-# Special standalone parameter mappings (exact match)
-# Currently empty - all parameters use prefix-based matching
-STANDALONE_MAPPINGS = {}
+SDIM_PATTERNS = [
+    (r'^(.+)_SDIM$', 'single'),
+    (r'^(.+)_SDIM(\d+)$', 'indexed')
+]
+
+DTYPE_PATTERNS = {
+    'width': [r'_WIDTH$', r'_W$', r'_BITS$'],
+    'signed': [r'_SIGNED$', r'_SIGN$'],
+    'bias': [r'_BIAS$'],
+    'format': [r'_FORMAT$', r'_FMT$'],
+    'fractional_width': [r'_FRACTIONAL_WIDTH$', r'_FRAC_WIDTH$'],
+    'exponent_width': [r'_EXPONENT_WIDTH$', r'_EXP_WIDTH$'],
+    'mantissa_width': [r'_MANTISSA_WIDTH$', r'_MANT_WIDTH$'],
+}
+
+AXILITE_PATTERNS = {
+    'enable': [r'^USE_(.+)$', r'^(.+)_EN$', r'^ENABLE_(.+)$'],
+    'data_width': [r'^(.+)_DATA_WIDTH$', r'^(.+)_DW$'],
+    'addr_width': [r'^(.+)_ADDR_WIDTH$', r'^(.+)_AW$'],
+}
 
 
-# Temporarily disabled - DatatypeMetadata has been removed
+@dataclass
+class LinkingRule:
+    """A rule for linking parameters based on patterns."""
+    name: str
+    pattern: Pattern[str]
+    handler: Callable[[Parameter, KernelMetadata, re.Match, Optional[dict]], bool]
+    priority: int = 100  # Lower = higher priority
+    metadata: Optional[dict] = None  # Additional data for handler
+
+
 class ParameterLinker:
-    pass
-
-# Rest of file commented out
-"""
-    """Links RTL parameters to datatype properties using naive prefix grouping."""
+    """Modular parameter linker with extensible rule system."""
     
-    def __init__(self, enable_interface_linking: bool = True, 
-                 enable_internal_linking: bool = True):
-        """
-        Initialize the parameter linker.
+    def __init__(self):
+        self.rules: List[LinkingRule] = []
+        self._setup_default_rules()
+    
+    def _setup_default_rules(self):
+        """Set up the default linking rules."""
+        # BDIM rules (priority 50) - using consolidated handler
+        self.rules.append(LinkingRule(
+            name='bdim',
+            pattern=self._build_pattern(BDIM_PATTERNS),
+            handler=link_dimension_parameter,
+            priority=50,
+            metadata={'dimension': 'bdim', 'patterns': BDIM_PATTERNS}
+        ))
+        
+        # SDIM rules (priority 60) - using consolidated handler
+        self.rules.append(LinkingRule(
+            name='sdim',
+            pattern=self._build_pattern(SDIM_PATTERNS),
+            handler=link_dimension_parameter,
+            priority=60,
+            metadata={'dimension': 'sdim', 'patterns': SDIM_PATTERNS}
+        ))
+        
+        # AXI-Lite rules (priority 65 - before datatype to avoid _WIDTH collision)
+        self.rules.append(LinkingRule(
+            name='axilite',
+            pattern=self._build_pattern(AXILITE_PATTERNS),
+            handler=link_axilite_parameter,
+            priority=65
+        ))
+        
+        # Datatype rules (priority 70)
+        self.rules.append(LinkingRule(
+            name='dtype',
+            pattern=self._build_pattern(DTYPE_PATTERNS, pattern_type='suffix'),
+            handler=link_dtype_parameter,
+            priority=70
+        ))
+        
+        # Sort by priority
+        self.rules.sort(key=lambda x: x.priority)
+    
+    def _build_pattern(self, pattern_source, pattern_type='standard'):
+        """Build regex pattern from various source formats.
         
         Args:
-            enable_interface_linking: Enable auto-linking for interface parameters
-            enable_internal_linking: Enable auto-linking for internal parameters
+            pattern_source: List of patterns or dict of property->patterns
+            pattern_type: 'standard', 'suffix', or 'dimension'
         """
-        self.enable_interface_linking = enable_interface_linking
-        self.enable_internal_linking = enable_internal_linking
-    
-    def link_interface_parameters(self, interface_name: str, 
-                                parameters: List[Parameter]) -> Optional[Dict]:
-        """
-        Link parameters to an interface based on naming patterns.
+        patterns = []
         
-        Args:
-            interface_name: Name of the interface
-            parameters: List of all module parameters
-            
-        Returns:
-            DatatypeMetadata with linked parameters, or None if no links found
-        """
-        if not self.enable_interface_linking:
-            return None
-        
-        logger.debug(f"Attempting to auto-link parameters for interface '{interface_name}'")
-        
-        # Build parameter name lookup
-        param_names = {p.name for p in parameters}
-        
-        # Try to find parameters matching interface patterns
-        linked_params = {}
-        
-        for suffix, property_name in PROPERTY_SUFFIXES:
-            # Construct expected parameter name
-            expected_name = f"{interface_name}{suffix}"
-            
-            if expected_name in param_names:
-                linked_params[property_name] = expected_name
-                logger.debug(f"Auto-linked '{expected_name}' to {property_name} for interface '{interface_name}'")
-        
-        # Create DatatypeMetadata if we found any parameters
-        if linked_params:
-            return DatatypeMetadata(
-                name=interface_name,
-                width=linked_params.get("width"),
-                signed=linked_params.get("signed"),
-                format=linked_params.get("format"),
-                bias=linked_params.get("bias"),
-                fractional_width=linked_params.get("fractional_width"),
-                exponent_width=linked_params.get("exponent_width"),
-                mantissa_width=linked_params.get("mantissa_width"),
-                description="Auto-linked from naming conventions"
-            )
-        
-        return None
-    
-    def link_internal_parameters(self, parameters: List[Parameter], 
-                                exclude_prefixes: Optional[List[str]] = None,
-                                exclude_parameters: Optional[set] = None) -> List[DatatypeMetadata]:
-        """
-        Detect and link parameters for internal mechanisms using naive prefix grouping.
-        
-        This implementation:
-        1. Extracts the prefix from parameters ending with recognized suffixes
-        2. Groups parameters by common prefix
-        3. Each prefix becomes a datatype name (e.g., THRESH_* -> "THRESH", T_WIDTH -> "T")
-        
-        Args:
-            parameters: List of all module parameters
-            exclude_prefixes: Optional list of prefixes to exclude (e.g., interface names)
-            exclude_parameters: Optional set of parameter names to exclude (already claimed by pragmas)
-            
-        Returns:
-            List of DatatypeMetadata for internal mechanisms
-        """
-        if not self.enable_internal_linking:
-            return []
-        
-        logger.debug("Attempting to auto-link internal datatype parameters")
-        
-        # Track which parameters have been processed
-        processed_params = set()
-        
-        # Group parameters by prefix
-        prefix_groups = defaultdict(dict)
-        
-        for param in parameters:
-            # Skip if already processed
-            if param.name in processed_params:
-                continue
-            
-            # Skip if parameter is explicitly excluded (already claimed by pragma)
-            if exclude_parameters and param.name in exclude_parameters:
-                logger.debug(f"Skipping '{param.name}' - parameter is excluded (claimed by pragma)")
-                continue
-            
-            # Check for suffix patterns
-            for suffix, property_name in PROPERTY_SUFFIXES:
-                if param.name.endswith(suffix):
-                    # Extract prefix
-                    prefix = param.name[:-len(suffix)]
-                    if prefix:  # Only if there's actually a prefix
-                        # Check if prefix should be excluded
-                        if exclude_prefixes and prefix in exclude_prefixes:
-                            logger.debug(f"Skipping '{param.name}' - prefix '{prefix}' is excluded")
-                            continue
-                        prefix_groups[prefix][property_name] = param.name
-                        processed_params.add(param.name)
-                        logger.debug(f"Auto-linked '{param.name}' to {prefix}.{property_name}")
-                        break
-        
-        # Create DatatypeMetadata objects
-        internal_datatypes = []
-        
-        for prefix, properties in prefix_groups.items():
-            # Create datatype with whatever properties we found
-            dt_metadata = DatatypeMetadata(
-                name=prefix,
-                width=properties.get("width"),
-                signed=properties.get("signed"),
-                format=properties.get("format"),
-                bias=properties.get("bias"),
-                fractional_width=properties.get("fractional_width"),
-                exponent_width=properties.get("exponent_width"),
-                mantissa_width=properties.get("mantissa_width"),
-                description=f"Auto-linked internal datatype from prefix '{prefix}'"
-            )
-            internal_datatypes.append(dt_metadata)
-            logger.info(f"Created auto-linked internal datatype '{prefix}' with {len(properties)} parameters")
-        
-        return internal_datatypes
-    
-    def find_linked_parameters(self, datatype_metadata: DatatypeMetadata) -> Set[str]:
-        """
-        Find which parameters are linked by a DatatypeMetadata.
-        
-        Args:
-            datatype_metadata: DatatypeMetadata to inspect
-            
-        Returns:
-            Set of parameter names linked by this metadata
-        """
-        return set(datatype_metadata.get_all_parameters())
-    
-    def collect_dimension_parameters(self, interface_name: str, parameters: List[Parameter], 
-                                   dimension_type: str) -> Tuple[Optional[str], Optional[List[str]]]:
-        """
-        Collect dimension parameters for an interface.
-        
-        This method supports both single parameter and indexed parameter conventions:
-        - Single: <interface>_BDIM or <interface>_SDIM
-        - Indexed: <interface>_BDIM0, <interface>_BDIM1, etc.
-        
-        For indexed parameters, gaps are filled with "1" (singleton dimensions).
-        
-        Args:
-            interface_name: Name of the interface
-            parameters: List of all module parameters
-            dimension_type: Either "BDIM" or "SDIM"
-            
-        Returns:
-            Tuple of (single_param_name, indexed_params_list)
-            Only one will be non-None, based on what's found.
-        """
-        # Build parameter name lookup for efficiency
-        param_names = {p.name for p in parameters}
-        
-        # Check for single parameter first (existing convention)
-        single_name = f"{interface_name}_{dimension_type}"
-        if single_name in param_names:
-            logger.debug(f"Found single {dimension_type} parameter: {single_name}")
-            return single_name, None
-        
-        # Check for indexed parameters
-        indexed_params = {}
-        # Support both uppercase and lowercase variants
-        patterns = [
-            re.compile(f"{interface_name}_{dimension_type}(\\d+)"),
-            re.compile(f"{interface_name}_{dimension_type.lower()}(\\d+)")
-        ]
-        
-        for param in parameters:
-            for pattern in patterns:
-                match = pattern.match(param.name)
-                if match:
-                    index = int(match.group(1))
-                    indexed_params[index] = param.name
-                    logger.debug(f"Found indexed {dimension_type} parameter: {param.name} at index {index}")
-                    break
-        
-        if indexed_params:
-            # Convert to list, handling gaps with singleton dimensions
-            max_index = max(indexed_params.keys())
-            result = []
-            for i in range(max_index + 1):
-                if i in indexed_params:
-                    result.append(indexed_params[i])
-                else:
-                    # Gap in indices - treat as singleton dimension
-                    result.append("1")
-                    logger.debug(f"Gap at index {i} for {interface_name}_{dimension_type}, using singleton")
-            
-            logger.info(f"Collected indexed {dimension_type} parameters for '{interface_name}': {result}")
-            return None, result
-        
-        # No parameters found
-        logger.debug(f"No {dimension_type} parameters found for interface '{interface_name}'")
-        return None, None
-    
-    def apply_to_kernel_metadata(self, kernel_metadata: 'KernelMetadata') -> None:
-        """Apply all parameter linking to kernel metadata.
-        
-        This method handles:
-        - Interface parameter linking for streaming interfaces
-        - Creating default datatype metadata when needed
-        - Setting default BDIM/SDIM parameters
-        - Internal parameter linking
-        - Managing the exposed parameters list
-        
-        Args:
-            kernel_metadata: KernelMetadata to modify in place
-        """
-        logger.debug("Applying parameter linking to kernel metadata")
-        
-        # Apply interface auto-linking
-        if self.enable_interface_linking:
-            for interface in kernel_metadata.interfaces:
-                # Auto-link all eligible interfaces (exclude control)
-                if interface.interface_type.value in ['input', 'output', 'weight', 'config']:
-                    
-                    auto_linked_dt = self.link_interface_parameters(
-                        interface.name, kernel_metadata.parameters
-                    )
-                    
-                    if interface.datatype_metadata is None:
-                        # No existing metadata - use auto-linked or create default
-                        if auto_linked_dt:
-                            interface.datatype_metadata = auto_linked_dt
-                            logger.info(f"Auto-linked datatype parameters for interface '{interface.name}'")
-                        else:
-                            # No auto-linkable parameters found - create minimal metadata
-                            interface.datatype_metadata = DatatypeMetadata(name=interface.name)
-                            logger.debug(f"No datatype parameters found for interface '{interface.name}' - using minimal metadata")
-                    elif auto_linked_dt:
-                        # Merge auto-linked with existing metadata (auto-link fills gaps)
-                        existing = interface.datatype_metadata
-                        merged = DatatypeMetadata(
-                            name=existing.name,
-                            width=existing.width or auto_linked_dt.width,
-                            signed=existing.signed or auto_linked_dt.signed,
-                            format=existing.format or auto_linked_dt.format,
-                            bias=existing.bias or auto_linked_dt.bias,
-                            fractional_width=existing.fractional_width or auto_linked_dt.fractional_width,
-                            exponent_width=existing.exponent_width or auto_linked_dt.exponent_width,
-                            mantissa_width=existing.mantissa_width or auto_linked_dt.mantissa_width
-                        )
-                        interface.datatype_metadata = merged
-                        logger.info(f"Merged auto-linked parameters with existing metadata for interface '{interface.name}'")
-                    
-                    # Remove linked parameters from exposed list
-                    if interface.datatype_metadata:
-                        for param_name in interface.datatype_metadata.get_all_parameters():
-                            if param_name in kernel_metadata.exposed_parameters:
-                                kernel_metadata.exposed_parameters.remove(param_name)
-                    
-                    # Only auto-link BDIM if not already set by pragma
-                    # BDIM applies to INPUT, OUTPUT, and WEIGHT interfaces
-                    if not interface.bdim_params:
-                        # Collect BDIM parameters using new method
-                        single_bdim, indexed_bdims = self.collect_dimension_parameters(
-                            interface.name, kernel_metadata.parameters, "BDIM"
-                        )
-                        
-                        if indexed_bdims:
-                            # Multi-dimensional case
-                            interface.bdim_params = indexed_bdims
-                            # Remove all indexed params from exposed (except singletons)
-                            for param in indexed_bdims:
-                                if param != "1" and param in kernel_metadata.exposed_parameters:
-                                    kernel_metadata.exposed_parameters.remove(param)
-                                    logger.debug(f"Removed indexed BDIM parameter '{param}' from exposed list")
-                        elif single_bdim:
-                            # Single parameter case - store as list
-                            interface.bdim_params = [single_bdim]
-                            if single_bdim in kernel_metadata.exposed_parameters:
-                                kernel_metadata.exposed_parameters.remove(single_bdim)
-                                logger.debug(f"Removed single BDIM parameter '{single_bdim}' from exposed list")
-                        else:
-                            # No matching BDIM parameters found - leave unset for validation
-                            logger.debug(f"No BDIM parameters found for interface '{interface.name}'")
-                    
-                    # Only auto-link SDIM if not already set by pragma
-                    # SDIM only applies to INPUT and WEIGHT interfaces (not OUTPUT)
-                    if interface.interface_type.value in ['input', 'weight']:
-                        if not interface.sdim_params:
-                            # Collect SDIM parameters using new method
-                            single_sdim, indexed_sdims = self.collect_dimension_parameters(
-                                interface.name, kernel_metadata.parameters, "SDIM"
-                            )
-                            
-                            if indexed_sdims:
-                                # Multi-dimensional case
-                                interface.sdim_params = indexed_sdims
-                                # Remove all indexed params from exposed (except singletons)
-                                for param in indexed_sdims:
-                                    if param != "1" and param in kernel_metadata.exposed_parameters:
-                                        kernel_metadata.exposed_parameters.remove(param)
-                                        logger.debug(f"Removed indexed SDIM parameter '{param}' from exposed list")
-                            elif single_sdim:
-                                # Single parameter case - store as list
-                                interface.sdim_params = [single_sdim]
-                                if single_sdim in kernel_metadata.exposed_parameters:
-                                    kernel_metadata.exposed_parameters.remove(single_sdim)
-                                    logger.debug(f"Removed single SDIM parameter '{single_sdim}' from exposed list")
-                            else:
-                                # No matching SDIM parameters found - leave unset for validation
-                                logger.debug(f"No SDIM parameters found for interface '{interface.name}'")
-                    else:
-                        logger.debug(f"Skipping SDIM auto-linking for interface '{interface.name}' "
-                                   f"of type '{interface.interface_type.value}' (SDIM only applies to INPUT/WEIGHT)")
-        
-        # Apply internal auto-linking
-        if self.enable_internal_linking:
-            # Get interface names and already-linked parameters for exclusion
-            interface_names = [iface.name for iface in kernel_metadata.interfaces]
-            exclude_parameters = set()
-            
-            # Collect parameters already linked by pragmas
-            for dt in kernel_metadata.internal_datatypes:
-                exclude_parameters.update(dt.get_all_parameters())
-            
-            # Collect parameters already linked by interface datatypes
-            for interface in kernel_metadata.interfaces:
-                if interface.datatype_metadata:
-                    exclude_parameters.update(interface.datatype_metadata.get_all_parameters())
-            
-            auto_linked_internals = self.link_internal_parameters(
-                kernel_metadata.parameters,
-                exclude_prefixes=interface_names,
-                exclude_parameters=exclude_parameters
-            )
-            
-            if auto_linked_internals:
-                kernel_metadata.internal_datatypes.extend(auto_linked_internals)
-                logger.info(f"Auto-linked {len(auto_linked_internals)} internal datatypes")
-                
-                # Remove auto-linked parameters from exposed list
-                for dt in auto_linked_internals:
-                    for param_name in dt.get_all_parameters():
-                        if param_name in kernel_metadata.exposed_parameters:
-                            kernel_metadata.exposed_parameters.remove(param_name)
-    
-    def assign_parameter_categories(self, kernel_metadata: 'KernelMetadata') -> None:
-        """Assign semantic categories to parameters based on their usage.
-        
-        This method analyzes how parameters are used and assigns appropriate
-        categories (SHAPE, DATATYPE, CONTROL, INTERNAL, ALGORITHM).
-        
-        Args:
-            kernel_metadata: KernelMetadata with parameters to categorize
-        """
-        logger.debug("Assigning parameter categories")
-        
-        # Collect shape parameters from all interfaces
-        shape_params = set()
-        for interface in kernel_metadata.interfaces:
-            if interface.bdim_params:
-                for i, param in enumerate(interface.bdim_params):
-                    if param != '1' and isinstance(param, str):
-                        shape_params.add(param)
-                        # Find the parameter and update its details
-                        for p in kernel_metadata.parameters:
-                            if p.name == param:
-                                p.interface_name = interface.name
-                                p.source_detail["shape_type"] = "bdim"
-                                p.source_detail["dimension"] = i
-                                break
-                                
-            if interface.sdim_params:
-                for i, param in enumerate(interface.sdim_params):
-                    if param != '1' and isinstance(param, str):
-                        shape_params.add(param)
-                        # Find the parameter and update its details
-                        for p in kernel_metadata.parameters:
-                            if p.name == param:
-                                p.interface_name = interface.name
-                                p.source_detail["shape_type"] = "sdim"
-                                p.source_detail["dimension"] = i
-                                break
-        
-        # Collect datatype parameters from interfaces
-        datatype_params = set()
-        for interface in kernel_metadata.interfaces:
-            if interface.datatype_metadata:
-                dt_params = interface.datatype_metadata.get_all_parameters()
-                datatype_params.update(dt_params)
-                # Update interface_name for these parameters
-                for param_name in dt_params:
-                    for p in kernel_metadata.parameters:
-                        if p.name == param_name:
-                            p.interface_name = interface.name
-                            # Add property info to source_detail if not already set
-                            if p.source_type == SourceType.RTL:
-                                p.source_type = SourceType.INTERFACE_DATATYPE
-                                # Determine which property this parameter controls
-                                dt_meta = interface.datatype_metadata
-                                if dt_meta.width == param_name:
-                                    p.source_detail["property"] = "width"
-                                elif dt_meta.signed == param_name:
-                                    p.source_detail["property"] = "signed"
-                                elif dt_meta.format == param_name:
-                                    p.source_detail["property"] = "format"
-                                elif dt_meta.bias == param_name:
-                                    p.source_detail["property"] = "bias"
-                                elif dt_meta.fractional_width == param_name:
-                                    p.source_detail["property"] = "fractional_width"
-                                p.source_detail["interface"] = interface.name
-                            break
-        
-        # Collect datatype parameters from internal datatypes
-        for dt_meta in kernel_metadata.internal_datatypes:
-            dt_params = dt_meta.get_all_parameters()
-            datatype_params.update(dt_params)
-            # Update source info for these parameters
-            for param_name in dt_params:
-                for p in kernel_metadata.parameters:
-                    if p.name == param_name:
-                        if p.source_type == SourceType.RTL:
-                            p.source_type = SourceType.INTERNAL_DATATYPE
-                            p.source_detail["interface"] = dt_meta.name
-                            # Determine which property
-                            if dt_meta.width == param_name:
-                                p.source_detail["property"] = "width"
-                            elif dt_meta.signed == param_name:
-                                p.source_detail["property"] = "signed"
-                        break
-        
-        # Assign categories to all parameters
-        for param in kernel_metadata.parameters:
-            if param.name in shape_params:
-                param.category = ParameterCategory.SHAPE
-                if param.source_type == SourceType.RTL:
-                    param.source_type = SourceType.INTERFACE_SHAPE
-            elif param.name in datatype_params:
-                param.category = ParameterCategory.DATATYPE
-            elif param.source_type == SourceType.AXILITE:
-                param.category = ParameterCategory.CONTROL
-            elif param.name not in kernel_metadata.exposed_parameters:
-                # Non-exposed parameters linked to internal datatypes
-                param.category = ParameterCategory.INTERNAL
+        # Extract patterns from source
+        if isinstance(pattern_source, dict):
+            # Flatten dict values (AXILITE_PATTERNS, DTYPE_PATTERNS)
+            for patterns_list in pattern_source.values():
+                patterns.extend(patterns_list)
+        else:
+            # List of patterns (BDIM_PATTERNS, SDIM_PATTERNS)
+            if pattern_source and isinstance(pattern_source[0], tuple):
+                patterns = [p for p, _ in pattern_source]
             else:
-                # Default: exposed parameters are algorithm parameters
-                param.category = ParameterCategory.ALGORITHM
+                patterns = pattern_source
         
-        logger.info(f"Categorized {len(kernel_metadata.parameters)} parameters: "
-                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.ALGORITHM)} algorithm, "
-                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.SHAPE)} shape, "
-                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.DATATYPE)} datatype, "
-                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.CONTROL)} control, "
-                   f"{sum(1 for p in kernel_metadata.parameters if p.category == ParameterCategory.INTERNAL)} internal")
+        # Build regex based on type
+        if pattern_type == 'suffix':
+            # For dtype patterns - strip anchors, escape, re-anchor
+            suffixes = [p.replace('$', '') for p in patterns]
+            return re.compile('.+(' + '|'.join(re.escape(s) for s in suffixes) + ')$')
+        else:
+            # Standard - join patterns with | (patterns already have their own groups)
+            return re.compile('|'.join(patterns))
+    
+    def link_parameters(self, kernel: KernelMetadata) -> None:
+        """Link parameters using registered rules.
+        
+        Processes each parameter in kernel.parameters and attempts to link it
+        to an appropriate interface or internal group based on naming patterns.
+        Parameters that don't match any pattern remain in kernel.parameters.
+        
+        Args:
+            kernel: KernelMetadata to process (modified in place)
+        """
+        remaining_params = []
+        
+        logger.info(f"Starting parameter linking for kernel '{kernel.name}' with {len(kernel.parameters)} parameters")
+        
+        for param in kernel.parameters:
+            linked = False
+            
+            # Try each rule in priority order
+            for rule in self.rules:
+                match = rule.pattern.match(param.name)
+                if match:
+                    logger.debug(f"Parameter '{param.name}' matches rule '{rule.name}'")
+                    # Try to link using the handler
+                    if rule.handler(param, kernel, match, rule.metadata):
+                        logger.debug(f"Parameter '{param.name}' successfully linked by rule '{rule.name}'")
+                        linked = True
+                        break
+            
+            if not linked:
+                logger.debug(f"Parameter '{param.name}' not linked by any rule, keeping in kernel.parameters")
+                remaining_params.append(param)
+        
+        kernel.parameters = remaining_params
+        logger.info(f"Parameter linking complete. {len(remaining_params)} parameters remain unlinked")
+
+
+# Handler functions for each parameter type
+
+def link_dimension_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+    """Try to link parameter as dimension (BDIM or SDIM).
+    
+    This is a consolidated handler that uses the rule metadata to determine
+    which dimension type and patterns to use.
+    """
+    if not metadata:
+        return False
+    
+    dimension_type = metadata.get('dimension')  # 'bdim' or 'sdim'
+    
+    # Find the first non-None capture group (since we have multiple patterns combined)
+    interface_name = None
+    for i in range(1, match.lastindex + 1 if match.lastindex else 1):
+        group_val = match.group(i)
+        if group_val is not None and not group_val.isdigit():  # Skip index groups
+            interface_name = group_val
+            break
+    
+    if not interface_name:
+        logger.debug(f"Could not extract interface name from match for '{param.name}'")
+        return False
+    
+    logger.debug(f"{dimension_type.upper()} pattern matched for '{param.name}', interface_name='{interface_name}'")
+    interface = _find_stream_interface(interface_name, kernel)
+    
+    if not interface:
+        logger.debug(f"No interface found with name '{interface_name}'")
+        return False
+    
+    # For SDIM, check interface type
+    if dimension_type == 'sdim' and interface.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
+        logger.debug(f"SDIM not applicable to {interface.interface_type} interface")
+        return False
+    
+    attr_name = f"{dimension_type}_params"
+    
+    # Check if this is an indexed pattern by looking for a digit group
+    index_group = None
+    if match.lastindex:
+        for i in range(1, match.lastindex + 1):
+            group_val = match.group(i)
+            if group_val is not None and group_val.isdigit():
+                index_group = int(group_val)
+                break
+    
+    if index_group is not None:
+        # Indexed parameter
+        if not getattr(interface, attr_name):
+            _add_indexed_dimension_param(interface, attr_name, param, index_group)
+            logger.debug(f"Successfully linked indexed '{param.name}' to interface '{interface.name}'")
+            return True
+        else:
+            logger.debug(f"Interface '{interface.name}' already has {attr_name}, skipping")
+            return False
+    else:
+        # Single parameter case
+        context = f"'{param.name}' to interface '{interface.name}' as {attr_name}"
+        return _assign_if_empty(interface, attr_name, [param], context)
+
+
+def link_dtype_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+    """Try to link parameter as datatype property."""
+    # Find the best (longest) matching pattern to handle compound suffixes correctly
+    best_match = None
+    best_property = None
+    best_prefix = None
+    
+    for property_name, patterns in DTYPE_PATTERNS.items():
+        for pattern_str in patterns:
+            suffix = pattern_str.replace('$', '')
+            if param.name.endswith(suffix):
+                prefix = param.name[:-len(suffix)]
+                # Prefer longer suffixes (more specific)
+                if best_match is None or len(suffix) > len(best_match):
+                    best_match = suffix
+                    best_property = property_name
+                    best_prefix = prefix
+    
+    if not best_property:
+        logger.debug(f"Could not determine property for parameter '{param.name}'")
+        return False
+    
+    # Try to find matching interface - check both stream and AXI-Lite interfaces
+    interface = _find_stream_interface(best_prefix, kernel)
+    if not interface:
+        # Also check AXI-Lite interfaces
+        interface = _find_axilite_interface(best_prefix, kernel)
+    
+    if interface:
+        # Create DatatypeParameters if needed
+        if not interface.dtype_params:
+            interface.dtype_params = DatatypeParameters()
+        
+        # Set kernel_value to track the property type
+        param.kernel_value = best_property
+        
+        # Use _assign_if_empty to set the property
+        context = f"'{param.name}' to interface '{interface.name}' as dtype property '{best_property}'"
+        return _assign_if_empty(interface.dtype_params, best_property, param, context)
+    
+    # No matching interface - parameter remains unlinked
+    logger.debug(f"No interface found for dtype parameter '{param.name}' with prefix '{best_prefix}'")
+    return False
+
+
+def link_axilite_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+    """Try to link parameter to AXI-Lite interface."""
+    # Extract interface name from match groups
+    interface_name = None
+    for group in match.groups():
+        if group:
+            interface_name = group
+            break
+    
+    if not interface_name:
+        return False
+    
+    interface = _find_axilite_interface(interface_name, kernel)
+    if not interface:
+        logger.debug(f"No AXI-Lite interface found for '{interface_name}'")
+        return False
+    
+    # Find which property this pattern matches
+    for property_name, patterns in AXILITE_PATTERNS.items():
+        for pattern_str in patterns:
+            if re.match(pattern_str, param.name):
+                # Map property name to interface attribute
+                attr_map = {
+                    'enable': 'enable_param',
+                    'data_width': 'data_width_param', 
+                    'addr_width': 'addr_width_param'
+                }
+                
+                attr_name = attr_map.get(property_name)
+                if attr_name:
+                    context = f"'{param.name}' to AXI-Lite interface '{interface.name}' as {attr_name}"
+                    return _assign_if_empty(interface, attr_name, param, context)
+    
+    return False
+
+
+
+
+# Helper functions
+
+def _assign_if_empty(obj, attr_name: str, value, logger_context: str = "") -> bool:
+    """Assign value to attribute if it's currently empty/None/False.
+    
+    Args:
+        obj: Object to set attribute on
+        attr_name: Name of attribute to set
+        value: Value to assign
+        logger_context: Optional context for debug logging
+        
+    Returns:
+        True if assignment was made, False if attribute was already set
+    """
+    current_value = getattr(obj, attr_name)
+    if not current_value:
+        setattr(obj, attr_name, value)
+        if logger_context:
+            logger.debug(f"Assigned {logger_context}")
+        return True
+    if logger_context:
+        logger.debug(f"Skipped {logger_context} - already set")
+    return False
+
+
+def _find_stream_interface(name: str, kernel: KernelMetadata) -> Optional[AXIStreamMetadata]:
+    """Find an AXI-Stream interface by name."""
+    # Check inputs
+    for interface in kernel.inputs:
+        if interface.name == name:
+            return interface
+    
+    # Check outputs
+    for interface in kernel.outputs:
+        if interface.name == name:
+            return interface
+    
+    return None
+
+
+def _find_axilite_interface(name: str, kernel: KernelMetadata) -> Optional[AXILiteMetadata]:
+    """Find an AXI-Lite interface by name."""
+    for interface in kernel.config:
+        if interface.name == name or interface.name == f"s_axilite_{name}":
+            return interface
+    return None
+
+
+def _add_indexed_dimension_param(interface: AXIStreamMetadata, attr_name: str,
+                                param: Parameter, index: int) -> None:
+    """Add an indexed parameter to a dimension list, handling gaps."""
+    current_list = getattr(interface, attr_name)
+    
+    # If empty, create new list
+    if not current_list:
+        # Fill with "1" up to index
+        new_list = ["1"] * (index + 1)
+        new_list[index] = param
+        setattr(interface, attr_name, new_list)
+    else:
+        # Extend existing list if needed
+        while len(current_list) <= index:
+            current_list.append("1")
+        current_list[index] = param
