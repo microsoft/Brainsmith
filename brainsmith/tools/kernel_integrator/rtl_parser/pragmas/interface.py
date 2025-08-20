@@ -114,7 +114,7 @@ class DatatypePragma(InterfacePragma):
         
         # Find the interface using helper
         interface = self.find_interface(kernel, interface_name)
-        if not interface:
+        if interface is None:
             logger.warning(f"DATATYPE pragma target interface '{interface_name}' not found")
             return
         
@@ -184,7 +184,7 @@ class WeightPragma(InterfacePragma):
         # WeightPragma handles multiple interfaces, so we apply to each one
         for interface_name in interface_names:
             interface = self.find_interface(kernel, interface_name)
-            if interface:
+            if interface is not None:
                 # Mark interface as weight type
                 if hasattr(interface, 'is_weight'):
                     interface.is_weight = True
@@ -222,7 +222,7 @@ class DatatypeParamPragma(InterfacePragma):
         parameter_name = pos[2]
         
         # Validate property type
-        valid_properties = ['width', 'signed', 'format', 'bias', 'fractional_width']
+        valid_properties = ['width', 'signed', 'format', 'bias', 'fractional_width', 'exponent_width', 'mantissa_width']
         if property_type not in valid_properties:
             raise PragmaError(f"Invalid property_type '{property_type}'. Must be one of: {valid_properties}")
         
@@ -239,14 +239,10 @@ class DatatypeParamPragma(InterfacePragma):
         property_type = self.parsed_data.get("property_type")
         parameter_name = self.parsed_data.get("parameter_name")
         
-        # Find the interface
-        interface = None
-        for iface in kernel.inputs + kernel.outputs + kernel.config:
-            if iface.name == interface_name:
-                interface = iface
-                break
+        # Find the interface using helper method
+        interface = self.find_interface(kernel, interface_name)
         
-        if not interface:
+        if interface is None:
             # If interface not found, this might be an internal datatype
             # For now, just log a warning - internal datatypes handling can be added later if needed
             logger.warning(f"DATATYPE_PARAM pragma target interface '{interface_name}' not found")
@@ -263,12 +259,31 @@ class DatatypeParamPragma(InterfacePragma):
             # Move parameter to interface
             param = kernel.parameters.pop(param_index)
             
-            # Store the property type in the parameter's source_detail for now
-            # This tells us what property (width/signed/etc) this parameter represents
-            param.kernel_value = property_type  # Store property type in kernel_value
+            # Store the property type in the parameter's kernel_value
+            param.kernel_value = property_type
             
-            interface.dtype_params.append(param)
-            logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' dtype_params (property: {property_type})")
+            # Create DatatypeParameters if needed
+            if not hasattr(interface, 'dtype_params') or interface.dtype_params is None:
+                from brainsmith.tools.kernel_integrator.types.metadata import DatatypeParameters
+                interface.dtype_params = DatatypeParameters()
+            
+            # Assign to the appropriate property
+            if property_type == 'width':
+                interface.dtype_params.width = param
+            elif property_type == 'signed':
+                interface.dtype_params.signed = param
+            elif property_type == 'format':
+                interface.dtype_params.format = param
+            elif property_type == 'bias':
+                interface.dtype_params.bias = param
+            elif property_type == 'fractional_width':
+                interface.dtype_params.fractional_width = param
+            elif property_type == 'exponent_width':
+                interface.dtype_params.exponent_width = param
+            elif property_type == 'mantissa_width':
+                interface.dtype_params.mantissa_width = param
+            
+            logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' dtype_params.{property_type}")
         else:
             logger.warning(f"DATATYPE_PARAM pragma references parameter '{parameter_name}' which is not in kernel.parameters")
         

@@ -14,7 +14,7 @@ from typing import Dict
 import logging
 
 from .base import Pragma, PragmaError
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
+from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class TopModulePragma(Pragma):
             raise PragmaError("TOP_MODULE pragma requires exactly one argument: <module_name>")
         return {"module_name": pos[0]}
 
-    def apply_to_kernel(self, kernel: 'KernelMetadata') -> None:
+    def apply_to_kernel(self, kernel: KernelMetadata) -> None:
         """Apply TOP_MODULE pragma to kernel metadata."""
         # TOP_MODULE is handled during parsing to select the correct module
         # By the time we have KernelMetadata, the module has already been selected

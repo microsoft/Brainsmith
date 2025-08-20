@@ -22,12 +22,12 @@ from brainsmith.tools.kernel_integrator.rtl_parser import RTLParser, parse_rtl_f
 from brainsmith.tools.kernel_integrator.rtl_parser.ast_parser import ASTParser
 from brainsmith.tools.kernel_integrator.rtl_parser.module_extractor import ModuleExtractor
 from brainsmith.tools.kernel_integrator.rtl_parser.protocol_validator import ProtocolScanner
-from brainsmith.tools.kernel_integrator.rtl_parser.pragma import PragmaHandler
+# from brainsmith.tools.kernel_integrator.rtl_parser.pragma_handler import PragmaHandler
 from brainsmith.tools.kernel_integrator.rtl_parser.parameter_linker import ParameterLinker
 
 # Import data structures
 from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import Parameter, Port, PortDirection
+from brainsmith.tools.kernel_integrator.types.rtl import Parameter, Port, Direction
 from brainsmith.core.dataflow.types import InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
@@ -77,10 +77,10 @@ def protocol_validator() -> ProtocolScanner:
 
 
 
-@pytest.fixture
-def pragma_handler() -> PragmaHandler:
-    """Create a pragma handler instance."""
-    return PragmaHandler()
+# @pytest.fixture
+# def pragma_handler() -> PragmaHandler:
+#     """Create a pragma handler instance."""
+#     return PragmaHandler()
 
 
 @pytest.fixture

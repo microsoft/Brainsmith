@@ -24,13 +24,15 @@ from brainsmith.tools.kernel_integrator.types.rtl import Port, PortGroup
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
+# Keys are uppercase for case-insensitive matching
 GLOBAL_SIGNAL_SUFFIXES = {
-    "clk": {"direction": Direction.INPUT, "required": True},
-    "rst_n": {"direction": Direction.INPUT, "required": True},
-    "clk2x": {"direction": Direction.INPUT, "required": False},
+    "CLK": {"direction": Direction.INPUT, "required": True},
+    "RST_N": {"direction": Direction.INPUT, "required": True},
+    "CLK2X": {"direction": Direction.INPUT, "required": False},
 }
 
-# Suffixes for AXI-Stream signals (direction is slave, opposite for master) 
+# Suffixes for AXI-Stream signals (direction is slave, opposite for master)
+# Keys are uppercase for case-insensitive matching
 AXI_STREAM_SUFFIXES = {
     "TDATA": {"direction": Direction.INPUT, "required": True},
     "TVALID": {"direction": Direction.INPUT, "required": True},
@@ -39,6 +41,7 @@ AXI_STREAM_SUFFIXES = {
 }
 
 # Suffixes for AXI-Lite signals
+# Keys are uppercase for case-insensitive matching
 AXI_LITE_SUFFIXES = {
     # Write Address Channel
     "AWADDR": {"direction": Direction.INPUT, "required": True},
@@ -169,13 +172,12 @@ class ProtocolScanner:
                     if prefix not in interfaces_by_protocol[protocol_type]:
                         interfaces_by_protocol[protocol_type][prefix] = InterfaceMetadata(
                             name=prefix,
-                            ports={},
-                            description=None
+                            ports={}
                         )
                         logger.debug("Created new potential %s group '%s'", protocol_type, prefix)
 
-                    # Record the port keyed by canonical suffix
-                    interfaces_by_protocol[protocol_type][prefix].ports[protocol_suffix] = port
+                    # Record the port keyed by canonical suffix (lowercase for consistency)
+                    interfaces_by_protocol[protocol_type][prefix].ports[protocol_suffix.lower()] = port
                     logger.debug("Assigned '%s' (suffix '%s') to %s group '%s'", port.name, protocol_suffix, protocol_type, prefix)
                     port_assigned = True
                     break  # Stop after first suffix match for this protocol
@@ -213,9 +215,10 @@ class ProtocolScanner:
         """
         metadata = {}
         protocol_suffixes = self.suffixes[protocol]
+        # Convert present keys to uppercase for case-insensitive comparison
         present_keys = {key.upper() for key in interface.ports.keys()}
-        required_keys = {key.upper() for key, spec in protocol_suffixes.items() if spec["required"] is True}
-        optional_keys = {key.upper() for key, spec in protocol_suffixes.items() if spec["required"] is False}
+        required_keys = {key for key, spec in protocol_suffixes.items() if spec["required"] is True}
+        optional_keys = {key for key, spec in protocol_suffixes.items() if spec["required"] is False}
         missing = required_keys - present_keys
         unexpected = present_keys - required_keys - optional_keys
 
@@ -224,8 +227,8 @@ class ProtocolScanner:
             # Check for required signals in write/read channels
             write_missing = {sig for sig in missing if sig in AXI_LITE_WRITE_SUFFIXES}
             read_missing = {sig for sig in missing if sig in AXI_LITE_READ_SUFFIXES}
-            has_write_channel = any(sig in interface.ports and AXI_LITE_WRITE_SUFFIXES[sig]['required'] for sig in AXI_LITE_WRITE_SUFFIXES)
-            has_read_channel = any(sig in interface.ports and AXI_LITE_READ_SUFFIXES[sig]['required'] for sig in AXI_LITE_READ_SUFFIXES)
+            has_write_channel = any(sig.lower() in interface.ports and AXI_LITE_WRITE_SUFFIXES[sig]['required'] for sig in AXI_LITE_WRITE_SUFFIXES)
+            has_read_channel = any(sig.lower() in interface.ports and AXI_LITE_READ_SUFFIXES[sig]['required'] for sig in AXI_LITE_READ_SUFFIXES)
             if has_write_channel and write_missing:
                 raise ValueError(f"AXI-Lite {interface.name}: Partial write interface, missing required signal(s): {write_missing}")
             if has_read_channel and read_missing:
@@ -261,6 +264,9 @@ class ProtocolScanner:
         alignment = {}
         protocol_suffixes = self.suffixes[protocol]
         for port_name, port in interface.ports.items():
+            # Note: port_name here is already the canonical suffix (e.g., "clk", "rst_n")
+            # from interface.ports which maps suffix -> Port
+            # Convert to uppercase for case-insensitive matching
             expected_direction = protocol_suffixes.get(port_name.upper(), {}).get("direction")
             alignment[port_name] = port.direction == expected_direction
         if all(alignment.values()):

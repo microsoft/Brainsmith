@@ -850,10 +850,11 @@ class ModuleExtractor:
         
         try:
             # Instantiate the specific Pragma subclass with parsed inputs
+            # Add line_number to inputs for reference
+            parsed_inputs['line_number'] = line_number
             return pragma_class(
                 type=pragma_enum_type,
-                inputs=parsed_inputs,
-                line_number=line_number
+                inputs=parsed_inputs
             )
         except PragmaError as e:
             logger.warning(f"Error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")

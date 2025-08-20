@@ -16,11 +16,26 @@ from .rtl import Port, PortGroup, Parameter, Direction
 
 
 @dataclass
+class DatatypeParameters:
+    """Container for datatype-related parameters.
+    
+    Each property is optional and can hold at most one Parameter.
+    This ensures no duplicate properties and provides structured access.
+    """
+    width: Optional[Parameter] = None
+    signed: Optional[Parameter] = None
+    bias: Optional[Parameter] = None
+    format: Optional[Parameter] = None
+    fractional_width: Optional[Parameter] = None
+    exponent_width: Optional[Parameter] = None
+    mantissa_width: Optional[Parameter] = None
+
+
+@dataclass
 class InterfaceMetadata(MutableMapping[str, Port]):
     """Base metadata for all interfaces."""
     name: str
     ports: Dict[str, Port]
-    description: Optional[str]
 
     def add_port(self, port: Port):
         """Add a port to the interface."""
@@ -40,10 +55,6 @@ class InterfaceMetadata(MutableMapping[str, Port]):
     def get_port(self, suffix: str) -> Optional[Port]:
         return self.ports.get(suffix)
 
-
-
-
-
     
 @dataclass
 class AXIStreamMetadata(InterfaceMetadata):
@@ -55,7 +66,7 @@ class AXIStreamMetadata(InterfaceMetadata):
     # Owned RTL Parameters
     bdim_params: List[Parameter] = field(default_factory=list)
     sdim_params: List[Parameter] = field(default_factory=list)
-    dtype_params: List[Parameter] = field(default_factory=list)
+    dtype_params: Optional[DatatypeParameters] = None
 
     # Shape expressions for tiling system
     bdim_shape: Optional[List] = None
@@ -63,7 +74,7 @@ class AXIStreamMetadata(InterfaceMetadata):
 
     # TAFK TODO: Fix/add these
     relationships: Dict[str, str] = field(default_factory=dict)
-    datatype_constraints: DatatypeConstraintGroup = field(default_factory=DatatypeConstraintGroup)
+    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
     
     @property
     def interface_type(self) -> InterfaceType:
@@ -71,6 +82,7 @@ class AXIStreamMetadata(InterfaceMetadata):
         if self.is_weight:
             return InterfaceType.WEIGHT
         return InterfaceType.INPUT if self.direction == Direction.INPUT else InterfaceType.OUTPUT
+
 
 @dataclass
 class AXILiteMetadata(InterfaceMetadata):
@@ -83,6 +95,7 @@ class AXILiteMetadata(InterfaceMetadata):
     enable_param: Optional[Parameter] = None
     data_width_param: Optional[Parameter] = None
     addr_width_param: Optional[Parameter] = None
+    dtype_params: Optional[DatatypeParameters] = None
 
     @property
     def is_read_only(self) -> bool:
@@ -93,7 +106,8 @@ class AXILiteMetadata(InterfaceMetadata):
     def is_write_only(self) -> bool:
         """Check if this AXI-Lite interface is write-only."""
         return self.has_write and not self.has_read
-    
+
+
 @dataclass
 class ControlMetadata(InterfaceMetadata):
     """Metadata for a Control interface."""
@@ -114,7 +128,7 @@ class KernelMetadata:
     control: ControlMetadata
     # Optional fields with defaults
     parameters: List[Parameter] = field(default_factory=list)
-    linked_parameters: List[Parameter] = field(default_factory=list)  # DERIVED parameters
+    linked_parameters: List[Parameter] = field(default_factory=list)  # Deprecated: parameters linked by pragmas
     inputs: List[AXIStreamMetadata] = field(default_factory=list)
     outputs: List[AXIStreamMetadata] = field(default_factory=list)
     config: List[AXILiteMetadata] = field(default_factory=list)
@@ -125,24 +139,3 @@ class KernelMetadata:
         """Get PascalCase class name from module name."""
         from brainsmith.tools.kernel_integrator.utils import pascal_case
         return pascal_case(self.name)
-    
-
-
-
-    def validate(self) -> List[str]:
-        """Validate kernel metadata.
-        
-        Returns:
-            List of validation error messages (empty if valid)
-        """
-        errors = []
-        
-        # Must have at least input and output
-        if len(self.inputs) < 1:
-            errors.append("No input interface found")
-        if len(self.outputs) < 1:
-            errors.append("No output interface found")
-
-        # TAFK TODO: Flesh out
-
-        return errors

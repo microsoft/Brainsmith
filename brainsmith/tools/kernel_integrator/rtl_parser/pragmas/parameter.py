@@ -224,7 +224,7 @@ class AxiLiteParamPragma(Pragma):
                 interface = config_iface
                 break
         
-        if not interface:
+        if interface is None:
             logger.warning(f"AXILITE_PARAM pragma target interface '{interface_name}' not found")
             return
         

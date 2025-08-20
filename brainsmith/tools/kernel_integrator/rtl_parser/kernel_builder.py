@@ -50,7 +50,7 @@ class KernelBuilder:
         self.scanner = ProtocolScanner(debug=debug)
         self.debug = debug
     
-    def build(self, parsed_module: ParsedModule, source_name: Optional[str] = None) -> KernelMetadata:
+    def build(self, parsed_module: ParsedModule) -> KernelMetadata:
         """Build complete `KernelMetadata` from a ParsedModule.
 
         Steps:
@@ -72,9 +72,7 @@ class KernelBuilder:
         module_name = parsed_module.name
         parameters = parsed_module.parameters
         ports = parsed_module.ports
-        pragmas = parsed_module.pragmas
-        if source_name is None:
-            source_name = parsed_module.file_path
+        source_path = parsed_module.file_path
 
         # (1) Build interfaces organized by protocol type
         interfaces_by_protocol = self.scan_and_build_interfaces(ports)
@@ -114,7 +112,7 @@ class KernelBuilder:
         # (3) Assemble metadata
         return KernelMetadata(
             name=module_name,
-            source_file=str(source_name),
+            source_file=str(source_path),
             control=control_interface,
             inputs=input_interfaces,
             outputs=output_interfaces,
@@ -185,18 +183,13 @@ class KernelBuilder:
         # Check against required & expected signals
         _ = self.scanner.check_signals(interface, ProtocolType.AXI_STREAM)
 
-        # Validate direction alignment, determine input or output
+        # Validate direction alignment
         direction = self.scanner.check_direction(interface, ProtocolType.AXI_STREAM)
-        if direction == Direction.INPUT:
-            interface_type = InterfaceType.INPUT
-        else:
-            interface_type = InterfaceType.OUTPUT
 
         return AXIStreamMetadata(
             name=interface.name,
             ports=interface.ports,
-            direction=direction,
-            interface_type=interface_type
+            direction=direction
         )
 
     def build_axi_lite(self, interface: InterfaceMetadata) -> AXILiteMetadata:
@@ -212,7 +205,6 @@ class KernelBuilder:
         return AXILiteMetadata(
             name=interface.name,
             ports=interface.ports,
-            description=None,
             has_write=metadata['has_write'],
             has_read=metadata['has_read']
         )

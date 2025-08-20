@@ -37,10 +37,19 @@ class Pragma:
         type: Pragma type identifier (using PragmaType enum)
         inputs: Dict with 'raw', 'positional', and 'named' arguments
         parsed_data: Optional processed data from pragma handler
+        line_number: Source line number for debugging (1-based)
     """
     type: PragmaType
     inputs: Dict[str, Any]
     parsed_data: Dict = field(init=False)  # Stores the result of _parse_inputs
+    line_number: Optional[int] = None
+    
+    def __post_init__(self):
+        """Initialize parsed_data by calling _parse_inputs and extract line_number."""
+        # Extract line_number from inputs if present
+        if 'line_number' in self.inputs:
+            self.line_number = self.inputs['line_number']
+        self.parsed_data = self._parse_inputs()
 
     def _parse_inputs(self) -> Dict:
         """
@@ -64,7 +73,10 @@ class Pragma:
     def __str__(self):
         # Use raw inputs if available, otherwise fall back to positional
         raw_inputs = self.inputs.get('raw', self.inputs.get('positional', []))
-        return f"@brainsmith {self.type.value} " + " ".join(map(str, raw_inputs))
+        pragma_str = f"@brainsmith {self.type.value} " + " ".join(map(str, raw_inputs))
+        if self.line_number:
+            pragma_str += f" (line {self.line_number})"
+        return pragma_str
 
 
 @dataclass

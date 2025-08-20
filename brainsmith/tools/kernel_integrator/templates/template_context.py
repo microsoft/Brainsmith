@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple, Any, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, DatatypeMetadata, KernelMetadata
+from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, KernelMetadata
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter
 
 if TYPE_CHECKING:
