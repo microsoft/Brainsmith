@@ -97,7 +97,7 @@ class RTLParser:
             )
             
             # Build KernelMetadata from parsed module
-            kernel_metadata = self.kernel_builder.build(parsed_module, source_name)
+            kernel_metadata = self.kernel_builder.build(parsed_module)
             
             # Apply all pragmas to KernelMetadata
             self._apply_pragmas(kernel_metadata, parsed_module)
