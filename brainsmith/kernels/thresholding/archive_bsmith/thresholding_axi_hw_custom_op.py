@@ -4,8 +4,10 @@
 #
 # Auto-generated HWCustomOp for thresholding_axi
 # Generated from: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
+# Generation timestamp: 2025-07-07T16:13:11.737561
 #
-# This HWCustomOp uses direct KernelMetadata access with no intermediate layers
+# This HWCustomOp uses the modern AutoHWCustomOp base class with explicit
+# parameter definitions and no runtime CodegenBinding dependencies.
 ############################################################################
 
 from typing import List, Dict, Tuple, Any
@@ -27,52 +29,42 @@ class ThresholdingAxi(AutoHWCustomOp):
     Auto-generated HWCustomOp for thresholding_axi kernel.
     
     Generated from RTL: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
-    Uses direct KernelMetadata access with AutoHWCustomOp base class.
+    Uses AutoHWCustomOp for automatic FINN method implementation.
     """
     
     def __init__(self, onnx_node, **kwargs):
         """Initialize ThresholdingAxi with KernelDefinition."""
         kernel_def = self._create_kernel_definition()
         super().__init__(onnx_node, kernel_def, **kwargs)
-    
-    @property
-    def kernel_name(self) -> str:
-        """Return kernel name for this operation."""
-        return "thresholding_axi"
+        
+        # Set kernel-specific attributes
+        self.kernel_name = "thresholding_axi"
+        self.rtl_source = "brainsmith/kernels/thresholding/thresholding_axi_bw.sv"
     
     def get_nodeattr_types(self):
-        """
-        Define all node attributes for thresholding_axi.
-        
-        Generated from interface objects in KernelMetadata.
-        """
+        """Define interface datatypes and BDIM/SDIM parameters from SHAPE pragmas."""
+        # Get parent attributes first (includes exec_mode, backend, etc.)
         attrs = super().get_nodeattr_types()
+        
+        # Add kernel-specific attributes
         attrs.update({
-            # Interface datatype attributes
-            "inputDataType": ('s', True, ""),
-            "outputDataType": ('s', True, ""),
-            "thresholdDataType": ('s', True, ""),
+            # Interface datatype attributes (required by FINN)
+            "inputDataType": ('s', True, ''),
+            "outputDataType": ('s', True, ''),
             
-            # BDIM (block dimensions) parallelism
-            "CHANNELS": ('i', True, 0),
-            # SDIM (streaming dimensions) parallelism
-            "PE": ('i', True, 0),
+            # BDIM/SDIM parameters from SHAPE pragmas
+            "CHANNELS": ('i', True, 0),  # BDIM: input
+            "PE": ('i', True, 0),  # SDIM: input
             
-            # Runtime writeable weights if config interface exists
-            "runtime_writeable_weights": ('b', False, True),
         })
         
         return attrs
     
     def _create_kernel_definition(self) -> KernelDefinition:
-        """
-        Create KernelDefinition for thresholding_axi.
+        """Create simplified KernelDefinition with interface definitions only."""
+        kernel_def = KernelDefinition(name="thresholding_axi")
         
-        Creates KernelDefinition using direct metadata access.
-        """
-        kernel_def = KernelDefinition("thresholding_axi")
-        
-        # Add all input definitions (regular inputs and weights combined)
+        # Add input definitions
         input_def = InputDefinition(
             name="input",
             datatype_constraints=[
@@ -83,9 +75,11 @@ class ThresholdingAxi(AutoHWCustomOp):
                 ),
             ],
             block_tiling=["CHANNELS"],
-            stream_tiling=["PE"],
+            stream_tiling=["PE"]
         )
         kernel_def.add_input(input_def)
+        
+        # Add weight input definitions
         
         # Add output definitions
         output_def = OutputDefinition(
@@ -100,16 +94,10 @@ class ThresholdingAxi(AutoHWCustomOp):
         )
         kernel_def.add_output(output_def)
         
-        # Add relationships (if they exist on KernelMetadata)
-        
+        # Add relationships
         return kernel_def
-
-    ############################################################################
-    # ======================= MANUALLY IMPLEMENT FUNCTIONS BELOW ===============
-    # Add custom helper methods, execution logic, and resource estimation logic
-    # here. This section is intentionally left for manual implementation.
-    ############################################################################
-        
+    
+    
     def execute_node(self, context, graph):
         """
         Execute the hardware kernel in simulation.
@@ -118,7 +106,7 @@ class ThresholdingAxi(AutoHWCustomOp):
         This should handle both 'cppsim' and 'rtlsim' execution modes.
         
         For reference implementation, see:
-        # TAFK TODO
+        deps/finn/src/finn/custom_op/fpgadataflow/rtl/thresholding_rtl.py
         """
         raise NotImplementedError(
             f"execute_node() not implemented for {self.__class__.__name__}. "
@@ -176,26 +164,32 @@ class ThresholdingAxi(AutoHWCustomOp):
         )
 
 
-# Kernel metadata for reference
-"""
-thresholding_axi Kernel Specification:
-
-Core Functionality:
-- Module: thresholding_axi
-- Source: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
-
-Interfaces:
-- Input: input- Output: output
-
-Interface Attributes:
-- inputDataType: Input interface datatype selection
-- outputDataType: Output interface datatype selection  
-- thresholdDataType: Config interface datatype selection
-
-Shape Parameters:
-- CHANNELS: int (BDIM shape parameter from input interface)
-- PE: int (SDIM shape parameter from input interface)
-
-Configuration:
-- runtime_writeable_weights: bool = True (supports runtime weight updates)
-"""
+# Convenience function for FINN integration
+def make_thresholding_axi_node(inputs, outputs, **node_attrs):
+    """
+    Create ThresholdingAxi ONNX node.
+    
+    Interface datatype attributes (required):
+    - inputDataType: str (required)
+    - outputDataType: str (required)
+    
+    BDIM/SDIM parameters from SHAPE pragmas:
+    - CHANNELS: int (required)  # BDIM: input
+    - PE: int (required)  # SDIM: input
+    
+    """
+    import onnx.helper
+    
+    # Verify required interface datatypes are specified
+    if "inputDataType" not in node_attrs:
+        raise ValueError("Required attribute 'inputDataType' not specified")
+    if "outputDataType" not in node_attrs:
+        raise ValueError("Required attribute 'outputDataType' not specified")
+    
+    return onnx.helper.make_node(
+        "ThresholdingAxi",
+        inputs=inputs,
+        outputs=outputs,
+        domain="finn.custom_op.fpgadataflow",
+        **node_attrs
+    )

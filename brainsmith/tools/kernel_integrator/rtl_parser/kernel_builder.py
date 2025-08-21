@@ -18,11 +18,11 @@ from collections import defaultdict
 from tree_sitter import Tree
 
 from brainsmith.core.dataflow.types import ProtocolType, InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import (
+from brainsmith.tools.kernel_integrator.metadata import (
     KernelMetadata, InterfaceMetadata, AXIStreamMetadata, 
     AXILiteMetadata, ControlMetadata
 )
-from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, Direction, ParsedModule
+from .types import Port, Parameter, Direction, ParsedModule
 from .ast_parser import ASTParser
 from .protocol_validator import ProtocolScanner
 from .pragmas import Pragma

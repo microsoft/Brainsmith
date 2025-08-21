@@ -67,13 +67,13 @@ module skid_buffer #(
     input  logic              clk,
     input  logic              rst,
 
-    input  logic              ivld,
-    input  logic [WIDTH-1:0]  idat,
-    output logic              irdy,
+    input  logic              input_TVALID,
+    input  logic [WIDTH-1:0]  input_TDATA,
+    output logic              input_TREADY,
 
-    output logic              ovld,
-    input  logic              ordy,
-    output logic [WIDTH-1:0]  odat
+    output logic              output_TVALID,
+    input  logic              output_TREADY,
+    output logic [WIDTH-1:0]  output_TDATA
 );
 
     // Internal signals
@@ -81,9 +81,9 @@ module skid_buffer #(
     logic             buffer_valid;
 
     // Output logic
-    assign odat  =  buffer_valid ? buffer_data : idat;
-    assign ovld  =  buffer_valid || ivld;
-    assign irdy  = !buffer_valid && (ordy || !ivld);
+    assign output_TDATA  =  buffer_valid ? buffer_data : input_TDATA;
+    assign output_TVALID  =  buffer_valid || input_TVALID;
+    assign input_TREADY  = !buffer_valid && (output_TREADY || !input_TVALID);
 
     // Skid buffer behavior
     always_ff @(posedge clk or posedge rst) begin
@@ -91,10 +91,10 @@ module skid_buffer #(
             buffer_valid <= 1'b0;
             buffer_data  <= {WIDTH{1'b0}};
         end else 
-            if (buffer_valid && ordy) 
+            if (buffer_valid && output_TREADY) 
                 buffer_valid <= 1'b0; // Buffer emptied
-            else if (ivld && !ordy) begin
-                buffer_data  <= idat;
+            else if (input_TVALID && !output_TREADY) begin
+                buffer_data  <= input_TDATA;
                 buffer_valid <= 1'b1; // Buffer filled
             end
     end
@@ -303,7 +303,7 @@ module ptranspose #(
 			.rst(rst),
 			.d_in(mem_banks_in[i]),
 			.wr_addr(wr_addr),
-			.wr_en(irdy && ivld),
+			.wr_en(input_TREADY && input_TVALID),
 			.d_out(mem_banks_out[i]),
 			.rd_addr(mem_banks_rd_addr[i]),
 			.rd_hold(!osb_rdy)
@@ -330,7 +330,7 @@ module ptranspose #(
 	// Remap the input based on the current write bank rotation
 	always_comb begin
 		for(int unsigned i=0; i<SDIM; i++)  mem_banks_in[i] = 'd0;  // default values to avoid latch inference
-		for(int unsigned i=0; i<SDIM; i++)  mem_banks_in[wr_bank_schedule[i]] = idat[i];
+		for(int unsigned i=0; i<SDIM; i++)  mem_banks_in[wr_bank_schedule[i]] = input_TDATA[i];
 	end
 
 	// Write bank schedule rotation logic
@@ -344,7 +344,7 @@ module ptranspose #(
 			wr_counter <= 'd0;
 		end
 		else 
-			if (ivld && irdy) begin // Detect once we need to rotate and perform right rotation
+			if (input_TVALID && input_TREADY) begin // Detect once we need to rotate and perform right rotation
 				if (wr_rot_counter == WR_ROT_PERIOD - 1) begin
 					wr_rot_counter <= 'd0;
 					if (wr_counter == (I*J/SDIM - 1))  
@@ -381,13 +381,13 @@ module ptranspose #(
 	end
 
 	assign page_rd_offset = rd_page_in_progress ? PAGE_OFFSET : 'd0;
-        assign irdy = !wr_jobs_done[0] || !wr_jobs_done[1]; 	
+        assign input_TREADY = !wr_jobs_done[0] || !wr_jobs_done[1]; 	
 
 	// Write address incrementer (resets to the start once the second page is written)
 	always_ff @(posedge clk) begin
 		if (rst) wr_addr <= 'd0;
 		else 
-			if (ivld && irdy) 
+			if (input_TVALID && input_TREADY) 
 				if (wr_addr < (2*PAGE_OFFSET - 1))
 					wr_addr <= wr_addr + 'd1;
 				else
@@ -522,13 +522,13 @@ module ptranspose #(
 		.clk(clk),
 		.rst(rst),
 
-		.ivld(osb_vld),
-		.irdy(osb_rdy),
-		.idat(data_reg),
+		.input_TVALID(osb_vld),
+		.input_TREADY(osb_rdy),
+		.input_TDATA(data_reg),
 
-		.ovld(ovld),
-		.ordy(ordy),
-		.odat(odat)
+		.output_TVALID(output_TVALID),
+		.output_TREADY(output_TREADY),
+		.output_TDATA(output_TDATA)
 	);
 	
 endmodule : ptranspose

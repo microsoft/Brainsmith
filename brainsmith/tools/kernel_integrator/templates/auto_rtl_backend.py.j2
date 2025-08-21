@@ -1,0 +1,296 @@
+{#-
+Direct RTLBackend Template
+
+Works directly with KernelMetadata structure without abstraction layers.
+Generates clean parameter mappings using direct metadata access.
+-#}
+############################################################################
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Auto-generated RTLBackend for {{ kernel_metadata.name }}
+# Generated from: {{ kernel_metadata.source_file }}
+# Date: {{ timestamp }}
+#
+# This RTLBackend uses direct KernelMetadata access with no intermediate layers
+############################################################################
+
+from typing import List, Dict, Tuple, Any
+import os
+import shutil
+from pathlib import Path
+
+from brainsmith.core.finn.auto_rtl_backend import AutoRTLBackend
+from {{ kernel_metadata.name }}_hw_custom_op import {{ kernel_metadata.class_name }}
+from qonnx.core.datatype import DataType
+
+
+class {{ kernel_metadata.name }}_rtl({{ kernel_metadata.class_name }}, AutoRTLBackend):
+    """
+    RTL backend for {{ kernel_metadata.name }} operation.
+    
+    Auto-generated from SystemVerilog RTL: {{ kernel_metadata.source_file }}
+    Uses direct parameter resolution from KernelMetadata structure.
+    """
+    
+    def __init__(self, onnx_node, **kwargs):
+        """Initialize {{ kernel_metadata.name }}_rtl backend."""
+        super().__init__(onnx_node, **kwargs)
+    
+    @property
+    def finn_rtllib_module(self) -> str:
+        """Return finn-rtllib module name for this operation."""
+        # TODO: Set this if using a module from finn-rtllib
+        return ""
+    
+    def get_nodeattr_types(self):
+        """
+        Define all node attributes including RTL-specific parameters.
+        
+        Inherits interface attributes from HWCustomOp parent and adds
+        RTL-specific algorithm parameters.
+        """
+        # Get interface datatype attributes from HWCustomOp parent
+        my_attrs = super().get_nodeattr_types()
+        
+        # Add RTL-specific algorithm parameters
+        rtl_attrs = {
+            {%- for param in kernel_metadata.parameters %}
+            "{{ param.nodeattr_name }}": ('i', True, {{ param.resolved_default or 'None' }}),
+            {%- endfor %}
+            {%- if kernel_metadata.config %}
+            # Configuration interface parameters
+            {%- for interface in kernel_metadata.config %}
+            {%- if interface.dtype_params and interface.dtype_params.width %}
+            "{{ interface.dtype_params.width.nodeattr_name }}": ('i', True, {{ interface.dtype_params.width.resolved_default or 'None' }}),
+            {%- endif %}
+            {%- endfor %}
+            # AXI-Lite enable parameter
+            "USE_AXILITE": ('i', True, 1),  # Has AXI-Lite config interface
+            {%- else %}
+            # AXI-Lite enable parameter
+            "USE_AXILITE": ('i', True, 0),  # No AXI-Lite interface
+            {%- endif %}
+            {%- for interface in kernel_metadata.config %}
+            {%- if interface.name.lower() == "threshold" %}
+            # Threshold datatype parameter
+            "thresholdDataType": ('s', True, 'INT8'),  # Default threshold datatype
+            {%- endif %}
+            {%- endfor %}
+        }
+        my_attrs.update(rtl_attrs)
+        
+        # Add HDL generation attributes
+        my_attrs.update({
+            "gen_top_module": ("s", False, ""),
+            "ipgen_path": ("s", False, ""),
+            "ip_path": ("s", False, ""),
+        })
+        
+        return my_attrs
+    
+    def prepare_codegen_rtl_values(self, model):
+        """
+        Prepare parameter values for RTL code generation.
+        
+        Maps node attributes and interface properties to RTL template variables.
+        Uses direct access to generate clear, traceable mappings.
+        """
+        code_gen_dict = {}
+        
+        # Basic module information
+        code_gen_dict["$MODULE_NAME_AXI_WRAPPER$"] = [self.get_verilog_top_module_name()]
+        code_gen_dict["$TOP_MODULE$"] = code_gen_dict["$MODULE_NAME_AXI_WRAPPER$"]
+        
+        # Standard stream width variables
+        code_gen_dict["$IBITS$"] = [str(self.get_instream_width())]
+        code_gen_dict["$OBITS$"] = [str(self.get_outstream_width())]
+        
+        # Direct parameter assignments from KernelMetadata
+        {%- for param in kernel_metadata.parameters %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self.get_nodeattr("{{ param.nodeattr_name }}"))]
+        {%- endfor %}
+        
+        # Interface-specific parameters
+        {%- for interface in kernel_metadata.stream_interfaces %}
+        {%- if interface.bdim_params %}
+        # {{ interface.name }} BDIM parameters
+        {%- for param in interface.bdim_params %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_bdim("{{ interface.name }}", {{ loop.index0 }}))]
+        {%- endfor %}
+        {%- endif %}
+        {%- if interface.sdim_params %}
+        # {{ interface.name }} SDIM parameters  
+        {%- for param in interface.sdim_params %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_sdim("{{ interface.name }}", {{ loop.index0 }}))]
+        {%- endfor %}
+        {%- endif %}
+        {%- endfor %}
+        
+        # Interface datatype widths
+        {%- for interface in kernel_metadata.stream_interfaces %}
+        code_gen_dict["${{ interface.name.upper() }}_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
+        {%- if interface.dtype_params and interface.dtype_params.signed %}
+        code_gen_dict["${{ interface.name.upper() }}_SIGNED$"] = [str(1 if self._get_interface_signed("{{ interface.name }}") else 0)]
+        {%- endif %}
+        {%- endfor %}
+        
+        # Config interface parameters
+        {%- for interface in kernel_metadata.config %}
+        {%- if interface.dtype_params and interface.dtype_params.width %}
+        code_gen_dict["${{ interface.dtype_params.width.name.upper() }}$"] = [str(self.get_nodeattr("{{ interface.dtype_params.width.nodeattr_name }}"))]
+        {%- endif %}
+        {%- endfor %}
+        
+        # Standard interface width mappings
+        {%- for interface in kernel_metadata.inputs %}
+        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
+        {%- endfor %}
+        {%- for interface in kernel_metadata.outputs %}
+        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
+        {%- endfor %}
+        
+        # AXI-Lite configuration enable
+        {%- if kernel_metadata.config %}
+        code_gen_dict["$USE_AXILITE$"] = [str(1)]
+        {%- else %}
+        code_gen_dict["$USE_AXILITE$"] = [str(0)]
+        {%- endif %}
+        
+        # Extract PE and CHANNELS parameters if they exist
+        # These often appear in shape expressions but need to be available as parameters
+        if hasattr(self, 'get_nodeattr'):
+            if self.get_nodeattr("PE", None) is not None:
+                code_gen_dict["$PE$"] = [str(self.get_nodeattr("PE"))]
+            if self.get_nodeattr("CHANNELS", None) is not None:
+                code_gen_dict["$CHANNELS$"] = [str(self.get_nodeattr("CHANNELS"))]
+        
+        return code_gen_dict
+    
+    def get_supporting_rtl_files(self) -> list:
+        """
+        Get list of supporting RTL files to include.
+        
+        Override this method if your kernel requires additional RTL files.
+        """
+        return [
+            # Add any supporting RTL files here
+        ]
+    
+    def generate_hdl(self, model, fpgapart, clk):
+        """Generate HDL from pre-generated wrapper template."""
+        # Get code generation directory
+        code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+        os.makedirs(code_gen_dir, exist_ok=True)
+        
+        # Save top module name
+        topname = self.get_verilog_top_module_name()
+        self.set_nodeattr("gen_top_module", topname)
+        
+        # Get template variables
+        code_gen_dict = self.prepare_codegen_rtl_values(model)
+        
+        # Find the pre-generated wrapper template
+        module_dir = Path(__file__).parent
+        wrapper_name = "{{ kernel_metadata.name }}_wrapper.v"
+        wrapper_path = module_dir / wrapper_name
+        
+        if wrapper_path.exists():
+            # Read wrapper template
+            with open(wrapper_path, "r") as f:
+                template_content = f.read()
+            
+            # Apply template substitution
+            for placeholder, values in code_gen_dict.items():
+                value = values[0] if isinstance(values, list) and values else str(values)
+                template_content = template_content.replace(placeholder, value)
+            
+            # Write processed wrapper
+            output_path = os.path.join(code_gen_dir, f"{topname}.v")
+            with open(output_path, "w") as f:
+                f.write(template_content)
+        else:
+            raise FileNotFoundError(
+                f"Wrapper template not found at {wrapper_path}. "
+                "Ensure the wrapper file is in the same directory as this RTL backend."
+            )
+        
+        # Copy supporting RTL files if specified
+        for rtl_file in self.get_supporting_rtl_files():
+            if os.path.exists(rtl_file):
+                shutil.copy(rtl_file, code_gen_dir)
+            else:
+                print(f"Warning: Supporting RTL file not found: {rtl_file}")
+        
+        # Set paths for downstream tools
+        self.set_nodeattr("ipgen_path", code_gen_dir)
+        self.set_nodeattr("ip_path", code_gen_dir)
+    
+    {% if kernel_metadata.has_weights %}
+    def make_weight_file(self, weights, weight_file_mode, weight_file_name):
+        """
+        Generate weight initialization file for this kernel.
+        
+        TODO: Implement this method for your specific weight format.
+        This should write weights in the format expected by your RTL.
+        
+        Args:
+            weights: numpy array with weight values
+            weight_file_mode: 'decoupled' or 'const' 
+            weight_file_name: path where weight file should be written
+            
+        For reference implementation, see:
+        deps/finn/src/finn/custom_op/fpgadataflow/rtl/thresholding_rtl.py
+        """
+        raise NotImplementedError(
+            f"make_weight_file() not implemented for {self.__class__.__name__}. "
+            "Please implement this method if your kernel uses weights."
+        )
+    {% endif %}
+    
+    ############################################################################
+    # ======================= MANUALLY IMPLEMENT FUNCTIONS BELOW ===============
+    # Add any custom methods specific to your RTL backend here
+    ############################################################################
+
+
+# Kernel metadata reference
+"""
+{{ kernel_metadata.name }} RTL Backend Specification:
+
+Module: {{ kernel_metadata.name }}
+Source: {{ kernel_metadata.source_file }}
+
+Parameters:
+{% for param in kernel_metadata.parameters %}
+- {{ param.name }}: RTL parameter (nodeattr: {{ param.nodeattr_name }})
+{% endfor %}
+
+Interfaces:
+{% for interface in kernel_metadata.inputs %}
+- {{ interface.name }}: INPUT interface{% if interface.is_weight %} (weight){% endif %}
+{% endfor %}
+{% for interface in kernel_metadata.outputs %}
+- {{ interface.name }}: OUTPUT interface
+{% endfor %}
+{% if kernel_metadata.config %}
+{% for interface in kernel_metadata.config %}
+- {{ interface.name }}: CONFIG interface (AXI-Lite)
+{% endfor %}
+{% endif %}
+
+Template Variables Generated:
+- Module and stream width variables
+{% for param in kernel_metadata.parameters %}
+- ${{ param.name.upper() }}$: from nodeattr '{{ param.nodeattr_name }}'
+{% endfor %}
+{% for interface in kernel_metadata.stream_interfaces %}
+- ${{ interface.name.upper() }}_WIDTH$: interface datatype width
+{% for param in interface.bdim_params %}
+- ${{ param.name.upper() }}$: {{ interface.name }} BDIM parameter
+{% endfor %}
+{% for param in interface.sdim_params %}
+- ${{ param.name.upper() }}$: {{ interface.name }} SDIM parameter
+{% endfor %}
+{% endfor %}
+"""

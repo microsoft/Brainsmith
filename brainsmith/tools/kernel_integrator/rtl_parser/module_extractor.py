@@ -16,8 +16,7 @@ import logging
 from typing import Optional, List, Tuple, Dict, Callable, Any
 from tree_sitter import Node, Tree
 
-from brainsmith.tools.kernel_integrator.types.rtl import Direction
-from brainsmith.tools.kernel_integrator.types.rtl import Port, Parameter, PragmaType, ParsedModule
+from .types import Direction, Port, Parameter, PragmaType, ParsedModule
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
