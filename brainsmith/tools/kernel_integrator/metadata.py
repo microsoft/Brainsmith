@@ -12,7 +12,7 @@ from collections.abc import MutableMapping
 from brainsmith.core.dataflow.types import Direction, InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
-from .rtl import Port, PortGroup, Parameter, Direction
+from .rtl_parser.types import Port, PortGroup, Parameter
 
 
 @dataclass
@@ -66,6 +66,10 @@ class InterfaceMetadata(MutableMapping[str, Port]):
 
     def get_port(self, suffix: str) -> Optional[Port]:
         return self.ports.get(suffix)
+    
+    def _get_signal(self, suffix: str) -> Optional[Port]:
+        """Get signal by suffix (case-insensitive)."""
+        return self.ports.get(suffix.upper())
 
     
 @dataclass
@@ -94,6 +98,27 @@ class AXIStreamMetadata(InterfaceMetadata):
         if self.is_weight:
             return InterfaceType.WEIGHT
         return InterfaceType.INPUT if self.direction == Direction.INPUT else InterfaceType.OUTPUT
+    
+    # Signal role properties
+    @property
+    def tdata(self) -> Optional[Port]:
+        """Get TDATA signal port."""
+        return self._get_signal("TDATA")
+    
+    @property
+    def tvalid(self) -> Optional[Port]:
+        """Get TVALID signal port."""
+        return self._get_signal("TVALID")
+    
+    @property
+    def tready(self) -> Optional[Port]:
+        """Get TREADY signal port."""
+        return self._get_signal("TREADY")
+    
+    @property
+    def tlast(self) -> Optional[Port]:
+        """Get TLAST signal port."""
+        return self._get_signal("TLAST")
 
 
 @dataclass
@@ -118,12 +143,128 @@ class AXILiteMetadata(InterfaceMetadata):
     def is_write_only(self) -> bool:
         """Check if this AXI-Lite interface is write-only."""
         return self.has_write and not self.has_read
+    
+    # Write Address Channel
+    @property
+    def awaddr(self) -> Optional[Port]:
+        """Get AWADDR signal port."""
+        return self._get_signal("AWADDR")
+    
+    @property
+    def awprot(self) -> Optional[Port]:
+        """Get AWPROT signal port."""
+        return self._get_signal("AWPROT")
+    
+    @property
+    def awvalid(self) -> Optional[Port]:
+        """Get AWVALID signal port."""
+        return self._get_signal("AWVALID")
+    
+    @property
+    def awready(self) -> Optional[Port]:
+        """Get AWREADY signal port."""
+        return self._get_signal("AWREADY")
+    
+    # Write Data Channel
+    @property
+    def wdata(self) -> Optional[Port]:
+        """Get WDATA signal port."""
+        return self._get_signal("WDATA")
+    
+    @property
+    def wstrb(self) -> Optional[Port]:
+        """Get WSTRB signal port."""
+        return self._get_signal("WSTRB")
+    
+    @property
+    def wvalid(self) -> Optional[Port]:
+        """Get WVALID signal port."""
+        return self._get_signal("WVALID")
+    
+    @property
+    def wready(self) -> Optional[Port]:
+        """Get WREADY signal port."""
+        return self._get_signal("WREADY")
+    
+    # Write Response Channel
+    @property
+    def bresp(self) -> Optional[Port]:
+        """Get BRESP signal port."""
+        return self._get_signal("BRESP")
+    
+    @property
+    def bvalid(self) -> Optional[Port]:
+        """Get BVALID signal port."""
+        return self._get_signal("BVALID")
+    
+    @property
+    def bready(self) -> Optional[Port]:
+        """Get BREADY signal port."""
+        return self._get_signal("BREADY")
+    
+    # Read Address Channel
+    @property
+    def araddr(self) -> Optional[Port]:
+        """Get ARADDR signal port."""
+        return self._get_signal("ARADDR")
+    
+    @property
+    def arprot(self) -> Optional[Port]:
+        """Get ARPROT signal port."""
+        return self._get_signal("ARPROT")
+    
+    @property
+    def arvalid(self) -> Optional[Port]:
+        """Get ARVALID signal port."""
+        return self._get_signal("ARVALID")
+    
+    @property
+    def arready(self) -> Optional[Port]:
+        """Get ARREADY signal port."""
+        return self._get_signal("ARREADY")
+    
+    # Read Data Channel
+    @property
+    def rdata(self) -> Optional[Port]:
+        """Get RDATA signal port."""
+        return self._get_signal("RDATA")
+    
+    @property
+    def rresp(self) -> Optional[Port]:
+        """Get RRESP signal port."""
+        return self._get_signal("RRESP")
+    
+    @property
+    def rvalid(self) -> Optional[Port]:
+        """Get RVALID signal port."""
+        return self._get_signal("RVALID")
+    
+    @property
+    def rready(self) -> Optional[Port]:
+        """Get RREADY signal port."""
+        return self._get_signal("RREADY")
 
 
 @dataclass
 class ControlMetadata(InterfaceMetadata):
     """Metadata for a Control interface."""
     interface_type: InterfaceType = InterfaceType.CONTROL
+    
+    # Signal role properties
+    @property
+    def clk(self) -> Optional[Port]:
+        """Get CLK signal port."""
+        return self._get_signal("CLK")
+    
+    @property
+    def rst_n(self) -> Optional[Port]:
+        """Get RST_N signal port."""
+        return self._get_signal("RST_N")
+    
+    @property
+    def clk2x(self) -> Optional[Port]:
+        """Get CLK2X signal port."""
+        return self._get_signal("CLK2X")
 
 
 @dataclass
@@ -163,3 +304,13 @@ class KernelMetadata:
     def has_weights(self) -> bool:
         """Check if any input interface is marked as a weight."""
         return any(i.is_weight for i in self.inputs)
+    
+    @property
+    def interfaces(self) -> List[InterfaceMetadata]:
+        """Get all interfaces in a single list."""
+        interfaces = []
+        interfaces.append(self.control)
+        interfaces.extend(self.inputs)
+        interfaces.extend(self.outputs) 
+        interfaces.extend(self.config)
+        return interfaces

@@ -15,8 +15,8 @@ from typing import Optional, List, Tuple
 from pathlib import Path
 from tree_sitter import Node, Tree
 
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import ParsedModule, PragmaType, Parameter, Port
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
+from .types import ParsedModule, PragmaType, Parameter, Port
 from .pragmas import Pragma
 from .ast_parser import ASTParser, SyntaxError
 from .kernel_builder import KernelBuilder
@@ -43,9 +43,10 @@ class RTLParser:
 
     Attributes:
         debug: Enable debug output
+        strict: Enable strict validation (default: True)
     """
     
-    def __init__(self, debug: bool = False):
+    def __init__(self, debug: bool = False, strict: bool = True):
         """Initializes the RTLParser.
 
         Creates sub-components for AST parsing, component extraction,
@@ -53,10 +54,12 @@ class RTLParser:
 
         Args:
             debug: If True, enables detailed debug logging.
+            strict: If True, enables strict validation (default: True).
         Raises:
             RuntimeError: For unexpected errors during initialization.
         """
         self.debug = debug
+        self.strict = strict
         logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
         # Initialize sub-components
@@ -104,6 +107,8 @@ class RTLParser:
 
             # Auto-linking with remaining parameters            
             self.linker.link_parameters(kernel_metadata)
+
+            # TODO: Add validation toggled by self.strict flag
             
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params")
             logger.info(f"Successfully parsed and processed module '{kernel_metadata.name}' from {source_name}")

@@ -25,7 +25,7 @@ from typing import Dict, List, Any
 # Import shared types
 from brainsmith.core.dataflow.types import InterfaceType
 # Import RTL-specific types
-from brainsmith.tools.kernel_integrator.types.rtl import (
+from .types import (
     Parameter,
     Port,
     PortGroup,
@@ -73,8 +73,6 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
     logger = logging.getLogger(__name__)
     
     try:
-        from ..errors import RTLParsingError
-        
         # Ensure rtl_file is a Path object
         if isinstance(rtl_file, str):
             rtl_file = Path(rtl_file)
@@ -90,9 +88,5 @@ def parse_rtl_file(rtl_file, advanced_pragmas: bool = False):
         
     except Exception as e:
         logger.error(f"Failed to parse RTL file {rtl_file}: {e}")
-        # Re-raise as RTLParsingError for consistent error handling
-        from ..errors import RTLParsingError
-        raise RTLParsingError(f"RTL parsing failed for {rtl_file}: {e}") from e
-
-
-# Legacy functions removed - ParsedKernelData handles all functionality directly
+        # Re-raise for consistent error handling
+        raise RuntimeError(f"RTL parsing failed for {rtl_file}: {e}") from e

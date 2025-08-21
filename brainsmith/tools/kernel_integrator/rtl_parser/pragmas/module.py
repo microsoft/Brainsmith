@@ -14,7 +14,7 @@ from typing import Dict
 import logging
 
 from .base import Pragma, PragmaError
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 

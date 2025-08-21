@@ -18,10 +18,10 @@ from dataclasses import dataclass
 from typing import List, Optional, Pattern, Callable, Union
 from collections import defaultdict
 
-from brainsmith.tools.kernel_integrator.types.metadata import (
+from brainsmith.tools.kernel_integrator.metadata import (
     KernelMetadata, AXIStreamMetadata, AXILiteMetadata, DatatypeParameters
 )
-from brainsmith.tools.kernel_integrator.types.rtl import Parameter
+from .types import Parameter
 from brainsmith.core.dataflow.types import InterfaceType
 
 logger = logging.getLogger(__name__)

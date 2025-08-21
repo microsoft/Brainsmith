@@ -1,12 +1,4 @@
-"""
-Main entry point for running KI as a module.
-
-Enables running: python -m brainsmith.tools.hw_kernel_gen
-
-This implementation follows the Interface-Wise Dataflow Modeling axioms
-and provides a simple-by-default, powerful-when-needed approach to hardware
-kernel generation.
-"""
+"""Main entry point for the kernel_integrator module."""
 
 import sys
 from .cli import main

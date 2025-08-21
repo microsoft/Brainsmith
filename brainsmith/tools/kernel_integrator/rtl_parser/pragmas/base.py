@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 import logging
 
-from brainsmith.tools.kernel_integrator.types.metadata import KernelMetadata, InterfaceMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata
+from ..types import PragmaType
 
 logger = logging.getLogger(__name__)
 

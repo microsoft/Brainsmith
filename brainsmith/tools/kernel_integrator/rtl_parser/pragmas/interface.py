@@ -17,8 +17,8 @@ import logging
 from .base import InterfacePragma, PragmaError
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 from brainsmith.core.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.types.metadata import InterfaceMetadata, KernelMetadata
-from brainsmith.tools.kernel_integrator.types.rtl import PragmaType
+from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
+from ..types import PragmaType
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +264,7 @@ class DatatypeParamPragma(InterfacePragma):
             
             # Create DatatypeParameters if needed
             if not hasattr(interface, 'dtype_params') or interface.dtype_params is None:
-                from brainsmith.tools.kernel_integrator.types.metadata import DatatypeParameters
+                from brainsmith.tools.kernel_integrator.metadata import DatatypeParameters
                 interface.dtype_params = DatatypeParameters()
             
             # Assign to the appropriate property
