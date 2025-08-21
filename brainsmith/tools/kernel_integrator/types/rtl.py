@@ -165,6 +165,27 @@ class Parameter:
             Integer value or None if not parseable
         """
         return self._parse_value(self.default_value) if isinstance(self._parse_value(self.default_value), int) else None
+    
+    @property
+    def needs_nodeattr(self) -> bool:
+        """Check if this parameter needs to be exposed as a node attribute.
+        
+        Parameters don't need node attributes if:
+        - They have a kernel_value (alias or derived expression)
+        - They are localparams (compile-time constants)
+        
+        Returns:
+            True if parameter needs a node attribute, False otherwise
+        """
+        # Parameters with kernel_value are either aliased or derived
+        if self.kernel_value:
+            return False
+        
+        # Localparams are compile-time constants
+        if self.rtl_type and 'localparam' in self.rtl_type.lower():
+            return False
+            
+        return True
 
 
 @dataclass

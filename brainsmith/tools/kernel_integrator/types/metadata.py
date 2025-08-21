@@ -29,6 +29,18 @@ class DatatypeParameters:
     fractional_width: Optional[Parameter] = None
     exponent_width: Optional[Parameter] = None
     mantissa_width: Optional[Parameter] = None
+    
+    def has_any(self) -> bool:
+        """Check if any datatype parameters are set."""
+        return any([
+            self.width,
+            self.signed,
+            self.bias,
+            self.format,
+            self.fractional_width,
+            self.exponent_width,
+            self.mantissa_width
+        ])
 
 
 @dataclass
@@ -72,9 +84,9 @@ class AXIStreamMetadata(InterfaceMetadata):
     bdim_shape: Optional[List] = None
     sdim_shape: Optional[List] = None
 
-    # TAFK TODO: Fix/add these
-    relationships: Dict[str, str] = field(default_factory=dict)
     datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
+    # TAFK TODO: Fix/add this
+    relationships: Dict[str, str] = field(default_factory=dict)
     
     @property
     def interface_type(self) -> InterfaceType:
@@ -128,7 +140,7 @@ class KernelMetadata:
     control: ControlMetadata
     # Optional fields with defaults
     parameters: List[Parameter] = field(default_factory=list)
-    linked_parameters: List[Parameter] = field(default_factory=list)  # Deprecated: parameters linked by pragmas
+    linked_parameters: List[Parameter] = field(default_factory=list)
     inputs: List[AXIStreamMetadata] = field(default_factory=list)
     outputs: List[AXIStreamMetadata] = field(default_factory=list)
     config: List[AXILiteMetadata] = field(default_factory=list)
@@ -139,3 +151,15 @@ class KernelMetadata:
         """Get PascalCase class name from module name."""
         from brainsmith.tools.kernel_integrator.utils import pascal_case
         return pascal_case(self.name)
+    
+    # Navigation helpers
+    @property
+    def stream_interfaces(self) -> List[AXIStreamMetadata]:
+        """Get all AXI-Stream interfaces (inputs + outputs)."""
+        return self.inputs + self.outputs
+    
+    # Convenience flags
+    @property
+    def has_weights(self) -> bool:
+        """Check if any input interface is marked as a weight."""
+        return any(i.is_weight for i in self.inputs)
