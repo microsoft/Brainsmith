@@ -5,14 +5,15 @@ This module contains types that represent parsed and processed kernel
 information at a higher abstraction level than raw RTL.
 """
 
+import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Union, Iterator
+from typing import Dict, List, Optional, Iterator
 from collections.abc import MutableMapping
 
 from brainsmith.core.dataflow.types import Direction, InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
-from .rtl_parser.types import Port, PortGroup, Parameter
+from .rtl_parser.types import Port, Parameter
 
 
 @dataclass
@@ -290,8 +291,12 @@ class KernelMetadata:
     @property
     def class_name(self) -> str:
         """Get PascalCase class name from module name."""
-        from brainsmith.tools.kernel_integrator.utils import pascal_case
         return pascal_case(self.name)
+    
+    @property
+    def file_name(self) -> str:
+        """Get snake_case file name from module name."""
+        return snake_case(self.name)
     
     # Navigation helpers
     @property
@@ -314,3 +319,56 @@ class KernelMetadata:
         interfaces.extend(self.outputs) 
         interfaces.extend(self.config)
         return interfaces
+    
+
+# Utility functions
+
+
+def pascal_case(name: str) -> str:
+    """
+    Convert snake_case or kebab-case to PascalCase.
+    
+    Args:
+        name: String to convert (e.g., "my_module_name" or "my-module-name")
+        
+    Returns:
+        PascalCase string (e.g., "MyModuleName")
+        
+    Examples:
+        >>> pascal_case("thresholding_axi")
+        "ThresholdingAxi"
+        >>> pascal_case("matrix-multiply")
+        "MatrixMultiply"
+        >>> pascal_case("my_custom_op")
+        "MyCustomOp"
+    """
+    # Replace hyphens with underscores
+    name = name.replace('-', '_')
+    
+    # Split on underscores and capitalize each part
+    parts = name.split('_')
+    return ''.join(word.capitalize() for word in parts if word)
+
+
+def snake_case(name: str) -> str:
+    """
+    Convert PascalCase or kebab-case to snake_case.
+    
+    Args:
+        name: String to convert (e.g., "MyModuleName" or "my-module-name")
+        
+    Returns:
+        snake_case string (e.g., "my_module_name")
+        
+    Examples:
+        >>> snake_case("ThresholdingAxi")
+        "thresholding_axi"
+        >>> snake_case("MatrixMultiply")
+        "matrix_multiply"
+    """
+    # Replace hyphens with underscores
+    name = name.replace('-', '_')
+    
+    # Insert underscores before capitals and convert to lowercase
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
