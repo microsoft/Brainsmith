@@ -4,9 +4,6 @@
 #
 # Auto-generated RTLBackend for thresholding_axi
 # Generated from: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
-# Date: 2025-08-21T22:53:30.529290
-#
-# This RTLBackend uses direct KernelMetadata access with no intermediate layers
 ############################################################################
 
 from typing import List, Dict, Tuple, Any
@@ -15,11 +12,11 @@ import shutil
 from pathlib import Path
 
 from brainsmith.core.finn.auto_rtl_backend import AutoRTLBackend
-from thresholding_axi_hw_custom_op import ThresholdingAxi
+from .thresholding_axi import ThresholdingAxi
 from qonnx.core.datatype import DataType
 
 
-class thresholding_axi_rtl(ThresholdingAxi, AutoRTLBackend):
+class ThresholdingAxi_rtl(ThresholdingAxi, AutoRTLBackend):
     """
     RTL backend for thresholding_axi operation.
     
@@ -48,9 +45,20 @@ class thresholding_axi_rtl(ThresholdingAxi, AutoRTLBackend):
         my_attrs = super().get_nodeattr_types()
         
         # Add RTL-specific algorithm parameters
-        rtl_attrs = {            "input_FPARG": ('i', True, None),            "BIAS": ('i', True, None),            "THRESHOLDS_PATH": ('i', True, ""),            "DEPTH_TRIGGER_URAM": ('i', True, None),            "DEPTH_TRIGGER_BRAM": ('i', True, None),            "DEEP_PIPELINE": ('i', True, None),            # Configuration interface parameters            "width": ('i', True, None),            # AXI-Lite enable parameter
-            "USE_AXILITE": ('i', True, 1),  # Has AXI-Lite config interface            # Threshold datatype parameter
-            "thresholdDataType": ('s', True, 'INT8'),  # Default threshold datatype        }
+        rtl_attrs = {
+            "input_FPARG": ('i', True, None),
+            "BIAS": ('i', True, None),
+            "THRESHOLDS_PATH": ('s', True, ""),
+            "DEPTH_TRIGGER_URAM": ('i', True, None),
+            "DEPTH_TRIGGER_BRAM": ('i', True, None),
+            "DEEP_PIPELINE": ('i', True, None),
+            # Configuration interface parameters
+            "width": ('i', True, None),
+            # AXI-Lite enable parameter
+            "USE_AXILITE": ('i', True, 1),  # Has AXI-Lite config interface
+            # Threshold datatype parameter
+            "thresholdDataType": ('s', True, 'INT8'),  # Default threshold datatype
+        }
         my_attrs.update(rtl_attrs)
         
         # Add HDL generation attributes
@@ -79,19 +87,48 @@ class thresholding_axi_rtl(ThresholdingAxi, AutoRTLBackend):
         code_gen_dict["$IBITS$"] = [str(self.get_instream_width())]
         code_gen_dict["$OBITS$"] = [str(self.get_outstream_width())]
         
-        # Direct parameter assignments from KernelMetadata        code_gen_dict["$INPUT_FPARG$"] = [str(self.get_nodeattr("input_FPARG"))]        code_gen_dict["$BIAS$"] = [str(self.get_nodeattr("BIAS"))]        code_gen_dict["$THRESHOLDS_PATH$"] = [str(self.get_nodeattr("THRESHOLDS_PATH"))]        code_gen_dict["$DEPTH_TRIGGER_URAM$"] = [str(self.get_nodeattr("DEPTH_TRIGGER_URAM"))]        code_gen_dict["$DEPTH_TRIGGER_BRAM$"] = [str(self.get_nodeattr("DEPTH_TRIGGER_BRAM"))]        code_gen_dict["$DEEP_PIPELINE$"] = [str(self.get_nodeattr("DEEP_PIPELINE"))]        
-        # Interface-specific parameters        # input BDIM parameters        code_gen_dict["$INPUT_BDIM$"] = [str(self._get_interface_bdim("input", 0))]        # input SDIM parameters        code_gen_dict["$INPUT_SDIM$"] = [str(self._get_interface_sdim("input", 0))]        
-        # Interface datatype widths        code_gen_dict["$INPUT_WIDTH$"] = [str(self._get_interface_width("input"))]        code_gen_dict["$INPUT_SIGNED$"] = [str(1 if self._get_interface_signed("input") else 0)]        code_gen_dict["$OUTPUT_WIDTH$"] = [str(self._get_interface_width("output"))]        
-        # Config interface parameters        code_gen_dict["$T_WIDTH$"] = [str(self.get_nodeattr("width"))]        
-        # Standard interface width mappings        code_gen_dict["$INPUT_STREAM_WIDTH$"] = [str(self._get_interface_width("input"))]        code_gen_dict["$OUTPUT_STREAM_WIDTH$"] = [str(self._get_interface_width("output"))]        
-        # AXI-Lite configuration enable        code_gen_dict["$USE_AXILITE$"] = [str(1)]        
+        # Direct parameter assignments from KernelMetadata
+        code_gen_dict["$INPUT_FPARG$"] = [str(self.get_nodeattr("input_FPARG"))]
+        code_gen_dict["$BIAS$"] = [str(self.get_nodeattr("BIAS"))]
+        code_gen_dict["$THRESHOLDS_PATH$"] = [str(self.get_nodeattr("THRESHOLDS_PATH"))]
+        code_gen_dict["$DEPTH_TRIGGER_URAM$"] = [str(self.get_nodeattr("DEPTH_TRIGGER_URAM"))]
+        code_gen_dict["$DEPTH_TRIGGER_BRAM$"] = [str(self.get_nodeattr("DEPTH_TRIGGER_BRAM"))]
+        code_gen_dict["$DEEP_PIPELINE$"] = [str(self.get_nodeattr("DEEP_PIPELINE"))]
+        
+        # Interface-specific parameters
+        # input BDIM parameters
+        code_gen_dict["$INPUT_BDIM$"] = [str(self._get_interface_bdim("input", 0))]
+        # input SDIM parameters  
+        code_gen_dict["$INPUT_SDIM$"] = [str(self._get_interface_sdim("input", 0))]
+        
+        # Interface datatype widths
+        code_gen_dict["$INPUT_WIDTH$"] = [str(self._get_interface_width("input"))]
+        code_gen_dict["$INPUT_SIGNED$"] = [str(1 if self._get_interface_signed("input") else 0)]
+        code_gen_dict["$OUTPUT_WIDTH$"] = [str(self._get_interface_width("output"))]
+        
+        # Config interface parameters
+        code_gen_dict["$T_WIDTH$"] = [str(self.get_nodeattr("width"))]
+        
+        # Standard interface width mappings
+        code_gen_dict["$INPUT_STREAM_WIDTH$"] = [str(self._get_interface_width("input"))]
+        code_gen_dict["$OUTPUT_STREAM_WIDTH$"] = [str(self._get_interface_width("output"))]
+        
+        # AXI-Lite configuration enable
+        code_gen_dict["$USE_AXILITE$"] = [str(1)]
+        
         # Extract PE and CHANNELS parameters if they exist
         # These often appear in shape expressions but need to be available as parameters
         if hasattr(self, 'get_nodeattr'):
-            if self.get_nodeattr("PE", None) is not None:
-                code_gen_dict["$PE$"] = [str(self.get_nodeattr("PE"))]
-            if self.get_nodeattr("CHANNELS", None) is not None:
-                code_gen_dict["$CHANNELS$"] = [str(self.get_nodeattr("CHANNELS"))]
+            try:
+                pe_val = self.get_nodeattr("PE")
+                code_gen_dict["$PE$"] = [str(pe_val)]
+            except Exception:
+                pass
+            try:
+                channels_val = self.get_nodeattr("CHANNELS")
+                code_gen_dict["$CHANNELS$"] = [str(channels_val)]
+            except Exception:
+                pass
         
         return code_gen_dict
     

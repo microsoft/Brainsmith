@@ -134,19 +134,11 @@ module mem_bank #(
 				d_out <= mem[rd_addr];
 endmodule
 
-// @brainsmith BITS
-
-
-// @brainsmith BDIM s_axis [C] [PE]
-// @brainsmith BDIM m_axis [C] [PE]
-// @brainsmith DATATYPE s_axis FIXED WI WI
-// @brainsmith DATATYPE m_axis FIXED O_BITS O_BITS
-// @brainsmith DATATYPE_PARAM s_axis width WI
-// @brainsmith DATATYPE_PARAM s_axis signed SIGNED
-// @brainsmith DATATYPE_PARAM s_axis format FPARG
-// @brainsmith DATATYPE_PARAM m_axis width O_BITS
-// @brainsmith DATATYPE_PARAM m_axis bias BIAS
-
+// @brainsmith BDIM input [I, J]
+// @brainsmith SDIM input SIMD
+// @brainsmith BDIM output [J, I]
+// @brainsmith DATATYPE input WIDTH BITS
+// @brainsmith DATATYPE_CONSTRAINT input * 1 32
 
 // ----------------------------------------
 // Parallel Transpose Unit (PTranspose)
@@ -160,13 +152,15 @@ module ptranspose #(
 	input logic                       clk, // global control 
 	input logic                       rst,
 
-	output logic                      irdy, // Input stream
-	input  logic                      ivld,
-	input  logic [SIMD-1:0][BITS-1:0] idat,
+    //- AXI Stream - Input --------------
+	output	logic  input_tready,
+	input	logic  input_tvalid,
+	input	logic [SIMD-1:0][BITS-1:0] input_tdata,
 
-	input  logic                      ordy, // Output stream
-	output logic                      ovld,
-	output logic [SIMD-1:0][BITS-1:0] odat
+	//- AXI Stream - Output -------------
+	input	logic  output_tready,
+	output	logic  output_tvalid,
+	output	logic [SIMD-1:0][BITS-1:0] output_tdata
 ); 
 
 	// elaboration time compute for generating the WR_ROT_PERIOD

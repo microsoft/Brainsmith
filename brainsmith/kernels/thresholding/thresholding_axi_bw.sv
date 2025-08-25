@@ -39,13 +39,14 @@
  *****************************************************************************/
 
 
-// @brainsmith DATATYPE input * 1 32
-// @brainsmith DATATYPE output * 1 32
-// @brainsmith DATATYPE_PARAM threshold width T_WIDTH
+// @brainsmith DATATYPE_CONSTRAINT input * 1 32
+// @brainsmith DATATYPE_CONSTRAINT output * 1 32
+// @brainsmith DATATYPE threshold width T_WIDTH
 // @brainsmith BDIM input input_BDIM SHAPE=[CHANNELS]
 // @brainsmith SDIM input input_SDIM SHAPE=[PE]
 // *NOTE: This PE should really be SIMD
 // @brainsmith AXILITE_PARAM USE_AXILITE threshold enable
+// @brainsmith WEIGHT threshold
 
 module thresholding_axi #(
     // Interface Parallelism

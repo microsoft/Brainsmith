@@ -8,45 +8,27 @@ Uses standard protocol signal names in the interface while mapping to actual por
 // Generated from: {{ kernel_metadata.source_file }}
 
 module {{ kernel_metadata.name }}_wrapper #(
-{%- set ns = namespace(has_axilite=false, has_interface=false) %}
 {%- set has_general = kernel_metadata.parameters|length > 0 %}
-
-{#- Check for AXI-Lite parameters -#}
-{%- for interface in kernel_metadata.config %}
-{%- if interface.enable_param %}
-{%- set ns.has_axilite = true %}
-{%- endif %}
-{%- endfor %}
-
-{#- Check for interface parameters -#}
-{%- for interface in kernel_metadata.stream_interfaces %}
-{%- if interface.bdim_params or interface.sdim_params or (interface.dtype_params and interface.dtype_params.has_any()) %}
-{%- set ns.has_interface = true %}
-{%- endif %}
-{%- endfor %}
-{%- for interface in kernel_metadata.config %}
-{%- if interface.dtype_params and interface.dtype_params.has_any() %}
-{%- set ns.has_interface = true %}
-{%- endif %}
-{%- endfor %}
+{%- set has_axilite = kernel_metadata.has_axilite_enable_params %}
+{%- set has_interface = kernel_metadata.has_interface_params %}
 
 {% if has_general %}
     // General algorithm parameters
 {% for param in kernel_metadata.parameters %}
     parameter {{ param.name }} = {{ param.template_param_name }}{% if not loop.last %},
-{% endif %}{% endfor %}{% if ns.has_axilite or ns.has_interface %},{% endif %}
+{% endif %}{% endfor %}{% if has_axilite or has_interface %},{% endif %}
 {% endif %}
-{%- if ns.has_axilite %}
+{%- if has_axilite %}
 
     // AXI-Lite configuration parameter
 {% for interface in kernel_metadata.config %}
 {% if interface.enable_param %}
-    parameter {{ interface.enable_param.name }} = {{ interface.enable_param.template_param_name }}{% if ns.has_interface %},{% endif %}
+    parameter {{ interface.enable_param.name }} = {{ interface.enable_param.template_param_name }}{% if has_interface %},{% endif %}
 {% endif %}
 {% endfor %}
 {% endif %}
 
-{%- if ns.has_interface %}
+{%- if has_interface %}
 {#- Collect datatype parameters from config interfaces -#}
 {% for interface in kernel_metadata.config %}
 {% if interface.dtype_params and interface.dtype_params.has_any() %}
@@ -60,22 +42,10 @@ module {{ kernel_metadata.name }}_wrapper #(
 
 {#- Interface parameters from stream interfaces -#}
 {% for interface in kernel_metadata.stream_interfaces %}
-{% set interface_has_params = interface.bdim_params or interface.sdim_params or (interface.dtype_params and interface.dtype_params.has_any()) %}
-{% if interface_has_params %}
+{% if interface.has_parameters() %}
 
     // {{ interface.name }} interface parameters
-{% set param_list = [] %}
-{%- for param in interface.bdim_params %}
-{%- set _ = param_list.append(param) %}
-{%- endfor %}
-{%- for param in interface.sdim_params %}
-{%- set _ = param_list.append(param) %}
-{%- endfor %}
-{%- if interface.dtype_params %}
-{%- if interface.dtype_params.width %}{% set _ = param_list.append(interface.dtype_params.width) %}{% endif %}
-{%- if interface.dtype_params.signed %}{% set _ = param_list.append(interface.dtype_params.signed) %}{% endif %}
-{%- endif %}
-{% for param in param_list %}
+{% for param in interface.get_all_params() %}
     parameter {{ param.name }} = {{ param.template_param_name }}{% if not loop.last %},
 {% endif %}{% endfor %}{% if not loop.last %},{% endif %}
 {% endif %}
@@ -89,113 +59,90 @@ module {{ kernel_metadata.name }}_wrapper #(
 {#- Input interfaces -#}
 {%- for interface in kernel_metadata.inputs %}
 
-    // {{ interface.name }}: {% if interface.is_weight %}WEIGHT{% else %}INPUT{% endif %} interface
-    input wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.name }}_TDATA,
-    input wire {{ interface.name }}_TVALID,
-    output wire {{ interface.name }}_TREADY,
+    // {{ interface.compiler_name }}: {% if interface.is_weight %}WEIGHT{% else %}INPUT{% endif %} interface (RTL: {{ interface.name }})
+    input wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.compiler_name }}_TDATA,
+    input wire {{ interface.compiler_name }}_TVALID,
+    output wire {{ interface.compiler_name }}_TREADY,
 {%- if interface.tlast %}
-    input wire {{ interface.name }}_TLAST,
+    input wire {{ interface.compiler_name }}_TLAST,
 {%- endif %}
 {%- endfor %}
 
 {#- Output interfaces -#}
 {%- for interface in kernel_metadata.outputs %}
 
-    // {{ interface.name }}: OUTPUT interface
-    output wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.name }}_TDATA,
-    output wire {{ interface.name }}_TVALID,
-    input wire {{ interface.name }}_TREADY,
+    // {{ interface.compiler_name }}: OUTPUT interface (RTL: {{ interface.name }})
+    output wire [${{ interface.name.upper() }}_STREAM_WIDTH$-1:0] {{ interface.compiler_name }}_TDATA,
+    output wire {{ interface.compiler_name }}_TVALID,
+    input wire {{ interface.compiler_name }}_TREADY,
 {%- if interface.tlast %}
-    output wire {{ interface.name }}_TLAST,
+    output wire {{ interface.compiler_name }}_TLAST,
 {%- endif %}
 {%- endfor %}
 
 {#- Config interfaces (AXI-Lite) -#}
 {%- for interface in kernel_metadata.config %}
 
-    // {{ interface.name }}: CONFIG interface (AXI-Lite)
+    // {{ interface.compiler_name }}: CONFIG interface (AXI-Lite, RTL: {{ interface.name }})
 {%- if interface.has_write %}
 
     // Write Address Channel
-    input wire {{ interface.name }}_AWVALID,
-    output wire {{ interface.name }}_AWREADY,
-    input wire [31:0] {{ interface.name }}_AWADDR,
+    input wire {{ interface.compiler_name }}_AWVALID,
+    output wire {{ interface.compiler_name }}_AWREADY,
+    input wire [31:0] {{ interface.compiler_name }}_AWADDR,
 {%- if interface.awprot %}
-    input wire [2:0] {{ interface.name }}_AWPROT,
+    input wire [2:0] {{ interface.compiler_name }}_AWPROT,
 {%- endif %}
 
     // Write Data Channel
-    input wire {{ interface.name }}_WVALID,
-    output wire {{ interface.name }}_WREADY,
-    input wire [31:0] {{ interface.name }}_WDATA,
-    input wire [3:0] {{ interface.name }}_WSTRB,
+    input wire {{ interface.compiler_name }}_WVALID,
+    output wire {{ interface.compiler_name }}_WREADY,
+    input wire [31:0] {{ interface.compiler_name }}_WDATA,
+    input wire [3:0] {{ interface.compiler_name }}_WSTRB,
 
     // Write Response Channel
-    output wire {{ interface.name }}_BVALID,
-    input wire {{ interface.name }}_BREADY,
-    output wire [1:0] {{ interface.name }}_BRESP,
+    output wire {{ interface.compiler_name }}_BVALID,
+    input wire {{ interface.compiler_name }}_BREADY,
+    output wire [1:0] {{ interface.compiler_name }}_BRESP,
 {%- endif %}
 {%- if interface.has_read %}
 
     // Read Address Channel
-    input wire {{ interface.name }}_ARVALID,
-    output wire {{ interface.name }}_ARREADY,
-    input wire [31:0] {{ interface.name }}_ARADDR,
+    input wire {{ interface.compiler_name }}_ARVALID,
+    output wire {{ interface.compiler_name }}_ARREADY,
+    input wire [31:0] {{ interface.compiler_name }}_ARADDR,
 {%- if interface.arprot %}
-    input wire [2:0] {{ interface.name }}_ARPROT,
+    input wire [2:0] {{ interface.compiler_name }}_ARPROT,
 {%- endif %}
 
     // Read Data Channel
-    output wire {{ interface.name }}_RVALID,
-    input wire {{ interface.name }}_RREADY,
-    output wire [31:0] {{ interface.name }}_RDATA,
-    output wire [1:0] {{ interface.name }}_RRESP{% if not loop.last %},{% endif %}
+    output wire {{ interface.compiler_name }}_RVALID,
+    input wire {{ interface.compiler_name }}_RREADY,
+    output wire [31:0] {{ interface.compiler_name }}_RDATA,
+    output wire [1:0] {{ interface.compiler_name }}_RRESP{% if not loop.last %},{% endif %}
 {%- endif %}
 {%- endfor %}
 );
 
     // Instantiate the wrapped kernel
     {{ kernel_metadata.name }} #(
-{%- set ns2 = namespace(has_axilite=false, has_interface=false) %}
-{%- set has_general = kernel_metadata.parameters|length > 0 %}
-
-{#- Check for AXI-Lite parameters -#}
-{%- for interface in kernel_metadata.config %}
-{%- if interface.enable_param %}
-{%- set ns2.has_axilite = true %}
-{%- endif %}
-{%- endfor %}
-
-{#- Check for interface parameters -#}
-{%- for interface in kernel_metadata.stream_interfaces %}
-{%- if interface.bdim_params or interface.sdim_params or (interface.dtype_params and interface.dtype_params.has_any()) %}
-{%- set ns2.has_interface = true %}
-{%- endif %}
-{%- endfor %}
-{%- for interface in kernel_metadata.config %}
-{%- if interface.dtype_params and interface.dtype_params.has_any() %}
-{%- set ns2.has_interface = true %}
-{%- endif %}
-{%- endfor %}
-
 {%- if has_general %}
+
         // General algorithm parameters
 {% for param in kernel_metadata.parameters %}
         .{{ param.name }}({{ param.name }}){% if not loop.last %},
-{% endif %}{% endfor %}{% if ns2.has_axilite or ns2.has_interface %},{% endif %}
+{% endif %}{% endfor %}{% if has_axilite or has_interface %},{% endif %}
 {% endif %}
-
-{%- if ns2.has_axilite %}
+{%- if has_axilite %}
 
         // AXI-Lite configuration parameters
 {% for interface in kernel_metadata.config %}
 {% if interface.enable_param %}
-        .{{ interface.enable_param.name }}({{ interface.enable_param.name }}){% if ns2.has_interface %},{% endif %}
+        .{{ interface.enable_param.name }}({{ interface.enable_param.name }}){% if has_interface %},{% endif %}
 {% endif %}
 {% endfor %}
 {% endif %}
-
-{%- if ns2.has_interface %}
+{%- if has_interface %}
 {#- Config interface datatype parameters -#}
 {% for interface in kernel_metadata.config %}
 {% if interface.dtype_params and interface.dtype_params.has_any() %}
@@ -209,22 +156,10 @@ module {{ kernel_metadata.name }}_wrapper #(
 
 {#- Stream interface parameters -#}
 {% for interface in kernel_metadata.stream_interfaces %}
-{% set interface_has_params = interface.bdim_params or interface.sdim_params or (interface.dtype_params and interface.dtype_params.has_any()) %}
-{% if interface_has_params %}
+{% if interface.has_parameters() %}
 
         // {{ interface.name }} interface parameters
-{% set param_list = [] %}
-{%- for param in interface.bdim_params %}
-{%- set _ = param_list.append(param) %}
-{%- endfor %}
-{%- for param in interface.sdim_params %}
-{%- set _ = param_list.append(param) %}
-{%- endfor %}
-{%- if interface.dtype_params %}
-{%- if interface.dtype_params.width %}{% set _ = param_list.append(interface.dtype_params.width) %}{% endif %}
-{%- if interface.dtype_params.signed %}{% set _ = param_list.append(interface.dtype_params.signed) %}{% endif %}
-{%- endif %}
-{% for param in param_list %}
+{% for param in interface.get_all_params() %}
         .{{ param.name }}({{ param.name }}){% if not loop.last %},
 {% endif %}{% endfor %}{% if not loop.last %},{% endif %}
 {% endif %}
@@ -238,55 +173,55 @@ module {{ kernel_metadata.name }}_wrapper #(
 {#- Connect input interfaces -#}
 {%- for interface in kernel_metadata.inputs %}
 
-        // {{ interface.name }} connections
-        .{{ interface.tdata.name }}({{ interface.name }}_TDATA),
-        .{{ interface.tvalid.name }}({{ interface.name }}_TVALID),
-        .{{ interface.tready.name }}({{ interface.name }}_TREADY){% if interface.tlast %},
-        .{{ interface.tlast.name }}({{ interface.name }}_TLAST){% endif %}{% if not loop.last or kernel_metadata.outputs or kernel_metadata.config %},{% endif %}
+        // {{ interface.name }} connections (from {{ interface.compiler_name }})
+        .{{ interface.tdata.name }}({{ interface.compiler_name }}_TDATA),
+        .{{ interface.tvalid.name }}({{ interface.compiler_name }}_TVALID),
+        .{{ interface.tready.name }}({{ interface.compiler_name }}_TREADY){% if interface.tlast %},
+        .{{ interface.tlast.name }}({{ interface.compiler_name }}_TLAST){% endif %}{% if not loop.last or kernel_metadata.outputs or kernel_metadata.config %},{% endif %}
 {%- endfor %}
 
 {#- Connect output interfaces -#}
 {%- for interface in kernel_metadata.outputs %}
 
-        // {{ interface.name }} connections  
-        .{{ interface.tdata.name }}({{ interface.name }}_TDATA),
-        .{{ interface.tvalid.name }}({{ interface.name }}_TVALID),
-        .{{ interface.tready.name }}({{ interface.name }}_TREADY){% if interface.tlast %},
-        .{{ interface.tlast.name }}({{ interface.name }}_TLAST){% endif %}{% if not loop.last or kernel_metadata.config %},{% endif %}
+        // {{ interface.name }} connections (to {{ interface.compiler_name }})  
+        .{{ interface.tdata.name }}({{ interface.compiler_name }}_TDATA),
+        .{{ interface.tvalid.name }}({{ interface.compiler_name }}_TVALID),
+        .{{ interface.tready.name }}({{ interface.compiler_name }}_TREADY){% if interface.tlast %},
+        .{{ interface.tlast.name }}({{ interface.compiler_name }}_TLAST){% endif %}{% if not loop.last or kernel_metadata.config %},{% endif %}
 {%- endfor %}
 
 {#- Connect config interfaces -#}
 {%- for interface in kernel_metadata.config %}
 
-        // {{ interface.name }} connections
+        // {{ interface.name }} connections (from/to {{ interface.compiler_name }})
 {%- if interface.has_write %}
 
-        .{{ interface.awvalid.name }}({{ interface.name }}_AWVALID),
-        .{{ interface.awready.name }}({{ interface.name }}_AWREADY),
-        .{{ interface.awaddr.name }}({{ interface.name }}_AWADDR),
+        .{{ interface.awvalid.name }}({{ interface.compiler_name }}_AWVALID),
+        .{{ interface.awready.name }}({{ interface.compiler_name }}_AWREADY),
+        .{{ interface.awaddr.name }}({{ interface.compiler_name }}_AWADDR),
 {% if interface.awprot %}
-        .{{ interface.awprot.name }}({{ interface.name }}_AWPROT),
+        .{{ interface.awprot.name }}({{ interface.compiler_name }}_AWPROT),
 {% endif %}
-        .{{ interface.wvalid.name }}({{ interface.name }}_WVALID),
-        .{{ interface.wready.name }}({{ interface.name }}_WREADY),
-        .{{ interface.wdata.name }}({{ interface.name }}_WDATA),
-        .{{ interface.wstrb.name }}({{ interface.name }}_WSTRB),
-        .{{ interface.bvalid.name }}({{ interface.name }}_BVALID),
-        .{{ interface.bready.name }}({{ interface.name }}_BREADY),
-        .{{ interface.bresp.name }}({{ interface.name }}_BRESP){% if interface.has_read %},{% endif %}
+        .{{ interface.wvalid.name }}({{ interface.compiler_name }}_WVALID),
+        .{{ interface.wready.name }}({{ interface.compiler_name }}_WREADY),
+        .{{ interface.wdata.name }}({{ interface.compiler_name }}_WDATA),
+        .{{ interface.wstrb.name }}({{ interface.compiler_name }}_WSTRB),
+        .{{ interface.bvalid.name }}({{ interface.compiler_name }}_BVALID),
+        .{{ interface.bready.name }}({{ interface.compiler_name }}_BREADY),
+        .{{ interface.bresp.name }}({{ interface.compiler_name }}_BRESP){% if interface.has_read %},{% endif %}
 {%- endif %}
 {%- if interface.has_read %}
 
-        .{{ interface.arvalid.name }}({{ interface.name }}_ARVALID),
-        .{{ interface.arready.name }}({{ interface.name }}_ARREADY),
-        .{{ interface.araddr.name }}({{ interface.name }}_ARADDR),
+        .{{ interface.arvalid.name }}({{ interface.compiler_name }}_ARVALID),
+        .{{ interface.arready.name }}({{ interface.compiler_name }}_ARREADY),
+        .{{ interface.araddr.name }}({{ interface.compiler_name }}_ARADDR),
 {% if interface.arprot %}
-        .{{ interface.arprot.name }}({{ interface.name }}_ARPROT),
+        .{{ interface.arprot.name }}({{ interface.compiler_name }}_ARPROT),
 {% endif %}
-        .{{ interface.rvalid.name }}({{ interface.name }}_RVALID),
-        .{{ interface.rready.name }}({{ interface.name }}_RREADY),
-        .{{ interface.rdata.name }}({{ interface.name }}_RDATA),
-        .{{ interface.rresp.name }}({{ interface.name }}_RRESP){% if not loop.last %},{% endif %}
+        .{{ interface.rvalid.name }}({{ interface.compiler_name }}_RVALID),
+        .{{ interface.rready.name }}({{ interface.compiler_name }}_RREADY),
+        .{{ interface.rdata.name }}({{ interface.compiler_name }}_RDATA),
+        .{{ interface.rresp.name }}({{ interface.compiler_name }}_RRESP){% if not loop.last %},{% endif %}
 {%- endif %}
 {%- endfor %}
     );

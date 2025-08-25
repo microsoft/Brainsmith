@@ -117,10 +117,12 @@ Commands:
     clean          Clean build artifacts, container, and optionally images
     clean --deep   Deep clean including Docker images and dependency repos
     logs           Show container logs
+    kernel         Run kernel integrator (kernel <rtl_file> [options])
 
 Examples:
     $0 start && $0 "python script.py"          # Typical workflow
     $0 shell                                    # Interactive development
+    $0 kernel design.sv -o output/              # Generate FINN HWCustomOp from RTL
     $0 clean                                    # Clean container and build files
     $0 clean --deep                             # Full reset (removes everything)
 EOF
@@ -680,6 +682,10 @@ case "${1:-help}" in
     "clean")
         shift
         clean_all "$@"
+        ;;
+    "kernel")
+        shift
+        exec_in_container python -m brainsmith.tools.kernel_integrator "$@"
         ;;
     "help"|"-h"|"--help")
         show_help
