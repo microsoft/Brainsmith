@@ -1,15 +1,6 @@
-############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-#
-# Auto-generated HWCustomOp for thresholding_axi
-# Generated from: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
-#
-# This HWCustomOp uses direct KernelMetadata access with no intermediate layers
-############################################################################
 
-from typing import List, Dict, Tuple, Any
-import numpy as np
 from qonnx.core.datatype import DataType
 
 from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
@@ -35,32 +26,23 @@ class ThresholdingAxi(AutoHWCustomOp):
         kernel_def = self._create_kernel_definition()
         super().__init__(onnx_node, kernel_def, **kwargs)
     
-    @property
-    def kernel_name(self) -> str:
-        """Return kernel name for this operation."""
-        return "thresholding_axi"
-    
     def get_nodeattr_types(self):
         """
         Define all node attributes for thresholding_axi.
-        
-        Generated from interface objects in KernelMetadata.
         """
         attrs = super().get_nodeattr_types()
-        attrs.update({
-            # Interface datatype attributes
+        
+        kernel_attrs = {
             "inputDataType": ('s', True, ""),
+            "weightDataType": ('s', True, ""),
             "outputDataType": ('s', True, ""),
-            "thresholdDataType": ('s', True, ""),
-            
-            # BDIM (block dimensions) parallelism
             "CHANNELS": ('i', True, 0),
-            # SDIM (streaming dimensions) parallelism
             "PE": ('i', True, 0),
-            
-            # Runtime writeable weights if config interface exists
             "runtime_writeable_weights": ('b', False, True),
-        })
+            # Backend selection attribute
+            "preferred_impl_style": ('s', False, "rtl"),
+        }
+        attrs.update(kernel_attrs)
         
         return attrs
     
@@ -72,7 +54,7 @@ class ThresholdingAxi(AutoHWCustomOp):
         """
         kernel_def = KernelDefinition("thresholding_axi")
         
-        # Add all input definitions (regular inputs and weights combined)
+        # All input definitions (regular inputs and AXI-Stream weights)
         input_def = InputDefinition(
             name="input",
             datatype_constraints=[
@@ -87,7 +69,16 @@ class ThresholdingAxi(AutoHWCustomOp):
         )
         kernel_def.add_input(input_def)
         
-        # Add output definitions
+        # AXI-Lite weight interfaces as input definitions
+        input_def = InputDefinition(
+            name="weight",
+            datatype_constraints=[
+            ],
+            is_weight=True
+        )
+        kernel_def.add_input(input_def)
+        
+        # Output definitions
         output_def = OutputDefinition(
             name="output",
             datatype_constraints=[
@@ -185,16 +176,19 @@ Core Functionality:
 - Source: brainsmith/kernels/thresholding/thresholding_axi_bw.sv
 
 Interfaces:
-- Input: input- Output: output
+- Input: input (RTL: input)
+- Output: output (RTL: output)
 
 Interface Attributes:
 - inputDataType: Input interface datatype selection
 - outputDataType: Output interface datatype selection  
-- thresholdDataType: Config interface datatype selection
+- weightDataType: Weight interface datatype selection (AXI-Lite)
 
 Shape Parameters:
-- CHANNELS: int (BDIM shape parameter from input interface)
-- PE: int (SDIM shape parameter from input interface)
+BDIM Parameters:
+- CHANNELS: int (block dimension parameter)
+SDIM Parameters:
+- PE: int (stream dimension parameter)
 
 Configuration:
 - runtime_writeable_weights: bool = True (supports runtime weight updates)

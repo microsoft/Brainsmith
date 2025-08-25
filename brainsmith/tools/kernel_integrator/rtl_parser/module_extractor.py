@@ -19,7 +19,7 @@ from tree_sitter import Node, Tree
 from .types import Direction, Port, Parameter, PragmaType, ParsedModule
 from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
-    TopModulePragma, DatatypePragma, WeightPragma, DatatypeParamPragma,
+    TopModulePragma, DatatypeConstraintPragma, WeightPragma, DatatypePragma,
     AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma,
     RelationshipPragma
 )
@@ -52,12 +52,12 @@ class ModuleExtractor:
         # Map PragmaType to the corresponding Pragma subclass constructor
         self.pragma_constructors: Dict[PragmaType, Callable[..., Pragma]] = {
             PragmaType.TOP_MODULE: TopModulePragma,
-            PragmaType.DATATYPE: DatatypePragma,
+            PragmaType.DATATYPE_CONSTRAINT: DatatypeConstraintPragma,
             PragmaType.BDIM: BDimPragma,
             PragmaType.SDIM: SDimPragma,
             PragmaType.DERIVED_PARAMETER: DerivedParameterPragma,
             PragmaType.WEIGHT: WeightPragma,
-            PragmaType.DATATYPE_PARAM: DatatypeParamPragma,
+            PragmaType.DATATYPE: DatatypePragma,
             PragmaType.ALIAS: AliasPragma,
             PragmaType.AXILITE_PARAM: AxiLiteParamPragma,
             PragmaType.RELATIONSHIP: RelationshipPragma,

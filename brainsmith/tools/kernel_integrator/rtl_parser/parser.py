@@ -108,6 +108,9 @@ class RTLParser:
             # Auto-linking with remaining parameters            
             self.linker.link_parameters(kernel_metadata)
 
+            # Format for compiler export
+            self._format_for_compiler_export(kernel_metadata)
+
             # TODO: Add validation toggled by self.strict flag
             
             logger.info(f"KernelMetadata object created for '{kernel_metadata.name}' with {len(kernel_metadata.parameters)} params")
@@ -143,6 +146,89 @@ class RTLParser:
         
         logger.info(f"Pragma application complete.")
     
+    def _format_for_compiler_export(self, kernel: KernelMetadata) -> None:
+        """Format kernel metadata for compiler export.
+        
+        This method prepares the KernelMetadata for use by downstream compilers
+        by applying necessary transformations and standardizations.
+        
+        Current formatting:
+        - Assigns standardized compiler names to interfaces
+        
+        Future formatting may include:
+        - Parameter name standardization
+        - Datatype normalization
+        - Additional compiler-specific requirements
+        
+        Args:
+            kernel: KernelMetadata to format in-place
+        """
+        logger.info("Formatting kernel metadata for compiler export")
+        
+        # Separate inputs by type
+        regular_inputs = [iface for iface in kernel.inputs if not iface.is_weight]
+        weight_inputs = [iface for iface in kernel.inputs if iface.is_weight]
+        
+        # Separate AXI-Lite configs by type
+        weight_configs = [iface for iface in kernel.config if iface.is_weight]
+        regular_configs = [iface for iface in kernel.config if not iface.is_weight]
+        
+        # Count total weight interfaces (AXI-Stream weights + AXI-Lite weights)
+        total_weight_interfaces = len(weight_inputs) + len(weight_configs)
+        
+        # Assign compiler names to regular inputs
+        if len(regular_inputs) == 1:
+            regular_inputs[0].compiler_name = "input"
+        else:
+            for idx, iface in enumerate(regular_inputs):
+                iface.compiler_name = f"input{idx}"
+        
+        # Assign compiler names to all weight interfaces (both AXI-Stream and AXI-Lite)
+        weight_idx = 0
+        
+        # First assign to AXI-Stream weight inputs
+        if total_weight_interfaces == 1:
+            # Single weight interface - no index needed
+            if weight_inputs:
+                weight_inputs[0].compiler_name = "weight"
+        else:
+            # Multiple weight interfaces - use indices
+            for iface in weight_inputs:
+                iface.compiler_name = f"weight{weight_idx}"
+                weight_idx += 1
+        
+        # Then assign to AXI-Lite weight config interfaces
+        if total_weight_interfaces == 1 and weight_configs:
+            # Single weight interface and it's AXI-Lite - no index
+            weight_configs[0].compiler_name = "weight"
+        else:
+            # Continue indexing for AXI-Lite weight interfaces
+            for config in weight_configs:
+                config.compiler_name = f"weight{weight_idx}"
+                weight_idx += 1
+        
+        # Assign compiler names to non-weight AXI-Lite config interfaces
+        if len(regular_configs) == 1:
+            regular_configs[0].compiler_name = "config"
+        else:
+            for idx, config in enumerate(regular_configs):
+                config.compiler_name = f"config{idx}"
+        
+        # Assign compiler names to outputs
+        if len(kernel.outputs) == 1:
+            kernel.outputs[0].compiler_name = "output"
+        else:
+            for idx, iface in enumerate(kernel.outputs):
+                iface.compiler_name = f"output{idx}"
+        
+        # Log the assignments for debugging
+        logger.debug("Compiler name assignments:")
+        for iface in kernel.inputs:
+            logger.debug(f"  Input '{iface.name}' -> '{iface.compiler_name}'")
+        for iface in kernel.outputs:
+            logger.debug(f"  Output '{iface.name}' -> '{iface.compiler_name}'")
+        for iface in kernel.config:
+            logger.debug(f"  Config '{iface.name}' -> '{iface.compiler_name}'")
 
 
     def parse_file(self, file_path: str) -> KernelMetadata:

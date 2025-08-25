@@ -49,7 +49,7 @@ except ImportError:
 
 # Brainsmith imports
 from brainsmith.kernels.thresholding.finn.thresholding import Thresholding
-from brainsmith.kernels.thresholding.bsmith.thresholding_axi_hw_custom_op import ThresholdingAxi
+from brainsmith.kernels.thresholding.thresholding_axi import ThresholdingAxi
 
 
 class CPPSIMTester:

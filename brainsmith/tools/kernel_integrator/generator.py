@@ -24,6 +24,10 @@ class KernelGenerator:
         'wrapper': {
             'template': 'rtl_wrapper.v.j2',
             'filename': '{name}_wrapper.v'
+        },
+        'infer': {
+            'template': 'infer_transform.py.j2',
+            'filename': 'infer_{name}.py'
         }
     }
     

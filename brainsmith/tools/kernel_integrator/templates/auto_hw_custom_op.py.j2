@@ -4,18 +4,9 @@ Direct AutoHWCustomOp Template
 Works directly with KernelMetadata structure without abstraction layers.
 Uses correct property names and natural data organization.
 -#}
-############################################################################
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-#
-# Auto-generated HWCustomOp for {{ kernel_metadata.name }}
-# Generated from: {{ kernel_metadata.source_file }}
-#
-# This HWCustomOp uses direct KernelMetadata access with no intermediate layers
-############################################################################
 
-from typing import List, Dict, Tuple, Any
-import numpy as np
 from qonnx.core.datatype import DataType
 
 from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
@@ -41,63 +32,20 @@ class {{ kernel_metadata.class_name }}(AutoHWCustomOp):
         kernel_def = self._create_kernel_definition()
         super().__init__(onnx_node, kernel_def, **kwargs)
     
-    @property
-    def kernel_name(self) -> str:
-        """Return kernel name for this operation."""
-        return "{{ kernel_metadata.name }}"
-    
     def get_nodeattr_types(self):
         """
         Define all node attributes for {{ kernel_metadata.name }}.
-        
-        Generated from interface objects in KernelMetadata.
         """
         attrs = super().get_nodeattr_types()
-        attrs.update({
-            # Interface datatype attributes
-            {% for interface in kernel_metadata.inputs %}
-            "{{ interface.name }}DataType": ('s', True, ""),
-            {% endfor %}
-            {% for interface in kernel_metadata.outputs %}
-            "{{ interface.name }}DataType": ('s', True, ""),
-            {% endfor %}
-            {% for interface in kernel_metadata.config %}
-            "{{ interface.name }}DataType": ('s', True, ""),
-            {% endfor %}
-            
-            {# Check if we have any shape parameters #}
-            {% set has_bdim = namespace(value=false) %}
-            {% set has_sdim = namespace(value=false) %}
-            {% for interface in kernel_metadata.stream_interfaces %}
-            {% if interface.bdim_shape %}{% set has_bdim.value = true %}{% endif %}
-            {% if interface.sdim_shape %}{% set has_sdim.value = true %}{% endif %}
-            {% endfor %}
-            {% if has_bdim.value %}
-            # BDIM (block dimensions) parallelism
-            {% for interface in kernel_metadata.stream_interfaces %}
-            {% if interface.bdim_shape %}
-            {% for shape_param in interface.bdim_shape %}
-            "{{ shape_param }}": ('i', True, 0),
-            {% endfor %}
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-            {% if has_sdim.value %}
-            # SDIM (streaming dimensions) parallelism
-            {% for interface in kernel_metadata.stream_interfaces %}
-            {% if interface.sdim_shape %}
-            {% for shape_param in interface.sdim_shape %}
-            "{{ shape_param }}": ('i', True, 0),
-            {% endfor %}
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-            
-            # Runtime writeable weights if config interface exists
-            {% if kernel_metadata.config %}
-            "runtime_writeable_weights": ('b', False, True),
-            {% endif %}
-        })
+        
+        kernel_attrs = {
+        {% for name, (type_char, required, default) in kernel_metadata.get_nodeattr_types().items() %}
+            "{{ name }}": ('{{ type_char }}', {{ required }}, {% if default is string %}"{{ default }}"{% elif default is none %}None{% else %}{{ default }}{% endif %}),
+        {% endfor %}
+            # Backend selection attribute
+            "preferred_impl_style": ('s', False, "rtl"),
+        }
+        attrs.update(kernel_attrs)
         
         return attrs
     
@@ -109,10 +57,10 @@ class {{ kernel_metadata.class_name }}(AutoHWCustomOp):
         """
         kernel_def = KernelDefinition("{{ kernel_metadata.name }}")
         
-        # Add all input definitions (regular inputs and weights combined)
+        # All input definitions (regular inputs and AXI-Stream weights)
         {% for interface in kernel_metadata.inputs %}
         input_def = InputDefinition(
-            name="{{ interface.name }}",
+            name="{{ interface.compiler_name }}",
             datatype_constraints=[
                 {% for constraint in interface.datatype_constraints %}
                 DatatypeConstraintGroup(
@@ -135,10 +83,36 @@ class {{ kernel_metadata.class_name }}(AutoHWCustomOp):
         kernel_def.add_input(input_def)
         {% endfor %}
         
-        # Add output definitions
+        # AXI-Lite weight interfaces as input definitions
+        {% for interface in kernel_metadata.config %}
+        {% if interface.is_weight %}
+        input_def = InputDefinition(
+            name="{{ interface.compiler_name }}",
+            datatype_constraints=[
+                {% for constraint in interface.datatype_constraints %}
+                DatatypeConstraintGroup(
+                    base_type="{{ constraint.base_type }}",
+                    min_width={{ constraint.min_width }},
+                    max_width={{ constraint.max_width }}
+                ),
+                {% endfor %}
+            ],
+            {% if interface.bdim_shape %}
+            block_tiling={{ interface.bdim_shape | tojson }},
+            {% endif %}
+            {% if interface.sdim_shape %}
+            stream_tiling={{ interface.sdim_shape | tojson }},
+            {% endif %}
+            is_weight=True
+        )
+        kernel_def.add_input(input_def)
+        {% endif %}
+        {% endfor %}
+        
+        # Output definitions
         {% for interface in kernel_metadata.outputs %}
         output_def = OutputDefinition(
-            name="{{ interface.name }}",
+            name="{{ interface.compiler_name }}",
             datatype_constraints=[
                 {% for constraint in interface.datatype_constraints %}
                 DatatypeConstraintGroup(
@@ -254,36 +228,40 @@ Core Functionality:
 
 Interfaces:
 {% for interface in kernel_metadata.inputs %}
-- Input: {{ interface.name }}{% if interface.is_weight %} (weight){% endif %}
+- Input: {{ interface.compiler_name }}{% if interface.is_weight %} (weight){% endif %} (RTL: {{ interface.name }})
 {% endfor %}
 {% for interface in kernel_metadata.outputs %}
-- Output: {{ interface.name }}
+- Output: {{ interface.compiler_name }} (RTL: {{ interface.name }})
 {% endfor %}
 
 Interface Attributes:
 {% for interface in kernel_metadata.inputs %}
-- {{ interface.name }}DataType: Input interface datatype selection
+- {{ interface.compiler_name }}DataType: Input interface datatype selection
 {% endfor %}
 {% for interface in kernel_metadata.outputs %}
-- {{ interface.name }}DataType: Output interface datatype selection  
+- {{ interface.compiler_name }}DataType: Output interface datatype selection  
 {% endfor %}
 {% for interface in kernel_metadata.config %}
-- {{ interface.name }}DataType: Config interface datatype selection
+{% if interface.is_weight %}
+- {{ interface.compiler_name }}DataType: Weight interface datatype selection (AXI-Lite)
+{% else %}
+- {{ interface.compiler_name }}DataType: Config interface datatype selection
+{% endif %}
 {% endfor %}
 
 Shape Parameters:
-{% for interface in kernel_metadata.stream_interfaces %}
-{% if interface.bdim_shape %}
-{% for shape_param in interface.bdim_shape %}
-- {{ shape_param }}: int (BDIM shape parameter from {{ interface.name }} interface)
+{% if kernel_metadata.has_bdim_params %}
+BDIM Parameters:
+{% for param_name in kernel_metadata.get_all_bdim_params() %}
+- {{ param_name }}: int (block dimension parameter)
 {% endfor %}
 {% endif %}
-{% if interface.sdim_shape %}
-{% for shape_param in interface.sdim_shape %}
-- {{ shape_param }}: int (SDIM shape parameter from {{ interface.name }} interface)
+{% if kernel_metadata.has_sdim_params %}
+SDIM Parameters:
+{% for param_name in kernel_metadata.get_all_sdim_params() %}
+- {{ param_name }}: int (stream dimension parameter)
 {% endfor %}
 {% endif %}
-{% endfor %}
 
 {% if kernel_metadata.config %}
 Configuration:

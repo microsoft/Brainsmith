@@ -17,7 +17,7 @@ This package contains all pragma implementations organized by type:
 # Re-export all pragma classes for backward compatibility
 from .base import Pragma, InterfacePragma, PragmaError
 from .module import TopModulePragma
-from .interface import DatatypePragma, DatatypeParamPragma, WeightPragma
+from .interface import DatatypeConstraintPragma, DatatypePragma, WeightPragma
 from .parameter import AliasPragma, DerivedParameterPragma, AxiLiteParamPragma
 from .dimension import BDimPragma, SDimPragma
 from .relationship import RelationshipPragma
@@ -30,8 +30,8 @@ __all__ = [
     # Module pragmas
     'TopModulePragma',
     # Interface pragmas
+    'DatatypeConstraintPragma',
     'DatatypePragma',
-    'DatatypeParamPragma',
     'WeightPragma',
     # Parameter pragmas
     'AliasPragma',

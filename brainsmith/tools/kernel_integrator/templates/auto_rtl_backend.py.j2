@@ -10,8 +10,6 @@ Generates clean parameter mappings using direct metadata access.
 #
 # Auto-generated RTLBackend for {{ kernel_metadata.name }}
 # Generated from: {{ kernel_metadata.source_file }}
-#
-# This RTLBackend uses direct KernelMetadata access with no intermediate layers
 ############################################################################
 
 from typing import List, Dict, Tuple, Any
@@ -20,11 +18,11 @@ import shutil
 from pathlib import Path
 
 from brainsmith.core.finn.auto_rtl_backend import AutoRTLBackend
-from {{ kernel_metadata.name }}_hw_custom_op import {{ kernel_metadata.class_name }}
+from .{{ kernel_metadata.name }} import {{ kernel_metadata.class_name }}
 from qonnx.core.datatype import DataType
 
 
-class {{ kernel_metadata.name }}_rtl({{ kernel_metadata.class_name }}, AutoRTLBackend):
+class {{ kernel_metadata.class_name }}_rtl({{ kernel_metadata.class_name }}, AutoRTLBackend):
     """
     RTL backend for {{ kernel_metadata.name }} operation.
     
@@ -54,28 +52,28 @@ class {{ kernel_metadata.name }}_rtl({{ kernel_metadata.class_name }}, AutoRTLBa
         
         # Add RTL-specific algorithm parameters
         rtl_attrs = {
-            {%- for param in kernel_metadata.parameters %}
-            "{{ param.nodeattr_name }}": ('i', True, {{ param.resolved_default or 'None' }}),
-            {%- endfor %}
-            {%- if kernel_metadata.config %}
+            {% for param in kernel_metadata.parameters %}
+            "{{ param.nodeattr_name }}": ('{{ 's' if param.is_string_type() else 'i' }}', True, {{ param.resolved_default or 'None' }}),
+            {% endfor %}
+            {% if kernel_metadata.config %}
             # Configuration interface parameters
-            {%- for interface in kernel_metadata.config %}
-            {%- if interface.dtype_params and interface.dtype_params.width %}
+            {% for interface in kernel_metadata.config %}
+            {% if interface.dtype_params and interface.dtype_params.width %}
             "{{ interface.dtype_params.width.nodeattr_name }}": ('i', True, {{ interface.dtype_params.width.resolved_default or 'None' }}),
-            {%- endif %}
-            {%- endfor %}
+            {% endif %}
+            {% endfor %}
             # AXI-Lite enable parameter
             "USE_AXILITE": ('i', True, 1),  # Has AXI-Lite config interface
-            {%- else %}
+            {% else %}
             # AXI-Lite enable parameter
             "USE_AXILITE": ('i', True, 0),  # No AXI-Lite interface
-            {%- endif %}
-            {%- for interface in kernel_metadata.config %}
-            {%- if interface.name.lower() == "threshold" %}
+            {% endif %}
+            {% for interface in kernel_metadata.config %}
+            {% if interface.name.lower() == "threshold" %}
             # Threshold datatype parameter
             "thresholdDataType": ('s', True, 'INT8'),  # Default threshold datatype
-            {%- endif %}
-            {%- endfor %}
+            {% endif %}
+            {% endfor %}
         }
         my_attrs.update(rtl_attrs)
         
@@ -106,63 +104,69 @@ class {{ kernel_metadata.name }}_rtl({{ kernel_metadata.class_name }}, AutoRTLBa
         code_gen_dict["$OBITS$"] = [str(self.get_outstream_width())]
         
         # Direct parameter assignments from KernelMetadata
-        {%- for param in kernel_metadata.parameters %}
+        {% for param in kernel_metadata.parameters %}
         code_gen_dict["${{ param.name.upper() }}$"] = [str(self.get_nodeattr("{{ param.nodeattr_name }}"))]
-        {%- endfor %}
+        {% endfor %}
         
         # Interface-specific parameters
-        {%- for interface in kernel_metadata.stream_interfaces %}
-        {%- if interface.bdim_params %}
+        {% for interface in kernel_metadata.stream_interfaces %}
+        {% if interface.bdim_params %}
         # {{ interface.name }} BDIM parameters
-        {%- for param in interface.bdim_params %}
-        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_bdim("{{ interface.name }}", {{ loop.index0 }}))]
-        {%- endfor %}
-        {%- endif %}
-        {%- if interface.sdim_params %}
+        {% for param in interface.bdim_params %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_bdim("{{ interface.compiler_name }}", {{ loop.index0 }}))]
+        {% endfor %}
+        {% endif %}
+        {% if interface.sdim_params %}
         # {{ interface.name }} SDIM parameters  
-        {%- for param in interface.sdim_params %}
-        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_sdim("{{ interface.name }}", {{ loop.index0 }}))]
-        {%- endfor %}
-        {%- endif %}
-        {%- endfor %}
+        {% for param in interface.sdim_params %}
+        code_gen_dict["${{ param.name.upper() }}$"] = [str(self._get_interface_sdim("{{ interface.compiler_name }}", {{ loop.index0 }}))]
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
         
         # Interface datatype widths
-        {%- for interface in kernel_metadata.stream_interfaces %}
-        code_gen_dict["${{ interface.name.upper() }}_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
-        {%- if interface.dtype_params and interface.dtype_params.signed %}
-        code_gen_dict["${{ interface.name.upper() }}_SIGNED$"] = [str(1 if self._get_interface_signed("{{ interface.name }}") else 0)]
-        {%- endif %}
-        {%- endfor %}
+        {% for interface in kernel_metadata.stream_interfaces %}
+        code_gen_dict["${{ interface.name.upper() }}_WIDTH$"] = [str(self._get_interface_width("{{ interface.compiler_name }}"))]
+        {% if interface.dtype_params and interface.dtype_params.signed %}
+        code_gen_dict["${{ interface.name.upper() }}_SIGNED$"] = [str(1 if self._get_interface_signed("{{ interface.compiler_name }}") else 0)]
+        {% endif %}
+        {% endfor %}
         
         # Config interface parameters
-        {%- for interface in kernel_metadata.config %}
-        {%- if interface.dtype_params and interface.dtype_params.width %}
+        {% for interface in kernel_metadata.config %}
+        {% if interface.dtype_params and interface.dtype_params.width %}
         code_gen_dict["${{ interface.dtype_params.width.name.upper() }}$"] = [str(self.get_nodeattr("{{ interface.dtype_params.width.nodeattr_name }}"))]
-        {%- endif %}
-        {%- endfor %}
+        {% endif %}
+        {% endfor %}
         
         # Standard interface width mappings
-        {%- for interface in kernel_metadata.inputs %}
-        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
-        {%- endfor %}
-        {%- for interface in kernel_metadata.outputs %}
-        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.name }}"))]
-        {%- endfor %}
+        {% for interface in kernel_metadata.inputs %}
+        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.compiler_name }}"))]
+        {% endfor %}
+        {% for interface in kernel_metadata.outputs %}
+        code_gen_dict["${{ interface.name.upper() }}_STREAM_WIDTH$"] = [str(self._get_interface_width("{{ interface.compiler_name }}"))]
+        {% endfor %}
         
         # AXI-Lite configuration enable
-        {%- if kernel_metadata.config %}
+        {% if kernel_metadata.config %}
         code_gen_dict["$USE_AXILITE$"] = [str(1)]
-        {%- else %}
+        {% else %}
         code_gen_dict["$USE_AXILITE$"] = [str(0)]
-        {%- endif %}
+        {% endif %}
         
         # Extract PE and CHANNELS parameters if they exist
         # These often appear in shape expressions but need to be available as parameters
         if hasattr(self, 'get_nodeattr'):
-            if self.get_nodeattr("PE", None) is not None:
-                code_gen_dict["$PE$"] = [str(self.get_nodeattr("PE"))]
-            if self.get_nodeattr("CHANNELS", None) is not None:
-                code_gen_dict["$CHANNELS$"] = [str(self.get_nodeattr("CHANNELS"))]
+            try:
+                pe_val = self.get_nodeattr("PE")
+                code_gen_dict["$PE$"] = [str(pe_val)]
+            except Exception:
+                pass
+            try:
+                channels_val = self.get_nodeattr("CHANNELS")
+                code_gen_dict["$CHANNELS$"] = [str(channels_val)]
+            except Exception:
+                pass
         
         return code_gen_dict
     

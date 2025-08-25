@@ -19,34 +19,15 @@ if TYPE_CHECKING:
 class PragmaType(Enum):
     """Valid pragma types recognized by the parser."""
     TOP_MODULE = "top_module"          # Specify the top module if multiple exist
-    DATATYPE = "datatype"              # Restrict datatype for an interface
+    DATATYPE_CONSTRAINT = "datatype_constraint"  # Restrict datatype for an interface
     DERIVED_PARAMETER = "derived_parameter" # Link module param to python function
     WEIGHT = "weight"                  # Specify interface as a weight
     BDIM = "bdim"                      # Override block dimensions for an interface
     SDIM = "sdim"                      # Override stream dimensions for an interface
-    DATATYPE_PARAM = "datatype_param"  # Map interface datatype properties to RTL parameters
+    DATATYPE = "datatype"              # Map interface datatype properties to RTL parameters
     ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
     AXILITE_PARAM = "axilite_param"    # Mark parameter as AXI-Lite configuration related
     RELATIONSHIP = "relationship"      # Define relationships between interfaces
-
-
-class ParamSourceType(Enum):
-    """How a parameter gets its value during code generation."""
-    NODEATTR = "nodeattr"                        # Direct from RTL module parameter
-    NODEATTR_ALIAS = "nodeattr_alias"  # Via alias pragma
-    DERIVED = "derived"                # Via derived_parameter pragma expression
-    AXILITE = "axilite"               # From AXI-Lite interface
-    INTERFACE_DATATYPE = "interface_datatype"  # From interface datatype properties
-    INTERFACE_SHAPE = "interface_shape"  # From interface shape (BDIM/SDIM)
-
-
-class ParameterCategory(Enum):
-    """Categories for parameter classification."""
-    SHAPE = "shape"                    # Shape-related (BDIM/SDIM)
-    ALGORITHM = "algorithm"            # Algorithm/computation parameters
-    DATATYPE = "datatype"             # Datatype-related parameters
-    INTERNAL = "internal"             # Internal/derived parameters
-
 
 @dataclass
 class Port:
@@ -186,6 +167,26 @@ class Parameter:
             return False
             
         return True
+    
+    def is_string_type(self) -> bool:
+        """Check if this parameter should be typed as a string in nodeattr.
+        
+        Returns True if the default value is a string literal (wrapped in quotes).
+        This is used to determine whether to use 's' or 'i' type in nodeattr.
+        
+        Returns:
+            True if parameter has a string literal default value, False otherwise
+        """
+        if not self.default_value:
+            return False
+        
+        val = self.default_value.strip()
+        # Check for double quotes or single quotes
+        if (val.startswith('"') and val.endswith('"')) or \
+           (val.startswith("'") and val.endswith("'")):
+            return True
+        
+        return False
 
 
 @dataclass

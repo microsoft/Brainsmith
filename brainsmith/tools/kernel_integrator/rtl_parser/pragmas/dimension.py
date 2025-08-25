@@ -232,13 +232,31 @@ class BDimPragma(InterfacePragma):
             logger.warning(f"BDIM pragma target interface '{interface_name}' not found")
             return
         
-        # Validate interface type
-        if hasattr(interface, 'interface_type') and interface.interface_type not in [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]:
-            error_msg = (f"BDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
-                        f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
-                        f"BDIM pragmas are only allowed on INPUT, OUTPUT, or WEIGHT interfaces.")
-            logger.error(f"BDIM interface type validation failed: {error_msg}")
-            raise PragmaError(error_msg)
+        # Validate interface type - allow CONFIG/AXI-Lite only if marked as weight
+        if hasattr(interface, 'interface_type'):
+            allowed_types = [InterfaceType.INPUT, InterfaceType.OUTPUT, InterfaceType.WEIGHT]
+            # Special case: CONFIG interfaces can have BDIM if they're marked as weights
+            if interface.interface_type == InterfaceType.CONFIG:
+                if not (hasattr(interface, 'is_weight') and interface.is_weight):
+                    error_msg = (f"BDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                                f"CONFIG interface '{interface_name}' unless it is marked as a weight. "
+                                f"Use '@brainsmith weight {interface_name}' first.")
+                    logger.error(f"BDIM interface type validation failed: {error_msg}")
+                    raise PragmaError(error_msg)
+            elif interface.interface_type not in allowed_types:
+                error_msg = (f"BDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                            f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
+                            f"BDIM pragmas are only allowed on INPUT, OUTPUT, or WEIGHT interfaces.")
+                logger.error(f"BDIM interface type validation failed: {error_msg}")
+                raise PragmaError(error_msg)
+        
+        # Ensure interface has DataflowMetadata
+        if hasattr(interface, 'supports_dataflow') and interface.supports_dataflow():
+            if not hasattr(interface, 'dataflow') or interface.dataflow is None:
+                from brainsmith.tools.kernel_integrator.metadata import DataflowMetadata
+                interface.dataflow = DataflowMetadata()
+        else:
+            raise PragmaError(f"Interface '{interface_name}' does not support dataflow properties")
         
         # Move parameters from kernel to interface
         for param_ref in bdim_params:
@@ -253,15 +271,15 @@ class BDimPragma(InterfacePragma):
                     break
             
             if param_index is not None:
-                # Move parameter to interface
+                # Move parameter to interface's dataflow metadata
                 param = kernel.parameters.pop(param_index)
-                interface.bdim_params.append(param)
-                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' bdim_params")
+                interface.dataflow.bdim_params.append(param)
+                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' dataflow.bdim_params")
             else:
                 logger.warning(f"BDIM pragma references parameter '{param_ref}' which is not in kernel.parameters")
         
-        # Apply the shape to the interface
-        interface.bdim_shape = bdim_shape
+        # Apply the shape to the interface's dataflow metadata
+        interface.dataflow.bdim_shape = bdim_shape
         logger.debug(f"BDIM pragma successfully applied to interface '{interface_name}' with shape={bdim_shape}")
 
 
@@ -472,12 +490,30 @@ class SDimPragma(InterfacePragma):
             return
         
         # Validate interface type - SDIM only applies to INPUT or WEIGHT
-        if hasattr(interface, 'interface_type') and interface.interface_type not in [InterfaceType.INPUT, InterfaceType.WEIGHT]:
-            error_msg = (f"SDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
-                        f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
-                        f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
-            logger.error(f"SDIM interface type validation failed: {error_msg}")
-            raise PragmaError(error_msg)
+        if hasattr(interface, 'interface_type'):
+            allowed_types = [InterfaceType.INPUT, InterfaceType.WEIGHT]
+            # Special case: CONFIG interfaces can have SDIM if they're marked as weights
+            if interface.interface_type == InterfaceType.CONFIG:
+                if not (hasattr(interface, 'is_weight') and interface.is_weight):
+                    error_msg = (f"SDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                                f"CONFIG interface '{interface_name}' unless it is marked as a weight. "
+                                f"Use '@brainsmith weight {interface_name}' first.")
+                    logger.error(f"SDIM interface type validation failed: {error_msg}")
+                    raise PragmaError(error_msg)
+            elif interface.interface_type not in allowed_types:
+                error_msg = (f"SDIM pragma at line {self.inputs.get('line_number', 'unknown')} cannot be applied to "
+                            f"interface '{interface_name}' of type '{interface.interface_type.value}'. "
+                            f"SDIM pragmas are only allowed on INPUT or WEIGHT interfaces.")
+                logger.error(f"SDIM interface type validation failed: {error_msg}")
+                raise PragmaError(error_msg)
+        
+        # Ensure interface has DataflowMetadata
+        if hasattr(interface, 'supports_dataflow') and interface.supports_dataflow():
+            if not hasattr(interface, 'dataflow') or interface.dataflow is None:
+                from brainsmith.tools.kernel_integrator.metadata import DataflowMetadata
+                interface.dataflow = DataflowMetadata()
+        else:
+            raise PragmaError(f"Interface '{interface_name}' does not support dataflow properties")
         
         # Move parameters from kernel to interface
         for param_ref in sdim_params:
@@ -492,13 +528,13 @@ class SDimPragma(InterfacePragma):
                     break
             
             if param_index is not None:
-                # Move parameter to interface
+                # Move parameter to interface's dataflow metadata
                 param = kernel.parameters.pop(param_index)
-                interface.sdim_params.append(param)
-                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' sdim_params")
+                interface.dataflow.sdim_params.append(param)
+                logger.debug(f"Moved parameter '{param.name}' from kernel to interface '{interface_name}' dataflow.sdim_params")
             else:
                 logger.warning(f"SDIM pragma references parameter '{param_ref}' which is not in kernel.parameters")
         
-        # Apply the shape to the interface
-        interface.sdim_shape = sdim_shape
+        # Apply the shape to the interface's dataflow metadata
+        interface.dataflow.sdim_shape = sdim_shape
         logger.debug(f"SDIM pragma successfully applied to interface '{interface_name}' with shape={sdim_shape}")

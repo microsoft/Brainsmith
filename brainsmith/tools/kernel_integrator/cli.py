@@ -20,11 +20,12 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s design.sv                           # Generate all files in ./output/<kernel_name>/
+  %(prog)s design.sv                           # Generate files in same directory as design.sv
   %(prog)s design.sv -o /path/output           # Generate files in specified directory
   %(prog)s design.sv --validate                # Validate RTL only (no file generation)
   %(prog)s design.sv --info                    # Display parsed kernel metadata
   %(prog)s design.sv --artifacts wrapper,autohwcustomop  # Generate specific files only
+  %(prog)s design.sv --artifacts infer                  # Generate only the infer transform
   %(prog)s design.sv --no-strict --verbose     # Disable strict validation with verbose output
 
 Notes:
@@ -44,7 +45,7 @@ Notes:
         '-o', '--output',
         type=Path,
         metavar='DIR',
-        help='output directory (default: ./output/<kernel_name>/)'
+        help='output directory (default: same directory as RTL file)'
     )
     
     # Operation modes
@@ -64,7 +65,7 @@ Notes:
         '--artifacts',
         type=str,
         metavar='LIST',
-        help='comma-separated list of artifacts to generate (autohwcustomop,rtlbackend,wrapper)'
+        help='comma-separated list of artifacts to generate (autohwcustomop,rtlbackend,wrapper,infer)'
     )
     
     parser.add_argument(
@@ -77,12 +78,6 @@ Notes:
         '-v', '--verbose',
         action='store_true',
         help='enable verbose output'
-    )
-    
-    parser.add_argument(
-        '--version',
-        action='version',
-        version='%(prog)s 4.0.0'
     )
     
     return parser
@@ -201,31 +196,45 @@ def display_kernel_info(metadata: 'KernelMetadata') -> None:
     
     # Basic info
     print(f"\n📦 Module: {metadata.name}")
-    if metadata.description:
-        print(f"📝 Description: {metadata.description}")
+    print(f"📄 Source: {metadata.source_file}")
     
     # Parameters
     if metadata.parameters:
         print(f"\n⚙️  Parameters ({len(metadata.parameters)}):")
-        for param in metadata.parameters.values():
+        for param in metadata.parameters:
             default = f" = {param.default_value}" if param.default_value else ""
             print(f"  - {param.name}: {param.rtl_type or 'unknown'}{default}")
     
     # Interfaces
-    if metadata.interfaces:
-        print(f"\n🔌 Interfaces ({len(metadata.interfaces)}):")
-        for iface in metadata.interfaces.values():
-            protocol = iface.protocol_type.value if hasattr(iface, 'protocol_type') else 'unknown'
-            direction = iface.direction.value if hasattr(iface, 'direction') else 'unknown'
-            print(f"  - {iface.name}: {protocol} ({direction})")
+    interfaces = metadata.interfaces
+    if interfaces:
+        print(f"\n🔌 Interfaces ({len(interfaces)}):")
+        for iface in interfaces:
+            # Determine interface type
+            if hasattr(iface, 'interface_type'):
+                if hasattr(iface.interface_type, 'value'):
+                    interface_type = iface.interface_type.value
+                else:
+                    interface_type = str(iface.interface_type)
+            else:
+                interface_type = type(iface).__name__.replace('Metadata', '')
+            
+            # Add direction for AXI-Stream
+            extra_info = ""
+            if hasattr(iface, 'direction'):
+                extra_info = f" ({iface.direction.value})"
+            
+            print(f"  - {iface.name}: {interface_type}{extra_info}")
+            
+            # Show ports if available
             if hasattr(iface, 'ports') and iface.ports:
-                for port in iface.ports.values():
-                    print(f"    • {port.name}[{port.width}]")
+                for port_name, port in iface.ports.items():
+                    width_str = f"[{port.width}]" if port.width else ""
+                    print(f"    • {port.name}{width_str}")
     
-    # Pragmas summary
-    pragma_count = len(getattr(metadata, '_applied_pragmas', []))
-    if pragma_count > 0:
-        print(f"\n🏷️  Pragmas applied: {pragma_count}")
+    # Linked parameters
+    if metadata.linked_parameters:
+        print(f"\n🔗 Linked Parameters: {len(metadata.linked_parameters)}")
     
     print()
 
@@ -252,7 +261,7 @@ def parse_artifacts_list(artifacts_str: str) -> List[str]:
         return []
     
     artifacts = [a.strip() for a in artifacts_str.split(',')]
-    valid_artifacts = {'autohwcustomop', 'rtlbackend', 'wrapper'}
+    valid_artifacts = {'autohwcustomop', 'rtlbackend', 'wrapper', 'infer'}
     
     invalid = [a for a in artifacts if a not in valid_artifacts]
     if invalid:
@@ -297,7 +306,7 @@ def main(argv=None) -> int:
         if args.output:
             output_dir = args.output
         else:
-            output_dir = Path('output') / metadata.name
+            output_dir = args.rtl_file.parent
         
         # Generate files (passing metadata to avoid re-parsing)
         files, elapsed_ms = generate_kernel_files(

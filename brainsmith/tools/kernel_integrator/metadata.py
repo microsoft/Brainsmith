@@ -7,13 +7,41 @@ information at a higher abstraction level than raw RTL.
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Iterator
+from typing import Dict, List, Optional, Iterator, Tuple, Any
 from collections.abc import MutableMapping
 
 from brainsmith.core.dataflow.types import Direction, InterfaceType
 from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
 
 from .rtl_parser.types import Port, Parameter
+
+
+@dataclass
+class DataflowMetadata:
+    """Shared metadata for dataflow properties of interfaces.
+    
+    Contains all attributes related to dataflow semantics that can apply
+    to both AXI-Stream and AXI-Lite interfaces when used for data transfer.
+    """
+    is_weight: bool = False
+    bdim_params: List[Parameter] = field(default_factory=list)
+    sdim_params: List[Parameter] = field(default_factory=list)
+    bdim_shape: Optional[List] = None
+    sdim_shape: Optional[List] = None
+    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
+    relationships: Dict[str, str] = field(default_factory=dict)
+    
+    def has_shape_params(self) -> bool:
+        """Check if interface has BDIM or SDIM parameters."""
+        return bool(self.bdim_shape or self.sdim_shape)
+    
+    def get_shape_params(self) -> List[Parameter]:
+        """Get all shape-related parameters."""
+        return self.bdim_params + self.sdim_params
+    
+    def get_all_params(self) -> List[Parameter]:
+        """Get all parameters (shape params) in consistent order."""
+        return self.bdim_params + self.sdim_params
 
 
 @dataclass
@@ -44,11 +72,12 @@ class DatatypeParameters:
         ])
 
 
-@dataclass
+@dataclass  
 class InterfaceMetadata(MutableMapping[str, Port]):
     """Base metadata for all interfaces."""
     name: str
     ports: Dict[str, Port]
+    compiler_name: Optional[str] = None  # Standardized name for compiler export
 
     def add_port(self, port: Port):
         """Add a port to the interface."""
@@ -71,34 +100,67 @@ class InterfaceMetadata(MutableMapping[str, Port]):
     def _get_signal(self, suffix: str) -> Optional[Port]:
         """Get signal by suffix (case-insensitive)."""
         return self.ports.get(suffix.upper())
+    
+    def has_parameters(self) -> bool:
+        """Check if this interface has any parameters."""
+        return False  # Base implementation - override in subclasses
+    
+    def supports_dataflow(self) -> bool:
+        """Check if this interface type can have dataflow properties."""
+        # Will be overridden by AXIStreamMetadata and AXILiteMetadata
+        return False
 
     
 @dataclass
 class AXIStreamMetadata(InterfaceMetadata):
     """Metadata for a AXI-Stream interface."""
     # interface_type is determined by direction: INPUT or OUTPUT
-    direction: Direction
-    is_weight: bool = False
-
-    # Owned RTL Parameters
-    bdim_params: List[Parameter] = field(default_factory=list)
-    sdim_params: List[Parameter] = field(default_factory=list)
+    direction: Direction = field(default=Direction.INPUT)  # Will be set during parsing
     dtype_params: Optional[DatatypeParameters] = None
-
-    # Shape expressions for tiling system
-    bdim_shape: Optional[List] = None
-    sdim_shape: Optional[List] = None
-
-    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
-    # TAFK TODO: Fix/add this
-    relationships: Dict[str, str] = field(default_factory=dict)
+    dataflow: Optional[DataflowMetadata] = None
     
     @property
     def interface_type(self) -> InterfaceType:
         """Interface type based on direction."""
-        if self.is_weight:
+        if self.dataflow and self.dataflow.is_weight:
             return InterfaceType.WEIGHT
         return InterfaceType.INPUT if self.direction == Direction.INPUT else InterfaceType.OUTPUT
+    
+    # Delegation properties for backward compatibility
+    @property
+    def is_weight(self) -> bool:
+        """Check if this interface is marked as weight."""
+        return self.dataflow.is_weight if self.dataflow else False
+    
+    @property
+    def bdim_params(self) -> List[Parameter]:
+        """Get block dimension parameters."""
+        return self.dataflow.bdim_params if self.dataflow else []
+    
+    @property
+    def sdim_params(self) -> List[Parameter]:
+        """Get stream dimension parameters."""
+        return self.dataflow.sdim_params if self.dataflow else []
+    
+    @property
+    def bdim_shape(self) -> Optional[List]:
+        """Get block dimension shape expression."""
+        return self.dataflow.bdim_shape if self.dataflow else None
+    
+    @property
+    def sdim_shape(self) -> Optional[List]:
+        """Get stream dimension shape expression."""
+        return self.dataflow.sdim_shape if self.dataflow else None
+    
+    @property
+    def datatype_constraints(self) -> List[DatatypeConstraintGroup]:
+        """Get datatype constraints."""
+        return self.dataflow.datatype_constraints if self.dataflow else []
+    
+    @property
+    def relationships(self) -> Dict[str, str]:
+        """Get relationships."""
+        return self.dataflow.relationships if self.dataflow else {}
     
     # Signal role properties
     @property
@@ -120,12 +182,53 @@ class AXIStreamMetadata(InterfaceMetadata):
     def tlast(self) -> Optional[Port]:
         """Get TLAST signal port."""
         return self._get_signal("TLAST")
+    
+    def has_parameters(self) -> bool:
+        """Check if this interface has any parameters."""
+        has_dataflow_params = self.dataflow and len(self.dataflow.get_all_params()) > 0
+        return bool(has_dataflow_params or 
+                   (self.dtype_params and self.dtype_params.has_any()))
+    
+    @property
+    def has_shape_params(self) -> bool:
+        """Check if interface has BDIM or SDIM parameters."""
+        return self.dataflow.has_shape_params() if self.dataflow else False
+    
+    def get_all_params(self) -> List[Parameter]:
+        """Get all parameters for this interface in consistent order."""
+        params = []
+        
+        # Add dataflow parameters
+        if self.dataflow:
+            params.extend(self.dataflow.get_all_params())
+        
+        # Add non-None dtype params in consistent order
+        if self.dtype_params:
+            if self.dtype_params.width:
+                params.append(self.dtype_params.width)
+            if self.dtype_params.signed:
+                params.append(self.dtype_params.signed)
+            if self.dtype_params.bias:
+                params.append(self.dtype_params.bias)
+            if self.dtype_params.format:
+                params.append(self.dtype_params.format)
+            if self.dtype_params.fractional_width:
+                params.append(self.dtype_params.fractional_width)
+            if self.dtype_params.exponent_width:
+                params.append(self.dtype_params.exponent_width)
+            if self.dtype_params.mantissa_width:
+                params.append(self.dtype_params.mantissa_width)
+        
+        return params
+    
+    def supports_dataflow(self) -> bool:
+        """AXI-Stream interfaces support dataflow properties."""
+        return True
 
 
 @dataclass
 class AXILiteMetadata(InterfaceMetadata):
     """Metadata for an AXI-Lite interface."""
-    interface_type: InterfaceType = InterfaceType.CONFIG
     has_write: bool = True  # Default to true, can be overridden
     has_read: bool = True   # Default to true, can be overridden
 
@@ -134,7 +237,51 @@ class AXILiteMetadata(InterfaceMetadata):
     data_width_param: Optional[Parameter] = None
     addr_width_param: Optional[Parameter] = None
     dtype_params: Optional[DatatypeParameters] = None
+    dataflow: Optional[DataflowMetadata] = None
+    
+    @property
+    def interface_type(self) -> InterfaceType:
+        """Interface type based on whether it's marked as weight."""
+        if self.dataflow and self.dataflow.is_weight:
+            return InterfaceType.WEIGHT
+        return InterfaceType.CONFIG
 
+    # Delegation properties for dataflow metadata
+    @property
+    def is_weight(self) -> bool:
+        """Check if this interface is marked as weight."""
+        return self.dataflow.is_weight if self.dataflow else False
+    
+    @property
+    def bdim_params(self) -> List[Parameter]:
+        """Get block dimension parameters."""
+        return self.dataflow.bdim_params if self.dataflow else []
+    
+    @property
+    def sdim_params(self) -> List[Parameter]:
+        """Get stream dimension parameters."""
+        return self.dataflow.sdim_params if self.dataflow else []
+    
+    @property
+    def bdim_shape(self) -> Optional[List]:
+        """Get block dimension shape expression."""
+        return self.dataflow.bdim_shape if self.dataflow else None
+    
+    @property
+    def sdim_shape(self) -> Optional[List]:
+        """Get stream dimension shape expression."""
+        return self.dataflow.sdim_shape if self.dataflow else None
+    
+    @property
+    def datatype_constraints(self) -> List[DatatypeConstraintGroup]:
+        """Get datatype constraints."""
+        return self.dataflow.datatype_constraints if self.dataflow else []
+    
+    @property
+    def relationships(self) -> Dict[str, str]:
+        """Get relationships."""
+        return self.dataflow.relationships if self.dataflow else {}
+    
     @property
     def is_read_only(self) -> bool:
         """Check if this AXI-Lite interface is read-only."""
@@ -244,6 +391,44 @@ class AXILiteMetadata(InterfaceMetadata):
     def rready(self) -> Optional[Port]:
         """Get RREADY signal port."""
         return self._get_signal("RREADY")
+    
+    def has_parameters(self) -> bool:
+        """Check if this interface has any parameters."""
+        has_dataflow_params = self.dataflow and len(self.dataflow.get_all_params()) > 0
+        return bool(has_dataflow_params or
+                   self.enable_param or self.data_width_param or 
+                   self.addr_width_param or 
+                   (self.dtype_params and self.dtype_params.has_any()))
+    
+    def get_all_params(self) -> List[Parameter]:
+        """Get all parameters for this interface in consistent order."""
+        params = []
+        
+        # Add dataflow parameters
+        if self.dataflow:
+            params.extend(self.dataflow.get_all_params())
+        
+        # Add control parameters
+        if self.enable_param:
+            params.append(self.enable_param)
+        if self.data_width_param:
+            params.append(self.data_width_param)
+        if self.addr_width_param:
+            params.append(self.addr_width_param)
+        
+        # Add non-None dtype params in consistent order
+        if self.dtype_params:
+            if self.dtype_params.width:
+                params.append(self.dtype_params.width)
+            if self.dtype_params.signed:
+                params.append(self.dtype_params.signed)
+            # Other dtype params less common for AXI-Lite
+        
+        return params
+    
+    def supports_dataflow(self) -> bool:
+        """AXI-Lite interfaces support dataflow properties when used as weights."""
+        return True
 
 
 @dataclass
@@ -311,6 +496,34 @@ class KernelMetadata:
         return any(i.is_weight for i in self.inputs)
     
     @property
+    def has_bdim_params(self) -> bool:
+        """Check if any stream interface has BDIM parameters."""
+        return any(iface.bdim_shape for iface in self.stream_interfaces)
+    
+    @property
+    def has_sdim_params(self) -> bool:
+        """Check if any stream interface has SDIM parameters."""
+        return any(iface.sdim_shape for iface in self.stream_interfaces)
+    
+    @property
+    def has_interface_params(self) -> bool:
+        """Check if any interface has parameters."""
+        # Check stream interfaces
+        for iface in self.stream_interfaces:
+            if iface.has_parameters():
+                return True
+        # Check config interfaces
+        for iface in self.config:
+            if iface.has_parameters():
+                return True
+        return False
+    
+    @property
+    def has_axilite_enable_params(self) -> bool:
+        """Check if any config interface has enable parameter."""
+        return any(iface.enable_param for iface in self.config)
+    
+    @property
     def interfaces(self) -> List[InterfaceMetadata]:
         """Get all interfaces in a single list."""
         interfaces = []
@@ -319,6 +532,61 @@ class KernelMetadata:
         interfaces.extend(self.outputs) 
         interfaces.extend(self.config)
         return interfaces
+    
+    # Collection methods
+    def get_all_bdim_params(self) -> List[str]:
+        """Get all unique BDIM parameter names from all interfaces."""
+        params = []
+        seen = set()
+        for iface in self.stream_interfaces:
+            if iface.bdim_shape:
+                for param in iface.bdim_shape:
+                    if param not in seen:
+                        params.append(param)
+                        seen.add(param)
+        return params
+    
+    def get_all_sdim_params(self) -> List[str]:
+        """Get all unique SDIM parameter names from all interfaces."""
+        params = []
+        seen = set()
+        for iface in self.stream_interfaces:
+            if iface.sdim_shape:
+                for param in iface.sdim_shape:
+                    if param not in seen:
+                        params.append(param)
+                        seen.add(param)
+        return params
+    
+    def get_nodeattr_types(self) -> Dict[str, Tuple[str, bool, Any]]:
+        """Build complete nodeattr types dictionary for FINN.
+        
+        Returns:
+            Dictionary mapping attribute names to (type, required, default) tuples.
+        """
+        attrs = {}
+        
+        # Interface datatype attributes
+        for iface in self.inputs:
+            attrs[f"{iface.compiler_name}DataType"] = ('s', True, "")
+        for iface in self.config:
+            attrs[f"{iface.compiler_name}DataType"] = ('s', True, "")
+        for iface in self.outputs:
+            attrs[f"{iface.compiler_name}DataType"] = ('s', True, "")
+        
+        # BDIM shape parameters
+        for param_name in self.get_all_bdim_params():
+            attrs[param_name] = ('i', True, 0)
+        
+        # SDIM shape parameters
+        for param_name in self.get_all_sdim_params():
+            attrs[param_name] = ('i', True, 0)
+        
+        # Runtime writeable weights if config interface exists
+        if self.config:
+            attrs["runtime_writeable_weights"] = ('b', False, True)
+        
+        return attrs
     
 
 # Utility functions
