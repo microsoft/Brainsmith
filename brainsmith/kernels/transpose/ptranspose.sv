@@ -134,6 +134,8 @@ module mem_bank #(
 				d_out <= mem[rd_addr];
 endmodule
 
+
+// @brainsmith TOP_MODULE ptranspose
 // @brainsmith BDIM input [I, J]
 // @brainsmith SDIM input SIMD
 // @brainsmith BDIM output [J, I]

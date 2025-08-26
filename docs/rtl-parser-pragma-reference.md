@@ -39,6 +39,46 @@ endmodule
 - Module name must exist in the file
 - Only one TOP_MODULE pragma allowed per file
 
+### INCLUDE_RTL
+
+Specifies additional RTL source files that should be included with the module.
+
+**Syntax:**
+```systemverilog
+// @brainsmith include_rtl <file_path>
+```
+
+**Examples:**
+```systemverilog
+// Include file in same directory
+// @brainsmith include_rtl helper_modules.sv
+
+// Include with relative path
+// @brainsmith include_rtl ../common/utilities.sv
+
+// Include with absolute path  
+// @brainsmith include_rtl /project/shared/types.sv
+
+// Multiple files (use multiple pragmas)
+// @brainsmith include_rtl data_processor.sv
+// @brainsmith include_rtl memory_controller.sv
+```
+
+**Path Resolution:**
+1. Absolute paths are used as-is
+2. Relative paths are resolved from the main RTL file's directory
+3. If not found, paths are resolved from current working directory
+
+**Validation:**
+- File existence is checked during parsing (unless `--no-strict`)
+- Duplicate includes are automatically removed
+- Circular dependencies are not detected (user responsibility)
+
+**Behavior:**
+- All included files are copied to output directory during generation
+- Files are added to IP integration scripts for synthesis
+- The main RTL file is always first in the dependency list
+
 ## Interface Configuration Pragmas
 
 ### DATATYPE
@@ -310,12 +350,13 @@ Defines constraints between parameters.
 
 Pragmas are applied in a specific order to ensure correct behavior:
 
-1. **Module Selection** (TOP_MODULE)
-2. **Interface Configuration** (DATATYPE, WEIGHT)
-3. **Dimension Assignment** (BDIM, SDIM)
-4. **Parameter Enhancement** (ALIAS, DERIVED_PARAMETER)
-5. **Parameter Linking** (DATATYPE_PARAM, AXILITE_PARAM)
-6. **Relationships** (RELATIONSHIP)
+1. **File Dependencies** (INCLUDE_RTL)
+2. **Module Selection** (TOP_MODULE)
+3. **Interface Configuration** (DATATYPE, WEIGHT)
+4. **Dimension Assignment** (BDIM, SDIM)
+5. **Parameter Enhancement** (ALIAS, DERIVED_PARAMETER)
+6. **Parameter Linking** (DATATYPE_PARAM, AXILITE_PARAM)
+7. **Relationships** (RELATIONSHIP)
 
 ## Error Handling
 

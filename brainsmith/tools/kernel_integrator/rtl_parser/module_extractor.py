@@ -21,7 +21,7 @@ from .pragmas import (
     Pragma, PragmaError, InterfacePragma,
     TopModulePragma, DatatypeConstraintPragma, WeightPragma, DatatypePragma,
     AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma,
-    RelationshipPragma
+    RelationshipPragma, IncludeRTLPragma
 )
 from .ast_parser import ASTParser
 
@@ -61,6 +61,7 @@ class ModuleExtractor:
             PragmaType.ALIAS: AliasPragma,
             PragmaType.AXILITE_PARAM: AxiLiteParamPragma,
             PragmaType.RELATIONSHIP: RelationshipPragma,
+            PragmaType.INCLUDE_RTL: IncludeRTLPragma,
         }
     
     def extract_from_tree(self, tree: Tree, source_name: str = "<string>") -> ParsedModule:

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from brainsmith.tools.kernel_integrator.rtl_parser.module_extractor import ModuleExtractor
 from brainsmith.tools.kernel_integrator.types.rtl import Parameter, Port, PragmaType
-from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.module import TopModulePragma
+from brainsmith.tools.kernel_integrator.rtl_parser.pragmas.source import TopModulePragma
 from brainsmith.tools.kernel_integrator.types.rtl import PortDirection
 
 from .utils.rtl_builder import RTLBuilder, create_minimal_module

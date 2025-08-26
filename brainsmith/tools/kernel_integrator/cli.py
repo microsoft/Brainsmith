@@ -25,7 +25,6 @@ Examples:
   %(prog)s design.sv --validate                # Validate RTL only (no file generation)
   %(prog)s design.sv --info                    # Display parsed kernel metadata
   %(prog)s design.sv --artifacts wrapper,autohwcustomop  # Generate specific files only
-  %(prog)s design.sv --artifacts infer                  # Generate only the infer transform
   %(prog)s design.sv --no-strict --verbose     # Disable strict validation with verbose output
 
 Notes:
@@ -65,7 +64,7 @@ Notes:
         '--artifacts',
         type=str,
         metavar='LIST',
-        help='comma-separated list of artifacts to generate (autohwcustomop,rtlbackend,wrapper,infer)'
+        help='comma-separated list of artifacts to generate (autohwcustomop,rtlbackend,wrapper)'
     )
     
     parser.add_argument(
@@ -78,6 +77,20 @@ Notes:
         '-v', '--verbose',
         action='store_true',
         help='enable verbose output'
+    )
+    
+    parser.add_argument(
+        '--include-rtl',
+        action='append',
+        metavar='FILE',
+        help='additional RTL file to include (can be specified multiple times)'
+    )
+    
+    parser.add_argument(
+        '--rtl-path',
+        type=str,
+        metavar='PATHS',
+        help='colon-separated list of paths to search for RTL files'
     )
     
     return parser
@@ -236,6 +249,12 @@ def display_kernel_info(metadata: 'KernelMetadata') -> None:
     if metadata.linked_parameters:
         print(f"\n🔗 Linked Parameters: {len(metadata.linked_parameters)}")
     
+    # Included RTL files
+    if hasattr(metadata, 'included_rtl_files') and metadata.included_rtl_files:
+        print(f"\n📁 Included RTL Files ({len(metadata.included_rtl_files)}):")
+        for rtl_file in metadata.included_rtl_files:
+            print(f"  - {rtl_file}")
+    
     print()
 
 
@@ -261,7 +280,7 @@ def parse_artifacts_list(artifacts_str: str) -> List[str]:
         return []
     
     artifacts = [a.strip() for a in artifacts_str.split(',')]
-    valid_artifacts = {'autohwcustomop', 'rtlbackend', 'wrapper', 'infer'}
+    valid_artifacts = {'autohwcustomop', 'rtlbackend', 'wrapper'}
     
     invalid = [a for a in artifacts if a not in valid_artifacts]
     if invalid:
@@ -291,6 +310,20 @@ def main(argv=None) -> int:
         # Parse RTL once (used by all modes)
         parser_inst = RTLParser(strict=not args.no_strict)
         metadata = parser_inst.parse_file(str(args.rtl_file))
+        
+        # Merge CLI-specified RTL files with pragma-specified files
+        if args.include_rtl:
+            for rtl_file in args.include_rtl:
+                if rtl_file not in metadata.included_rtl_files:
+                    metadata.included_rtl_files.append(rtl_file)
+        
+        # TODO: Handle --rtl-path for search paths (Phase 3)
+        
+        # Validate included files if not just showing info
+        if not args.info and not args.no_strict:
+            from pathlib import Path
+            source_path = Path(args.rtl_file).resolve()
+            parser_inst._validate_included_files(metadata, source_path)
         
         # Handle info mode
         if args.info:

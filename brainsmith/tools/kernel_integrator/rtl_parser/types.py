@@ -28,6 +28,7 @@ class PragmaType(Enum):
     ALIAS = "alias"                    # Expose RTL parameter with different name in nodeattr
     AXILITE_PARAM = "axilite_param"    # Mark parameter as AXI-Lite configuration related
     RELATIONSHIP = "relationship"      # Define relationships between interfaces
+    INCLUDE_RTL = "include_rtl"        # Include additional RTL source files
 
 @dataclass
 class Port:

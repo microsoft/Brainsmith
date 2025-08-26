@@ -471,6 +471,8 @@ class KernelMetadata:
     inputs: List[AXIStreamMetadata] = field(default_factory=list)
     outputs: List[AXIStreamMetadata] = field(default_factory=list)
     config: List[AXILiteMetadata] = field(default_factory=list)
+    # Additional RTL files to include (source file is always first)
+    included_rtl_files: List[str] = field(default_factory=list)
 
     # Simple transformations as properties
     @property

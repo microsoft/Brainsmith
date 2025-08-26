@@ -249,12 +249,33 @@ class RTLParser:
         """
         logger.info(f"Starting file parsing for: {file_path}")
         try:
+            # Resolve to absolute path
+            from pathlib import Path
+            file_path_obj = Path(file_path).resolve()
+            file_path_str = str(file_path_obj)
+            
             # Read file content
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path_str, 'r', encoding='utf-8') as f:
                 systemverilog_code = f.read()
             
             # Delegate to core parse method
-            return self.parse(systemverilog_code, file_path)
+            kernel_metadata = self.parse(systemverilog_code, file_path_str)
+            
+            # Ensure source file is the first in included_rtl_files
+            if file_path_str not in kernel_metadata.included_rtl_files:
+                kernel_metadata.included_rtl_files.insert(0, file_path_str)
+            elif kernel_metadata.included_rtl_files[0] != file_path_str:
+                # Move source file to front if it's not already there
+                kernel_metadata.included_rtl_files.remove(file_path_str)
+                kernel_metadata.included_rtl_files.insert(0, file_path_str)
+            
+            logger.debug(f"Source file '{file_path_str}' added as first dependency")
+            
+            # Validate included RTL files if strict mode
+            if self.strict:
+                self._validate_included_files(kernel_metadata, file_path_obj)
+            
+            return kernel_metadata
             
         except FileNotFoundError as e:
             logger.error(f"File not found: {file_path}")
@@ -268,3 +289,46 @@ class RTLParser:
         except Exception as e:
             logger.exception(f"Unexpected error during file parsing for {file_path}: {e}")
             raise ParserError(f"Unexpected error during file parsing: {e}")
+    
+    def _validate_included_files(self, kernel_metadata: KernelMetadata, source_path: Path) -> None:
+        """
+        Validate that all included RTL files can be found.
+        
+        Args:
+            kernel_metadata: KernelMetadata with included_rtl_files list
+            source_path: Path to the main source file for relative path resolution
+            
+        Raises:
+            ParserError: If any included files cannot be found
+        """
+        if not kernel_metadata.included_rtl_files:
+            return
+        
+        source_dir = source_path.parent
+        missing_files = []
+        
+        # Skip the first file (source file itself) as it's already validated
+        for rtl_file in kernel_metadata.included_rtl_files[1:]:
+            rtl_path = Path(rtl_file)
+            
+            # Check absolute path
+            if rtl_path.is_absolute():
+                if not rtl_path.exists():
+                    missing_files.append(rtl_file)
+                continue
+            
+            # Check relative to source directory
+            if (source_dir / rtl_file).exists():
+                continue
+            
+            # Check relative to current directory
+            if Path(rtl_file).exists():
+                continue
+            
+            # File not found in any location
+            missing_files.append(rtl_file)
+        
+        if missing_files:
+            error_msg = f"Cannot find included RTL files: {', '.join(missing_files)}"
+            logger.error(error_msg)
+            raise ParserError(error_msg)
