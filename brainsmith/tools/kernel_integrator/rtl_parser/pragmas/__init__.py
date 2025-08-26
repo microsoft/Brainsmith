@@ -8,7 +8,7 @@
 
 This package contains all pragma implementations organized by type:
 - base.py: Base classes and exceptions
-- module.py: Module-level pragmas (TOP_MODULE)
+- source.py: Source-related pragmas (TOP_MODULE, INCLUDE_RTL)
 - interface.py: Interface-related pragmas (DATATYPE, DATATYPE_PARAM, WEIGHT)
 - parameter.py: Parameter-related pragmas (ALIAS, DERIVED_PARAMETER)
 - dimension.py: Dimension pragmas (BDIM, SDIM)
@@ -16,7 +16,7 @@ This package contains all pragma implementations organized by type:
 
 # Re-export all pragma classes for backward compatibility
 from .base import Pragma, InterfacePragma, PragmaError
-from .module import TopModulePragma
+from .source import TopModulePragma, IncludeRTLPragma
 from .interface import DatatypeConstraintPragma, DatatypePragma, WeightPragma
 from .parameter import AliasPragma, DerivedParameterPragma, AxiLiteParamPragma
 from .dimension import BDimPragma, SDimPragma
@@ -27,8 +27,9 @@ __all__ = [
     'Pragma',
     'InterfacePragma',
     'PragmaError',
-    # Module pragmas
+    # Source pragmas
     'TopModulePragma',
+    'IncludeRTLPragma',
     # Interface pragmas
     'DatatypeConstraintPragma',
     'DatatypePragma',

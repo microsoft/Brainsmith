@@ -39,6 +39,8 @@
  *****************************************************************************/
 
 
+// @brainsmith INCLUDE_RTL thresholding.sv
+// @brainsmith INCLUDE_RTL /home/tafk/dev/brainsmith-1/deps/finn/finn-rtllib/axi/hdl/axilite.sv
 // @brainsmith DATATYPE_CONSTRAINT input * 1 32
 // @brainsmith DATATYPE_CONSTRAINT output * 1 32
 // @brainsmith DATATYPE threshold width T_WIDTH
@@ -129,7 +131,7 @@ module thresholding_axi #(
 
 	if(USE_AXILITE) begin
 		uwire [ADDR_BITS-1:0]  cfg_a0;
-		axi4lite_if #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(T_WIDTH)) axi (
+		axilite #(.ADDR_WIDTH(ADDR_BITS), .DATA_WIDTH(32), .IP_DATA_WIDTH(T_WIDTH)) axi (
 			.aclk(ap_clk), .aresetn(ap_rst_n),
 
 			.awready(threshold_AWREADY), .awvalid(threshold_AWVALID), .awaddr(threshold_AWADDR), .awprot('x),

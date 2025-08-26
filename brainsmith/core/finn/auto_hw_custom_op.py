@@ -361,25 +361,6 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         return attrs
     
-    def _get_interface_datatype(self, interface_name: str, is_input: bool = True) -> DataType:
-        """
-        Helper method to extract datatype using FINN-standard attribute pattern.
-        """
-        # Get the mapping
-        finn_attrs = self._get_finn_attribute_mapping()
-        
-        # Find the attribute name for this interface
-        if interface_name not in finn_attrs:
-            raise ValueError(f"Interface '{interface_name}' not found in kernel definition")
-        
-        attr_name = finn_attrs[interface_name]
-        
-        # Get datatype
-        dtype_str = self.get_nodeattr(attr_name)
-        if not dtype_str:
-            raise ValueError(f"No datatype specified. Expected node attribute '{attr_name}'.")
-        
-        return DataType[dtype_str]
     
     
     
@@ -760,107 +741,28 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             return interface.datatype
         return None
     
-    # Resource Estimation
-    
-    def bram_estimation(self) -> int:
-        """
-        Estimate BRAM usage from memory requirements.
-        
-        Returns:
-            Number of 18Kb BRAM blocks
-        """
-        self._ensure_kernel_model()
-        
-        try:
-            metrics = self._kernel_model.calculate_performance_metrics()
-            
-            # Extract memory requirements
-            memory_bits = 0
-            if "inputs" in metrics:
-                for inp_name, inp_metrics in metrics["inputs"].items():
-                    if "memory_bits" in inp_metrics:
-                        memory_bits += inp_metrics["memory_bits"]
-            
-            # Check aggregate metrics
-            if "aggregate" in metrics and "memory_bits" in metrics["aggregate"]:
-                memory_bits = max(memory_bits, metrics["aggregate"]["memory_bits"])
-            
-            # Convert to BRAM blocks (18Kb each)
-            if memory_bits > 0:
-                bram_bits = 18 * 1024
-                return (memory_bits + bram_bits - 1) // bram_bits
-        
-        except Exception:
-            # If metrics calculation fails, return conservative estimate
-            pass
-        
-        return 0
-    
-    def lut_estimation(self) -> int:
-        """
-        Estimate LUT usage based on stream widths.
-        
-        Returns:
-            Estimated LUT count
-        """
-        self._ensure_kernel_model()
-        
-        # Simple heuristic: LUTs proportional to total stream width
-        total_width = 0
-        
-        # Sum input stream widths
-        for i in range(len(list(self._kernel_model.input_models))):
-            try:
-                total_width += self.get_instream_width(i)
-            except:
-                pass
-        
-        # Sum output stream widths
-        for i in range(len(list(self._kernel_model.output_models))):
-            try:
-                total_width += self.get_outstream_width(i)
-            except:
-                pass
-        
-        # Rough estimate: 10 LUTs per bit of stream width
-        return max(100, total_width * 10)
-    
-    def dsp_estimation(self, fpgapart: str = "xczu7ev") -> int:
-        """
-        Estimate DSP usage.
+    def get_interface_index(self, name: str) -> tuple[int, bool]:
+        """Get interface index by name.
         
         Args:
-            fpgapart: FPGA part name
+            name: Interface name to look up
             
         Returns:
-            Estimated DSP count
+            Tuple of (index, is_input) or (-1, False) if not found
         """
-        # Simple default - subclasses should override for accuracy
-        return 0
-    
-    def uram_estimation(self) -> int:
-        """
-        Estimate UltraRAM usage.
+        self._ensure_kernel_model()
         
-        Returns:
-            Number of URAM blocks
-        """
-        # Check if using ultra RAM
-        try:
-            ram_style = self.get_nodeattr("ram_style")
-            if ram_style == "ultra":
-                # Similar to BRAM but with 288Kb blocks
-                bram_count = self.bram_estimation()
-                if bram_count > 0:
-                    # Rough conversion from BRAM to URAM
-                    bram_bits = bram_count * 18 * 1024
-                    uram_bits = 288 * 1024
-                    return (bram_bits + uram_bits - 1) // uram_bits
-        except AttributeError:
-            # ram_style attribute doesn't exist
-            pass
+        # Check inputs
+        for i, inp in enumerate(self._kernel_model.input_models):
+            if inp.definition.name == name:
+                return (i, True)
         
-        return 0
+        # Check outputs  
+        for i, out in enumerate(self._kernel_model.output_models):
+            if out.definition.name == name:
+                return (i, False)
+                
+        return (-1, False)
     
     def get_exp_cycles(self) -> int:
         """
@@ -986,3 +888,49 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         if not self._kernel_model:
             self._analyze_and_create_model(model)
             self._build_kernel_model()
+    
+    def export_template_parameters(self) -> Dict[str, Any]:
+        """Export KernelModel parameters for RTL template generation.
+        
+        Extracts all interface properties and parameters in a format
+        suitable for RTL code generation templates.
+        
+        Returns:
+            Dictionary with parameter names and values
+        """
+        self._ensure_kernel_model()
+        params = {}
+        
+        # Export interface properties
+        for inp in self._kernel_model.input_models:
+            name_upper = inp.definition.name.upper()
+            params[f"{name_upper}_WIDTH"] = inp.datatype.bitwidth()
+            params[f"{name_upper}_SIGNED"] = 1 if inp.datatype.signed() else 0
+            
+            # Add block dimensions if they exist
+            if hasattr(inp, 'block_dims') and inp.block_dims:
+                for i, bdim in enumerate(inp.block_dims):
+                    params[f"{name_upper}_BDIM{i}"] = bdim
+            
+            # Add stream dimensions if they exist
+            if hasattr(inp, 'sdim') and inp.sdim:
+                for i, sdim in enumerate(inp.sdim):
+                    params[f"{name_upper}_SDIM{i}"] = sdim
+        
+        # Export output properties
+        for out in self._kernel_model.output_models:
+            name_upper = out.definition.name.upper()
+            params[f"{name_upper}_WIDTH"] = out.datatype.bitwidth()
+            params[f"{name_upper}_SIGNED"] = 1 if out.datatype.signed() else 0
+            
+            # Add block dimensions if they exist
+            if hasattr(out, 'block_dims') and out.block_dims:
+                for i, bdim in enumerate(out.block_dims):
+                    params[f"{name_upper}_BDIM{i}"] = bdim
+        
+        # Add parameter binding values if they exist
+        if self._kernel_model.parameter_binding:
+            for param_name, param_value in self._kernel_model.parameter_binding.params.items():
+                params[param_name.upper()] = param_value
+        
+        return params
