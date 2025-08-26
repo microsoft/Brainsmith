@@ -38,7 +38,7 @@ bert_large:
 
 bert_large_mlo:
 	# python gen_initial_folding.py --simd 64 --pe 16 --num_layers 2 -t 1 -o ./configs/bert_large.json
-	python end2end_bert.py -o bert_large_mlo_repro -n 16 -l 2 -z 1024 -i 4096 -p ./configs/bert_large_config_ext.json --dcp
+	python end2end_bert.py -o bert_large_mlo_repro -n 16 -l 2 -z 1024 -i 4096 -p ./configs/bert_large_config_ext.json
 
 
 bert_large_l1_simd16_pe8:
