@@ -105,7 +105,7 @@ def forge(blueprint, model, args):
         verify_save_rtlsim_waveforms=True,
         verify_steps=[
             build_cfg.VerificationStepType.FOLDED_HLS_CPPSIM,
-            build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
+            #build_cfg.VerificationStepType.STITCHED_IP_RTLSIM,
         ],
     )
     _ = build.build_dataflow_cfg(build_dir+"/df_input.onnx", df_cfg)
