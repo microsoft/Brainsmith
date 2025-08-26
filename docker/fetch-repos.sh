@@ -16,7 +16,8 @@ yecho() { echo -e "${YELLOW}$1${NC}"; }
 
 # Dependency Git URLs, hashes/branches, and directory names
 QONNX_URL="https://github.com/fastmachinelearning/qonnx.git"
-FINN_URL="https://github.com/Xilinx/finn.git"
+#FINN_URL="https://github.com/Xilinx/finn.git"
+FINN_URL="https://github.com/jsmonson/finn.git"
 FINN_EXP_URL="https://github.com/Xilinx/finn-experimental.git"
 BREVITAS_URL="https://github.com/Xilinx/brevitas.git"
 #BREVITAS_URL="https://github.com/jsmonson/brevitas.git"
@@ -31,7 +32,8 @@ KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
 QONNX_COMMIT="custom/brainsmith"
-FINN_COMMIT="custom/transformer_loop"
+#FINN_COMMIT="custom/transformer_loop"
+FINN_COMMIT="custom/transformer_loop_repro_fifo"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 #BREVITAS_COMMIT="0ea7bac8f7d7b687c1ac0c8cb4712ad9885645c5"
 #BREVITAS_COMMIT="335633a5cb8474464661b94aa13bf4c1bd74c957"
