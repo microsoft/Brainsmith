@@ -10,12 +10,13 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 import math
-from .base import BaseModel, ParameterBinding
+from .base_interface import BaseInterface
+from .base import ParameterBinding
 from .types import Shape, RaggedShape, prod
 from .qonnx_types import BaseDataType
 
 @dataclass
-class OutputInterface(BaseModel):
+class OutputInterface(BaseInterface):
     """Model for output interfaces
     
     Output interfaces:
@@ -24,16 +25,8 @@ class OutputInterface(BaseModel):
     - Only track tensor and block dimensions
     """
     
-    # Core dimensions
-    tensor_dims: Shape              # Full tensor shape
-    block_dims: RaggedShape        # Block decomposition (can be CSDF)
-    datatype: BaseDataType         # Concrete QONNX datatype
-    
     # Computed streaming rate (set by kernel)
     _streaming_rate: Optional[int] = field(default=None, init=False)
-    
-    # Runtime behavior
-    parameter_binding: Optional[ParameterBinding] = None
     
     def __init__(self,
                  tensor_dims: Shape,
@@ -52,17 +45,9 @@ class OutputInterface(BaseModel):
         
         # Initialize fields
         self._streaming_rate = None
-        self._cached_metrics = {}
         
-        self.__post_init__()
-    
-    def __post_init__(self):
-        """Initialize with optimized setup"""
-        # Normalize block_dims to list format
-        if isinstance(self.block_dims, tuple):
-            self.block_dims = [self.block_dims]
-        
-        self._cached_metrics = {}
+        # Call parent post_init
+        super().__post_init__()
     
     @property
     def streaming_rate(self) -> int:
@@ -81,16 +66,6 @@ class OutputInterface(BaseModel):
         self._invalidate_performance_cache()
     
     @property
-    def n_phases(self) -> int:
-        """Number of CSDF phases"""
-        return len(self.block_dims)
-    
-    @property
-    def is_csdf(self) -> bool:
-        """Check if interface has cyclo-static behavior"""
-        return self.n_phases > 1
-    
-    @property
     def production_interval(self) -> int:
         """Cycles to produce entire tensor (based on streaming rate)"""
         if "production_interval" not in self._cached_metrics:
@@ -107,17 +82,6 @@ class OutputInterface(BaseModel):
             # Use QONNX bitwidth() method
             self._cached_metrics["bandwidth_bits"] = self.streaming_rate * self.datatype.bitwidth()
         return self._cached_metrics["bandwidth_bits"]
-    
-    @property
-    def bandwidth_bytes(self) -> float:
-        """Bandwidth in bytes per cycle"""
-        return self.bandwidth_bits / 8.0
-    
-    def effective_bandwidth(self, clock_freq_mhz: float = 100.0) -> float:
-        """Compute effective bandwidth in MB/s"""
-        cycles_per_second = clock_freq_mhz * 1e6
-        bytes_per_cycle = self.bandwidth_bytes
-        return bytes_per_cycle * cycles_per_second / 1e6
     
     def calculate_performance_metrics(self) -> Dict[str, Any]:
         """Calculate performance metrics"""
@@ -142,10 +106,6 @@ class OutputInterface(BaseModel):
             )
         
         return errors
-    
-    def _invalidate_performance_cache(self):
-        """Invalidate cached performance metrics"""
-        self._cached_metrics.clear()
     
     def __repr__(self) -> str:
         """String representation"""

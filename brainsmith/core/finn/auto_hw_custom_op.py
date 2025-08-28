@@ -604,21 +604,6 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         return datatype_bits * streaming_elements
     
-    def get_number_output_values(self) -> int:
-        """
-        Get total number of output values.
-        
-        Returns:
-            Total elements across all outputs
-        """
-        self._ensure_kernel_model()
-        
-        total = 0
-        for out_model in self._kernel_model.output_models:
-            total += int(np.prod(out_model.tensor_dims))
-        
-        return total
-    
     # Node Attribute Management
     
     def get_nodeattr_types(self) -> Dict[str, Any]:

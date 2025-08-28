@@ -10,12 +10,13 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Union, Dict, Any, Tuple
 import math
-from .base import BaseModel, ParameterBinding
+from .base_interface import BaseInterface
+from .base import ParameterBinding
 from .types import Shape, RaggedShape, prod
 from .qonnx_types import BaseDataType
 
 @dataclass
-class InputInterface(BaseModel):
+class InputInterface(BaseInterface):
     """Model for input interfaces with streaming configuration
     
     Input interfaces support:
@@ -24,18 +25,12 @@ class InputInterface(BaseModel):
     - Sparsity and utilization tracking
     """
     
-    # Core dimensions
-    tensor_dims: Shape              # Full tensor shape
-    block_dims: RaggedShape        # Block decomposition (can be CSDF)
-    datatype: BaseDataType         # Concrete QONNX datatype
-    
     # Streaming configuration
     _sdim: Optional[Shape] = field(default=None, init=False)
     
     # Runtime behavior
     skip_prob: List[float] = field(default_factory=list)  # Sparsity per phase
     actual_utilization: float = 1.0  # Actual vs theoretical utilization
-    parameter_binding: Optional[ParameterBinding] = None  # Parameter values
     
     def __init__(self, 
                  tensor_dims: Shape, 
@@ -63,21 +58,12 @@ class InputInterface(BaseModel):
         else:
             self._sdim = None
         
-        self._cached_metrics = {}
-        
-        self.__post_init__()
-    
-    def __post_init__(self):
-        """Initialize with optimized setup"""
-        # Normalize block_dims to list format
-        if isinstance(self.block_dims, tuple):
-            self.block_dims = [self.block_dims]
+        # Call parent post_init
+        super().__post_init__()
         
         # Default skip_prob if not provided
         if not self.skip_prob:
             self.skip_prob = [0.0] * self.n_phases
-        
-        self._cached_metrics = {}
     
     @property
     def sdim(self) -> Shape:
@@ -126,16 +112,6 @@ class InputInterface(BaseModel):
         return prod(self.sdim)
     
     @property
-    def n_phases(self) -> int:
-        """Number of CSDF phases"""
-        return len(self.block_dims)
-    
-    @property
-    def is_csdf(self) -> bool:
-        """Check if interface has cyclo-static behavior"""
-        return self.n_phases > 1
-    
-    @property
     def initiation_interval(self) -> int:
         """Total cycles to stream entire tensor"""
         if "initiation_interval" not in self._cached_metrics:
@@ -161,19 +137,10 @@ class InputInterface(BaseModel):
             self._cached_metrics["bandwidth_bits"] = self.streaming_bandwidth * self.datatype.bitwidth()
         return self._cached_metrics["bandwidth_bits"]
     
-    @property
-    def bandwidth_bytes(self) -> float:
-        """Bandwidth in bytes per cycle"""
-        return self.bandwidth_bits / 8.0
-    
     def effective_bandwidth(self, clock_freq_mhz: float = 100.0) -> float:
         """Compute effective bandwidth in MB/s
         
-        Args:
-            clock_freq_mhz: Clock frequency in MHz
-            
-        Returns:
-            Effective bandwidth in MB/s
+        Overrides base to include utilization factor.
         """
         cycles_per_second = clock_freq_mhz * 1e6
         bytes_per_cycle = self.bandwidth_bytes * self.actual_utilization
@@ -212,10 +179,6 @@ class InputInterface(BaseModel):
             )
         
         return errors
-    
-    def _invalidate_performance_cache(self):
-        """Invalidate cached performance metrics"""
-        self._cached_metrics.clear()
     
     def __repr__(self) -> str:
         """String representation"""

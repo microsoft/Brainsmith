@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 from brainsmith.core.finn.auto_rtl_backend import AutoRTLBackend
-from .thresholding_axi import ThresholdingAxi
+from thresholding_axi import ThresholdingAxi
 from qonnx.core.datatype import DataType
 
 

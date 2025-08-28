@@ -32,14 +32,12 @@ class RelationshipPragma(Pragma):
     - EQUAL: All dimensions must match
     - DEPENDENT <src_dim> <tgt_dim> <dep_type>: Dimension dependency
     - MULTIPLE <src_dim> <tgt_dim> [factor=N]: Multiple relationship
-    - DIVISIBLE <src_dim> <tgt_dim>: Divisibility constraint
     
     Examples:
     - @brainsmith RELATIONSHIP input0 output0 EQUAL
     - @brainsmith RELATIONSHIP input0 output0 DEPENDENT 0 0 copy
     - @brainsmith RELATIONSHIP input0 output0 DEPENDENT 1 1 scaled SCALE_FACTOR
     - @brainsmith RELATIONSHIP input0 output0 MULTIPLE 0 0 factor=4
-    - @brainsmith RELATIONSHIP input0 output0 DIVISIBLE 1 1
     """
     
     def __post_init__(self):
@@ -103,8 +101,8 @@ class RelationshipPragma(Pragma):
                     raise PragmaError("DEPENDENT relationship with 'scaled' type requires scale factor")
                 result["scale_factor"] = pos[6]
                 
-        elif rel_type in ["MULTIPLE", "DIVISIBLE"]:
-            # MULTIPLE/DIVISIBLE require: src_dim tgt_dim [factor=N]
+        elif rel_type == "MULTIPLE":
+            # MULTIPLE requires: src_dim tgt_dim [factor=N]
             if len(pos) < 5:
                 raise PragmaError(f"{rel_type} relationship requires source_dim and target_dim")
             
@@ -124,7 +122,7 @@ class RelationshipPragma(Pragma):
         
         else:
             raise PragmaError(f"Unknown relationship type '{rel_type}'. "
-                            "Valid types: EQUAL, DEPENDENT, MULTIPLE, DIVISIBLE")
+                            "Valid types: EQUAL, DEPENDENT, MULTIPLE")
         
         return result
     
@@ -159,7 +157,6 @@ class RelationshipPragma(Pragma):
             "EQUAL": RelationType.EQUAL,
             "DEPENDENT": RelationType.DEPENDENT,
             "MULTIPLE": RelationType.MULTIPLE,
-            "DIVISIBLE": RelationType.DIVISIBLE,
         }
         
         if rel_type_str not in rel_type_map:

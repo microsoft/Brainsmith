@@ -90,7 +90,7 @@ class InferThresholdingAxi(Transformation):
                     "ThresholdingAxi",
                     [thl_input, thl_threshold],
                     [thl_output],
-                    domain="brainsmith.examples.kernel_integrator",
+                    domain="brainsmith.examples.kernel_integrator.kernel",
                     backend="RTL",
                     CHANNELS=ifc,
                     PE=pe,

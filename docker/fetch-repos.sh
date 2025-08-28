@@ -162,16 +162,16 @@ fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR
 fetch_repo $CNPY_URL $CNPY_COMMIT $CNPY_DIR
 fetch_repo $HLSLIB_URL $HLSLIB_COMMIT $HLSLIB_DIR
 fetch_repo $OMX_URL $OMX_COMMIT $OMX_DIR
-fetch_repo $AVNET_BDF_URL $AVNET_BDF_COMMIT $AVNET_BDF_DIR
-fetch_repo $XIL_BDF_URL $XIL_BDF_COMMIT $XIL_BDF_DIR
-fetch_repo $RFSOC4x2_BDF_URL $RFSOC4x2_BDF_COMMIT $RFSOC4x2_BDF_DIR
-fetch_repo $KV260_BDF_URL $KV260_BDF_COMMIT $KV260_SOM_BDF_DIR
 fetch_repo $ONNXSCRIPT_URL $ONNXSCRIPT_COMMIT $ONNXSCRIPT_DIR
 
 # Can skip downloading of board files entirely if desired
-if [ "$FINN_SKIP_BOARD_FILES" = "1" ]; then
-    echo "Skipping download and verification of board files"
-else
+if [ "$BSMITH_DOWNLOAD_BOARDS" == "1" ]; then
+    # Fetch board-related repositories
+    fetch_repo $AVNET_BDF_URL $AVNET_BDF_COMMIT $AVNET_BDF_DIR
+    fetch_repo $XIL_BDF_URL $XIL_BDF_COMMIT $XIL_BDF_DIR
+    fetch_repo $RFSOC4x2_BDF_URL $RFSOC4x2_BDF_COMMIT $RFSOC4x2_BDF_DIR
+    fetch_repo $KV260_BDF_URL $KV260_BDF_COMMIT $KV260_SOM_BDF_DIR
+    
     # download extra board files and extract if needed
     if [ ! -d "$BSMITH_DIR/deps/board_files" ]; then
         fetch_board_files
@@ -187,6 +187,8 @@ else
             fetch_board_files
         fi
     fi
+else
+    echo "Skipping board file repositories and downloads (set BSMITH_DOWNLOAD_BOARDS=1 to enable)"
 fi
 
 gecho "Docker container is named $DOCKER_INST_NAME"
