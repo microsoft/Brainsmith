@@ -142,15 +142,20 @@ def compare_node_attributes(finn_node, brainsmith_node, report_lines):
         report_lines.append(f"  BIAS: {attrs['BIAS'].i}")
         report_lines.append(f"  inputDataType: {attrs['inputDataType'].s.decode()}")
         report_lines.append(f"  outputDataType: {attrs['outputDataType'].s.decode()}")
-        report_lines.append(f"  thresholdDataType: {attrs['thresholdDataType'].s.decode()}")
+        # Handle both possible names for threshold data type
+        if 'thresholdDataType' in attrs:
+            report_lines.append(f"  thresholdDataType: {attrs['thresholdDataType'].s.decode()}")
+        elif 'weightDataType' in attrs:
+            report_lines.append(f"  weightDataType: {attrs['weightDataType'].s.decode()}")
         
-        # RTL-specific attributes
-        report_lines.append(f"\n  RTL-specific attributes:")
-        report_lines.append(f"    input_FPARG: {attrs['input_FPARG'].i}")
-        report_lines.append(f"    DEPTH_TRIGGER_URAM: {attrs['DEPTH_TRIGGER_URAM'].i}")
-        report_lines.append(f"    DEPTH_TRIGGER_BRAM: {attrs['DEPTH_TRIGGER_BRAM'].i}")
-        report_lines.append(f"    DEEP_PIPELINE: {attrs['DEEP_PIPELINE'].i}")
-        report_lines.append(f"    USE_AXILITE: {attrs['USE_AXILITE'].i}")
+        # RTL-specific attributes (may not exist for non-RTL nodes)
+        rtl_attrs = ['input_FPARG', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE', 'USE_AXILITE']
+        has_rtl_attrs = any(attr in attrs for attr in rtl_attrs)
+        if has_rtl_attrs:
+            report_lines.append(f"\n  RTL-specific attributes:")
+            for attr in rtl_attrs:
+                if attr in attrs:
+                    report_lines.append(f"    {attr}: {attrs[attr].i}")
         
         # Compare values if FINN node exists
         if finn_node:

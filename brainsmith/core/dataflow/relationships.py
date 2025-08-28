@@ -14,16 +14,16 @@ from abc import ABC, abstractmethod
 
 
 class RelationType(Enum):
-    """Types of relationships between interface dimensions"""
+    """Types of relationships between interface dimensions
+    
+    Simplified to only include actively used relationship types:
+    - EQUAL: Dimensions must be exactly equal
+    - DEPENDENT: Target dimension depends on source (with optional scaling)
+    - MULTIPLE: Target is a multiple of source (kept for future use)
+    """
     EQUAL = "equal"
     MULTIPLE = "multiple"
-    DIVISIBLE = "divisible"
-    GREATER_THAN = "greater_than"
-    LESS_THAN = "less_than"
-    GREATER_EQUAL = "greater_equal"
-    LESS_EQUAL = "less_equal"
-    COUPLED = "coupled"
-    DEPENDENT = "dependent"  # NEW: Dimension-specific dependency
+    DEPENDENT = "dependent"  # Dimension-specific dependency
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,6 @@ class DimensionRelationship:
     source_dim: Optional[int] = None  # None means total size
     target_dim: Optional[int] = None  # None means total size
     factor: Optional[Union[int, float]] = None  # For MULTIPLE relations
-    coupling_func: Optional[Callable[[int, int], bool]] = None  # For COUPLED
     dependency_type: Optional[str] = None  # For DEPENDENT: "copy", "scaled", "min"
     description: str = ""
     
@@ -49,9 +48,6 @@ class DimensionRelationship:
         """Validate relationship configuration"""
         if self.relation == RelationType.MULTIPLE and self.factor is None:
             raise ValueError("MULTIPLE relationships require a factor")
-        
-        if self.relation == RelationType.COUPLED and self.coupling_func is None:
-            raise ValueError("COUPLED relationships require a coupling function")
         
         if self.source_interface == self.target_interface:
             if self.source_dim == self.target_dim:
@@ -78,18 +74,6 @@ class DimensionRelationship:
             return f"{src} == {tgt}"
         elif self.relation == RelationType.MULTIPLE:
             return f"{src} == {self.factor} * {tgt}"
-        elif self.relation == RelationType.DIVISIBLE:
-            return f"{src} % {tgt} == 0"
-        elif self.relation == RelationType.GREATER_THAN:
-            return f"{src} > {tgt}"
-        elif self.relation == RelationType.LESS_THAN:
-            return f"{src} < {tgt}"
-        elif self.relation == RelationType.GREATER_EQUAL:
-            return f"{src} >= {tgt}"
-        elif self.relation == RelationType.LESS_EQUAL:
-            return f"{src} <= {tgt}"
-        elif self.relation == RelationType.COUPLED:
-            return f"{src} coupled with {tgt}"
         elif self.relation == RelationType.DEPENDENT:
             if self.dependency_type == "scaled" and self.factor:
                 return f"{tgt} = {src} * {self.factor}"
@@ -137,66 +121,12 @@ class DimensionRelationship:
             return src_val == tgt_val
         elif self.relation == RelationType.MULTIPLE:
             return src_val == self.factor * tgt_val
-        elif self.relation == RelationType.DIVISIBLE:
-            return tgt_val != 0 and src_val % tgt_val == 0
-        elif self.relation == RelationType.GREATER_THAN:
-            return src_val > tgt_val
-        elif self.relation == RelationType.LESS_THAN:
-            return src_val < tgt_val
-        elif self.relation == RelationType.GREATER_EQUAL:
-            return src_val >= tgt_val
-        elif self.relation == RelationType.LESS_EQUAL:
-            return src_val <= tgt_val
-        elif self.relation == RelationType.COUPLED:
-            return self.coupling_func(src_val, tgt_val)
         elif self.relation == RelationType.DEPENDENT:
             # For DEPENDENT, we validate during SDIM propagation
             # Here we just return True as it's a valid relationship type
             return True
         else:
             raise ValueError(f"Unknown relation type: {self.relation}")
-
-
-@dataclass(frozen=True)
-class ArchitecturalConstraint:
-    """Hardware architectural constraint
-    
-    Represents constraints like:
-    - weights.stream[0] * weights.stream[1] <= 16 (DSP usage limit)
-    - data.total % 64 == 0 (alignment requirement)
-    - channels >= 16 (minimum for efficiency)
-    """
-    name: str
-    expression: str
-    operator: str  # "==", "!=", "<=", ">=", "<", ">", "%"
-    value: Union[int, float, str]
-    description: str = ""
-    
-    def __post_init__(self):
-        """Validate constraint configuration"""
-        valid_operators = {"==", "!=", "<=", ">=", "<", ">", "%"}
-        if self.operator not in valid_operators:
-            raise ValueError(f"Invalid operator '{self.operator}', must be one of {valid_operators}")
-    
-    def describe(self) -> str:
-        """Human-readable description"""
-        if self.description:
-            return f"{self.name}: {self.description}"
-        else:
-            return f"{self.name}: {self.expression} {self.operator} {self.value}"
-    
-    def evaluate(self, context: Dict[str, Any]) -> bool:
-        """Evaluate constraint in given context
-        
-        Args:
-            context: Dictionary with interfaces and parameters
-            
-        Returns:
-            True if constraint is satisfied
-        """
-        # This will be implemented with the expression evaluator
-        # For now, just return True as placeholder
-        return True
 
 
 @dataclass(frozen=True)
