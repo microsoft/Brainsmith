@@ -8,7 +8,6 @@ Plugin-based transforms organized by compilation stage.
 """
 
 # Import all transforms by category to trigger plugin registration
-from . import core
 from . import cleanup
 from . import kernel_opt
 from . import post_proc
