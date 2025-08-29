@@ -254,10 +254,6 @@ FINN_KERNELS = [
     ('ElementwiseBitwiseAnd', f'{FK}.elementwise_binary.ElementwiseBitwiseAnd'),
     ('ElementwiseBitwiseOr', f'{FK}.elementwise_binary.ElementwiseBitwiseOr'),
     ('ElementwiseBitwiseXor', f'{FK}.elementwise_binary.ElementwiseBitwiseXor'),
-    ('ElementwiseMaximum', f'{FK}.elementwise_binary.ElementwiseMaximum'),
-    ('ElementwiseMinimum', f'{FK}.elementwise_binary.ElementwiseMinimum'),
-    ('ElementwiseFloat2Int', f'{FK}.elementwise_binary.ElementwiseFloat2Int'),
-    ('ElementwiseFloatCast', f'{FK}.elementwise_binary.ElementwiseFloatCast'),
     # Other kernels with corrected names
     ('StreamingConcat', f'{FK}.concat.StreamingConcat'),
     ('StreamingSplit', f'{FK}.split.StreamingSplit'),
