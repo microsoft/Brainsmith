@@ -19,9 +19,6 @@ import logging
 from typing import Any
 import numpy as np
 
-# Import transforms to ensure they're registered
-import brainsmith.transforms
-
 from brainsmith.core.plugins import step, get_transform
 from brainsmith.utils import apply_transforms
 
