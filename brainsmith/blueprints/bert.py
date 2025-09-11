@@ -74,32 +74,6 @@ def custom_step_extract_loop_body(model, cfg):
     but it is useful for this model.
     """
     model = model.transform(FoldConstants())
-    # model_ir    = onnxscript.ir.serde.deserialize_model(model.model)
-    # graph       = model_ir.graph
-
-    # P = gvu.PytorchHierarchyNode()
-    # unadded_nodes = []
-    # for node in graph._nodes:
-    #     added = P.add_node(node)
-    #     if not added:
-    #         unadded_nodes.append(node)
-    # P.print_hierarchy()
-    # print(f"Total nodes: {len(graph._nodes)}")
-    # print(f"Unadded nodes: {len(unadded_nodes)}")
-
-    # # Handle the unadded Transpose nodes as a special case for BERT
-    # # Todo: Make this more robust in the future
-    # for node in unadded_nodes:
-    #     print(f"added metadata for node {node.name}")
-    #     pred_node = node.predecessors()[0]
-    #     node.metadata_props['pkg.torch.onnx.name_scopes'] = pred_node.metadata_props['pkg.torch.onnx.name_scopes']
-    #     node.metadata_props['pkg.torch.onnx.class_hierarchy'] = pred_node.metadata_props['pkg.torch.onnx.class_hierarchy']
-    #     assert(P.add_node(node))
-    # loop_body_graph_view = gvu.bGraphView(f'loop-body', P.get_nodes(cfg.loop_body_hierarchy))
-    # print(f"Layer 0 graph view: {len(loop_body_graph_view._nodes)}")
-    # loop_body_model = onnxscript.ir.Model(loop_body_graph_view, ir_version=10)
-    # proto = onnxscript.ir.serde.serialize_model(loop_body_model)
-    # onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
     return model
 
 
@@ -112,52 +86,10 @@ def custom_step_loop_rolling(model, cfg):
     in the FINN pipeline, but it is useful for this model.
     """
 
-    print("Loading loop body template")
     loop_extraction = LoopExtraction(cfg.loop_body_hierarchy)
     model = model.transform(loop_extraction)
     model = model.transform(LoopRolling(loop_extraction.loop_body_template))
-    # LoopBody = pb.LoopBodyTemplate(cfg.output_dir+'/loop-body-template.onnx')
 
-    # # Replace instances of the loop body with a function call to the loop body
-    # change_layers_to_function_calls = pattern.RewriteRule(
-    #   LoopBody.pattern,
-    #   LoopBody.function_replace
-    # )
-    # print("Replacing layers with function calls")
-
-    # model_proto = model.model
-    # model_ir = onnxscript.ir.serde.deserialize_model(model_proto)
-
-    # model_layers_replaced = rewrite(
-    #     model_ir,
-    #     pattern_rewrite_rules = [change_layers_to_function_calls]
-    # )
-
-    # model_layers_replaced.functions[LoopBody.function.identifier()] = LoopBody.function
-    # model_layers_replaced.graph.opset_imports['loop']=0
-    # model_proto = onnxscript.ir.serde.serialize_model(model_layers_replaced)
-
-    # model.model = model_proto
-
-    # normalized_graph = pb.normalize_io_for_loop_rolling(model_layers_replaced.graph, LoopBody)
-
-    # print(f"normalized graphs is layer {normalized_graph is model_layers_replaced.graph}")
-    # onnxscript.ir.save(model_layers_replaced, "normalized.onnx")
-    # LoopMatchPattern,nodes = LoopBody.build_function_match_pattern(normalized_graph)
-
-    # loop_replace_pattern = pb.build_loop_replace_pattern(normalized_graph, LoopBody)
-
-    # change_function_calls_to_loop = pattern.RewriteRule(
-    #     LoopMatchPattern,
-    #     loop_replace_pattern
-    # )
-    # rewrite_set = pattern.RewriteRuleSet([change_function_calls_to_loop])
-    # count = rewrite_set.apply_to_model(model_layers_replaced, verbose=None)
-    # print(f"Rolled {count} function calls into a loop operator")
-    # model.model = onnxscript.ir.serde.serialize_model(model_layers_replaced)
-
-    # model = model.transform(FoldConstants())
-    # model = model.transform(to_hw.InferFinnLoopOp())
     return model
 
 
@@ -284,38 +216,6 @@ def custom_step_infer_hardware(model, cfg):
 
     """
 
-#    model = model.transform(to_hw.InferFinnLoopOp())
-#    custom_opset = onnx.OperatorSetIdProto()
-#    custom_opset.version = 0
-#    custom_opset.domain = "qonnx.custom_op.general"
-#    model.model.opset_import.append(custom_opset)
-#    custom_opset = onnx.OperatorSetIdProto()
-#    custom_opset.version = 1
-#    custom_opset.domain = "brainsmith.custom_op.general"
-
-#    model.model.opset_import.pop(1)
-#    model.model.functions.pop(0)
-
-
-#    model.model.opset_import.append(custom_opset)
-    #onnx.checker.check_model(model.model)
-#    print("model passes checker")
-
-#    inst = registry.getCustomOp(model.graph.node[0])
-#    body = inst.get_nodeattr("body")
-#    custom_opset = onnx.OperatorSetIdProto()
-#    custom_opset.version = 0
-#    custom_opset.domain = "qonnx.custom_op.general"
-#    body.model.opset_import.append(custom_opset)
-#    custom_opset = onnx.OperatorSetIdProto()
-#    custom_opset.version = 1
-#    custom_opset.domain = "brainsmith.custom_op.general"
-#    body.model.opset_import.append(custom_opset)
-#    body.model.opset_import[0].version = 18
-#    print("checking body")
-    #onnx.checker.check_model(body.model)
-#    print("body passes checker")
-
     model = model.transform(to_bs_hw.InferLayerNorm())
     model = model.transform(to_hw.InferDuplicateStreamsLayer())
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
@@ -325,9 +225,6 @@ def custom_step_infer_hardware(model, cfg):
     model = model.transform(to_hw.InferThresholdingLayer())
     model = model.transform(to_hw.InferQuantizedMatrixVectorActivation())
 
-    #inst.set_nodeattr("body", body.model.graph)
-
-    #model.save("new_body_graph.onnx")
     return model
 
 
