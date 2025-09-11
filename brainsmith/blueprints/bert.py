@@ -66,8 +66,7 @@ from qonnx.transformation.base import Transformation
 import onnxscript
 from onnxscript.utils import graph_view_utils as gvu
 
-#from finn.transformation.fpgadataflow import LoopExtraction
-from finn.transformation.fpgadataflow import LoopRolling
+from finn.transformation.fpgadataflow.loop_rolling import LoopExtraction, LoopRolling
 
 def custom_step_extract_loop_body(model, cfg):
     """
@@ -121,7 +120,7 @@ def custom_step_loop_rolling(model, cfg):
     """
 
     print("Loading loop body template")
-    loop_extraction = pb.LoopExtraction(cfg.loop_body_hierarchy)
+    loop_extraction = LoopExtraction(cfg.loop_body_hierarchy)
     model = model.transform(loop_extraction)
     model = model.transform(LoopRolling(loop_extraction.loop_body_template))
     # LoopBody = pb.LoopBodyTemplate(cfg.output_dir+'/loop-body-template.onnx')
