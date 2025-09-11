@@ -62,19 +62,7 @@ from finn.builder.build_dataflow_steps import (
 
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
-
 from finn.transformation.fpgadataflow.loop_rolling import LoopExtraction, LoopRolling
-
-def custom_step_extract_loop_body(model, cfg):
-    """
-    BERT custom step for extracting the loop body
-
-    This is a custom step to extract the loop body from the
-    BERT model. It is not a standard step in the FINN pipeline,
-    but it is useful for this model.
-    """
-    model = model.transform(FoldConstants())
-    return model
 
 
 def custom_step_loop_rolling(model, cfg):
@@ -86,6 +74,7 @@ def custom_step_loop_rolling(model, cfg):
     in the FINN pipeline, but it is useful for this model.
     """
 
+    model = model.transform(FoldConstants())
     loop_extraction = LoopExtraction(cfg.loop_body_hierarchy)
     model = model.transform(loop_extraction)
     model = model.transform(LoopRolling(loop_extraction.loop_body_template))
@@ -423,7 +412,6 @@ BUILD_BERT_STEPS = [
         custom_step_infer_hardware,
         step_create_dataflow_partition,
         step_specialize_layers,
-        custom_step_extract_loop_body,
         custom_step_loop_rolling,
         step_target_fps_parallelization,
         step_apply_folding_config,
