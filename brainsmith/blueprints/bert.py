@@ -63,9 +63,6 @@ from finn.builder.build_dataflow_steps import (
 # Temporary imports - remove once FloatQuant is available
 from qonnx.transformation.base import Transformation
 
-import onnxscript
-from onnxscript.utils import graph_view_utils as gvu
-
 from finn.transformation.fpgadataflow.loop_rolling import LoopExtraction, LoopRolling
 
 def custom_step_extract_loop_body(model, cfg):
@@ -105,10 +102,6 @@ def custom_step_extract_loop_body(model, cfg):
     # onnx.save(proto, cfg.output_dir+'/loop-body-template.onnx')
     return model
 
-
-from onnxscript.rewriter import pattern
-from onnxscript.rewriter import pattern_builder_jsm as pb
-from onnxscript.rewriter import rewrite
 
 def custom_step_loop_rolling(model, cfg):
     """
