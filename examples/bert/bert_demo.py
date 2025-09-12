@@ -26,6 +26,7 @@ from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
 from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
+from onnx import StringStringEntryProto
 from onnxsim import simplify
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
@@ -220,11 +221,29 @@ def run_brainsmith_dse(model, args):
     model_dir = os.path.join(args.output_dir, "intermediate_models")
     os.makedirs(model_dir, exist_ok=True)
 
+    # Extract metadata from the original model
+    metadata = {}
+    for node in model.graph.node:
+        md = {}
+        for prop in node.metadata_props:
+            md[prop.key] = prop.value
+        metadata[node.name] = md
+
     # Simplify model (matches old hw_compiler.py)
-    model, check = simplify(model)
+    simp_model_no_md, check = simplify(model)
     if not check:
         raise RuntimeError("Unable to simplify the Brevitas BERT model")
 
+    # Add the metadata back to the simplified model
+    simp_model_with_md = simp_model_no_md
+    for node in simp_model_no_md.graph.node:
+        if node.name in metadata:
+            md_props = metadata[node.name]
+            for key,value in md_props.items():
+                new_md = StringStringEntryProto(key=key,value=value)
+                node.metadata_props.append(new_md)
+
+    model = simp_model_with_md
     # Save simplified model
     if args.save_intermediate:
         onnx.save(model, os.path.join(model_dir, "simp.onnx"))
