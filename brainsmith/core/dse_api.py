@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from .design.parser import BlueprintParser
+from .design.parser import parse_blueprint
 from .design.builder import DSETreeBuilder
 from .dse.tree import DSETree
 from .dse.runner import SegmentRunner
@@ -64,8 +64,7 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
     logger.info(f"  Output: {output_dir}")
     
     # Parse blueprint
-    parser = BlueprintParser()
-    design_space, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
+    design_space, forge_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
     
     # Build DSE tree
     tree_builder = DSETreeBuilder()

@@ -9,11 +9,11 @@ and DSE tree construction.
 """
 
 from .space import DesignSpace
-from .parser import BlueprintParser
+from .parser import parse_blueprint
 from .builder import DSETreeBuilder
 
 __all__ = [
-    'BlueprintParser',
+    'parse_blueprint',
     'DesignSpace',
     'DSETreeBuilder'
 ]
