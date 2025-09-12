@@ -268,7 +268,7 @@ def run_brainsmith_dse(model, args):
     )
 
     # Get static blueprint path
-    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
+    blueprint_path = Path(__file__).parent / args.blueprint
 
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
@@ -342,6 +342,8 @@ def main():
                        help='Target board (V80, Pynq-Z1, U250)')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Enable verbose logging')
+    parser.add_argument('-bp', '--blueprint', type=str, default='bert_demo.yaml',
+                       help='Custom blueprint path (default: use built-in bert_demo.yaml)')
 
     args = parser.parse_args()
 
