@@ -11,8 +11,8 @@ board: "V80"                        # Target FPGA board
 
 # Optional: Direct FINN parameter overrides for debugging
 # finn_config:
-#  minimize_bit_width: false
-#  rtlsim_batch_size: 100
+#   minimize_bit_width: false
+#   rtlsim_batch_size: 100
 
 design_space:
   kernels:
