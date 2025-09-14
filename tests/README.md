@@ -21,6 +21,14 @@ Integration tests for Brainsmith's core systems: blueprint parsing, design space
 - Framework integration (FINN/QONNX transforms)
 - Plugin discovery and metadata queries
 - Backend selection for hardware kernels
+- Transform chain dependencies and failure recovery
+- Plugin state management and isolation
+
+### Plugin Error Handling (`test_plugin_errors.py`)
+- Non-existent plugin access with helpful errors
+- Duplicate plugin registration behavior
+- Plugin initialization and execution failures
+- Framework prefix resolution errors
 
 ## Running Tests
 

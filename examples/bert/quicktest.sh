@@ -1,5 +1,4 @@
 #!/bin/bash
-# Quick test script - matches functionality of old quicktest.sh
 
 set -e
 
@@ -37,8 +36,6 @@ python bert_demo.py \
     -i 256 \
     -b 4 \
     -q 32 \
-    -f 1 \
-    -c 3.0 \
-    -p ./configs/quicktest_folding.json
+    --blueprint bert_quicktest.yaml
 
 echo "Quick test completed!"

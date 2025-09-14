@@ -90,7 +90,7 @@ See the [Pragma Reference](./kernel-integrator-pragma-reference.md) guide.
 
 Your RTL module should follow these conventions:
 
-1. **Clear Port Definitions**: Use standard SystemVerilog port declarations
+1. **Clear Port Definitions**: Use standard SystemVerilog ANSI-style port declarations
 2. **Parameter Declaration**: Use `parameter` or `localparam` appropriately
 3. **Protocol Compliance**: Follow AXI-Stream or AXI-Lite protocols for interfaces
 
