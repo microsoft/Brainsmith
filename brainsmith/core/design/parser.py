@@ -129,6 +129,9 @@ def _load_with_inheritance(blueprint_path: str, return_parent: bool = False) -> 
     with open(blueprint_path, 'r') as f:
         data = yaml.safe_load(f)
     
+    # Expand environment variables with context
+    data = _expand_env_vars_with_context(data, blueprint_path)
+    
     parent_data = None
     
     # Handle inheritance
@@ -168,6 +171,77 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
             result[key] = _deep_merge(result[key], value)
         else:
             result[key] = value
+    
+    return result
+
+
+def _expand_env_vars(data: Any) -> Any:
+    """
+    Recursively expand environment variables in data structure.
+    
+    Supports ${VAR} and $VAR syntax. Handles nested dicts and lists.
+    
+    Args:
+        data: Data structure to process
+        
+    Returns:
+        Data with environment variables expanded
+    """
+    if isinstance(data, str):
+        # Use os.path.expandvars which handles both ${VAR} and $VAR
+        return os.path.expandvars(data)
+    elif isinstance(data, dict):
+        return {k: _expand_env_vars(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_expand_env_vars(item) for item in data]
+    else:
+        # Numbers, booleans, None, etc. - return as-is
+        return data
+
+
+def _expand_env_vars_with_context(data: Any, blueprint_path: str) -> Any:
+    """
+    Expand environment variables with additional context variables.
+    
+    Provides:
+        - BLUEPRINT_DIR: Directory containing the blueprint file
+        - BSMITH_DIR: Brainsmith root directory (if not already set)
+        
+    Args:
+        data: Data structure to process
+        blueprint_path: Path to blueprint file (for context)
+        
+    Returns:
+        Data with environment variables expanded
+    """
+    # Calculate context variables
+    blueprint_dir = str(Path(blueprint_path).parent.absolute())
+    
+    # Save original values if they exist
+    old_vars = {}
+    context_vars = {
+        'BLUEPRINT_DIR': blueprint_dir,
+    }
+    
+    # Only set BSMITH_DIR if not already set (smithy sets it)
+    if 'BSMITH_DIR' not in os.environ:
+        context_vars['BSMITH_DIR'] = str(Path(__file__).parents[3])
+    
+    for var, value in context_vars.items():
+        if var in os.environ:
+            old_vars[var] = os.environ[var]
+        os.environ[var] = value
+    
+    try:
+        # Expand variables with context
+        result = _expand_env_vars(data)
+    finally:
+        # Restore original environment
+        for var in context_vars:
+            if var in old_vars:
+                os.environ[var] = old_vars[var]
+            else:
+                os.environ.pop(var, None)
     
     return result
 

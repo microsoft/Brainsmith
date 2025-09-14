@@ -1,0 +1,37 @@
+name: "BERT Quicktest"
+description: "Quick test configuration for BERT with minimal layers and folding"
+
+extends: "${BSMITH_DIR}/brainsmith/blueprints/bert.yaml"
+
+# Configuration overrides
+clock_ns: 5.0
+output: "bitfile"                   # estimates | rtl | bitfile
+board: "V80"                        # Target FPGA board
+save_intermediate_models: true      # Save intermediate ONNX models
+
+# Direct override FINN configuration options
+finn_config:
+  standalone_thresholds: true
+  target_fps: 1                     # Low FPS for quick test (vs 3000 in demo)
+  folding_config_file: "${BSMITH_DIR}/examples/bert/configs/quicktest_folding.json"  # Quicktest-specific folding
+  verbose: false
+  
+  # Quicktest-specific optimizations
+  fifosim_n_inferences: 2           # Speed up FIFO sizing
+  split_large_fifos: true           # Enable FIFO splitting
+
+design_space:
+  # Inherit kernels from parent blueprint (don't override with empty list)
+  # kernels are defined in parent bert.yaml
+
+  # Add pre/post-processing steps to standard BERT blueprint   
+  steps:
+    - at_start:
+        insert: 
+          - "bert_cleanup"
+          - "remove_head"
+          - "remove_tail"
+          - "generate_reference_io"
+
+    - at_end:
+        insert: "shell_metadata_handover"
