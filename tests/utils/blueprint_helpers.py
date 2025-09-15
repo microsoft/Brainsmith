@@ -94,6 +94,24 @@ design_space:
     - test_step1
 """
 
+INHERITANCE_PARENT_BLUEPRINT = """
+name: {name}
+clock_ns: {clock_ns}
+board: V70
+design_space:
+  steps: {steps}
+  kernels:
+{kernels}
+"""
+
+INHERITANCE_GRANDPARENT_BLUEPRINT = """
+name: {name}
+clock_ns: {clock_ns}
+board: V100
+design_space:
+  steps: {steps}
+"""
+
 
 def create_blueprint_file(
     tmp_path: Path,
@@ -129,6 +147,7 @@ def create_blueprint_file(
     # Handle kernel_backends formatting
     if 'kernel_backends' in kwargs and isinstance(kwargs['kernel_backends'], list):
         kwargs['kernel_backends'] = str(kwargs['kernel_backends'])
+    # If kernel_backends is already a formatted YAML string, leave it as is
         
     # Handle step_operations formatting
     if 'step_operations' in kwargs and isinstance(kwargs['step_operations'], list):
@@ -319,5 +338,53 @@ def create_branch_points_blueprint(
         tmp_path,
         BRANCH_POINTS_BLUEPRINT,
         name,
+        **kwargs
+    )
+
+
+def create_inheritance_parent(
+    tmp_path: Path,
+    name: str = "parent",
+    steps: Optional[List[str]] = None,
+    kernels: Optional[List[str]] = None,
+    **kwargs
+) -> Path:
+    """Create a parent blueprint for inheritance testing."""
+    if steps is None:
+        steps = ["test_step1", "test_step2"]
+    
+    if kernels is None:
+        kernels = ["TestKernel", "TestKernelWithBackends"]
+    
+    # Format kernels as YAML array
+    kernels_yaml = ""
+    for kernel in kernels:
+        kernels_yaml += f"    - {kernel}\n"
+    
+    return create_blueprint_file(
+        tmp_path,
+        INHERITANCE_PARENT_BLUEPRINT,
+        name,
+        steps=steps,
+        kernels=kernels_yaml,
+        **kwargs
+    )
+
+
+def create_inheritance_grandparent(
+    tmp_path: Path,
+    name: str = "grandparent",
+    steps: Optional[List[str]] = None,
+    **kwargs
+) -> Path:
+    """Create a grandparent blueprint for inheritance testing."""
+    if steps is None:
+        steps = ["test_step1"]
+    
+    return create_blueprint_file(
+        tmp_path,
+        INHERITANCE_GRANDPARENT_BLUEPRINT,
+        name,
+        steps=steps,
         **kwargs
     )

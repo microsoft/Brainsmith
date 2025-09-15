@@ -14,41 +14,14 @@ Brainsmith automates this process by defining a *Design Space* of potential Kern
 
 ## Brainsmith Library
 
-The Brainsmith compiler relies on a rich library of kernels, graph transforms, and build steps for effective design space exploration. This library is managed through a **singleton plugin registry**, allowing new components to be easily registered with relevant metadata via function decorators. Registered plugins can be referenced by name in DSE blueprints.
-```python
-from brainsmith.core.plugins import step
+The Brainsmith compiler relies on a rich library of kernels, graph transforms, and build steps for effective design space exploration. This library is managed through a **singleton plugin registry**, allowing new components to be easily registered with relevant metadata via function decorators. Registered plugins can be referenced by name in DSE blueprints or directly through a variety of plugin access functions.
 
-@step(
-    name="my_step",
-    category="optimization",
-    author="your name or organization"
-)
-def my_optimization_step(blueprint, context):
-    # Apply transforms to model in place
-```
+*Read more: [Plugin Registry](./plugin_registry.md)*
 
-Registered plugins can then be accessed by name in blueprints or a variety of plugin
+## Building Components
 
-and immediately accessed via blueprints.
+Hardware kernels are the synthesizable building blocks that implement neural network operations in RTL or HLS, requiring complex integration across multiple files (operators, backends, templates, and tests). Brainsmith provides the **Kernel Integrator** tool to automatically generate the Python wrapper and integration code from annotated SystemVerilog, dramatically simplifying the process of adding custom hardware implementations to your design space. This enables hardware engineers to focus on optimizing kernel implementations while the framework handles the integration complexity.
 
+***PRE-RELEASE NOTE***: The Kernel Integrator currently supports RTL kernels only. Vitis HLS support is planned for a future release. 
 
-The Brainsmith compiler relies on a rich library of kernels, graph transforms, and build steps for effective design exploration.
-
-To enable easy addition and access to this library, the Plugin Registry maintains a singleton catalog
-
-singleton registry of plugins
-
-
-The plugin registry enables extensibility by allowing developers to register new functionality that can be discovered and used dynamically at runtime. The system uses a **singleton registry** that maintains a catalog of all available plugins, organized by type and tagged with metadata. Plugins registered via decorators become immediately available for use in Brainsmith's blueprint system (see [Blueprint Guide](./blueprints.md)) references components by name in YAML.
-
-All plugins are managed through a central registry using decorator-based registration, accessible via blueprint or direct look-up.
-
-**Example
-
-*Read more: [Hardware Kernels](docs/hardware_kernels.md), [Plugin Registry](./plugin_registry.md)
-
-## Building Components 
-
-
-
-*Read more: [Hardware Kernels](docs/hardware_kernels.md), [Kernel Integrator](docs/kernel-integrator-user-guide.md)*
+*Read more: [Hardware Kernels](docs/hardware_kernels.md), [Kernel Integrator](docs/kernel-integrator-user-guide.md), [Pragma Reference](docs/kernel-integrator-pragma-reference.md)*

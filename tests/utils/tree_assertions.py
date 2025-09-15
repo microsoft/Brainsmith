@@ -20,6 +20,13 @@ class ExpectedTreeStructure:
     segment_efficiency: Optional[float] = None
 
 
+@dataclass
+class ExpectedExecutionLevel:
+    """Expected execution level for validation."""
+    level: int
+    nodes: List[str]
+
+
 
 class TreeAssertions:
     """Helper class for DSE tree assertions."""
