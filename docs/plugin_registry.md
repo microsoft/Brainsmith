@@ -19,7 +19,7 @@
 
 **Purpose**: Modify ONNX graphs for optimization, hardware mapping, or preprocessing
 
-Transforms modify ONNX graphs by pattern matching, node replacement, optimization, or cleanup. Each transform returns a tuple: (modified_model, boolean_indicating_changes).
+Transforms modify ONNX graphs by pattern matching, node replacement, optimization, or cleanup. Each transform returns a tuple: (modified_model, boolean_indicating_changes). All transforms are subclasses of the [QONNX Transformation pass](https://github.com/fastmachinelearning/qonnx/blob/main/docs/overview.rst#transformation-pass).
 
 **Interface**:
 ```python
@@ -38,6 +38,22 @@ class MyTransform(Transformation):
         graph_modified = False
         # ... transformation logic ...
         return (model, graph_modified)
+```
+
+**Example**: `brainsmith/transforms/kernel_opt/set_pumped_compute.py:16`
+```python
+@transform(
+    name="SetPumpedCompute",
+    stage="kernel_opt",
+    description="Set pumped compute attribute for MVAUs and DynMatMuls"
+)
+class SetPumpedCompute(Transformation):
+    def apply(self, model):
+        for node in model.graph.node:
+            if node.op_type == "MVAU_rtl":
+                inst = registry.getCustomOp(node)
+                inst.set_nodeattr("pumpedCompute", 1)
+        return (model, False)
 ```
 
 ### 2. Build Steps

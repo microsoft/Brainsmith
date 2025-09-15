@@ -26,6 +26,19 @@ def forge_config():
     )
 
 
+@pytest.fixture
+def base_finn_config():
+    """Create a base FINN configuration for testing."""
+    return {
+        "output_dir": "output/test",
+        "synth_clk_period_ns": DEFAULT_CLOCK_PERIOD_NS,
+        "board": "test_board",
+        "shell_flow_type": "test_flow",
+        "generate_outputs": ["estimates"],
+        "folding_config_file": None
+    }
+
+
 # Design Space Fixtures
 
 @pytest.fixture
