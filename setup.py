@@ -25,7 +25,7 @@ setup(
         "onnx==1.17.0",
         "onnxoptimizer==0.3.13",
         "onnxruntime==1.18.1",
-        "onnxscript==0.4.0",
+        "onnxscript==0.5.0",
         "onnxsim==0.4.36",
         "pre-commit==3.3.2",
         "packaging>=25.0",
