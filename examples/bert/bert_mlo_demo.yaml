@@ -12,6 +12,7 @@ save_intermediate_models: true      # Save intermediate ONNX models
 
 finn_config:
   loop_body_hierarchy: ['encoder', 'encoder.layer.0']
+  split_large_fifos: true
 
 
 design_space:
