@@ -1,5 +1,3 @@
-# !!!DISLAIMER!!! - These docs are under active rework on this branch, none should be taken as finished.
-
 # Getting Started with Brainsmith
 
 ## Brainsmith Compiler
