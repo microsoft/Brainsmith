@@ -1,5 +1,8 @@
 # Kernel Integrator User Guide
 
+## ***PRE-RELEASE NOTE***
+**The Kernel Integrator is an experimental feature that offers signficiant automation potential and will work for most simple kernels, it has some rough edges and limitations for complex corner cases (particularly including AXI-Lite config signals).**
+
 ## Overview
 
 The Kernel Integrator is an automated tool that bridges the gap between SystemVerilog RTL hardware designs and the FINN compiler framework. It generates Python integration code that allows custom RTL kernels to be seamlessly used within neural network accelerator designs.
