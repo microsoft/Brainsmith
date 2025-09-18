@@ -38,19 +38,22 @@ RUN apt-get update && \
     libjansson-dev \
     libgetdata-dev \
     libtinfo5 \
-    g++-10
+    g++-10 \
+    python3-poetry
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN locale-gen "en_US.UTF-8"
 
-# Install pip dependencies for Brainsmith
-COPY requirements.txt /tmp/
-RUN pip install -r /tmp/requirements.txt
-RUN rm /tmp/requirements.txt
+# Configure Poetry for container use
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_VIRTUALENVS_IN_PROJECT=false
 
-# Install pip dependencies for FINN
-COPY docker/requirements.finn.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
-RUN rm /tmp/requirements.txt
+# Install dependencies using Poetry
+COPY pyproject.toml poetry.lock* /tmp/
+WORKDIR /tmp
+RUN poetry install --no-root --only main && \
+    rm -rf /tmp/pyproject.toml /tmp/poetry.lock
+WORKDIR /
 
 # Xilinx toolflow specific imports
 ENV TZ="US/Pacific"

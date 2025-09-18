@@ -110,7 +110,7 @@ ipython_config.py
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+poetry.lock
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
@@ -410,6 +410,11 @@ workspace/
 local.*
 !local.example.*
 
+# Brainsmith environment configuration
+brainsmith.env
+config/brainsmith.env
+!config/brainsmith.env.example
+
 # Generated documentation
 docs/api/
 docs/generated/
@@ -493,4 +498,8 @@ test_reports/
 !*settings*.xml
 
 # AI coding configuration
-CLAUDE.md 
+CLAUDE.md
+
+# Brainsmith dependency management
+smithy.lock
+.poetry/ 
