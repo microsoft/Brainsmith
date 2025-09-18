@@ -30,6 +30,17 @@ becho () { echo -e "${BLUE}$1${NC}"; }
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 
+# Load environment configuration
+if [ -f "$BSMITH_DIR/docker/env-config.sh" ]; then
+    source "$BSMITH_DIR/docker/env-config.sh"
+else
+    # Minimal fallback defaults
+    export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/${USER}_brainsmith}"
+    export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
+    export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
+    export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
+fi
+
 # Generate container name based on brainsmith directory (no timestamp for persistence)
 BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
 DOCKER_UNAME=$(id -un)
@@ -41,25 +52,7 @@ debug() {
     [ "${BSMITH_DEBUG:-0}" = "1" ] && echo "DEBUG: $1" >&2
 }
 
-# Set defaults (same as run-docker.sh)
-: ${BSMITH_HW_COMPILER="finn"}
-
-# Set Xilinx environment defaults with bashrc fallback
-if [ -z "$BSMITH_XILINX_PATH" ] && [ -f "$HOME/.bashrc" ]; then
-    BSMITH_XILINX_PATH=$(grep -E "^export BSMITH_XILINX_PATH=" "$HOME/.bashrc" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | head -1)
-fi
-: ${BSMITH_XILINX_PATH="/opt/Xilinx"}
-
-if [ -z "$BSMITH_XILINX_VERSION" ] && [ -f "$HOME/.bashrc" ]; then
-    BSMITH_XILINX_VERSION=$(grep -E "^export BSMITH_XILINX_VERSION=" "$HOME/.bashrc" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | head -1)
-fi
-: ${BSMITH_XILINX_VERSION="2024.2"}
-
-if [ -z "$BSMITH_DOCKER_EXTRA" ] && [ -f "$HOME/.bashrc" ]; then
-    BSMITH_DOCKER_EXTRA=$(grep -E "^export BSMITH_DOCKER_EXTRA=" "$HOME/.bashrc" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | head -1)
-fi
-: ${BSMITH_DOCKER_EXTRA=""}
-
+# Docker-specific configuration (computed values, not from config file)
 # Handle Docker tag with CI fallback
 if [ -z "$BSMITH_DOCKER_TAG" ]; then
     # Try git describe first, fallback to commit hash for CI
@@ -72,24 +65,11 @@ if [ -z "$BSMITH_DOCKER_TAG" ]; then
         BSMITH_DOCKER_TAG="microsoft/brainsmith:ci-$COMMIT_HASH"
     fi
 fi
-: ${NETRON_PORT=8080}
-: ${NVIDIA_VISIBLE_DEVICES=""}
 
-: ${BSMITH_BUILD_DIR="/tmp/$DOCKER_INST_NAME"}
-: ${BSMITH_SSH_KEY_DIR="$BSMITH_DIR/ssh_keys"}
-: ${PLATFORM_REPO_PATHS="/opt/xilinx/platforms"}
-: ${OHMYXILINX="${BSMITH_DIR}/deps/oh-my-xilinx"}
-: ${VIVADO_HLS_LOCAL=$VIVADO_PATH}
-: ${VIVADO_IP_CACHE=$BSMITH_BUILD_DIR/vivado_ip_cache}
+# Docker runtime detection
 : ${DOCKER_BUILDKIT="1"}
-: ${BSMITH_DOCKER_PREBUILT="0"}
-: ${BSMITH_DOCKER_NO_CACHE="0"}
-: ${BSMITH_SKIP_DEP_REPOS="0"}
-: ${BSMITH_DOWNLOAD_BOARDS="0"}
-: ${BSMITH_DOCKER_RUN_AS_ROOT="0"}
-: ${BSMITH_DOCKER_GPU="$(docker info | grep nvidia | wc -m)"}
-: ${BSMITH_DOCKER_BUILD_FLAGS=""}
-: ${BSMITH_DOCKER_FLAGS=""}
+# GPU support must be explicitly enabled via BSMITH_DOCKER_GPU=1
+: ${BSMITH_DOCKER_GPU="0"}
 
 # Validate Docker flags for security
 validate_docker_flags() {
@@ -107,7 +87,7 @@ Brainsmith Container Management
 
 Usage: $0 COMMAND [OPTIONS]
 
-Commands:
+Container Commands:
     start          Start persistent container in background
     shell          Interactive shell in running container
     build          Build Docker image
@@ -118,12 +98,20 @@ Commands:
     clean          Clean build artifacts, container, and optionally images
     clean --deep   Deep clean including Docker images and dependency repos
     logs           Show container logs
-    kernel         Run kernel integrator (kernel <rtl_file> [options])
+    deps-check     Quick dependency status check
+
+Dependency Commands:
+    deps           Manage dependencies (Poetry + custom Git repos)
+    deps update    Update dependencies based on pyproject.toml
+    deps status    Show status of all dependencies
+    deps lock      Generate lock files for reproducible builds
+    deps install   Install dependencies (use --locked for exact versions)
 
 Examples:
     $0 start && $0 "python script.py"          # Typical workflow
     $0 shell                                    # Interactive development
-    $0 kernel design.sv -o output/              # Generate FINN HWCustomOp from RTL
+    $0 deps update                              # Update all dependencies
+    $0 deps status                              # Check dependency status
     $0 clean                                    # Clean container and build files
     $0 clean --deep                             # Full reset (removes everything)
 EOF
@@ -359,7 +347,7 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
-    DOCKER_CMD+=" -e BSMITH_DOWNLOAD_BOARDS=$BSMITH_DOWNLOAD_BOARDS"
+    DOCKER_CMD+=" -e BSMITH_DEPS_POLICY=$BSMITH_DEPS_POLICY"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     
@@ -412,8 +400,8 @@ create_container() {
     fi
 
     # GPU support
-    if [ "$BSMITH_DOCKER_GPU" != 0 ]; then
-        gecho "nvidia-docker detected, enabling GPUs"
+    if [ "$BSMITH_DOCKER_GPU" = "1" ]; then
+        gecho "GPU support enabled (BSMITH_DOCKER_GPU=1)"
         if [ ! -z "$NVIDIA_VISIBLE_DEVICES" ]; then
             DOCKER_CMD+=" --runtime nvidia -e NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
         else
@@ -550,6 +538,7 @@ show_logs() {
     docker logs "$DOCKER_INST_NAME" "$@"
 }
 
+
 cleanup_container() {
     STATUS=$(get_container_status)
     if [ "$STATUS" != "not_found" ]; then
@@ -654,8 +643,28 @@ clean_all() {
     fi
 }
 
+
+# Handle dependency management commands
+handle_deps_command() {
+    shift  # Remove 'deps' from arguments
+    
+    recho "The deps command has been removed."
+    recho "Brainsmith now uses Poetry for all dependency management:"
+    echo
+    echo "  poetry install              # Install Python dependencies"
+    echo "  poetry update              # Update dependencies"
+    echo
+    echo "For non-Python dependencies (cnpy, board files), these are"
+    echo "handled automatically in the Docker environment."
+    echo
+    echo "For manual installation, see the documentation."
+}
+
 # Main command handling
 case "${1:-help}" in
+    "deps")
+        handle_deps_command "$@"
+        ;;
     "build")
         build_image
         ;;
@@ -684,10 +693,6 @@ case "${1:-help}" in
     "clean")
         shift
         clean_all "$@"
-        ;;
-    "kernel")
-        shift
-        exec_in_container python -m brainsmith.tools.kernel_integrator "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

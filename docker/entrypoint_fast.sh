@@ -38,12 +38,8 @@ if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         exit 1
     fi
     
-    # Since container is ready, dependencies should exist - check for finnxsi directory
-    if [ ! -d "${BSMITH_DIR}/deps/finn/finn_xsi" ]; then
-        log_error "finnxsi directory not found at ${BSMITH_DIR}/deps/finn/finn_xsi"
-        log_error "This suggests dependencies were not fetched properly during container initialization"
-        exit 1
-    fi
+    # Dependencies are now managed by Poetry - no need to check deps/ directory
+    # Poetry installs packages to the system Python environment in the container
 fi
 
 # Load environment setup (dependencies should already be fetched by main container)
