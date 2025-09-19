@@ -11,7 +11,7 @@ echo "==================================="
 # Change to demo directory
 cd "$(dirname "$0")"
 
-# Clean up any existing quicktest build directory
+Clean up any existing quicktest build directory
 if [ -d "${BSMITH_BUILD_DIR}/quicktest" ]; then
     echo "Removing existing quicktest build directory..."
     rm -rf "${BSMITH_BUILD_DIR}/quicktest"
@@ -20,8 +20,8 @@ fi
 # Generate folding config
 echo "Generating folding configuration..."
 python gen_folding_config.py \
-    --simd 4 \
-    --pe 4 \
+    --simd 1 \
+    --pe 1 \
     --num_layers 1 \
     -t 1 \
     -o ./configs/quicktest_folding.json

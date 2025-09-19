@@ -224,12 +224,11 @@ def run_brainsmith_dse(model, args):
         raise RuntimeError("Unable to simplify the Brevitas BERT model")
     
     # Save simplified model
-    if args.save_intermediate:
-        onnx.save(model, os.path.join(model_dir, "simp.onnx"))
-        # Also save to debug directory for comparison
-        debug_dir = os.path.join(args.output_dir, "debug_models")
-        onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-        print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
+    onnx.save(model, os.path.join(model_dir, "simp.onnx"))
+    # Also save to debug directory for comparison
+    debug_dir = os.path.join(args.output_dir, "debug_models")
+    onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
+    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
     
     # Run cleanup
     cleanup(
@@ -309,9 +308,6 @@ def main():
                        help='Blueprint YAML file to use (default: bert_demo.yaml)')
     
     args = parser.parse_args()
-    
-    # For compatibility with old scripts, maintain save_intermediate
-    args.save_intermediate = True
     
     # Determine output directory
     build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")

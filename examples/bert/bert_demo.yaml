@@ -15,7 +15,7 @@ finn_config:
   standalone_thresholds: true
   target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
   folding_config_file: null         # Path to manual folding config JSON (optional)
-  verbose: false                    # Print all warnings and compiler output
+  split_large_fifos: true
 
 design_space:
   # Inherit kernels from parent blueprint
