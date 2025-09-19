@@ -66,8 +66,16 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
     forge_config = _extract_config_and_mappings(blueprint_data)
     
     # Parse steps with inheritance support
+    # Need to handle recursive inheritance properly - if parent has operations,
+    # we need to get its fully resolved steps, not just raw data
     parent_steps = None
-    if parent_data:
+    if parent_data and 'extends' in parent_data:
+        # Parent also has inheritance - need to recursively parse it
+        parent_blueprint_path = str(Path(blueprint_path).parent / parent_data['extends'])
+        parent_design_space, _ = parse_blueprint(parent_blueprint_path, model_path)
+        parent_steps = parent_design_space.steps
+    elif parent_data:
+        # Parent has no inheritance - can use raw steps
         parent_steps_data = parent_data.get('design_space', {}).get('steps', [])
         if parent_steps_data:
             parent_steps = _parse_steps_raw(parent_steps_data)
