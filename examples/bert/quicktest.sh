@@ -11,7 +11,7 @@ echo "==================================="
 # Change to demo directory
 cd "$(dirname "$0")"
 
-Clean up any existing quicktest build directory
+# Clean up any existing quicktest build directory
 if [ -d "${BSMITH_BUILD_DIR}/quicktest" ]; then
     echo "Removing existing quicktest build directory..."
     rm -rf "${BSMITH_BUILD_DIR}/quicktest"
