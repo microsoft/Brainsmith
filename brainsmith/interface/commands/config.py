@@ -11,7 +11,7 @@ from rich.tree import Tree
 from rich.syntax import Syntax
 import yaml
 
-from brainsmith.config import get_config, load_config, validate_and_report, ConfigPriority
+from brainsmith.config import get_config, load_config
 from brainsmith.config.export import export_to_environment
 
 console = Console()
@@ -26,14 +26,13 @@ def config():
 @config.command()
 @click.option('--format', '-f', type=click.Choice(['table', 'yaml', 'json', 'env']), 
               default='table', help='Output format')
-@click.option('--show-source', is_flag=True, help='Show configuration sources')
-def show(format: str, show_source: bool):
+def show(format: str):
     """Display current configuration."""
     try:
         config = get_config()
         
         if format == 'table':
-            _show_table_format(config, show_source)
+            _show_table_format(config)
         elif format == 'yaml':
             config_dict = config.model_dump()
             console.print(Syntax(yaml.dump(config_dict, default_flow_style=False), "yaml"))
@@ -50,91 +49,48 @@ def show(format: str, show_source: bool):
         sys.exit(1)
 
 
-def _show_table_format(config, show_source: bool):
+def _show_table_format(config):
     """Display configuration in a formatted table."""
     table = Table(title="Brainsmith Configuration")
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
-    if show_source:
-        table.add_column("Priority", style="yellow")
     
     # Core paths
-    table.add_row("Core Paths", "", "")
-    table.add_row("  BSMITH_DIR", str(config.bsmith_dir), 
-                  config.get_priority("bsmith_dir").value if show_source else None)
-    table.add_row("  BSMITH_BUILD_DIR", str(config.bsmith_build_dir),
-                  config.get_priority("bsmith_build_dir").value if show_source else None)
-    table.add_row("  BSMITH_DEPS_DIR", str(config.bsmith_deps_dir),
-                  config.get_priority("bsmith_deps_dir").value if show_source else None)
-    
-    # Python config
-    table.add_row("", "", "")
-    table.add_row("Python", "", "")
-    table.add_row("  Version", config.python.version, "")
-    table.add_row("  Unbuffered", str(config.python.unbuffered), "")
+    table.add_row("Core Paths", "")
+    table.add_row("  BSMITH_DIR", str(config.bsmith_dir))
+    table.add_row("  BSMITH_BUILD_DIR", str(config.bsmith_build_dir))
+    table.add_row("  BSMITH_DEPS_DIR", str(config.bsmith_deps_dir))
     
     # Xilinx tools
-    table.add_row("", "", "")
-    table.add_row("Xilinx Tools", "", "")
-    table.add_row("  Vivado", str(config.xilinx.vivado_path) if config.xilinx.vivado_path else "Not found",
-                  config.get_priority("xilinx.vivado_path").value if show_source else None)
-    table.add_row("  Vitis", str(config.xilinx.vitis_path) if config.xilinx.vitis_path else "Not found",
-                  config.get_priority("xilinx.vitis_path").value if show_source else None)
-    table.add_row("  HLS", str(config.xilinx.hls_path) if config.xilinx.hls_path else "Not found",
-                  config.get_priority("xilinx.hls_path").value if show_source else None)
-    table.add_row("  Version", config.xilinx.version, "")
+    table.add_row("", "")
+    table.add_row("Xilinx Tools", "")
+    table.add_row("  Vivado", str(config.vivado_path) if config.vivado_path else "Not found")
+    table.add_row("  Vitis", str(config.vitis_path) if config.vitis_path else "Not found")
+    table.add_row("  HLS", str(config.vitis_hls_path) if config.vitis_hls_path else "Not found")
+    table.add_row("  Version", config.xilinx_version)
     
     # Other settings
-    table.add_row("", "", "")
-    table.add_row("Other Settings", "", "")
-    table.add_row("  HW Compiler", config.hw_compiler, "")
-    table.add_row("  Plugins Strict", str(config.plugins_strict), "")
-    table.add_row("  Debug Enabled", str(config.debug.enabled), "")
+    table.add_row("", "")
+    table.add_row("Other Settings", "")
+    table.add_row("  Plugins Strict", str(config.plugins_strict))
+    table.add_row("  Debug Enabled", str(config.debug))
     
     console.print(table)
 
 
 @config.command()
-@click.option('--config-file', '-c', type=click.Path(exists=True, path_type=Path),
-              help='Configuration file to validate')
-def validate(config_file: Path):
+def validate():
     """Validate current configuration."""
     try:
-        # Load config with optional override file
-        if config_file:
-            config = load_config(project_file=config_file)
-            console.print(f"Validating configuration from: {config_file}")
-        else:
-            config = get_config()
-            console.print("Validating current configuration")
+        config = get_config()
+        console.print("Validating current configuration")
         
-        # Run validation
-        results = config.validate_by_priority()
-        
-        # Display results
-        error_count = len(results.get("errors", []))
-        warning_count = len(results.get("warnings", []))
-        info_count = len(results.get("info", []))
-        
-        if error_count > 0:
-            console.print("\n[red]Errors:[/red]")
-            for error in results["errors"]:
-                console.print(f"  ✗ {error}")
-        
-        if warning_count > 0:
-            console.print("\n[yellow]Warnings:[/yellow]")
-            for warning in results["warnings"]:
-                console.print(f"  ⚠ {warning}")
-        
-        if info_count > 0:
-            console.print("\n[blue]Info:[/blue]")
-            for info in results["info"]:
-                console.print(f"  ℹ {info}")
-        
-        if error_count == 0:
+        # Basic validation - just check that we can load the config
+        # The validators in the schema will catch any real issues
+        if config.bsmith_dir and config.bsmith_dir.exists():
             console.print("\n[green]✓ Configuration is valid![/green]")
         else:
-            console.print(f"\n[red]Configuration has {error_count} error(s)[/red]")
+            console.print("\n[red]✗ Configuration error: BSMITH_DIR not found[/red]")
             sys.exit(1)
             
     except Exception as e:
@@ -177,25 +133,14 @@ def init(output: Path, force: bool):
         # Create a minimal config with important settings
         minimal_config = {
             "bsmith_build_dir": str(config.bsmith_build_dir),
-            "xilinx": {
-                "version": config.xilinx.version,
-            },
-            "dependencies": {
-                "fetch_boards": config.dependencies.fetch_boards,
-                "fetch_experimental": config.dependencies.fetch_experimental,
-            },
-            "debug": {
-                "enabled": config.debug.enabled,
-            }
+            "xilinx_path": str(config.xilinx_path) if config.xilinx_path else None,
+            "xilinx_version": config.xilinx_version,
+            "netron_port": config.netron_port,
+            "debug": config.debug,
         }
         
-        # Add Xilinx paths if found
-        if config.xilinx.vivado_path:
-            minimal_config["xilinx"]["vivado_path"] = str(config.xilinx.vivado_path)
-        if config.xilinx.vitis_path:
-            minimal_config["xilinx"]["vitis_path"] = str(config.xilinx.vitis_path)
-        if config.xilinx.hls_path:
-            minimal_config["xilinx"]["hls_path"] = str(config.xilinx.hls_path)
+        # Remove None values for cleaner YAML
+        minimal_config = {k: v for k, v in minimal_config.items() if v is not None}
         
         # Write YAML file
         with open(output, 'w') as f:
