@@ -18,6 +18,8 @@ import logging
 import os
 from typing import Dict, Any, List, Tuple
 
+from brainsmith.config import is_plugins_strict
+
 logger = logging.getLogger(__name__)
 
 # Base paths
@@ -327,10 +329,8 @@ def _register_transforms(transforms: List[Tuple[str, str]], framework: str) -> i
     Register transforms directly with the registry.
     """
     from .registry import get_registry
-    import os
-    
     registry = get_registry()
-    strict_mode = os.environ.get('BSMITH_PLUGINS_STRICT', '').lower() == 'true'
+    strict_mode = is_plugins_strict()
     
     # First pass: validate all imports
     validated = []
@@ -382,10 +382,8 @@ def _register_backends(backends: List[Tuple[str, str, str, str]], framework: str
     Register backends directly with the registry.
     """
     from .registry import get_registry
-    import os
-    
     registry = get_registry()
-    strict_mode = os.environ.get('BSMITH_PLUGINS_STRICT', '').lower() == 'true'
+    strict_mode = is_plugins_strict()
     
     # First pass: validate all imports
     validated = []
@@ -463,10 +461,8 @@ def _register_steps(steps: List[Tuple[str, str]], framework: str) -> int:
     Register build steps directly with the registry.
     """
     from .registry import get_registry
-    import os
-    
     registry = get_registry()
-    strict_mode = os.environ.get('BSMITH_PLUGINS_STRICT', '').lower() == 'true'
+    strict_mode = is_plugins_strict()
     
     # First pass: validate all imports
     validated = []
@@ -550,7 +546,7 @@ def initialize_framework_integrations() -> Dict[str, int]:
     
     # Register FINN kernels with atomic validation
     registry = get_registry()
-    strict_mode = os.environ.get('BSMITH_PLUGINS_STRICT', '').lower() == 'true'
+    strict_mode = is_plugins_strict()
     validated_kernels = []
     kernel_failures = []
     

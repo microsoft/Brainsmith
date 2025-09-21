@@ -1,3 +1,8 @@
-import os
+"""Brainsmith command-line interface.
 
-IS_POSIX = os.name == "posix"
+Provides the smith CLI tool for design space exploration and hardware generation.
+"""
+
+from .cli import main
+
+__all__ = ["main"]
