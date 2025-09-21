@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from brainsmith.config import get_build_dir
 from .design.parser import BlueprintParser
 from .design.builder import DSETreeBuilder
 from .dse.tree import DSETree
@@ -51,7 +52,7 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
     
     # Determine output directory
     if output_dir is None:
-        build_dir = Path(os.environ.get("BSMITH_BUILD_DIR", "./build"))
+        build_dir = get_build_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = str(build_dir / f"dse_{timestamp}")
     

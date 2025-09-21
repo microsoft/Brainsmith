@@ -22,6 +22,8 @@ from pathlib import Path
 import numpy as np
 import onnx
 import torch
+
+from brainsmith.config import get_build_dir
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
@@ -332,9 +334,9 @@ def main():
     args.split_large_fifos = True
     
     # Determine output directory
-    build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
+    build_dir = get_build_dir()
     print(build_dir)
-    args.output_dir = os.path.join(build_dir, args.output)
+    args.output_dir = os.path.join(str(build_dir), args.output)
     
     print("=" * 70)
     print("BERT Modern Demo - Using Brainsmith DSE v3")
