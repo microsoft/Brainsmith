@@ -24,23 +24,6 @@ cd $BSMITH_DIR
 # Ensure Python output is unbuffered for real-time output
 export PYTHONUNBUFFERED=1
 
-# Quick check for dependency readiness
-# The log monitoring system should ensure container is ready before exec is called
-READINESS_MARKER="/tmp/.brainsmith_deps_ready"
-if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
-    # First check if marker exists (fast path)
-    if [ ! -f "$READINESS_MARKER" ]; then
-        log_error "Container dependencies not ready. The container may still be initializing."
-        log_error "Expected marker file: $READINESS_MARKER"
-        log_error "Check container logs with: docker logs <container-name>"
-        log_error "Or wait for initialization to complete and try again."
-        log_info "Debug: BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS, READINESS_MARKER=$READINESS_MARKER"
-        exit 1
-    fi
-    
-    # Dependencies are now managed by Poetry - no need to check deps/ directory
-    # Poetry installs packages to the system Python environment in the container
-fi
 
 # Load environment setup (dependencies should already be fetched by main container)
 # Set quiet mode for exec to suppress environment messages
