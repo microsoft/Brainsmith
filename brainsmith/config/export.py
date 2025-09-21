@@ -33,26 +33,29 @@ def export_to_environment(config: BrainsmithConfig, verbose: bool = False) -> No
         env_dict["NUM_DEFAULT_WORKERS"] = str(config.finn.num_default_workers)
     
     # Legacy Xilinx paths that FINN expects
-    if config.xilinx.vivado_path:
-        env_dict["XILINX_VIVADO"] = str(config.xilinx.vivado_path)
-        env_dict["VIVADO_PATH"] = str(config.xilinx.vivado_path)
-    if config.xilinx.vitis_path:
-        env_dict["XILINX_VITIS"] = str(config.xilinx.vitis_path)
-        env_dict["VITIS_PATH"] = str(config.xilinx.vitis_path)
-    if config.xilinx.hls_path:
-        env_dict["XILINX_HLS"] = str(config.xilinx.hls_path)
-        env_dict["HLS_PATH"] = str(config.xilinx.hls_path)
-    
-    # Python settings that external tools might need
-    env_dict["PYTHON"] = config.python.version
-    env_dict["PYTHONUNBUFFERED"] = "1" if config.python.unbuffered else "0"
+    if config.vivado_path:
+        env_dict["XILINX_VIVADO"] = str(config.vivado_path)
+        env_dict["VIVADO_PATH"] = str(config.vivado_path)
+    if config.vitis_path:
+        env_dict["XILINX_VITIS"] = str(config.vitis_path)
+        env_dict["VITIS_PATH"] = str(config.vitis_path)
+    if config.vitis_hls_path:
+        env_dict["XILINX_HLS"] = str(config.vitis_hls_path)
+        env_dict["HLS_PATH"] = str(config.vitis_hls_path)
     
     # Platform repo paths for Xilinx tools
-    env_dict["PLATFORM_REPO_PATHS"] = config.tools.platform_repo_paths
+    env_dict["PLATFORM_REPO_PATHS"] = config.platform_repo_paths
     
     # oh-my-xilinx path (required by FINN)
-    ohmyxilinx = config.tools.ohmyxilinx_path or (config.bsmith_deps_dir / "oh-my-xilinx")
+    ohmyxilinx = config.bsmith_deps_dir / "oh-my-xilinx"
     env_dict["OHMYXILINX"] = str(ohmyxilinx)
+    
+    # Vivado IP cache
+    if config.vivado_ip_cache:
+        env_dict["VIVADO_IP_CACHE"] = str(config.vivado_ip_cache)
+    
+    # Netron port for visualization
+    env_dict["NETRON_PORT"] = str(config.netron_port)
     
     # Handle PATH updates
     path_components = os.environ.get("PATH", "").split(":")
@@ -70,7 +73,7 @@ def export_to_environment(config: BrainsmithConfig, verbose: bool = False) -> No
     env_dict["PATH"] = ":".join(path_components)
     
     # Handle PYTHONPATH updates for FINN XSI
-    if config.xilinx.vivado_path and config.finn.finn_root:
+    if config.vivado_path and config.finn.finn_root:
         finn_xsi_path = config.finn.finn_root / "finn_xsi"
         if finn_xsi_path.exists():
             pythonpath_components = os.environ.get("PYTHONPATH", "").split(":")
@@ -82,20 +85,20 @@ def export_to_environment(config: BrainsmithConfig, verbose: bool = False) -> No
     # Handle LD_LIBRARY_PATH updates
     ld_lib_components = os.environ.get("LD_LIBRARY_PATH", "").split(":")
     
-    # Add libudev if needed and exists (hardcoded for now)
+    # Add libudev if needed and exists for Xilinx tool compatibility
     libudev_path = "/lib/x86_64-linux-gnu/libudev.so.1"
-    if config.xilinx.vivado_path and Path(libudev_path).exists():
+    if config.vivado_path and Path(libudev_path).exists():
         env_dict["LD_PRELOAD"] = libudev_path
     
     # Add Vivado libraries
-    if config.xilinx.vivado_path:
+    if config.vivado_path:
         ld_lib_components.append("/lib/x86_64-linux-gnu/")
-        vivado_lib = str(config.xilinx.vivado_path / "lib" / "lnx64.o")
+        vivado_lib = str(config.vivado_path / "lib" / "lnx64.o")
         ld_lib_components.append(vivado_lib)
     
     # Add Vitis FPO libraries
-    if config.xilinx.vitis_path:
-        vitis_fpo_lib = str(config.xilinx.vitis_path / "lnx64" / "tools" / "fpo_v7_1")
+    if config.vitis_path:
+        vitis_fpo_lib = str(config.vitis_path / "lnx64" / "tools" / "fpo_v7_1")
         if vitis_fpo_lib not in ld_lib_components:
             ld_lib_components.append(vitis_fpo_lib)
     

@@ -1,11 +1,10 @@
 """Brainsmith configuration schema using Pydantic.
 
 This module defines the complete configuration schema for Brainsmith,
-providing type safety, validation, and clear priority resolution.
+providing type safety and validation.
 """
 
 import os
-from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple, Type
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -13,67 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSett
 import yaml
 
 
-class ConfigPriority(str, Enum):
-    """Configuration priority levels."""
-    CORE = "core"           # Required - error if missing
-    OPTIONAL = "optional"   # Warn if missing  
-    TERTIARY = "tertiary"   # Silent if missing
-
-
-class PythonConfig(BaseModel):
-    """Python environment configuration."""
-    version: str = Field(default="python3.10", description="Python executable version")
-    unbuffered: bool = Field(default=True, description="Python unbuffered output")
-    
-    model_config = ConfigDict(validate_assignment=True)
-
-
-class XilinxConfig(BaseModel):
-    """Xilinx/AMD tool configuration."""
-    vivado_path: Optional[Path] = Field(default=None, description="Path to Vivado installation")
-    vitis_path: Optional[Path] = Field(default=None, description="Path to Vitis installation") 
-    hls_path: Optional[Path] = Field(default=None, description="Path to Vitis HLS installation")
-    version: str = Field(default="2024.2", description="Default Xilinx version")
-    # Legacy support
-    xilinx_path: Optional[Path] = Field(default=None, description="Legacy Xilinx root path (deprecated)")
-    
-    @field_validator('vivado_path', 'vitis_path', 'hls_path')
-    @classmethod
-    def validate_tool_path(cls, v: Optional[Path]) -> Optional[Path]:
-        """Validate Xilinx tool installation paths."""
-        if v is not None and v.exists():
-            settings_file = v / "settings64.sh"
-            if not settings_file.exists():
-                raise ValueError(f"Invalid Xilinx installation at {v} - missing settings64.sh")
-        return v
-    
-    model_config = ConfigDict(validate_assignment=True)
-
-
-class ToolConfig(BaseModel):
-    """Tool path configuration."""
-    platform_repo_paths: str = Field(default="/opt/xilinx/platforms", description="Platform repository paths")
-    ohmyxilinx_path: Optional[Path] = Field(default=None, description="oh-my-xilinx path override")
-    
-    model_config = ConfigDict(validate_assignment=True)
-
-
-class DependencyConfig(BaseModel):
-    """Dependency fetching configuration."""
-    fetch_boards: bool = Field(default=True, description="Fetch board files")
-    fetch_experimental: bool = Field(default=False, description="Fetch experimental dependencies")
-    
-    model_config = ConfigDict(validate_assignment=True)
-
-
-
-class DebugConfig(BaseModel):
-    """Debug configuration."""
-    enabled: bool = Field(default=False, description="Enable debug output")
-    
-    model_config = ConfigDict(validate_assignment=True)
-
-
+# Keep FinnConfig nested as it makes sense
 class FinnConfig(BaseModel):
     """FINN-specific path configuration."""
     finn_root: Optional[Path] = Field(default=None, description="FINN root directory")
@@ -82,24 +21,6 @@ class FinnConfig(BaseModel):
     num_default_workers: Optional[int] = Field(default=None, description="Default number of workers")
     
     model_config = ConfigDict(validate_assignment=True)
-
-
-# Priority metadata for fields
-FIELD_PRIORITIES = {
-    "bsmith_dir": ConfigPriority.CORE,
-    "bsmith_build_dir": ConfigPriority.OPTIONAL,
-    "bsmith_deps_dir": ConfigPriority.OPTIONAL,
-    "python": ConfigPriority.TERTIARY,
-    "xilinx": ConfigPriority.OPTIONAL,
-    "xilinx.vivado_path": ConfigPriority.OPTIONAL,
-    "xilinx.vitis_path": ConfigPriority.OPTIONAL,
-    "xilinx.hls_path": ConfigPriority.OPTIONAL,
-    "tools": ConfigPriority.TERTIARY,
-    "compiler": ConfigPriority.TERTIARY,
-    "dependencies": ConfigPriority.TERTIARY,
-    "debug": ConfigPriority.TERTIARY,
-    "finn": ConfigPriority.OPTIONAL,
-}
 
 
 class YamlSettingsSource(PydanticBaseSettingsSource):
@@ -137,11 +58,9 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         """Get field value from YAML source."""
         data = self._read_file(self.yaml_file)
         
-        # Handle nested fields
         if field_name in data:
             return data[field_name], field_name, True
         
-        # Not found
         return None, field_name, False
     
     def __call__(self) -> Dict[str, Any]:
@@ -165,47 +84,79 @@ class BrainsmithConfig(BaseSettings):
     # Core paths
     bsmith_dir: Optional[Path] = Field(
         default=None,
-        description="Root directory of Brainsmith (auto-detected if not set)",
-        validation_alias="BSMITH_DIR"
+        description="Root directory of Brainsmith (auto-detected if not set)"
     )
     bsmith_build_dir: Path = Field(
         default=Path("/tmp/brainsmith_build"),
-        description="Build directory for artifacts",
-        validation_alias="BSMITH_BUILD_DIR"
+        description="Build directory for artifacts"
     )
     bsmith_deps_dir: Path = Field(
         default=Path("deps"),
-        description="Dependencies directory",
-        validation_alias="BSMITH_DEPS_DIR"
+        description="Dependencies directory"
     )
     
-    # Nested configurations
-    python: PythonConfig = Field(default_factory=PythonConfig)
-    xilinx: XilinxConfig = Field(default_factory=XilinxConfig)
-    tools: ToolConfig = Field(default_factory=ToolConfig)
-    dependencies: DependencyConfig = Field(default_factory=DependencyConfig)
-    debug: DebugConfig = Field(default_factory=DebugConfig)
-    finn: FinnConfig = Field(default_factory=FinnConfig)
-    
-    # Additional top-level fields
-    hw_compiler: str = Field(
-        default="finn", 
-        description="Hardware compiler backend",
-        validation_alias="BSMITH_HW_COMPILER"
+    # Xilinx configuration (flattened)
+    xilinx_path: Optional[Path] = Field(
+        default=None,
+        description="Xilinx root installation path (e.g., /tools/Xilinx)"
     )
+    xilinx_version: str = Field(
+        default="2024.2",
+        description="Xilinx tool version"
+    )
+    # These are auto-derived from xilinx_path but can be overridden
+    vivado_path: Optional[Path] = Field(
+        default=None,
+        description="Path to Vivado (auto-detected from xilinx_path)"
+    )
+    vitis_path: Optional[Path] = Field(
+        default=None,
+        description="Path to Vitis (auto-detected from xilinx_path)"
+    )
+    vitis_hls_path: Optional[Path] = Field(
+        default=None,
+        description="Path to Vitis HLS (auto-detected from xilinx_path)"
+    )
+    
+    # Tool paths (flattened)
+    platform_repo_paths: str = Field(
+        default="/opt/xilinx/platforms",
+        description="Platform repository paths"
+    )
+    
+    # Debug (flattened)
+    debug: bool = Field(
+        default=False,
+        description="Enable debug output"
+    )
+    
+    # Plugin settings
     plugins_strict: bool = Field(
-        default=True, 
-        description="Strict plugin loading",
-        validation_alias="BSMITH_PLUGINS_STRICT"
+        default=True,
+        description="Strict plugin loading"
     )
+    
+    # Vivado-specific settings
+    vivado_ip_cache: Optional[Path] = Field(
+        default=None,
+        description="Vivado IP cache directory (auto-computed from build_dir if not set)"
+    )
+    
+    # Network/visualization settings
+    netron_port: int = Field(
+        default=8080,
+        description="Port for Netron neural network visualization"
+    )
+    
+    # FINN configuration (keep nested - it's a clear subsystem)
+    finn: FinnConfig = Field(default_factory=FinnConfig)
     
     model_config = SettingsConfigDict(
         env_prefix='BSMITH_',
         env_nested_delimiter='__',
         validate_assignment=True,
-        extra="allow",  # For forward compatibility
+        extra="allow",
         case_sensitive=False,
-        # Auto-detect BSMITH_DIR if not set
         env_file=None,  # We handle config files via custom source
     )
     
@@ -252,20 +203,26 @@ class BrainsmithConfig(BaseSettings):
         if not self.finn.finn_deps_dir:
             self.finn.finn_deps_dir = self.bsmith_deps_dir
         
-        # Handle Xilinx legacy paths
-        if self.xilinx.xilinx_path and not self.xilinx.vivado_path and self.xilinx.xilinx_path.exists():
-            xilinx_version = self.xilinx.version
-            vivado_path = self.xilinx.xilinx_path / "Vivado" / xilinx_version
-            if vivado_path.exists():
-                self.xilinx.vivado_path = vivado_path
+        # Auto-detect Xilinx tool paths from xilinx_path if not explicitly set
+        if self.xilinx_path and self.xilinx_path.exists():
+            if not self.vivado_path:
+                vivado_path = self.xilinx_path / "Vivado" / self.xilinx_version
+                if vivado_path.exists():
+                    self.vivado_path = vivado_path
             
-            vitis_path = self.xilinx.xilinx_path / "Vitis" / xilinx_version
-            if vitis_path.exists():
-                self.xilinx.vitis_path = vitis_path
-                
-            hls_path = self.xilinx.xilinx_path / "Vitis_HLS" / xilinx_version
-            if hls_path.exists():
-                self.xilinx.hls_path = hls_path
+            if not self.vitis_path:
+                vitis_path = self.xilinx_path / "Vitis" / self.xilinx_version
+                if vitis_path.exists():
+                    self.vitis_path = vitis_path
+            
+            if not self.vitis_hls_path:
+                hls_path = self.xilinx_path / "Vitis_HLS" / self.xilinx_version
+                if hls_path.exists():
+                    self.vitis_hls_path = hls_path
+        
+        # Auto-compute Vivado IP cache if not set
+        if not self.vivado_ip_cache and self.vivado_path:
+            self.vivado_ip_cache = self.bsmith_build_dir / "vivado_ip_cache"
     
     def _auto_detect_bsmith_dir(self) -> Optional[Path]:
         """Auto-detect BSMITH_DIR from module location or current directory."""
@@ -310,35 +267,32 @@ class BrainsmithConfig(BaseSettings):
             return (info.data['bsmith_dir'] / v).absolute()
         return v.absolute()
     
-    def validate_by_priority(self) -> Dict[str, List[str]]:
-        """Validate configuration based on priority levels.
+    @field_validator('vivado_path', 'vitis_path', 'vitis_hls_path')
+    @classmethod
+    def validate_tool_path(cls, v: Optional[Path]) -> Optional[Path]:
+        """Validate Xilinx tool installation paths."""
+        if v is not None:
+            if not v.exists():
+                raise ValueError(f"Xilinx tool path does not exist: {v}")
+            
+            # Check for settings64.sh
+            settings_file = v / "settings64.sh"
+            if not settings_file.exists():
+                raise ValueError(f"Invalid Xilinx installation at {v} - missing settings64.sh")
+            
+            # Check for key executables (without executing them)
+            if "Vivado" in str(v):
+                if not (v / "bin" / "vivado").exists():
+                    raise ValueError(f"Invalid Vivado installation - missing bin/vivado")
+            elif "Vitis" in str(v) and "HLS" not in str(v):
+                if not (v / "bin" / "vitis").exists():
+                    raise ValueError(f"Invalid Vitis installation - missing bin/vitis")
+            elif "HLS" in str(v):
+                if not (v / "bin" / "vitis_hls").exists() and not (v / "bin" / "vivado_hls").exists():
+                    raise ValueError(f"Invalid Vitis HLS installation - missing HLS executable")
         
-        Returns:
-            Dict with 'errors', 'warnings', and 'info' lists
-        """
-        results = {"errors": [], "warnings": [], "info": []}
-        
-        # Check core fields
-        if not self.bsmith_dir or not self.bsmith_dir.exists():
-            results["errors"].append("BSMITH_DIR is required and must exist")
-        
-        # Check optional fields (Xilinx tools)
-        if not self.xilinx.vivado_path:
-            results["warnings"].append("Vivado not found - hardware compilation will not be available")
-        if not self.xilinx.vitis_path:
-            results["warnings"].append("Vitis not found - some features may be limited")
-        if not self.xilinx.hls_path:
-            results["warnings"].append("Vitis HLS not found - HLS compilation will not be available")
-        
-        # Check FINN paths
-        if not self.finn.finn_root:
-            results["info"].append("FINN_ROOT not set - will be auto-detected if needed")
-        
-        return results
+        return v
     
-    def get_priority(self, field_path: str) -> ConfigPriority:
-        """Get the priority level for a field."""
-        return FIELD_PRIORITIES.get(field_path, ConfigPriority.TERTIARY)
     
     def to_env_dict(self) -> Dict[str, str]:
         """Convert configuration to environment variable dictionary."""
@@ -349,37 +303,34 @@ class BrainsmithConfig(BaseSettings):
         env_dict["BSMITH_BUILD_DIR"] = str(self.bsmith_build_dir)
         env_dict["BSMITH_DEPS_DIR"] = str(self.bsmith_deps_dir)
         
-        # Python
-        env_dict["PYTHON"] = self.python.version
-        env_dict["PYTHONUNBUFFERED"] = "1" if self.python.unbuffered else "0"
+        # Plugins
         env_dict["BSMITH_PLUGINS_STRICT"] = "true" if self.plugins_strict else "false"
         
         # Xilinx tools
-        if self.xilinx.vivado_path:
-            env_dict["XILINX_VIVADO"] = str(self.xilinx.vivado_path)
-            env_dict["VIVADO_PATH"] = str(self.xilinx.vivado_path)
-        if self.xilinx.vitis_path:
-            env_dict["XILINX_VITIS"] = str(self.xilinx.vitis_path)
-            env_dict["VITIS_PATH"] = str(self.xilinx.vitis_path)
-        if self.xilinx.hls_path:
-            env_dict["XILINX_HLS"] = str(self.xilinx.hls_path)
-            env_dict["HLS_PATH"] = str(self.xilinx.hls_path)
+        if self.vivado_path:
+            env_dict["XILINX_VIVADO"] = str(self.vivado_path)
+            env_dict["VIVADO_PATH"] = str(self.vivado_path)
+        if self.vitis_path:
+            env_dict["XILINX_VITIS"] = str(self.vitis_path)
+            env_dict["VITIS_PATH"] = str(self.vitis_path)
+        if self.vitis_hls_path:
+            env_dict["XILINX_HLS"] = str(self.vitis_hls_path)
+            env_dict["HLS_PATH"] = str(self.vitis_hls_path)
         
         # Tools  
-        # OHMYXILINX is required by FINN - use override or default to deps/oh-my-xilinx
-        ohmyxilinx = self.tools.ohmyxilinx_path or (self.bsmith_deps_dir / "oh-my-xilinx")
-        env_dict["OHMYXILINX"] = str(ohmyxilinx)
-        env_dict["PLATFORM_REPO_PATHS"] = self.tools.platform_repo_paths
-        
-        # Compiler
-        env_dict["BSMITH_HW_COMPILER"] = self.hw_compiler
-        
-        # Dependencies
-        env_dict["BSMITH_FETCH_BOARDS"] = "true" if self.dependencies.fetch_boards else "false"
-        env_dict["BSMITH_FETCH_EXPERIMENTAL"] = "true" if self.dependencies.fetch_experimental else "false"
+        # OHMYXILINX is required by FINN - always use deps/oh-my-xilinx
+        env_dict["OHMYXILINX"] = str(self.bsmith_deps_dir / "oh-my-xilinx")
+        env_dict["PLATFORM_REPO_PATHS"] = self.platform_repo_paths
         
         # Debug
-        env_dict["BSMITH_DEBUG"] = "1" if self.debug.enabled else "0"
+        env_dict["BSMITH_DEBUG"] = "1" if self.debug else "0"
+        
+        # Vivado IP cache
+        if self.vivado_ip_cache:
+            env_dict["VIVADO_IP_CACHE"] = str(self.vivado_ip_cache)
+        
+        # Netron port
+        env_dict["NETRON_PORT"] = str(self.netron_port)
         
         # FINN compatibility
         env_dict["FINN_ROOT"] = str(self.finn.finn_root) if self.finn.finn_root else str(self.bsmith_dir)

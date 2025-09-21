@@ -17,6 +17,7 @@ from brainsmith.config import load_config, BrainsmithConfig, export_to_environme
 from brainsmith.core.dse_api import explore_design_space
 from .commands import config as config_commands
 from .commands import kernel as kernel_commands
+from .commands import setup as setup_commands
 
 console = Console()
 
@@ -130,6 +131,7 @@ def dse(ctx: SmithContext, model: Path, blueprint: Path, output_dir: Optional[Pa
 # Add subcommand groups
 cli.add_command(config_commands.config)
 cli.add_command(kernel_commands.kernel)
+cli.add_command(setup_commands.setup)
 
 
 def main():
@@ -140,7 +142,7 @@ def main():
         # so we need to preprocess sys.argv
         if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
             # Check if first arg is a subcommand
-            subcommands = ['config', 'kernel', 'dse']
+            subcommands = ['config', 'kernel', 'dse', 'setup']
             if sys.argv[1] not in subcommands:
                 # Assume it's a model path for DSE, inject 'dse' command
                 sys.argv.insert(1, 'dse')

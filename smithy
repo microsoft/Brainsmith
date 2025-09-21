@@ -263,7 +263,7 @@ build_image() {
     [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && BSMITH_DOCKER_BUILD_FLAGS+="--no-cache "
 
     docker build -f docker/Dockerfile \
-        --build-arg BACKEND=$BSMITH_HW_COMPILER \
+        --build-arg BACKEND=finn \
         --build-arg ENTRYPOINT=docker/entrypoint.sh \
         --tag=$BSMITH_DOCKER_TAG \
         $BSMITH_DOCKER_BUILD_FLAGS .

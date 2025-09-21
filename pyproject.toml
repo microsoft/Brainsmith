@@ -148,6 +148,7 @@ pyyaml = ">=6.0.1"
 setuptools = "68.2.2"
 pydantic = ">=2.5.0"
 pydantic-settings = ">=2.1.0"
+pybind11 = ">=2.10.0"
 brevitas = {path = "deps/brevitas", develop = true}
 qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}
