@@ -1,5 +1,5 @@
 #!/bin/bash
-# Brainsmith Container Management Script
+# Brainsmith Container Management Script with Poetry
 # Provides utilities for managing persistent Brainsmith containers
 #
 # Key commands:
@@ -31,15 +31,7 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 
 # Load environment configuration
-if [ -f "$BSMITH_DIR/docker/env-config.sh" ]; then
-    source "$BSMITH_DIR/docker/env-config.sh"
-else
-    # Minimal fallback defaults
-    export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/${USER}_brainsmith}"
-    export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
-    export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
-    export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
-fi
+source "$BSMITH_DIR/docker/env-config.sh"
 
 # Generate container name based on brainsmith directory (no timestamp for persistence)
 BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
@@ -83,7 +75,7 @@ validate_docker_flags() {
 
 show_help() {
     cat << EOF
-Brainsmith Container Management
+Brainsmith Container Management with Poetry
 
 Usage: $0 COMMAND [OPTIONS]
 
@@ -101,11 +93,11 @@ Container Commands:
     deps-check     Quick dependency status check
 
 Dependency Commands:
-    deps           Manage dependencies (Poetry + custom Git repos)
-    deps update    Update dependencies based on pyproject.toml
-    deps status    Show status of all dependencies
-    deps lock      Generate lock files for reproducible builds
-    deps install   Install dependencies (use --locked for exact versions)
+    deps           Show Poetry dependency management help
+    
+Note: Direct dependency management is now done with Poetry:
+    poetry install                    # Install dependencies from pyproject.toml
+    ./setup-dev.sh                   # Set up editable developer environment
 
 Examples:
     $0 start && $0 "python script.py"          # Typical workflow
@@ -163,6 +155,9 @@ monitor_container_startup() {
                         ;;
                     "FETCHING_DEPENDENCIES")
                         gecho "→ Fetching dependency repositories..."
+                        ;;
+                    "UPDATING_DEPENDENCIES")
+                        gecho "→ Updating dependencies with Poetry..."
                         ;;
                     "INSTALLING_PACKAGES")
                         if [ -n "$status_detail" ]; then
@@ -260,7 +255,7 @@ build_image() {
     # Check disk space before building (requires 15GB for builds)
     check_disk_space 15
 
-    gecho "Building Docker image $BSMITH_DOCKER_TAG"
+    gecho "Building Docker image $BSMITH_DOCKER_TAG with Poetry support"
 
     OLD_PWD=$(pwd)
     cd $BSMITH_DIR
@@ -342,6 +337,13 @@ create_container() {
     # Essential volume mounts
     DOCKER_CMD+=" -v $BSMITH_DIR:$BSMITH_DIR"
     DOCKER_CMD+=" -v $BSMITH_BUILD_DIR:$BSMITH_BUILD_DIR"
+    
+    # Poetry cache directory mount for non-root users
+    if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
+        # Create Poetry cache directory if it doesn't exist
+        mkdir -p "$HOME/.cache/pypoetry"
+        DOCKER_CMD+=" -v $HOME/.cache/pypoetry:$HOME/.cache/pypoetry"
+    fi
 
     # Essential environment variables
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
@@ -350,6 +352,9 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_DEPS_POLICY=$BSMITH_DEPS_POLICY"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
+    
+    # Set Poetry cache to a writable location
+    DOCKER_CMD+=" -e POETRY_CACHE_DIR=$BSMITH_BUILD_DIR/.poetry_cache"
     
     # FINN-specific environment variables
     DOCKER_CMD+=" -e FINN_BUILD_DIR=$BSMITH_BUILD_DIR"
@@ -460,6 +465,16 @@ create_container() {
 # Build image if needed, create container if needed, start daemon in background
 start_daemon() {
     setup_container_if_needed "daemon"
+    local result=$?
+    
+    # If container started successfully, show next steps
+    if [ $result -eq 0 ]; then
+        gecho ""
+        gecho "Container started successfully!"
+        gecho "To open a shell, run: ./smithy shell"
+    fi
+    
+    return $result
 }
 
 stop_container() {
@@ -633,6 +648,15 @@ clean_all() {
                 rm -rf "$BSMITH_DIR/deps"
             fi
         fi
+        
+        # Clean Poetry cache (optional, with confirmation)
+        read -p "Remove Poetry cache? This will require re-downloading packages [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            gecho "Removing Poetry cache..."
+            rm -rf "$HOME/.cache/pypoetry"
+            rm -rf "$BSMITH_BUILD_DIR/.poetry_cache"
+        fi
     fi
     
     gecho "Clean complete!"
@@ -648,11 +672,13 @@ clean_all() {
 handle_deps_command() {
     shift  # Remove 'deps' from arguments
     
-    recho "The deps command has been removed."
+    recho "The deps command has been updated for Poetry."
     recho "Brainsmith now uses Poetry for all dependency management:"
     echo
     echo "  poetry install              # Install Python dependencies"
     echo "  poetry update              # Update dependencies"
+    echo "  poetry show                # Show installed packages"
+    echo "  ./setup-dev.sh             # Set up editable developer environment"
     echo
     echo "For non-Python dependencies (cnpy, board files), these are"
     echo "handled automatically in the Docker environment."

@@ -2,7 +2,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-# Main entrypoint for Brainsmith development environment
+# Main entrypoint for Brainsmith development environment with Poetry
 # Handles full setup including dependency fetching and installation
 
 # Enhanced logging for debugging
@@ -32,37 +32,59 @@ emit_status "INITIALIZING"
 
 cd $BSMITH_DIR
 
-# First: Install Python dependencies using Poetry
+# Install dependencies using Poetry
 if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
     emit_status "UPDATING_DEPENDENCIES"
-    log_info "Installing Python dependencies using Poetry"
     
-    # Ensure we have pyproject.toml
-    if [ ! -f "$BSMITH_DIR/pyproject.toml" ]; then
-        emit_status "ERROR" "pyproject.toml not found"
-        log_error "pyproject.toml not found in $BSMITH_DIR"
-        exit 1
-    fi
+    # First run poetry install to set up base dependencies
+    log_info "Running poetry install to set up base dependencies..."
+    cd "$BSMITH_DIR" && poetry install --no-interaction --no-ansi
     
-    # Install Python dependencies with Poetry
-    log_info "Running poetry install..."
-    if poetry install; then
-        log_info "Python dependencies installed successfully"
+    # Always run the developer setup
+    if [ -x "$BSMITH_DIR/setup-dev.sh" ]; then
+        log_info "Running setup-dev.sh to set up editable dependencies..."
+        cd "$BSMITH_DIR" && ./setup-dev.sh
+        
+        # Get the virtualenv path that Poetry created
+        VENV_PATH=$(cd "$BSMITH_DIR" && poetry env info --path)
+        
+        # Save venv info for later sourcing
+        echo "export VIRTUAL_ENV=\"$VENV_PATH\"" > "$BSMITH_BUILD_DIR/.brainsmith_venv"
+        echo "export PATH=\"$VENV_PATH/bin:\$PATH\"" >> "$BSMITH_BUILD_DIR/.brainsmith_venv"
+        # Set FINN_ROOT to deps location
+        echo "export FINN_ROOT=\"$BSMITH_DIR/deps/finn\"" >> "$BSMITH_BUILD_DIR/.brainsmith_venv"
+        
+        # Activate the venv now for the rest of this script
+        source "$VENV_PATH/bin/activate"
     else
-        emit_status "ERROR" "Failed to install Python dependencies"
-        log_error "Poetry install failed"
+        log_error "setup-dev.sh not found or not executable"
         exit 1
     fi
     
-    # Setup non-Python dependencies for simulation (optional)
-    log_info "Setting up optional simulation dependencies..."
-    if python -c "from brainsmith.core.plugins.simulation import SimulationSetup; s = SimulationSetup(); s.setup_cppsim()"; then
+    # Optional: Setup C++ simulation dependencies
+    # Use the venv's python if available
+    PYTHON_CMD="python"
+    if [ -d "$VENV_DIR/bin" ]; then
+        PYTHON_CMD="$VENV_DIR/bin/python"
+    fi
+    if $PYTHON_CMD -c "from brainsmith.core.plugins.simulation import SimulationSetup; s = SimulationSetup(); s.setup_cppsim()" 2>/dev/null; then
         log_info "C++ simulation dependencies ready"
     else
-        log_info "C++ simulation setup skipped (optional dependency)"
+        log_info "C++ simulation setup skipped (optional)"
     fi
     
     log_info "Dependencies ready at $(date)"
+    
+    # For daemon mode, emit READY status after dependencies are installed
+    if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
+        # Create readiness marker after dependencies are installed
+        log_info "Creating dependency readiness marker"
+        touch /tmp/.brainsmith_deps_ready
+        
+        # Emit final ready status for log monitoring
+        emit_status "READY"
+        log_info "All setup complete - container is now fully ready for exec commands"
+    fi
 else
     log_info "Skipping dependency installation (BSMITH_SKIP_DEP_REPOS=1)"
 fi
@@ -114,38 +136,16 @@ build_finnxsi_if_needed() {
 # Third: Build finnxsi if needed (both daemon and one-shot mode)
 build_finnxsi_if_needed
 
-# Install brainsmith in development mode using Poetry
+# Install brainsmith package
 install_brainsmith_package() {
-    emit_status "INSTALLING_BRAINSMITH"
-    log_info "Installing brainsmith in development mode"
-    
-    cd "$BSMITH_DIR"
-    
-    # Use Poetry to install only the root package (deps already installed)
-    if poetry install --only-root; then
-        log_info "Brainsmith installed successfully"
-        return 0
-    else
-        emit_status "ERROR" "Failed to install brainsmith"
-        log_error "Failed to install brainsmith package"
-        return 1
-    fi
+    # Already handled by the Poetry installation above
+    log_info "Brainsmith package already installed"
+    return 0
 }
 
-# For daemon mode, complete ALL setup before going into background
+# For daemon mode, keep container alive
 if [ "$BSMITH_CONTAINER_MODE" = "daemon" ]; then
-    log_info "Daemon mode: ensuring brainsmith is installed before going into background"
-    
-    # Install brainsmith package
-    install_brainsmith_package
-    
-    # Create readiness marker ONLY after everything is truly ready
-    log_info "Creating dependency readiness marker"
-    touch /tmp/.brainsmith_deps_ready
-    
-    # Emit final ready status for log monitoring
-    emit_status "READY"
-    log_info "All setup complete - container is now fully ready for exec commands"
+    log_info "Daemon mode: container setup complete"
     # Common approach: use tail -f /dev/null to keep container alive
     exec tail -f /dev/null
 fi

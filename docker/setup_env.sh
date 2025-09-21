@@ -17,10 +17,18 @@ export PATH=$PATH:$OHMYXILINX
 # Ensure Python output is unbuffered for real-time output
 export PYTHONUNBUFFERED=1
 
-# Set up key FINN environment variables
+# Source the virtual environment if it exists (this also sets FINN_ROOT)
+if [ -f "$BSMITH_BUILD_DIR/.brainsmith_venv" ]; then
+    source "$BSMITH_BUILD_DIR/.brainsmith_venv"
+fi
+
+# Set up key FINN environment variables (FINN_ROOT may be overridden by .brainsmith_venv)
 export FINN_BUILD_DIR=$BSMITH_BUILD_DIR
 export FINN_DEPS_DIR="${BSMITH_DIR}/deps"
-export FINN_ROOT="${BSMITH_DIR}/deps/finn"
+# Only set FINN_ROOT if not already set by .brainsmith_venv
+if [ -z "$FINN_ROOT" ]; then
+    export FINN_ROOT="${BSMITH_DIR}/deps/finn"
+fi
 
 # Define colors for terminal output
 YELLOW='\033[0;33m'

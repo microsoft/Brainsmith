@@ -1,154 +1,28 @@
+# NOTE: Git dependencies (finn, qonnx, etc.) are intentionally NOT listed here.
+# They are installed as editable packages from ./deps/ by setup-dev.sh
+
 [build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = [ "poetry-core>=1.0.0",]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "brainsmith"
-version = "0.0.0"  # Dynamic versioning from git tags
+version = "0.0.1a"
 description = "From PyTorch to RTL with no brakes - QNN Compiler Framework for AMD/Xilinx FPGAs"
-authors = ["Thomas Keller <thomaskeller@microsoft.com>"]
-maintainers = ["Thomas Keller <thomaskeller@microsoft.com>"]
+authors = [ "Thomas Keller <thomaskeller@microsoft.com>",]
+maintainers = [ "Thomas Keller <thomaskeller@microsoft.com>",]
 readme = "README.md"
 license = "MIT"
 homepage = "https://github.com/microsoft/Brainsmith/"
 repository = "https://github.com/microsoft/Brainsmith/"
 documentation = "https://github.com/microsoft/Brainsmith/tree/main/docs"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Operating System :: POSIX :: Linux",
-]
-packages = [
-    { include = "brainsmith" },
-    { include = "brainsmith/cli", from = "src" }
-]
+classifiers = [ "Development Status :: 3 - Alpha", "Intended Audience :: Science/Research", "Topic :: Scientific/Engineering :: Artificial Intelligence", "License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Operating System :: POSIX :: Linux",]
+[[tool.poetry.packages]]
+include = "brainsmith"
 
-[tool.poetry.dependencies]
-python = "^3.10,<3.12"
-
-# Core ML and data processing
-numpy = "1.24.1"
-scipy = "1.10.1"
-scikit-learn = "1.2.1"
-pandas = "1.5.3"
-ml-dtypes = ">=0.5.1"
-
-# PyTorch ecosystem (with CUDA support)
-torch = "2.7.0"
-torchvision = "0.22.0"
-torchaudio = "2.7.0"
-
-# ONNX ecosystem
-onnx = "1.17.0"
-onnxoptimizer = "0.3.13"
-onnxruntime = "1.18.1"
-onnxsim = "0.4.36"
-
-# Transformers and NLP
-transformers = "4.46.3"
-
-# Visualization and UI
-matplotlib = "3.7.0"
-netron = ">=5.0.0"
-ipython = "8.12.2"
-ipykernel = "6.21.2"
-pygments = "2.14.0"
-tqdm = "4.64.1"
-
-# Utilities
-bitstring = "4.2.3"
-clize = "5.0.1"
-dataclasses-json = "0.5.7"
-gspread = "3.6.0"
-importlib-resources = "6.1.0"
-packaging = ">=25.0"
-protobuf = "3.20.3"
-psutil = "5.9.4"
-pyscaffold = "4.4"
-setupext-janitor = ">=1.1.2"
-sigtools = "4.0.1"
-toposort = "1.7.0"
-tree-sitter = "0.24.0"
-typing-extensions = ">=4.10"
-vcdvcd = "1.0.5"
-wget = "3.2"
-markupsafe = "2.0.1"
-docker = "^7.0.0"
-
-# Dependencies for FINN ecosystem
-deap = "1.3.1"
-mip = "1.13.0"
-networkx = "2.8"
-future-annotations = "1.0.0"
-dependencies = "2.0.1"
-tokenize-rt = "4.2.1"
-
-# CLI enhancements
-click = "^8.1.7"
-rich = "^13.7.0"
-pyyaml = "^6.0.1"
-
-# Pin setuptools version
-setuptools = "68.2.2"
-
-# Git-based Python dependencies (from fetch-repos.sh)
-qonnx = { git = "https://github.com/fastmachinelearning/qonnx.git", rev = "9153395712b5617d38b058900c873c6fc522b343" }
-finn = { git = "https://github.com/Xilinx/finn.git", rev = "bd9baeb7ddad0f613689f3be81df28067f8c1d9b" }
-finn-experimental = { git = "https://github.com/Xilinx/finn-experimental.git", rev = "0724be21111a21f0d81a072fccc1c446e053f851" }
-brevitas = { git = "https://github.com/Xilinx/brevitas.git", rev = "95edaa0bdc8e639e39b1164466278c59df4877be" }
-dataset-loading = { git = "https://github.com/fbcotter/dataset_loading.git", tag = "0.0.4" }
-
-[tool.poetry.group.dev.dependencies]
-pytest = "6.2.5"
-pytest-dependency = "0.5.1"
-pytest-xdist = { version = "3.2.0", extras = ["setproctitle"] }
-pytest-parallel = "0.1.1"
-pytest-metadata = "1.7.0"
-pytest-html = "3.0.0"
-pytest-html-merger = "0.0.8"
-pytest-cov = "4.1.0"
-pre-commit = "3.3.2"
-ruff = "^0.1.0"
-
-[tool.poetry.group.boards]
-optional = true
-
-[tool.poetry.group.boards.dependencies]
-# Board-specific tools can be added here if needed
-pyserial = "^3.5"
-
-[tool.poetry.group.experimental]
-optional = true
-
-[tool.poetry.group.experimental.dependencies]
-# Experimental dependencies
-onnxscript = { git = "https://github.com/jsmonson/onnxscript.git", rev = "62c7110aba46554432ce8e82ba2d8a086bd6227c" }
-
-[tool.poetry.scripts]
-# Post-install hook to set up simulation dependencies
-brainsmith-post-install = "brainsmith.core.post_install:main"
-
-[tool.poetry.urls]
-"Bug Tracker" = "https://github.com/microsoft/Brainsmith/issues"
-"Discussions" = "https://github.com/microsoft/Brainsmith/discussions"
-
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "semver"
-pattern = "^v?(?P<base>\\d+\\.\\d+\\.\\d+)"
-
-# Custom Brainsmith configuration
 [tool.brainsmith]
-# FPGA-specific configuration
 xilinx_min_version = "2022.1"
 default_build_dir = "/tmp/brainsmith_build"
-
-# Git repositories that are not Python packages (HLS libraries, etc.)
 [[tool.brainsmith.git_repos]]
 name = "cnpy"
 url = "https://github.com/maltanar/cnpy.git"
@@ -170,7 +44,6 @@ rev = "0b59762f9e4c4f7e5aa535ee9bc29f292434ca7a"
 install = false
 group = "core"
 
-# Board file repositories
 [[tool.brainsmith.git_repos]]
 name = "avnet-bdf"
 url = "https://github.com/Avnet/bdf.git"
@@ -206,7 +79,6 @@ group = "boards"
 copy_from = "boards/Xilinx/kv260_som"
 copy_to = "board_files/kv260_som"
 
-# Direct download board files
 [[tool.brainsmith.board_files]]
 name = "pynq-z1"
 url = "https://github.com/cathalmccabe/pynq-z1_board_files/raw/master/pynq-z1.zip"
@@ -219,13 +91,97 @@ url = "https://dpoauwgwqsy2x.cloudfront.net/Download/pynq-z2.zip"
 type = "zip"
 group = "boards"
 
-# Dependency management settings
-[tool.brainsmith.dependencies]
-# Policy for handling local changes during update
-update_policy = "prompt"  # Options: prompt, skip-modified, stash-always, fail-on-modified
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-select = ["E", "F", "I", "N", "UP", "YTT", "B", "A", "C4", "DTZ", "ISC", "ICN", "PIE", "PT", "RET", "SIM", "ARG", "PTH"]
-ignore = ["E501"]  # Line length handled by formatter
+select = [ "E", "F", "I", "N", "UP", "YTT", "B", "A", "C4", "DTZ", "ISC", "ICN", "PIE", "PT", "RET", "SIM", "ARG", "PTH",]
+ignore = [ "E501",]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+numpy = "1.24.1"
+scipy = "1.10.1"
+scikit-learn = "1.2.1"
+pandas = "1.5.3"
+ml-dtypes = ">=0.5.1"
+torch = "2.7.0"
+torchvision = "0.22.0"
+torchaudio = "2.7.0"
+onnx = "1.17.0"
+onnxoptimizer = "0.3.13"
+onnxruntime = "1.18.1"
+onnxsim = "0.4.36"
+transformers = "4.46.3"
+matplotlib = "3.7.0"
+netron = ">=5.0.0"
+ipython = "8.12.2"
+ipykernel = "6.21.2"
+pygments = "2.14.0"
+tqdm = "4.64.1"
+bitstring = "4.2.3"
+clize = "5.0.1"
+dataclasses-json = "0.5.7"
+gspread = "3.6.0"
+importlib-resources = "6.1.0"
+packaging = ">=25.0"
+protobuf = "3.20.3"
+psutil = "5.9.4"
+pyscaffold = "4.4"
+setupext-janitor = ">=1.1.2"
+sigtools = "4.0.1"
+toposort = "1.7.0"
+tree-sitter = "0.24.0"
+typing-extensions = ">=4.10"
+vcdvcd = "1.0.5"
+wget = "3.2"
+markupsafe = "2.0.1"
+docker = ">=7.0.0"
+deap = "1.3.1"
+mip = "1.13.0"
+networkx = "2.8"
+future-annotations = "1.0.0"
+dependencies = "2.0.1"
+tokenize-rt = "4.2.1"
+click = ">=8.1.7"
+rich = ">=13.7.0"
+pyyaml = ">=6.0.1"
+setuptools = "68.2.2"
+pydantic = ">=2.5.0"
+pydantic-settings = ">=2.1.0"
+brevitas = {path = "deps/brevitas", develop = true}
+qonnx = {path = "deps/qonnx", develop = true}
+finn = {path = "deps/finn", develop = true}
+onnxscript = {path = "deps/onnxscript", develop = true}
+finn-experimental = {path = "deps/finn-experimental", develop = true}
+dataset-loading = {path = "deps/dataset-loading", develop = true}
+
+[tool.poetry.scripts]
+brainsmith-post-install = "brainsmith.core.post_install:main"
+smith = "brainsmith.interface.cli:main"
+
+[tool.brainsmith.dependencies]
+update_policy = "prompt"
+
+[tool.poetry.group.dev]
+optional = false
+
+[tool.poetry.group.boards]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = "6.2.5"
+pytest-dependency = "0.5.1"
+pytest-parallel = "0.1.1"
+pytest-metadata = "1.7.0"
+pytest-html = "3.0.0"
+pytest-html-merger = "0.0.8"
+pytest-cov = "4.1.0"
+pre-commit = "3.3.2"
+ruff = ">=0.1.0"
+
+[tool.poetry.group.boards.dependencies]
+pyserial = ">=3.5"
+
+[tool.poetry.group.dev.dependencies.pytest-xdist]
+version = "3.2.0"
+extras = [ "setproctitle",]
