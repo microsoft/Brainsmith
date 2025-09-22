@@ -86,6 +86,10 @@ For a fresh installation or to re-download all dependencies:
 ./examples/bert/quicktest.sh    # Run in poetry venv
 ```
 
+## Documentation
+
+For detailed documentation and guides, see the [documentation overview](docs/README.md).
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
