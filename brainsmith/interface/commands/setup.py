@@ -1,21 +1,22 @@
 """Setup and installation commands for the smith CLI."""
 
+# Standard library imports
 import os
-import sys
 import shutil
-from typing import Optional, List, Dict, Tuple
 from pathlib import Path
+from typing import Optional, List
 
+# Third-party imports
 import click
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.panel import Panel
 
+# Local imports
 from brainsmith.config import get_config
 from brainsmith.core.plugins.dependencies import DependencyManager
-
-console = Console()
+from ..utils import (
+    console, error_exit, success, warning, tip, 
+    progress_spinner, show_panel, format_status, format_warning_status
+)
 
 # Constants
 EXCLUDED_BOARD_NAMES = {'deprecated', 'boards', 'board_files', 'Xilinx'}
@@ -29,13 +30,16 @@ def setup():
 
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
-def all(force: bool):
-    """Install all dependencies (cppsim, xsim, boards)."""
-    console.print(Panel.fit(
-        "[bold]Brainsmith Complete Setup[/bold]\n"
-        "This will install all optional dependencies.",
-        border_style="blue"
-    ))
+def all(force: bool) -> None:
+    """Install all dependencies (cppsim, xsim, boards).
+    
+    Args:
+        force: Whether to force reinstallation
+    """
+    show_panel(
+        "Brainsmith Complete Setup",
+        "This will install all optional dependencies."
+    )
     
     # Run all setup tasks
     ctx = click.get_current_context()
@@ -48,13 +52,17 @@ def all(force: bool):
     console.print("\n[bold cyan]3. Downloading Board Files[/bold cyan]")
     ctx.invoke(boards, force=force)
     
-    console.print("\n[green]✓ All setup tasks completed![/green]")
+    success("All setup tasks completed!")
 
 
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
-def cppsim(force: bool):
-    """Setup C++ simulation dependencies (cnpy, finn-hlslib)."""
+def cppsim(force: bool) -> None:
+    """Setup C++ simulation dependencies (cnpy, finn-hlslib).
+    
+    Args:
+        force: Whether to force reinstallation
+    """
     config = get_config()
     deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
     
@@ -63,54 +71,52 @@ def cppsim(force: bool):
     hlslib_installed = _are_hlslib_headers_installed(deps_mgr)
     
     if not force and cnpy_installed and hlslib_installed:
-        console.print("  [yellow]![/yellow] C++ simulation dependencies already installed (use --force to reinstall)")
+        warning("C++ simulation dependencies already installed (use --force to reinstall)")
         return
     
     # Install what's needed
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True
-    ) as progress:
-        task = progress.add_task("Setting up C++ simulation dependencies...", total=None)
-        
+    with progress_spinner("Setting up C++ simulation dependencies...") as task:
         try:
             # Use the group install method with quiet mode
-            success = deps_mgr.setup_cppsim(force=force)
-            if not success:
-                progress.stop()
-                console.print("  [red]✗[/red] Failed to setup C++ simulation dependencies")
-                sys.exit(1)
+            result = deps_mgr.setup_cppsim(force=force)
+            if not result:
+                error_exit("Failed to setup C++ simulation dependencies")
                     
         except Exception as e:
-            progress.stop()
-            console.print(f"  [red]✗[/red] Failed to setup C++ simulation: {e}")
-            
             # Check if it's likely a missing g++ issue
+            details = []
             if not shutil.which('g++'):
-                console.print("\n[yellow]Note:[/yellow] C++ compiler (g++) is required for C++ simulation.")
-                console.print("Install it with: [cyan]sudo apt install g++[/cyan]")
-            sys.exit(1)
+                details = [
+                    "C++ compiler (g++) is required for C++ simulation.",
+                    "Install it with: sudo apt install g++"
+                ]
+            error_exit(f"Failed to setup C++ simulation: {e}", details=details)
     
     # Show result
-    console.print("  [green]✓[/green] C++ simulation dependencies installed successfully")
+    success("C++ simulation dependencies installed successfully")
 
 
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force rebuild even if already built')
-def xsim(force: bool):
-    """Setup Xilinx simulation (build finn-xsim with Vivado)."""
+def xsim(force: bool) -> None:
+    """Setup Xilinx simulation (build finn-xsim with Vivado).
+    
+    Args:
+        force: Whether to force rebuild
+    """
     config = get_config()
     
     # Check Vivado availability
     if not config.vivado_path:
-        console.print("[red]Error:[/red] Vivado not found in configuration.")
-        console.print("Please set up Vivado and update your configuration.")
-        console.print("\nYou can set Vivado path using:")
-        console.print("  - Environment variable: export BSMITH_XILINX__VIVADO_PATH=/path/to/vivado")
-        console.print("  - Config file: Add xilinx.vivado_path to brainsmith_settings.yaml")
-        sys.exit(1)
+        error_exit(
+            "Vivado not found in configuration.",
+            details=[
+                "Please set up Vivado and update your configuration.",
+                "Set Vivado path using:",
+                "  - Environment variable: export BSMITH_XILINX__VIVADO_PATH=/path/to/vivado",
+                "  - Config file: Add xilinx.vivado_path to brainsmith_settings.yaml"
+            ]
+        )
     
     deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
     
@@ -118,42 +124,41 @@ def xsim(force: bool):
     xsi_so_path = config.bsmith_deps_dir / "finn" / "finn_xsi" / "xsi.so"
     
     if not force and xsi_so_path.exists():
-        console.print("  [yellow]![/yellow] finn-xsim already built (use --force to rebuild)")
+        warning("finn-xsim already built (use --force to rebuild)")
         return
     
     # Build it
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True  # This removes the progress bar after completion
-    ) as progress:
-        task = progress.add_task("Building finn-xsim module...", total=None)
+    with progress_spinner("Building finn-xsim module...") as task:
         try:
-            success = deps_mgr.build_finnxsim(force=force)
+            result = deps_mgr.build_finnxsim(force=force)
+            if not result:
+                error_exit("Failed to build finn-xsim")
         except Exception as e:
-            progress.stop()
-            console.print(f"  [red]✗[/red] Failed to build finn-xsim: {e}")
-            console.print("\nPlease ensure:")
-            console.print("  • Vivado is properly installed")
-            console.print("  • You have the required Vivado license")
-            console.print("  • The Vivado path in configuration is correct")
-            sys.exit(1)
+            error_exit(
+                f"Failed to build finn-xsim: {e}",
+                details=[
+                    "Vivado is properly installed",
+                    "You have the required Vivado license",
+                    "The Vivado path in configuration is correct"
+                ]
+            )
     
     # Show result after progress completes
-    if success:
-        console.print("  [green]✓[/green] finn-xsim built successfully")
-    else:
-        console.print("  [red]✗[/red] Failed to build finn-xsim")
-        sys.exit(1)
+    success("finn-xsim built successfully")
 
 
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force redownload even if already present')
 @click.option('--repo', '-r', multiple=True, help='Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed list of all board files')
-def boards(force: bool, repo: tuple, verbose: bool):
-    """Download FPGA board definition files."""
+def boards(force: bool, repo: tuple, verbose: bool) -> None:
+    """Download FPGA board definition files.
+    
+    Args:
+        force: Whether to force redownload
+        repo: Specific repositories to download
+        verbose: Whether to show detailed board list
+    """
     config = get_config()
     deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
     
@@ -170,17 +175,16 @@ def boards(force: bool, repo: tuple, verbose: bool):
         invalid_repos = [r for r in repo if r not in valid_repos]
         
         if invalid_repos:
-            console.print(f"  [red]✗[/red] Unknown board repositories: {', '.join(invalid_repos)}")
-            console.print("\n  [yellow]Available repositories:[/yellow]")
-            for r in valid_repos:
-                console.print(f"      • {r}")
-            sys.exit(1)
+            error_exit(
+                f"Unknown board repositories: {', '.join(invalid_repos)}",
+                details=[f"Available repositories: {', '.join(valid_repos)}"]
+            )
         
         repos_to_download = list(repo)
         already_have = [r for r in repos_to_download if r in existing_boards]
         
         if not force and already_have == repos_to_download:
-            console.print(f"  [yellow]![/yellow] Requested repositories already downloaded:")
+            warning("Requested repositories already downloaded:")
             
             # Show repos and optionally board details
             total_boards = 0
@@ -204,7 +208,7 @@ def boards(force: bool, repo: tuple, verbose: bool):
                         for board in sorted(set(boards_by_repo[r])):
                             console.print(f"        • {board}")
                             
-            console.print("\n  [dim]Use --force to redownload[/dim]")
+            console.print("\n[dim]Use --force to redownload[/dim]")
             return
     else:
         # Check if all boards are already downloaded
@@ -222,7 +226,7 @@ def boards(force: bool, repo: tuple, verbose: bool):
                 if verbose:
                     boards_by_repo[r] = _extract_board_names(board_files, r)
                 
-            console.print(f"  [yellow]![/yellow] Board files already downloaded:")
+            warning("Board files already downloaded:")
             for board in sorted(existing_boards):
                 console.print(f"      • {board}")
             if total_boards > 0:
@@ -237,35 +241,24 @@ def boards(force: bool, repo: tuple, verbose: bool):
                         for board in sorted(set(boards_by_repo[r])):
                             console.print(f"        • {board}")
                             
-            console.print("\n  [dim]Use --force to redownload[/dim]")
+            console.print("\n[dim]Use --force to redownload[/dim]")
             return
     
     # Download boards
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True
-    ) as progress:
-        if repo:
-            task = progress.add_task(f"Downloading {len(repo)} board repositories...", total=None)
-        else:
-            task = progress.add_task("Downloading board definition files...", total=None)
-        
+    description = (f"Downloading {len(repo)} board repositories..." if repo 
+                   else "Downloading board definition files...")
+    
+    with progress_spinner(description) as task:
         try:
-            success = deps_mgr.download_board_files(boards=list(repo) if repo else None, quiet=True)
-            if not success:
-                progress.stop()
-                console.print("  [red]✗[/red] Failed to download board files")
-                sys.exit(1)
+            result = deps_mgr.download_board_files(boards=list(repo) if repo else None, quiet=True)
+            if not result:
+                error_exit("Failed to download board files")
                 
         except Exception as e:
-            progress.stop()
-            console.print(f"  [red]✗[/red] Failed to download board files: {e}")
-            sys.exit(1)
+            error_exit(f"Failed to download board files: {e}")
     
     # Show what was downloaded
-    console.print("  [green]✓[/green] Board definition files downloaded:")
+    success("Board definition files downloaded:")
     
     # List repositories - if specific repos were requested, only show those
     if repo:
@@ -305,8 +298,12 @@ def boards(force: bool, repo: tuple, verbose: bool):
 
 
 @setup.command()
-def check():
-    """Check the status of all setup components."""
+def check() -> None:
+    """Check the status of all setup components.
+    
+    Displays a table showing the installation status of all
+    Brainsmith dependencies and tools.
+    """
     config = get_config()
     deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
     
@@ -316,31 +313,27 @@ def check():
     table.add_column("Location", style="dim")
     
     # Check C++ Simulation
-    cnpy_status = "Installed" if _is_cnpy_installed(deps_mgr) else "Not installed"
-    cnpy_color = "green" if cnpy_status == "Installed" else "red"
-    table.add_row("cnpy", f"[{cnpy_color}]{cnpy_status}[/{cnpy_color}]", "deps/cnpy")
+    cnpy_installed = _is_cnpy_installed(deps_mgr)
+    cnpy_status = format_status("Installed" if cnpy_installed else "Not installed", cnpy_installed)
+    table.add_row("cnpy", cnpy_status, "deps/cnpy")
     
-    hlslib_status = "Installed" if _are_hlslib_headers_installed(deps_mgr) else "Not installed"
-    hlslib_color = "green" if hlslib_status == "Installed" else "red"
-    table.add_row("finn-hlslib headers", f"[{hlslib_color}]{hlslib_status}[/{hlslib_color}]", 
-                  "deps/finn-hlslib")
+    hlslib_installed = _are_hlslib_headers_installed(deps_mgr)
+    hlslib_status = format_status("Installed" if hlslib_installed else "Not installed", hlslib_installed)
+    table.add_row("finn-hlslib headers", hlslib_status, "deps/finn-hlslib")
     
     # Check RTL Simulation
-    finnxsim_status = "Built" if _is_finnxsim_built(deps_mgr) else "Not built"
-    finnxsim_color = "green" if finnxsim_status == "Built" else "red"
-    table.add_row("finn-xsim", f"[{finnxsim_color}]{finnxsim_status}[/{finnxsim_color}]", 
-                  "deps/finn/finn_xsi")
+    finnxsim_built = _is_finnxsim_built(deps_mgr)
+    finnxsim_status = format_status("Built" if finnxsim_built else "Not built", finnxsim_built)
+    table.add_row("finn-xsim", finnxsim_status, "deps/finn/finn_xsi")
     
     # Check Vivado
     if config.vivado_path:
-        vivado_status = "Found"
-        vivado_color = "green"
         vivado_details = []
         
         # Check if settings64.sh has been sourced
-        if "XILINX_VIVADO" not in os.environ:
+        is_sourced = "XILINX_VIVADO" in os.environ
+        if not is_sourced:
             vivado_details.append("⚠️  Not sourced")
-            vivado_color = "yellow"
         else:
             vivado_details.append("✓ Sourced")
         
@@ -348,26 +341,23 @@ def check():
         if config.xilinx_version:
             vivado_details.append(f"v{config.xilinx_version}")
             
-        vivado_path = f"{config.vivado_path}"
-        if vivado_details:
-            vivado_status = f"Found ({', '.join(vivado_details)})"
+        vivado_path = str(config.vivado_path)
+        status_text = f"Found ({', '.join(vivado_details)})" if vivado_details else "Found"
+        vivado_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
-        vivado_status = "Not found"
-        vivado_color = "red"
+        vivado_status = format_status("Not found", False)
         vivado_path = "Not configured"
         
-    table.add_row("Vivado", f"[{vivado_color}]{vivado_status}[/{vivado_color}]", vivado_path)
+    table.add_row("Vivado", vivado_status, vivado_path)
     
     # Check Vitis HLS
     if config.vitis_hls_path:
-        hls_status = "Found"
-        hls_color = "green"
         hls_details = []
         
         # Check if sourced
-        if "XILINX_HLS" not in os.environ and "XILINX_VITIS_HLS" not in os.environ:
+        is_sourced = "XILINX_HLS" in os.environ or "XILINX_VITIS_HLS" in os.environ
+        if not is_sourced:
             hls_details.append("⚠️  Not sourced")
-            hls_color = "yellow"
         else:
             hls_details.append("✓ Sourced")
         
@@ -376,32 +366,31 @@ def check():
             hls_details.append(f"v{config.xilinx_version}")
             
         hls_path = str(config.vitis_hls_path)
-        if hls_details:
-            hls_status = f"Found ({', '.join(hls_details)})"
+        status_text = f"Found ({', '.join(hls_details)})" if hls_details else "Found"
+        hls_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
-        hls_status = "Not found"
-        hls_color = "yellow"
+        hls_status = format_warning_status("Not found")
         hls_path = "Not configured"
         
-    table.add_row("Vitis HLS", f"[{hls_color}]{hls_status}[/{hls_color}]", hls_path)
+    table.add_row("Vitis HLS", hls_status, hls_path)
     
     # Check boards
     board_count = _count_downloaded_boards(deps_mgr)
-    board_status = f"{board_count} repositories" if board_count > 0 else "None"
-    board_color = "green" if board_count > 0 else "yellow"
-    table.add_row("Board files", f"[{board_color}]{board_status}[/{board_color}]", "deps/board-files")
+    board_status_text = f"{board_count} repositories" if board_count > 0 else "None"
+    board_status = format_status(board_status_text, True) if board_count > 0 else format_warning_status(board_status_text)
+    table.add_row("Board files", board_status, "deps/board-files")
     
     console.print(table)
     
     # Print recommendations
-    if cnpy_status == "Not installed" or hlslib_status == "Not installed":
-        console.print("\n[yellow]Tip:[/yellow] Run 'smith setup cppsim' to install C++ simulation dependencies")
+    if not cnpy_installed or not hlslib_installed:
+        tip("Run 'smith setup cppsim' to install C++ simulation dependencies")
     
-    if finnxsim_status == "Not built" and vivado_status == "Found":
-        console.print("\n[yellow]Tip:[/yellow] Run 'smith setup xsim' to build Xilinx simulation support")
+    if not finnxsim_built and config.vivado_path:
+        tip("Run 'smith setup xsim' to build Xilinx simulation support")
     
     if board_count == 0:
-        console.print("\n[yellow]Tip:[/yellow] Run 'smith setup boards' to download board definition files")
+        tip("Run 'smith setup boards' to download board definition files")
 
 
 # Helper functions to check installation status

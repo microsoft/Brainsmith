@@ -1,19 +1,20 @@
 #!/bin/bash
-# Brainsmith Container Management Script with Poetry
-# Provides utilities for managing persistent Brainsmith containers
+# Brainsmith Container Management Script
+# Poetry-based orchestration for development environments
 #
 # Key commands:
-#   start  - Start persistent container in background for development
+#   start  - Start container and run complete setup automatically
 #   shell  - Open interactive shell in running container
+#   setup  - Run additional setup via smith CLI in container
 #   clean  - Remove container and build artifacts (use --deep for full reset)
 #
 # Typical workflow:
-#   ./smithy start                     # Start container once
-#   ./smithy "python script.py"        # Run commands
-#   ./smithy shell                     # Interactive development
-#   ./smithy stop                      # Pause work (container persists)
-#   ./smithy start                     # Resume quickly
-#   ./smithy clean --deep              # Full cleanup when needed
+#   poetry install                         # Set up Poetry environment (host)
+#   ./fetch-repos.sh                       # Fetch Git repositories (host)
+#   ./ctl-docker.sh start                  # Start container + automatic setup (all-in-one)
+#   ./ctl-docker.sh shell                  # Interactive development
+#   ./ctl-docker.sh "smith build model.py" # Run commands
+#   ./ctl-docker.sh clean --deep           # Full cleanup when needed
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -75,12 +76,12 @@ validate_docker_flags() {
 
 show_help() {
     cat << EOF
-Brainsmith Container Management with Poetry
+Brainsmith Container Management (Poetry-based)
 
-Usage: $0 COMMAND [OPTIONS]
+Usage: ./ctl-docker.sh COMMAND [OPTIONS]
 
 Container Commands:
-    start          Start persistent container in background
+    start          Start container and run complete setup automatically
     shell          Interactive shell in running container
     build          Build Docker image
     stop           Stop container
@@ -90,22 +91,26 @@ Container Commands:
     clean          Clean build artifacts, container, and optionally images
     clean --deep   Deep clean including Docker images and dependency repos
     logs           Show container logs
-    deps-check     Quick dependency status check
-
-Dependency Commands:
-    deps           Show Poetry dependency management help
     
-Note: Direct dependency management is now done with Poetry:
-    poetry install                    # Install dependencies from pyproject.toml
-    ./setup-dev.sh                   # Set up editable developer environment
+Setup Commands:
+    setup [args]   Run setup via smith CLI (e.g., 'setup cppsim', 'setup boards')
+    check          Check setup status via smith CLI
+
+Dependency Commands (run on host):
+    deps           Show dependency management help
+    
+Note: Complete workflow is now streamlined:
+    poetry install                    # Install dependencies from pyproject.toml (host)
+    ./fetch-repos.sh                  # Fetch Git repositories (host)
+    ./ctl-docker.sh start                          # Start container + automatic setup (all-in-one)
 
 Examples:
-    $0 start && $0 "python script.py"          # Typical workflow
-    $0 shell                                    # Interactive development
-    $0 deps update                              # Update all dependencies
-    $0 deps status                              # Check dependency status
-    $0 clean                                    # Clean container and build files
-    $0 clean --deep                             # Full reset (removes everything)
+    ./ctl-docker.sh start                                   # Start and set up everything automatically
+    ./ctl-docker.sh shell                                   # Interactive development
+    ./ctl-docker.sh "smith build model.py"                  # Run smith commands
+    ./ctl-docker.sh setup cppsim                           # Install additional components
+    ./ctl-docker.sh clean                                   # Clean container and build files
+    ./ctl-docker.sh clean --deep                            # Full reset (removes everything)
 EOF
 }
 
@@ -125,115 +130,37 @@ check_disk_space() {
     fi
 }
 
-# Monitor container startup via log streaming
-monitor_container_startup() {
-    local container_name="$1"
-    local timeout="${2:-300}"  # Default 5 minutes
-    local start_time=$(date +%s)
-
-    gecho "Starting container and monitoring initialization..."
-
-    # Create a temporary file to track completion
-    local completion_file="/tmp/.monitor_${container_name}_$$"
-
-    # Get current time for log filtering (slightly before to catch startup)
-    local log_since=$(date --iso-8601=seconds -d '2 seconds ago')
-
-    # Start log monitoring in background
-    {
-        docker logs -f --since="$log_since" "$container_name" 2>&1 | while IFS= read -r line; do
-            # Check for status messages (with more flexible matching)
-            if [[ "$line" =~ BRAINSMITH_STATUS:(.+)$ ]]; then
-                local status="${BASH_REMATCH[1]}"
-                local status_parts=(${status//:/ })
-                local status_type="${status_parts[0]}"
-                local status_detail="${status_parts[1]:-}"
-
-                case "$status_type" in
-                    "INITIALIZING")
-                        gecho "→ Container initializing..."
-                        ;;
-                    "FETCHING_DEPENDENCIES")
-                        gecho "→ Fetching dependency repositories..."
-                        ;;
-                    "UPDATING_DEPENDENCIES")
-                        gecho "→ Updating dependencies with Poetry..."
-                        ;;
-                    "INSTALLING_PACKAGES")
-                        if [ -n "$status_detail" ]; then
-                            if [ "$status_detail" = "starting" ]; then
-                                gecho "→ Starting package installation..."
-                            else
-                                gecho "→ Installing package: $status_detail"
-                            fi
-                        else
-                            gecho "→ Installing packages..."
-                        fi
-                        ;;
-                    "BUILDING_FINNXSI")
-                        gecho "→ Building finnxsi extension..."
-                        ;;
-                    "READY")
-                        gecho "✓ Container is ready!"
-                        echo "SUCCESS" > "$completion_file"
-                        break
-                        ;;
-                    "ERROR")
-                        recho "✗ Container initialization failed: $status_detail"
-                        echo "ERROR:$status_detail" > "$completion_file"
-                        break
-                        ;;
-                esac
-            elif [[ "$line" =~ "All setup complete - container is now fully ready" ]]; then
-                # Fallback detection for ready state
-                gecho "✓ Container is ready!"
-                echo "SUCCESS" > "$completion_file"
-                break
-            elif [ "${BSMITH_SHOW_INIT_LOGS:-false}" = "true" ]; then
-                # Show all logs if requested
-                echo "  $line"
-            fi
-        done
-    } &
-
-    local monitor_pid=$!
-
-    # Wait for completion or timeout
-    local elapsed=0
-    while [ $elapsed -lt $timeout ]; do
-        if [ -f "$completion_file" ]; then
-            local result=$(cat "$completion_file")
-            kill $monitor_pid 2>/dev/null || true
-            wait $monitor_pid 2>/dev/null || true
-            rm -f "$completion_file"
-
-            if [ "$result" = "SUCCESS" ]; then
-                return 0
-            else
-                recho "Container initialization failed: ${result#ERROR:}"
-                return 1
-            fi
-        fi
-
+# Monitor container setup process with live output
+check_container_ready() {
+    local container_name="$1"</    
+    
+    gecho "Container initializing..."
+    
+    # Give container a moment to start
+    sleep 2
+    
+    # Simply follow the logs - Docker handles the streaming
+    docker logs -f "$container_name" 2>&1 &
+    
+    local LOG_PID=$!
+    
+    # Monitor readiness in a loop
+    while true; do
         # Check if container is still running
         if ! docker inspect "$container_name" --format='{{.State.Running}}' 2>/dev/null | grep -q "true"; then
-            kill $monitor_pid 2>/dev/null || true
-            wait $monitor_pid 2>/dev/null || true
-            rm -f "$completion_file"
-            recho "Container stopped unexpectedly during initialization"
+            kill $LOG_PID 2>/dev/null || true
+            recho "Container stopped unexpectedly"
             return 1
         fi
-
+        
+        # Check if Poetry dependencies are installed and smith is available
+        if docker exec "$container_name" bash -c "source /usr/local/bin/setup-env.sh && cd $BSMITH_DIR && command -v smith" >/dev/null 2>&1; then
+            kill $LOG_PID 2>/dev/null || true
+            return 0
+        fi
+        
         sleep 2
-        elapsed=$((elapsed + 2))
     done
-
-    # Timeout reached
-    kill $monitor_pid 2>/dev/null || true
-    wait $monitor_pid 2>/dev/null || true
-    rm -f "$completion_file"
-    recho "Container initialization timeout after ${timeout}s"
-    return 1
 }
 
 get_container_status() {
@@ -264,7 +191,6 @@ build_image() {
 
     docker build -f docker/Dockerfile \
         --build-arg BACKEND=finn \
-        --build-arg ENTRYPOINT=docker/entrypoint.sh \
         --tag=$BSMITH_DOCKER_TAG \
         $BSMITH_DOCKER_BUILD_FLAGS .
 
@@ -299,15 +225,13 @@ setup_container_if_needed() {
         build_image
     fi
 
-    # Create the container but don't start it yet
-    create_container "$1"
+    # Create the container
+    create_container
     return $?
 }
 
-# Create container with the specified mode
+# Create background container
 create_container() {
-    MODE="$1"
-
     # Validate Docker flags for security before proceeding
     validate_docker_flags
 
@@ -320,14 +244,9 @@ create_container() {
     mkdir -p $BSMITH_BUILD_DIR
     mkdir -p $BSMITH_SSH_KEY_DIR
 
-    # Build Docker command with all required options
+    # Build Docker command with daemon options
     DOCKER_CMD="docker run"
-
-    if [ "$MODE" = "daemon" ]; then
-        DOCKER_CMD+=" -d -t"
-    else
-        DOCKER_CMD+=" -it --rm"
-    fi
+    DOCKER_CMD+=" -d -t"
 
     DOCKER_CMD+=" --name $DOCKER_INST_NAME"
     DOCKER_CMD+=" --init --hostname $DOCKER_INST_NAME"
@@ -338,34 +257,43 @@ create_container() {
     DOCKER_CMD+=" -v $BSMITH_DIR:$BSMITH_DIR"
     DOCKER_CMD+=" -v $BSMITH_BUILD_DIR:$BSMITH_BUILD_DIR"
     
-    # Poetry cache directory mount for non-root users
+    # Poetry cache and virtual environment mounts for non-root users
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
-        # Create Poetry cache directory if it doesn't exist
+        # Create Poetry directories if they don't exist
         mkdir -p "$HOME/.cache/pypoetry"
+        mkdir -p "$HOME/.cache/pypoetry/virtualenvs"
+        
+        # Mount Poetry cache directory (for package downloads)
         DOCKER_CMD+=" -v $HOME/.cache/pypoetry:$HOME/.cache/pypoetry"
+        
+        # Mount virtual environments directory to ensure consistency
+        # Map host venv location to container venv location
+        DOCKER_CMD+=" -v $HOME/.cache/pypoetry/virtualenvs:/tmp/poetry_venvs"
     fi
 
     # Essential environment variables
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
+    DOCKER_CMD+=" -e BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
     DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
     DOCKER_CMD+=" -e BSMITH_DEPS_POLICY=$BSMITH_DEPS_POLICY"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     
-    # Set Poetry cache to a writable location
-    DOCKER_CMD+=" -e POETRY_CACHE_DIR=$BSMITH_BUILD_DIR/.poetry_cache"
+    # Set Poetry environment variables for consistency
+    DOCKER_CMD+=" -e POETRY_CACHE_DIR=$HOME/.cache/pypoetry"
+    DOCKER_CMD+=" -e POETRY_VIRTUALENVS_PATH=/tmp/poetry_venvs"
+    DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=false"
     
     # FINN-specific environment variables
     DOCKER_CMD+=" -e FINN_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e FINN_ROOT=$BSMITH_DIR"
 
-    # User/permission setup (unless running as root)
+    # User/permission setup (preserved from original)
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
         # Only mount system files if they exist and are readable
         [ -r /etc/group ] && DOCKER_CMD+=" -v /etc/group:/etc/group:ro"
         [ -r /etc/passwd ] && DOCKER_CMD+=" -v /etc/passwd:/etc/passwd:ro"
-        # REMOVED: [ -r /etc/shadow ] && DOCKER_CMD+=" -v /etc/shadow:/etc/shadow:ro"
         # Security: /etc/shadow contains password hashes and should not be mounted
         [ -d /etc/sudoers.d ] && DOCKER_CMD+=" -v /etc/sudoers.d:/etc/sudoers.d:ro"
 
@@ -381,7 +309,7 @@ create_container() {
         fi
     fi
 
-    # Dependency and Xilinx setup (if not skipping deps)
+    # Xilinx and dependency setup (preserved from original)
     if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
         DOCKER_CMD+=" -e OHMYXILINX=$OHMYXILINX"
@@ -404,7 +332,7 @@ create_container() {
         fi
     fi
 
-    # GPU support
+    # GPU support (preserved from original)
     if [ "$BSMITH_DOCKER_GPU" = "1" ]; then
         gecho "GPU support enabled (BSMITH_DOCKER_GPU=1)"
         if [ ! -z "$NVIDIA_VISIBLE_DEVICES" ]; then
@@ -417,61 +345,79 @@ create_container() {
     # Additional flags from BSMITH_DOCKER_EXTRA and other sources
     DOCKER_CMD+=" $BSMITH_DOCKER_EXTRA $BSMITH_DOCKER_FLAGS"
 
-    # Image and command
-    if [ "$MODE" = "daemon" ]; then
-        # Use entrypoint with daemon mode to keep container running
-        DOCKER_CMD+=" -e BSMITH_CONTAINER_MODE=daemon"
-        DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
-        gecho "Starting daemon container..."
-        # Execute with explicit empty command to trigger daemon mode
-        RESULT=$($DOCKER_CMD "")
-        DOCKER_EXIT_CODE=$?
+    # Run container with the image tag
+    DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
+    
+    gecho "Starting container..."
+    # Execute without command to trigger daemon mode
+    RESULT=$($DOCKER_CMD)
+    DOCKER_EXIT_CODE=$?
 
-        # Wait a moment and check if container actually started
-        sleep 2
-        FINAL_STATUS=$(get_container_status)
+    # Simplified readiness check
+    sleep 2
+    FINAL_STATUS=$(get_container_status)
 
-        if [ "$FINAL_STATUS" != "running" ]; then
-            recho "Container failed to start properly. Status: $FINAL_STATUS"
-            echo "=== Container logs ===" >&2
-            docker logs "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
-            echo "=== Docker inspect ===" >&2
-            docker inspect "$DOCKER_INST_NAME" --format='{{.State}}' 2>&1 || echo "Inspect failed" >&2
-            return 1
-        else
-            # Use new log monitoring system instead of polling
-            local init_timeout="${BSMITH_INIT_TIMEOUT:-300}"
-
-            if monitor_container_startup "$DOCKER_INST_NAME" "$init_timeout"; then
-                gecho "Container started successfully in daemon mode"
-                return 0
-            else
-                recho "Container failed to initialize properly"
-                echo "=== Container logs (last 50 lines) ===" >&2
-                docker logs --tail 50 "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
-                echo "=== Stopping and removing failed container ===" >&2
-                docker stop "$DOCKER_INST_NAME" 2>/dev/null || true
-                docker rm "$DOCKER_INST_NAME" 2>/dev/null || true
-                return 1
-            fi
-        fi
+    if [ "$FINAL_STATUS" != "running" ]; then
+        recho "Container failed to start properly. Status: $FINAL_STATUS"
+        echo "=== Container logs ===" >&2
+        docker logs "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
+        return 1
     else
-        DOCKER_CMD+=" $BSMITH_DOCKER_TAG bash"
-        gecho "Starting interactive container..."
-        exec $DOCKER_CMD
+        # Wait for full container setup
+        if check_container_ready "$DOCKER_INST_NAME"; then
+            return 0
+        else
+            recho "Container failed to initialize properly"
+            echo "=== Container logs (last 50 lines) ===" >&2
+            docker logs --tail 50 "$DOCKER_INST_NAME" 2>&1 || echo "No logs available" >&2
+            echo "=== Stopping and removing failed container ===" >&2
+            docker stop "$DOCKER_INST_NAME" 2>/dev/null || true
+            docker rm "$DOCKER_INST_NAME" 2>/dev/null || true
+            return 1
+        fi
     fi
 }
 
-# Build image if needed, create container if needed, start daemon in background
+# Start container and run automatic setup
 start_daemon() {
-    setup_container_if_needed "daemon"
+    setup_container_if_needed
     local result=$?
     
-    # If container started successfully, show next steps
+    # If container started successfully, run automatic setup
     if [ $result -eq 0 ]; then
         gecho ""
-        gecho "Container started successfully!"
-        gecho "To open a shell, run: ./smithy shell"
+        gecho "✓ Container is ready and initialized!"
+        gecho ""
+        gecho "Running automatic setup..."
+        
+        # Run setup automatically
+        setup_via_smith "setup" "all"
+        local setup_result=$?
+        
+        if [ $setup_result -eq 0 ]; then
+            gecho ""
+            gecho "✓ Complete setup finished successfully!"
+            gecho ""
+            gecho "Container is ready for development:"
+            gecho "  ./ctl-docker.sh shell        # Open interactive shell"
+            gecho "  ./ctl-docker.sh \"smith --help\" # Explore smith CLI"
+            gecho "  ./ctl-docker.sh check        # Check setup status"
+        elif [ $setup_result -eq 130 ]; then
+            yecho ""
+            yecho "Setup interrupted by user"
+            yecho "Container is running. You can:"
+            yecho "  ./ctl-docker.sh setup all    # Resume setup"
+            yecho "  ./ctl-docker.sh shell        # Use current environment"
+        else
+            yecho ""
+            yecho "⚠️  Automatic setup encountered issues"
+            yecho "Container is running but setup may be incomplete"
+            yecho ""
+            yecho "You can:"
+            yecho "  ./ctl-docker.sh shell        # Use basic environment"
+            yecho "  ./ctl-docker.sh setup all    # Retry setup manually"
+            yecho "  ./ctl-docker.sh check        # Check what's missing"
+        fi
     fi
     
     return $result
@@ -513,7 +459,7 @@ show_status() {
 
 exec_in_container() {
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start"
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
         return 1
     fi
 
@@ -532,27 +478,27 @@ exec_in_container() {
         fi
     done
 
-    # Use the fast exec entrypoint for optimized performance
-    # Also ensure unbuffered output is set for exec commands
-    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash -c "$CMD"
+    # Use the environment setup script for proper Poetry activation
+    # Debug: show the command being executed
+    debug "Executing in container: source /usr/local/bin/setup-env-streamlined.sh && cd $BSMITH_DIR && $CMD"
+    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" bash -c "source /usr/local/bin/setup-env.sh && cd $BSMITH_DIR && $CMD"
     return $?
 }
 
 open_shell() {
     if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: $0 start"
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
         return 1
     fi
 
     gecho "Opening shell in container $DOCKER_INST_NAME"
-    # Use entrypoint_fast.sh to get proper environment setup
-    docker exec -it -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint_fast.sh bash
+    # Use exec entrypoint for interactive shell with welcome message
+    docker exec -it -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh
 }
 
 show_logs() {
     docker logs "$DOCKER_INST_NAME" "$@"
 }
-
 
 cleanup_container() {
     STATUS=$(get_container_status)
@@ -564,7 +510,7 @@ cleanup_container() {
     fi
 }
 
-# Clean build artifacts only
+# Clean build artifacts only (preserved from original)
 clean_build_artifacts() {
     gecho "Cleaning build artifacts..."
     
@@ -597,7 +543,7 @@ clean_build_artifacts() {
     gecho "Build artifacts cleaned"
 }
 
-# Comprehensive clean with optional deep clean
+# Comprehensive clean with optional deep clean (preserved from original)
 clean_all() {
     local deep_clean=0
     if [ "$1" = "--deep" ] || [ "$1" = "-d" ]; then
@@ -643,9 +589,9 @@ clean_all() {
         read -p "Remove dependency repositories (deps/)? This will require re-fetching on next run [y/N]: " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            if [ -d "$BSMITH_DIR/deps" ]; then
+            if [ -d "$BSMITH_DEPS_DIR" ]; then
                 gecho "Removing dependency repositories..."
-                rm -rf "$BSMITH_DIR/deps"
+                rm -rf "$BSMITH_DEPS_DIR"
             fi
         fi
         
@@ -667,27 +613,63 @@ clean_all() {
     fi
 }
 
+# NEW: Smith CLI integration commands
+setup_via_smith() {
+    shift  # Remove 'setup' from arguments
+    
+    if ! is_container_running; then
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
+        return 1
+    fi
+    
+    if [ $# -eq 0 ]; then
+        # Default to setup all
+        exec_in_container "smith setup all"
+    else
+        # Pass specific arguments to smith setup
+        exec_in_container "smith setup $*"
+    fi
+}
 
-# Handle dependency management commands
+check_via_smith() {
+    if ! is_container_running; then
+        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
+        return 1
+    fi
+    
+    gecho "Checking setup status via smith CLI..."
+    exec_in_container "smith setup check"
+}
+
+# Handle dependency management commands (updated for Poetry)
 handle_deps_command() {
     shift  # Remove 'deps' from arguments
     
-    recho "The deps command has been updated for Poetry."
+    recho "Dependency management has been updated for Poetry."
     recho "Brainsmith now uses Poetry for all dependency management:"
     echo
-    echo "  poetry install              # Install Python dependencies"
-    echo "  poetry update              # Update dependencies"
-    echo "  poetry show                # Show installed packages"
-    echo "  ./setup-dev.sh             # Set up editable developer environment"
+    echo "  Host commands (run outside container):"
+    echo "    ./fetch-repos.sh          # Fetch Git repositories"
+    echo "    poetry install            # Install Python dependencies"
+    echo "    poetry update             # Update dependencies"
+    echo "    poetry show               # Show installed packages"
+    echo "    ./setup-dev.sh            # Set up editable developer environment"
     echo
-    echo "For non-Python dependencies (cnpy, board files), these are"
-    echo "handled automatically in the Docker environment."
+    echo "  Container commands:"
+    echo "    ./ctl-docker.sh setup all   # Set up all dependencies in container"
+    echo "    ./ctl-docker.sh check       # Check dependency status"
     echo
     echo "For manual installation, see the documentation."
 }
 
 # Main command handling
 case "${1:-help}" in
+    "setup")
+        setup_via_smith "$@"
+        ;;
+    "check")
+        check_via_smith
+        ;;
     "deps")
         handle_deps_command "$@"
         ;;

@@ -23,15 +23,23 @@ fi
 # Build directory for temporary files
 export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/${USER}_brainsmith}"
 
+# Dependencies directory
+export BSMITH_DEPS_DIR="${BSMITH_DEPS_DIR:-$BSMITH_DIR/deps}"
+
 # FINN compatibility variables
-export FINN_ROOT="$BSMITH_DIR"
+export FINN_ROOT="$BSMITH_DEPS_DIR/finn"
 export FINN_BUILD_DIR="$BSMITH_BUILD_DIR"
-export FINN_DEPS_DIR="$BSMITH_DIR/deps"
+export FINN_DEPS_DIR="$BSMITH_DEPS_DIR"
 
 # Python environment
 export PYTHON="${PYTHON:-python3.10}"
 export PYTHONUNBUFFERED=1
 export BSMITH_PLUGINS_STRICT="${BSMITH_PLUGINS_STRICT:-true}"
+
+# Poetry-specific environment variables
+export POETRY_CACHE_DIR="${POETRY_CACHE_DIR:-$HOME/.cache/pypoetry}"
+export POETRY_VIRTUALENVS_IN_PROJECT="${POETRY_VIRTUALENVS_IN_PROJECT:-false}"
+export POETRY_VIRTUALENVS_PATH="${POETRY_VIRTUALENVS_PATH:-/tmp/poetry_venvs}"
 
 # Xilinx/AMD tools configuration
 # Users should set XILINX_VIVADO, XILINX_VITIS, etc. in their environment
@@ -92,12 +100,15 @@ export BSMITH_HW_COMPILER="${BSMITH_HW_COMPILER:-finn}"
 # Network ports
 export NETRON_PORT="${NETRON_PORT:-8080}"
 
-# Docker-specific variables (only used by smithy)
+# Docker-specific variables
 export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
 export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
 export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
 export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
 export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
+
+# Poetry setup flag
+export BSMITH_POETRY_SETUP="${BSMITH_POETRY_SETUP:-true}"
 
 # Dependency update policy for Docker
 # Options: prompt, skip-modified, stash-always, fail-on-modified
@@ -113,6 +124,8 @@ if [ "$BSMITH_DEBUG" = "1" ]; then
     echo "[DEBUG]   BSMITH_DIR=$BSMITH_DIR"
     echo "[DEBUG]   BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     echo "[DEBUG]   PYTHON=$PYTHON"
+    echo "[DEBUG]   POETRY_CACHE_DIR=$POETRY_CACHE_DIR"
+    echo "[DEBUG]   BSMITH_POETRY_SETUP=$BSMITH_POETRY_SETUP"
     [ -n "$XILINX_VIVADO" ] && echo "[DEBUG]   XILINX_VIVADO=$XILINX_VIVADO"
     [ -n "$XILINX_VITIS" ] && echo "[DEBUG]   XILINX_VITIS=$XILINX_VITIS"
     [ -n "$XILINX_HLS" ] && echo "[DEBUG]   XILINX_HLS=$XILINX_HLS"

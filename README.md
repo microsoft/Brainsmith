@@ -43,15 +43,15 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 
 ```bash
 # Start persistent development container
-./smithy start
+./ctl-docker.sh start
 
 # Attach shell to container 
-./smithy shell
+./ctl-docker.sh shell
 # Run example
 ./examples/bert/quicktest.sh
 
 # OR execute one-off command 
-./smithy ./examples/bert/quicktest.sh
+./ctl-docker.sh ./examples/bert/quicktest.sh
 ```
 
 ## License

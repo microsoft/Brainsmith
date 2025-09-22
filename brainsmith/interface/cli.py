@@ -3,23 +3,23 @@
 Main entry point for the smith CLI tool.
 """
 
-import sys
+# Standard library imports
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
+# Third-party imports
 import click
-from rich.console import Console
 from rich.logging import RichHandler
-from rich.table import Table
 
+# Local imports
 from brainsmith.config import load_config, BrainsmithConfig, export_to_environment
 from brainsmith.core.dse_api import explore_design_space
 from .commands import config as config_commands
 from .commands import kernel as kernel_commands
 from .commands import setup as setup_commands
-
-console = Console()
+from .utils import console, error_exit, success
 
 
 class SmithContext:
@@ -70,8 +70,7 @@ def cli(ctx, verbose: bool, config: Optional[str]):
         # Export to environment for legacy compatibility
         export_to_environment(smith_ctx.config, verbose=verbose)
     except Exception as e:
-        console.print(f"[red]Error loading configuration:[/red] {e}")
-        sys.exit(1)
+        error_exit(f"Failed to load configuration: {e}")
     
     # Handle default command behavior (DSE when model/blueprint provided)
     if ctx.invoked_subcommand is None:
@@ -91,7 +90,7 @@ def cli(ctx, verbose: bool, config: Optional[str]):
 @click.option('--output-dir', '-o', type=click.Path(path_type=Path),
               help='Output directory (defaults to build dir with timestamp)')
 @pass_context
-def dse(ctx: SmithContext, model: Path, blueprint: Path, output_dir: Optional[Path]):
+def dse(ctx: SmithContext, model: Path, blueprint: Path, output_dir: Optional[Path]) -> None:
     """Run design space exploration for neural network acceleration.
     
     MODEL: Path to ONNX model file
@@ -112,20 +111,18 @@ def dse(ctx: SmithContext, model: Path, blueprint: Path, output_dir: Optional[Pa
             output_dir=str(output_dir) if output_dir else None
         )
         
-        console.print("\n[green]✓ Design space exploration completed successfully![/green]")
+        success("Design space exploration completed successfully!")
         
         # Display summary if available
         if hasattr(result, 'summary'):
             console.print(f"\nSummary: {result.summary}")
             
     except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
+        error_exit(str(e))
     except Exception as e:
-        console.print(f"[red]Error during exploration:[/red] {e}")
         if ctx.verbose:
             console.print_exception()
-        sys.exit(1)
+        error_exit(f"Failed during exploration: {e}")
 
 
 # Add subcommand groups
@@ -134,7 +131,7 @@ cli.add_command(kernel_commands.kernel)
 cli.add_command(setup_commands.setup)
 
 
-def main():
+def main() -> None:
     """Main entry point for the smith CLI."""
     try:
         # Handle the case where positional args are passed for default DSE
