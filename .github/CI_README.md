@@ -10,7 +10,7 @@
 │   ├── collect-artifacts/   # Safe artifact collection
 │   ├── docker-cleanup/      # Container & build cleanup
 │   ├── run-test-with-artifacts/  # Complete test lifecycle
-│   ├── smithy-exec/         # Command execution with container lifecycle
+│   ├── docker-exec/         # Command execution with container lifecycle
 │   └── workflow-setup/      # Standard initialization
 └── workflows/        # 2 focused workflows
     ├── pr-validation.yml     # BERT Quicktest
@@ -78,7 +78,7 @@ Complete test lifecycle with conditional artifact collection.
 
 #### Docker Actions  
 - `build-docker` - Builds image with verification and timing fixes
-- `smithy-exec` - Executes commands with container lifecycle management
+- `docker-exec` - Executes commands with container lifecycle management
 
 ## Adding New Workflows
 

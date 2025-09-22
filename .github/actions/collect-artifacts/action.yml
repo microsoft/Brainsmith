@@ -40,9 +40,9 @@ runs:
         free -h > "$ARTIFACT_DIR/memory_usage.txt" 2>/dev/null || true
         
         echo "=== Collecting container info ==="
-        if [ -x ./smithy ]; then
-            ./smithy status > "$ARTIFACT_DIR/container_status.txt" 2>&1 || echo "Status failed" > "$ARTIFACT_DIR/container_status.txt"
-            ./smithy logs > "$ARTIFACT_DIR/container.log" 2>&1 || echo "No logs" > "$ARTIFACT_DIR/container.log"
+        if [ -x ./ctl-docker.sh ]; then
+            ./ctl-docker.sh status > "$ARTIFACT_DIR/container_status.txt" 2>&1 || echo "Status failed" > "$ARTIFACT_DIR/container_status.txt"
+            ./ctl-docker.sh logs > "$ARTIFACT_DIR/container.log" 2>&1 || echo "No logs" > "$ARTIFACT_DIR/container.log"
         fi
         
         echo "✓ Artifacts collected in $ARTIFACT_DIR"
