@@ -12,8 +12,19 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# Move to project directory
-cd "${BSMITH_DIR:-/workspace}"
+# 3. Set up basic environment
+export PYTHONUNBUFFERED=1
+
+# Ensure python symlink exists (for compatibility)
+if [ ! -e /usr/bin/python ] && [ -e /usr/bin/python3 ]; then
+    if [ -w /usr/bin ]; then
+        ln -sf /usr/bin/python3 /usr/bin/python
+    else
+        mkdir -p "$HOME/.local/bin"
+        ln -sf /usr/bin/python3 "$HOME/.local/bin/python"
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+fi
 
 # 1. Fetch Git repositories if needed
 if [ ! -d "$BSMITH_DEPS_DIR" ] || [ -z "$(ls -A $BSMITH_DEPS_DIR 2>/dev/null)" ]; then
@@ -27,8 +38,11 @@ fi
 
 # 2. Install Poetry dependencies if needed
 if [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-    # Check if poetry.lock exists and dependencies are installed
-    if [ ! -f "poetry.lock" ] || ! poetry run python -c "import torch" 2>/dev/null; then
+    # Configure Poetry for project-local virtual environment
+    poetry config virtualenvs.in-project true
+    
+    # Check if .venv exists and dependencies are installed
+    if [ ! -d ".venv" ] || ! .venv/bin/python -c "import torch" 2>/dev/null; then
         log "Installing Poetry dependencies..."
         poetry install --no-interaction
         if [ $? -eq 0 ]; then
@@ -38,19 +52,18 @@ if [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
         fi
     fi
     
-    # Activate Poetry environment
-    log "Activating Poetry environment..."
-    VENV_PATH=$(poetry env info --path 2>/dev/null || echo "")
-    
-    if [ -n "$VENV_PATH" ] && [ -d "$VENV_PATH" ]; then
-        export VIRTUAL_ENV="$VENV_PATH"
-        export PATH="$VENV_PATH/bin:$PATH"
+    # Activate project-local virtual environment
+    if [ -d ".venv" ]; then
+        log "Activating virtual environment..."
+        export VIRTUAL_ENV="$PWD/.venv"
+        export PATH="$VIRTUAL_ENV/bin:$PATH"
+        source .venv/bin/activate
     else
-        log "⚠️  Failed to activate Poetry environment"
+        log "⚠️  No .venv directory found"
     fi
 fi
 
-# 2. Source Xilinx tools if available
+# 3. Source Xilinx tools if available
 source_xilinx() {
     local sourced=false
     
@@ -81,28 +94,12 @@ if [ -n "${VIVADO_PATH}${VITIS_PATH}${HLS_PATH}" ]; then
     source_xilinx
 fi
 
-# 3. Set up basic environment
-export PYTHONUNBUFFERED=1
-
-# Ensure python symlink exists (for compatibility)
-if [ ! -e /usr/bin/python ] && [ -e /usr/bin/python3 ]; then
-    if [ -w /usr/bin ]; then
-        ln -sf /usr/bin/python3 /usr/bin/python
-    else
-        mkdir -p "$HOME/.local/bin"
-        ln -sf /usr/bin/python3 "$HOME/.local/bin/python"
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
-fi
-
 # 4. Ensure smith is accessible in PATH
-if command -v poetry >/dev/null 2>&1 && poetry run which smith >/dev/null 2>&1; then
-    # Add Poetry bin to PATH if not already there
-    POETRY_BIN=$(dirname $(poetry run which smith))
-    if [[ ":$PATH:" != *":$POETRY_BIN:"* ]]; then
-        export PATH="$POETRY_BIN:$PATH"
-        log "✓ Added Poetry bin to PATH"
-    fi
+# With .venv activated, smith should already be in PATH
+if command -v smith >/dev/null 2>&1; then
+    log "✓ smith command available"
+else
+    log "⚠️  smith command not found in PATH"
 fi
 
 # 5. Keep container alive in daemon mode

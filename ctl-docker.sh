@@ -4,9 +4,9 @@
 #
 # Key commands:
 #   start  - Start container and run complete setup automatically
-#   shell  - Open interactive shell in running container
-#   setup  - Run additional setup via smith CLI in container
-#   clean  - Remove container and build artifacts (use --deep for full reset)
+#   shell  - Open interactive shell in running container  
+#   clean  - Stop container and clean artifacts (use --deep for full reset)
+#   [cmd]  - Execute any command in container (e.g., "smith setup all")
 #
 # Typical workflow:
 #   poetry install                         # Set up Poetry environment (host)
@@ -87,30 +87,25 @@ Container Commands:
     stop           Stop container
     restart        Stop and start container
     status         Show container status
-    cleanup        Remove container only
-    clean          Clean build artifacts, container, and optionally images
-    clean --deep   Deep clean including Docker images and dependency repos
+    clean          Stop and clean container/artifacts (use --deep for full reset)
+                   Options: --deep, --deep deps, --deep venv, --deep cache
+    
+Other Commands:
     logs           Show container logs
     
-Setup Commands:
-    setup [args]   Run setup via smith CLI (e.g., 'setup cppsim', 'setup boards')
-    check          Check setup status via smith CLI
-
-Dependency Commands (run on host):
-    deps           Show dependency management help
-    
 Note: Complete workflow is now streamlined:
-    poetry install                    # Install dependencies from pyproject.toml (host)
-    ./fetch-repos.sh                  # Fetch Git repositories (host)
-    ./ctl-docker.sh start                          # Start container + automatic setup (all-in-one)
+    poetry install           # Install dependencies from pyproject.toml (host)
+    ./fetch-repos.sh         # Fetch Git repositories (host)
+    ./ctl-docker.sh start    # Start container + automatic setup (all-in-one)
 
 Examples:
     ./ctl-docker.sh start                                   # Start and set up everything automatically
     ./ctl-docker.sh shell                                   # Interactive development
     ./ctl-docker.sh "smith build model.py"                  # Run smith commands
-    ./ctl-docker.sh setup cppsim                           # Install additional components
-    ./ctl-docker.sh clean                                   # Clean container and build files
+    ./ctl-docker.sh "smith setup cppsim"                    # Install additional components
+    ./ctl-docker.sh clean                                   # Stop container and clean build files
     ./ctl-docker.sh clean --deep                            # Full reset (removes everything)
+    ./ctl-docker.sh clean --deep venv                       # Clean only virtual environment
 EOF
 }
 
@@ -257,18 +252,9 @@ create_container() {
     DOCKER_CMD+=" -v $BSMITH_DIR:$BSMITH_DIR"
     DOCKER_CMD+=" -v $BSMITH_BUILD_DIR:$BSMITH_BUILD_DIR"
     
-    # Poetry cache and virtual environment mounts for non-root users
-    if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
-        # Create Poetry directories if they don't exist
-        mkdir -p "$HOME/.cache/pypoetry"
-        mkdir -p "$HOME/.cache/pypoetry/virtualenvs"
-        
-        # Mount Poetry cache directory (for package downloads)
-        DOCKER_CMD+=" -v $HOME/.cache/pypoetry:$HOME/.cache/pypoetry"
-        
-        # Mount virtual environments directory to ensure consistency
-        # Map host venv location to container venv location
-        DOCKER_CMD+=" -v $HOME/.cache/pypoetry/virtualenvs:/tmp/poetry_venvs"
+    # Mount project-local .venv if it exists
+    if [ -d "$BSMITH_DIR/.venv" ]; then
+        DOCKER_CMD+=" -v $BSMITH_DIR/.venv:$BSMITH_DIR/.venv"
     fi
 
     # Essential environment variables
@@ -280,10 +266,8 @@ create_container() {
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     
-    # Set Poetry environment variables for consistency
-    DOCKER_CMD+=" -e POETRY_CACHE_DIR=$HOME/.cache/pypoetry"
-    DOCKER_CMD+=" -e POETRY_VIRTUALENVS_PATH=/tmp/poetry_venvs"
-    DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=false"
+    # Set Poetry to use project-local virtual environments
+    DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
     
     # FINN-specific environment variables
     DOCKER_CMD+=" -e FINN_BUILD_DIR=$BSMITH_BUILD_DIR"
@@ -391,7 +375,7 @@ start_daemon() {
         gecho "Running automatic setup..."
         
         # Run setup automatically
-        setup_via_smith "setup" "all"
+        exec_in_container "smith setup all"
         local setup_result=$?
         
         if [ $setup_result -eq 0 ]; then
@@ -399,24 +383,24 @@ start_daemon() {
             gecho "✓ Complete setup finished successfully!"
             gecho ""
             gecho "Container is ready for development:"
-            gecho "  ./ctl-docker.sh shell        # Open interactive shell"
-            gecho "  ./ctl-docker.sh \"smith --help\" # Explore smith CLI"
-            gecho "  ./ctl-docker.sh check        # Check setup status"
+            gecho "  ./ctl-docker.sh shell                # Open interactive shell"
+            gecho "  ./ctl-docker.sh \"smith --help\"       # Explore smith CLI"
+            gecho "  ./ctl-docker.sh \"smith setup check\"  # Check setup status"
         elif [ $setup_result -eq 130 ]; then
             yecho ""
             yecho "Setup interrupted by user"
             yecho "Container is running. You can:"
-            yecho "  ./ctl-docker.sh setup all    # Resume setup"
-            yecho "  ./ctl-docker.sh shell        # Use current environment"
+            yecho "  ./ctl-docker.sh \"smith setup all\"    # Resume setup"
+            yecho "  ./ctl-docker.sh shell                # Use current environment"
         else
             yecho ""
             yecho "⚠️  Automatic setup encountered issues"
             yecho "Container is running but setup may be incomplete"
             yecho ""
             yecho "You can:"
-            yecho "  ./ctl-docker.sh shell        # Use basic environment"
-            yecho "  ./ctl-docker.sh setup all    # Retry setup manually"
-            yecho "  ./ctl-docker.sh check        # Check what's missing"
+            yecho "  ./ctl-docker.sh shell                # Use basic environment"
+            yecho "  ./ctl-docker.sh \"smith setup all\"    # Retry setup manually"
+            yecho "  ./ctl-docker.sh \"smith setup check\"  # Check what's missing"
         fi
     fi
     
@@ -500,17 +484,7 @@ show_logs() {
     docker logs "$DOCKER_INST_NAME" "$@"
 }
 
-cleanup_container() {
-    STATUS=$(get_container_status)
-    if [ "$STATUS" != "not_found" ]; then
-        gecho "Removing container $DOCKER_INST_NAME"
-        docker rm -f "$DOCKER_INST_NAME"
-    else
-        yecho "Container $DOCKER_INST_NAME does not exist"
-    fi
-}
-
-# Clean build artifacts only (preserved from original)
+# Clean build artifacts only
 clean_build_artifacts() {
     gecho "Cleaning build artifacts..."
     
@@ -543,66 +517,106 @@ clean_build_artifacts() {
     gecho "Build artifacts cleaned"
 }
 
-# Comprehensive clean with optional deep clean (preserved from original)
+# Unified clean command with optional deep clean targets
 clean_all() {
-    local deep_clean=0
-    if [ "$1" = "--deep" ] || [ "$1" = "-d" ]; then
-        deep_clean=1
-    fi
+    local deep_targets=()
     
-    yecho "Starting comprehensive clean..."
+    # Parse arguments for --deep and specific targets
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --deep|-d)
+                shift
+                if [[ $# -eq 0 ]] || [[ "$1" == -* ]]; then
+                    # Just --deep with no target means all
+                    deep_targets=("all")
+                else
+                    # Collect specific targets
+                    while [[ $# -gt 0 ]] && [[ "$1" != -* ]]; do
+                        deep_targets+=("$1")
+                        shift
+                    done
+                fi
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
     
-    # 1. Stop container if running
+    yecho "Starting clean..."
+    
+    # 1. Always stop container if running
     if is_container_running; then
         gecho "Stopping running container..."
         stop_container
     fi
     
-    # 2. Remove container
-    cleanup_container
+    # 2. Always remove container
+    STATUS=$(get_container_status)
+    if [ "$STATUS" != "not_found" ]; then
+        gecho "Removing container $DOCKER_INST_NAME"
+        docker rm -f "$DOCKER_INST_NAME"
+    fi
     
-    # 3. Clean build artifacts
+    # 3. Always clean build artifacts
     clean_build_artifacts
     
-    # 4. Deep clean (if requested)
-    if [ $deep_clean -eq 1 ]; then
-        yecho "Performing deep clean..."
+    # 4. Deep clean specific targets if requested
+    if [ ${#deep_targets[@]} -gt 0 ]; then
+        yecho "Performing deep clean of: ${deep_targets[*]}"
         
-        # Remove Docker image
-        if docker images | grep -q "$BSMITH_DOCKER_TAG"; then
-            gecho "Removing Docker image: $BSMITH_DOCKER_TAG"
-            docker rmi -f "$BSMITH_DOCKER_TAG"
-        fi
+        for target in "${deep_targets[@]}"; do
+            case "$target" in
+                "all")
+                    # Clean everything
+                    deep_targets=("cache" "deps" "venv")
+                    break
+                    ;;
+            esac
+        done
         
-        # Remove dangling images
-        local dangling_images=$(docker images -f "dangling=true" -q)
-        if [ -n "$dangling_images" ]; then
-            gecho "Removing dangling Docker images..."
-            docker rmi $dangling_images
-        fi
-        
-        # Prune Docker build cache (with confirmation)
-        gecho "Pruning Docker build cache..."
-        docker builder prune -f
-        
-        # Clean dependency repos (optional, with confirmation)
-        read -p "Remove dependency repositories (deps/)? This will require re-fetching on next run [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            if [ -d "$BSMITH_DEPS_DIR" ]; then
-                gecho "Removing dependency repositories..."
-                rm -rf "$BSMITH_DEPS_DIR"
-            fi
-        fi
-        
-        # Clean Poetry cache (optional, with confirmation)
-        read -p "Remove Poetry cache? This will require re-downloading packages [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            gecho "Removing Poetry cache..."
-            rm -rf "$HOME/.cache/pypoetry"
-            rm -rf "$BSMITH_BUILD_DIR/.poetry_cache"
-        fi
+        for target in "${deep_targets[@]}"; do
+            case "$target" in
+                "cache")
+                    # Remove Docker image and cache
+                    if docker images | grep -q "$BSMITH_DOCKER_TAG"; then
+                        gecho "Removing Docker image: $BSMITH_DOCKER_TAG"
+                        docker rmi -f "$BSMITH_DOCKER_TAG"
+                    fi
+                    
+                    # Remove dangling images
+                    local dangling_images=$(docker images -f "dangling=true" -q)
+                    if [ -n "$dangling_images" ]; then
+                        gecho "Removing dangling Docker images..."
+                        docker rmi $dangling_images
+                    fi
+                    
+                    # Prune Docker build cache
+                    gecho "Pruning Docker build cache..."
+                    docker builder prune -f
+                    ;;
+                    
+                "deps")
+                    # Clean dependency repos
+                    if [ -d "$BSMITH_DEPS_DIR" ]; then
+                        gecho "Removing dependency repositories..."
+                        rm -rf "$BSMITH_DEPS_DIR"
+                    fi
+                    ;;
+                    
+                "venv")
+                    # Clean project-local .venv
+                    if [ -d "$BSMITH_DIR/.venv" ]; then
+                        gecho "Removing project-local .venv..."
+                        rm -rf "$BSMITH_DIR/.venv"
+                    fi
+                    ;;
+                    
+                *)
+                    yecho "Unknown deep clean target: $target"
+                    ;;
+            esac
+        done
     fi
     
     gecho "Clean complete!"
@@ -613,66 +627,9 @@ clean_all() {
     fi
 }
 
-# NEW: Smith CLI integration commands
-setup_via_smith() {
-    shift  # Remove 'setup' from arguments
-    
-    if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
-        return 1
-    fi
-    
-    if [ $# -eq 0 ]; then
-        # Default to setup all
-        exec_in_container "smith setup all"
-    else
-        # Pass specific arguments to smith setup
-        exec_in_container "smith setup $*"
-    fi
-}
-
-check_via_smith() {
-    if ! is_container_running; then
-        recho "Container $DOCKER_INST_NAME is not running. Start it first with: ./ctl-docker.sh start"
-        return 1
-    fi
-    
-    gecho "Checking setup status via smith CLI..."
-    exec_in_container "smith setup check"
-}
-
-# Handle dependency management commands (updated for Poetry)
-handle_deps_command() {
-    shift  # Remove 'deps' from arguments
-    
-    recho "Dependency management has been updated for Poetry."
-    recho "Brainsmith now uses Poetry for all dependency management:"
-    echo
-    echo "  Host commands (run outside container):"
-    echo "    ./fetch-repos.sh          # Fetch Git repositories"
-    echo "    poetry install            # Install Python dependencies"
-    echo "    poetry update             # Update dependencies"
-    echo "    poetry show               # Show installed packages"
-    echo "    ./setup-dev.sh            # Set up editable developer environment"
-    echo
-    echo "  Container commands:"
-    echo "    ./ctl-docker.sh setup all   # Set up all dependencies in container"
-    echo "    ./ctl-docker.sh check       # Check dependency status"
-    echo
-    echo "For manual installation, see the documentation."
-}
 
 # Main command handling
 case "${1:-help}" in
-    "setup")
-        setup_via_smith "$@"
-        ;;
-    "check")
-        check_via_smith
-        ;;
-    "deps")
-        handle_deps_command "$@"
-        ;;
     "build")
         build_image
         ;;
@@ -694,9 +651,6 @@ case "${1:-help}" in
     "logs")
         shift
         show_logs "$@"
-        ;;
-    "cleanup")
-        cleanup_container
         ;;
     "clean")
         shift
