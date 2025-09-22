@@ -78,6 +78,7 @@ class Registry:
     
     def find(self, plugin_type: str, **criteria) -> List[Type]:
         """Find plugins matching criteria."""
+        self._load_plugins()
         results = []
         for name, (cls, metadata) in self._plugins[plugin_type].items():
             if all(metadata.get(k) == v for k, v in criteria.items()):
@@ -86,6 +87,7 @@ class Registry:
     
     def all(self, plugin_type: str) -> Dict[str, Type]:
         """Get all plugins of a type."""
+        self._load_plugins()
         return {name: cls for name, (cls, _) in self._plugins[plugin_type].items()}
     
     def reset(self) -> None:
@@ -97,6 +99,17 @@ class Registry:
         self._plugins = {
             'transform': {}, 'kernel': {}, 'backend': {}, 'step': {}
         }
+        
+        # Reset the discovery flag to force reloading
+        if hasattr(self, '_discovered'):
+            delattr(self, '_discovered')
+        
+        # Reset framework adapter initialization state
+        try:
+            from . import framework_adapters
+            framework_adapters._initialized = False
+        except ImportError:
+            pass
         
         self._load_plugins()
                 
