@@ -25,7 +25,8 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 ### Dependencies
 1. Ubuntu 22.04+
 2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
-3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+3. For Docker setup: Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+4. For local setup: Python 3.10+ and [Poetry](https://python-poetry.org/docs/#installation)
 
 
 ### 1. Set key environment variables
@@ -39,19 +40,43 @@ export BSMITH_XILINX_VERSION="2024.2"
 export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
 ```
 
-### 2. Run end-to-end test to validate environment 
+### 2. Installation Options
+
+#### Option A: Docker-based Development
 
 ```bash
-# Start persistent development container
+# Start container with automatic setup
 ./ctl-docker.sh start
 
-# Attach shell to container 
+# Open interactive shell
 ./ctl-docker.sh shell
-# Run example
-./examples/bert/quicktest.sh
 
-# OR execute one-off command 
+# Run commands directly
+./ctl-docker.sh "smith --help"
+```
+
+#### Option B: Local Development with Poetry
+
+```bash
+# Run automated setup script (activates venv automatically)
+./setup-dev.sh
+smith --help
+
+# Or manually:
+./fetch-repos.sh      # Fetch Git dependencies
+poetry install        # Install Python packages
+source $(poetry env info --path)/bin/activate  # Activate virtual environment
+smith --help
+```
+
+### 3. Validate Installation
+
+```bash
+# For Docker setup:
 ./ctl-docker.sh ./examples/bert/quicktest.sh
+
+# For local setup:
+poetry run ./examples/bert/quicktest.sh
 ```
 
 ## License
