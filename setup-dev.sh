@@ -12,6 +12,22 @@ fi
 
 echo "🔧 Setting up Brainsmith developer environment..."
 
+# Run environment validation if script exists
+if [ -f "docker/validate_env.sh" ]; then
+    echo "🔍 Validating system requirements..."
+    if ! bash docker/validate_env.sh; then
+        echo ""
+        echo "⚠️  System validation failed. Some features may not work properly."
+        echo ""
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+    echo ""
+fi
+
 # Check for Python
 if ! command -v python3 &> /dev/null; then
     echo "❌ Python 3 is required but not found"

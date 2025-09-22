@@ -31,8 +31,39 @@ becho () { echo -e "${BLUE}$1${NC}"; }
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 
-# Load environment configuration
-source "$BSMITH_DIR/docker/env-config.sh"
+# Essential environment defaults for Docker container creation
+# Most configuration is handled by smith CLI after container starts
+export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/${USER}_brainsmith}"
+export BSMITH_DEPS_DIR="${BSMITH_DEPS_DIR:-$BSMITH_DIR/deps}"
+
+# Docker-specific control variables
+export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
+export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
+export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
+export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
+export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
+export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-0}"
+
+# Dependency update policy
+export BSMITH_DEPS_POLICY="${BSMITH_DEPS_POLICY:-skip-modified}"
+
+# Basic defaults for Xilinx (smith will detect the rest)
+export BSMITH_XILINX_VERSION="${BSMITH_XILINX_VERSION:-2024.2}"
+export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-$BSMITH_BUILD_DIR/vivado_ip_cache}"
+export OHMYXILINX="${OHMYXILINX:-$BSMITH_DEPS_DIR/oh-my-xilinx}"
+export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-/opt/xilinx/platforms}"
+
+# Debug settings
+export BSMITH_DEBUG="${BSMITH_DEBUG:-0}"
+
+# Show configuration in debug mode
+if [ "$BSMITH_DEBUG" = "1" ]; then
+    echo "[DEBUG] Docker environment:"
+    echo "[DEBUG]   BSMITH_DIR=$BSMITH_DIR"
+    echo "[DEBUG]   BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
+    echo "[DEBUG]   BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
+    [ -n "$BSMITH_XILINX_PATH" ] && echo "[DEBUG]   BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
+fi
 
 # Generate container name based on brainsmith directory (no timestamp for persistence)
 BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
@@ -149,7 +180,7 @@ check_container_ready() {
         fi
         
         # Check if Poetry dependencies are installed and smith is available
-        if docker exec "$container_name" bash -c "source /usr/local/bin/setup-env.sh && cd $BSMITH_DIR && command -v smith" >/dev/null 2>&1; then
+        if docker exec "$container_name" bash -c "cd $BSMITH_DIR && command -v smith" >/dev/null 2>&1; then
             kill $LOG_PID 2>/dev/null || true
             return 0
         fi
@@ -293,7 +324,7 @@ create_container() {
         fi
     fi
 
-    # Xilinx and dependency setup (preserved from original)
+    # Xilinx and dependency setup (simplified - smith handles path detection)
     if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
         DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
         DOCKER_CMD+=" -e OHMYXILINX=$OHMYXILINX"
@@ -302,17 +333,17 @@ create_container() {
         DOCKER_CMD+=" -e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1"
         DOCKER_CMD+=" -e XILINX_LOCAL_USER_DATA=no"
 
-        # Xilinx tools (if available)
-        if [ ! -z "$BSMITH_XILINX_PATH" ]; then
-            VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
-            VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
-            HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
-
+        # Pass Xilinx base path and let smith detect the rest
+        if [ ! -z "$BSMITH_XILINX_PATH" ] && [ -d "$BSMITH_XILINX_PATH" ]; then
             DOCKER_CMD+=" -v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH"
-            [ -d "$VIVADO_PATH" ] && DOCKER_CMD+=" -e XILINX_VIVADO=$VIVADO_PATH -e VIVADO_PATH=$VIVADO_PATH"
-            [ -d "$HLS_PATH" ] && DOCKER_CMD+=" -e HLS_PATH=$HLS_PATH"
-            [ -d "$VITIS_PATH" ] && DOCKER_CMD+=" -e VITIS_PATH=$VITIS_PATH"
-            [ -d "$PLATFORM_REPO_PATHS" ] && DOCKER_CMD+=" -v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS -e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS"
+            DOCKER_CMD+=" -e BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
+            DOCKER_CMD+=" -e BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
+        fi
+        
+        # Mount platform repo if it exists
+        if [ ! -z "$PLATFORM_REPO_PATHS" ] && [ -d "$PLATFORM_REPO_PATHS" ]; then
+            DOCKER_CMD+=" -v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS"
+            DOCKER_CMD+=" -e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS"
         fi
     fi
 
@@ -465,7 +496,7 @@ exec_in_container() {
     # Use the environment setup script for proper Poetry activation
     # Debug: show the command being executed
     debug "Executing in container: source /usr/local/bin/setup-env-streamlined.sh && cd $BSMITH_DIR && $CMD"
-    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" bash -c "source /usr/local/bin/setup-env.sh && cd $BSMITH_DIR && $CMD"
+    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh bash -c "$CMD"
     return $?
 }
 
