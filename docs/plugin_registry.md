@@ -232,7 +232,7 @@ if has_transform("MyTransform"):
 
 ### Namespace Resolution
 
-The system automatically tries common framework prefixes when resolving names. For plugins from external frameworks like FINN or QONNX, you can use either the full namespaced name (e.g., "finn:ConvertBipolarMatMulToXnorPopcount") or just the simple name if it's unique.
+The system automatically tries common framework prefixes when resolving names. For plugins from external frameworks like FINN or QONNX, you can use either the full namespace name (e.g., "finn:ConvertBipolarMatMulToXnorPopcount") or just the simple name if it's unique.
 
 ```python
 # These are equivalent if "Streamline" is unique:

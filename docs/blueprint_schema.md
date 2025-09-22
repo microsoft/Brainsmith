@@ -1,6 +1,6 @@
 # Blueprint Schema Reference
 
-Blueprints are YAML files that declaratively define the design space for FPGA accelerator generation, including hardware kernels, build steps, and exploration parameters.
+Blueprints are YAML files that define the design space for FPGA accelerator generation, including hardware kernels, build steps, and exploration parameters.
 
 ## Schema Structure
 
