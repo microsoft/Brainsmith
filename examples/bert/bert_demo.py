@@ -226,12 +226,11 @@ def run_brainsmith_dse(model, args):
         raise RuntimeError("Unable to simplify the Brevitas BERT model")
     
     # Save simplified model
-    if args.save_intermediate:
-        onnx.save(model, os.path.join(model_dir, "simp.onnx"))
-        # Also save to debug directory for comparison
-        debug_dir = os.path.join(args.output_dir, "debug_models")
-        onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-        print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
+    onnx.save(model, os.path.join(model_dir, "simp.onnx"))
+    # Also save to debug directory for comparison
+    debug_dir = os.path.join(args.output_dir, "debug_models")
+    onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
+    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
     
     # Run cleanup
     cleanup(
@@ -248,8 +247,8 @@ def run_brainsmith_dse(model, args):
         os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
     )
     
-    # Get static blueprint path
-    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
+    # Get blueprint path from args
+    blueprint_path = Path(__file__).parent / args.blueprint
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
@@ -306,32 +305,11 @@ def main():
     parser.add_argument('-q', '--seqlen', type=int, default=128, 
                        help='Sequence length parameter')
     
-    # Build configuration
-    parser.add_argument('-f', '--fps', type=int, default=3000, 
-                       help='Target FPS for auto folding')
-    parser.add_argument('-c', '--clk', type=float, default=3.33, 
-                       help='Target clock period in ns')
-    parser.add_argument('-s', '--stop_step', type=str, default=None, 
-                       help='Step to stop at in build flow')
-    parser.add_argument('-p', '--param', type=str, default=None, 
-                       help='Preconfigured folding parameters file')
-    parser.add_argument('-x', '--run_fifo_sizing', action='store_true', 
-                       help='Run FIFO sizing step')
-    parser.add_argument('-d', '--dcp', action='store_true',
-                       help='Generate DCP file (default: disabled for quicktest)')
-    parser.add_argument('--board', type=str, default='V80', 
-                       help='Target board (V80, Pynq-Z1, U250)')
-    parser.add_argument('-v', '--verbose', action='store_true', 
-                       help='Enable verbose logging')
+    # Blueprint configuration
+    parser.add_argument('--blueprint', type=str, default='bert_demo.yaml',
+                       help='Blueprint YAML file to use (default: bert_demo.yaml)')
     
     args = parser.parse_args()
-    
-    # Set hardcoded values to match old system
-    args.save_intermediate = True
-    args.standalone_thresholds = True
-    args.fifosim_n_inferences = 2
-    args.verification_atol = 1e-1
-    args.split_large_fifos = True
     
     # Determine output directory
     build_dir = get_build_dir()
@@ -339,7 +317,7 @@ def main():
     args.output_dir = os.path.join(str(build_dir), args.output)
     
     print("=" * 70)
-    print("BERT Modern Demo - Using Brainsmith DSE v3")
+    print("BERT Demo Using Brainsmith DSE")
     print("=" * 70)
     print(f"Configuration:")
     print(f"  Hidden layers: {args.num_hidden_layers}")
@@ -348,9 +326,7 @@ def main():
     print(f"  Intermediate size: {args.intermediate_size}")
     print(f"  Bitwidth: {args.bitwidth}")
     print(f"  Sequence length: {args.seqlen}")
-    print(f"  Target FPS: {args.fps}")
-    print(f"  Clock period: {args.clk} ns")
-    print(f"  Board: {args.board}")
+    print(f"  Blueprint: {args.blueprint}")
     print(f"  Output directory: {args.output_dir}")
     print("=" * 70)
     
