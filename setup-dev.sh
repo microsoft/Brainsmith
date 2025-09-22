@@ -37,14 +37,10 @@ echo ""
 echo "📦 Step 2: Installing Python dependencies..."
 poetry install
 
-# Step 3: Optional simulation dependencies
+# Step 3: Setup all dependencies
 echo ""
-echo "🔧 Step 3: Setting up optional simulation dependencies..."
-if poetry run python -m brainsmith.core.plugins.dependencies setup_cppsim 2>/dev/null; then
-    echo "  ✅ C++ simulation dependencies installed"
-else
-    echo "  ⚠️  C++ simulation setup skipped (optional)"
-fi
+echo "🔧 Step 3: Setting up all dependencies..."
+poetry run smith setup all
 
 echo ""
 echo "🎉 Development environment setup complete!"
