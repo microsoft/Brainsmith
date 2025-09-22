@@ -49,9 +49,18 @@ fi
 echo ""
 echo "🎉 Development environment setup complete!"
 echo ""
+
+# Activate the virtual environment
+VENV_PATH=$(poetry env info --path)
+echo "Activating virtual environment..."
+source "$VENV_PATH/bin/activate"
+
+echo ""
+echo "✅ Virtual environment activated!"
+echo ""
 echo "Brainsmith is ready for development. Available commands:"
-echo "  • poetry run smith --help"
-echo "  • poetry shell  # Activate environment"
+echo "  • smith --help  # Direct access to smith CLI"
+echo "  • deactivate    # Exit virtual environment"
 echo ""
 echo "To update dependencies in the future:"
 echo "  • ./fetch-repos.sh  # Update Git repositories"
