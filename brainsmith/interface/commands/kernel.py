@@ -1,16 +1,15 @@
 """Hardware kernel generation command for the smith CLI."""
 
-import sys
+# Standard library imports
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
+# Third-party imports
 import click
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
+# Local imports
 from brainsmith.tools.hw_kernel_gen.hkg import HardwareKernelGenerator
-
-console = Console()
+from ..utils import console, error_exit, success, progress_spinner
 
 
 @click.command()
@@ -26,7 +25,7 @@ console = Console()
     'generate_documentation'
 ]), help='Stop execution after specified phase (for debugging)')
 def kernel(rtl_file: Path, compiler_data: Path, output_dir: Path, 
-          custom_doc: Optional[Path], stop_after: Optional[str]):
+          custom_doc: Optional[Path], stop_after: Optional[str]) -> None:
     """Generate hardware kernel from RTL for FINN integration.
     
     RTL_FILE: Path to SystemVerilog RTL source file (.sv)
@@ -53,20 +52,12 @@ def kernel(rtl_file: Path, compiler_data: Path, output_dir: Path,
         )
         
         # Run the generator with progress indication
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Generating hardware kernel...", total=None)
-            
+        with progress_spinner("Generating hardware kernel...") as task:
             # Run the generator
             generated_files = generator.run(stop_after=stop_after)
-            
-            progress.update(task, completed=True)
         
         # Display results
-        console.print("\n[green]✓ Hardware kernel generation completed![/green]")
+        success("Hardware kernel generation completed!")
         
         if generated_files:
             console.print("\nGenerated files:")
@@ -78,12 +69,13 @@ def kernel(rtl_file: Path, compiler_data: Path, output_dir: Path,
             console.print(f"\n[yellow]Stopped after phase:[/yellow] {stop_after}")
             
     except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
+        error_exit(str(e))
     except Exception as e:
-        console.print(f"[red]Error during generation:[/red] {e}")
-        console.print("\nPlease check that:")
-        console.print("  • The RTL file is valid SystemVerilog")
-        console.print("  • The compiler data file is a valid Python module")
-        console.print("  • You have write permissions to the output directory")
-        sys.exit(1)
+        error_exit(
+            f"Failed during generation: {e}",
+            details=[
+                "The RTL file is valid SystemVerilog",
+                "The compiler data file is a valid Python module",
+                "You have write permissions to the output directory"
+            ]
+        )

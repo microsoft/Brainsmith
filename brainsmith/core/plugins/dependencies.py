@@ -7,9 +7,11 @@ board files, and other required components.
 import os
 import shutil
 import subprocess
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.request import urlretrieve
 
 from rich.console import Console
 
@@ -48,6 +50,17 @@ class LocalDependency:
     
     def dest_path(self, deps_dir: Path) -> Path:
         return deps_dir / self.parent_dep / self.subdir
+
+
+@dataclass
+class ZipDependency:
+    """Board file dependency distributed as a ZIP file."""
+    name: str
+    url: str
+    dest_subdir: str  # Relative to deps_dir
+    
+    def dest_path(self, deps_dir: Path) -> Path:
+        return deps_dir / self.dest_subdir
 
 
 # Define all dependencies declaratively
@@ -103,13 +116,26 @@ DEPENDENCIES = {
         rev='13fb6f6c02c7dfd7e4b336b18b959ad5115db696',
         dest_subdir='board-files/realdigital'
     ),
+    
+    # PYNQ boards (distributed as ZIP files)
+    'pynq-z1-board': ZipDependency(
+        name='pynq-z1-board',
+        url='https://github.com/cathalmccabe/pynq-z1_board_files/raw/master/pynq-z1.zip',
+        dest_subdir='board-files/pynq-z1'
+    ),
+    
+    'pynq-z2-board': ZipDependency(
+        name='pynq-z2-board',
+        url='https://dpoauwgwqsy2x.cloudfront.net/Download/pynq-z2.zip',
+        dest_subdir='board-files/pynq-z2'
+    ),
 }
 
 # Group dependencies by category
 DEPENDENCY_GROUPS = {
     'cppsim': ['cnpy', 'finn-hlslib'],
     'xsim': ['finn-xsim'],
-    'boards': ['avnet-boards', 'xilinx-boards', 'realdigital-boards'],
+    'boards': ['avnet-boards', 'xilinx-boards', 'realdigital-boards', 'pynq-z1-board', 'pynq-z2-board'],
 }
 
 
@@ -262,8 +288,8 @@ class DependencyManager:
         """Check if a dependency is already installed."""
         dest = dep.dest_path(self.deps_dir)
         
-        if isinstance(dep, GitDependency):
-            # For git deps, check if directory exists
+        if isinstance(dep, (GitDependency, ZipDependency)):
+            # For git/zip deps, check if directory exists and has content
             return dest.exists() and any(dest.iterdir())
         elif isinstance(dep, LocalDependency):
             # For local deps, check if build output exists
@@ -309,6 +335,8 @@ class DependencyManager:
             return self._install_git_dependency(dep, quiet)
         elif isinstance(dep, LocalDependency):
             return self._install_local_dependency(dep, quiet)
+        elif isinstance(dep, ZipDependency):
+            return self._install_zip_dependency(dep, quiet)
         return False
     
     def _install_git_dependency(self, dep: GitDependency, quiet: bool = False) -> bool:
@@ -406,6 +434,40 @@ echo "{pybind11_includes}"
             console.print(f"[green]✓ {dep.name} built successfully[/green]")
         return True
     
+    def _install_zip_dependency(self, dep: ZipDependency, quiet: bool = False) -> bool:
+        """Download and extract a ZIP file dependency."""
+        dest = dep.dest_path(self.deps_dir)
+        
+        try:
+            # Create temp file for download
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                
+                # Download the file
+                if not quiet:
+                    console.print(f"[dim]Downloading {dep.url}...[/dim]")
+                urlretrieve(dep.url, tmp_path)
+                
+                # Create destination directory
+                dest.mkdir(parents=True, exist_ok=True)
+                
+                # Extract the ZIP file
+                with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+                    zip_ref.extractall(dest)
+                
+                # Clean up temp file
+                tmp_path.unlink()
+                
+            if not quiet:
+                console.print(f"[green]✓ {dep.name} downloaded and extracted successfully[/green]")
+            return True
+            
+        except Exception as e:
+            if not quiet:
+                console.print(f"[red]Failed to download/extract {dep.name}: {e}[/red]")
+            return False
+    
     # Convenience methods for grouped installations
     def install_group(self, group_name: str, force: bool = False, quiet: bool = True) -> bool:
         """Install all dependencies in a group."""
@@ -439,15 +501,21 @@ echo "{pybind11_includes}"
             # Map board names to dependency names
             dep_names = []
             for board in boards:
-                matching = [name for name in DEPENDENCIES if board in name and name.endswith('-boards')]
+                # Match both -boards and -board suffixes
+                matching = [name for name in DEPENDENCIES 
+                           if board in name and (name.endswith('-boards') or name.endswith('-board'))]
                 dep_names.extend(matching)
             if not dep_names:
                 if not quiet:
                     console.print(f"[red]No matching board repositories found for: {', '.join(boards)}[/red]")
                     console.print("\n[yellow]Available repositories:[/yellow]")
-                    available_repos = [name.replace('-boards', '') for name in DEPENDENCIES 
-                                     if name.endswith('-boards')]
-                    for r in sorted(available_repos):
+                    available_repos = []
+                    for name in DEPENDENCIES:
+                        if name.endswith('-boards'):
+                            available_repos.append(name.replace('-boards', ''))
+                        elif name.endswith('-board'):
+                            available_repos.append(name.replace('-board', ''))
+                    for r in sorted(set(available_repos)):
                         console.print(f"  • {r}")
                 return False
         else:
