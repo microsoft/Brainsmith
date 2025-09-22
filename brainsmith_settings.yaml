@@ -1,11 +1,12 @@
 # Brainsmith Project Settings
 
 # Build directory for compilation artifacts
-bsmith_build_dir: /home/tafk/builds/brainsmith
+bsmith_build_dir: /tmp/brainsmith_build
 
 # Xilinx tool configuration
 xilinx_path: /tools/Xilinx
 xilinx_version: "2024.2"
 
 # Debug settings
+plugins_strict: true
 debug: false

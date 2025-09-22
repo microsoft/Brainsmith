@@ -58,15 +58,22 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 #### Option B: Local Development with Poetry
 
 ```bash
-# Run automated setup script (activates venv automatically)
+# Run automated setup script
 ./setup-dev.sh
+
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Now you can use smith
 smith --help
 
-# Or manually:
-./fetch-repos.sh      # Fetch Git dependencies
-poetry install        # Install Python packages
-source $(poetry env info --path)/bin/activate  # Activate virtual environment
-smith --help
+# Or run commands without activation
+poetry run smith --help
+```
+
+For a fresh installation or to re-download all dependencies:
+```bash
+./setup-dev.sh --force
 ```
 
 ### 3. Validate Installation
@@ -76,7 +83,7 @@ smith --help
 ./ctl-docker.sh ./examples/bert/quicktest.sh
 
 # For local setup:
-poetry run ./examples/bert/quicktest.sh
+./examples/bert/quicktest.sh    # Run in poetry venv
 ```
 
 ## License

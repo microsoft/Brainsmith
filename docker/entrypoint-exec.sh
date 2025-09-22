@@ -10,14 +10,11 @@ set -e
 # Move to project directory
 cd "${BSMITH_DIR:-/workspace}"
 
-# 1. Activate Poetry environment if available
-if [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-    VENV_PATH=$(poetry env info --path 2>/dev/null || echo "")
-    
-    if [ -n "$VENV_PATH" ] && [ -d "$VENV_PATH" ]; then
-        export VIRTUAL_ENV="$VENV_PATH"
-        export PATH="$VENV_PATH/bin:$PATH"
-    fi
+# 1. Activate project-local virtual environment if available
+if [ -d ".venv" ]; then
+    export VIRTUAL_ENV="$PWD/.venv"
+    export PATH="$VIRTUAL_ENV/bin:$PATH"
+    source .venv/bin/activate 2>/dev/null || true
 fi
 
 # 2. Source Xilinx tools if available (silent)
@@ -51,9 +48,9 @@ else
     echo "===================================="
     
     if [ -n "$VIRTUAL_ENV" ]; then
-        echo "✓ Poetry: $(basename $VIRTUAL_ENV)"
+        echo "✓ Virtual env: .venv"
     else
-        echo "⚠️  Poetry: No environment (run 'poetry install' on host)"
+        echo "⚠️  Virtual env: Not found (run './setup-dev.sh' on host)"
     fi
     
     if [ -n "$XILINX_VIVADO" ] || [ -n "$XILINX_VITIS" ]; then

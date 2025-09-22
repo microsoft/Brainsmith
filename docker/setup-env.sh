@@ -5,13 +5,11 @@
 # Move to project directory
 cd "${BSMITH_DIR:-/workspace}" 2>/dev/null
 
-# Activate Poetry environment if available
-if [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-    VENV_PATH=$(poetry env info --path 2>/dev/null || echo "")
-    if [ -n "$VENV_PATH" ] && [ -d "$VENV_PATH" ]; then
-        export VIRTUAL_ENV="$VENV_PATH"
-        export PATH="$VENV_PATH/bin:$PATH"
-    fi
+# Activate project-local virtual environment if available
+if [ -d ".venv" ]; then
+    export VIRTUAL_ENV="$PWD/.venv"
+    export PATH="$VIRTUAL_ENV/bin:$PATH"
+    source .venv/bin/activate 2>/dev/null || true
 fi
 
 # Source Xilinx tools if available (silent)
