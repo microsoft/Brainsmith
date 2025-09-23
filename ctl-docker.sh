@@ -31,45 +31,50 @@ becho () { echo -e "${BLUE}$1${NC}"; }
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 export BSMITH_DIR=$(readlink -f "$SCRIPT_DIR")
 
-# Essential environment defaults for Docker container creation
-# Most configuration is handled by smith CLI after container starts
-export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-/tmp/${USER}_brainsmith}"
+# Generate container name based on brainsmith directory (no timestamp for persistence)
+BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
+DOCKER_UNAME=$(id -un)
+DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
+BSMITH_CONTAINER_DIR="/tmp/${DOCKER_INST_NAME}"
+DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
+
+# ===== ENVIRONMENT DEFAULTS (Developers: override these as needed) =====
+
+# Essential paths - default to container-specific tmp directory for isolation
+export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-$BSMITH_CONTAINER_DIR/build}"
 export BSMITH_DEPS_DIR="${BSMITH_DEPS_DIR:-$BSMITH_DIR/deps}"
 
 # Docker-specific control variables
-export BSMITH_SSH_KEY_DIR="${BSMITH_SSH_KEY_DIR:-$BSMITH_DIR/ssh_keys}"
 export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
 export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
 export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
 export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
 export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-0}"
 
-# Dependency update policy
-export BSMITH_DEPS_POLICY="${BSMITH_DEPS_POLICY:-skip-modified}"
-
-# Basic defaults for Xilinx (smith will detect the rest)
+# Xilinx/FINN variables - Overrides values from brainsmith CLI/yaml settings
+# These provide defaults that can be overridden by environment variables
+export BSMITH_XILINX_PATH="${BSMITH_XILINX_PATH:-/tools/Xilinx}"
 export BSMITH_XILINX_VERSION="${BSMITH_XILINX_VERSION:-2024.2}"
-export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-$BSMITH_BUILD_DIR/vivado_ip_cache}"
-export OHMYXILINX="${OHMYXILINX:-$BSMITH_DEPS_DIR/oh-my-xilinx}"
-export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-/opt/xilinx/platforms}"
+export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-}"
+export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-}"
+
+# Docker runtime detection
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
 
 # Debug settings
 export BSMITH_DEBUG="${BSMITH_DEBUG:-0}"
 
+# ===== END OF ENVIRONMENT DEFAULTS =====
+
 # Show configuration in debug mode
 if [ "$BSMITH_DEBUG" = "1" ]; then
     echo "[DEBUG] Docker environment:"
+    echo "[DEBUG]   DOCKER_INST_NAME=$DOCKER_INST_NAME"
     echo "[DEBUG]   BSMITH_DIR=$BSMITH_DIR"
     echo "[DEBUG]   BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     echo "[DEBUG]   BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
     [ -n "$BSMITH_XILINX_PATH" ] && echo "[DEBUG]   BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
 fi
-
-# Generate container name based on brainsmith directory (no timestamp for persistence)
-BSMITH_DIR_HASH=$(echo "$BSMITH_DIR" | md5sum | cut -d' ' -f1 | head -c 8)
-DOCKER_UNAME=$(id -un)
-DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
-DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
 # Debug output for container name generation (only if BSMITH_DEBUG is set)
 debug() {
@@ -90,10 +95,7 @@ if [ -z "$BSMITH_DOCKER_TAG" ]; then
     fi
 fi
 
-# Docker runtime detection
-: ${DOCKER_BUILDKIT="1"}
-# GPU support must be explicitly enabled via BSMITH_DOCKER_GPU=1
-: ${BSMITH_DOCKER_GPU="0"}
+# GPU support is controlled by BSMITH_DOCKER_GPU environment variable
 
 # Validate Docker flags for security
 validate_docker_flags() {
@@ -180,7 +182,7 @@ check_container_ready() {
         fi
         
         # Check if Poetry dependencies are installed and smith is available
-        if docker exec "$container_name" bash -c "cd $BSMITH_DIR && command -v smith" >/dev/null 2>&1; then
+        if docker exec "$container_name" bash -c "cd $BSMITH_DIR && [ -f .venv/bin/smith ]" >/dev/null 2>&1; then
             kill $LOG_PID 2>/dev/null || true
             return 0
         fi
@@ -266,9 +268,9 @@ create_container() {
 
     gecho "Creating new container $DOCKER_INST_NAME"
 
-    # Create necessary directories
+    # Create necessary directories on host
+    mkdir -p $BSMITH_CONTAINER_DIR
     mkdir -p $BSMITH_BUILD_DIR
-    mkdir -p $BSMITH_SSH_KEY_DIR
 
     # Build Docker command with daemon options
     DOCKER_CMD="docker run"
@@ -281,6 +283,7 @@ create_container() {
 
     # Essential volume mounts
     DOCKER_CMD+=" -v $BSMITH_DIR:$BSMITH_DIR"
+    DOCKER_CMD+=" -v $BSMITH_CONTAINER_DIR:$BSMITH_CONTAINER_DIR"
     DOCKER_CMD+=" -v $BSMITH_BUILD_DIR:$BSMITH_BUILD_DIR"
     
     # Mount project-local .venv if it exists
@@ -292,10 +295,11 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
+    DOCKER_CMD+=" -e BSMITH_CONTAINER_DIR=$BSMITH_CONTAINER_DIR"
     DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
-    DOCKER_CMD+=" -e BSMITH_DEPS_POLICY=$BSMITH_DEPS_POLICY"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
+    DOCKER_CMD+=" -e DOCKER_INST_NAME=$DOCKER_INST_NAME"
     
     # Set Poetry to use project-local virtual environments
     DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
@@ -312,38 +316,45 @@ create_container() {
         # Security: /etc/shadow contains password hashes and should not be mounted
         [ -d /etc/sudoers.d ] && DOCKER_CMD+=" -v /etc/sudoers.d:/etc/sudoers.d:ro"
 
-        # SSH key directory mount for non-root user
-        if [ -d "$BSMITH_SSH_KEY_DIR" ]; then
-            DOCKER_CMD+=" -v $BSMITH_SSH_KEY_DIR:$HOME/.ssh"
-        fi
         DOCKER_CMD+=" --user $(id -u):$(id -g)"
-    else
-        # SSH key directory mount for root user
-        if [ -d "$BSMITH_SSH_KEY_DIR" ]; then
-            DOCKER_CMD+=" -v $BSMITH_SSH_KEY_DIR:/root/.ssh"
-        fi
     fi
 
-    # Xilinx and dependency setup (simplified - smith handles path detection)
-    if [ "$BSMITH_SKIP_DEP_REPOS" = "0" ]; then
-        DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
-        DOCKER_CMD+=" -e OHMYXILINX=$OHMYXILINX"
+    # Xilinx setup - if Xilinx path is provided and exists
+    if [ ! -z "$BSMITH_XILINX_PATH" ] && [ -d "$BSMITH_XILINX_PATH" ]; then
+        # Mount Xilinx installation
+        DOCKER_CMD+=" -v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH"
+        DOCKER_CMD+=" -e BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
+        
+        # Pass through Xilinx-related variables if they are defined
+        [ -n "$BSMITH_XILINX_VERSION" ] && DOCKER_CMD+=" -e BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
+        [ -n "$VIVADO_IP_CACHE" ] && DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
 
         # Xilinx workarounds
         DOCKER_CMD+=" -e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1"
         DOCKER_CMD+=" -e XILINX_LOCAL_USER_DATA=no"
-
-        # Pass Xilinx base path and let smith detect the rest
-        if [ ! -z "$BSMITH_XILINX_PATH" ] && [ -d "$BSMITH_XILINX_PATH" ]; then
-            DOCKER_CMD+=" -v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH"
-            DOCKER_CMD+=" -e BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
-            DOCKER_CMD+=" -e BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
-        fi
         
         # Mount platform repo if it exists
         if [ ! -z "$PLATFORM_REPO_PATHS" ] && [ -d "$PLATFORM_REPO_PATHS" ]; then
             DOCKER_CMD+=" -v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS"
             DOCKER_CMD+=" -e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS"
+        fi
+        
+        # Handle Xilinx license file/server
+        if [ ! -z "$XILINXD_LICENSE_FILE" ]; then
+            # Check if it's a file path (not a server address like 2100@server)
+            if [[ "$XILINXD_LICENSE_FILE" != *"@"* ]]; then
+                # It might be a file path or multiple paths separated by colons
+                IFS=':' read -ra LICENSE_PATHS <<< "$XILINXD_LICENSE_FILE"
+                for LICENSE_PATH in "${LICENSE_PATHS[@]}"; do
+                    if [ -f "$LICENSE_PATH" ]; then
+                        # Mount the directory containing the license file
+                        LICENSE_DIR=$(dirname "$LICENSE_PATH")
+                        DOCKER_CMD+=" -v $LICENSE_DIR:$LICENSE_DIR:ro"
+                    fi
+                done
+            fi
+            # Always pass the environment variable
+            DOCKER_CMD+=" -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
         fi
     fi
 

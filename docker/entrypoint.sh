@@ -27,19 +27,31 @@ if [ ! -e /usr/bin/python ] && [ -e /usr/bin/python3 ]; then
 fi
 
 # 1. Fetch Git repositories if needed
-if [ ! -d "$BSMITH_DEPS_DIR" ] || [ -z "$(ls -A $BSMITH_DEPS_DIR 2>/dev/null)" ]; then
-    log "Fetching Git dependencies..."
-    if [ -x "./fetch-repos.sh" ]; then
-        ./fetch-repos.sh
-    else
-        log "⚠️  fetch-repos.sh not found or not executable"
+if [ "$BSMITH_SKIP_DEP_REPOS" != "1" ]; then
+    if [ ! -d "$BSMITH_DEPS_DIR" ] || [ -z "$(ls -A $BSMITH_DEPS_DIR 2>/dev/null)" ]; then
+        log "Fetching Git dependencies..."
+        if [ -x "./fetch-repos.sh" ]; then
+            ./fetch-repos.sh
+        else
+            log "⚠️  fetch-repos.sh not found or not executable"
+        fi
     fi
+else
+    log "Skipping dependency repository fetch (BSMITH_SKIP_DEP_REPOS=1)"
 fi
 
 # 2. Install Poetry dependencies if needed
 if [ -f "pyproject.toml" ] && command -v poetry >/dev/null 2>&1; then
-    # Configure Poetry for project-local virtual environment
-    poetry config virtualenvs.in-project true
+    # Use container-specific directory passed from ctl-docker.sh
+    # This ensures consistency across all container operations
+    mkdir -p "$BSMITH_CONTAINER_DIR"
+    
+    # Set Poetry config and cache directories to container-specific locations
+    export POETRY_CONFIG_DIR="${BSMITH_CONTAINER_DIR}/.poetry-config"
+    export POETRY_CACHE_DIR="${BSMITH_CONTAINER_DIR}/.poetry-cache"
+    mkdir -p "$POETRY_CONFIG_DIR" "$POETRY_CACHE_DIR"
+    
+    # Poetry will use POETRY_VIRTUALENVS_IN_PROJECT from environment (set to true by ctl-docker.sh)
     
     # Check if .venv exists and dependencies are installed
     if [ ! -d ".venv" ] || ! .venv/bin/python -c "import torch" 2>/dev/null; then
