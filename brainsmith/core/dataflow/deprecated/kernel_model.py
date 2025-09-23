@@ -52,7 +52,7 @@ class KernelModel(BaseModel):
     def __init__(self,
                  input_models: List[InputInterface] = None,
                  output_models: List[OutputInterface] = None,
-                 definition: Optional['KernelDefinition'] = None,
+                 schema: Optional['KernelSchema'] = None,
                  parameter_binding: Optional[ParameterBinding] = None,
                  **kwargs):
         """Initialize kernel model
@@ -60,11 +60,11 @@ class KernelModel(BaseModel):
         Args:
             input_models: List of input interfaces with concrete datatypes
             output_models: List of output interfaces with concrete datatypes
-            definition: Parent kernel definition (optional)
+            schema: Parent kernel schema (optional)
             parameter_binding: Parameter bindings (optional)
             **kwargs: Additional properties
         """
-        super().__init__(definition)
+        super().__init__(schema)
         
         self.input_models = input_models or []
         self.output_models = output_models or []
@@ -73,11 +73,11 @@ class KernelModel(BaseModel):
         # Validate that all interfaces have concrete datatypes
         for inp in self.input_models:
             if not hasattr(inp, 'datatype') or inp.datatype is None:
-                raise ValueError(f"Input interface '{inp.definition.name}' missing concrete datatype")
+                raise ValueError(f"Input interface '{inp.schema.name}' missing concrete datatype")
         
         for out in self.output_models:
             if not hasattr(out, 'datatype') or out.datatype is None:
-                raise ValueError(f"Output interface '{out.definition.name}' missing concrete datatype")
+                raise ValueError(f"Output interface '{out.schema.name}' missing concrete datatype")
         
         # Initialize other fields from kwargs
         for key, value in kwargs.items():
@@ -89,9 +89,9 @@ class KernelModel(BaseModel):
     def __post_init__(self):
         """Initialize model with optimized setup"""
         # Build name mappings for quick lookup
-        self._input_map = {inp.definition.name if inp.definition else f"input_{i}": inp 
+        self._input_map = {inp.schema.name if inp.schema else f"input_{i}": inp 
                           for i, inp in enumerate(self.input_models)}
-        self._output_map = {out.definition.name if out.definition else f"output_{i}": out 
+        self._output_map = {out.schema.name if out.schema else f"output_{i}": out 
                            for i, out in enumerate(self.output_models)}
         
         # Cache for performance calculations

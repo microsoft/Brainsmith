@@ -7,15 +7,13 @@
 
 """Core dataflow modeling components
 
-This module provides the core classes for modeling dataflow kernels with
-the SDIM (Streaming Dimensions) architecture.
+This module provides the core classes for modeling dataflow kernels.
 
 Key Components:
-- InputDefinition/OutputDefinition: Schema for interfaces
-- InputInterface/OutputInterface: Runtime models with SDIM support
-- KernelDefinition/KernelModel: Kernel-level abstractions
-- RelationType: Including DEPENDENT relationship for dimension constraints
-- Tiling functions: For block dimension configuration
+- InputSchema/OutputSchema: Schema definitions for kernel interfaces
+- KernelSchema: Kernel definition with input/output schemas
+- Immutable models: Created via factory functions in models.py
+- RelationType: Dimension relationships and constraints
 """
 
 # Core types
@@ -24,12 +22,8 @@ from .types import Shape
 # Relationships
 from .relationships import DimensionRelationship, RelationType
 
-# QONNX types (unified type system)
-from .qonnx_types import (
-    BaseDataType,
-    create_simple_datatype,
-    datatype_from_string,
-)
+# QONNX types (direct from QONNX)
+from qonnx.core.datatype import DataType, BaseDataType
 
 # Constraint types
 from .constraint_types import (
@@ -37,24 +31,19 @@ from .constraint_types import (
     validate_datatype_against_constraints,
 )
 
-# Core architecture
-from .input_definition import InputDefinition
-from .output_definition import OutputDefinition
-from .input_interface import InputInterface
-from .output_interface import OutputInterface
-from .kernel_definition import KernelDefinition
-from .kernel_model import KernelModel
+# Core architecture - schemas consolidated in schemas.py
+from .schemas import InputSchema, OutputSchema, KernelSchema
 
-# Tiling functions and configuration
-from .tiling_functions import (
-    fixed_tiles,
-    adaptive_parameterized_tiles,
-    parameterized_tiles,
-    adaptive_tiles,
-    full_tensor
+# Immutable models and factory functions
+from .models import (
+    InputModel,
+    OutputModel,
+    KernelModel,
+    create_input_model,
+    create_output_model,
+    create_kernel_model,
+    update_kernel_stream_config
 )
-from .tiling_spec import TilingSpec, TilingExpr, TilingExprType
-from .tiling_strategy import TilingStrategy, TilingOrder, TilingResult
 
 
 
@@ -65,20 +54,17 @@ __all__ = [
     # Relationships
     'DimensionRelationship', 'RelationType',
     
-    # QONNX types (unified type system)
-    'BaseDataType', 'create_simple_datatype', 'datatype_from_string',
+    # QONNX types
+    'DataType', 'BaseDataType',
     
     # Constraint types
     'DatatypeConstraintGroup', 'validate_datatype_against_constraints',
     
     # Core architecture
-    'InputDefinition', 'OutputDefinition',
-    'InputInterface', 'OutputInterface',
-    'KernelDefinition', 'KernelModel',
+    'InputSchema', 'OutputSchema', 'KernelSchema',
     
-    # Tiling functions
-    'fixed_tiles', 'adaptive_parameterized_tiles', 'parameterized_tiles', 'adaptive_tiles',
-    'full_tensor',
-    'TilingSpec', 'TilingExpr', 'TilingExprType',
-    'TilingStrategy', 'TilingOrder', 'TilingResult',
+    # Immutable models and factory functions
+    'InputModel', 'OutputModel', 'KernelModel',
+    'create_input_model', 'create_output_model', 'create_kernel_model',
+    'update_kernel_stream_config',
 ]
