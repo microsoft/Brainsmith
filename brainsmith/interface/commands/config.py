@@ -65,15 +65,15 @@ def _show_table_format(config: BrainsmithConfig) -> None:
     # Core paths
     table.add_row("Core Paths", "")
     table.add_row("  BSMITH_DIR", str(config.bsmith_dir))
-    table.add_row("  BSMITH_BUILD_DIR", str(config.bsmith_build_dir))
-    table.add_row("  BSMITH_DEPS_DIR", str(config.bsmith_deps_dir))
+    table.add_row("  BSMITH_BUILD_DIR", str(config.build_dir))
+    table.add_row("  BSMITH_DEPS_DIR", str(config.deps_dir))
     
     # Xilinx tools
     table.add_row("", "")
     table.add_row("Xilinx Tools", "")
-    table.add_row("  Vivado", str(config.vivado_path) if config.vivado_path else "Not found")
-    table.add_row("  Vitis", str(config.vitis_path) if config.vitis_path else "Not found")
-    table.add_row("  HLS", str(config.vitis_hls_path) if config.vitis_hls_path else "Not found")
+    table.add_row("  Vivado", str(config.effective_vivado_path) if config.effective_vivado_path else "Not found")
+    table.add_row("  Vitis", str(config.effective_vitis_path) if config.effective_vitis_path else "Not found")
+    table.add_row("  HLS", str(config.effective_vitis_hls_path) if config.effective_vitis_hls_path else "Not found")
     table.add_row("  Version", config.xilinx_version)
     
     # Other settings
@@ -148,7 +148,7 @@ def init(output: Path, force: bool) -> None:
         
         # Create a minimal config with important settings
         minimal_config = {
-            "bsmith_build_dir": str(config.bsmith_build_dir),
+            "build_dir": str(config.build_dir),
             "xilinx_path": str(config.xilinx_path) if config.xilinx_path else None,
             "xilinx_version": config.xilinx_version,
             "netron_port": config.netron_port,

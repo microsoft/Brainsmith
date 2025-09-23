@@ -21,7 +21,7 @@ def get_build_dir() -> Path:
         Path to the build directory
     """
     from .loader import get_config
-    return get_config().bsmith_build_dir
+    return get_config().build_dir
 
 
 def get_deps_dir() -> Path:
@@ -34,7 +34,7 @@ def get_deps_dir() -> Path:
         Path to the dependencies directory
     """
     from .loader import get_config
-    return get_config().bsmith_deps_dir
+    return get_config().deps_dir
 
 
 def get_bsmith_dir() -> Path:

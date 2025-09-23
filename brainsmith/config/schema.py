@@ -6,10 +6,39 @@ providing type safety and validation.
 
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple, Type
+from functools import cached_property
+from typing import Optional, Dict, Any, List, Tuple, Type, Callable
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 import yaml
+
+
+# Declarative environment variable export mappings
+EXTERNAL_ENV_MAPPINGS: Dict[str, Callable[['BrainsmithConfig'], Optional[str]]] = {
+    # Xilinx tool paths
+    'XILINX_VIVADO': lambda c: str(c.effective_vivado_path) if c.effective_vivado_path else None,
+    'VIVADO_PATH': lambda c: str(c.effective_vivado_path) if c.effective_vivado_path else None,
+    'XILINX_VITIS': lambda c: str(c.effective_vitis_path) if c.effective_vitis_path else None,
+    'VITIS_PATH': lambda c: str(c.effective_vitis_path) if c.effective_vitis_path else None,
+    'XILINX_HLS': lambda c: str(c.effective_vitis_hls_path) if c.effective_vitis_hls_path else None,
+    'HLS_PATH': lambda c: str(c.effective_vitis_hls_path) if c.effective_vitis_hls_path else None,
+    
+    # Platform and tool paths
+    'PLATFORM_REPO_PATHS': lambda c: c.platform_repo_paths,
+    'OHMYXILINX': lambda c: str(c.deps_dir / "oh-my-xilinx"),
+    
+    # Vivado specific
+    'VIVADO_IP_CACHE': lambda c: str(c.effective_vivado_ip_cache) if c.effective_vivado_path else None,
+    
+    # Visualization
+    'NETRON_PORT': lambda c: str(c.netron_port),
+    
+    # FINN environment variables
+    'FINN_ROOT': lambda c: str(c.finn.finn_root or c.deps_dir / "finn"),
+    'FINN_BUILD_DIR': lambda c: str(c.finn.finn_build_dir or c.build_dir),
+    'FINN_DEPS_DIR': lambda c: str(c.finn.finn_deps_dir or c.deps_dir),
+    'NUM_DEFAULT_WORKERS': lambda c: str(c.finn.num_default_workers) if c.finn.num_default_workers else None,
+}
 
 
 # Keep FinnConfig nested as it makes sense
@@ -84,13 +113,14 @@ class BrainsmithConfig(BaseSettings):
     # Core paths
     bsmith_dir: Optional[Path] = Field(
         default=None,
-        description="Root directory of Brainsmith (auto-detected if not set)"
+        description="Root directory of Brainsmith (auto-detected if not set)",
+        alias="dir"  # Maps to BSMITH_DIR env var
     )
-    bsmith_build_dir: Path = Field(
+    build_dir: Path = Field(
         default=Path("/tmp/brainsmith_build"),
         description="Build directory for artifacts"
     )
-    bsmith_deps_dir: Path = Field(
+    deps_dir: Path = Field(
         default=Path("deps"),
         description="Dependencies directory"
     )
@@ -182,162 +212,134 @@ class BrainsmithConfig(BaseSettings):
         )
     
     def model_post_init(self, __context: Any) -> None:
-        """Post-initialization to handle auto-detection and path resolution."""
+        """Post-initialization to handle essential setup only."""
         # Auto-detect BSMITH_DIR if not set
         if self.bsmith_dir is None:
-            auto_dir = self._auto_detect_bsmith_dir()
-            if auto_dir:
-                self.bsmith_dir = auto_dir
-            else:
+            try:
+                import brainsmith
+                self.bsmith_dir = Path(brainsmith.__file__).parent.parent
+            except ImportError:
                 raise ValueError("BSMITH_DIR not set and could not be auto-detected")
         
         # Resolve relative paths
-        if self.bsmith_dir and not self.bsmith_deps_dir.is_absolute():
-            self.bsmith_deps_dir = (self.bsmith_dir / self.bsmith_deps_dir).absolute()
+        if self.bsmith_dir and not self.deps_dir.is_absolute():
+            self.deps_dir = (self.bsmith_dir / self.deps_dir).absolute()
         
         # Set FINN compatibility paths if not already set
         if not self.finn.finn_root:
-            self.finn.finn_root = self.bsmith_dir
+            self.finn.finn_root =  self.deps_dir / "finn"
         if not self.finn.finn_build_dir:
-            self.finn.finn_build_dir = self.bsmith_build_dir
+            self.finn.finn_build_dir = self.build_dir
         if not self.finn.finn_deps_dir:
-            self.finn.finn_deps_dir = self.bsmith_deps_dir
-        
-        # Auto-detect Xilinx tool paths from xilinx_path if not explicitly set
-        if self.xilinx_path and self.xilinx_path.exists():
-            if not self.vivado_path:
-                vivado_path = self.xilinx_path / "Vivado" / self.xilinx_version
-                if vivado_path.exists():
-                    self.vivado_path = vivado_path
-            
-            if not self.vitis_path:
-                vitis_path = self.xilinx_path / "Vitis" / self.xilinx_version
-                if vitis_path.exists():
-                    self.vitis_path = vitis_path
-            
-            if not self.vitis_hls_path:
-                hls_path = self.xilinx_path / "Vitis_HLS" / self.xilinx_version
-                if hls_path.exists():
-                    self.vitis_hls_path = hls_path
-        
-        # Auto-compute Vivado IP cache if not set
-        if not self.vivado_ip_cache and self.vivado_path:
-            self.vivado_ip_cache = self.bsmith_build_dir / "vivado_ip_cache"
+            self.finn.finn_deps_dir = self.deps_dir
     
-    def _auto_detect_bsmith_dir(self) -> Optional[Path]:
-        """Auto-detect BSMITH_DIR from module location or current directory."""
-        # Try from current working directory
-        cwd = Path.cwd()
-        if (cwd / "pyproject.toml").exists():
-            # Check if it's a Brainsmith project
-            with open(cwd / "pyproject.toml") as f:
-                content = f.read()
-                if "brainsmith" in content:
-                    return cwd
-        
-        # Try from module location
-        try:
-            import brainsmith
-            module_path = Path(brainsmith.__file__).parent.parent
-            if (module_path / "pyproject.toml").exists():
-                return module_path
-        except ImportError:
-            pass
-        
-        return None
     
-    @field_validator('bsmith_dir')
+    @field_validator('bsmith_dir', mode='before')
     @classmethod
-    def validate_bsmith_dir(cls, v: Optional[Path]) -> Optional[Path]:
+    def validate_bsmith_dir(cls, v: Optional[Any]) -> Optional[Path]:
         """Validate that BSMITH_DIR exists and contains pyproject.toml."""
         if v is None:
             # Will be handled in model_post_init
             return v
+        
+        # Convert to Path if needed
+        if not isinstance(v, Path):
+            v = Path(v)
+            
         if not v.exists():
             raise ValueError(f"BSMITH_DIR {v} does not exist")
         if not (v / "pyproject.toml").exists():
             raise ValueError(f"BSMITH_DIR {v} does not contain pyproject.toml")
         return v.absolute()
     
-    @field_validator('bsmith_build_dir', 'bsmith_deps_dir')
+    @field_validator('build_dir', 'deps_dir', mode='before')
     @classmethod
-    def resolve_paths(cls, v: Path, info) -> Path:
-        """Resolve relative paths against BSMITH_DIR."""
+    def resolve_paths(cls, v: Any, info) -> Path:
+        """Convert to Path and resolve relative paths against BSMITH_DIR."""
+        # Ensure we have a Path object
+        if not isinstance(v, Path):
+            v = Path(v)
+        
         if not v.is_absolute() and 'bsmith_dir' in info.data and info.data['bsmith_dir'] is not None:
-            return (info.data['bsmith_dir'] / v).absolute()
+            bsmith_dir = info.data['bsmith_dir']
+            if not isinstance(bsmith_dir, Path):
+                bsmith_dir = Path(bsmith_dir)
+            return (bsmith_dir / v).absolute()
         return v.absolute()
     
     @field_validator('vivado_path', 'vitis_path', 'vitis_hls_path')
     @classmethod
     def validate_tool_path(cls, v: Optional[Path]) -> Optional[Path]:
-        """Validate Xilinx tool installation paths."""
-        if v is not None:
-            if not v.exists():
-                raise ValueError(f"Xilinx tool path does not exist: {v}")
-            
-            # Check for settings64.sh
-            settings_file = v / "settings64.sh"
-            if not settings_file.exists():
-                raise ValueError(f"Invalid Xilinx installation at {v} - missing settings64.sh")
-            
-            # Check for key executables (without executing them)
-            if "Vivado" in str(v):
-                if not (v / "bin" / "vivado").exists():
-                    raise ValueError(f"Invalid Vivado installation - missing bin/vivado")
-            elif "Vitis" in str(v) and "HLS" not in str(v):
-                if not (v / "bin" / "vitis").exists():
-                    raise ValueError(f"Invalid Vitis installation - missing bin/vitis")
-            elif "HLS" in str(v):
-                if not (v / "bin" / "vitis_hls").exists() and not (v / "bin" / "vivado_hls").exists():
-                    raise ValueError(f"Invalid Vitis HLS installation - missing HLS executable")
-        
+        """Validate Xilinx tool path format only, not existence."""
+        # Just ensure it's a Path object if provided
+        # Don't check existence as tools may not be mounted yet
         return v
     
     
-    def to_env_dict(self) -> Dict[str, str]:
-        """Convert configuration to environment variable dictionary."""
+    def to_external_env_dict(self) -> Dict[str, str]:
+        """Export external tool environment variables.
+        
+        This exports only environment variables consumed by external tools
+        (FINN, Xilinx, etc). Internal BSMITH_* variables are NOT exported
+        to prevent configuration feedback loops.
+        """
         env_dict = {}
         
-        # Core paths
-        env_dict["BSMITH_DIR"] = str(self.bsmith_dir)
-        env_dict["BSMITH_BUILD_DIR"] = str(self.bsmith_build_dir)
-        env_dict["BSMITH_DEPS_DIR"] = str(self.bsmith_deps_dir)
-        
-        # Plugins
-        env_dict["BSMITH_PLUGINS_STRICT"] = "true" if self.plugins_strict else "false"
-        
-        # Xilinx tools
-        if self.vivado_path:
-            env_dict["XILINX_VIVADO"] = str(self.vivado_path)
-            env_dict["VIVADO_PATH"] = str(self.vivado_path)
-        if self.vitis_path:
-            env_dict["XILINX_VITIS"] = str(self.vitis_path)
-            env_dict["VITIS_PATH"] = str(self.vitis_path)
-        if self.vitis_hls_path:
-            env_dict["XILINX_HLS"] = str(self.vitis_hls_path)
-            env_dict["HLS_PATH"] = str(self.vitis_hls_path)
-        
-        # Tools  
-        # OHMYXILINX is required by FINN - always use deps/oh-my-xilinx
-        env_dict["OHMYXILINX"] = str(self.bsmith_deps_dir / "oh-my-xilinx")
-        env_dict["PLATFORM_REPO_PATHS"] = self.platform_repo_paths
-        
-        # Debug
-        env_dict["BSMITH_DEBUG"] = "1" if self.debug else "0"
-        
-        # Vivado IP cache
-        if self.vivado_ip_cache:
-            env_dict["VIVADO_IP_CACHE"] = str(self.vivado_ip_cache)
-        
-        # Netron port
-        env_dict["NETRON_PORT"] = str(self.netron_port)
-        
-        # FINN compatibility
-        env_dict["FINN_ROOT"] = str(self.finn.finn_root) if self.finn.finn_root else str(self.bsmith_dir)
-        env_dict["FINN_BUILD_DIR"] = str(self.finn.finn_build_dir) if self.finn.finn_build_dir else str(self.bsmith_build_dir)
-        env_dict["FINN_DEPS_DIR"] = str(self.finn.finn_deps_dir) if self.finn.finn_deps_dir else str(self.bsmith_deps_dir)
-        
-        if self.finn.num_default_workers:
-            env_dict["NUM_DEFAULT_WORKERS"] = str(self.finn.num_default_workers)
+        # Apply all mappings
+        for env_var, getter in EXTERNAL_ENV_MAPPINGS.items():
+            value = getter(self)
+            if value is not None:
+                env_dict[env_var] = value
         
         return env_dict
+    
+    # Keep old method for backwards compatibility, but have it use the new one
+    def to_env_dict(self) -> Dict[str, str]:
+        """Deprecated: Use to_external_env_dict() instead."""
+        return self.to_external_env_dict()
+    
+    @cached_property
+    def effective_vivado_path(self) -> Optional[Path]:
+        """Get effective Vivado path with auto-detection."""
+        if self.vivado_path:
+            return self.vivado_path
+        
+        if self.xilinx_path and self.xilinx_path.exists():
+            vivado_path = self.xilinx_path / "Vivado" / self.xilinx_version
+            if vivado_path.exists():
+                return vivado_path
+        
+        return None
+    
+    @cached_property
+    def effective_vitis_path(self) -> Optional[Path]:
+        """Get effective Vitis path with auto-detection."""
+        if self.vitis_path:
+            return self.vitis_path
+        
+        if self.xilinx_path and self.xilinx_path.exists():
+            vitis_path = self.xilinx_path / "Vitis" / self.xilinx_version
+            if vitis_path.exists():
+                return vitis_path
+        
+        return None
+    
+    @cached_property
+    def effective_vitis_hls_path(self) -> Optional[Path]:
+        """Get effective Vitis HLS path with auto-detection."""
+        if self.vitis_hls_path:
+            return self.vitis_hls_path
+        
+        if self.xilinx_path and self.xilinx_path.exists():
+            hls_path = self.xilinx_path / "Vitis_HLS" / self.xilinx_version
+            if hls_path.exists():
+                return hls_path
+        
+        return None
+    
+    @cached_property
+    def effective_vivado_ip_cache(self) -> Path:
+        """Get effective Vivado IP cache directory."""
+        if self.vivado_ip_cache:
+            return self.vivado_ip_cache
+        return self.build_dir / "vivado_ip_cache"

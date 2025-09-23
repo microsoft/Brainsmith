@@ -115,6 +115,7 @@ Usage: ./ctl-docker.sh COMMAND [OPTIONS]
 
 Container Commands:
     start          Start container and run complete setup automatically
+                   Options: --force (re-fetch repos and force reinstall)
     shell          Interactive shell in running container
     build          Build Docker image
     stop           Stop container
@@ -133,6 +134,7 @@ Note: Complete workflow is now streamlined:
 
 Examples:
     ./ctl-docker.sh start                                   # Start and set up everything automatically
+    ./ctl-docker.sh start --force                           # Force re-fetch repos and reinstall everything
     ./ctl-docker.sh shell                                   # Interactive development
     ./ctl-docker.sh "smith build model.py"                  # Run smith commands
     ./ctl-docker.sh "smith setup cppsim"                    # Install additional components
@@ -218,7 +220,6 @@ build_image() {
     [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && BSMITH_DOCKER_BUILD_FLAGS+="--no-cache "
 
     docker build -f docker/Dockerfile \
-        --build-arg BACKEND=finn \
         --tag=$BSMITH_DOCKER_TAG \
         $BSMITH_DOCKER_BUILD_FLAGS .
 
@@ -303,10 +304,6 @@ create_container() {
     
     # Set Poetry to use project-local virtual environments
     DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
-    
-    # FINN-specific environment variables
-    DOCKER_CMD+=" -e FINN_BUILD_DIR=$BSMITH_BUILD_DIR"
-    DOCKER_CMD+=" -e FINN_ROOT=$BSMITH_DIR"
 
     # User/permission setup (preserved from original)
     if [ "$BSMITH_DOCKER_RUN_AS_ROOT" = "0" ]; then
@@ -406,6 +403,12 @@ create_container() {
 
 # Start container and run automatic setup
 start_daemon() {
+    # Check for --force flag
+    local force_flag=""
+    if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+        force_flag="--force"
+    fi
+    
     setup_container_if_needed
     local result=$?
     
@@ -416,8 +419,14 @@ start_daemon() {
         gecho ""
         gecho "Running automatic setup..."
         
-        # Run setup automatically
-        exec_in_container "smith setup all"
+        # If force flag is set, also force fetch repos
+        if [ -n "$force_flag" ]; then
+            gecho "Force mode: Re-fetching repositories and reinstalling dependencies..."
+            exec_in_container "cd $BSMITH_DIR && ./fetch-repos.sh --force"
+        fi
+        
+        # Run setup automatically with force flag if provided
+        exec_in_container "smith setup all $force_flag"
         local setup_result=$?
         
         if [ $setup_result -eq 0 ]; then
@@ -676,7 +685,8 @@ case "${1:-help}" in
         build_image
         ;;
     "start")
-        start_daemon
+        shift
+        start_daemon "$@"
         ;;
     "shell")
         open_shell
