@@ -75,6 +75,15 @@ class FINNRunner:
         Raises:
             RuntimeError: If build fails
         """
+        # Ensure FINN environment variables are set before importing FINN
+        # TODO: In the future, we hope to move away from environment variables
+        # and pass configuration directly to FINN components. For now, FINN
+        # requires certain environment variables to be set (FINN_ROOT, FINN_BUILD_DIR, etc.)
+        from brainsmith.config import load_config, export_to_environment
+        config = load_config()
+        export_to_environment(config)
+        
+        
         # Import FINN lazily to avoid circular dependencies
         from finn.builder.build_dataflow import build_dataflow_cfg
         from finn.builder.build_dataflow_config import DataflowBuildConfig

@@ -64,7 +64,7 @@ def cppsim(force: bool) -> None:
         force: Whether to force reinstallation
     """
     config = get_config()
-    deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
+    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     # Check if both are already installed
     cnpy_installed = _is_cnpy_installed(deps_mgr)
@@ -107,7 +107,7 @@ def xsim(force: bool) -> None:
     config = get_config()
     
     # Check Vivado availability
-    if not config.vivado_path:
+    if not config.effective_vivado_path:
         error_exit(
             "Vivado not found in configuration.",
             details=[
@@ -118,10 +118,10 @@ def xsim(force: bool) -> None:
             ]
         )
     
-    deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
+    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     # Check if already built (xsi.so exists)
-    xsi_so_path = config.bsmith_deps_dir / "finn" / "finn_xsi" / "xsi.so"
+    xsi_so_path = config.deps_dir / "finn" / "finn_xsi" / "xsi.so"
     
     if not force and xsi_so_path.exists():
         warning("finn-xsim already built (use --force to rebuild)")
@@ -160,7 +160,7 @@ def boards(force: bool, repo: tuple, verbose: bool) -> None:
         verbose: Whether to show detailed board list
     """
     config = get_config()
-    deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
+    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     # Check what's already downloaded
     board_files_dir = deps_mgr.deps_path / "board-files"
@@ -305,7 +305,7 @@ def check() -> None:
     Brainsmith dependencies and tools.
     """
     config = get_config()
-    deps_mgr = DependencyManager(deps_dir=str(config.bsmith_deps_dir))
+    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     table = Table(title="Brainsmith Setup Status")
     table.add_column("Component", style="cyan")
@@ -327,7 +327,7 @@ def check() -> None:
     table.add_row("finn-xsim", finnxsim_status, "deps/finn/finn_xsi")
     
     # Check Vivado
-    if config.vivado_path:
+    if config.effective_vivado_path:
         vivado_details = []
         
         # Check if settings64.sh has been sourced
@@ -341,7 +341,7 @@ def check() -> None:
         if config.xilinx_version:
             vivado_details.append(f"v{config.xilinx_version}")
             
-        vivado_path = str(config.vivado_path)
+        vivado_path = str(config.effective_vivado_path)
         status_text = f"Found ({', '.join(vivado_details)})" if vivado_details else "Found"
         vivado_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
@@ -351,7 +351,7 @@ def check() -> None:
     table.add_row("Vivado", vivado_status, vivado_path)
     
     # Check Vitis HLS
-    if config.vitis_hls_path:
+    if config.effective_vitis_hls_path:
         hls_details = []
         
         # Check if sourced
@@ -365,7 +365,7 @@ def check() -> None:
         if config.xilinx_version:
             hls_details.append(f"v{config.xilinx_version}")
             
-        hls_path = str(config.vitis_hls_path)
+        hls_path = str(config.effective_vitis_hls_path)
         status_text = f"Found ({', '.join(hls_details)})" if hls_details else "Found"
         hls_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
@@ -386,7 +386,7 @@ def check() -> None:
     if not cnpy_installed or not hlslib_installed:
         tip("Run 'smith setup cppsim' to install C++ simulation dependencies")
     
-    if not finnxsim_built and config.vivado_path:
+    if not finnxsim_built and config.effective_vivado_path:
         tip("Run 'smith setup xsim' to build Xilinx simulation support")
     
     if board_count == 0:

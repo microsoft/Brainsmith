@@ -43,7 +43,7 @@ import custom_steps  # Import custom steps to trigger registration
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import forge
+from brainsmith import explore_design_space
 
 warnings.simplefilter("ignore")
 
@@ -252,7 +252,7 @@ def run_brainsmith_dse(model, args):
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
-    results = forge(
+    results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
