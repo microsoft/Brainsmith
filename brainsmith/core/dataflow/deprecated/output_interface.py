@@ -32,22 +32,22 @@ class OutputInterface(BaseInterface):
                  tensor_dims: Shape,
                  block_dims: RaggedShape,
                  datatype: BaseDataType,
-                 definition: Optional['OutputDefinition'] = None,
+                 schema: Optional['OutputSchema'] = None,
                  parameter_binding: Optional[ParameterBinding] = None,
                  **kwargs):
         """Initialize output interface"""
-        super().__init__(definition)
-        
+        # Set dataclass fields directly
         self.tensor_dims = tensor_dims
         self.block_dims = block_dims
         self.datatype = datatype
         self.parameter_binding = parameter_binding
+        self._schema = schema
         
         # Initialize fields
         self._streaming_rate = None
         
-        # Call parent post_init
-        super().__post_init__()
+        # Call post_init to complete initialization
+        self.__post_init__()
     
     @property
     def streaming_rate(self) -> int:

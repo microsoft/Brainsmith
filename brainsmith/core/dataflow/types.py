@@ -17,7 +17,6 @@ import re
 
 # Type aliases
 Shape = Tuple[int, ...]
-RaggedShape = Union[Shape, List[Shape]]
 
 # New unified shape expression types for kernel integrator integration
 ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
