@@ -39,27 +39,28 @@ class InputInterface(BaseInterface):
                  stream_dims: Optional[Shape] = None,
                  skip_prob: List[float] = None,
                  actual_utilization: float = 1.0,
-                 definition: Optional['InputDefinition'] = None,
+                 schema: Optional['InputSchema'] = None,
                  parameter_binding: Optional[ParameterBinding] = None,
                  **kwargs):
         """Initialize input interface"""
-        super().__init__(definition)
-        
+        # Set dataclass fields directly
         self.tensor_dims = tensor_dims
         self.block_dims = block_dims
         self.datatype = datatype
+        self.parameter_binding = parameter_binding
+        self._schema = schema
+        
         self.skip_prob = skip_prob or []
         self.actual_utilization = actual_utilization
-        self.parameter_binding = parameter_binding
         
         # Initialize streaming dimensions from constructor parameter
         if stream_dims is not None:
             self._sdim = tuple(stream_dims)
         else:
             self._sdim = None
-        
-        # Call parent post_init
-        super().__post_init__()
+            
+        # Call post_init to complete initialization
+        self.__post_init__()
         
         # Default skip_prob if not provided
         if not self.skip_prob:

@@ -10,7 +10,7 @@
 from typing import List, Dict, Optional, Set, Tuple
 from dataclasses import dataclass
 from .kernel_model import KernelModel
-from .kernel_definition import KernelDefinition
+from .kernel_definition import KernelSchema
 from .base import BaseModel
 from .input_interface import InputInterface
 from .output_interface import OutputInterface
@@ -38,7 +38,7 @@ class KernelModelValidator:
     
     def __init__(self, kernel_model: KernelModel):
         self.model = kernel_model
-        self.definition = kernel_model.definition
+        self.schema = kernel_model.schema
         self.issues: List[ValidationIssue] = []
     
     def validate_configuration(self) -> List[ValidationIssue]:

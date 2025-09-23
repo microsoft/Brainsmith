@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 module range_indicator #(
 	parameter int unsigned RANGE_STEP = 1,
 	parameter int unsigned RANGE_MIN  = 0,

@@ -32,6 +32,17 @@
  * @author	Josh Monson <joshmonson@microsoft.com>
  *****************************************************************************/
 
+// @brainsmith INCLUDE_RTL rope.sv
+// @brainsmith INCLUDE_RTL $BSMITH_DIR$/deps/finn/finn-rtllib/axi/hdl/axilite.sv
+// @brainsmith WEIGHT sincos
+// @brainsmith DATATYPE s_axis width ELEM_BITS
+// @brainsmith DATATYPE sincos width SINCOS_WIDTH
+// @brainsmith DATATYPE_CONSTRAINT s_axis INT 1 32
+// @brainsmith DATATYPE_CONSTRAINT sincos INT 1 32
+// @brainsmith BDIM s_axis [SEQ_LEN, HIDDEN_DIM]
+// @brainsmith SDIM s_axis SIMD
+
+
 module rope_axi #(
 	int unsigned  HEAD_DIM,
 	int unsigned  SEQ_LEN,
