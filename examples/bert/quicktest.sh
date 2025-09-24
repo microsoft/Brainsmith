@@ -2,6 +2,11 @@
 
 set -e
 
+# Export brainsmith configuration to environment (including internal variables)
+# This ensures BSMITH_BUILD_DIR and other internal variables are available
+# Note: This script should be run with 'poetry run ./quicktest.sh'
+eval $(smith config show --format env)
+
 # Set longer timeout for RTL simulation (BERT models can take longer)
 export LIVENESS_THRESHOLD=10000000
 

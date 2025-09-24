@@ -3056,7 +3056,7 @@ sympy = "*"
 
 [[package]]
 name = "onnxscript"
-version = "0.3.0.dev20250922"
+version = "0.3.0.dev20250924"
 description = "Naturally author ONNX functions and models using a subset of Python"
 optional = false
 python-versions = ">=3.8"

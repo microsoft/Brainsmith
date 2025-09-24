@@ -9,7 +9,6 @@ with all plugins resolved from the registry.
 """
 
 import os
-import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from dataclasses import dataclass
 from .space import DesignSpace
 from brainsmith.core.config import ForgeConfig
 from brainsmith.core.plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
+from brainsmith.utils.yaml_parser import load_yaml, expand_env_vars_with_context
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]
@@ -134,124 +134,38 @@ def _load_with_inheritance(blueprint_path: str, return_parent: bool = False) -> 
         If return_parent is False: Merged blueprint data
         If return_parent is True: Tuple of (merged data, parent data)
     """
-    with open(blueprint_path, 'r') as f:
-        data = yaml.safe_load(f)
-    
-    # Expand environment variables with context
-    data = _expand_env_vars_with_context(data, blueprint_path)
+    # Use unified YAML loader with inheritance support and env var expansion
+    # The context variable BLUEPRINT_DIR is automatically provided as YAML_DIR
+    data = load_yaml(
+        blueprint_path,
+        expand_env_vars=True,
+        support_inheritance=True,
+        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
+    )
     
     parent_data = None
     
-    # Handle inheritance
-    if 'extends' in data:
-        # Resolve parent path relative to child
-        parent_path = str(Path(blueprint_path).parent / data['extends'])
-        parent_data = _load_with_inheritance(parent_path, return_parent=False)
-        
-        # Deep merge parent and child
-        merged = _deep_merge(parent_data, data)
-        
-        if return_parent:
-            return merged, parent_data
-        return merged
+    # If we need to return parent data, load it separately
+    if return_parent and 'extends' in data:
+        # Load original file without inheritance to get raw data
+        raw_data = load_yaml(
+            blueprint_path,
+            expand_env_vars=True,
+            support_inheritance=False
+        )
+        if 'extends' in raw_data:
+            parent_path = str(Path(blueprint_path).parent / raw_data['extends'])
+            parent_data = load_yaml(
+                parent_path,
+                expand_env_vars=True,
+                support_inheritance=True
+            )
     
-    # No inheritance
     if return_parent:
-        return data, None
+        return data, parent_data
     return data
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Deep merge two dictionaries.
-    
-    Args:
-        base: Base dictionary (parent blueprint)
-        override: Override dictionary (child blueprint)
-        
-    Returns:
-        Merged dictionary
-    """
-    result = base.copy()
-    
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    
-    return result
-
-
-def _expand_env_vars(data: Any) -> Any:
-    """
-    Recursively expand environment variables in data structure.
-    
-    Supports ${VAR} and $VAR syntax. Handles nested dicts and lists.
-    
-    Args:
-        data: Data structure to process
-        
-    Returns:
-        Data with environment variables expanded
-    """
-    if isinstance(data, str):
-        # Use os.path.expandvars which handles both ${VAR} and $VAR
-        return os.path.expandvars(data)
-    elif isinstance(data, dict):
-        return {k: _expand_env_vars(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [_expand_env_vars(item) for item in data]
-    else:
-        # Numbers, booleans, None, etc. - return as-is
-        return data
-
-
-def _expand_env_vars_with_context(data: Any, blueprint_path: str) -> Any:
-    """
-    Expand environment variables with additional context variables.
-    
-    Provides:
-        - BLUEPRINT_DIR: Directory containing the blueprint file
-        - BSMITH_DIR: Brainsmith root directory (if not already set)
-        
-    Args:
-        data: Data structure to process
-        blueprint_path: Path to blueprint file (for context)
-        
-    Returns:
-        Data with environment variables expanded
-    """
-    # Calculate context variables
-    blueprint_dir = str(Path(blueprint_path).parent.absolute())
-    
-    # Save original values if they exist
-    old_vars = {}
-    context_vars = {
-        'BLUEPRINT_DIR': blueprint_dir,
-    }
-    
-    # Only set BSMITH_DIR if not already set (smithy sets it)
-    if 'BSMITH_DIR' not in os.environ:
-        context_vars['BSMITH_DIR'] = str(Path(__file__).parents[3])
-    
-    for var, value in context_vars.items():
-        if var in os.environ:
-            old_vars[var] = os.environ[var]
-        os.environ[var] = value
-    
-    try:
-        # Expand variables with context
-        result = _expand_env_vars(data)
-    finally:
-        # Restore original environment
-        for var in context_vars:
-            if var in old_vars:
-                os.environ[var] = old_vars[var]
-            else:
-                os.environ.pop(var, None)
-    
-    return result
 
 
 def _parse_steps_raw(steps_data: List[Any]) -> List[Union[str, List[Optional[str]]]]:

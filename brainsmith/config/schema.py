@@ -10,7 +10,7 @@ from functools import cached_property
 from typing import Optional, Dict, Any, List, Tuple, Type, Callable
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
-import yaml
+from brainsmith.utils.yaml_parser import load_yaml
 
 
 # Declarative environment variable export mappings
@@ -48,6 +48,16 @@ class FinnConfig(BaseModel):
     finn_build_dir: Optional[Path] = Field(default=None, description="FINN build directory")
     finn_deps_dir: Optional[Path] = Field(default=None, description="FINN dependencies directory")
     num_default_workers: Optional[int] = Field(default=None, description="Default number of workers")
+    
+    @field_validator('finn_root', 'finn_build_dir', 'finn_deps_dir', mode='before')
+    @classmethod
+    def ensure_path_type(cls, v: Optional[Any]) -> Optional[Path]:
+        """Convert to Path object."""
+        if v is None:
+            return None
+        if not isinstance(v, Path):
+            return Path(v)
+        return v
     
     model_config = ConfigDict(validate_assignment=True)
 
@@ -91,12 +101,17 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         return None
     
     def _read_file(self, file_path: Path) -> Dict[str, Any]:
-        """Read and parse YAML file."""
+        """Read and parse YAML file with environment variable expansion."""
         if not file_path or not file_path.exists():
             return {}
         try:
-            with open(file_path) as f:
-                return yaml.safe_load(f) or {}
+            # Use unified YAML parser with env var expansion and schema-based path resolution
+            return load_yaml(
+                file_path,
+                expand_env_vars=True,
+                support_inheritance=False,  # Config files don't use inheritance
+                schema_class=self.settings_cls  # Pass the BrainsmithConfig class to extract path fields
+            )
         except Exception:
             return {}
     
@@ -238,9 +253,8 @@ class BrainsmithConfig(BaseSettings):
             except ImportError:
                 raise ValueError("BSMITH_DIR not set and could not be auto-detected")
         
-        # Resolve relative paths
-        if self.bsmith_dir and not self.deps_dir.is_absolute():
-            self.deps_dir = (self.bsmith_dir / self.deps_dir).absolute()
+        # Note: Relative paths are already resolved by the YAML parser
+        # based on the location of the YAML file
         
         # Set FINN compatibility paths if not already set
         if not self.finn.finn_root:
@@ -267,29 +281,25 @@ class BrainsmithConfig(BaseSettings):
             raise ValueError(f"BSMITH_DIR {v} does not exist")
         if not (v / "pyproject.toml").exists():
             raise ValueError(f"BSMITH_DIR {v} does not contain pyproject.toml")
-        return v.absolute()
+        return v
     
     @field_validator('build_dir', 'deps_dir', mode='before')
     @classmethod
-    def resolve_paths(cls, v: Any, info) -> Path:
-        """Convert to Path and resolve relative paths against BSMITH_DIR."""
+    def ensure_path_type(cls, v: Any) -> Path:
+        """Convert to Path object."""
         # Ensure we have a Path object
         if not isinstance(v, Path):
             v = Path(v)
-        
-        if not v.is_absolute() and 'bsmith_dir' in info.data and info.data['bsmith_dir'] is not None:
-            bsmith_dir = info.data['bsmith_dir']
-            if not isinstance(bsmith_dir, Path):
-                bsmith_dir = Path(bsmith_dir)
-            return (bsmith_dir / v).absolute()
-        return v.absolute()
+        return v
     
-    @field_validator('vivado_path', 'vitis_path', 'vitis_hls_path')
+    @field_validator('xilinx_path', 'vivado_path', 'vitis_path', 'vitis_hls_path', 'vivado_ip_cache', mode='before')
     @classmethod
-    def validate_tool_path(cls, v: Optional[Path]) -> Optional[Path]:
-        """Validate Xilinx tool path format only, not existence."""
-        # Just ensure it's a Path object if provided
-        # Don't check existence as tools may not be mounted yet
+    def validate_tool_path(cls, v: Optional[Any]) -> Optional[Path]:
+        """Convert tool paths to Path objects."""
+        if v is None:
+            return None
+        if not isinstance(v, Path):
+            return Path(v)
         return v
     
     
@@ -307,6 +317,22 @@ class BrainsmithConfig(BaseSettings):
             value = getter(self)
             if value is not None:
                 env_dict[env_var] = value
+        
+        return env_dict
+    
+    def to_all_env_dict(self) -> Dict[str, str]:
+        """Export ALL environment variables including internal BSMITH_* ones.
+        
+        WARNING: This includes internal configuration variables that may cause
+        feedback loops if used incorrectly. Use this only when you need access
+        to BSMITH_BUILD_DIR and similar internal variables.
+        """
+        env_dict = self.to_external_env_dict()
+        
+        # Add internal BSMITH variables
+        env_dict['BSMITH_BUILD_DIR'] = str(self.build_dir)
+        env_dict['BSMITH_DEPS_DIR'] = str(self.deps_dir)
+        env_dict['BSMITH_DIR'] = str(self.bsmith_dir)
         
         return env_dict
     
