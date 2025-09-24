@@ -16,9 +16,8 @@ This module contains all schema classes for defining kernel interfaces:
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Union, Dict, Any
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
-from .base import BaseSchema
 from qonnx.core.datatype import BaseDataType
 from .constraint_types import DatatypeConstraintGroup, validate_datatype_against_constraints
 from .relationships import DimensionRelationship, RelationType
@@ -54,6 +53,23 @@ def _build_repr(class_name: str, name: str, **kwargs) -> str:
             parts.append(f"{key}={value}")
     
     return f"{class_name}({', '.join(parts)})"
+
+
+class BaseSchema(ABC):
+    """Base class for all Schema classes
+    
+    Schemas specify constraints, relationships, and validation rules.
+    They define "what should be" rather than "what is".
+    """
+    
+    @abstractmethod
+    def validate(self) -> List[str]:
+        """Validate the schema for internal consistency
+        
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        pass
 
 
 @dataclass
