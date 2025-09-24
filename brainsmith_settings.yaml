@@ -1,7 +1,7 @@
 # Brainsmith Project Settings
 
 # Build directory for compilation artifacts
-bsmith_build_dir: /home/tafk/builds/brainsmith
+build_dir: ${HOME}/.brainsmith_build
 
 # Xilinx tool configuration
 xilinx_path: /tools/Xilinx

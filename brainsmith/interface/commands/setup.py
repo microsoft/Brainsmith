@@ -65,7 +65,7 @@ def cppsim(force: bool) -> None:
     """
     config = get_config()
     
-    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
+    deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     
     # Check if both are already installed
     cnpy_installed = _is_cnpy_installed(deps_mgr)
@@ -105,6 +105,8 @@ def xsim(force: bool) -> None:
     Args:
         force: Whether to force rebuild
     """
+    from brainsmith.config import export_to_environment
+    
     config = get_config()
     
     # Check Vivado availability
@@ -119,7 +121,10 @@ def xsim(force: bool) -> None:
             ]
         )
     
-    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
+    # Export environment variables before building
+    export_to_environment(config)
+    
+    deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     
     # Check if already built (xsi.so exists)
     xsi_so_path = config.deps_dir / "finn" / "finn_xsi" / "xsi.so"
@@ -162,7 +167,7 @@ def boards(force: bool, repo: tuple, verbose: bool) -> None:
     """
     config = get_config()
     
-    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
+    deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     
     # Check what's already downloaded
     board_files_dir = deps_mgr.deps_path / "board-files"
@@ -307,7 +312,7 @@ def check() -> None:
     Brainsmith dependencies and tools.
     """
     config = get_config()
-    deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
+    deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     
     table = Table(title="Brainsmith Setup Status")
     table.add_column("Component", style="cyan")

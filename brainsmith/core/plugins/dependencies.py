@@ -10,7 +10,7 @@ import subprocess
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from urllib.request import urlretrieve
 
 from rich.console import Console
@@ -227,13 +227,36 @@ def git_clone(url: str, dest: Path, rev: str, sparse_paths: Optional[List[str]] 
 class DependencyManager:
     """Manages external dependencies for Brainsmith."""
     
-    def __init__(self, deps_dir: Optional[Path] = None):
+    def __init__(self, deps_dir: Optional[Union[Path, str]] = None):
         """Initialize dependency manager.
         
         Args:
-            deps_dir: Directory for dependencies. Defaults to deps/ in current directory.
+            deps_dir: Directory for dependencies. Can be absolute or relative to project root.
         """
-        self.deps_dir = Path(deps_dir) if deps_dir else Path.cwd() / "deps"
+        if deps_dir is None:
+            # Default to deps/ in current directory
+            self.deps_dir = Path.cwd() / "deps"
+        elif isinstance(deps_dir, Path):
+            self.deps_dir = deps_dir
+        else:
+            self.deps_dir = Path(deps_dir)
+        
+        # If path is not absolute, resolve it relative to brainsmith root
+        if not self.deps_dir.is_absolute():
+            # Try to get brainsmith root from config
+            try:
+                from brainsmith.config import get_config
+                config = get_config()
+                if config.bsmith_dir:
+                    # Resolve relative to brainsmith root
+                    self.deps_dir = config.bsmith_dir / self.deps_dir
+                else:
+                    # Fallback to current directory
+                    self.deps_dir = self.deps_dir.absolute()
+            except ImportError:
+                # Config not available, use current directory
+                self.deps_dir = self.deps_dir.absolute()
+            
         self.deps_dir.mkdir(exist_ok=True)
     
     @property
@@ -388,7 +411,24 @@ class DependencyManager:
             build_path = build_path / dep.build_dir
             build_path.mkdir(exist_ok=True)
         
-        if not run_command(dep.build_cmd, build_path, f"Building {dep.name}", quiet=quiet):
+        # Set up environment for build
+        build_env = {}
+        # Get Brainsmith environment variables
+        try:
+            from brainsmith.config import get_config
+            config = get_config()
+            build_env.update(config.to_external_env_dict())
+            
+            # For finn-xsim, ensure FINN_ROOT points to the actual FINN location
+            if dep.name == 'finn-xsim':
+                # Override FINN_ROOT to point to the parent dependency's absolute path
+                build_env['FINN_ROOT'] = str(parent_path.absolute())
+        except ImportError:
+            # Fallback if config not available
+            if dep.name == 'finn-xsim':
+                build_env['FINN_ROOT'] = str(parent_path.absolute())
+        
+        if not run_command(dep.build_cmd, build_path, f"Building {dep.name}", env=build_env, quiet=quiet):
             return False
         
         # Check if build succeeded
