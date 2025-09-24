@@ -14,7 +14,7 @@ import click
 from rich.logging import RichHandler
 
 # Local imports
-from brainsmith.config import load_config, BrainsmithConfig, export_to_environment
+from brainsmith.config import load_config, BrainsmithConfig
 from brainsmith.core.dse_api import explore_design_space
 from .commands import config as config_commands
 from .commands import kernel as kernel_commands
@@ -68,7 +68,7 @@ def cli(ctx, verbose: bool, config: Optional[str]):
     try:
         smith_ctx.config = load_config(project_file=smith_ctx.config_file)
         # Export to environment for legacy compatibility
-        export_to_environment(smith_ctx.config, verbose=verbose)
+        smith_ctx.config.export_to_environment(verbose=verbose)
     except Exception as e:
         error_exit(f"Failed to load configuration: {e}")
     

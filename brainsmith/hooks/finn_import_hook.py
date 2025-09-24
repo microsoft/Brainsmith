@@ -76,10 +76,10 @@ class FinnEnvironmentHook(MetaPathFinder):
                 return
             
             # Delayed imports to avoid circular dependencies
-            from brainsmith.config import get_config, export_to_environment
+            from brainsmith.config import get_config
             
             config = get_config()
-            export_to_environment(config)
+            config.export_to_environment()
             
             # Mark as setup
             os.environ['_BSMITH_FINN_ENV_SETUP'] = '1'

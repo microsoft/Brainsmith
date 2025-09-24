@@ -105,8 +105,6 @@ def xsim(force: bool) -> None:
     Args:
         force: Whether to force rebuild
     """
-    from brainsmith.config import export_to_environment
-    
     config = get_config()
     
     # Check Vivado availability
@@ -122,7 +120,7 @@ def xsim(force: bool) -> None:
         )
     
     # Export environment variables before building
-    export_to_environment(config)
+    config.export_to_environment()
     
     deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     

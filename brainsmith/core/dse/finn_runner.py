@@ -79,9 +79,9 @@ class FINNRunner:
         # TODO: In the future, we hope to move away from environment variables
         # and pass configuration directly to FINN components. For now, FINN
         # requires certain environment variables to be set (FINN_ROOT, FINN_BUILD_DIR, etc.)
-        from brainsmith.config import load_config, export_to_environment
+        from brainsmith.config import load_config
         config = load_config()
-        export_to_environment(config)
+        config.export_to_environment()
         
         
         # Import FINN lazily to avoid circular dependencies
