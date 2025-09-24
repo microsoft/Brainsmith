@@ -55,15 +55,8 @@ def export_to_environment(config: BrainsmithConfig, verbose: bool = False) -> No
     
     env_dict["PATH"] = ":".join(path_components)
     
-    # Handle PYTHONPATH updates for FINN XSI
-    if config.effective_vivado_path and config.finn.finn_root:
-        finn_xsi_path = config.finn.finn_root / "finn_xsi"
-        if finn_xsi_path.exists():
-            pythonpath_components = os.environ.get("PYTHONPATH", "").split(":")
-            finn_xsi_str = str(finn_xsi_path)
-            if finn_xsi_str not in pythonpath_components:
-                pythonpath_components.append(finn_xsi_str)
-                env_dict["PYTHONPATH"] = ":".join(filter(None, pythonpath_components))
+    # FINN XSI no longer requires PYTHONPATH manipulation
+    # The new finn.xsi module handles path management internally
     
     # Handle LD_LIBRARY_PATH updates
     ld_lib_components = os.environ.get("LD_LIBRARY_PATH", "").split(":")

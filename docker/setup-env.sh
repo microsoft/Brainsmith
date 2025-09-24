@@ -70,6 +70,15 @@ source_xilinx() {
         [ "$silent" = "false" ] && echo "⚠️  Xilinx paths configured but settings64.sh not found"
     fi
     
+    # Set up finn_xsi Python path if available
+    if [ -n "${XILINX_VIVADO}" ] && [ -n "${BSMITH_DEPS_DIR}" ]; then
+        local finn_xsi_path="${BSMITH_DEPS_DIR}/finn/finn_xsi"
+        if [ -d "$finn_xsi_path" ] && [ -f "$finn_xsi_path/xsi.so" ]; then
+            export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${finn_xsi_path}"
+            [ "$silent" = "false" ] && echo "✓ finn_xsi added to PYTHONPATH"
+        fi
+    fi
+    
     return 0
 }
 
