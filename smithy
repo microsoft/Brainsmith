@@ -85,6 +85,7 @@ fi
 : ${BSMITH_DOCKER_PREBUILT="0"}
 : ${BSMITH_DOCKER_NO_CACHE="0"}
 : ${BSMITH_SKIP_DEP_REPOS="0"}
+: ${BSMITH_DOWNLOAD_BOARDS="0"}
 : ${BSMITH_DOCKER_RUN_AS_ROOT="0"}
 : ${BSMITH_DOCKER_GPU="$(docker info | grep nvidia | wc -m)"}
 : ${BSMITH_DOCKER_BUILD_FLAGS=""}
@@ -117,10 +118,12 @@ Commands:
     clean          Clean build artifacts, container, and optionally images
     clean --deep   Deep clean including Docker images and dependency repos
     logs           Show container logs
+    kernel         Run kernel integrator (kernel <rtl_file> [options])
 
 Examples:
     $0 start && $0 "python script.py"          # Typical workflow
     $0 shell                                    # Interactive development
+    $0 kernel design.sv -o output/              # Generate FINN HWCustomOp from RTL
     $0 clean                                    # Clean container and build files
     $0 clean --deep                             # Full reset (removes everything)
 EOF
@@ -356,6 +359,7 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
+    DOCKER_CMD+=" -e BSMITH_DOWNLOAD_BOARDS=$BSMITH_DOWNLOAD_BOARDS"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     
@@ -680,6 +684,10 @@ case "${1:-help}" in
     "clean")
         shift
         clean_all "$@"
+        ;;
+    "kernel")
+        shift
+        exec_in_container python -m brainsmith.tools.kernel_integrator "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

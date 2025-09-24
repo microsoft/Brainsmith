@@ -12,7 +12,7 @@ from .dse_api import explore_design_space
 
 # Key components exported for external use
 from .dse import DSESegment, DSETree, SegmentRunner
-from .design import DesignSpace, BlueprintParser, DSETreeBuilder
+from .design import DesignSpace, parse_blueprint, DSETreeBuilder
 from .config import ForgeConfig
 
 __all__ = [
@@ -24,7 +24,7 @@ __all__ = [
     "SegmentRunner",
     # Design components
     "DesignSpace",
-    "BlueprintParser",
+    "parse_blueprint",
     "DSETreeBuilder",
     # Config
     "ForgeConfig",

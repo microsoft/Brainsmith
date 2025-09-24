@@ -245,12 +245,11 @@ def run_brainsmith_dse(model, args):
 
     model = simp_model_with_md
     # Save simplified model
-    if args.save_intermediate:
-        onnx.save(model, os.path.join(model_dir, "simp.onnx"))
-        # Also save to debug directory for comparison
-        debug_dir = os.path.join(args.output_dir, "debug_models")
-        onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-        print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
+    onnx.save(model, os.path.join(model_dir, "simp.onnx"))
+    # Also save to debug directory for comparison
+    debug_dir = os.path.join(args.output_dir, "debug_models")
+    onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
+    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
 
     # Run cleanup
     cleanup(
@@ -268,7 +267,7 @@ def run_brainsmith_dse(model, args):
     )
 
     # Get static blueprint path
-    blueprint_path = Path(__file__).parent / args.blueprint
+    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
 
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
@@ -342,8 +341,6 @@ def main():
                        help='Target board (V80, Pynq-Z1, U250)')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Enable verbose logging')
-    parser.add_argument('-bp', '--blueprint', type=str, default='bert_demo.yaml',
-                       help='Custom blueprint path (default: use built-in bert_demo.yaml)')
 
     args = parser.parse_args()
 
@@ -360,7 +357,7 @@ def main():
     args.output_dir = os.path.join(build_dir, args.output)
 
     print("=" * 70)
-    print("BERT Modern Demo - Using Brainsmith DSE v3")
+    print("BERT Demo Using Brainsmith DSE")
     print("=" * 70)
     print(f"Configuration:")
     print(f"  Hidden layers: {args.num_hidden_layers}")
@@ -369,9 +366,7 @@ def main():
     print(f"  Intermediate size: {args.intermediate_size}")
     print(f"  Bitwidth: {args.bitwidth}")
     print(f"  Sequence length: {args.seqlen}")
-    print(f"  Target FPS: {args.fps}")
-    print(f"  Clock period: {args.clk} ns")
-    print(f"  Board: {args.board}")
+    print(f"  Blueprint: {args.blueprint}")
     print(f"  Output directory: {args.output_dir}")
     print("=" * 70)
 
