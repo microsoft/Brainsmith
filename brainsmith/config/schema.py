@@ -34,19 +34,25 @@ EXTERNAL_ENV_MAPPINGS: Dict[str, Callable[['BrainsmithConfig'], Optional[str]]] 
     'NETRON_PORT': lambda c: str(c.netron_port),
     
     # FINN environment variables
-    'FINN_ROOT': lambda c: str(c.finn.finn_root or c.deps_dir / "finn"),
-    'FINN_BUILD_DIR': lambda c: str(c.finn.finn_build_dir or c.build_dir),
-    'FINN_DEPS_DIR': lambda c: str(c.finn.finn_deps_dir or c.deps_dir),
+    'FINN_ROOT': lambda c: str(c.effective_finn_root),
+    'FINN_BUILD_DIR': lambda c: str(c.effective_finn_build_dir),
+    'FINN_DEPS_DIR': lambda c: str(c.effective_finn_deps_dir),
     'NUM_DEFAULT_WORKERS': lambda c: str(c.finn.num_default_workers) if c.finn.num_default_workers else None,
 }
 
 
 # Keep FinnConfig nested as it makes sense
 class FinnConfig(BaseModel):
-    """FINN-specific path configuration."""
-    finn_root: Optional[Path] = Field(default=None, description="FINN root directory")
-    finn_build_dir: Optional[Path] = Field(default=None, description="FINN build directory")
-    finn_deps_dir: Optional[Path] = Field(default=None, description="FINN dependencies directory")
+    """FINN-specific path configuration.
+    
+    These paths default to sensible values derived from the parent config:
+    - finn_root: defaults to deps_dir/finn
+    - finn_build_dir: defaults to build_dir
+    - finn_deps_dir: defaults to deps_dir
+    """
+    finn_root: Optional[Path] = Field(default=None, description="FINN root directory (defaults to deps_dir/finn)")
+    finn_build_dir: Optional[Path] = Field(default=None, description="FINN build directory (defaults to build_dir)")
+    finn_deps_dir: Optional[Path] = Field(default=None, description="FINN dependencies directory (defaults to deps_dir)")
     num_default_workers: Optional[int] = Field(default=None, description="Default number of workers")
     
     @field_validator('finn_root', 'finn_build_dir', 'finn_deps_dir', mode='before')
@@ -143,11 +149,7 @@ class BrainsmithConfig(BaseSettings):
     """
     
     # Core paths
-    bsmith_dir: Optional[Path] = Field(
-        default=None,
-        description="Root directory of Brainsmith (auto-detected if not set)",
-        alias="dir"  # Maps to BSMITH_DIR env var
-    )
+    # NOTE: bsmith_dir is now a cached property, not a configurable field
     build_dir: Path = Field(
         default=Path("/tmp/brainsmith_build"),
         description="Build directory for artifacts"
@@ -245,43 +247,33 @@ class BrainsmithConfig(BaseSettings):
     
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization to handle essential setup only."""
-        # Auto-detect BSMITH_DIR if not set
-        if self.bsmith_dir is None:
-            try:
-                import brainsmith
-                self.bsmith_dir = Path(brainsmith.__file__).parent.parent
-            except ImportError:
-                raise ValueError("BSMITH_DIR not set and could not be auto-detected")
-        
         # Note: Relative paths are already resolved by the YAML parser
         # based on the location of the YAML file
-        
-        # Set FINN compatibility paths if not already set
-        if not self.finn.finn_root:
-            self.finn.finn_root =  self.deps_dir / "finn"
-        if not self.finn.finn_build_dir:
-            self.finn.finn_build_dir = self.build_dir
-        if not self.finn.finn_deps_dir:
-            self.finn.finn_deps_dir = self.deps_dir
+        pass  # No longer need to set FINN paths here
     
-    
-    @field_validator('bsmith_dir', mode='before')
-    @classmethod
-    def validate_bsmith_dir(cls, v: Optional[Any]) -> Optional[Path]:
-        """Validate that BSMITH_DIR exists and contains pyproject.toml."""
-        if v is None:
-            # Will be handled in model_post_init
-            return v
+    @property
+    def bsmith_dir(self) -> Path:
+        """Get the Brainsmith package root directory.
         
-        # Convert to Path if needed
-        if not isinstance(v, Path):
-            v = Path(v)
-            
-        if not v.exists():
-            raise ValueError(f"BSMITH_DIR {v} does not exist")
-        if not (v / "pyproject.toml").exists():
-            raise ValueError(f"BSMITH_DIR {v} does not contain pyproject.toml")
-        return v
+        This is always auto-detected from the package location and cannot be overridden.
+        The directory is validated to ensure it contains pyproject.toml.
+        """
+        # Cache the value in a private attribute
+        if not hasattr(self, '_bsmith_dir'):
+            try:
+                import brainsmith
+                bsmith_dir = Path(brainsmith.__file__).parent.parent
+                
+                # Validate that this is indeed the Brainsmith root
+                if not (bsmith_dir / "pyproject.toml").exists():
+                    raise ValueError(f"Auto-detected directory {bsmith_dir} does not contain pyproject.toml")
+                
+                self._bsmith_dir = bsmith_dir
+            except ImportError:
+                raise ValueError("Cannot determine BSMITH_DIR: brainsmith package not importable")
+        
+        return self._bsmith_dir
+    
     
     @field_validator('build_dir', 'deps_dir', mode='before')
     @classmethod
@@ -386,3 +378,124 @@ class BrainsmithConfig(BaseSettings):
         if self.vivado_ip_cache:
             return self.vivado_ip_cache
         return self.build_dir / "vivado_ip_cache"
+    
+    @property
+    def effective_finn_root(self) -> Path:
+        """Get effective FINN root directory."""
+        if self.finn.finn_root:
+            return self.finn.finn_root
+        # Default: deps_dir / "finn"
+        deps = self.deps_dir
+        if not deps.is_absolute():
+            deps = self.bsmith_dir / deps
+        return deps / "finn"
+    
+    @property
+    def effective_finn_build_dir(self) -> Path:
+        """Get effective FINN build directory."""
+        return self.finn.finn_build_dir or self.build_dir
+    
+    @property
+    def effective_finn_deps_dir(self) -> Path:
+        """Get effective FINN dependencies directory."""
+        if self.finn.finn_deps_dir:
+            return self.finn.finn_deps_dir
+        # Default: deps_dir
+        deps = self.deps_dir
+        if not deps.is_absolute():
+            deps = self.bsmith_dir / deps
+        return deps
+    
+    def export_to_environment(self, include_internal: bool = False, verbose: bool = False) -> None:
+        """Export configuration to environment variables.
+        
+        This is the unified method for exporting configuration to the environment.
+        By default, exports only external tool configuration values (FINN_*, XILINX_*, etc)
+        and sets up PATH, PYTHONPATH, and LD_LIBRARY_PATH for tool compatibility.
+        
+        Args:
+            include_internal: If True, also export internal BSMITH_* variables
+                            (WARNING: may cause configuration feedback loops)
+            verbose: Whether to print export information
+        """
+        # Get environment variables based on what's requested
+        if include_internal:
+            env_dict = self.to_all_env_dict()
+        else:
+            env_dict = self.to_external_env_dict()
+        
+        # Handle PATH updates
+        path_components = os.environ.get("PATH", "").split(":")
+        
+        # Add oh-my-xilinx to PATH if it exists (hardcoded convention)
+        ohmyxilinx_path = self.deps_dir / "oh-my-xilinx"
+        if ohmyxilinx_path.exists() and str(ohmyxilinx_path) not in path_components:
+            path_components.append(str(ohmyxilinx_path))
+        
+        # Add ~/.local/bin to PATH
+        home_local_bin = str(Path.home() / ".local" / "bin")
+        if home_local_bin not in path_components:
+            path_components.append(home_local_bin)
+        
+        # Add Xilinx tool bin directories to PATH
+        if self.effective_vivado_path:
+            vivado_bin = str(self.effective_vivado_path / "bin")
+            if vivado_bin not in path_components:
+                path_components.append(vivado_bin)
+        
+        if self.effective_vitis_path:
+            vitis_bin = str(self.effective_vitis_path / "bin")
+            if vitis_bin not in path_components:
+                path_components.append(vitis_bin)
+        
+        if self.effective_vitis_hls_path:
+            hls_bin = str(self.effective_vitis_hls_path / "bin")
+            if hls_bin not in path_components:
+                path_components.append(hls_bin)
+        
+        env_dict["PATH"] = ":".join(path_components)
+        
+        # FINN XSI no longer requires PYTHONPATH manipulation
+        # The new finn.xsi module handles path management internally
+        
+        # Handle LD_LIBRARY_PATH updates
+        ld_lib_components = os.environ.get("LD_LIBRARY_PATH", "").split(":")
+        
+        # Add libudev if needed and exists for Xilinx tool compatibility
+        libudev_path = "/lib/x86_64-linux-gnu/libudev.so.1"
+        if self.effective_vivado_path and Path(libudev_path).exists():
+            env_dict["LD_PRELOAD"] = libudev_path
+        
+        # Add Vivado libraries
+        if self.effective_vivado_path:
+            ld_lib_components.append("/lib/x86_64-linux-gnu/")
+            vivado_lib = str(self.effective_vivado_path / "lib" / "lnx64.o")
+            ld_lib_components.append(vivado_lib)
+        
+        # Add Vitis FPO libraries
+        if self.effective_vitis_path:
+            vitis_fpo_lib = str(self.effective_vitis_path / "lnx64" / "tools" / "fpo_v7_1")
+            if vitis_fpo_lib not in ld_lib_components:
+                ld_lib_components.append(vitis_fpo_lib)
+        
+        env_dict["LD_LIBRARY_PATH"] = ":".join(filter(None, ld_lib_components))
+        
+        # Set Xilinx environment variables for better caching behavior
+        # The actual HOME override is handled at container level in entrypoint scripts
+        if self.effective_vivado_path:
+            # Ensure XILINX_LOCAL_USER_DATA is set to prevent network operations
+            env_dict["XILINX_LOCAL_USER_DATA"] = "no"
+        
+        # Apply all environment variables
+        for key, value in env_dict.items():
+            if value is not None:
+                os.environ[key] = str(value)
+                if verbose and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
+                    from rich.console import Console
+                    console = Console()
+                    console.print(f"[dim]Export {key}={value}[/dim]")
+        
+        if verbose:
+            from rich.console import Console
+            console = Console()
+            console.print("[green]✓ Configuration exported to environment[/green]")

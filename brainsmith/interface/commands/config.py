@@ -4,7 +4,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 # Third-party imports
 import click
@@ -14,7 +14,6 @@ from rich.table import Table
 
 # Local imports
 from brainsmith.config import get_config, load_config, BrainsmithConfig
-from brainsmith.config.export import export_to_environment
 from ..utils import console, error_exit, success, warning, tip
 
 
@@ -27,19 +26,24 @@ def config():
 @config.command()
 @click.option('--format', '-f', type=click.Choice(['table', 'yaml', 'json', 'env']), 
               default='table', help='Output format')
+@click.option('--verbose', '-v', is_flag=True, help='Include source information and path validation')
 @click.option('--external-only', is_flag=True, help='For env format, show only external tool variables')
-def show(format: str, external_only: bool) -> None:
+def show(format: str, verbose: bool, external_only: bool) -> None:
     """Display current configuration.
     
     Args:
         format: Output format (table, yaml, json, or env)
+        verbose: Include source information for each setting
         external_only: For env format, whether to show only external tool variables
     """
     try:
         config = get_config()
         
         if format == 'table':
-            _show_table_format(config)
+            if verbose:
+                _show_verbose_table_format(config)
+            else:
+                _show_table_format(config)
         elif format == 'yaml':
             config_dict = config.model_dump()
             console.print(Syntax(yaml.dump(config_dict, default_flow_style=False), "yaml"))
@@ -58,6 +62,55 @@ def show(format: str, external_only: bool) -> None:
         error_exit(f"Failed to load configuration: {e}")
 
 
+def _format_path_display(path: Optional[Path], base_path: Optional[Path] = None, original_value: Optional[Path] = None) -> str:
+    """Format a path for display, showing relative portions in green and base in grey.
+    
+    Args:
+        path: The resolved path to format
+        base_path: The base path to check against
+        original_value: The original configured value (if different from path)
+        
+    Returns:
+        Formatted string with appropriate styling
+    """
+    if path is None:
+        return "None"
+    
+    path_obj = Path(path)
+    
+    # Determine the actual path to check for existence
+    if not path_obj.is_absolute() and base_path:
+        check_path = base_path / path_obj
+    else:
+        check_path = path_obj
+    
+    # Determine color based on existence
+    color = "green" if check_path.exists() else "yellow"
+    
+    # If path is not absolute, it's a relative path that should be shown relative to base_path
+    if not path_obj.is_absolute() and base_path:
+        return f"[dim]{base_path}/[/dim][{color}]{path}[/{color}]"
+    
+    # Use original_value if provided (for cases where path is computed)
+    if original_value is not None and not Path(original_value).is_absolute():
+        # Show as relative with full path
+        base_str = str(base_path) if base_path else str(path_obj.parent)
+        rel_str = str(original_value)
+        return f"[dim]{base_str}/[/dim][{color}]{rel_str}[/{color}]"
+    
+    # If path is under base_path, show it as relative
+    if base_path and path_obj.is_absolute() and base_path.is_absolute():
+        try:
+            rel_path = path_obj.relative_to(base_path)
+            return f"[dim]{base_path}/[/dim][{color}]{rel_path}[/{color}]"
+        except ValueError:
+            # Path is not relative to base_path
+            pass
+    
+    # Otherwise, show as-is with appropriate color
+    return f"[{color}]{path}[/{color}]"
+
+
 def _show_table_format(config: BrainsmithConfig) -> None:
     """Display configuration in a formatted table.
     
@@ -66,353 +119,214 @@ def _show_table_format(config: BrainsmithConfig) -> None:
     """
     table = Table(title="Brainsmith Configuration")
     table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
+    table.add_column("Value")  # No style to allow markup in cells
     
     # Core paths
     table.add_row("Core Paths", "")
-    table.add_row("  BSMITH_DIR", str(config.bsmith_dir))
-    table.add_row("  Build Directory", str(config.build_dir))
-    table.add_row("  Dependencies Directory", str(config.deps_dir))
+    table.add_row("  Build Directory", _format_path_display(config.build_dir, config.bsmith_dir))
+    table.add_row("  Dependencies Directory", _format_path_display(config.deps_dir, config.bsmith_dir, config.deps_dir))
     
-    # FINN configuration
+    # Toolchain Settings
     table.add_row("", "")
-    table.add_row("FINN Configuration", "")
-    finn_root = config.finn.finn_root or config.deps_dir / "finn"
-    table.add_row("  FINN_ROOT", str(finn_root))
-    finn_build = config.finn.finn_build_dir or config.build_dir
-    table.add_row("  FINN_BUILD_DIR", str(finn_build))
-    if config.finn.num_default_workers:
-        table.add_row("  Default Workers", str(config.finn.num_default_workers))
-    
-    # Xilinx tools
-    table.add_row("", "")
-    table.add_row("Xilinx Tools", "")
-    table.add_row("  Base Path", str(config.xilinx_path) if config.xilinx_path else "Not configured")
-    table.add_row("  Vivado", str(config.effective_vivado_path) if config.effective_vivado_path else "Not found")
-    table.add_row("  Vitis", str(config.effective_vitis_path) if config.effective_vitis_path else "Not found")
-    table.add_row("  Vitis HLS", str(config.effective_vitis_hls_path) if config.effective_vitis_hls_path else "Not found")
-    table.add_row("  Version", config.xilinx_version)
-    
-    # Other settings
-    table.add_row("", "")
-    table.add_row("Other Settings", "")
+    table.add_row("Toolchain Settings", "")
     table.add_row("  Plugins Strict", str(config.plugins_strict))
     table.add_row("  Debug Mode", str(config.debug))
     table.add_row("  Netron Port", str(config.netron_port))
     if config.vivado_ip_cache:
-        table.add_row("  Vivado IP Cache", str(config.vivado_ip_cache))
+        table.add_row("  Vivado IP Cache", _format_path_display(config.vivado_ip_cache, config.bsmith_dir))
+    
+    # Xilinx tools
+    table.add_row("", "")
+    table.add_row("Xilinx Tools", "")
+    
+    # Format Vivado path with base and version highlighted, color based on existence
+    if config.effective_vivado_path:
+        color = "green" if config.effective_vivado_path.exists() else "yellow"
+        vivado_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vivado/[/dim][{color}]{config.xilinx_version}[/{color}]"
+    else:
+        vivado_display = "[yellow]Not found[/yellow]"
+    table.add_row("  Vivado", vivado_display)
+    
+    # Format Vitis path with base and version highlighted, color based on existence
+    if config.effective_vitis_path:
+        color = "green" if config.effective_vitis_path.exists() else "yellow"
+        vitis_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vitis/[/dim][{color}]{config.xilinx_version}[/{color}]"
+    else:
+        vitis_display = "[yellow]Not found[/yellow]"
+    table.add_row("  Vitis", vitis_display)
+    
+    # Format Vitis HLS path with base and version highlighted, color based on existence
+    if config.effective_vitis_hls_path:
+        color = "green" if config.effective_vitis_hls_path.exists() else "yellow"
+        vitis_hls_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vitis_HLS/[/dim][{color}]{config.xilinx_version}[/{color}]"
+    else:
+        vitis_hls_display = "[yellow]Not found[/yellow]"
+    table.add_row("  Vitis HLS", vitis_hls_display)
     
     console.print(table)
 
 
-@config.command()
-@click.option('--verbose', '-v', is_flag=True, help='Show detailed validation results')
-def validate(verbose: bool) -> None:
-    """Validate current configuration.
-    
-    Checks paths exist, tools are available, and configuration is consistent.
+def _show_verbose_table_format(config: BrainsmithConfig) -> None:
+    """Display configuration with source information.
     
     Args:
-        verbose: Show detailed validation results
+        config: The Brainsmith configuration object
     """
-    try:
-        config = get_config()
-        console.print("Validating current configuration...")
-        
-        issues = []
-        warnings = []
-        
-        # Check core paths
-        if verbose:
-            console.print("\n[bold]Checking core paths:[/bold]")
-        
-        # BSMITH_DIR
-        if config.bsmith_dir and config.bsmith_dir.exists():
-            if verbose:
-                console.print(f"  ✓ BSMITH_DIR exists: {config.bsmith_dir}")
-        else:
-            issues.append(f"BSMITH_DIR not found: {config.bsmith_dir}")
-        
-        # Build directory
-        if config.build_dir:
-            if not config.build_dir.exists():
-                try:
-                    config.build_dir.mkdir(parents=True, exist_ok=True)
-                    if verbose:
-                        console.print(f"  ✓ Build directory created: {config.build_dir}")
-                except:
-                    warnings.append(f"Cannot create build directory: {config.build_dir}")
-            elif verbose:
-                console.print(f"  ✓ Build directory exists: {config.build_dir}")
-        
-        # Deps directory
-        if config.deps_dir:
-            if config.deps_dir.exists():
-                if verbose:
-                    console.print(f"  ✓ Dependencies directory exists: {config.deps_dir}")
-            else:
-                warnings.append(f"Dependencies directory not found: {config.deps_dir}")
-        
-        # Check path resolution
-        if config.deps_dir and not config.deps_dir.is_absolute():
-            # Check if relative path resolves correctly
-            expected = config.bsmith_dir / config.deps_dir if config.bsmith_dir else None
-            if expected and config.deps_dir.absolute() != expected.absolute():
-                warnings.append(
-                    f"Relative deps_dir may not resolve correctly:\n"
-                    f"    Expected: {expected}\n"
-                    f"    Actual: {config.deps_dir.absolute()}"
-                )
-        
-        # Check Xilinx tools
-        if verbose:
-            console.print("\n[bold]Checking Xilinx tools:[/bold]")
-        
-        if config.xilinx_path:
-            if config.effective_vivado_path:
-                if verbose:
-                    console.print(f"  ✓ Vivado found: {config.effective_vivado_path}")
-            else:
-                warnings.append("Vivado not found at expected path")
-                
-            if config.effective_vitis_hls_path:
-                if verbose:
-                    console.print(f"  ✓ Vitis HLS found: {config.effective_vitis_hls_path}")
-            else:
-                warnings.append("Vitis HLS not found at expected path")
-        elif verbose:
-            console.print("  - Xilinx tools not configured")
-        
-        # Check FINN paths
-        if verbose:
-            console.print("\n[bold]Checking FINN configuration:[/bold]")
-        
-        finn_root = config.finn.finn_root or config.deps_dir / "finn"
-        if finn_root.exists():
-            if verbose:
-                console.print(f"  ✓ FINN_ROOT exists: {finn_root}")
-            # Check for finn_xsi if present
-            finn_xsi = finn_root / "finn_xsi" / "xsi.so"
-            if finn_xsi.exists():
-                if verbose:
-                    console.print(f"  ✓ FINN XSI module built")
-            elif verbose:
-                console.print(f"  - FINN XSI module not built (optional)")
-        else:
-            warnings.append(f"FINN not found at: {finn_root}")
-        
-        # Show results
-        console.print()
-        if issues:
-            console.print("[bold red]Configuration has errors:[/bold red]")
-            for issue in issues:
-                console.print(f"  ✗ {issue}")
-        
-        if warnings:
-            console.print("[bold yellow]Configuration warnings:[/bold yellow]")
-            for warning in warnings:
-                console.print(f"  ⚠ {warning}")
-        
-        if not issues:
-            if warnings:
-                warning("Configuration is valid with warnings")
-            else:
-                success("Configuration is valid!")
-        else:
-            error_exit("Configuration validation failed")
-            
-    except Exception as e:
-        error_exit(f"Failed to validate configuration: {e}")
-
-
-@config.command()
-@click.option('--verbose', '-v', is_flag=True, help='Show exported variables')
-@click.option('--all', '-a', is_flag=True, help='Export ALL variables including internal BSMITH_*')
-def export(verbose: bool, all: bool) -> None:
-    """Export configuration as environment variables.
+    # Create main table with source column
+    table = Table(title="Brainsmith Configuration (Verbose)")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value")  # No style to allow markup in cells
+    table.add_column("Source", style="yellow")
     
-    By default, only exports external tool variables (FINN_*, XILINX_*, etc).
-    Use --all to include internal BSMITH_* variables.
-    
-    Args:
-        verbose: Whether to show the exported variables
-        all: Export all variables including internal ones
-    """
-    try:
-        config = get_config()
-        
-        if all:
-            # Export ALL variables including internal BSMITH_*
-            if verbose:
-                console.print("[yellow]Warning:[/yellow] Exporting ALL variables including internal BSMITH_*")
-                console.print("This may cause configuration feedback loops if not used carefully.\n")
-            
-            env_dict = config.to_all_env_dict()
-            for key, value in env_dict.items():
-                if value is not None:
-                    os.environ[key] = str(value)
-                    if verbose:
-                        console.print(f"[dim]Export {key}={value}[/dim]")
-            
-            count = len([v for v in env_dict.values() if v is not None])
-            if not verbose:
-                success(f"Exported {count} variables (including internal)")
-                console.print("Use --verbose to see exported variables")
-        else:
-            # Default: use existing export_to_environment (external only)
-            export_to_environment(config, verbose=verbose)
-            
-            if not verbose:
-                # Count exported variables
-                env_dict = config.to_external_env_dict()
-                count = len([v for v in env_dict.values() if v is not None])
-                success(f"Exported {count} external tool variables")
-                console.print("Use --all to include internal BSMITH_* variables")
-                console.print("Use --verbose to see exported variables")
-            
-    except Exception as e:
-        error_exit(f"Failed to export configuration: {e}")
-
-
-@config.command()
-def where() -> None:
-    """Show where each configuration value comes from.
-    
-    This helps debug configuration precedence issues by showing
-    whether each value comes from CLI, environment, YAML, or defaults.
-    """
-    try:
-        config = get_config()
-        
-        table = Table(title="Configuration Sources")
-        table.add_column("Setting", style="cyan")
-        table.add_column("Value", style="green")
-        table.add_column("Source", style="yellow")
-        
-        # Get values and try to determine sources
-        # Note: This is a simplified version - full source tracking would require
-        # modifying the config loading to track sources
-        
-        import os
-        from pathlib import Path
-        
-        # Check key paths
-        settings = [
-            ("bsmith_dir", config.bsmith_dir, "BSMITH_DIR"),
-            ("build_dir", config.build_dir, "BSMITH_BUILD_DIR"),
-            ("deps_dir", config.deps_dir, "BSMITH_DEPS_DIR"),
-            ("xilinx_path", config.xilinx_path, "BSMITH_XILINX_PATH"),
-            ("xilinx_version", config.xilinx_version, "BSMITH_XILINX_VERSION"),
-            ("debug", config.debug, "BSMITH_DEBUG"),
-            ("plugins_strict", config.plugins_strict, "BSMITH_PLUGINS_STRICT"),
-        ]
-        
+    # Helper to determine source
+    def get_source(setting_name: str, env_var: str, is_derived: bool = False) -> str:
+        if os.environ.get(env_var):
+            return f"env: {env_var}"
         # Try to find YAML file
         yaml_file = None
         for possible in ["brainsmith_settings.yaml", ".brainsmith.yaml"]:
             if Path(possible).exists():
                 yaml_file = Path(possible)
                 break
-        
-        yaml_data = {}
         if yaml_file:
             try:
                 yaml_data = yaml.safe_load(yaml_file.read_text())
+                if setting_name in yaml_data:
+                    return f"yaml: {yaml_file.name}"
             except:
                 pass
-        
-        for setting_name, value, env_var in settings:
-            source = "default"
-            
-            # Check environment
-            if os.environ.get(env_var):
-                source = f"env: {env_var}"
-            # Check YAML
-            elif yaml_data and setting_name in yaml_data:
-                source = f"yaml: {yaml_file.name}"
-            # Check if it's auto-detected (like bsmith_dir)
-            elif setting_name == "bsmith_dir" and value:
-                source = "auto-detected"
-                
-            table.add_row(setting_name, str(value) if value else "None", source)
-        
-        console.print(table)
-        
-        if yaml_file:
-            console.print(f"\n[dim]Configuration file: {yaml_file.absolute()}[/dim]")
-        else:
-            console.print("\n[dim]No configuration file found in current directory[/dim]")
-            
-    except Exception as e:
-        error_exit(f"Failed to analyze configuration: {e}")
+        return "derived" if is_derived else "default"
+    
+    # Core paths
+    table.add_row("Core Paths", "", "")
+    table.add_row("  Build Directory", _format_path_display(config.build_dir, config.bsmith_dir), 
+                  get_source("build_dir", "BSMITH_BUILD_DIR"))
+    table.add_row("  Dependencies Directory", _format_path_display(config.deps_dir, config.bsmith_dir, config.deps_dir),
+                  get_source("deps_dir", "BSMITH_DEPS_DIR"))
+    
+    # Toolchain Settings
+    table.add_row("", "", "")
+    table.add_row("Toolchain Settings", "", "")
+    table.add_row("  Debug Mode", str(config.debug),
+                  get_source("debug", "BSMITH_DEBUG"))
+    table.add_row("  Plugins Strict", str(config.plugins_strict),
+                  get_source("plugins_strict", "BSMITH_PLUGINS_STRICT"))
+    table.add_row("  Netron Port", str(config.netron_port),
+                  get_source("netron_port", "BSMITH_NETRON_PORT"))
+    if config.vivado_ip_cache:
+        table.add_row("  Vivado IP Cache", _format_path_display(config.vivado_ip_cache, config.bsmith_dir),
+                      get_source("vivado_ip_cache", "BSMITH_VIVADO_IP_CACHE", is_derived=not config._fields_set.get("vivado_ip_cache", False)))
+    
+    # Xilinx tools
+    table.add_row("", "", "")
+    table.add_row("Xilinx Tools", "", "")
+    table.add_row("  Base Path", str(config.xilinx_path) if config.xilinx_path else "Not configured",
+                  get_source("xilinx_path", "BSMITH_XILINX_PATH"))
+    table.add_row("  Version", config.xilinx_version,
+                  get_source("xilinx_version", "BSMITH_XILINX_VERSION"))
+    
+    # Format Vivado path with base and version highlighted, color based on existence
+    if config.effective_vivado_path:
+        color = "green" if config.effective_vivado_path.exists() else "yellow"
+        vivado_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vivado/[/dim][{color}]{config.xilinx_version}[/{color}]"
+        table.add_row("  Vivado", vivado_display,
+                      "derived" if not config.vivado_path else get_source("vivado_path", "BSMITH_VIVADO_PATH"))
+    else:
+        table.add_row("  Vivado", "[yellow]Not found[/yellow]", "—")
+    
+    # Format Vitis path with base and version highlighted, color based on existence
+    if config.effective_vitis_path:
+        color = "green" if config.effective_vitis_path.exists() else "yellow"
+        vitis_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vitis/[/dim][{color}]{config.xilinx_version}[/{color}]"
+        table.add_row("  Vitis", vitis_display,
+                      "derived" if not config.vitis_path else get_source("vitis_path", "BSMITH_VITIS_PATH"))
+    else:
+        table.add_row("  Vitis", "[yellow]Not found[/yellow]", "—")
+    
+    # Format Vitis HLS path with base and version highlighted, color based on existence
+    if config.effective_vitis_hls_path:
+        color = "green" if config.effective_vitis_hls_path.exists() else "yellow"
+        vitis_hls_display = f"[{color}]{config.xilinx_path}[/{color}][dim]/Vitis_HLS/[/dim][{color}]{config.xilinx_version}[/{color}]"
+        table.add_row("  Vitis HLS", vitis_hls_display,
+                      "derived" if not config.vitis_hls_path else get_source("vitis_hls_path", "BSMITH_VITIS_HLS_PATH"))
+    else:
+        table.add_row("  Vitis HLS", "[yellow]Not found[/yellow]", "—")
+    
+    # FINN configuration (only in verbose mode)
+    table.add_row("", "", "")
+    table.add_row("FINN Configuration", "", "")
+    
+    # Use effective properties and check if they're using defaults
+    finn_root = config.effective_finn_root
+    finn_root_is_derived = config.finn.finn_root is None  # None means using default
+    finn_root_original = None if finn_root_is_derived else config.finn.finn_root
+    if finn_root_is_derived:
+        finn_root_original = Path("deps/finn")  # Show the relative path for derived
+    
+    table.add_row("  FINN_ROOT", _format_path_display(finn_root, config.bsmith_dir, finn_root_original), 
+                  "derived" if finn_root_is_derived else get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
+    
+    # FINN_BUILD_DIR
+    finn_build = config.effective_finn_build_dir
+    finn_build_is_derived = config.finn.finn_build_dir is None  # None means using default
+    table.add_row("  FINN_BUILD_DIR", _format_path_display(finn_build, config.bsmith_dir),
+                  "derived" if finn_build_is_derived else get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
+    
+    # FINN_DEPS_DIR
+    finn_deps = config.effective_finn_deps_dir
+    finn_deps_is_derived = config.finn.finn_deps_dir is None  # None means using default
+    finn_deps_original = None if finn_deps_is_derived else config.finn.finn_deps_dir
+    if finn_deps_is_derived and finn_deps == config.deps_dir:
+        finn_deps_original = config.deps_dir  # Show the actual deps_dir value
+    table.add_row("  FINN_DEPS_DIR", _format_path_display(finn_deps, config.bsmith_dir, finn_deps_original),
+                  "derived" if finn_deps_is_derived else get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
+    
+    if config.finn.num_default_workers:
+        table.add_row("  Default Workers", str(config.finn.num_default_workers),
+                      get_source("finn.num_default_workers", "BSMITH_FINN__NUM_DEFAULT_WORKERS"))
+    
+    console.print(table)
+    
+    # Show validation warnings
+    warnings = []
+    if config.deps_dir and not config.deps_dir.is_absolute():
+        expected = config.bsmith_dir / config.deps_dir
+        if config.deps_dir.absolute() != expected.absolute():
+            warnings.append(f"Relative deps_dir may not resolve correctly")
+    
+    if warnings:
+        console.print("\n[bold yellow]Warnings:[/bold yellow]")
+        for warning in warnings:
+            console.print(f"  ⚠ {warning}")
+
 
 
 @config.command()
-def paths() -> None:
-    """Show all resolved paths in the configuration.
+@click.option('--verbose', '-v', is_flag=True, help='Show exported variables')
+def export(verbose: bool) -> None:
+    """Export configuration as environment variables.
     
-    This is a convenience command to quickly see all paths
-    and whether they exist.
+    Exports external tool configuration (FINN_*, XILINX_*, etc) to the environment.
+    Internal BSMITH_* variables are not exported to prevent configuration feedback loops.
+    
+    Args:
+        verbose: Whether to show the exported variables
     """
     try:
         config = get_config()
         
-        table = Table(title="Configuration Paths")
-        table.add_column("Path Type", style="cyan")
-        table.add_column("Value", style="green") 
-        table.add_column("Exists", style="yellow")
-        table.add_column("Resolved", style="dim")
+        # Export external variables only
+        config.export_to_environment(verbose=verbose)
         
-        # Helper to check and format paths
-        def add_path(name: str, path: Any):
-            if path is None:
-                table.add_row(name, "Not set", "—", "—")
-            else:
-                path_obj = Path(path)
-                exists = "✓" if path_obj.exists() else "✗"
-                resolved = str(path_obj.absolute()) if not path_obj.is_absolute() else "—"
-                table.add_row(name, str(path), exists, resolved)
-        
-        # Core paths
-        table.add_row("[bold]Core Paths[/bold]", "", "", "")
-        add_path("BSMITH_DIR", config.bsmith_dir)
-        add_path("Build Directory", config.build_dir)
-        add_path("Dependencies", config.deps_dir)
-        
-        # FINN paths
-        table.add_row("", "", "", "")
-        table.add_row("[bold]FINN Paths[/bold]", "", "", "")
-        finn_root = config.finn.finn_root or config.deps_dir / "finn"
-        add_path("FINN_ROOT", finn_root)
-        finn_build = config.finn.finn_build_dir or config.build_dir
-        add_path("FINN_BUILD_DIR", finn_build)
-        
-        # Xilinx paths
-        table.add_row("", "", "", "")
-        table.add_row("[bold]Xilinx Paths[/bold]", "", "", "")
-        add_path("Xilinx Base", config.xilinx_path)
-        add_path("Vivado", config.effective_vivado_path)
-        add_path("Vitis", config.effective_vitis_path)
-        add_path("Vitis HLS", config.effective_vitis_hls_path)
-        
-        # Other paths
-        table.add_row("", "", "", "")
-        table.add_row("[bold]Other Paths[/bold]", "", "", "")
-        if config.vivado_ip_cache:
-            add_path("Vivado IP Cache", config.vivado_ip_cache)
-        add_path("Platform Repos", config.platform_repo_paths)
-        
-        console.print(table)
-        
-        # Show any path warnings
-        if config.deps_dir and not config.deps_dir.is_absolute():
-            console.print(
-                "\n[yellow]Warning:[/yellow] deps_dir is relative. "
-                "It will resolve differently when run from different directories."
-            )
+        if not verbose:
+            # Count exported variables
+            env_dict = config.to_external_env_dict()
+            count = len([v for v in env_dict.values() if v is not None])
+            success(f"Exported {count} environment variables")
+            console.print("Use --verbose to see exported variables")
             
     except Exception as e:
-        error_exit(f"Failed to show paths: {e}")
+        error_exit(f"Failed to export configuration: {e}")
 
 
 @config.command()
@@ -477,7 +391,6 @@ def init(output: Path, force: bool, minimal: bool, full: bool) -> None:
             
             # Core paths
             config_dict["# Core paths"] = None
-            config_dict["bsmith_dir"] = str(config.bsmith_dir)  # Auto-detected value
             config_dict["build_dir"] = str(config.build_dir)
             config_dict["deps_dir"] = "deps"  # Keep relative for portability
             
