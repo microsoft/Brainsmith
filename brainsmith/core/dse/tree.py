@@ -45,7 +45,7 @@ class DSETree:
     
     def _count_nodes(self, node: DSESegment) -> int:
         """Count all nodes from given node."""
-        count = 0 if node.segment_id == "root" else 1
+        count = 1  # All nodes should be counted, including root
         for child in node.children.values():
             count += self._count_nodes(child)
         return count
@@ -131,8 +131,7 @@ class DSETree:
         
         def calculate_depth(node: DSESegment, depth: int = 0):
             nonlocal max_depth
-            if node.segment_id != "root":
-                max_depth = max(max_depth, depth)
+            max_depth = max(max_depth, depth)  # Count depth from root
             for child in node.children.values():
                 calculate_depth(child, depth + 1)
         
