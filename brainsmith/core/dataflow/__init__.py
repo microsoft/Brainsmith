@@ -39,8 +39,6 @@ from .models import (
     InputModel,
     OutputModel,
     KernelModel,
-    create_input_model,
-    create_output_model,
     create_kernel_model,
     update_kernel_stream_config
 )
@@ -65,6 +63,5 @@ __all__ = [
     
     # Immutable models and factory functions
     'InputModel', 'OutputModel', 'KernelModel',
-    'create_input_model', 'create_output_model', 'create_kernel_model',
-    'update_kernel_stream_config',
+    'create_kernel_model', 'update_kernel_stream_config',
 ]

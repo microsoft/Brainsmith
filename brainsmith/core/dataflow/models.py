@@ -31,7 +31,6 @@ class InputModel:
     """Immutable input interface model.
     
     Represents a concrete input with resolved dimensions and datatypes.
-    Create via create_input_model() factory function.
     """
     
     # Core properties
@@ -89,7 +88,6 @@ class OutputModel:
     """Immutable output interface model.
     
     Represents a concrete output with resolved dimensions and datatypes.
-    Create via create_output_model() factory function.
     """
     
     # Core properties
@@ -198,71 +196,8 @@ class KernelModel:
             "total_bandwidth_mbps": (total_input_bw + total_output_bw) * self.clock_freq_mhz / 8.0
         }
 
-def create_model
 
 # Factory functions for creating models
-
-def create_input_model(
-    name: str,
-    tensor_dims: Shape,
-    block_dims: Shape,
-    datatype: BaseDataType,
-    stream_dims: Optional[Shape] = None,
-    **kwargs
-) -> InputModel:
-    """Factory function to create an InputModel.
-    
-    Args:
-        name: Interface name
-        tensor_dims: Full tensor dimensions
-        block_dims: Block dimensions for tiling
-        datatype: QONNX datatype
-        stream_dims: Streaming dimensions (default: all 1s)
-        **kwargs: Additional properties (is_weight, etc.)
-        
-    Returns:
-        Immutable InputModel instance
-    """
-    if stream_dims is None:
-        stream_dims = tuple(1 for _ in block_dims)
-    
-    return InputModel(
-        name=name,
-        tensor_dims=tuple(tensor_dims),
-        block_dims=tuple(block_dims),
-        datatype=datatype,
-        stream_dims=tuple(stream_dims),
-        is_weight=kwargs.get('is_weight', False)
-    )
-
-
-def create_output_model(
-    name: str,
-    tensor_dims: Shape,
-    block_dims: Shape,
-    datatype: BaseDataType,
-    streaming_rate: int = 1
-) -> OutputModel:
-    """Factory function to create an OutputModel.
-    
-    Args:
-        name: Interface name
-        tensor_dims: Full tensor dimensions
-        block_dims: Block dimensions for tiling
-        datatype: QONNX datatype
-        streaming_rate: Elements per cycle (default: 1)
-        
-    Returns:
-        Immutable OutputModel instance
-    """
-    return OutputModel(
-        name=name,
-        tensor_dims=tuple(tensor_dims),
-        block_dims=tuple(block_dims),
-        datatype=datatype,
-        streaming_rate=streaming_rate
-    )
-
 
 def create_kernel_model(
     name: str,
