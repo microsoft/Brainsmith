@@ -324,32 +324,11 @@ def main():
     parser.add_argument('-q', '--seqlen', type=int, default=128,
                        help='Sequence length parameter')
 
-    # Build configuration
-    parser.add_argument('-f', '--fps', type=int, default=3000,
-                       help='Target FPS for auto folding')
-    parser.add_argument('-c', '--clk', type=float, default=3.33,
-                       help='Target clock period in ns')
-    parser.add_argument('-s', '--stop_step', type=str, default=None,
-                       help='Step to stop at in build flow')
-    parser.add_argument('-p', '--param', type=str, default=None,
-                       help='Preconfigured folding parameters file')
-    parser.add_argument('-x', '--run_fifo_sizing', action='store_true',
-                       help='Run FIFO sizing step')
-    parser.add_argument('-d', '--dcp', action='store_true',
-                       help='Generate DCP file (default: disabled for quicktest)')
-    parser.add_argument('--board', type=str, default='V80',
-                       help='Target board (V80, Pynq-Z1, U250)')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                       help='Enable verbose logging')
+    # Blueprint configuration
+    parser.add_argument('--blueprint', type=str, default='bert_demo.yaml',
+                       help='Blueprint YAML file to use (default: bert_demo.yaml)')
 
     args = parser.parse_args()
-
-    # Set hardcoded values to match old system
-    args.save_intermediate = True
-    args.standalone_thresholds = True
-    args.fifosim_n_inferences = 2
-    args.verification_atol = 1e-1
-    args.split_large_fifos = True
 
     # Determine output directory
     build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
