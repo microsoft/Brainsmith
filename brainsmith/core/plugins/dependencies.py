@@ -88,8 +88,8 @@ DEPENDENCIES = {
         name='finn-xsim',
         parent_dep='finn',
         subdir='finn_xsi',
-        build_cmd=['make'],
-        prerequisites=['g++', 'python3-config'],
+        build_cmd=['python', '-m', 'finn.xsi.setup', '--quiet'],
+        prerequisites=['g++', 'make'],  # python3-config no longer needed explicitly
         env_requirements={'XILINX_VIVADO': 'Vivado installation'},
         check_file='xsi.so'
     ),
@@ -177,7 +177,9 @@ def run_command(cmd: List[str], cwd: Path, description: str, env: Optional[Dict[
         if not quiet:
             console.print(f"[red]✗ {description} failed[/red]")
             if e.stderr:
-                console.print(f"[red]{e.stderr.decode()}[/red]")
+                console.print(f"[red]stderr: {e.stderr.decode()}[/red]")
+            if e.stdout:
+                console.print(f"[yellow]stdout: {e.stdout.decode()}[/yellow]")
         return False
 
 
@@ -386,41 +388,7 @@ class DependencyManager:
             build_path = build_path / dep.build_dir
             build_path.mkdir(exist_ok=True)
         
-        # Special handling for finn-xsim to include pybind11
-        build_env = None
-        if dep.name == 'finn-xsim':
-            try:
-                # Create a wrapper script for python3-config that includes pybind11
-                wrapper_script = build_path / 'python3-config-wrapper'
-                pybind11_result = subprocess.run(
-                    ['poetry', 'run', 'python', '-m', 'pybind11', '--includes'],
-                    capture_output=True, text=True, check=True
-                )
-                pybind11_includes = pybind11_result.stdout.strip()
-                
-                wrapper_content = f'''#!/bin/bash
-# Wrapper script to include pybind11 headers
-echo "{pybind11_includes}"
-'''
-                wrapper_script.write_text(wrapper_content)
-                wrapper_script.chmod(0o755)
-                
-                # Add wrapper script directory to PATH
-                new_path = f"{build_path}:{os.environ.get('PATH', '')}"
-                build_env = {'PATH': new_path}
-                if not quiet:
-                    console.print(f"[dim]Created python3-config wrapper with pybind11 includes[/dim]")
-                
-                # Rename the wrapper to python3-config
-                python3_config = build_path / 'python3-config'
-                if python3_config.exists():
-                    python3_config.unlink()
-                wrapper_script.rename(python3_config)
-                
-            except subprocess.CalledProcessError as e:
-                console.print(f"[yellow]Warning: Could not setup pybind11 includes: {e}[/yellow]")
-        
-        if not run_command(dep.build_cmd, build_path, f"Building {dep.name}", env=build_env, quiet=quiet):
+        if not run_command(dep.build_cmd, build_path, f"Building {dep.name}", quiet=quiet):
             return False
         
         # Check if build succeeded

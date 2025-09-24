@@ -64,6 +64,7 @@ def cppsim(force: bool) -> None:
         force: Whether to force reinstallation
     """
     config = get_config()
+    
     deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     # Check if both are already installed
@@ -130,7 +131,7 @@ def xsim(force: bool) -> None:
     # Build it
     with progress_spinner("Building finn-xsim module...") as task:
         try:
-            result = deps_mgr.build_finnxsim(force=force)
+            result = deps_mgr.build_finnxsim(force=force, quiet=False)
             if not result:
                 error_exit("Failed to build finn-xsim")
         except Exception as e:
@@ -160,6 +161,7 @@ def boards(force: bool, repo: tuple, verbose: bool) -> None:
         verbose: Whether to show detailed board list
     """
     config = get_config()
+    
     deps_mgr = DependencyManager(deps_dir=str(config.deps_dir))
     
     # Check what's already downloaded

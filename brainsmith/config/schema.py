@@ -64,13 +64,30 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
             self.yaml_file = yaml_file or self._find_yaml_file()
         
     def _find_yaml_file(self) -> Optional[Path]:
-        """Find YAML file in standard locations."""
+        """Find YAML file in standard locations.
+        
+        Search order:
+        1. Current working directory
+        2. Brainsmith project root (auto-detected)
+        """
+        # First check current working directory
         for location in [
             Path.cwd() / "brainsmith_settings.yaml",
             Path.cwd() / ".brainsmith" / "settings.yaml",
         ]:
             if location.exists():
                 return location
+        
+        # Then check brainsmith project root
+        try:
+            import brainsmith
+            bsmith_root = Path(brainsmith.__file__).parent.parent
+            root_settings = bsmith_root / "brainsmith_settings.yaml"
+            if root_settings.exists():
+                return root_settings
+        except Exception:
+            pass
+            
         return None
     
     def _read_file(self, file_path: Path) -> Dict[str, Any]:
