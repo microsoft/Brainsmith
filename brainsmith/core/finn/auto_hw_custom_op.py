@@ -9,6 +9,22 @@ Base class for automatic hardware custom operators.
 
 Uses cached kernel model state for performance while providing
 refresh mechanism via transforms.
+
+Two-Phase Model Creation Flow:
+
+    KernelSchema (static)
+           │
+           ├─[Phase 1: nodeattr only]─→ ResolvedKernelConfig
+           │                                      │
+           │                                      ├─[Phase 2: + ModelWrapper]
+           │                                      ↓
+           │                            TensorContext + DataType resolver
+           │                                      │
+           │                                      ↓
+           └─────────────────────────────→ KernelModel (complete)
+
+Cache invalidation:
+  set_nodeattr() → refresh_nodeattr_config() → clears downstream caches
 """
 
 from abc import ABC, abstractmethod
@@ -18,7 +34,13 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-from brainsmith.core.dataflow import KernelSchema
+from brainsmith.core.dataflow import (
+    KernelSchema,
+    ResolvedInterfaceConfig,
+    ResolvedKernelConfig,
+    TensorContext,
+    KernelModelFactory
+)
 from brainsmith.core.dataflow.models import (
     KernelModel,
     InputModel,
@@ -26,22 +48,41 @@ from brainsmith.core.dataflow.models import (
     create_kernel_model,
     update_kernel_stream_config
 )
+from brainsmith.core.dataflow.template_utils import resolve_template_params
+from brainsmith.core.dataflow.shape_utils import (
+    create_folded_shape,
+    calculate_stream_width
+)
+from brainsmith.core.dataflow.types import prod
+from brainsmith.core.dataflow.schema_compiler import SchemaCompiler, CompiledSchema
 
 
 class AutoHWCustomOp(HWCustomOp, ABC):
     """Base class for automatic hardware custom operators.
     
     Key features:
-    - Caches kernel model for performance
-    - Provides refresh_kernel_model() for state updates
-    - All model access through get_kernel_model()
+    - Two-phase model creation separating nodeattr and ModelWrapper dependencies
+    - Automatic cache invalidation on nodeattr changes
+    - Efficient partial updates when only nodeattrs change
+    
+    Subclasses must:
+    - Define kernel_schema class attribute with KernelSchema instance
+    - Implement abstract methods from HWCustomOp base class
     """
+    
+    # =============================================================================
+    # Class Attributes
+    # =============================================================================
     
     # Subclasses must define this class attribute
     kernel_schema: KernelSchema = None
     
+    # =============================================================================
+    # Initialization
+    # =============================================================================
+    
     def __init__(self, onnx_node, **kwargs):
-        """Initialize with cached model state."""
+        """Initialize with three-level cache system."""
         super().__init__(onnx_node, **kwargs)
         
         if self.kernel_schema is None:
@@ -49,9 +90,18 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                 f"{self.__class__.__name__} must define kernel_schema class attribute"
             )
         
-        # Cache for kernel model - will be created on first access
+        # Three levels of cache for two-phase model creation
+        self._resolved_config: Optional[ResolvedKernelConfig] = None
+        self._tensor_context: Optional[TensorContext] = None  
         self._kernel_model: Optional[KernelModel] = None
-
+        
+        # Use compiled schema for optimized runtime operations
+        self._compiled_schema: CompiledSchema = SchemaCompiler.compile(self.kernel_schema)
+    
+    # =============================================================================
+    # Public API - Model Access
+    # =============================================================================
+    
     def get_kernel_model(self) -> KernelModel:
         """Get the cached kernel model.
         
@@ -64,266 +114,92 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             )
         return self._kernel_model
     
+    
+    # =============================================================================
+    # Public API - Model Refresh
+    # =============================================================================
+    
+    def refresh_nodeattr_config(self) -> None:
+        """Update resolved config from current nodeattrs (Phase 1)."""
+        self._resolved_config = self._resolve_from_nodeattrs()
+        # Invalidate downstream caches
+        self._tensor_context = None
+        self._kernel_model = None
+    
     def refresh_kernel_model(self, model: ModelWrapper) -> None:
-        """Refresh the cached kernel model from current state.
+        """Refresh complete kernel model with ModelWrapper info (Phase 2).
         
         This should be called by transforms when shapes or types change.
         
         Args:
             model: The global ModelWrapper instance (not cached)
         """
-        self._kernel_model = self._create_kernel_model(model)
-    
-    def _create_kernel_model(self, model: ModelWrapper) -> KernelModel:
-        """Create fresh kernel model from current nodeattrs.
+        # Ensure we have resolved config
+        if self._resolved_config is None:
+            self.refresh_nodeattr_config()
         
-        Returns:
-            Fresh KernelModel reflecting current nodeattrs
-        """
-        # Create input models
-        input_models = []
-        for i in range(len(self.kernel_schema.inputs)):
-            inp_model = self._create_input_model(i, model)
-            if inp_model is not None:  # Skip optional missing
-                input_models.append(inp_model)
+        # Extract tensor context
+        self._tensor_context = TensorContext.from_model_wrapper(
+            self.onnx_node, model
+        )
         
-        # Create output models
-        output_models = []
-        for i in range(len(self.kernel_schema.outputs)):
-            out_model = self._create_output_model(i, model)
-            output_models.append(out_model)
+        # Build datatype resolver
+        datatype_resolver = self._build_datatype_resolver()
         
-        # Extract parameters
-        parameters = self._extract_parameters()
-        
-        # Create kernel model
-        return create_kernel_model(
-            name=self.kernel_schema.name,
-            inputs=input_models,
-            outputs=output_models,
-            parameters=parameters,
-            clock_freq_mhz=self.get_nodeattr("clock_freq_mhz", 100.0)
+        # Create complete model using factory
+        self._kernel_model = KernelModelFactory.create_model(
+            self._resolved_config,
+            self._tensor_context,
+            datatype_resolver
         )
     
-    def _resolve_interface_datatype(
-        self,
-        schema,
-        position: int,
-        is_input: bool
-    ) -> DataType:
-        """Resolve datatype for an interface from nodeattr.
-        
-        Args:
-            schema: Interface schema
-            position: Interface position
-            is_input: True for input, False for output
-            
-        Returns:
-            Resolved QONNX DataType
-        """
-        dtype_attr = schema.datatype_attr
-        if not dtype_attr:
-            prefix = "input" if is_input else "output"
-            dtype_attr = f"{prefix}{position}Datatype"
-        
-        return DataType[self.get_nodeattr(dtype_attr)]
+    # =============================================================================
+    # Override - Nodeattr Management with Change Detection
+    # =============================================================================
     
-    def _create_input_model(
-        self, 
-        position: int, 
-        model: ModelWrapper
-    ) -> Optional[InputModel]:
-        """Create input model from schema and ONNX info."""
+    def set_nodeattr(self, name: str, value: Any) -> None:
+        """Override to invalidate cache on relevant changes."""
+        # Get old value if it exists
+        try:
+            old_value = self.get_nodeattr(name)
+        except (AttributeError, Exception):
+            old_value = None
         
-        schema = self.kernel_schema.inputs[position]
-
-        # Check if input exists
-        if position >= len(self.onnx_node.input):
-            if schema.optional:
-                return None
-            raise ValueError(
-                f"Required input '{schema.name}' missing at position {position}"
-            )
+        super().set_nodeattr(name, value)
         
-        tensor_name = self.onnx_node.input[position]
-        if not tensor_name and schema.optional:
-            return None
-        
-        # Get tensor info from ONNX
-        tensor_shape = model.get_tensor_shape(tensor_name)
-        
-        # Resolve datatype
-        datatype = self._resolve_interface_datatype(schema, position, is_input=True)
-        # TODO: Add datatype constraint validation when implemented in schema
-        
-        # Resolve dimensions from templates
-        block_dims = self._resolve_tiling(schema.block_tiling, tensor_shape)
-        stream_dims = self._resolve_tiling(schema.stream_tiling, block_dims)
-        
-        # Create model directly
-        return InputModel(
-            name=schema.name,
-            tensor_dims=tuple(tensor_shape),
-            block_dims=tuple(block_dims),
-            datatype=datatype,
-            stream_dims=tuple(stream_dims),
-            is_weight=schema.is_weight
-        )
+        # Check if this affects model - now O(1) lookup using compiled schema
+        if self._compiled_schema.is_model_affecting(name):
+            if old_value != value:
+                # Use targeted invalidation for better performance
+                affected_caches = self._compiled_schema.get_affected_caches(name)
+                self._invalidate_caches(affected_caches)
     
-    def _create_output_model(
-        self,
-        position: int,
-        model: ModelWrapper
-    ) -> OutputModel:
-        """Create output model from schema and ONNX info."""
+    def _invalidate_caches(self, cache_names: Set[str]) -> None:
+        """Invalidate specific caches based on dependency analysis."""
+        if "resolved_config" in cache_names:
+            self._resolved_config = None
+        if "tensor_context" in cache_names:
+            self._tensor_context = None
+        if "kernel_model" in cache_names:
+            self._kernel_model = None
         
-        schema = self.kernel_schema.outputs[position]
-        tensor_name = self.onnx_node.output[position]
-        
-        # Get tensor info from ONNX
-        tensor_shape = model.get_tensor_shape(tensor_name)
-        
-        # Resolve datatype
-        datatype = self._resolve_interface_datatype(schema, position, is_input=False)
-        
-        # Resolve block dimensions
-        block_dims = self._resolve_tiling(schema.block_tiling or [":"], tensor_shape)
-        
-        # Create model directly
-        return OutputModel(
-            name=schema.name,
-            tensor_dims=tuple(tensor_shape),
-            block_dims=tuple(block_dims),
-            datatype=datatype,
-            streaming_rate=1  # Will be computed by kernel model
-        )
+        # If resolved_config is invalidated, downstream caches must also be cleared
+        if "resolved_config" in cache_names:
+            self._tensor_context = None
+            self._kernel_model = None
+        # If tensor_context is invalidated, kernel_model must be cleared
+        elif "tensor_context" in cache_names:
+            self._kernel_model = None
     
-    def _resolve_tiling(
-        self,
-        template: List[Union[int, str]],
-        shape: Sequence[int]
-    ) -> Tuple[int, ...]:
-        """Resolve tiling template to concrete dimensions.
-        
-        Handles both nodeattr resolution and tiling application in one method.
-        
-        Args:
-            template: List containing literals, ":", and nodeattr names
-            shape: Tensor shape to tile against
-            
-        Returns:
-            Tuple of concrete dimensions
-            
-        Raises:
-            ValueError: If validation fails or nodeattrs not found
-        """
-        if not template:
-            raise ValueError("Tiling template cannot be empty")
-        
-        if not shape:
-            raise ValueError("Shape cannot be empty")
-        
-        # Stage 1: Resolve nodeattr references to integers
-        resolved_template = []
-        for item in template:
-            if isinstance(item, str) and item != ":":
-                # This is a nodeattr reference
-                value = self.get_nodeattr(item)
-                if value is None:
-                    raise ValueError(f"Nodeattr '{item}' not found")
-                # Handle FINN's list encoding
-                if isinstance(value, list) and len(value) == 1:
-                    value = value[0]
-                resolved_template.append(int(value))
-            else:
-                # Keep literals and ":" as-is
-                resolved_template.append(item)
-        
-        # Stage 2: Validate and apply tiling
-        # Check dimension compatibility
-        if len(resolved_template) > len(shape):
-            raise ValueError(
-                f"Template has {len(resolved_template)} dimensions "
-                f"but shape has only {len(shape)}"
-            )
-        
-        # Left-pad result with 1s if shape has more dims
-        padding = len(shape) - len(resolved_template)
-        result = [1] * padding
-        
-        # Process each template item aligned to the right of shape
-        for i, (item, dim_size) in enumerate(zip(resolved_template, shape[padding:])):
-            actual_idx = padding + i
-            
-            if item == ":":
-                # Full dimension
-                result.append(dim_size)
-                
-            elif isinstance(item, int):
-                if item <= 0:
-                    raise ValueError(
-                        f"Dimension {actual_idx}: Value must be positive, got {item}"
-                    )
-                elif dim_size % item != 0:
-                    raise ValueError(
-                        f"Dimension {actual_idx}: {item} does not evenly divide {dim_size}"
-                    )
-                else:
-                    result.append(item)
-            else:
-                # This should never happen after nodeattr resolution
-                raise ValueError(
-                    f"Invalid template item at {i}: {item} (type: {type(item).__name__})"
-                )
-        
-        # Stage 3: Final validation - ensure result tiles evenly into shape
-        final_result = tuple(result)
-        for i, (tile, shape_dim) in enumerate(zip(final_result, shape)):
-            if shape_dim % tile != 0:
-                raise ValueError(
-                    f"Dimension {i}: Tiling value {tile} does not evenly divide "
-                    f"shape dimension {shape_dim}"
-                )
-        
-        return final_result
-    
-    def _extract_parameters(self) -> Dict[str, Any]:
-        """Extract parameter values from nodeattrs."""
-        params = {}
-        
-        # Common kernel parameters
-        common_params = [
-            "CHANNELS", "PE", "SIMD", "K", "S", 
-            "BATCH", "GROUPS", "DEPTHWISE"
-        ]
-        
-        for param in common_params:
-            if self.hasNodeAttr(param):
-                value = self.get_nodeattr(param)
-                # Unwrap single-element lists
-                if isinstance(value, list) and len(value) == 1:
-                    value = value[0]
-                params[param] = value
-        
-        return params
-    
-    # Override HWCustomOp methods to use cached models
+    # =============================================================================
+    # Override - HWCustomOp Interface Methods (Delegating to Cached Model)
+    # =============================================================================
     
     def get_folded_output_shape(self, ind=0):
         """Get folded output shape using cached model."""
         model = self.get_kernel_model()
         output = model.outputs[ind]
-        
-        # Create folded shape
-        folded = []
-        for tensor_dim, block_dim in zip(output.tensor_dims, output.block_dims):
-            if block_dim < tensor_dim:
-                # Dimension is folded
-                folded.extend([tensor_dim // block_dim, block_dim])
-            else:
-                folded.append(tensor_dim)
-        
-        return folded
+        return create_folded_shape(output.tensor_dims, output.block_dims)
     
     def get_number_output_values(self):
         """Get total output values using cached model."""
@@ -358,27 +234,21 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """Get folded input shape using cached model."""
         model = self.get_kernel_model()
         inp = model.inputs[ind]
-        
-        # Create folded shape
-        folded = []
-        for tensor_dim, block_dim in zip(inp.tensor_dims, inp.block_dims):
-            if block_dim < tensor_dim:
-                # Dimension is folded
-                folded.extend([tensor_dim // block_dim, block_dim])
-            else:
-                folded.append(tensor_dim)
-        
-        return folded
+        return create_folded_shape(inp.tensor_dims, inp.block_dims)
     
     def get_instream_width(self, ind=0) -> int:
         """Get input stream width in bits."""
         inp = self.get_kernel_model().inputs[ind]
-        return inp.streaming_bandwidth * inp.datatype.bitwidth()
+        return calculate_stream_width(inp.streaming_bandwidth, inp.datatype.bitwidth())
     
     def get_outstream_width(self, ind=0) -> int:
         """Get output stream width in bits."""
         out = self.get_kernel_model().outputs[ind]
         return out.streaming_rate * out.datatype.bitwidth()
+    
+    # =============================================================================
+    # Override - Template and Performance Methods
+    # =============================================================================
     
     def get_template_values(self):
         """Get template values from cached model."""
@@ -406,7 +276,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         params = {}
         
         for i, inp_schema in enumerate(self.kernel_schema.inputs):
-            if inp_schema.stream_tiling:
+            if hasattr(inp_schema, 'stream_tiling') and inp_schema.stream_tiling:
                 # This input supports streaming configuration
                 params[inp_schema.name] = {
                     "dimensions": len(inp_schema.stream_tiling),
@@ -419,14 +289,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         self,
         sdim_config: Dict[str, Union[int, List[int]]]
     ) -> Dict[str, Any]:
-        """Calculate performance metrics for specific SDIM config.
-        
-        Args:
-            sdim_config: Maps input names to stream dimensions
-            
-        Returns:
-            Performance metrics dictionary
-        """
+        """Calculate performance metrics for specific SDIM config."""
         # Get base model
         base_model = self.get_kernel_model()
         
@@ -454,27 +317,117 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         model = self.get_kernel_model()
         total_bits = sum(out.bandwidth_bits for out in model.outputs)
         return total_bits * model.clock_freq_mhz / 8.0
-
-
-def prod(shape):
-    """Product of shape elements."""
-    result = 1
-    for x in shape:
-        result *= x
-    return result
-
-
-def extract_tiling_parameters(template: List[Union[int, str]]) -> Set[str]:
-    """Extract parameter names from a tiling template.
     
-    Args:
-        template: Tiling template with literals, ":", and parameter names
+    # =============================================================================
+    # Private - Phase 1: Configuration Resolution (nodeattr-only)
+    # =============================================================================
+    
+    def _resolve_from_nodeattrs(self) -> ResolvedKernelConfig:
+        """Create resolved config from schema + nodeattrs."""
+        # Resolve each interface
+        inputs = []
+        for i, schema in enumerate(self.kernel_schema.inputs):
+            inputs.append(self._resolve_interface_config(schema, i, is_input=True))
         
-    Returns:
-        Set of parameter names (excluding ":")
+        outputs = []
+        for i, schema in enumerate(self.kernel_schema.outputs):
+            outputs.append(self._resolve_interface_config(schema, i, is_input=False))
         
-    Example:
-        >>> extract_tiling_parameters([1, "PE", ":", "SIMD"])
-        {"PE", "SIMD"}
-    """
-    return {item for item in template if isinstance(item, str) and item != ":"}
+        # Extract parameters
+        parameters = self._extract_parameters()
+        
+        # Get clock frequency with default
+        try:
+            clock_freq_mhz = self.get_nodeattr("clock_freq_mhz")
+        except (AttributeError, Exception):
+            clock_freq_mhz = 100.0
+        
+        return ResolvedKernelConfig(
+            kernel_name=self.kernel_schema.name,
+            inputs=inputs,
+            outputs=outputs,
+            parameters=parameters,
+            clock_freq_mhz=clock_freq_mhz
+        )
+    
+    def _resolve_interface_config(
+        self,
+        schema,
+        position: int,
+        is_input: bool
+    ) -> ResolvedInterfaceConfig:
+        """Resolve interface configuration from schema and nodeattrs."""
+        # For inputs, handle stream_tiling
+        stream_params = None
+        if is_input and hasattr(schema, 'stream_tiling') and schema.stream_tiling:
+            stream_params = self._resolve_template_params(schema.stream_tiling)
+        
+        return ResolvedInterfaceConfig(
+            name=schema.name,
+            position=position,
+            block_params=self._resolve_template_params(schema.block_tiling or [":"]),
+            stream_params=stream_params,
+            datatype_attr=schema.get_datatype_attr(position),
+            is_weight=getattr(schema, 'is_weight', False),
+            optional=schema.optional
+        )
+    
+    def _resolve_template_params(
+        self,
+        template: List[Union[int, str]]
+    ) -> List[Union[int, str]]:
+        """Resolve nodeattr references in template to their values."""
+        return resolve_template_params(
+            template, 
+            self.get_nodeattr,
+            self.get_nodeattr_types()
+        )
+    
+    def _extract_parameters(self) -> Dict[str, Any]:
+        """Extract parameter values from nodeattrs using compiled schema."""
+        params = {}
+        
+        # Use compiled schema to get only parameters that actually exist
+        for param in self._compiled_schema.all_parameters:
+            # Skip datatype and performance parameters
+            if param.endswith("Datatype") or param == "clock_freq_mhz":
+                continue
+                
+            try:
+                value = self.get_nodeattr(param)
+                # Unwrap single-element lists
+                if isinstance(value, list) and len(value) == 1:
+                    value = value[0]
+                params[param] = value
+            except (AttributeError, Exception):
+                # Attribute not defined or not set
+                pass
+        
+        return params
+    
+    # =============================================================================
+    # Private - Phase 2: DataType Resolution
+    # =============================================================================
+    
+    def _build_datatype_resolver(self) -> Dict[str, DataType]:
+        """Build mapping from datatype attr names to DataType values."""
+        resolver = {}
+        
+        # Resolve datatypes for all interfaces
+        for config in self._resolved_config.inputs + self._resolved_config.outputs:
+            if config.datatype_attr:
+                try:
+                    dtype_str = self.get_nodeattr(config.datatype_attr)
+                    if dtype_str:
+                        resolver[config.datatype_attr] = DataType[dtype_str]
+                except (AttributeError, Exception):
+                    # Datatype not set, will use default from tensor context
+                    pass
+        
+        return resolver
+    
+    # =============================================================================
+    # Private - Change Detection Support
+    # =============================================================================
+    
+    

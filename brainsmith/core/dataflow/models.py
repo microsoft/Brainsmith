@@ -199,6 +199,65 @@ class KernelModel:
 
 # Factory functions for creating models
 
+def create_input_model(
+    name: str,
+    tensor_dims: Tuple[int, ...],
+    block_dims: Tuple[int, ...],
+    datatype: BaseDataType,
+    stream_dims: Tuple[int, ...],
+    is_weight: bool = False
+) -> InputModel:
+    """Factory function to create an InputModel.
+    
+    Args:
+        name: Interface name
+        tensor_dims: Full tensor dimensions
+        block_dims: Block tiling dimensions
+        datatype: Data type
+        stream_dims: Streaming dimensions
+        is_weight: Whether this is a weight input
+        
+    Returns:
+        Immutable InputModel instance
+    """
+    return InputModel(
+        name=name,
+        tensor_dims=tensor_dims,
+        block_dims=block_dims,
+        datatype=datatype,
+        stream_dims=stream_dims,
+        is_weight=is_weight
+    )
+
+
+def create_output_model(
+    name: str,
+    tensor_dims: Tuple[int, ...],
+    block_dims: Tuple[int, ...],
+    datatype: BaseDataType,
+    streaming_rate: int = 1
+) -> OutputModel:
+    """Factory function to create an OutputModel.
+    
+    Args:
+        name: Interface name
+        tensor_dims: Full tensor dimensions
+        block_dims: Block tiling dimensions
+        datatype: Data type
+        streaming_rate: Elements per cycle
+        
+    Returns:
+        Immutable OutputModel instance
+    """
+    return OutputModel(
+        name=name,
+        tensor_dims=tensor_dims,
+        block_dims=block_dims,
+        datatype=datatype,
+        streaming_rate=streaming_rate
+    )
+
+
 def create_kernel_model(
     name: str,
     inputs: List[InputModel],
