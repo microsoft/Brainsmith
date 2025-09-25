@@ -40,8 +40,22 @@ from .models import (
     OutputModel,
     KernelModel,
     create_kernel_model,
+    create_input_model,
+    create_output_model,
     update_kernel_stream_config
 )
+
+# Two-phase model creation components
+from .resolved_config import ResolvedInterfaceConfig, ResolvedKernelConfig
+from .tensor_context import TensorContext, TensorInfo
+from .model_factory import KernelModelFactory
+
+# Schema compilation for performance
+from .schema_compiler import CompiledSchema, SchemaCompiler
+
+# Utility modules
+from . import template_utils
+from . import shape_utils
 
 
 
@@ -63,5 +77,16 @@ __all__ = [
     
     # Immutable models and factory functions
     'InputModel', 'OutputModel', 'KernelModel',
-    'create_kernel_model', 'update_kernel_stream_config',
+    'create_kernel_model', 'create_input_model', 'create_output_model',
+    'update_kernel_stream_config',
+    
+    # Two-phase model creation
+    'ResolvedInterfaceConfig', 'ResolvedKernelConfig',
+    'TensorContext', 'TensorInfo', 'KernelModelFactory',
+    
+    # Schema compilation
+    'CompiledSchema', 'SchemaCompiler',
+    
+    # Utility modules
+    'template_utils', 'shape_utils',
 ]

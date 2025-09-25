@@ -126,6 +126,22 @@ class InterfaceSchema(BaseSchema):
                     )
         
         return errors
+    
+    def get_datatype_attr(self, index: int) -> str:
+        """Get the nodeattr name for this interface's datatype.
+        
+        Args:
+            index: Position of this interface in the kernel's input/output list
+            
+        Returns:
+            The node attribute name to use for this interface's datatype
+        """
+        if self.datatype_attr:
+            return self.datatype_attr
+        
+        # Generate default based on type and index
+        # This will be overridden by subclasses
+        raise NotImplementedError("Subclasses must implement get_datatype_attr")
 
 
 @dataclass
@@ -160,6 +176,21 @@ class InputSchema(InterfaceSchema):
         
         return errors
     
+    def get_datatype_attr(self, index: int) -> str:
+        """Get the nodeattr name for this input's datatype.
+        
+        Args:
+            index: Position of this input in the kernel's input list
+            
+        Returns:
+            The node attribute name to use for this input's datatype
+        """
+        if self.datatype_attr:
+            return self.datatype_attr
+        
+        # Generate default name
+        return f"input{index}Datatype"
+    
     def __repr__(self) -> str:
         """String representation of InputSchema."""
         return _build_repr(
@@ -181,6 +212,21 @@ class OutputSchema(InterfaceSchema):
     Outputs don't have configurable streaming - their rate is determined
     by the kernel computation.
     """
+    
+    def get_datatype_attr(self, index: int) -> str:
+        """Get the nodeattr name for this output's datatype.
+        
+        Args:
+            index: Position of this output in the kernel's output list
+            
+        Returns:
+            The node attribute name to use for this output's datatype
+        """
+        if self.datatype_attr:
+            return self.datatype_attr
+        
+        # Generate default name
+        return f"output{index}Datatype"
     
     def __repr__(self) -> str:
         """String representation of OutputSchema."""
