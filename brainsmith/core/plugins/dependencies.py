@@ -89,7 +89,7 @@ DEPENDENCIES = {
         parent_dep='finn',
         subdir='finn_xsi',
         build_cmd=['python', '-m', 'finn.xsi.setup', '--quiet'],
-        prerequisites=['g++', 'make'],  # python3-config no longer needed explicitly
+        prerequisites=['g++'],  # make no longer needed with pure Python build
         env_requirements={'XILINX_VIVADO': 'Vivado installation'},
         check_file='xsi.so'
     ),
@@ -169,17 +169,24 @@ def run_command(cmd: List[str], cwd: Path, description: str, env: Optional[Dict[
         cmd_env = os.environ.copy()
         if env:
             cmd_env.update(env)
-        subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, env=cmd_env)
-        if not quiet:
+        
+        if quiet:
+            # In quiet mode, capture output
+            result = subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, env=cmd_env)
+            # No output unless error
+        else:
+            # In verbose mode, stream output to console
+            result = subprocess.run(cmd, cwd=cwd, check=True, env=cmd_env)
             console.print(f"[green]✓ {description}[/green]")
+        
         return True
     except subprocess.CalledProcessError as e:
-        if not quiet:
-            console.print(f"[red]✗ {description} failed[/red]")
-            if e.stderr:
-                console.print(f"[red]stderr: {e.stderr.decode()}[/red]")
-            if e.stdout:
-                console.print(f"[yellow]stdout: {e.stdout.decode()}[/yellow]")
+        console.print(f"[red]✗ {description} failed[/red]")
+        if quiet and hasattr(e, 'stderr') and e.stderr:
+            # In quiet mode, show captured error output
+            console.print(f"[red]stderr: {e.stderr.decode()}[/red]")
+        if quiet and hasattr(e, 'stdout') and e.stdout:
+            console.print(f"[yellow]stdout: {e.stdout.decode()}[/yellow]")
         return False
 
 
@@ -288,7 +295,7 @@ class DependencyManager:
             # Check if already installed
             if not force and self._is_installed(dep):
                 if not quiet:
-                    console.print(f"[yellow]{name} already installed[/yellow]")
+                    console.print(f"[yellow]{name} already installed (use --force to rebuild)[/yellow]")
                 results[name] = True
                 continue
             
@@ -305,7 +312,7 @@ class DependencyManager:
             # Install
             if not quiet:
                 console.print(f"\n[blue]Installing {name}...[/blue]")
-            results[name] = self._install_dependency(dep, quiet=quiet)
+            results[name] = self._install_dependency(dep, quiet=quiet, force=force)
             
         return results
     
@@ -354,12 +361,12 @@ class DependencyManager:
         
         return missing
     
-    def _install_dependency(self, dep, quiet: bool = False) -> bool:
+    def _install_dependency(self, dep, quiet: bool = False, force: bool = False) -> bool:
         """Install a single dependency."""
         if isinstance(dep, GitDependency):
             return self._install_git_dependency(dep, quiet)
         elif isinstance(dep, LocalDependency):
-            return self._install_local_dependency(dep, quiet)
+            return self._install_local_dependency(dep, quiet, force)
         elif isinstance(dep, ZipDependency):
             return self._install_zip_dependency(dep, quiet)
         return False
@@ -392,7 +399,7 @@ class DependencyManager:
             console.print(f"[green]✓ {dep.name} installed successfully[/green]")
         return True
     
-    def _install_local_dependency(self, dep: LocalDependency, quiet: bool = False) -> bool:
+    def _install_local_dependency(self, dep: LocalDependency, quiet: bool = False, force: bool = False) -> bool:
         """Build a dependency within another dependency."""
         build_path = dep.dest_path(self.deps_dir)
         
@@ -428,7 +435,17 @@ class DependencyManager:
             if dep.name == 'finn-xsim':
                 build_env['FINN_ROOT'] = str(parent_path.absolute())
         
-        if not run_command(dep.build_cmd, build_path, f"Building {dep.name}", env=build_env, quiet=quiet):
+        # Prepare build command with force flag if needed
+        build_cmd = dep.build_cmd.copy()
+        if force and dep.name == 'finn-xsim' and '--force' not in build_cmd:
+            # Insert --force before --quiet if present
+            if '--quiet' in build_cmd:
+                quiet_idx = build_cmd.index('--quiet')
+                build_cmd.insert(quiet_idx, '--force')
+            else:
+                build_cmd.append('--force')
+        
+        if not run_command(build_cmd, build_path, f"Building {dep.name}", env=build_env, quiet=quiet):
             return False
         
         # Check if build succeeded
@@ -500,7 +517,7 @@ class DependencyManager:
         console.print("\n[bold]Setting up Xilinx Simulation Dependencies[/bold]")
         return self.install_group('xsim')
     
-    def download_board_files(self, boards: Optional[List[str]] = None, quiet: bool = True) -> bool:
+    def download_board_files(self, boards: Optional[List[str]] = None, force: bool = False, quiet: bool = True) -> bool:
         """Download board definition files."""
         if not quiet:
             console.print("\n[bold]Downloading Board Definition Files[/bold]")
@@ -529,7 +546,7 @@ class DependencyManager:
         else:
             dep_names = DEPENDENCY_GROUPS['boards']
         
-        results = self.install(dep_names, quiet=quiet)
+        results = self.install(dep_names, force=force, quiet=quiet)
         return all(results.values())
     
     # Individual method wrappers for CLI compatibility

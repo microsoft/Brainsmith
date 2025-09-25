@@ -55,36 +55,56 @@ class StepOperation:
 def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ForgeConfig]:
     """
     Parse blueprint YAML and return DesignSpace and ForgeConfig.
-    Steps:
-    1. Load blueprint YAML (with inheritance)
-    2. Extract global config and FINN mappings
-    3. Parse steps and kernels
-    4. Validate required fields
-    5. Build DesignSpace
+    
+    Inheritance is resolved bottom-up:
+    1. Start from the root parent (no extends)
+    2. Fully resolve its steps (including operations)
+    3. Pass resolved steps to child for its operations
+    4. Repeat until we reach the target blueprint
     """
-    blueprint_data, parent_data = _load_with_inheritance(blueprint_path, return_parent=True)
-    forge_config = _extract_config_and_mappings(blueprint_data)
-    
-    # Parse steps with inheritance support
-    # Need to handle recursive inheritance properly - if parent has operations,
-    # we need to get its fully resolved steps, not just raw data
-    parent_steps = None
-    if parent_data and 'extends' in parent_data:
-        # Parent also has inheritance - need to recursively parse it
-        parent_blueprint_path = str(Path(blueprint_path).parent / parent_data['extends'])
-        parent_design_space, _ = parse_blueprint(parent_blueprint_path, model_path)
-        parent_steps = parent_design_space.steps
-    elif parent_data:
-        # Parent has no inheritance - can use raw steps
-        parent_steps_data = parent_data.get('design_space', {}).get('steps', [])
-        if parent_steps_data:
-            parent_steps = _parse_steps_raw(parent_steps_data)
-    
-    steps = _parse_steps(
-        blueprint_data.get('design_space', {}).get('steps', []),
-        parent_steps=parent_steps
+    # Load raw data to check inheritance chain
+    raw_data = load_yaml(
+        blueprint_path,
+        expand_env_vars=True,
+        support_inheritance=False,
+        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
     )
     
+    parent_steps = None
+    
+    # If this blueprint extends another, first parse the parent
+    if 'extends' in raw_data:
+        parent_path = raw_data['extends']
+        # Expand env vars in parent path
+        parent_path = expand_env_vars_with_context(
+            parent_path,
+            {'BSMITH_DIR': os.environ.get('BSMITH_DIR', str(Path(__file__).parent.parent.parent.parent.absolute()))}
+        )
+        
+        # Resolve parent path relative to current file
+        if not Path(parent_path).is_absolute():
+            parent_path = str(Path(blueprint_path).parent / parent_path)
+            
+        # Recursively parse parent to get its fully resolved steps
+        parent_design_space, _ = parse_blueprint(parent_path, model_path)
+        parent_steps = parent_design_space.steps
+    
+    # Now load the full merged data for config extraction
+    blueprint_data = load_yaml(
+        blueprint_path,
+        expand_env_vars=True,
+        support_inheritance=True,
+        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
+    )
+    
+    forge_config = _extract_config_and_mappings(blueprint_data)
+    
+    # Parse steps from THIS blueprint only (not inherited steps)
+    # Use raw_data to get only the steps defined in this file
+    steps_data = raw_data.get('design_space', {}).get('steps', [])
+    steps = _parse_steps(steps_data, parent_steps=parent_steps)
+    
+    # Parse kernels (use merged data to inherit kernels)
     kernel_backends = _parse_kernels(blueprint_data.get('design_space', {}).get('kernels', []))
 
     # Get max_combinations from environment or use default
@@ -122,48 +142,6 @@ def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
     )
 
 
-def _load_with_inheritance(blueprint_path: str, return_parent: bool = False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
-    """
-    Load blueprint and merge with parent if extends is specified.
-    
-    Args:
-        blueprint_path: Path to blueprint YAML file
-        return_parent: If True, also return the parent data
-        
-    Returns:
-        If return_parent is False: Merged blueprint data
-        If return_parent is True: Tuple of (merged data, parent data)
-    """
-    # Use unified YAML loader with inheritance support and env var expansion
-    # The context variable BLUEPRINT_DIR is automatically provided as YAML_DIR
-    data = load_yaml(
-        blueprint_path,
-        expand_env_vars=True,
-        support_inheritance=True,
-        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
-    )
-    
-    parent_data = None
-    
-    # If we need to return parent data, load it separately
-    if return_parent and 'extends' in data:
-        # Load original file without inheritance to get raw data
-        raw_data = load_yaml(
-            blueprint_path,
-            expand_env_vars=True,
-            support_inheritance=False
-        )
-        if 'extends' in raw_data:
-            parent_path = str(Path(blueprint_path).parent / raw_data['extends'])
-            parent_data = load_yaml(
-                parent_path,
-                expand_env_vars=True,
-                support_inheritance=True
-            )
-    
-    if return_parent:
-        return data, parent_data
-    return data
 
 
 
