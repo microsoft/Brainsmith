@@ -105,6 +105,8 @@ def xsim(force: bool) -> None:
     Args:
         force: Whether to force rebuild
     """
+    from brainsmith.config import export_to_environment
+    
     config = get_config()
     
     # Check Vivado availability
@@ -120,21 +122,14 @@ def xsim(force: bool) -> None:
         )
     
     # Export environment variables before building
-    config.export_to_environment()
+    export_to_environment(config)
     
     deps_mgr = DependencyManager(deps_dir=config.deps_dir)
     
-    # Check if already built (xsi.so exists)
-    xsi_so_path = config.deps_dir / "finn" / "finn_xsi" / "xsi.so"
-    
-    if not force and xsi_so_path.exists():
-        warning("finn-xsim already built (use --force to rebuild)")
-        return
-    
-    # Build it
+    # Build it (the build function handles force flag internally)
     with progress_spinner("Building finn-xsim module...") as task:
         try:
-            result = deps_mgr.build_finnxsim(force=force, quiet=False)
+            result = deps_mgr.build_finnxsim(force=force, quiet=True)
             if not result:
                 error_exit("Failed to build finn-xsim")
         except Exception as e:
@@ -147,7 +142,6 @@ def xsim(force: bool) -> None:
                 ]
             )
     
-    # Show result after progress completes
     success("finn-xsim built successfully")
 
 
@@ -255,7 +249,7 @@ def boards(force: bool, repo: tuple, verbose: bool) -> None:
     
     with progress_spinner(description) as task:
         try:
-            result = deps_mgr.download_board_files(boards=list(repo) if repo else None, quiet=True)
+            result = deps_mgr.download_board_files(boards=list(repo) if repo else None, force=force, quiet=True)
             if not result:
                 error_exit("Failed to download board files")
                 

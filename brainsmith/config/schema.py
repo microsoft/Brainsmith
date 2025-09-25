@@ -5,6 +5,7 @@ providing type safety and validation.
 """
 
 import os
+import yaml
 from pathlib import Path
 from functools import cached_property
 from typing import Optional, Dict, Any, List, Tuple, Type, Callable
@@ -79,6 +80,9 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         else:
             self.yaml_file = yaml_file or self._find_yaml_file()
         
+        # Load and parse the YAML file once during initialization
+        self._data = self._load_and_parse_yaml()
+        
     def _find_yaml_file(self) -> Optional[Path]:
         """Find YAML file in standard locations.
         
@@ -106,33 +110,59 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
             
         return None
     
-    def _read_file(self, file_path: Path) -> Dict[str, Any]:
-        """Read and parse YAML file with environment variable expansion."""
-        if not file_path or not file_path.exists():
+    def _load_and_parse_yaml(self) -> Dict[str, Any]:
+        """Load and parse YAML file with environment variable expansion."""
+        if not self.yaml_file or not self.yaml_file.exists():
             return {}
         try:
             # Use unified YAML parser with env var expansion and schema-based path resolution
             return load_yaml(
-                file_path,
+                self.yaml_file,
                 expand_env_vars=True,
                 support_inheritance=False,  # Config files don't use inheritance
                 schema_class=self.settings_cls  # Pass the BrainsmithConfig class to extract path fields
             )
-        except Exception:
+        except yaml.YAMLError as e:
+            # Import here to avoid circular dependency
+            from brainsmith.interface.utils import warning
+            
+            # Extract useful error information
+            error_msg = str(e)
+            if hasattr(e, 'problem_mark'):
+                mark = e.problem_mark
+                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {e.problem or 'invalid syntax'}"
+            
+            warning(
+                f"Failed to parse settings file: {self.yaml_file}",
+                details=[
+                    f"YAML syntax error at {error_msg}",
+                    "Using default configuration values instead",
+                    f"Fix the syntax in {self.yaml_file} to load your settings"
+                ]
+            )
+            return {}
+        except Exception as e:
+            # For other unexpected errors, still warn but less specifically
+            from brainsmith.interface.utils import warning
+            warning(
+                f"Failed to read settings file: {self.yaml_file}",
+                details=[
+                    f"Error: {e}",
+                    "Using default configuration values instead"
+                ]
+            )
             return {}
     
     def get_field_value(self, field_name: str, field_info: Any) -> Tuple[Any, str, bool]:
         """Get field value from YAML source."""
-        data = self._read_file(self.yaml_file)
-        
-        if field_name in data:
-            return data[field_name], field_name, True
+        if field_name in self._data:
+            return self._data[field_name], field_name, True
         
         return None, field_name, False
     
     def __call__(self) -> Dict[str, Any]:
         """Return all settings from YAML file."""
-        return self._read_file(self.yaml_file)
+        return self._data
 
 
 class BrainsmithConfig(BaseSettings):

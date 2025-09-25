@@ -37,25 +37,25 @@ def load_yaml(
     if not file_path.exists():
         raise FileNotFoundError(f"YAML file not found: {file_path}")
     
+    # Prepare context variables for inheritance
+    default_context = {
+        'YAML_DIR': str(file_path.parent.absolute()),
+        'BSMITH_DIR': os.environ.get('BSMITH_DIR', str(Path(__file__).parent.parent.parent.absolute()))
+    }
+    
+    # Merge with user-provided context
+    if context_vars:
+        default_context.update(context_vars)
+    
     # Load the YAML file
     if support_inheritance:
-        data = _load_with_inheritance(file_path)
+        data = _load_with_inheritance(file_path, default_context)
     else:
         with open(file_path, 'r') as f:
             data = yaml.safe_load(f) or {}
     
     # Expand environment variables if requested
     if expand_env_vars:
-        # Add file context variables
-        default_context = {
-            'YAML_DIR': str(file_path.parent.absolute()),
-            'BSMITH_DIR': os.environ.get('BSMITH_DIR', str(Path(__file__).parent.parent.parent.absolute()))
-        }
-        
-        # Merge with user-provided context
-        if context_vars:
-            default_context.update(context_vars)
-        
         data = expand_env_vars_with_context(data, default_context)
     
     # Resolve relative paths if path_fields are specified or schema is provided
@@ -70,12 +70,13 @@ def load_yaml(
     return data
 
 
-def _load_with_inheritance(file_path: Path) -> Dict[str, Any]:
+def _load_with_inheritance(file_path: Path, context_vars: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """
     Load a YAML file with inheritance support via 'extends' field.
     
     Args:
         file_path: Path to the YAML file
+        context_vars: Context variables for environment expansion
         
     Returns:
         Merged YAML data
@@ -87,14 +88,25 @@ def _load_with_inheritance(file_path: Path) -> Dict[str, Any]:
     if 'extends' in data:
         parent_path = data.pop('extends')
         
+        # Expand environment variables in parent path with context
+        if context_vars:
+            # Temporarily set context vars in environment
+            parent_path = expand_env_vars_with_context(parent_path, context_vars)
+        else:
+            parent_path = os.path.expandvars(parent_path)
+        
         # Resolve parent path relative to current file
         if not Path(parent_path).is_absolute():
             parent_path = file_path.parent / parent_path
         else:
             parent_path = Path(parent_path)
         
+        # Update context for parent file
+        parent_context = context_vars.copy() if context_vars else {}
+        parent_context['YAML_DIR'] = str(parent_path.parent.absolute())
+        
         # Load parent data
-        parent_data = _load_with_inheritance(parent_path)
+        parent_data = _load_with_inheritance(parent_path, parent_context)
         
         # Merge with child data (child overrides parent)
         return _deep_merge(parent_data, data)
