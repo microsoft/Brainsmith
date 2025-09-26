@@ -76,7 +76,7 @@ fi
 declare -A GIT_DEPS=(
     ["brevitas"]="https://github.com/Xilinx/brevitas.git@95edaa0bdc8e639e39b1164466278c59df4877be"
     ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@9153395712b5617d38b058900c873c6fc522b343"
-    ["finn"]="https://github.com/tafk7/finn.git@custom/env-vars-minimal"
+    ["finn"]="https://github.com/Xilinx/finn.git@c00f785d3cf8e98811115d5a794443f8203149b7"
     ["onnxscript"]="https://github.com/jsmonson/onnxscript.git@62c7110aba46554432ce8e82ba2d8a086bd6227c"
     ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
     ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
@@ -127,7 +127,7 @@ resolve_ref_to_commit() {
     # First try to resolve as-is (works for local branches, tags, and hashes)
     local resolved_commit=$(git rev-parse "$ref" 2>/dev/null || echo "")
     
-    # If that fails, try as a remote branch
+    # If that fails, try as a remote branch on origin
     if [ -z "$resolved_commit" ]; then
         resolved_commit=$(git rev-parse "origin/$ref" 2>/dev/null || echo "")
     fi
@@ -186,9 +186,15 @@ analyze_repo() {
     # Show additional details
     cd "$name"
     local branch_info=$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")
-    local remote_url=$(git remote get-url origin 2>/dev/null || echo "unknown")
+    local origin_url=$(git remote get-url origin 2>/dev/null || echo "unknown")
+    
     echo -e "    Branch: $branch_info"
-    echo -e "    Remote: ${remote_url##*/}"  # Just show repo name
+    echo -e "    Remote: ${origin_url##*/}"  # Just show repo name
+    
+    # Check for origin mismatch
+    if [ "$origin_url" != "$url" ]; then
+        echo -e "    ${YELLOW}⚠️  Origin mismatch${NC}: expected ${url##*/}"
+    fi
     cd ..
 }
 
@@ -200,8 +206,36 @@ update_repo() {
     local rev="${url_rev#*@}"
     
     if [ -d "$name" ]; then
+        # Check if origin URL matches expected
+        cd "$name"
+        local current_origin=$(git remote get-url origin 2>/dev/null || echo "")
+        cd ..
+        
+        local origin_mismatch=false
+        if [ "$current_origin" != "$url" ]; then
+            origin_mismatch=true
+        fi
+        
         local current_commit=$(get_current_commit "$name")
         local expected_commit=$(resolve_ref_to_commit "$name" "$rev")
+        
+        # Check for origin mismatch first
+        if [ "$origin_mismatch" = true ]; then
+            if [ "$FORCE" = true ]; then
+                echo -e "  ${YELLOW}Fixing origin${NC} $name"
+                echo -e "    Updating origin: ${current_origin} → ${url}"
+                cd "$name"
+                git remote set-url origin "$url"
+                git fetch origin --quiet
+                cd ..
+            else
+                echo -e "  ${CYAN}Skipping${NC} $name - origin URL mismatch"
+                echo -e "    Current origin: ${current_origin}"
+                echo -e "    Expected origin: ${url}"
+                echo -e "    Use --force to update origin URL"
+                return 0
+            fi
+        fi
         
         # Check if already at correct revision and no changes
         if [ "$current_commit" = "$expected_commit" ]; then
