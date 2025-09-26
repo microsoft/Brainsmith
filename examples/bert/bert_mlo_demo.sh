@@ -37,9 +37,6 @@ python bert_demo.py \
     -i 256 \
     -b 4 \
     -q 32 \
-    -f 1 \
-    -c 3.0 \
-    -p ./configs/bert_mlo_demo.json \
-    -bp ./bert_mlo_demo.yaml
+    --blueprint ./bert_mlo_demo.yaml
 
 echo "Bert MLO test completed!"
