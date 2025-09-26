@@ -70,21 +70,35 @@ class FinnConfig(BaseModel):
 
 
 class YamlSettingsSource(PydanticBaseSettingsSource):
-    """Custom settings source for YAML files."""
+    """Custom settings source for YAML files with support for user and project configs."""
     
     def __init__(self, settings_cls: Type[BaseSettings], yaml_file: Optional[Path] = None):
         super().__init__(settings_cls)
-        # Check for override from loader
-        if '_BRAINSMITH_YAML_FILE' in os.environ:
-            self.yaml_file = Path(os.environ['_BRAINSMITH_YAML_FILE'])
+        self.yaml_files = []
+        
+        # Check for explicit project file from loader
+        if '_BRAINSMITH_PROJECT_FILE' in os.environ:
+            self.yaml_files.append(Path(os.environ['_BRAINSMITH_PROJECT_FILE']))
         else:
-            self.yaml_file = yaml_file or self._find_yaml_file()
+            # Find project file in standard locations
+            project_file = self._find_project_yaml_file()
+            if project_file:
+                self.yaml_files.append(project_file)
         
-        # Load and parse the YAML file once during initialization
-        self._data = self._load_and_parse_yaml()
+        # Check for user file from loader
+        if '_BRAINSMITH_USER_FILE' in os.environ:
+            self.yaml_files.append(Path(os.environ['_BRAINSMITH_USER_FILE']))
+        else:
+            # Check default user config location
+            user_file = Path.home() / ".brainsmith" / "config.yaml"
+            if user_file.exists():
+                self.yaml_files.append(user_file)
         
-    def _find_yaml_file(self) -> Optional[Path]:
-        """Find YAML file in standard locations.
+        # Load and merge all YAML files
+        self._data = self._load_and_merge_yaml_files()
+        
+    def _find_project_yaml_file(self) -> Optional[Path]:
+        """Find project YAML file in standard locations.
         
         Search order:
         1. Current working directory
@@ -110,48 +124,66 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
             
         return None
     
-    def _load_and_parse_yaml(self) -> Dict[str, Any]:
-        """Load and parse YAML file with environment variable expansion."""
-        if not self.yaml_file or not self.yaml_file.exists():
-            return {}
-        try:
-            # Use unified YAML parser with env var expansion and schema-based path resolution
-            return load_yaml(
-                self.yaml_file,
-                expand_env_vars=True,
-                support_inheritance=False,  # Config files don't use inheritance
-                schema_class=self.settings_cls  # Pass the BrainsmithConfig class to extract path fields
-            )
-        except yaml.YAMLError as e:
-            # Import here to avoid circular dependency
-            from brainsmith.interface.utils import warning
-            
-            # Extract useful error information
-            error_msg = str(e)
-            if hasattr(e, 'problem_mark'):
-                mark = e.problem_mark
-                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {e.problem or 'invalid syntax'}"
-            
-            warning(
-                f"Failed to parse settings file: {self.yaml_file}",
-                details=[
-                    f"YAML syntax error at {error_msg}",
-                    "Using default configuration values instead",
-                    f"Fix the syntax in {self.yaml_file} to load your settings"
-                ]
-            )
-            return {}
-        except Exception as e:
-            # For other unexpected errors, still warn but less specifically
-            from brainsmith.interface.utils import warning
-            warning(
-                f"Failed to read settings file: {self.yaml_file}",
-                details=[
-                    f"Error: {e}",
-                    "Using default configuration values instead"
-                ]
-            )
-            return {}
+    def _load_and_merge_yaml_files(self) -> Dict[str, Any]:
+        """Load and merge multiple YAML files with proper priority.
+        
+        Files are loaded in order with later files having higher priority
+        (project config overrides user config).
+        """
+        merged_data = {}
+        
+        for yaml_file in self.yaml_files:
+            if yaml_file and yaml_file.exists():
+                try:
+                    # Use unified YAML parser with env var expansion and schema-based path resolution
+                    data = load_yaml(
+                        yaml_file,
+                        expand_env_vars=True,
+                        support_inheritance=False,  # Config files don't use inheritance
+                        schema_class=self.settings_cls  # Pass the BrainsmithConfig class to extract path fields
+                    )
+                    # Deep merge the data
+                    merged_data = self._deep_merge(merged_data, data)
+                except yaml.YAMLError as e:
+                    # Import here to avoid circular dependency
+                    from brainsmith.interface.utils import warning
+                    
+                    # Extract useful error information
+                    error_msg = str(e)
+                    if hasattr(e, 'problem_mark'):
+                        mark = e.problem_mark
+                        error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {e.problem or 'invalid syntax'}"
+                    
+                    warning(
+                        f"Failed to parse settings file: {yaml_file}",
+                        details=[
+                            f"YAML syntax error at {error_msg}",
+                            "Skipping this configuration file",
+                            f"Fix the syntax in {yaml_file} to load these settings"
+                        ]
+                    )
+                except Exception as e:
+                    # For other unexpected errors, still warn but less specifically
+                    from brainsmith.interface.utils import warning
+                    warning(
+                        f"Failed to read settings file: {yaml_file}",
+                        details=[
+                            f"Error: {e}",
+                            "Skipping this configuration file"
+                        ]
+                    )
+        
+        return merged_data
+    
+    def _deep_merge(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+        """Deep merge two dictionaries, with update taking precedence."""
+        result = base.copy()
+        for key, value in update.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
     
     def get_field_value(self, field_name: str, field_info: Any) -> Tuple[Any, str, bool]:
         """Get field value from YAML source."""
@@ -218,10 +250,14 @@ class BrainsmithConfig(BaseSettings):
         description="Platform repository paths"
     )
     
-    # Debug (flattened)
+    # Debug and output settings
     debug: bool = Field(
         default=False,
         description="Enable debug output"
+    )
+    verbose: bool = Field(
+        default=False,
+        description="Enable verbose output"
     )
     
     # Plugin settings
@@ -267,7 +303,7 @@ class BrainsmithConfig(BaseSettings):
         # Priority order in pydantic-settings: first source wins!
         # 1. Init settings (CLI/constructor args) - highest priority
         # 2. Environment variables (standard pydantic-settings behavior)
-        # 3. YAML file (custom source)
+        # 3. YAML files (custom source) - handles both user and project configs
         # 4. Field defaults (built into pydantic)
         return (
             init_settings,
@@ -436,7 +472,7 @@ class BrainsmithConfig(BaseSettings):
             deps = self.bsmith_dir / deps
         return deps
     
-    def export_to_environment(self, include_internal: bool = False, verbose: bool = False) -> None:
+    def export_to_environment(self, include_internal: bool = False, verbose: bool = False, export: bool = True) -> Dict[str, str]:
         """Export configuration to environment variables.
         
         This is the unified method for exporting configuration to the environment.
@@ -516,16 +552,19 @@ class BrainsmithConfig(BaseSettings):
             # Ensure XILINX_LOCAL_USER_DATA is set to prevent network operations
             env_dict["XILINX_LOCAL_USER_DATA"] = "no"
         
-        # Apply all environment variables
-        for key, value in env_dict.items():
-            if value is not None:
-                os.environ[key] = str(value)
-                if verbose and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
-                    from rich.console import Console
-                    console = Console()
-                    console.print(f"[dim]Export {key}={value}[/dim]")
+        # Apply all environment variables only if export=True
+        if export:
+            for key, value in env_dict.items():
+                if value is not None:
+                    os.environ[key] = str(value)
+                    if verbose and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
+                        from rich.console import Console
+                        console = Console()
+                        console.print(f"[dim]Export {key}={value}[/dim]")
+            
+            if verbose:
+                from rich.console import Console
+                console = Console()
+                console.print("[green]✓ Configuration exported to environment[/green]")
         
-        if verbose:
-            from rich.console import Console
-            console = Console()
-            console.print("[green]✓ Configuration exported to environment[/green]")
+        return env_dict

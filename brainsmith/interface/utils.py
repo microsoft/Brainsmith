@@ -1,16 +1,28 @@
 """Shared utilities for the Brainsmith CLI interface."""
 
+import logging
 import sys
 from typing import Optional, Any, Callable, TypeVar, List
 from contextlib import contextmanager
 
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 
 console = Console()
 
 T = TypeVar('T')
+
+
+def setup_logging(verbose: bool = False) -> None:
+    """Configure logging with Rich handler."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(message)s",
+        handlers=[RichHandler(console=console, rich_tracebacks=True)]
+    )
 
 
 def error_exit(message: str, details: Optional[List[str]] = None, code: int = 1) -> None:

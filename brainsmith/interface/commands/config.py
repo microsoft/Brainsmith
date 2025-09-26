@@ -1,10 +1,10 @@
-"""Configuration management commands for the smith CLI."""
+"""Configuration management commands for brainsmith CLI."""
 
 # Standard library imports
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 # Third-party imports
 import click
@@ -13,7 +13,8 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 # Local imports
-from brainsmith.config import get_config, load_config, BrainsmithConfig
+from brainsmith.config import BrainsmithConfig
+from ..context import ApplicationContext
 from ..utils import console, error_exit, success, warning, tip
 
 
@@ -28,16 +29,15 @@ def config():
               default='table', help='Output format')
 @click.option('--verbose', '-v', is_flag=True, help='Include source information and path validation')
 @click.option('--external-only', is_flag=True, help='For env format, show only external tool variables')
-def show(format: str, verbose: bool, external_only: bool) -> None:
+@click.pass_obj
+def show(ctx: ApplicationContext, format: str, verbose: bool, external_only: bool) -> None:
     """Display current configuration.
     
-    Args:
-        format: Output format (table, yaml, json, or env)
-        verbose: Include source information for each setting
-        external_only: For env format, whether to show only external tool variables
+    Shows the effective configuration after merging all sources:
+    user defaults, project settings, environment variables, and CLI overrides.
     """
     try:
-        config = get_config()
+        config = ctx.get_effective_config()
         
         if format == 'table':
             if verbose:
@@ -302,57 +302,97 @@ def _show_verbose_table_format(config: BrainsmithConfig) -> None:
 
 
 @config.command()
-@click.option('--verbose', '-v', is_flag=True, help='Show exported variables')
-def export(verbose: bool) -> None:
-    """Export configuration as environment variables.
+@click.argument('key')
+@click.argument('value')
+@click.pass_obj
+def set(ctx: ApplicationContext, key: str, value: str) -> None:
+    """Set a configuration value in user defaults.
     
-    Exports external tool configuration (FINN_*, XILINX_*, etc) to the environment.
-    Internal BSMITH_* variables are not exported to prevent configuration feedback loops.
-    
-    Args:
-        verbose: Whether to show the exported variables
+    Examples:
+        brainsmith config set verbose true
+        brainsmith config set build_dir /opt/builds
+        brainsmith config set finn.num_default_workers 8
     """
     try:
-        config = get_config()
+        # Convert string value to appropriate type
+        typed_value: Any = value
         
-        # Export external variables only
-        config.export_to_environment(verbose=verbose)
+        # Handle boolean values
+        if value.lower() in ['true', 'false']:
+            typed_value = value.lower() == 'true'
+        # Handle numeric values
+        elif value.isdigit():
+            typed_value = int(value)
+        # Handle paths
+        elif key.endswith('_dir') or key.endswith('_path'):
+            typed_value = value  # Keep as string, will be converted to Path by config
         
-        if not verbose:
-            # Count exported variables
-            env_dict = config.to_external_env_dict()
-            count = len([v for v in env_dict.values() if v is not None])
-            success(f"Exported {count} environment variables")
-            console.print("Use --verbose to see exported variables")
+        # Set the value
+        ctx.set_user_config_value(key, typed_value)
+        
+        success(f"Set {key} = {value}")
+        
+        # Show where it was saved
+        console.print(f"Saved to: {ctx.user_config_path}")
+        
+    except Exception as e:
+        error_exit(f"Failed to set configuration: {e}")
+
+
+@config.command()
+@click.option('--shell', type=click.Choice(['bash', 'zsh', 'fish', 'powershell']),
+              default='bash', help='Shell format for output')
+@click.pass_obj
+def export(ctx: ApplicationContext, shell: str) -> None:
+    """Export configuration as shell environment script.
+    
+    Usage:
+        eval $(brainsmith config export)
+        eval $(brainsmith config export --shell fish)
+    """
+    try:
+        # Use the env activate functionality
+        from ..commands import env as env_commands
+        ctx.invoke(env_commands.activate, shell=shell)
             
     except Exception as e:
         error_exit(f"Failed to export configuration: {e}")
 
 
 @config.command()
-@click.option('--output', '-o', type=click.Path(path_type=Path),
-              default=Path("brainsmith_settings.yaml"),
-              help='Output file path')
+@click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
+@click.option('--project', is_flag=True, help='Create project-level config (./brainsmith_settings.yaml)')
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
-@click.option('--minimal', is_flag=True, help='Create minimal config (backward compatibility)')
 @click.option('--full', is_flag=True, help='Include all possible configuration fields')
-def init(output: Path, force: bool, minimal: bool, full: bool) -> None:
-    """Initialize a new configuration file with defaults.
+@click.pass_obj
+def init(ctx: ApplicationContext, user: bool, project: bool, force: bool, full: bool) -> None:
+    """Initialize a new configuration file.
     
-    Args:
-        output: Path to the output configuration file
-        force: Whether to overwrite an existing file
-        minimal: Create minimal config (old behavior)
-        full: Include all possible fields
+    Creates either user-level config (~/.brainsmith/config.yaml) or
+    project-level config (./brainsmith_settings.yaml).
     """
+    # Determine output path
+    if user and project:
+        error_exit("Cannot specify both --user and --project")
+    elif user:
+        output = ctx.user_config_path
+    elif project:
+        output = Path("brainsmith_settings.yaml")
+    else:
+        # Default to project config
+        output = Path("brainsmith_settings.yaml")
+    
     if output.exists() and not force:
         error_exit(f"{output} already exists. Use --force to overwrite.")
     
     try:
-        # Load current config to get sensible defaults
-        config = get_config()
+        # Create parent directory if needed (especially for user config)
+        output.parent.mkdir(parents=True, exist_ok=True)
         
-        if minimal:
+        # Load current config to get sensible defaults
+        config = ctx.get_effective_config()
+        
+        if False:  # Remove minimal option
             # Old minimal behavior
             config_dict = {
                 "build_dir": str(config.build_dir),
@@ -461,7 +501,10 @@ def init(output: Path, force: bool, minimal: bool, full: bool) -> None:
         
         success(f"Created configuration file: {output}")
         console.print("\nYou can now edit this file to customize your settings.")
-        console.print("Run 'smith config validate' to check your configuration.")
+        if user:
+            console.print("These settings will be used as defaults for all Brainsmith projects.")
+        else:
+            console.print("These settings will be used for this project.")
         
     except Exception as e:
         error_exit(f"Failed to create configuration: {e}")

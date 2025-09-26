@@ -13,6 +13,7 @@ console = Console()
 
 def load_config(
     project_file: Optional[Path] = None,
+    user_file: Optional[Path] = None,
     **cli_overrides
 ) -> BrainsmithConfig:
     """Load configuration with pydantic-settings priority resolution.
@@ -21,27 +22,36 @@ def load_config(
     1. CLI arguments (passed as kwargs)
     2. Environment variables (BSMITH_* prefix)
     3. Project settings file (brainsmith_settings.yaml)
-    4. Built-in defaults (from schema Field defaults)
+    4. User settings file (~/.brainsmith/config.yaml)
+    5. Built-in defaults (from schema Field defaults)
     
     Args:
         project_file: Path to project settings file (for non-standard locations)
+        user_file: Path to user settings file (defaults to ~/.brainsmith/config.yaml)
         **cli_overrides: CLI argument overrides
         
     Returns:
         Validated BrainsmithConfig object
     """
     try:
-        # Pass yaml file path if provided
+        # Set environment variables for config file paths
+        env_vars_to_clean = []
+        
         if project_file:
-            # This will be picked up by YamlSettingsSource
-            os.environ['_BRAINSMITH_YAML_FILE'] = str(project_file)
+            os.environ['_BRAINSMITH_PROJECT_FILE'] = str(project_file)
+            env_vars_to_clean.append('_BRAINSMITH_PROJECT_FILE')
+            
+        if user_file:
+            os.environ['_BRAINSMITH_USER_FILE'] = str(user_file)
+            env_vars_to_clean.append('_BRAINSMITH_USER_FILE')
         
         # Create config with CLI overrides
         # Pydantic-settings handles the rest automatically
         config = BrainsmithConfig(**cli_overrides)
         
-        # Clean up temp env var
-        os.environ.pop('_BRAINSMITH_YAML_FILE', None)
+        # Clean up temp env vars
+        for var in env_vars_to_clean:
+            os.environ.pop(var, None)
         
         return config
         
@@ -72,3 +82,20 @@ def reset_config():
     """Reset the singleton configuration (mainly for testing)."""
     global _config
     _config = None
+
+
+def get_default_config() -> BrainsmithConfig:
+    """Get a configuration instance with only default values (no files or env vars)."""
+    # Temporarily clear env vars that would affect config
+    env_backup = {}
+    for key in list(os.environ.keys()):
+        if key.startswith('BSMITH_') or key.startswith('_BRAINSMITH_'):
+            env_backup[key] = os.environ.pop(key)
+    
+    try:
+        # Create config with defaults only
+        config = BrainsmithConfig()
+        return config
+    finally:
+        # Restore env vars
+        os.environ.update(env_backup)

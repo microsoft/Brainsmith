@@ -28,19 +28,7 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 3. For Docker setup: Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
 4. For local setup: Python 3.10+ and [Poetry](https://python-poetry.org/docs/#installation)
 
-
-### 1. Set key environment variables
-
-```bash
-# Brainsmith env vars with example paths
-export BSMITH_ROOT=/home/user/brainsmith/
-export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
-export BSMITH_XILINX_PATH="/tools/Xilinx"
-export BSMITH_XILINX_VERSION="2024.2"
-export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
-```
-
-### 2. Installation Options
+### 1. Installation Options
 
 #### Option A: Docker-based Development
 
@@ -52,38 +40,79 @@ export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XIL
 ./ctl-docker.sh shell
 
 # Run commands directly
-./ctl-docker.sh "smith --help"
+./ctl-docker.sh "smith model.onnx blueprint.yaml"
+
+# Optional: Enable persistent user configuration
+BSMITH_DOCKER_USER_MOUNT=1 ./ctl-docker.sh start
 ```
 
 #### Option B: Local Development with Poetry
 
 ```bash
 # Run automated setup script
-./setup-dev.sh
+./setup-venv.sh
 
 # Activate the virtual environment
 source .venv/bin/activate
 
-# Now you can use smith
-smith --help
-
-# Or run commands without activation
-poetry run smith --help
+# Check installation status
+brainsmith setup check
 ```
 
-For a fresh installation or to re-download all dependencies:
+### 2. Configure Brainsmith
+
 ```bash
-./setup-dev.sh --force
+# Initialize user configuration
+brainsmith config init --user
+
+# Set your Xilinx installation path
+brainsmith config set xilinx_path /tools/Xilinx
+brainsmith config set xilinx_version 2024.2
+
+# View current configuration
+brainsmith config show
 ```
 
-### 3. Validate Installation
+### 3. Run Design Space Exploration
+
+```bash
+# Run DSE with default command
+smith model.onnx blueprint.yaml
+
+# Or specify output directory
+smith model.onnx blueprint.yaml --output-dir ./results
+```
+
+### 4. Validate Installation
 
 ```bash
 # For Docker setup:
 ./ctl-docker.sh ./examples/bert/quicktest.sh
 
 # For local setup:
-./examples/bert/quicktest.sh    # Run in poetry venv
+./examples/bert/quicktest.sh
+```
+
+## CLI Overview
+
+Brainsmith provides two complementary CLI commands:
+
+- **`brainsmith`** - Application configuration, setup, and environment management
+- **`smith`** - Operational commands for DSE and kernel generation
+
+For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
+
+### Quick Examples
+
+```bash
+# Setup and configuration
+brainsmith setup all              # Install all dependencies
+brainsmith config set verbose true # Set user preferences
+brainsmith env activate           # Export environment for Xilinx tools
+
+# Operations
+smith model.onnx blueprint.yaml   # Run design space exploration
+smith kernel accelerator.sv       # Generate hardware kernel from RTL
 ```
 
 ## Documentation

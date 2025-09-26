@@ -383,13 +383,13 @@ def check() -> None:
     
     # Print recommendations
     if not cnpy_installed or not hlslib_installed:
-        tip("Run 'smith setup cppsim' to install C++ simulation dependencies")
+        tip("Run 'brainsmith setup cppsim' to install C++ simulation dependencies")
     
     if not finnxsim_built and config.effective_vivado_path:
-        tip("Run 'smith setup xsim' to build Xilinx simulation support")
+        tip("Run 'brainsmith setup xsim' to build Xilinx simulation support")
     
     if board_count == 0:
-        tip("Run 'smith setup boards' to download board definition files")
+        tip("Run 'brainsmith setup boards' to download board definition files")
 
 
 # Helper functions to check installation status
