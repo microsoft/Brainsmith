@@ -53,6 +53,34 @@ from .model_factory import KernelModelFactory
 # Schema compilation for performance
 from .schema_compiler import CompiledSchema, SchemaCompiler
 
+# Validation layer
+from .validation import (
+    KernelValidator,
+    validate_kernel_schema,
+    validate_kernel_config,
+    validate_kernel_model
+)
+
+# Simplified factory pattern
+from .kernel_builder import KernelBuilder, build_kernel_model
+
+# Reactive cache management
+from .reactive import (
+    ReactiveDict,
+    ComputedProperty,
+    ReactiveState,
+    reactive_method
+)
+
+# Datatype resolution
+from .datatype_resolver import (
+    DatatypeResolver,
+    ResolutionResult,
+    ResolutionSource,
+    create_datatype_resolver,
+    resolve_interface_datatypes
+)
+
 # Utility modules
 from . import template_utils
 from . import shape_utils
@@ -86,6 +114,20 @@ __all__ = [
     
     # Schema compilation
     'CompiledSchema', 'SchemaCompiler',
+    
+    # Validation
+    'KernelValidator', 'validate_kernel_schema', 'validate_kernel_config',
+    'validate_kernel_model',
+    
+    # Simplified factory
+    'KernelBuilder', 'build_kernel_model',
+    
+    # Reactive cache management
+    'ReactiveDict', 'ComputedProperty', 'ReactiveState', 'reactive_method',
+    
+    # Datatype resolution
+    'DatatypeResolver', 'ResolutionResult', 'ResolutionSource',
+    'create_datatype_resolver', 'resolve_interface_datatypes',
     
     # Utility modules
     'template_utils', 'shape_utils',
