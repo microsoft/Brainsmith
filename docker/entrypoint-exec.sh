@@ -23,29 +23,6 @@ source /usr/local/bin/setup-shell.sh
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    # Interactive shell with welcome message
-    echo ""
-    echo "🧠 Brainsmith Development Environment"
-    echo "===================================="
-    
-    if [ -n "$VIRTUAL_ENV" ]; then
-        echo "✓ Virtual env: .venv"
-    else
-        echo "⚠️  Virtual env: Not found (run './setup-venv.sh' on host)"
-    fi
-    
-    if [ -n "$XILINX_VIVADO" ] || [ -n "$XILINX_VITIS" ]; then
-        echo "✓ Xilinx: Tools available"
-    else
-        echo "○ Xilinx: Not configured"
-    fi
-    
-    echo ""
-    echo "Quick start:"
-    echo "  smith --help              # Operational CLI (DSE, kernels)"
-    echo "  brainsmith setup check    # Check setup status"
-    echo "  brainsmith setup all      # Complete setup"
-    echo ""
-    
+    # Interactive shell without welcome message
     exec bash
 fi

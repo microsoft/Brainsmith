@@ -74,12 +74,12 @@ fi
 
 # Define our Git dependencies - URLs and revisions
 declare -A GIT_DEPS=(
-    ["brevitas"]="https://github.com/Xilinx/brevitas.git|95edaa0bdc8e639e39b1164466278c59df4877be"
-    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git|9153395712b5617d38b058900c873c6fc522b343"
-    ["finn"]="https://github.com/tafk7/finn.git|custom/finnxsi-path-fix"
-    ["onnxscript"]="https://github.com/jsmonson/onnxscript.git|62c7110aba46554432ce8e82ba2d8a086bd6227c"
-    ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git|0724be21111a21f0d81a072fccc1c446e053f851"
-    ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git|0.0.4"
+    ["brevitas"]="https://github.com/Xilinx/brevitas.git@95edaa0bdc8e639e39b1164466278c59df4877be"
+    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@9153395712b5617d38b058900c873c6fc522b343"
+    ["finn"]="https://github.com/tafk7/finn.git@custom/finnxsi-path-fix"
+    ["onnxscript"]="https://github.com/jsmonson/onnxscript.git@62c7110aba46554432ce8e82ba2d8a086bd6227c"
+    ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
+    ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
 )
 
 # Create deps directory
@@ -145,8 +145,8 @@ resolve_ref_to_commit() {
 analyze_repo() {
     local name="$1"
     local url_rev="$2"
-    local url="${url_rev%|*}"
-    local rev="${url_rev#*|}"
+    local url="${url_rev%@*}"
+    local rev="${url_rev#*@}"
     
     if [ ! -d "$name" ]; then
         echo -e "  ${RED}❌ Missing${NC} $name"
@@ -196,8 +196,8 @@ analyze_repo() {
 update_repo() {
     local name="$1"
     local url_rev="$2"
-    local url="${url_rev%|*}"
-    local rev="${url_rev#*|}"
+    local url="${url_rev%@*}"
+    local rev="${url_rev#*@}"
     
     if [ -d "$name" ]; then
         local current_commit=$(get_current_commit "$name")
