@@ -173,7 +173,14 @@ export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 # Clean environments if forced
 if [ -n "$FORCE_MODE" ] && [ -d ".venv" ]; then
     echo "📋 Force mode: Removing existing .venv directory..."
-    rm -rf .venv
+    if [ "$DOCKER_MODE" == "1" ]; then
+        # In Docker, the .venv might be a mounted volume - just clean its contents
+        echo "  Docker mode: Cleaning .venv contents instead of removing directory..."
+        find .venv -mindepth 1 -delete 2>/dev/null || true
+    else
+        # In local mode, we can remove the entire directory
+        rm -rf .venv
+    fi
     poetry env remove --all -n 2>/dev/null || true
 fi
 

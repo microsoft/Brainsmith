@@ -18,6 +18,12 @@
 #
 # Environment variables:
 #   BSMITH_DOCKER_USER_MOUNT=1             # Mount ~/.brainsmith for persistent user config
+#   BSMITH_DOCKER_GPU=1                    # Enable GPU support
+#   BSMITH_DOCKER_RUN_AS_ROOT=1            # Run container as root (default: run as current user)
+#   BSMITH_DOCKER_PREBUILT=1               # Use pre-built image instead of building locally
+#   BSMITH_DOCKER_NO_CACHE=1               # Disable Docker build cache
+#   BSMITH_DOCKER_EXTRA="..."              # Additional Docker run flags
+#   BSMITH_DEBUG=1                         # Enable debug output
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -54,12 +60,10 @@ export BSMITH_DOCKER_USER_MOUNT="${BSMITH_DOCKER_USER_MOUNT:-0}"
 export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
 export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-0}"
 
-# Xilinx/FINN variables - Overrides values from brainsmith CLI/yaml settings
+# Xilinx variables - Overrides values from brainsmith CLI/yaml settings
 # These provide defaults that can be overridden by environment variables
 export BSMITH_XILINX_PATH="${BSMITH_XILINX_PATH:-/tools/Xilinx}"
 export BSMITH_XILINX_VERSION="${BSMITH_XILINX_VERSION:-2024.2}"
-export VIVADO_IP_CACHE="${VIVADO_IP_CACHE:-}"
-export PLATFORM_REPO_PATHS="${PLATFORM_REPO_PATHS:-}"
 
 # Docker runtime detection
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
@@ -102,8 +106,7 @@ fi
 
 # Validate Docker flags for security
 validate_docker_flags() {
-    if [[ "$BSMITH_DOCKER_FLAGS" =~ "/var/run/docker.sock" ]] || \
-       [[ "$BSMITH_DOCKER_EXTRA" =~ "/var/run/docker.sock" ]]; then
+    if [[ "$BSMITH_DOCKER_EXTRA" =~ "/var/run/docker.sock" ]]; then
         recho "ERROR: Mounting Docker socket is not allowed for security reasons"
         recho "This would give the container full control over the host"
         exit 1
@@ -223,11 +226,12 @@ build_image() {
     OLD_PWD=$(pwd)
     cd $BSMITH_DIR
 
-    [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && BSMITH_DOCKER_BUILD_FLAGS+="--no-cache "
+    local build_flags=""
+    [ "$BSMITH_DOCKER_NO_CACHE" = "1" ] && build_flags+="--no-cache "
 
     docker build -f docker/Dockerfile \
         --tag=$BSMITH_DOCKER_TAG \
-        $BSMITH_DOCKER_BUILD_FLAGS .
+        $build_flags .
 
     cd $OLD_PWD
 }
@@ -322,7 +326,7 @@ create_container() {
     # Setup control variables (for new entrypoint)
     DOCKER_CMD+=" -e BSMITH_SKIP_SETUP=${BSMITH_SKIP_SETUP:-0}"
     DOCKER_CMD+=" -e BSMITH_FORCE_SETUP=${BSMITH_FORCE_SETUP:-}"
-    DOCKER_CMD+=" -e BSMITH_SKIP_COMPONENTS='${BSMITH_SKIP_COMPONENTS:-}'"
+    [ -n "${BSMITH_SKIP_COMPONENTS:-}" ] && DOCKER_CMD+=" -e BSMITH_SKIP_COMPONENTS='$BSMITH_SKIP_COMPONENTS'"
     
     # Set Poetry to use project-local virtual environments
     DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
@@ -346,17 +350,11 @@ create_container() {
         
         # Pass through Xilinx-related variables if they are defined
         [ -n "$BSMITH_XILINX_VERSION" ] && DOCKER_CMD+=" -e BSMITH_XILINX_VERSION=$BSMITH_XILINX_VERSION"
-        [ -n "$VIVADO_IP_CACHE" ] && DOCKER_CMD+=" -e VIVADO_IP_CACHE=$VIVADO_IP_CACHE"
 
         # Xilinx workarounds
         DOCKER_CMD+=" -e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1"
         DOCKER_CMD+=" -e XILINX_LOCAL_USER_DATA=no"
         
-        # Mount platform repo if it exists
-        if [ ! -z "$PLATFORM_REPO_PATHS" ] && [ -d "$PLATFORM_REPO_PATHS" ]; then
-            DOCKER_CMD+=" -v $PLATFORM_REPO_PATHS:$PLATFORM_REPO_PATHS"
-            DOCKER_CMD+=" -e PLATFORM_REPO_PATHS=$PLATFORM_REPO_PATHS"
-        fi
         
         # Handle Xilinx license file/server
         if [ ! -z "$XILINXD_LICENSE_FILE" ]; then
@@ -387,8 +385,8 @@ create_container() {
         fi
     fi
 
-    # Additional flags from BSMITH_DOCKER_EXTRA and other sources
-    DOCKER_CMD+=" $BSMITH_DOCKER_EXTRA $BSMITH_DOCKER_FLAGS"
+    # Additional flags from BSMITH_DOCKER_EXTRA
+    DOCKER_CMD+=" $BSMITH_DOCKER_EXTRA"
 
     # Run container with the image tag
     DOCKER_CMD+=" $BSMITH_DOCKER_TAG"
@@ -541,8 +539,7 @@ open_shell() {
         return 1
     fi
 
-    gecho "Opening shell in container $DOCKER_INST_NAME"
-    # Use exec entrypoint for interactive shell with welcome message
+    # Use exec entrypoint for interactive shell
     docker exec -it -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh
 }
 
@@ -560,25 +557,7 @@ clean_build_artifacts() {
         rm -rf "$BSMITH_BUILD_DIR"
     fi
     
-    # Clean Vivado IP cache
-    if [ -d "$VIVADO_IP_CACHE" ]; then
-        gecho "Removing Vivado IP cache: $VIVADO_IP_CACHE"
-        rm -rf "$VIVADO_IP_CACHE"
-    fi
     
-    # Clean temporary markers
-    local temp_files=(
-        "/tmp/.brainsmith_packages_installed"
-        "/tmp/.brainsmith_deps_ready"
-        "/tmp/.monitor_${DOCKER_INST_NAME}_*"
-    )
-    
-    for file in "${temp_files[@]}"; do
-        if ls $file 2>/dev/null 1>&2; then
-            gecho "Removing temporary files: $file"
-            rm -f $file
-        fi
-    done
     
     gecho "Build artifacts cleaned"
 }
