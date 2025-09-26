@@ -177,8 +177,8 @@ finn-experimental = {path = "deps/finn-experimental", develop = true}
 dataset-loading = {path = "deps/dataset-loading", develop = true}
 
 [tool.poetry.scripts]
-brainsmith = "brainsmith.interface.brainsmith_cli:main"
-smith = "brainsmith.interface.smith_cli:main"
+brainsmith = "brainsmith.interface.cli:brainsmith_main"
+smith = "brainsmith.interface.cli:smith_main"
 brainsmith-post-install = "brainsmith.core.post_install:main"
 
 [tool.poetry.group.dev]

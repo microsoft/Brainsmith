@@ -1,9 +1,12 @@
 """Design Space Exploration command for smith CLI."""
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 import click
+
+logger = logging.getLogger(__name__)
 
 from brainsmith.core.dse_api import explore_design_space
 from ..context import ApplicationContext, get_context_from_parent
@@ -33,6 +36,8 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
     if output_dir:
         console.print(f"Output: {output_dir}")
     
+    logger.info(f"Starting DSE with model={model}, blueprint={blueprint}, output_dir={output_dir}")
+    
     try:
         # Run design space exploration
         result = explore_design_space(
@@ -48,8 +53,19 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
             console.print(f"\nSummary: {result.summary}")
             
     except FileNotFoundError as e:
-        error_exit(str(e))
+        error_exit(str(e),
+                  details=[
+                      "Check that the model file exists and is accessible",
+                      "Verify the blueprint file path is correct",
+                      "Ensure you have read permissions for both files"
+                  ])
     except Exception as e:
         if config.verbose:
             console.print_exception()
-        error_exit(f"Failed during exploration: {e}")
+        error_exit(f"Failed during exploration: {e}",
+                  details=[
+                      "Check the model is a valid ONNX file",
+                      "Verify the blueprint YAML syntax is correct",
+                      "Ensure all required dependencies are installed",
+                      "Run with --verbose for more details"
+                  ])

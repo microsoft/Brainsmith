@@ -1,8 +1,20 @@
 """Brainsmith command-line interface.
 
-Provides the smith CLI tool for design space exploration and hardware generation.
+Provides both brainsmith and smith CLI tools for neural network hardware acceleration.
 """
 
-from .cli import main
+from .cli import brainsmith_main, smith_main, main
+from .exceptions import (
+    BrainsmithError,
+    ConfigurationError,
+    ValidationError
+)
 
-__all__ = ["main"]
+__all__ = [
+    "brainsmith_main",
+    "smith_main",
+    "main",  # Backwards compatibility
+    "BrainsmithError",
+    "ConfigurationError",
+    "ValidationError"
+]

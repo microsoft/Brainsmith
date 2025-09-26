@@ -1,21 +1,23 @@
-"""Shared context management for Brainsmith dual CLI system."""
+"""Streamlined context management for Brainsmith dual CLI system."""
 
-import os
+import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 
 import click
-from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 
 from brainsmith.config import BrainsmithConfig, load_config, get_default_config
+from brainsmith.utils import load_yaml, dump_yaml
 
 
 @dataclass
 class ApplicationContext:
-    """Application context that manages settings across brainsmith and smith commands.
+    """Manages CLI settings and configuration.
     
-    This context handles the settings hierarchy:
+    Handles the settings hierarchy:
     1. Command-line arguments (highest priority)
     2. Environment variables
     3. Project configuration (./brainsmith_settings.yaml)
@@ -27,8 +29,6 @@ class ApplicationContext:
     verbose: bool = False
     debug: bool = False
     config_file: Optional[Path] = None
-    
-    # Override settings from CLI
     overrides: Dict[str, Any] = field(default_factory=dict)
     
     # Loaded configuration
@@ -37,86 +37,53 @@ class ApplicationContext:
     # User config path
     user_config_path: Path = field(default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml")
     
-    def __post_init__(self):
-        """Initialize the context and load configuration."""
-        if self.config is None:
-            self.load_configuration()
-    
     def load_configuration(self) -> None:
-        """Load configuration with proper hierarchy."""
-        try:
-            # Load with user config support
-            self.config = load_config(
-                project_file=self.config_file,
-                user_file=self.user_config_path if self.user_config_path.exists() else None
-            )
+        """Load configuration with overrides."""
+        logger.debug(f"Loading configuration from project_file={self.config_file}")
+        
+        # Load with user config support
+        self.config = load_config(
+            project_file=self.config_file,
+            user_file=self.user_config_path if self.user_config_path.exists() else None
+        )
+        
+        # Apply CLI overrides
+        if self.overrides:
+            config_dict = self.config.model_dump()
             
-            # Apply CLI overrides
-            if self.overrides:
-                self._apply_overrides()
-            
-            # Apply verbose/debug from context
-            if self.verbose:
-                self.config.verbose = True
-            if self.debug:
-                self.config.debug = True
+            for key, value in self.overrides.items():
+                # Handle nested keys (e.g., "finn.num_workers")
+                parts = key.split('.')
+                target = config_dict
                 
-        except Exception as e:
-            # Fall back to defaults on error
-            self.config = get_default_config()
-            if self.verbose:
-                click.echo(f"Warning: Failed to load configuration: {e}", err=True)
-    
-    def _apply_overrides(self) -> None:
-        """Apply command-line overrides to configuration."""
-        if not self.config or not self.overrides:
-            return
+                for part in parts[:-1]:
+                    if part not in target:
+                        target[part] = {}
+                    target = target[part]
+                
+                target[parts[-1]] = value
             
-        config_dict = self.config.model_dump()
-        
-        for key, value in self.overrides.items():
-            # Handle nested keys (e.g., "finn.num_workers")
-            parts = key.split('.')
-            target = config_dict
-            
-            for part in parts[:-1]:
-                if part not in target:
-                    target[part] = {}
-                target = target[part]
-            
-            target[parts[-1]] = value
-        
-        try:
             # Recreate config with overrides
             self.config = BrainsmithConfig(**config_dict)
-        except ValidationError as e:
-            if self.verbose:
-                click.echo(f"Warning: Invalid override values: {e}", err=True)
-    
-    def get_user_config_data(self) -> Dict[str, Any]:
-        """Get user configuration data if it exists."""
-        if self.user_config_path.exists():
-            import yaml
-            try:
-                with open(self.user_config_path) as f:
-                    return yaml.safe_load(f) or {}
-            except Exception:
-                return {}
-        return {}
-    
-    def save_user_config(self, data: Dict[str, Any]) -> None:
-        """Save user configuration data."""
-        import yaml
         
-        # Ensure directory exists
-        self.user_config_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(self.user_config_path, 'w') as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+        # Apply verbose/debug from context
+        if self.verbose:
+            self.config.verbose = True
+        if self.debug:
+            self.config.debug = True
+    
+    def get_effective_config(self) -> BrainsmithConfig:
+        """Get configuration, loading if needed."""
+        if not self.config:
+            self.load_configuration()
+        return self.config
     
     def set_user_config_value(self, key: str, value: Any) -> None:
-        """Set a single value in user configuration."""
-        data = self.get_user_config_data()
+        """Set a value in user configuration."""
+        # Load existing user config
+        data = {}
+        if self.user_config_path.exists():
+            data = load_yaml(self.user_config_path, expand_env_vars=False)
         
         # Handle nested keys
         parts = key.split('.')
@@ -129,12 +96,14 @@ class ApplicationContext:
         
         target[parts[-1]] = value
         
-        self.save_user_config(data)
+        # Save user config
+        dump_yaml(data, self.user_config_path, sort_keys=True)
+        
         # Reload configuration to reflect changes
         self.load_configuration()
     
     def export_environment(self, shell: str = "bash") -> str:
-        """Export configuration as shell environment variables."""
+        """Export configuration as shell environment."""
         if not self.config:
             return ""
         
@@ -157,19 +126,6 @@ class ApplicationContext:
             raise ValueError(f"Unsupported shell: {shell}")
         
         return "\n".join(lines)
-    
-    def get_effective_config(self) -> BrainsmithConfig:
-        """Get the effective configuration after all overrides."""
-        if not self.config:
-            self.load_configuration()
-        return self.config or get_default_config()
-
-
-def pass_context(f):
-    """Decorator to pass ApplicationContext to commands."""
-    def new_func(*args, **kwargs):
-        return f(ApplicationContext(), *args, **kwargs)
-    return click.decorators.update_wrapper(new_func, f)
 
 
 def get_context_from_parent(ctx: click.Context) -> Optional[ApplicationContext]:

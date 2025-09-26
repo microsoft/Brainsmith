@@ -108,7 +108,7 @@ For detailed command reference, see the [CLI API documentation](docs/cli_api_ref
 # Setup and configuration
 brainsmith setup all              # Install all dependencies
 brainsmith config set verbose true # Set user preferences
-brainsmith env activate           # Export environment for Xilinx tools
+eval $(brainsmith config export)  # Export environment for Xilinx tools
 
 # Operations
 smith model.onnx blueprint.yaml   # Run design space exploration
