@@ -1,24 +1,29 @@
 """Setup and installation commands for the smith CLI."""
 
 # Standard library imports
+import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 
 # Third-party imports
 import click
 from rich.table import Table
 
+logger = logging.getLogger(__name__)
+
 # Local imports
 from brainsmith.config import get_config
 from brainsmith.core.plugins.dependencies import DependencyManager
 from ..utils import (
-    console, error_exit, success, warning, tip, 
+    console, error_exit, success, warning, tip,
     progress_spinner, show_panel, format_status, format_warning_status
 )
+# Board file utilities inlined from board_utils.py
+# These functions are only used by the setup command
 
-# Constants
+# Board names to exclude from listings
 EXCLUDED_BOARD_NAMES = {'deprecated', 'boards', 'board_files', 'Xilinx'}
 
 
@@ -31,11 +36,7 @@ def setup():
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
 def all(force: bool) -> None:
-    """Install all dependencies (cppsim, xsim, boards).
-    
-    Args:
-        force: Whether to force reinstallation
-    """
+    """Install all dependencies (cppsim, xsim, boards)."""
     show_panel(
         "Brainsmith Complete Setup",
         "This will install all optional dependencies."
@@ -58,11 +59,7 @@ def all(force: bool) -> None:
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
 def cppsim(force: bool) -> None:
-    """Setup C++ simulation dependencies (cnpy, finn-hlslib).
-    
-    Args:
-        force: Whether to force reinstallation
-    """
+    """Setup C++ simulation dependencies (cnpy, finn-hlslib)."""
     config = get_config()
     
     deps_mgr = DependencyManager(deps_dir=config.deps_dir)
@@ -100,11 +97,7 @@ def cppsim(force: bool) -> None:
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force rebuild even if already built')
 def xsim(force: bool) -> None:
-    """Setup Xilinx simulation (build finn-xsim with Vivado).
-    
-    Args:
-        force: Whether to force rebuild
-    """
+    """Setup Xilinx simulation (build finn-xsim with Vivado)."""
     from brainsmith.config import export_to_environment
     
     config = get_config()
@@ -145,155 +138,145 @@ def xsim(force: bool) -> None:
     success("finn-xsim built successfully")
 
 
+def _show_board_summary(boards_by_repo: Dict[str, List[str]], title: str) -> None:
+    """Display a summary of boards organized by repository.
+    
+    Args:
+        boards_by_repo: Dictionary mapping repo names to board lists
+        title: Title to display above the board list
+    """
+    if boards_by_repo:
+        console.print(f"\n  [dim]{title}:[/dim]")
+        for repo_name in sorted(boards_by_repo.keys()):
+            if boards_by_repo[repo_name]:
+                console.print(f"\n      [yellow]{repo_name}:[/yellow]")
+                for board in sorted(set(boards_by_repo[repo_name])):
+                    console.print(f"        • {board}")
+
+
+def _handle_existing_boards(board_files_dir: Path, requested_repos: List[str], 
+                           verbose: bool, force: bool) -> bool:
+    """Handle the case where boards are already downloaded.
+    
+    Args:
+        board_files_dir: Path to board files directory
+        requested_repos: List of specifically requested repos (empty for all)
+        verbose: Whether to show detailed board list
+        force: Whether to force redownload
+        
+    Returns:
+        True if should continue with download, False otherwise
+    """
+    existing_repos = list_downloaded_repositories(board_files_dir)
+    
+    # Check if requested repos are already present
+    if requested_repos:
+        already_have = [r for r in requested_repos if r in existing_repos]
+        if not force and already_have == requested_repos:
+            warning("Requested repositories already downloaded:")
+            for r in sorted(already_have):
+                console.print(f"      • {r}")
+            
+            if verbose:
+                boards_by_repo = get_board_summary(board_files_dir)
+                filtered = {r: boards_by_repo[r] for r in already_have if r in boards_by_repo}
+                _show_board_summary(filtered, "Board definitions")
+            
+            console.print("\n[dim]Use --force to redownload[/dim]")
+            return False
+    else:
+        # Check if any boards exist
+        if not force and existing_repos:
+            boards_by_repo = get_board_summary(board_files_dir)
+            total_boards = sum(len(boards) for boards in boards_by_repo.values())
+            
+            warning("Board files already downloaded:")
+            for repo in sorted(existing_repos):
+                console.print(f"      • {repo}")
+            if total_boards > 0:
+                console.print(f"  [dim]{total_boards} board definitions available[/dim]")
+            
+            if verbose:
+                _show_board_summary(boards_by_repo, "Board definitions by repository")
+            
+            console.print("\n[dim]Use --force to redownload[/dim]")
+            return False
+    
+    return True
+
+
 @setup.command()
 @click.option('--force', '-f', is_flag=True, help='Force redownload even if already present')
 @click.option('--repo', '-r', multiple=True, help='Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed list of all board files')
 def boards(force: bool, repo: tuple, verbose: bool) -> None:
-    """Download FPGA board definition files.
-    
-    Args:
-        force: Whether to force redownload
-        repo: Specific repositories to download
-        verbose: Whether to show detailed board list
-    """
+    """Download FPGA board definition files."""
     config = get_config()
-    
     deps_mgr = DependencyManager(deps_dir=config.deps_dir)
-    
-    # Check what's already downloaded
     board_files_dir = deps_mgr.deps_path / "board-files"
-    existing_boards = []
-    if board_files_dir.exists():
-        existing_boards = [d.name for d in board_files_dir.iterdir() if d.is_dir() and any(d.iterdir())]
     
-    # If specific repos requested, validate and check if they're already downloaded
+    # Validate repository names if specified
     if repo:
-        # Validate repo names
-        valid_repos = ['avnet', 'xilinx', 'realdigital']
-        invalid_repos = [r for r in repo if r not in valid_repos]
-        
+        valid_repos, invalid_repos = validate_repository_names(list(repo))
         if invalid_repos:
             error_exit(
                 f"Unknown board repositories: {', '.join(invalid_repos)}",
-                details=[f"Available repositories: {', '.join(valid_repos)}"]
+                details=["Available repositories: avnet, xilinx, realdigital"]
             )
-        
-        repos_to_download = list(repo)
-        already_have = [r for r in repos_to_download if r in existing_boards]
-        
-        if not force and already_have == repos_to_download:
-            warning("Requested repositories already downloaded:")
-            
-            # Show repos and optionally board details
-            total_boards = 0
-            boards_by_repo = {}
-            
-            for r in sorted(already_have):
-                console.print(f"      • {r}")
-                
-                if verbose:
-                    repo_path = board_files_dir / r
-                    board_files = _find_board_files(repo_path)
-                    total_boards += len(board_files)
-                    boards_by_repo[r] = _extract_board_names(board_files, r)
-            
-            # In verbose mode, list all boards
-            if verbose and boards_by_repo:
-                console.print("\n  [dim]Board definitions:[/dim]")
-                for r in sorted(boards_by_repo.keys()):
-                    if boards_by_repo[r]:
-                        console.print(f"\n      [yellow]{r}:[/yellow]")
-                        for board in sorted(set(boards_by_repo[r])):
-                            console.print(f"        • {board}")
-                            
-            console.print("\n[dim]Use --force to redownload[/dim]")
-            return
+        repos_to_download = valid_repos
     else:
-        # Check if all boards are already downloaded
-        if not force and existing_boards:
-            # Count total boards and collect board names
-            total_boards = 0
-            boards_by_repo = {}
-            
-            for r in existing_boards:
-                repo_path = board_files_dir / r
-                board_files = _find_board_files(repo_path)
-                total_boards += len(board_files)
-                
-                # Collect board names for verbose mode
-                if verbose:
-                    boards_by_repo[r] = _extract_board_names(board_files, r)
-                
-            warning("Board files already downloaded:")
-            for board in sorted(existing_boards):
-                console.print(f"      • {board}")
-            if total_boards > 0:
-                console.print(f"  [dim]{total_boards} board definitions available[/dim]")
-                
-            # In verbose mode, list all boards
-            if verbose and boards_by_repo:
-                console.print("\n  [dim]Board definitions by repository:[/dim]")
-                for r in sorted(boards_by_repo.keys()):
-                    if boards_by_repo[r]:
-                        console.print(f"\n      [yellow]{r}:[/yellow]")
-                        for board in sorted(set(boards_by_repo[r])):
-                            console.print(f"        • {board}")
-                            
-            console.print("\n[dim]Use --force to redownload[/dim]")
-            return
+        repos_to_download = []
+    
+    # Check if boards already exist
+    if not _handle_existing_boards(board_files_dir, repos_to_download, verbose, force):
+        return
     
     # Download boards
-    description = (f"Downloading {len(repo)} board repositories..." if repo 
-                   else "Downloading board definition files...")
+    description = (f"Downloading {len(repos_to_download)} board repositories..." 
+                  if repos_to_download
+                  else "Downloading board definition files...")
     
     with progress_spinner(description) as task:
         try:
-            result = deps_mgr.download_board_files(boards=list(repo) if repo else None, force=force, quiet=True)
+            boards_arg = repos_to_download if repos_to_download else None
+            result = deps_mgr.download_board_files(boards=boards_arg, force=force, quiet=True)
             if not result:
                 error_exit("Failed to download board files")
-                
         except Exception as e:
             error_exit(f"Failed to download board files: {e}")
     
     # Show what was downloaded
     success("Board definition files downloaded:")
     
-    # List repositories - if specific repos were requested, only show those
-    if repo:
-        # Check what actually got downloaded
-        new_existing = [d.name for d in board_files_dir.iterdir() if d.is_dir() and any(d.iterdir())]
-        downloaded_repos = [r for r in repo if r in new_existing]
-    else:
-        downloaded_repos = [d.name for d in board_files_dir.iterdir() if d.is_dir() and any(d.iterdir())]
+    # Get summary of downloaded boards
+    downloaded_repos = list_downloaded_repositories(board_files_dir)
+    if repos_to_download:
+        # Filter to show only requested repos that were downloaded
+        downloaded_repos = [r for r in downloaded_repos if r in repos_to_download]
     
-    # Collect board information
-    total_boards = 0
+    # Display downloaded repositories
     boards_by_repo = {}
+    total_boards = 0
     
-    for r in sorted(downloaded_repos):
-        console.print(f"      • {r}")
-        repo_path = board_files_dir / r
-        # Look for board.xml files in board directories (handle various depths)
-        board_files = _find_board_files(repo_path)
-        total_boards += len(board_files)
+    for repo_name in sorted(downloaded_repos):
+        console.print(f"      • {repo_name}")
+        repo_path = board_files_dir / repo_name
+        board_files = find_board_files(repo_path)
+        board_count = len(board_files)
+        total_boards += board_count
         
-        # Collect board names for verbose mode
         if verbose:
-            boards_by_repo[r] = _extract_board_names(board_files, r)
+            boards = extract_board_names(board_files, repo_name)
+            if boards:
+                boards_by_repo[repo_name] = boards
     
-    # Show board count
+    # Show summary
     if total_boards > 0:
         console.print(f"  [dim]{total_boards} board definitions downloaded[/dim]")
     
-    # In verbose mode, list all boards
-    if verbose and boards_by_repo:
-        console.print("\n  [dim]Board definitions by repository:[/dim]")
-        for r in sorted(boards_by_repo.keys()):
-            if boards_by_repo[r]:
-                console.print(f"\n      [yellow]{r}:[/yellow]")
-                for board in sorted(set(boards_by_repo[r])):  # Use set to remove duplicates
-                    console.print(f"        • {board}")
+    # Show detailed board list in verbose mode
+    if verbose:
+        _show_board_summary(boards_by_repo, "Board definitions by repository")
 
 
 @setup.command()
@@ -415,21 +398,48 @@ def _is_finnxsim_built(deps_mgr) -> bool:
 def _count_downloaded_boards(deps_mgr) -> int:
     """Count number of downloaded board repositories."""
     board_files_dir = deps_mgr.deps_path / "board-files"
-    if not board_files_dir.exists():
-        return 0
-    return len([d for d in board_files_dir.iterdir() if d.is_dir() and any(d.iterdir())])
+    return len(list_downloaded_repositories(board_files_dir))
 
 
-def _find_board_files(repo_path: Path) -> List[Path]:
-    """Find all board.xml files in a repository at various depths."""
-    return list(repo_path.glob("*/*/board.xml")) + \
-           list(repo_path.glob("*/*/*/board.xml")) + \
-           list(repo_path.glob("*/*/*/*/board.xml"))
+# Board file utilities (previously in board_utils.py)
+
+def find_board_files(repo_path: Path) -> List[Path]:
+    """Find all board.xml files in a repository at various depths.
+    
+    Args:
+        repo_path: Path to the repository to search
+        
+    Returns:
+        List of paths to board.xml files
+    """
+    board_files = []
+    
+    # Search at different depths where board files might be located
+    patterns = [
+        "*/*/board.xml",
+        "*/*/*/board.xml",
+        "*/*/*/*/board.xml"
+    ]
+    
+    for pattern in patterns:
+        board_files.extend(repo_path.glob(pattern))
+    
+    logger.debug(f"Found {len(board_files)} board files in {repo_path}")
+    return board_files
 
 
-def _extract_board_names(board_files: List[Path], repo_name: str) -> List[str]:
-    """Extract board names from board.xml file paths."""
+def extract_board_names(board_files: List[Path], repo_name: str) -> List[str]:
+    """Extract board names from board.xml file paths.
+    
+    Args:
+        board_files: List of paths to board.xml files
+        repo_name: Name of the repository (to exclude from board names)
+        
+    Returns:
+        List of board names
+    """
     board_names = []
+    
     for board_file in board_files:
         parts = board_file.parts
         if 'board.xml' in parts:
@@ -438,4 +448,71 @@ def _extract_board_names(board_files: List[Path], repo_name: str) -> List[str]:
                 board_name = parts[idx-2]
                 if board_name not in EXCLUDED_BOARD_NAMES and board_name != repo_name:
                     board_names.append(board_name)
+    
     return board_names
+
+
+def get_board_summary(board_files_dir: Path) -> Dict[str, List[str]]:
+    """Get a summary of all boards organized by repository.
+    
+    Args:
+        board_files_dir: Path to the board-files directory
+        
+    Returns:
+        Dictionary mapping repository names to lists of board names
+    """
+    boards_by_repo = {}
+    
+    if not board_files_dir.exists():
+        return boards_by_repo
+    
+    for repo_dir in board_files_dir.iterdir():
+        if repo_dir.is_dir() and any(repo_dir.iterdir()):
+            board_files = find_board_files(repo_dir)
+            if board_files:
+                board_names = extract_board_names(board_files, repo_dir.name)
+                if board_names:
+                    boards_by_repo[repo_dir.name] = sorted(set(board_names))
+    
+    return boards_by_repo
+
+
+def list_downloaded_repositories(board_files_dir: Path) -> List[str]:
+    """List all downloaded board repositories.
+    
+    Args:
+        board_files_dir: Path to the board-files directory
+        
+    Returns:
+        List of repository names that contain boards
+    """
+    if not board_files_dir.exists():
+        return []
+    
+    repos = []
+    for repo_dir in board_files_dir.iterdir():
+        if repo_dir.is_dir() and any(repo_dir.iterdir()):
+            # Check if it actually contains board files
+            if find_board_files(repo_dir):
+                repos.append(repo_dir.name)
+    
+    return sorted(repos)
+
+
+def validate_repository_names(repo_names: List[str]) -> Tuple[List[str], List[str]]:
+    """Validate repository names against known repositories.
+    
+    Args:
+        repo_names: List of repository names to validate
+        
+    Returns:
+        Tuple of (valid_repos, invalid_repos)
+    """
+    valid_repos = ['avnet', 'xilinx', 'realdigital']
+    
+    valid = [r for r in repo_names if r in valid_repos]
+    invalid = [r for r in repo_names if r not in valid_repos]
+    
+    return valid, invalid
+
+

@@ -1,8 +1,8 @@
-"""Shared utilities for the Brainsmith CLI interface."""
+"""Essential utilities for the Brainsmith CLI interface."""
 
 import logging
 import sys
-from typing import Optional, Any, Callable, TypeVar, List
+from typing import Optional, List
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -11,8 +11,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 
 console = Console()
-
-T = TypeVar('T')
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -41,48 +39,6 @@ def error_exit(message: str, details: Optional[List[str]] = None, code: int = 1)
             console.print(f"  • {detail}")
     
     sys.exit(code)
-
-
-def warning(message: str, details: Optional[List[str]] = None) -> None:
-    """Print a warning message.
-    
-    Args:
-        message: The main warning message
-        details: Optional list of detail points to show
-    """
-    console.print(f"[yellow]Warning:[/yellow] {message}")
-    
-    if details:
-        for detail in details:
-            console.print(f"  • {detail}")
-
-
-def success(message: str) -> None:
-    """Print a success message.
-    
-    Args:
-        message: The success message
-    """
-    console.print(f"[green]✓[/green] {message}")
-
-
-def info(message: str, style: str = "cyan") -> None:
-    """Print an info message.
-    
-    Args:
-        message: The info message
-        style: Rich style to apply (default: cyan)
-    """
-    console.print(f"[{style}]{message}[/{style}]")
-
-
-def tip(message: str) -> None:
-    """Print a tip message.
-    
-    Args:
-        message: The tip message
-    """
-    console.print(f"\n[yellow]Tip:[/yellow] {message}")
 
 
 @contextmanager
@@ -147,3 +103,26 @@ def format_warning_status(status: str) -> str:
         Formatted status string
     """
     return f"[yellow]{status}[/yellow]"
+
+
+def success(message: str) -> None:
+    """Print a success message."""
+    console.print(f"[green]✓[/green] {message}")
+
+
+def warning(message: str, details: Optional[List[str]] = None) -> None:
+    """Print a warning message with optional details."""
+    console.print(f"[yellow]Warning:[/yellow] {message}")
+    if details:
+        for detail in details:
+            console.print(f"  • {detail}")
+
+
+def tip(message: str) -> None:
+    """Print a tip message."""
+    console.print(f"\n[yellow]Tip:[/yellow] {message}")
+
+
+def info(message: str, style: str = "cyan") -> None:
+    """Print an info message."""
+    console.print(f"[{style}]{message}[/{style}]")

@@ -194,41 +194,6 @@ Setup Status:
 ✓ Board files (47 boards)
 ```
 
-## Environment Management
-
-### `brainsmith env` - Environment Tools
-
-#### `brainsmith env show`
-Display effective environment configuration.
-
-```bash
-brainsmith env show
-```
-
-Shows all environment variables that would be set for external tools (Xilinx, FINN, etc.).
-
-#### `brainsmith env activate`
-Output shell commands to activate Brainsmith environment.
-
-```bash
-brainsmith env activate [OPTIONS]
-```
-
-**Options:**
-- `--shell [bash|zsh|fish|powershell]` - Shell format (default: bash)
-
-**Examples:**
-```bash
-# Activate in current shell
-eval $(brainsmith env activate)
-
-# Fish shell
-eval (brainsmith env activate --shell fish)
-
-# PowerShell
-brainsmith env activate --shell powershell | Invoke-Expression
-```
-
 ## Design Space Exploration
 
 ### `smith` (default command)
