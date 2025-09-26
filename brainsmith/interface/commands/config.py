@@ -417,87 +417,47 @@ def init(ctx: ApplicationContext, user: bool, project: bool, force: bool, full: 
             config_dict = convert_paths(config_dict)
             
         else:
-            # Default: complete config with commonly used fields
-            config_dict = {}
+            # Default: simple config matching brainsmith_settings.yaml format
+            config_dict = {
+                "__comment__": "Brainsmith Project Settings",
+                "build_dir": "${HOME}/.brainsmith/builds",
+                "xilinx_path": "/tools/Xilinx",
+                "xilinx_version": "2024.2",
+                "plugins_strict": True,
+                "debug": False
+            }
+        
+        # Write YAML with proper formatting
+        if full:
+            # Standard YAML dump for full config
+            with open(output, 'w') as f:
+                yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
+        else:
+            # Write formatted YAML matching the target style
+            lines = []
             
             # Add header comment
-            config_dict = {
-                "__comment__": [
-                    "Brainsmith Configuration File",
-                    "Priority: CLI args > Environment vars > This file > Defaults",
-                    "Environment variables use BSMITH_ prefix (e.g., BSMITH_BUILD_DIR)"
-                ]
-            }
+            lines.append("# Brainsmith Project Settings")
+            lines.append("")
             
-            # Core paths
-            config_dict["# Core paths"] = None
-            config_dict["build_dir"] = str(config.build_dir)
-            config_dict["deps_dir"] = "deps"  # Keep relative for portability
+            # Build directory comment and value
+            lines.append("# Build directory for compilation artifacts")
+            lines.append(f"build_dir: {config_dict['build_dir']}")
+            lines.append("")
             
-            # Xilinx tools
-            config_dict[""] = None  # Empty line
-            config_dict["# Xilinx tools"] = None
-            if config.xilinx_path:
-                config_dict["xilinx_path"] = str(config.xilinx_path)
-            config_dict["xilinx_version"] = config.xilinx_version
+            # Xilinx tool configuration
+            lines.append("# Xilinx tool configuration")
+            lines.append(f"xilinx_path: {config_dict['xilinx_path']}")
+            lines.append(f'xilinx_version: "{config_dict["xilinx_version"]}"')
+            lines.append("")
             
-            # FINN configuration (optional)
-            config_dict[" "] = None  # Empty line
-            config_dict["# FINN configuration (optional)"] = None
-            config_dict["finn"] = {}
-            if config.finn.finn_root:
-                config_dict["finn"]["finn_root"] = str(config.finn.finn_root)
-            if config.finn.finn_build_dir:
-                config_dict["finn"]["finn_build_dir"] = str(config.finn.finn_build_dir)
-            if config.finn.num_default_workers:
-                config_dict["finn"]["num_default_workers"] = config.finn.num_default_workers
-            
-            # If finn section is empty, remove it
-            if not config_dict["finn"]:
-                config_dict["finn"] = {"__comment__": "Uses defaults: deps/finn and build_dir"}
-            
-            # Other settings
-            config_dict["  "] = None  # Empty line
-            config_dict["# Other settings"] = None
-            config_dict["plugins_strict"] = config.plugins_strict
-            config_dict["debug"] = config.debug
-            config_dict["netron_port"] = config.netron_port
-        
-        # Special handling for YAML with comments
-        if not minimal and not full:
-            # Write custom YAML with comments
-            lines = []
-            for key, value in config_dict.items():
-                if key.startswith("#"):
-                    # Comment line
-                    lines.append(key)
-                elif key == "__comment__":
-                    # Multi-line comment at top
-                    for comment in value:
-                        lines.append(f"# {comment}")
-                elif key.strip() == "":
-                    # Empty line
-                    lines.append("")
-                elif value is None:
-                    # Skip None values (used for spacing)
-                    continue
-                elif isinstance(value, dict):
-                    if "__comment__" in value:
-                        lines.append(f"{key}:  # {value['__comment__']}")
-                    else:
-                        lines.append(f"{key}:")
-                        for k, v in value.items():
-                            if k != "__comment__":
-                                lines.append(f"  {k}: {v}")
-                else:
-                    lines.append(f"{key}: {value}")
+            # Debug settings
+            lines.append("# Debug settings")
+            lines.append(f"plugins_strict: {str(config_dict['plugins_strict']).lower()}")
+            lines.append(f"debug: {str(config_dict['debug']).lower()}")
             
             with open(output, 'w') as f:
                 f.write('\n'.join(lines) + '\n')
-        else:
-            # Standard YAML dump for minimal/full
-            with open(output, 'w') as f:
-                yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
         
         success(f"Created configuration file: {output}")
         console.print("\nYou can now edit this file to customize your settings.")

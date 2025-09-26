@@ -2,11 +2,12 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-demos/*/output/
-demos/*/results/
-demos/*/checkpoints/
-demos/*/logs/
-demos/*/configs/
+brainsmith_settings.yaml
+examples/*/output/
+examples/*/results/
+examples/*/checkpoints/
+examples/*/logs/
+examples/*/configs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -410,16 +411,6 @@ workspace/
 local.*
 !local.example.*
 
-# Brainsmith environment configuration
-brainsmith.env
-config/brainsmith.env
-!config/brainsmith.env.example
-
-# Generated documentation
-docs/api/
-docs/generated/
-site/
-
 # Benchmarking results
 benchmarks/results/
 *.bench
@@ -499,7 +490,3 @@ test_reports/
 
 # AI coding configuration
 CLAUDE.md
-
-# Brainsmith dependency management
-smithy.lock
-.poetry/ 
