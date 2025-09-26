@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
 from .constraint_types import DatatypeConstraintGroup, validate_datatype_against_constraints
-from .relationships import DimensionRelationship, RelationType
+from .relationships import DimensionRelationship, RelationType, ValidationResult, ConstraintViolation
 
 # Type aliases for better clarity
 TilingSpec = Sequence[Union[int, str]]
@@ -63,11 +63,11 @@ class BaseSchema(ABC):
     """
     
     @abstractmethod
-    def validate(self) -> List[str]:
+    def validate(self) -> ValidationResult:
         """Validate the schema for internal consistency
         
         Returns:
-            List of validation errors (empty if valid)
+            ValidationResult with any violations found
         """
         pass
 
@@ -100,32 +100,38 @@ class InterfaceSchema(BaseSchema):
             return True  # No constraints = allow any
         return validate_datatype_against_constraints(datatype, self.datatype_constraints)
     
-    def validate(self) -> List[str]:
+    def validate(self) -> ValidationResult:
         """Validate schema consistency.
         
         Returns:
-            List of validation errors (empty if valid)
+            ValidationResult with any violations found
         """
-        errors = []
+        violations = []
         
         if not self.name:
-            errors.append(f"{self.__class__.__name__} name cannot be empty")
+            violations.append(ConstraintViolation(
+                constraint_type="interface_structure",
+                message=f"{self.__class__.__name__} name cannot be empty",
+                severity="error"
+            ))
         
         if self.block_tiling:
             # Validate tiling spec format
-            for item in self.block_tiling:
+            for i, item in enumerate(self.block_tiling):
                 if not isinstance(item, (int, str)):
-                    errors.append(
-                        f"Invalid tiling item {item!r} in block_tiling - "
-                        f"must be int or str"
-                    )
+                    violations.append(ConstraintViolation(
+                        constraint_type="tiling_template",
+                        message=f"Invalid tiling item {item!r} at position {i} in block_tiling - must be int or str",
+                        severity="error"
+                    ))
                 elif isinstance(item, int) and item <= 0:
-                    errors.append(
-                        f"Invalid tiling value {item} in block_tiling - "
-                        f"must be positive"
-                    )
+                    violations.append(ConstraintViolation(
+                        constraint_type="tiling_value", 
+                        message=f"Invalid tiling value {item} at position {i} in block_tiling - must be positive",
+                        severity="error"
+                    ))
         
-        return errors
+        return ValidationResult(violations=violations)
     
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this interface's datatype.
@@ -156,25 +162,29 @@ class InputSchema(InterfaceSchema):
     stream_tiling: Optional[TilingSpec] = None
     is_weight: bool = False  # Explicitly mark weight inputs for FINN
     
-    def validate(self) -> List[str]:
+    def validate(self) -> ValidationResult:
         """Validate input schema consistency."""
-        errors = super().validate()
+        # Get base violations
+        result = super().validate()
+        violations = list(result.violations)
         
         if self.stream_tiling:
             # Validate stream tiling spec
-            for item in self.stream_tiling:
+            for i, item in enumerate(self.stream_tiling):
                 if not isinstance(item, (int, str)):
-                    errors.append(
-                        f"Invalid tiling item {item!r} in stream_tiling - "
-                        f"must be int or str"
-                    )
+                    violations.append(ConstraintViolation(
+                        constraint_type="tiling_template",
+                        message=f"Invalid tiling item {item!r} at position {i} in stream_tiling - must be int or str",
+                        severity="error"
+                    ))
                 elif isinstance(item, int) and item <= 0:
-                    errors.append(
-                        f"Invalid tiling value {item} in stream_tiling - "
-                        f"must be positive"
-                    )
+                    violations.append(ConstraintViolation(
+                        constraint_type="tiling_value",
+                        message=f"Invalid tiling value {item} at position {i} in stream_tiling - must be positive",
+                        severity="error"
+                    ))
         
-        return errors
+        return ValidationResult(violations=violations)
     
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this input's datatype.
@@ -377,7 +387,7 @@ class KernelSchema(BaseSchema):
     
     def _validate_schemas(self, 
                          schemas: List[BaseSchema], 
-                         schema_type: str) -> List[str]:
+                         schema_type: str) -> List[ConstraintViolation]:
         """Validate a list of schemas.
         
         Args:
@@ -385,59 +395,80 @@ class KernelSchema(BaseSchema):
             schema_type: Type name for error messages
             
         Returns:
-            List of validation errors
+            List of constraint violations
         """
-        errors = []
+        violations = []
         for idx, schema in enumerate(schemas):
-            schema_errors = schema.validate()
-            for error in schema_errors:
-                errors.append(f"{schema_type} '{schema.name}': {error}")
-        return errors
+            result = schema.validate()
+            for violation in result.violations:
+                # Add context to the violation message
+                new_violation = ConstraintViolation(
+                    constraint_type=violation.constraint_type,
+                    message=f"{schema_type} '{schema.name}': {violation.message}",
+                    severity=violation.severity,
+                    details=violation.details
+                )
+                violations.append(new_violation)
+        return violations
     
-    def _validate_relationships(self) -> List[str]:
+    def _validate_relationships(self) -> List[ConstraintViolation]:
         """Validate all relationships reference existing interfaces.
         
         Returns:
-            List of validation errors
+            List of constraint violations
         """
-        errors = []
+        violations = []
         all_names = ({inp.name for inp in self.inputs} |
                     {out.name for out in self.outputs})
         
         for rel in self.relationships:
             if rel.source_interface not in all_names:
-                errors.append(
-                    f"Relationship source '{rel.source_interface}' not found"
-                )
+                violations.append(ConstraintViolation(
+                    constraint_type="relationship_reference",
+                    message=f"Relationship source '{rel.source_interface}' not found",
+                    severity="error",
+                    details={"available_interfaces": list(all_names)}
+                ))
             if rel.target_interface not in all_names:
-                errors.append(
-                    f"Relationship target '{rel.target_interface}' not found"
-                )
+                violations.append(ConstraintViolation(
+                    constraint_type="relationship_reference",
+                    message=f"Relationship target '{rel.target_interface}' not found",
+                    severity="error",
+                    details={"available_interfaces": list(all_names)}
+                ))
         
-        return errors
+        return violations
     
-    def validate(self) -> List[str]:
+    def validate(self) -> ValidationResult:
         """Validate kernel schema consistency.
         
         Returns:
-            List of validation errors (empty if valid)
+            ValidationResult with any violations found
         """
-        errors = []
+        violations = []
         
         # Must have at least one input and output
         if not self.inputs:
-            errors.append("Kernel must have at least one input")
+            violations.append(ConstraintViolation(
+                constraint_type="schema_structure",
+                message="Kernel must have at least one input",
+                severity="error"
+            ))
         if not self.outputs:
-            errors.append("Kernel must have at least one output")
+            violations.append(ConstraintViolation(
+                constraint_type="schema_structure",
+                message="Kernel must have at least one output",
+                severity="error"
+            ))
         
         # Validate individual schemas
-        errors.extend(self._validate_schemas(self.inputs, "Input"))
-        errors.extend(self._validate_schemas(self.outputs, "Output"))
+        violations.extend(self._validate_schemas(self.inputs, "Input"))
+        violations.extend(self._validate_schemas(self.outputs, "Output"))
         
         # Validate relationships
-        errors.extend(self._validate_relationships())
+        violations.extend(self._validate_relationships())
         
-        return errors
+        return ValidationResult(violations=violations)
     
     def __repr__(self) -> str:
         """String representation of KernelSchema."""

@@ -5,196 +5,189 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-from distro import name
 import torch
 import numpy as np
 import torch.nn.functional as F
 from qonnx.core.datatype import DataType
-import warnings
 
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.dataflow import KernelSchema, InputSchema, OutputSchema
+from brainsmith.core.dataflow import (
+    KernelSchema, InputSchema, OutputSchema,
+    DatatypeConstraintGroup, RelationType,
+    KernelValidator
+)
 from brainsmith.core.finn import AutoHWCustomOp
 from brainsmith.core.plugins import kernel
-
-from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
-
-# TODO: Explain any shape assumptions -- TAFK
 
 @kernel(
     description="Hardware implementation of LayerNorm",
     author="Thomas Keller"
 )
 class LayerNorm(AutoHWCustomOp):
-    """Abstraction layer for HW implementation of the LayerNorm layer."""
-
-    def __init__(self, onnx_node, **kwargs):
-        super().__init__(onnx_node, **kwargs)
+    """Hardware implementation of LayerNorm layer.
+    
+    LayerNorm normalizes inputs across the channel dimension with learned
+    scale and bias parameters. This implementation supports configurable
+    SIMD parallelism for the channel dimension.
+    
+    Shape assumptions:
+    - Input shape: [..., NumChannels] where ... can be any number of batch dimensions
+    - Output shape: Same as input shape
+    - Normalization happens across the last dimension (channels)
+    """
 
     kernel_schema = KernelSchema(
         name="LayerNorm",
         inputs=[InputSchema(
             name="input",
             datatype_constraints=[
-                DatatypeConstraintGroup(
-                    types=["FLOAT"],
-                    min_dims=32,
-                    max_dims=32
-                )
+                DatatypeConstraintGroup("FLOAT", 32, 32)  # FLOAT32 only
             ],
-            block_tiling=["NumChannels"],
+            block_tiling=[":", "NumChannels"],  # Full batch dims, tiled channels
             stream_tiling=["SIMD"],
             datatype_attr="inputDataType"
         )],
         outputs=[OutputSchema(
             name="output",
             datatype_constraints=[
-                DatatypeConstraintGroup(
-                    types=["FLOAT"],
-                    min_dims=32,
-                    max_dims=32
-                )
+                DatatypeConstraintGroup("FLOAT", 32, 32)  # FLOAT32 only
             ],
-            block_tiling=["NumChannels"],
+            block_tiling=[":", "NumChannels"],  # Match input tiling
             datatype_attr="outputDataType"
         )],
-        relationships=[],
-        metadata={}
+        relationships=[
+            # Input and output shapes must be identical
+            # Since we use ":" for batch dims, we ensure the channel dim matches via NumChannels parameter
+        ],
+        metadata={
+            "description": "Layer normalization across channel dimension",
+            "supports_streaming": True
+        }
     )
 
     def get_nodeattr_types(self):
+        """Define node attributes for LayerNorm."""
         my_attrs = super().get_nodeattr_types()
         my_attrs.update({
+            # Tiling parameters
             "SIMD": ("i", True, 0),
             "NumChannels": ("i", True, 128),
+            
+            # Shape information (maintained for compatibility)
             "ifm_dim": ("ints", True, []),
+            
+            # LayerNorm-specific parameters
             "epsilon": ("f", True, 1e-5),
-            # FINN DataTypes for inputs, weight, bias, outputs
+            
+            # Datatype attributes (required by schema)
             "inputDataType": ("s", True, ""),
             "outputDataType": ("s", True, ""),
-            # Possible execution modes for simulating this node
-            #   Note: Override to support python mode
-            "exec_mode": (
-                "s", False, "python", {"", "rtlsim", "cppsim"}
-            ),
+            
+            # Execution mode - supports python simulation
+            "exec_mode": ("s", False, "python", {"python", "rtlsim", "cppsim"}),
         })
         return my_attrs
 
     def execute_node(self, context, graph):
-        # Executes elementwise operation in python
+        """Execute LayerNorm in Python simulation mode.
+        
+        Uses PyTorch implementation for functional verification.
+        Note: This assumes weight and bias have been folded/removed.
+        """
         node = self.onnx_node
-        # Get tensor values
+        
+        # Get input tensor
         in_values = context[node.input[0]]
-        out_values = context[node.output[0]]
-        # Get any shape info that needs reuse
+        
+        # Get shape info
         ishape = in_values.shape
-        oshape = out_values.shape
-        # Functionally verify with PyTorch implementation, since weight & bias are removed
+        
+        # Execute LayerNorm using PyTorch
+        # Normalize over the last dimension (channels)
         in_act = torch.from_numpy(in_values)
-        out_act = F.layer_norm(in_act, [ishape[-1]], eps=self.get_nodeattr("epsilon"))
-        context[node.output[0]] = np.asarray(out_act, dtype=np.float32).reshape(oshape)
+        out_act = F.layer_norm(
+            in_act, 
+            normalized_shape=[ishape[-1]], 
+            eps=self.get_nodeattr("epsilon")
+        )
+        
+        # Store output
+        context[node.output[0]] = np.asarray(out_act, dtype=np.float32)
 
-    # Verifies the node attributes, inputs and outputs
     def verify_node(self):
-        # TODO: Implement
-        pass
+        """Verify node configuration using the validation system.
+        
+        Validates:
+        - SIMD divides evenly into NumChannels
+        - Epsilon is positive
+        - Model is properly built if available
+        """
+        # Basic parameter validation
+        simd = self.get_nodeattr("SIMD")
+        num_channels = self.get_nodeattr("NumChannels")
+        epsilon = self.get_nodeattr("epsilon")
+        
+        if simd <= 0:
+            raise ValueError(f"SIMD must be positive, got {simd}")
+            
+        if num_channels <= 0:
+            raise ValueError(f"NumChannels must be positive, got {num_channels}")
+            
+        if num_channels % simd != 0:
+            raise ValueError(
+                f"SIMD ({simd}) must divide evenly into NumChannels ({num_channels})"
+            )
+            
+        if epsilon <= 0:
+            raise ValueError(f"Epsilon must be positive, got {epsilon}")
+        
+        # If kernel model is built, perform comprehensive validation
+        if hasattr(self, '_kernel_model') and self._kernel_model is not None:
+            validator = KernelValidator()
+            result = validator.validate_model(
+                self._kernel_model,
+                self.kernel_schema,
+                self._tensor_context
+            )
+            
+            if not result.is_valid():
+                # Collect error messages
+                errors = []
+                for violation in result.violations:
+                    if violation.severity == "error":
+                        errors.append(f"- {violation.message}")
+                
+                if errors:
+                    error_msg = "LayerNorm validation failed:\n" + "\n".join(errors)
+                    raise ValueError(error_msg)
 
     def get_normal_input_shape(self, ind=0):
+        """Get normal (unfolded) input shape.
+        
+        Override needed for backward compatibility with ifm_dim attribute.
+        """
         return self.get_nodeattr("ifm_dim")
 
     def get_normal_output_shape(self, ind=0):
+        """Get normal (unfolded) output shape.
+        
+        For LayerNorm, output shape always matches input shape.
+        """
         return self.get_normal_input_shape()
 
-    def get_folded_input_shape(self, ind=0):
-        # even though there is no folding in the current hlslib op,
-        # insert a time multiplexing axis to remain compatible with the
-        # shapes produced by the rest of the dataflow pipeline
-        normal_ishape = list(self.get_normal_input_shape())
-        simd = self.get_nodeattr("SIMD")
-        assert normal_ishape[-1] % simd == 0, "SIMD must divide into input dimension"
-        fold = int(normal_ishape[-1] / simd)
-        folded_ishape = normal_ishape[:-1] + [fold, simd]
-        return tuple(folded_ishape)
-
-    def get_folded_output_shape(self, ind=0):
-        return self.get_folded_input_shape()
-
-    def get_number_output_values(self):
-        nf = np.prod(self.get_folded_output_shape()[:-1])
-        return nf
-
     def make_shape_compatible_op(self, model):
+        """Create constant shape operation for shape inference."""
         return super().make_const_shape_op(self.get_normal_input_shape())
-
-    def get_input_datatype(self, ind=0):
-        """Returns FINN DataType of input."""
-        if ind == 0:
-            return DataType[self.get_nodeattr("inputDataType")]
-        else:
-            raise Exception("Undefined input ind for this layer type")
-
-    def get_output_datatype(self, ind=0):
-        """Returns FINN DataType of output."""
-        return DataType[self.get_nodeattr("outputDataType")]
-
-    def infer_node_datatype(self, model):
-        node = self.onnx_node
-        idt = model.get_tensor_datatype(node.input[0])
-        if idt != self.get_input_datatype():
-            warn_str = "inputDataType changing for %s: %s -> %s " % (
-                node.name,
-                str(self.get_input_datatype()),
-                str(idt),
-            )
-            warnings.warn(warn_str)
-        self.set_nodeattr("inputDataType", idt.name)
-        # set output datatype from property
-        odt = self.get_output_datatype()
-        model.set_tensor_datatype(node.output[0], odt)
-
-    def get_instream_width(self, ind=0):
-        i_bits = self.get_input_datatype().bitwidth()
-        in_width = i_bits * self.get_nodeattr("SIMD")
-        return in_width
-
-    def get_outstream_width(self, ind=0):
-        o_bits = self.get_output_datatype().bitwidth()
-        out_width = o_bits * self.get_nodeattr("SIMD")
-        return out_width
-
-    #def calc_wmem(self):
-    #    """Calculates and returns WMEM."""
-    #    pass
-
-    #def calc_tmem(self):
-    #    """Calculates and returns TMEM."""
-    #    pass
-
-    #def uram_estimation(self):
-    #    pass
-
-    #def bram_estimation(self):
-    #    pass
-
-    #def bram_efficiency_estimation(self):
-    #    pass
-
-    #def uram_efficiency_estimation(self):
-    #    """Function for URAM efficiency estimation: actual parameter storage
-    #    needed divided by the allocated URAM storage (from estimation)"""
-    #    pass
-
-    #def minimize_accumulator_width(self, model):
-    #    """Minimize the accumulator bit width according to the weight values,
-    #    input data types, and size of dot product"""
-    #    pass
-
-    #def generate_params(self, model, path):
-    #    pass
-
-    #def get_op_and_param_counts(self):
-    #    pass
-
-    #def derive_characteristic_fxns(self, period):
-    #    pass
-
+    
+    # Note: The following methods are now handled by the AutoHWCustomOp base class:
+    # - get_folded_input_shape() - Automatically computed from kernel model
+    # - get_folded_output_shape() - Automatically computed from kernel model  
+    # - get_number_output_values() - Automatically computed from kernel model
+    # - get_input_datatype() - Uses DatatypeResolver with proper fallback
+    # - get_output_datatype() - Uses DatatypeResolver with proper fallback
+    # - get_instream_width() - Calculated from model's streaming bandwidth
+    # - get_outstream_width() - Calculated from model's streaming rate
+    # - infer_node_datatype() - Handled by transforms with proper validation
+    
+    # The base class provides automatic caching and invalidation, so we don't
+    # need to manually manage any model state. Just ensure refresh_kernel_model()
+    # is called by transforms when needed.
