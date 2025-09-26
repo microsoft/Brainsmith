@@ -6,7 +6,7 @@
 #   start  - Start container and run complete setup automatically
 #   shell  - Open interactive shell in running container  
 #   clean  - Stop container and clean artifacts (use --deep for full reset)
-#   [cmd]  - Execute any command in container (e.g., "smith setup all")
+#   [cmd]  - Execute any command in container (e.g., "brainsmith setup all")
 #
 # Typical workflow:
 #   poetry install                         # Set up Poetry environment (host)
@@ -15,6 +15,9 @@
 #   ./ctl-docker.sh shell                  # Interactive development
 #   ./ctl-docker.sh "smith build model.py" # Run commands
 #   ./ctl-docker.sh clean --deep           # Full cleanup when needed
+#
+# Environment variables:
+#   BSMITH_DOCKER_USER_MOUNT=1             # Mount ~/.brainsmith for persistent user config
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -45,9 +48,9 @@ export BSMITH_BUILD_DIR="${BSMITH_BUILD_DIR:-$BSMITH_CONTAINER_DIR/build}"
 export BSMITH_DEPS_DIR="${BSMITH_DEPS_DIR:-$BSMITH_DIR/deps}"
 
 # Docker-specific control variables
-export BSMITH_SKIP_DEP_REPOS="${BSMITH_SKIP_DEP_REPOS:-0}"
 export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
 export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
+export BSMITH_DOCKER_USER_MOUNT="${BSMITH_DOCKER_USER_MOUNT:-0}"
 export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
 export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-0}"
 
@@ -116,6 +119,8 @@ Usage: ./ctl-docker.sh COMMAND [OPTIONS]
 Container Commands:
     start          Start container and run complete setup automatically
                    Options: --force (re-fetch repos and force reinstall)
+                           --skip <component>... (skip specific setup components)
+                   Components: repos, poetry, boards, sim
     shell          Interactive shell in running container
     build          Build Docker image
     stop           Stop container
@@ -128,16 +133,17 @@ Other Commands:
     logs           Show container logs
     
 Note: Complete workflow is now streamlined:
-    poetry install           # Install dependencies from pyproject.toml (host)
-    ./fetch-repos.sh         # Fetch Git repositories (host)
-    ./ctl-docker.sh start    # Start container + automatic setup (all-in-one)
+    poetry install                # Install dependencies from pyproject.toml (host)
+    ./docker/fetch-repos.sh       # Fetch Git repositories (host)
+    ./ctl-docker.sh start         # Start container + automatic setup (all-in-one)
 
 Examples:
     ./ctl-docker.sh start                                   # Start and set up everything automatically
     ./ctl-docker.sh start --force                           # Force re-fetch repos and reinstall everything
+    ./ctl-docker.sh start --skip boards sim                 # Start but skip boards and simulation setup
     ./ctl-docker.sh shell                                   # Interactive development
     ./ctl-docker.sh "smith build model.py"                  # Run smith commands
-    ./ctl-docker.sh "smith setup cppsim"                    # Install additional components
+    ./ctl-docker.sh "brainsmith setup cppsim"              # Install additional components
     ./ctl-docker.sh clean                                   # Stop container and clean build files
     ./ctl-docker.sh clean --deep                            # Full reset (removes everything)
     ./ctl-docker.sh clean --deep venv                       # Clean only virtual environment
@@ -292,15 +298,31 @@ create_container() {
         DOCKER_CMD+=" -v $BSMITH_DIR/.venv:$BSMITH_DIR/.venv"
     fi
 
+    # Mount user's ~/.brainsmith directory if requested
+    if [ "$BSMITH_DOCKER_USER_MOUNT" = "1" ]; then
+        if [ -d "$HOME/.brainsmith" ]; then
+            DOCKER_CMD+=" -v $HOME/.brainsmith:$HOME/.brainsmith"
+        else
+            # Create the directory if it doesn't exist
+            mkdir -p "$HOME/.brainsmith"
+            DOCKER_CMD+=" -v $HOME/.brainsmith:$HOME/.brainsmith"
+        fi
+        gecho "Mounting user's ~/.brainsmith directory"
+    fi
+
     # Essential environment variables
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
     DOCKER_CMD+=" -e BSMITH_CONTAINER_DIR=$BSMITH_CONTAINER_DIR"
-    DOCKER_CMD+=" -e BSMITH_SKIP_DEP_REPOS=$BSMITH_SKIP_DEP_REPOS"
     DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
     DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     DOCKER_CMD+=" -e DOCKER_INST_NAME=$DOCKER_INST_NAME"
+    
+    # Setup control variables (for new entrypoint)
+    DOCKER_CMD+=" -e BSMITH_SKIP_SETUP=${BSMITH_SKIP_SETUP:-0}"
+    DOCKER_CMD+=" -e BSMITH_FORCE_SETUP=${BSMITH_FORCE_SETUP:-}"
+    DOCKER_CMD+=" -e BSMITH_SKIP_COMPONENTS='${BSMITH_SKIP_COMPONENTS:-}'"
     
     # Set Poetry to use project-local virtual environments
     DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
@@ -403,56 +425,51 @@ create_container() {
 
 # Start container and run automatic setup
 start_daemon() {
-    # Check for --force flag
-    local force_flag=""
-    if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
-        force_flag="--force"
-    fi
+    # Parse arguments
+    local skip_components=""
+    local force_setup=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f)
+                force_setup="1"
+                shift
+                ;;
+            --skip)
+                shift
+                # Collect all components to skip
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    skip_components="$skip_components $1"
+                    shift
+                done
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    
+    # Set environment variables for container setup
+    [ -n "$force_setup" ] && export BSMITH_FORCE_SETUP="1"
+    [ -n "$skip_components" ] && export BSMITH_SKIP_COMPONENTS="${skip_components# }"
     
     setup_container_if_needed
     local result=$?
     
-    # If container started successfully, run automatic setup
+    # Container will handle setup automatically via entrypoint.sh
     if [ $result -eq 0 ]; then
         gecho ""
-        gecho "✓ Container is ready and initialized!"
+        gecho "✓ Container started successfully!"
         gecho ""
-        gecho "Running automatic setup..."
-        
-        # If force flag is set, also force fetch repos
-        if [ -n "$force_flag" ]; then
-            gecho "Force mode: Re-fetching repositories and reinstalling dependencies..."
-            exec_in_container "cd $BSMITH_DIR && ./fetch-repos.sh --force"
+        if [ -n "$skip_components" ]; then
+            gecho "Setup will skip: $skip_components"
         fi
-        
-        # Run setup automatically with force flag if provided
-        exec_in_container "smith setup all $force_flag"
-        local setup_result=$?
-        
-        if [ $setup_result -eq 0 ]; then
-            gecho ""
-            gecho "✓ Complete setup finished successfully!"
-            gecho ""
-            gecho "Container is ready for development:"
-            gecho "  ./ctl-docker.sh shell                # Open interactive shell"
-            gecho "  ./ctl-docker.sh \"smith --help\"       # Explore smith CLI"
-            gecho "  ./ctl-docker.sh \"smith setup check\"  # Check setup status"
-        elif [ $setup_result -eq 130 ]; then
-            yecho ""
-            yecho "Setup interrupted by user"
-            yecho "Container is running. You can:"
-            yecho "  ./ctl-docker.sh \"smith setup all\"    # Resume setup"
-            yecho "  ./ctl-docker.sh shell                # Use current environment"
-        else
-            yecho ""
-            yecho "⚠️  Automatic setup encountered issues"
-            yecho "Container is running but setup may be incomplete"
-            yecho ""
-            yecho "You can:"
-            yecho "  ./ctl-docker.sh shell                # Use basic environment"
-            yecho "  ./ctl-docker.sh \"smith setup all\"    # Retry setup manually"
-            yecho "  ./ctl-docker.sh \"smith setup check\"  # Check what's missing"
-        fi
+        gecho "Container is setting up the environment..."
+        gecho ""
+        gecho "You can:"
+        gecho "  ./ctl-docker.sh logs -f              # Watch setup progress"
+        gecho "  ./ctl-docker.sh shell                # Open interactive shell"
+        gecho "  ./ctl-docker.sh \"brainsmith setup check\"  # Check setup status"
     fi
     
     return $result
@@ -461,7 +478,7 @@ start_daemon() {
 stop_container() {
     if is_container_running; then
         gecho "Stopping container $DOCKER_INST_NAME"
-        docker stop "$DOCKER_INST_NAME"
+        docker stop "$DOCKER_INST_NAME" >/dev/null
     else
         yecho "Container $DOCKER_INST_NAME is not running"
     fi
@@ -513,9 +530,7 @@ exec_in_container() {
         fi
     done
 
-    # Use the environment setup script for proper Poetry activation
-    # Debug: show the command being executed
-    debug "Executing in container: source /usr/local/bin/setup-env-streamlined.sh && cd $BSMITH_DIR && $CMD"
+    # Use entrypoint-exec.sh which handles environment setup
     docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh bash -c "$CMD"
     return $?
 }
@@ -606,7 +621,7 @@ clean_all() {
     STATUS=$(get_container_status)
     if [ "$STATUS" != "not_found" ]; then
         gecho "Removing container $DOCKER_INST_NAME"
-        docker rm -f "$DOCKER_INST_NAME"
+        docker rm -f "$DOCKER_INST_NAME" >/dev/null
     fi
     
     # 3. Always clean build artifacts

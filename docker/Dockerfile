@@ -41,13 +41,14 @@ RUN apt-get update && \
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN locale-gen "en_US.UTF-8"
 
-# Install Poetry and toml
+# Install Poetry globally for containers
 ENV POETRY_VERSION=1.8.5
 ENV POETRY_HOME=/opt/poetry
-ENV POETRY_VIRTUALENVS_CREATE=true
-ENV POETRY_VIRTUALENVS_IN_PROJECT=false
-ENV POETRY_VIRTUALENVS_PATH=/tmp/poetry_venvs
 ENV PATH="$POETRY_HOME/bin:$PATH"
+
+# Docker-specific Poetry configuration
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true
+
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
     poetry --version && \
     pip3 install toml
@@ -63,8 +64,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Copy all entrypoint scripts
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint-exec.sh /usr/local/bin/entrypoint-exec.sh
-COPY docker/setup-env.sh /usr/local/bin/setup-env.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-exec.sh /usr/local/bin/setup-env.sh
+COPY docker/setup-shell.sh /usr/local/bin/setup-shell.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-exec.sh /usr/local/bin/setup-shell.sh
 
 # Set default entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -1,5 +1,5 @@
 # NOTE: Git dependencies (finn, qonnx, etc.) are listed below as local path dependencies.
-# Use ./fetch-repos.sh to clone repositories, then poetry install to set up the environment.
+# Use ./docker/fetch-repos.sh to clone repositories, then poetry install to set up the environment.
 
 [build-system]
 requires = [ "poetry-core>=1.0.0",]
@@ -166,7 +166,7 @@ markupsafe = "==2.0.1"  # Exact pin for compatibility
 importlib-resources = "~=6.1.0"
 dependencies = "~=2.0.1"  # Required by brevitas
 
-# PRE-RELEASE NOTE: Git dependencies (finn, qonnx, brevitas, etc.) are managed by fetch-repos.sh
+# PRE-RELEASE NOTE: Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
 # The repositories are cloned to ./deps/ and installed as editable local packages
 # For open source release, these will be converted to proper git dependencies in pyproject.toml
 brevitas = {path = "deps/brevitas", develop = true}
@@ -177,8 +177,9 @@ finn-experimental = {path = "deps/finn-experimental", develop = true}
 dataset-loading = {path = "deps/dataset-loading", develop = true}
 
 [tool.poetry.scripts]
+brainsmith = "brainsmith.interface.brainsmith_cli:main"
+smith = "brainsmith.interface.smith_cli:main"
 brainsmith-post-install = "brainsmith.core.post_install:main"
-smith = "brainsmith.interface.cli:main"
 
 [tool.poetry.group.dev]
 optional = false

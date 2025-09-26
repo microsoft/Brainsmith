@@ -12,16 +12,17 @@ def main():
     print("=" * 60)
     
     print("\nTo set up optional dependencies, run:")
-    print("  smith setup all        # Install all dependencies")
-    print("  smith setup cppsim     # C++ simulation support")
-    print("  smith setup xsim       # Xilinx simulation support (requires Vivado)")
-    print("  smith setup boards     # Download board definition files")
+    print("  brainsmith setup all        # Install all dependencies")
+    print("  brainsmith setup cppsim     # C++ simulation support")
+    print("  brainsmith setup xsim       # Xilinx simulation support (requires Vivado)")
+    print("  brainsmith setup boards     # Download board definition files")
     
     print("\nTo check setup status:")
-    print("  smith setup check")
+    print("  brainsmith setup check")
     
     print("\nTo get started:")
-    print("  smith --help")
+    print("  smith --help                # Operational commands (DSE, kernels)")
+    print("  brainsmith --help           # Configuration and setup")
     print("=" * 60 + "\n")
 
 
