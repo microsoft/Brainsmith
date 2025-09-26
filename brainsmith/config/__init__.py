@@ -6,7 +6,7 @@ Provides type-safe configuration management with Pydantic Settings.
 from .schema import BrainsmithConfig
 from .loader import load_config, get_config, reset_config, get_default_config
 from .helpers import get_build_dir, get_deps_dir, get_bsmith_dir, is_plugins_strict
-from .export import export_to_environment
+# from .export import export_to_environment
 
 __all__ = [
     # Core configuration classes
@@ -25,5 +25,5 @@ __all__ = [
     "is_plugins_strict",
     
     # Legacy compatibility
-    "export_to_environment",
+    # "export_to_environment",
 ]
