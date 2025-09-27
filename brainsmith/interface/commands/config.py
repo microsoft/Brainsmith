@@ -25,47 +25,6 @@ from ..exceptions import ConfigurationError, ValidationError
 # This class is only used by the config command
 
 
-def validate_config_key(key: str) -> bool:
-    """Validate that a configuration key is valid.
-    
-    Returns True if valid, raises ValidationError if not.
-    """
-    # Valid top-level keys from BrainsmithConfig
-    valid_keys = {
-        'build_dir', 'deps_dir', 'xilinx_path', 'xilinx_version',
-        'vivado_path', 'vitis_path', 'vitis_hls_path',
-        'vivado_ip_cache', 'platform_repo_paths', 'netron_port',
-        'debug', 'verbose', 'plugins_strict'
-    }
-    
-    # Valid nested keys
-    valid_nested = {
-        'finn.finn_root', 'finn.finn_build_dir', 'finn.finn_deps_dir',
-        'finn.num_default_workers'
-    }
-    
-    # Check if it's a valid key
-    if key in valid_keys or key in valid_nested:
-        return True
-    
-    # Check if it's a nested key we recognize
-    if '.' in key:
-        parts = key.split('.')
-        if parts[0] == 'finn' and len(parts) == 2:
-            # Could be a valid FINN key
-            return True
-    
-    # Provide helpful error message
-    all_keys = sorted(valid_keys | valid_nested)
-    raise ValidationError(
-        f"Invalid configuration key: '{key}'",
-        details=[
-            "Valid keys include:",
-            *[f"  - {k}" for k in all_keys[:10]],  # Show first 10
-            "...",
-            "Run 'brainsmith config show --verbose' to see all available settings"
-        ]
-    )
 
 
 class ConfigFormatter:
@@ -328,7 +287,19 @@ class ConfigFormatter:
 
 @click.group()
 def config():
-    """Manage Brainsmith configuration."""
+    """Manage Brainsmith configuration.
+
+    \b
+    Available commands:
+      show    Display current configuration
+      export  Export configuration as shell environment
+      init    Create new configuration files
+
+    \b
+    Configuration can be managed by editing YAML files directly:
+      Project: ./brainsmith_settings.yaml
+      User:    ~/.brainsmith/config.yaml
+    """
     pass
 
 
@@ -357,63 +328,6 @@ def show(ctx: ApplicationContext, verbose: bool) -> None:
 
 
 
-
-@config.command()
-@click.argument('key')
-@click.argument('value')
-@click.pass_obj
-def set(ctx: ApplicationContext, key: str, value: str) -> None:
-    """Set a configuration value in user defaults.
-    
-    \b
-    Examples:
-      brainsmith config set verbose true
-      brainsmith config set build_dir /opt/builds
-      brainsmith config set finn.num_default_workers 8
-    """
-    try:
-        logger.debug(f"Setting config key={key}, value={value}")
-        
-        # Validate the key first
-        validate_config_key(key)
-        
-        # Convert string value to appropriate type
-        typed_value: Any = value
-        
-        # Handle boolean values
-        if value.lower() in ['true', 'false']:
-            typed_value = value.lower() == 'true'
-        # Handle numeric values
-        elif value.isdigit():
-            typed_value = int(value)
-        # Handle paths
-        elif key.endswith('_dir') or key.endswith('_path'):
-            # Validate path format
-            if value.startswith('~'):
-                typed_value = value  # expanduser will handle it
-            elif not value:
-                raise ValidationError("Path cannot be empty")
-            else:
-                typed_value = value  # Keep as string, will be converted to Path by config
-        
-        # Set the value
-        ctx.set_user_config_value(key, typed_value)
-        
-        success(f"Set {key} = {value}")
-        
-        # Show where it was saved
-        console.print(f"Saved to: {ctx.user_config_path}")
-        
-    except ValidationError as e:
-        # ValidationError already has proper details
-        error_exit(e.message, details=e.details)
-    except Exception as e:
-        error_exit(f"Failed to set configuration: {e}",
-                  details=[
-                      "Check that the key is valid",
-                      "Ensure the value is in the correct format",
-                      "Run 'brainsmith config show --verbose' to see available keys"
-                  ])
 
 
 @config.command()
@@ -450,23 +364,17 @@ def export(ctx: ApplicationContext, shell: str) -> None:
 
 @config.command()
 @click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
-@click.option('--project', is_flag=True, help='Create project-level config (./brainsmith_settings.yaml)')
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
-@click.option('--full', is_flag=True, help='Include all possible configuration fields')
 @click.pass_obj
-def init(ctx: ApplicationContext, user: bool, project: bool, force: bool, full: bool) -> None:
+def init(ctx: ApplicationContext, user: bool, force: bool) -> None:
     """Initialize a new configuration file.
     
-    Creates either user-level config (~/.brainsmith/config.yaml) or
-    project-level config (./brainsmith_settings.yaml).
+    By default creates project-level config (./brainsmith_settings.yaml).
+    Use --user to create user-level config (~/.brainsmith/config.yaml).
     """
     # Determine output path
-    if user and project:
-        error_exit("Cannot specify both --user and --project")
-    elif user:
+    if user:
         output = ctx.user_config_path
-    elif project:
-        output = Path("brainsmith_settings.yaml")
     else:
         # Default to project config
         output = Path("brainsmith_settings.yaml")
@@ -481,71 +389,41 @@ def init(ctx: ApplicationContext, user: bool, project: bool, force: bool, full: 
         # Load current config to get sensible defaults
         config = ctx.get_effective_config()
         
-        if False:  # Remove minimal option
-            # Old minimal behavior
-            config_dict = {
-                "build_dir": str(config.build_dir),
-                "xilinx_path": str(config.xilinx_path) if config.xilinx_path else None,
-                "xilinx_version": config.xilinx_version,
-                "netron_port": config.netron_port,
-                "debug": config.debug,
-            }
-            # Remove None values
-            config_dict = {k: v for k, v in config_dict.items() if v is not None}
-            
-        elif full:
-            # Full config with all fields
-            config_dict = config.model_dump()
-            # Convert Path objects to strings
-            def convert_paths(obj):
-                if isinstance(obj, dict):
-                    return {k: convert_paths(v) for k, v in obj.items()}
-                elif isinstance(obj, Path):
-                    return str(obj)
-                return obj
-            config_dict = convert_paths(config_dict)
-            
-        else:
-            # Default: simple config matching brainsmith_settings.yaml format
-            config_dict = {
-                "__comment__": "Brainsmith Project Settings",
-                "build_dir": "${HOME}/.brainsmith/builds",
-                "xilinx_path": "/tools/Xilinx",
-                "xilinx_version": "2024.2",
-                "plugins_strict": True,
-                "debug": False
-            }
+        # Always create simple config matching brainsmith_settings.yaml format
+        config_dict = {
+            "__comment__": "Brainsmith Project Settings",
+            "build_dir": "${HOME}/.brainsmith/builds",
+            "xilinx_path": "/tools/Xilinx",
+            "xilinx_version": "2024.2",
+            "plugins_strict": True,
+            "debug": False
+        }
         
-        # Write YAML with proper formatting
-        if full:
-            # Use standardized YAML dumper for full config
-            dump_yaml(config_dict, output, sort_keys=False)
-        else:
-            # Write formatted YAML matching the target style
-            lines = []
-            
-            # Add header comment
-            lines.append("# Brainsmith Project Settings")
-            lines.append("")
-            
-            # Build directory comment and value
-            lines.append("# Build directory for compilation artifacts")
-            lines.append(f"build_dir: {config_dict['build_dir']}")
-            lines.append("")
-            
-            # Xilinx tool configuration
-            lines.append("# Xilinx tool configuration")
-            lines.append(f"xilinx_path: {config_dict['xilinx_path']}")
-            lines.append(f'xilinx_version: "{config_dict["xilinx_version"]}"')
-            lines.append("")
-            
-            # Debug settings
-            lines.append("# Debug settings")
-            lines.append(f"plugins_strict: {str(config_dict['plugins_strict']).lower()}")
-            lines.append(f"debug: {str(config_dict['debug']).lower()}")
-            
-            with open(output, 'w') as f:
-                f.write('\n'.join(lines) + '\n')
+        # Write formatted YAML matching the target style
+        lines = []
+        
+        # Add header comment
+        lines.append("# Brainsmith Project Settings")
+        lines.append("")
+        
+        # Build directory comment and value
+        lines.append("# Build directory for compilation artifacts")
+        lines.append(f"build_dir: {config_dict['build_dir']}")
+        lines.append("")
+        
+        # Xilinx tool configuration
+        lines.append("# Xilinx tool configuration")
+        lines.append(f"xilinx_path: {config_dict['xilinx_path']}")
+        lines.append(f'xilinx_version: "{config_dict["xilinx_version"]}"')
+        lines.append("")
+        
+        # Debug settings
+        lines.append("# Debug settings")
+        lines.append(f"plugins_strict: {str(config_dict['plugins_strict']).lower()}")
+        lines.append(f"debug: {str(config_dict['debug']).lower()}")
+        
+        with open(output, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
         
         success(f"Created configuration file: {output}")
         console.print("\nYou can now edit this file to customize your settings.")
