@@ -21,6 +21,11 @@ fi
 # Move to project directory
 cd "$BSMITH_DIR"
 
+# Ensure home directory exists and is writable for current user
+if [ ! -d "$HOME" ]; then
+    mkdir -p "$HOME"
+fi
+
 # Run one-stop setup (unless explicitly skipped)
 if [ "$BSMITH_SKIP_SETUP" != "1" ]; then
     log "Running setup..."

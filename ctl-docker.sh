@@ -1,6 +1,5 @@
 #!/bin/bash
 # Brainsmith Container Management Script
-# Poetry-based orchestration for development environments
 #
 # Key commands:
 #   start  - Start container and run complete setup automatically
@@ -10,20 +9,21 @@
 #
 # Typical workflow:
 #   poetry install                         # Set up Poetry environment (host)
-#   ./fetch-repos.sh                       # Fetch Git repositories (host)
+#   ./docker/fetch-repos.sh                # Fetch Git repositories (host)
 #   ./ctl-docker.sh start                  # Start container + automatic setup (all-in-one)
 #   ./ctl-docker.sh shell                  # Interactive development
 #   ./ctl-docker.sh "smith build model.py" # Run commands
 #   ./ctl-docker.sh clean --deep           # Full cleanup when needed
 #
 # Environment variables:
-#   BSMITH_DOCKER_USER_MOUNT=1             # Mount ~/.brainsmith for persistent user config
 #   BSMITH_DOCKER_GPU=1                    # Enable GPU support
 #   BSMITH_DOCKER_RUN_AS_ROOT=1            # Run container as root (default: run as current user)
 #   BSMITH_DOCKER_PREBUILT=1               # Use pre-built image instead of building locally
 #   BSMITH_DOCKER_NO_CACHE=1               # Disable Docker build cache
 #   BSMITH_DOCKER_EXTRA="..."              # Additional Docker run flags
 #   BSMITH_DEBUG=1                         # Enable debug output
+#
+# Note: Container HOME is set to /tmp/brainsmith_dev_* for permission isolation
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -47,6 +47,9 @@ DOCKER_INST_NAME="brainsmith_dev_${DOCKER_UNAME}_${BSMITH_DIR_HASH}"
 BSMITH_CONTAINER_DIR="/tmp/${DOCKER_INST_NAME}"
 DOCKER_INST_NAME="${DOCKER_INST_NAME,,}"
 
+# Common Docker environment arguments (shared between container create and exec)
+DOCKER_COMMON_ENV_ARGS="-e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} -e HOME=$BSMITH_CONTAINER_DIR"
+
 # ===== ENVIRONMENT DEFAULTS (Developers: override these as needed) =====
 
 # Essential paths - default to container-specific tmp directory for isolation
@@ -56,7 +59,6 @@ export BSMITH_DEPS_DIR="${BSMITH_DEPS_DIR:-$BSMITH_DIR/deps}"
 # Docker-specific control variables
 export BSMITH_DOCKER_RUN_AS_ROOT="${BSMITH_DOCKER_RUN_AS_ROOT:-0}"
 export BSMITH_DOCKER_PREBUILT="${BSMITH_DOCKER_PREBUILT:-0}"
-export BSMITH_DOCKER_USER_MOUNT="${BSMITH_DOCKER_USER_MOUNT:-0}"
 export BSMITH_DOCKER_NO_CACHE="${BSMITH_DOCKER_NO_CACHE:-0}"
 export BSMITH_DOCKER_GPU="${BSMITH_DOCKER_GPU:-0}"
 
@@ -83,11 +85,6 @@ if [ "$BSMITH_DEBUG" = "1" ]; then
     [ -n "$BSMITH_XILINX_PATH" ] && echo "[DEBUG]   BSMITH_XILINX_PATH=$BSMITH_XILINX_PATH"
 fi
 
-# Debug output for container name generation (only if BSMITH_DEBUG is set)
-debug() {
-    [ "${BSMITH_DEBUG:-0}" = "1" ] && echo "DEBUG: $1" >&2
-}
-
 # Docker-specific configuration (computed values, not from config file)
 # Handle Docker tag with CI fallback
 if [ -z "$BSMITH_DOCKER_TAG" ]; then
@@ -101,8 +98,6 @@ if [ -z "$BSMITH_DOCKER_TAG" ]; then
         BSMITH_DOCKER_TAG="microsoft/brainsmith:ci-$COMMIT_HASH"
     fi
 fi
-
-# GPU support is controlled by BSMITH_DOCKER_GPU environment variable
 
 # Validate Docker flags for security
 validate_docker_flags() {
@@ -302,26 +297,15 @@ create_container() {
         DOCKER_CMD+=" -v $BSMITH_DIR/.venv:$BSMITH_DIR/.venv"
     fi
 
-    # Mount user's ~/.brainsmith directory if requested
-    if [ "$BSMITH_DOCKER_USER_MOUNT" = "1" ]; then
-        if [ -d "$HOME/.brainsmith" ]; then
-            DOCKER_CMD+=" -v $HOME/.brainsmith:$HOME/.brainsmith"
-        else
-            # Create the directory if it doesn't exist
-            mkdir -p "$HOME/.brainsmith"
-            DOCKER_CMD+=" -v $HOME/.brainsmith:$HOME/.brainsmith"
-        fi
-        gecho "Mounting user's ~/.brainsmith directory"
-    fi
-
     # Essential environment variables
     DOCKER_CMD+=" -e BSMITH_BUILD_DIR=$BSMITH_BUILD_DIR"
     DOCKER_CMD+=" -e BSMITH_DIR=$BSMITH_DIR"
     DOCKER_CMD+=" -e BSMITH_DEPS_DIR=$BSMITH_DEPS_DIR"
     DOCKER_CMD+=" -e BSMITH_CONTAINER_DIR=$BSMITH_CONTAINER_DIR"
-    DOCKER_CMD+=" -e PYTHONUNBUFFERED=1"
-    DOCKER_CMD+=" -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true}"
     DOCKER_CMD+=" -e DOCKER_INST_NAME=$DOCKER_INST_NAME"
+    
+    # Common environment variables (shared with exec commands)
+    DOCKER_CMD+=" $DOCKER_COMMON_ENV_ARGS"
     
     # Setup control variables (for new entrypoint)
     DOCKER_CMD+=" -e BSMITH_SKIP_SETUP=${BSMITH_SKIP_SETUP:-0}"
@@ -353,8 +337,6 @@ create_container() {
 
         # Xilinx workarounds
         DOCKER_CMD+=" -e LD_PRELOAD=/lib/x86_64-linux-gnu/libudev.so.1"
-        DOCKER_CMD+=" -e XILINX_LOCAL_USER_DATA=no"
-        
         
         # Handle Xilinx license file/server
         if [ ! -z "$XILINXD_LICENSE_FILE" ]; then
@@ -529,7 +511,7 @@ exec_in_container() {
     done
 
     # Use entrypoint-exec.sh which handles environment setup
-    docker exec -e PYTHONUNBUFFERED=1 -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh bash -c "$CMD"
+    docker exec $DOCKER_COMMON_ENV_ARGS "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh bash -c "$CMD"
     return $?
 }
 
@@ -540,7 +522,7 @@ open_shell() {
     fi
 
     # Use exec entrypoint for interactive shell
-    docker exec -it -e BSMITH_PLUGINS_STRICT=${BSMITH_PLUGINS_STRICT:-true} "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh
+    docker exec -it $DOCKER_COMMON_ENV_ARGS "$DOCKER_INST_NAME" /usr/local/bin/entrypoint-exec.sh
 }
 
 show_logs() {
@@ -556,8 +538,6 @@ clean_build_artifacts() {
         gecho "Removing build directory: $BSMITH_BUILD_DIR"
         rm -rf "$BSMITH_BUILD_DIR"
     fi
-    
-    
     
     gecho "Build artifacts cleaned"
 }

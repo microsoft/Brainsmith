@@ -9,12 +9,24 @@
 # Python environment
 export PYTHONUNBUFFERED=1
 
+# Setup container directories (centralized location)
+setup_container_directories() {
+    # Create all required directories in HOME
+    mkdir -p "$HOME"/{.Xilinx,.cache,.local/bin} 2>/dev/null || true
+    
+    # Set Xilinx environment to avoid user-specific data
+    export XILINX_LOCAL_USER_DATA=no
+    export XILINX_USER_DATA_DIR="$HOME/.Xilinx"
+}
+
+# Call directory setup function
+setup_container_directories
+
 # Ensure python symlink exists (for compatibility)
 if [ ! -e /usr/bin/python ] && [ -e /usr/bin/python3 ]; then
     if [ -w /usr/bin ]; then
         ln -sf /usr/bin/python3 /usr/bin/python 2>/dev/null || true
     else
-        mkdir -p "$HOME/.local/bin" 2>/dev/null || true
         ln -sf /usr/bin/python3 "$HOME/.local/bin/python" 2>/dev/null || true
         export PATH="$HOME/.local/bin:$PATH"
     fi
