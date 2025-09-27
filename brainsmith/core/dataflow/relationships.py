@@ -212,13 +212,6 @@ class ValidationResult:
         
         return report
     
-    def get_error_summary(self) -> str:
-        """Get concise error summary"""
-        errors = [v for v in self.violations if v.severity == "error"]
-        if not errors:
-            return "No errors"
-        return "; ".join(v.message for v in errors)
-    
     def raise_if_invalid(self, kernel_name: str = ""):
         """Raise exception if validation failed"""
         if not self.is_valid:
