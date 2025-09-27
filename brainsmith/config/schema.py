@@ -76,16 +76,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         super().__init__(settings_cls)
         self.yaml_files = []
         
-        # Load user file first (lower priority)
-        if '_BRAINSMITH_USER_FILE' in os.environ:
-            self.yaml_files.append(Path(os.environ['_BRAINSMITH_USER_FILE']))
-        else:
-            # Check default user config location
-            user_file = Path.home() / ".brainsmith" / "config.yaml"
-            if user_file.exists():
-                self.yaml_files.append(user_file)
-        
-        # Load project file second (higher priority - will override user config)
+        # Check for explicit project file from loader
         if '_BRAINSMITH_PROJECT_FILE' in os.environ:
             self.yaml_files.append(Path(os.environ['_BRAINSMITH_PROJECT_FILE']))
         else:
@@ -93,6 +84,15 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
             project_file = self._find_project_yaml_file()
             if project_file:
                 self.yaml_files.append(project_file)
+        
+        # Check for user file from loader
+        if '_BRAINSMITH_USER_FILE' in os.environ:
+            self.yaml_files.append(Path(os.environ['_BRAINSMITH_USER_FILE']))
+        else:
+            # Check default user config location
+            user_file = Path.home() / ".brainsmith" / "config.yaml"
+            if user_file.exists():
+                self.yaml_files.append(user_file)
         
         # Load and merge all YAML files
         self._data = self._load_and_merge_yaml_files()
@@ -127,9 +127,8 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
     def _load_and_merge_yaml_files(self) -> Dict[str, Any]:
         """Load and merge multiple YAML files with proper priority.
         
-        Files are loaded in order with later files having higher priority.
-        Since we load user config first and project config second,
-        project config will override user config values.
+        Files are loaded in order with later files having higher priority
+        (project config overrides user config).
         """
         merged_data = {}
         
@@ -205,8 +204,7 @@ class BrainsmithConfig(BaseSettings):
     1. CLI arguments (passed to constructor) - HIGHEST
     2. Environment variables (BSMITH_* prefix)
     3. Project settings (brainsmith_settings.yaml)
-    4. User defaults (~/.brainsmith/config.yaml)
-    5. Built-in defaults (Field defaults) - LOWEST
+    4. Built-in defaults (Field defaults) - LOWEST
     
     Note: We only read BSMITH_* env vars, and only export FINN_* vars
     to avoid configuration feedback loops.
@@ -305,7 +303,7 @@ class BrainsmithConfig(BaseSettings):
         # Priority order in pydantic-settings: first source wins!
         # 1. Init settings (CLI/constructor args) - highest priority
         # 2. Environment variables (standard pydantic-settings behavior)
-        # 3. YAML files (custom source) - project config overrides user config
+        # 3. YAML files (custom source) - handles both user and project configs
         # 4. Field defaults (built into pydantic)
         return (
             init_settings,

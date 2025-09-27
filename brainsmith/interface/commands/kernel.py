@@ -30,7 +30,7 @@ from ..utils import console, error_exit, success, progress_spinner
               help='Additional RTL files to include (can specify multiple)')
 @click.option('--rtl-path', type=str,
               help='Colon-separated paths to search for RTL files')
-@click.option('--verbose', '-v', is_flag=True,
+@click.option('-v', '--verbose', is_flag=True,
               help='Enable verbose output')
 def kernel(rtl_file: Path, output_dir: Optional[Path], validate: bool, info: bool,
           artifacts: List[str], no_strict: bool, include_rtl: List[Path],

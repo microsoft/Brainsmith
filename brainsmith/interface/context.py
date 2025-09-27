@@ -78,6 +78,29 @@ class ApplicationContext:
             self.load_configuration()
         return self.config
     
+    def set_user_config_value(self, key: str, value: Any) -> None:
+        """Set a value in user configuration."""
+        # Load existing user config
+        data = {}
+        if self.user_config_path.exists():
+            data = load_yaml(self.user_config_path, expand_env_vars=False)
+        
+        # Handle nested keys
+        parts = key.split('.')
+        target = data
+        
+        for part in parts[:-1]:
+            if part not in target:
+                target[part] = {}
+            target = target[part]
+        
+        target[parts[-1]] = value
+        
+        # Save user config
+        dump_yaml(data, self.user_config_path, sort_keys=True)
+        
+        # Reload configuration to reflect changes
+        self.load_configuration()
     
     def export_environment(self, shell: str = "bash") -> str:
         """Export configuration as shell environment."""
