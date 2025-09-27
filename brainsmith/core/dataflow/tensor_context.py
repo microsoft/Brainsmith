@@ -58,12 +58,11 @@ class TensorContext:
         """
         inputs = []
         for tensor_name in node.input:
-            if tensor_name:  # Skip empty names
-                inputs.append(TensorInfo(
-                    name=tensor_name,
-                    shape=tuple(model.get_tensor_shape(tensor_name)),
-                    datatype=model.get_tensor_datatype(tensor_name)
-                ))
+            inputs.append(TensorInfo(
+                name=tensor_name,
+                shape=tuple(model.get_tensor_shape(tensor_name)),
+                datatype=model.get_tensor_datatype(tensor_name)
+            ))
         
         outputs = []
         for tensor_name in node.output:

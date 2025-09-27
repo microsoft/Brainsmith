@@ -131,7 +131,10 @@ class InterfaceSchema(BaseSchema):
                         severity="error"
                     ))
         
-        return ValidationResult(violations=violations)
+        result = ValidationResult()
+        for violation in violations:
+            result.add_violation(violation)
+        return result
     
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this interface's datatype.
@@ -184,7 +187,10 @@ class InputSchema(InterfaceSchema):
                         severity="error"
                     ))
         
-        return ValidationResult(violations=violations)
+        result = ValidationResult()
+        for violation in violations:
+            result.add_violation(violation)
+        return result
     
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this input's datatype.
@@ -468,7 +474,10 @@ class KernelSchema(BaseSchema):
         # Validate relationships
         violations.extend(self._validate_relationships())
         
-        return ValidationResult(violations=violations)
+        result = ValidationResult()
+        for violation in violations:
+            result.add_violation(violation)
+        return result
     
     def __repr__(self) -> str:
         """String representation of KernelSchema."""

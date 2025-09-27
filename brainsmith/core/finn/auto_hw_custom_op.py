@@ -7,24 +7,12 @@
 """
 Base class for automatic hardware custom operators.
 
-Uses cached kernel model state for performance while providing
-refresh mechanism via transforms.
+Uses the direct factory flow for clean model creation:
 
-Two-Phase Model Creation Flow:
+    KernelSchema + TensorContext + NodeAttrs → DirectFactory → KernelModel
 
-    KernelSchema (static)
-           │
-           ├─[Phase 1: nodeattr only]─→ ResolvedKernelConfig
-           │                                      │
-           │                                      ├─[Phase 2: + ModelWrapper]
-           │                                      ↓
-           │                            TensorContext + DataType resolver
-           │                                      │
-           │                                      ↓
-           └─────────────────────────────→ KernelModel (complete)
-
-Cache invalidation:
-  set_nodeattr() → refresh_nodeattr_config() → clears downstream caches
+This architecture eliminates intermediate objects and provides a direct
+path from inputs to model with all validation happening inside the factory.
 """
 
 from abc import ABC, abstractmethod
@@ -36,19 +24,16 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.core.dataflow import (
     KernelSchema,
-    ResolvedInterfaceConfig,
-    ResolvedKernelConfig,
-    TensorContext,
-    KernelModelFactory
+    KernelValidator,
+    TensorContext
 )
+from brainsmith.core.dataflow.direct_factory import DirectKernelFactory
 from brainsmith.core.dataflow.models import (
     KernelModel,
     InputModel,
     OutputModel,
-    create_kernel_model,
     update_kernel_stream_config
 )
-from brainsmith.core.dataflow.template_utils import resolve_template_params
 from brainsmith.core.dataflow.shape_utils import (
     create_folded_shape,
     calculate_stream_width
@@ -61,9 +46,9 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     """Base class for automatic hardware custom operators.
     
     Key features:
-    - Two-phase model creation separating nodeattr and ModelWrapper dependencies
+    - Clean contextualized model creation flow
     - Automatic cache invalidation on nodeattr changes
-    - Efficient partial updates when only nodeattrs change
+    - Comprehensive validation at each step
     
     Subclasses must:
     - Define kernel_schema class attribute with KernelSchema instance
@@ -82,7 +67,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     # =============================================================================
     
     def __init__(self, onnx_node, **kwargs):
-        """Initialize with three-level cache system."""
+        """Initialize with contextualized architecture."""
         super().__init__(onnx_node, **kwargs)
         
         if self.kernel_schema is None:
@@ -90,13 +75,14 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                 f"{self.__class__.__name__} must define kernel_schema class attribute"
             )
         
-        # Three levels of cache for two-phase model creation
-        self._resolved_config: Optional[ResolvedKernelConfig] = None
-        self._tensor_context: Optional[TensorContext] = None  
+        # Cache for model
         self._kernel_model: Optional[KernelModel] = None
         
         # Use compiled schema for optimized runtime operations
         self._compiled_schema: CompiledSchema = SchemaCompiler.compile(self.kernel_schema)
+        
+        # Validator for multi-phase validation
+        self._validator = KernelValidator()
     
     # =============================================================================
     # Public API - Model Access
@@ -119,39 +105,27 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     # Public API - Model Refresh
     # =============================================================================
     
-    def refresh_nodeattr_config(self) -> None:
-        """Update resolved config from current nodeattrs (Phase 1)."""
-        self._resolved_config = self._resolve_from_nodeattrs()
-        # Invalidate downstream caches
-        self._tensor_context = None
-        self._kernel_model = None
-    
     def refresh_kernel_model(self, model: ModelWrapper) -> None:
-        """Refresh complete kernel model with ModelWrapper info (Phase 2).
+        """Refresh kernel model using direct factory.
         
-        This should be called by transforms when shapes or types change.
+        Flow: Schema + TensorContext + NodeAttrs → DirectFactory → Model
         
         Args:
-            model: The global ModelWrapper instance (not cached)
+            model: The global ModelWrapper instance
         """
-        # Ensure we have resolved config
-        if self._resolved_config is None:
-            self.refresh_nodeattr_config()
+        # Create tensor context
+        tensor_context = TensorContext.from_model_wrapper(self.onnx_node, model)
         
-        # Extract tensor context
-        self._tensor_context = TensorContext.from_model_wrapper(
-            self.onnx_node, model
+        # Get all nodeattrs
+        nodeattrs = self._get_all_nodeattrs()
+        
+        # Direct creation - no intermediate objects
+        self._kernel_model = DirectKernelFactory.create_model(
+            self.kernel_schema,
+            tensor_context,
+            nodeattrs
         )
-        
-        # Build datatype resolver
-        datatype_resolver = self._build_datatype_resolver()
-        
-        # Create complete model using factory
-        self._kernel_model = KernelModelFactory.create_model(
-            self._resolved_config,
-            self._tensor_context,
-            datatype_resolver
-        )
+    
     
     # =============================================================================
     # Override - Nodeattr Management with Change Detection
@@ -167,29 +141,11 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         
         super().set_nodeattr(name, value)
         
-        # Check if this affects model - now O(1) lookup using compiled schema
+        # Check if this affects model
         if self._compiled_schema.is_model_affecting(name):
             if old_value != value:
-                # Use targeted invalidation for better performance
-                affected_caches = self._compiled_schema.get_affected_caches(name)
-                self._invalidate_caches(affected_caches)
-    
-    def _invalidate_caches(self, cache_names: Set[str]) -> None:
-        """Invalidate specific caches based on dependency analysis."""
-        if "resolved_config" in cache_names:
-            self._resolved_config = None
-        if "tensor_context" in cache_names:
-            self._tensor_context = None
-        if "kernel_model" in cache_names:
-            self._kernel_model = None
-        
-        # If resolved_config is invalidated, downstream caches must also be cleared
-        if "resolved_config" in cache_names:
-            self._tensor_context = None
-            self._kernel_model = None
-        # If tensor_context is invalidated, kernel_model must be cleared
-        elif "tensor_context" in cache_names:
-            self._kernel_model = None
+                # Clear cache
+                self._kernel_model = None
     
     # =============================================================================
     # Override - HWCustomOp Interface Methods (Delegating to Cached Model)
@@ -272,12 +228,10 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     
     def get_sdim_parameters(self):
         """Get SDIM configuration options."""
-        # Build from scratch each time
         params = {}
         
         for i, inp_schema in enumerate(self.kernel_schema.inputs):
             if hasattr(inp_schema, 'stream_tiling') and inp_schema.stream_tiling:
-                # This input supports streaming configuration
                 params[inp_schema.name] = {
                     "dimensions": len(inp_schema.stream_tiling),
                     "template": inp_schema.stream_tiling
@@ -319,115 +273,20 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         return total_bits * model.clock_freq_mhz / 8.0
     
     # =============================================================================
-    # Private - Phase 1: Configuration Resolution (nodeattr-only)
+    # Private - Helper Methods
     # =============================================================================
     
-    def _resolve_from_nodeattrs(self) -> ResolvedKernelConfig:
-        """Create resolved config from schema + nodeattrs."""
-        # Resolve each interface
-        inputs = []
-        for i, schema in enumerate(self.kernel_schema.inputs):
-            inputs.append(self._resolve_interface_config(schema, i, is_input=True))
+    def _get_all_nodeattrs(self) -> Dict[str, Any]:
+        """Get all nodeattrs as a dictionary."""
+        nodeattrs = {}
         
-        outputs = []
-        for i, schema in enumerate(self.kernel_schema.outputs):
-            outputs.append(self._resolve_interface_config(schema, i, is_input=False))
-        
-        # Extract parameters
-        parameters = self._extract_parameters()
-        
-        # Get clock frequency with default
-        try:
-            clock_freq_mhz = self.get_nodeattr("clock_freq_mhz")
-        except (AttributeError, Exception):
-            clock_freq_mhz = 100.0
-        
-        return ResolvedKernelConfig(
-            kernel_name=self.kernel_schema.name,
-            inputs=inputs,
-            outputs=outputs,
-            parameters=parameters,
-            clock_freq_mhz=clock_freq_mhz
-        )
-    
-    def _resolve_interface_config(
-        self,
-        schema,
-        position: int,
-        is_input: bool
-    ) -> ResolvedInterfaceConfig:
-        """Resolve interface configuration from schema and nodeattrs."""
-        # For inputs, handle stream_tiling
-        stream_params = None
-        if is_input and hasattr(schema, 'stream_tiling') and schema.stream_tiling:
-            stream_params = self._resolve_template_params(schema.stream_tiling)
-        
-        return ResolvedInterfaceConfig(
-            name=schema.name,
-            position=position,
-            block_params=self._resolve_template_params(schema.block_tiling or [":"]),
-            stream_params=stream_params,
-            datatype_attr=schema.get_datatype_attr(position),
-            is_weight=getattr(schema, 'is_weight', False),
-            optional=schema.optional
-        )
-    
-    def _resolve_template_params(
-        self,
-        template: List[Union[int, str]]
-    ) -> List[Union[int, str]]:
-        """Resolve nodeattr references in template to their values."""
-        return resolve_template_params(
-            template, 
-            self.get_nodeattr,
-            self.get_nodeattr_types()
-        )
-    
-    def _extract_parameters(self) -> Dict[str, Any]:
-        """Extract parameter values from nodeattrs using compiled schema."""
-        params = {}
-        
-        # Use compiled schema to get only parameters that actually exist
-        for param in self._compiled_schema.all_parameters:
-            # Skip datatype and performance parameters
-            if param.endswith("Datatype") or param == "clock_freq_mhz":
-                continue
-                
+        for name, (dtype, required, default, *_) in self.get_nodeattr_types().items():
             try:
-                value = self.get_nodeattr(param)
-                # Unwrap single-element lists
-                if isinstance(value, list) and len(value) == 1:
-                    value = value[0]
-                params[param] = value
+                value = self.get_nodeattr(name)
+                nodeattrs[name] = value
             except (AttributeError, Exception):
-                # Attribute not defined or not set
-                pass
+                if default is not None:
+                    nodeattrs[name] = default
         
-        return params
-    
-    # =============================================================================
-    # Private - Phase 2: DataType Resolution
-    # =============================================================================
-    
-    def _build_datatype_resolver(self) -> Dict[str, DataType]:
-        """Build mapping from datatype attr names to DataType values."""
-        resolver = {}
-        
-        # Resolve datatypes for all interfaces
-        for config in self._resolved_config.inputs + self._resolved_config.outputs:
-            if config.datatype_attr:
-                try:
-                    dtype_str = self.get_nodeattr(config.datatype_attr)
-                    if dtype_str:
-                        resolver[config.datatype_attr] = DataType[dtype_str]
-                except (AttributeError, Exception):
-                    # Datatype not set, will use default from tensor context
-                    pass
-        
-        return resolver
-    
-    # =============================================================================
-    # Private - Change Detection Support
-    # =============================================================================
-    
+        return nodeattrs
     

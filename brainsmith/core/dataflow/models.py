@@ -48,6 +48,8 @@ class InputModel:
     @property
     def streaming_bandwidth(self) -> int:
         """Elements streamed per cycle."""
+        if self.stream_dims is None:
+            return 1  # No streaming = 1 element at a time
         return prod(self.stream_dims)
     
     @property
@@ -58,8 +60,12 @@ class InputModel:
             total_blocks *= math.ceil(t / b)
         
         cycles_per_block = 1
-        for b, s in zip(self.block_dims, self.stream_dims):
-            cycles_per_block *= math.ceil(b / s)
+        if self.stream_dims is not None:
+            for b, s in zip(self.block_dims, self.stream_dims):
+                cycles_per_block *= math.ceil(b / s)
+        else:
+            # No streaming = process whole block at once
+            cycles_per_block = prod(self.block_dims)
         
         return total_blocks * cycles_per_block
     
