@@ -37,15 +37,11 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
                   help='Configuration file (overrides default locations)')
     @click.option('--build-dir', type=click.Path(path_type=Path),
                   help='Override build directory')
-    @click.option('--xilinx-path', type=click.Path(path_type=Path),
-                  help='Override Xilinx installation path')
-    @click.option('--xilinx-version', help='Override Xilinx version (e.g., 2024.2)')
     @click.option('--debug', is_flag=True, help='Enable debug mode')
     @click.version_option(package_name='brainsmith', prog_name=name)
     @click.pass_context
     def cli(ctx: click.Context, verbose: bool, config: Optional[Path], 
-            build_dir: Optional[Path], xilinx_path: Optional[Path],
-            xilinx_version: Optional[str], debug: bool):
+            build_dir: Optional[Path], debug: bool):
         """Brainsmith - Neural network hardware acceleration toolkit."""
         
         # Initialize application context
@@ -58,10 +54,6 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         # Apply overrides
         if build_dir:
             context.overrides['build_dir'] = str(build_dir)
-        if xilinx_path:
-            context.overrides['xilinx_path'] = str(xilinx_path)
-        if xilinx_version:
-            context.overrides['xilinx_version'] = xilinx_version
         
         # Load configuration
         context.load_configuration()
@@ -94,17 +86,18 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
     # Update docstring based on CLI type
     if name == 'smith':
         cli.help = """Smith - Operational commands for Brainsmith.
-        
+
 When invoked without a subcommand, runs design space exploration
 if model and blueprint arguments are provided."""
     else:
         cli.help = """Brainsmith - Neural network hardware acceleration toolkit.
-        
-Use 'smith' for streamlined access to operational commands (dse, kernel)."""
+
+Use 'smith' to create hardware designs and components."""
     
-    # Add operational commands (both CLIs)
-    for cmd_name, cmd in OPERATIONAL_COMMANDS.items():
-        cli.add_command(cmd, name=cmd_name)
+    # Add operational commands (smith CLI only)
+    if name == 'smith':
+        for cmd_name, cmd in OPERATIONAL_COMMANDS.items():
+            cli.add_command(cmd, name=cmd_name)
     
     # Add admin commands (brainsmith only)
     if include_admin:
@@ -116,9 +109,12 @@ Use 'smith' for streamlined access to operational commands (dse, kernel)."""
         @click.argument('args', nargs=-1, type=click.UNPROCESSED)
         @click.pass_context
         def smith(ctx: click.Context, args):
-            """Run smith operational commands with inherited settings.
+            """Create hardware designs and components.
             
-            This allows 'brainsmith --verbose smith dse model.onnx blueprint.yaml' syntax.
+            Provides access to dataflow accelerator and kernel generation tools.
+            Inherits configuration from parent brainsmith command.
+            
+            Example: brainsmith --verbose smith dse model.onnx blueprint.yaml
             """
             # Get the application context
             app_ctx = ctx.obj

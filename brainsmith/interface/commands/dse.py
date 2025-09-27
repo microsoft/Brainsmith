@@ -21,7 +21,8 @@ from ..utils import console, error_exit, success
 @click.pass_context
 def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[Path]) -> None:
     """Run design space exploration for neural network acceleration.
-    
+
+    \b
     MODEL: Path to ONNX model file
     BLUEPRINT: Path to Blueprint YAML file defining exploration strategy
     """
