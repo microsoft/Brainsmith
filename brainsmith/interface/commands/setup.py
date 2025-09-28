@@ -47,7 +47,7 @@ def confirm_removal(items: List[str], description: str, skip_confirm: bool = Fal
 
 @click.group()
 def setup():
-    """Install and configure Brainsmith dependencies."""
+    """Install and configure optional Brainsmith dependencies."""
     pass
 
 

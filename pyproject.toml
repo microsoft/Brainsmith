@@ -179,7 +179,6 @@ dataset-loading = {path = "deps/dataset-loading", develop = true}
 [tool.poetry.scripts]
 brainsmith = "brainsmith.interface.cli:brainsmith_main"
 smith = "brainsmith.interface.cli:smith_main"
-brainsmith-post-install = "brainsmith.core.post_install:main"
 
 [tool.poetry.group.dev]
 optional = false

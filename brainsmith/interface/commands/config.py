@@ -290,12 +290,6 @@ def config():
     """Manage Brainsmith configuration.
 
     \b
-    Available commands:
-      show    Display current configuration
-      export  Export configuration as shell environment
-      init    Create new configuration files
-
-    \b
     Configuration can be managed by editing YAML files directly:
       Project: ./brainsmith_settings.yaml
       User:    ~/.brainsmith/config.yaml
@@ -370,7 +364,6 @@ def init(ctx: ApplicationContext, user: bool, force: bool) -> None:
     """Initialize a new configuration file.
     
     By default creates project-level config (./brainsmith_settings.yaml).
-    Use --user to create user-level config (~/.brainsmith/config.yaml).
     """
     # Determine output path
     if user:
