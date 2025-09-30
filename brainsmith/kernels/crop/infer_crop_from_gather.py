@@ -69,16 +69,22 @@ class InferCropFromGather(Transformation):
                 # ensure that the output shape matches the expected output shape
                 output_shape = model.get_tensor_shape(n.output[0])
 
-                # assume that the indices input is an int64 scalar
+                # assume that the indices input is an int64 scalar or array
                 indices = model.get_initializer(n.input[1])
-                assert indices.dtype == np.int64, "Indices must be int64 scalar"
-                assert elements_are_consecutive(indices[0]), "Indices must be consecutive"
+                assert indices.dtype == np.int64, "Indices must be int64"
+                # Handle both scalar (0-d) and array cases
+                if indices.ndim == 0:
+                    # Single scalar index - always consecutive
+                    indices_to_check = np.array([indices.item()])
+                else:
+                    indices_to_check = indices
+                assert elements_are_consecutive(indices_to_check), "Indices must be consecutive"
 
                 # set the number of pixels to crop off each edge
                 width =  input_shape[-1]
                 assert width % self.simd == 0, "Width must be divisible by SIMD"
-                crop_north = int(np.min(indices))
-                crop_south = input_shape[axis] - int(np.max(indices)) - 1
+                crop_north = int(np.min(indices_to_check))
+                crop_south = input_shape[axis] - int(np.max(indices_to_check)) - 1
                 crop_east = 0
                 crop_west = 0
 
