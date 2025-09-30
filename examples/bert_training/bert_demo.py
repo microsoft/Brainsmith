@@ -73,7 +73,7 @@ def generate_reference_io(model, output_dir):
     # Generate input
     input_m = model_wrapper.graph.input[0]
     in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
+    in_tensor = np.random.randint(0, 1000, size=in_shape, dtype=np.int64)
     
     # Save input
     np.save(os.path.join(output_dir, "input.npy"), in_tensor)
