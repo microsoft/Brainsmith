@@ -145,6 +145,9 @@ def bert_streamlining_step(model, cfg):
         'AbsorbAddIntoMultiThreshold'
     ])
     
+    CollapseRepeatedOp = get_transform('CollapseRepeatedOp')
+    model = model.transform(CollapseRepeatedOp("Mul", lambda x, y: y * x))
+
     # Final cleanup
     InferDataTypes = get_transform('InferDataTypes')
     GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
