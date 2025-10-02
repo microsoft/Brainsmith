@@ -14,8 +14,13 @@ save_intermediate_models: true      # Save intermediate ONNX models
 finn_config:
   standalone_thresholds: true
   target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
-  folding_config_file: null         # Path to manual folding config JSON (optional)
   split_large_fifos: true
+  fifosim_n_inferences: 2         # Speed up FIFO sizing
+  verify_steps:
+    - "stitched_ip_rtlsim"
+  verify_save_rtlsim_waveforms: true
+  verify_save_full_context: true
+  verification_atol: 0.1
 
 design_space:
   # Inherit kernels from parent blueprint

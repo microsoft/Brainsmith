@@ -21,20 +21,10 @@ from pathlib import Path
 
 import numpy as np
 import onnx
-import torch
-from brevitas.graph.calibrate import calibration_mode
-from brevitas.graph.quantize import layerwise_quantize
-from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
-from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
 from onnxsim import simplify
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
 from qonnx.util.cleanup import cleanup
-from torch import nn
-from transformers import BertConfig, BertModel
-from transformers.utils.fx import symbolic_trace
-import brevitas.nn as qnn
-import brevitas.onnx as bo
 
 import custom_steps  # Import custom steps to trigger registration
 
@@ -47,11 +37,11 @@ warnings.simplefilter("ignore")
 
 
 def generate_bert_model(args):
-    """Generate quantized BERT model from HuggingFace with Brevitas quantization.
+    """Load BERT model from specified ONNX file."""
+    if not os.path.exists(args.model_path):
+        raise FileNotFoundError(f"Model file not found: {args.model_path}")
     
-    This matches the functionality from old end2end_bert.py::gen_initial_bert_model()
-    """
-    model = onnx.load("tinyBERT_1Layer_ptq_int8.onnx")
+    model = onnx.load(args.model_path)
     return model
 
 
@@ -170,11 +160,12 @@ def run_brainsmith_dse(model, args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Modern BERT FINN demo - Exact parity with old system using Brainsmith DSE'
+        description='BERT FINN demo using pre-trained ONNX model'
     )
     
     # Model configuration
     parser.add_argument('-o', '--output', help='Output build directory name', required=True)
+    parser.add_argument('-m', '--model', dest='model_path', help='Path to ONNX model file', required=True)
     parser.add_argument('-z', '--hidden_size', type=int, default=384, 
                        help='BERT hidden_size parameter')
     parser.add_argument('-n', '--num_attention_heads', type=int, default=12, 

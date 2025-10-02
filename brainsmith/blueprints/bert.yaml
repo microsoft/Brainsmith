@@ -21,6 +21,7 @@ design_space:
     - ElementwiseBinaryOperation
     - Shuffle
     - Crop 
+    - Lookup
     - HWSoftmax
     - Thresholding
     - MVAU
