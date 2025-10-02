@@ -20,6 +20,69 @@ from .utils import console, setup_logging
 logger = logging.getLogger(__name__)
 
 
+def _register_commands(cli: click.Group, name: str, include_admin: bool) -> None:
+    """Register appropriate commands to the CLI group.
+    
+    Args:
+        cli: Click group to register commands to
+        name: CLI name ('brainsmith' or 'smith')
+        include_admin: Whether to include administrative commands
+    """
+    # Add operational commands (smith CLI only)
+    if name == 'smith':
+        for cmd_name, cmd in OPERATIONAL_COMMANDS.items():
+            cli.add_command(cmd, name=cmd_name)
+    
+    # Add admin commands (brainsmith only)
+    if include_admin:
+        for cmd_name, cmd in ADMIN_COMMANDS.items():
+            cli.add_command(cmd, name=cmd_name)
+        
+        # Add smith as a subcommand for "brainsmith smith" invocation
+        cli.add_command(_create_smith_subcommand(), name='smith')
+
+
+def _create_smith_subcommand() -> click.Command:
+    """Create the smith subcommand for brainsmith CLI.
+    
+    Returns:
+        Click command that proxies to smith CLI
+    """
+    @click.command()
+    @click.argument('args', nargs=-1, type=click.UNPROCESSED)
+    @click.pass_context
+    def smith(ctx: click.Context, args):
+        """Create hardware designs and components.
+        
+        Provides access to dataflow accelerator and kernel generation tools.
+        Inherits configuration from parent brainsmith command.
+        
+        Example: brainsmith --verbose smith dse model.onnx blueprint.yaml
+        """
+        # Get the application context
+        app_ctx = ctx.obj
+        
+        # Create smith CLI and run with inherited context
+        smith_cli = create_cli('smith', include_admin=False)
+        
+        # Convert args to sys.argv format
+        original_argv = sys.argv
+        try:
+            sys.argv = ['smith'] + list(args)
+            
+            # Pass context through Click's obj
+            smith_cli(obj=app_ctx, standalone_mode=False)
+            
+        except SystemExit as e:
+            # Re-raise to preserve exit code
+            raise
+        finally:
+            # Restore original argv
+            sys.argv = original_argv
+    
+    return smith
+
+
 def create_cli(name: str, include_admin: bool = True) -> click.Group:
     """Factory to create CLI with appropriate commands.
     
@@ -94,48 +157,8 @@ if model and blueprint arguments are provided."""
 
 Use 'smith' to create hardware designs and components."""
     
-    # Add operational commands (smith CLI only)
-    if name == 'smith':
-        for cmd_name, cmd in OPERATIONAL_COMMANDS.items():
-            cli.add_command(cmd, name=cmd_name)
-    
-    # Add admin commands (brainsmith only)
-    if include_admin:
-        for cmd_name, cmd in ADMIN_COMMANDS.items():
-            cli.add_command(cmd, name=cmd_name)
-        
-        # Add smith as a subcommand for "brainsmith smith" invocation
-        @cli.command()
-        @click.argument('args', nargs=-1, type=click.UNPROCESSED)
-        @click.pass_context
-        def smith(ctx: click.Context, args):
-            """Create hardware designs and components.
-            
-            Provides access to dataflow accelerator and kernel generation tools.
-            Inherits configuration from parent brainsmith command.
-            
-            Example: brainsmith --verbose smith dse model.onnx blueprint.yaml
-            """
-            # Get the application context
-            app_ctx = ctx.obj
-            
-            # Create smith CLI and run with inherited context
-            smith_cli = create_cli('smith', include_admin=False)
-            
-            # Convert args to sys.argv format
-            original_argv = sys.argv
-            try:
-                sys.argv = ['smith'] + list(args)
-                
-                # Pass context through Click's obj
-                smith_cli(obj=app_ctx, standalone_mode=False)
-                
-            except SystemExit as e:
-                # Re-raise to preserve exit code
-                raise
-            finally:
-                # Restore original argv
-                sys.argv = original_argv
+    # Register commands based on CLI type
+    _register_commands(cli, name, include_admin)
     
     return cli
 
@@ -178,8 +201,6 @@ def smith_main() -> None:
         sys.exit(1)
 
 
-# For backwards compatibility
-main = smith_main
 
 
 if __name__ == "__main__":

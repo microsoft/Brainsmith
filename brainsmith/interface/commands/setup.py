@@ -524,19 +524,40 @@ def check() -> None:
 
 # Helper functions to check installation status
 def _is_cnpy_installed(deps_mgr) -> bool:
-    """Check if cnpy is installed."""
+    """Check if cnpy is installed.
+    
+    Args:
+        deps_mgr: DependencyManager instance
+        
+    Returns:
+        True if cnpy header file exists in expected location
+    """
     cnpy_dir = deps_mgr.deps_dir / "cnpy"
     return (cnpy_dir / "cnpy.h").exists()
 
 
 def _are_hlslib_headers_installed(deps_mgr) -> bool:
-    """Check if finn-hlslib headers are installed."""
+    """Check if finn-hlslib headers are installed.
+    
+    Args:
+        deps_mgr: DependencyManager instance
+        
+    Returns:
+        True if finn-hlslib testbench directory exists
+    """
     hlslib_dir = deps_mgr.deps_dir / "finn-hlslib"
     return (hlslib_dir / "tb").exists()
 
 
 def _is_finnxsim_built(deps_mgr) -> bool:
-    """Check if finn-xsim module is built."""
+    """Check if finn-xsim module is built.
+    
+    Args:
+        deps_mgr: DependencyManager instance (unused but kept for consistency)
+        
+    Returns:
+        True if finn.xsi module is available and functional
+    """
     from finn import xsi
     return xsi.is_available()
 

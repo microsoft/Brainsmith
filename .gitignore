@@ -8,6 +8,7 @@ examples/*/results/
 examples/*/checkpoints/
 examples/*/logs/
 examples/*/configs/
+*.onnx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
