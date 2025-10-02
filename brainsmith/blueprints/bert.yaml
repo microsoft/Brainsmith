@@ -23,7 +23,6 @@ design_space:
     - HWSoftmax
     - Thresholding
     - MVAU
-
   steps:
     - "qonnx_to_finn"  # custom_step_qonnx2finn
     # Topology optimization

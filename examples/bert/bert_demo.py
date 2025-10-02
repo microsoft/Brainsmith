@@ -66,12 +66,10 @@ def generate_bert_model(args):
         attn_implementation="sdpa",
         hidden_act="relu",
     )
-
     # Initialize model
     model = BertModel(config=config)
     model.to(dtype=dtype)
     model.eval()
-
     # Prepare inputs
     vocab_size = model.config.vocab_size
     seq_len = args.seqlen
@@ -107,7 +105,6 @@ def generate_bert_model(args):
             'return_quant_tensor': False
         }
     )
-
     # Attention quantization
     layerwise_compute_layer_map[qnn.ScaledDotProductAttention] = (
         qnn.QuantScaledDotProductAttention,
@@ -126,7 +123,6 @@ def generate_bert_model(args):
             'return_quant_tensor': False
         }
     )
-
     # Tanh quantization
     layerwise_compute_layer_map[nn.Tanh] = (
         qnn.QuantTanh,
@@ -174,13 +170,11 @@ def generate_bert_model(args):
     print(f"  - Model inputs: {[i.name for i in model.graph.input]}")
     print(f"  - Model outputs: {[o.name for o in model.graph.output]}")
     print(f"  - Number of nodes: {len(model.graph.node)}")
-
     return model
 
 
 def generate_reference_io(model, output_dir):
     """Generate reference input/output for verification.
-
     This matches custom_step_generate_reference_io from old bert.py
     """
     import finn.core.onnx_exec as oxe
@@ -250,13 +244,11 @@ def run_brainsmith_dse(model, args):
     debug_dir = os.path.join(args.output_dir, "debug_models")
     onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
     print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
-
     # Run cleanup
     cleanup(
         in_file=os.path.join(model_dir, "simp.onnx"),
         out_file=os.path.join(args.output_dir, "df_input.onnx")
     )
-
     # Save a copy of the cleaned model for visualization
     import shutil
     debug_dir = os.path.join(args.output_dir, "debug_models")
@@ -266,8 +258,8 @@ def run_brainsmith_dse(model, args):
         os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
     )
 
-    # Get static blueprint path
-    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
+    # Get blueprint path from args
+    blueprint_path = Path(__file__).parent / args.blueprint
 
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
@@ -276,7 +268,6 @@ def run_brainsmith_dse(model, args):
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
     )
-
     # Results are automatically logged by forge()
     # Just check if we succeeded
     stats = results.stats
@@ -291,7 +282,6 @@ def run_brainsmith_dse(model, args):
         if result.success and result.output_model:
             shutil.copy2(result.output_model, final_model_dst)
             break
-
     # Handle shell metadata (matches old hw_compiler.py)
     handover_file = os.path.join(args.output_dir, "stitched_ip", "shell_handover.json")
     if os.path.exists(handover_file):
@@ -300,7 +290,6 @@ def run_brainsmith_dse(model, args):
         handover["num_layers"] = args.num_hidden_layers
         with open(handover_file, "w") as fp:
             json.dump(handover, fp, indent=4)
-
     return results
 
 
@@ -334,7 +323,6 @@ def main():
     build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
     print(build_dir)
     args.output_dir = os.path.join(build_dir, args.output)
-
     print("=" * 70)
     print("BERT Demo Using Brainsmith DSE")
     print("=" * 70)
@@ -348,7 +336,6 @@ def main():
     print(f"  Blueprint: {args.blueprint}")
     print(f"  Output directory: {args.output_dir}")
     print("=" * 70)
-
     try:
         # Step 1: Generate BERT model
         print("\nStep 1: Generating quantized BERT model...")
@@ -362,7 +349,6 @@ def main():
         print("BUILD COMPLETED SUCCESSFULLY")
         print("=" * 70)
         print(f"Output directory: {args.output_dir}")
-
     except Exception as e:
         print(f"\nERROR: Build failed with error: {e}")
         raise
