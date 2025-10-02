@@ -404,10 +404,6 @@ def _register_backends(backends: List[Tuple[str, str, str, str]], framework: str
             original_class=class_path,
             description=f"{framework.upper()} {language.upper()} backend for {kernel}"
         )
-    logger.info(f"Registered {len(validated)} {framework} backends")
-    return len(validated)
-
-
 # FINN build steps - (name, function_path)
 FINN_STEPS = [
     ('qonnx_to_finn', 'finn.builder.build_dataflow_steps.step_qonnx_to_finn'),
