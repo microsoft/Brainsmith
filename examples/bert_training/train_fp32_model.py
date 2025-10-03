@@ -21,7 +21,7 @@ def create_tinybert_config():
     config = BertConfig(
         vocab_size=30522,
         hidden_size=384,
-        num_hidden_layers=1,
+        num_hidden_layers=6,
         num_attention_heads=12,
         intermediate_size=1536,
         hidden_act="relu",

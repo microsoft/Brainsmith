@@ -26,11 +26,10 @@ AVNET_BDF_URL="https://github.com/Avnet/bdf.git"
 XIL_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
-ONNXSCRIPT_URL="https://github.com/jsmonson/onnxscript.git"
 
 QONNX_COMMIT="9153395712b5617d38b058900c873c6fc522b343"
 FINN_COMMIT="bd9baeb7ddad0f613689f3be81df28067f8c1d9b"
-FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
+FINN_EXP_COMMIT="219909c8441372ad37eb2bc14ec2e0780ef61026"
 BREVITAS_COMMIT="b106358c4169d8a9b68cb2a531aa795417d74887"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
 HLSLIB_COMMIT="5c5ad631e3602a8dd5bd3399a016477a407d6ee7"
@@ -40,7 +39,6 @@ XIL_BDF_COMMIT="8cf4bb674a919ac34e3d99d8d71a9e60af93d14e"
 RFSOC4x2_BDF_COMMIT="13fb6f6c02c7dfd7e4b336b18b959ad5115db696"
 KV260_BDF_COMMIT="98e0d3efc901f0b974006bc4370c2a7ad8856c79"
 EXP_BOARD_FILES_MD5="226ca927a16ea4ce579f1332675e9e9a"
-ONNXSCRIPT_COMMIT="62c7110aba46554432ce8e82ba2d8a086bd6227c"
 
 QONNX_DIR="qonnx"
 FINN_DIR="finn"
@@ -53,7 +51,6 @@ AVNET_BDF_DIR="avnet-bdf"
 XIL_BDF_DIR="xil-bdf"
 RFSOC4x2_BDF_DIR="rfsoc4x2-bdf"
 KV260_SOM_BDF_DIR="kv260-som-bdf"
-ONNXSCRIPT_DIR="onnxscript"
 
 # Validate environment variables for licensed Xilinx tools
 if [ -z "$BSMITH_XILINX_PATH" ];then
@@ -162,7 +159,6 @@ fetch_repo $BREVITAS_URL $BREVITAS_COMMIT $BREVITAS_DIR
 fetch_repo $CNPY_URL $CNPY_COMMIT $CNPY_DIR
 fetch_repo $HLSLIB_URL $HLSLIB_COMMIT $HLSLIB_DIR
 fetch_repo $OMX_URL $OMX_COMMIT $OMX_DIR
-fetch_repo $ONNXSCRIPT_URL $ONNXSCRIPT_COMMIT $ONNXSCRIPT_DIR
 
 # Can skip downloading of board files entirely if desired
 if [ "$BSMITH_DOWNLOAD_BOARDS" == "1" ]; then
@@ -171,7 +167,7 @@ if [ "$BSMITH_DOWNLOAD_BOARDS" == "1" ]; then
     fetch_repo $XIL_BDF_URL $XIL_BDF_COMMIT $XIL_BDF_DIR
     fetch_repo $RFSOC4x2_BDF_URL $RFSOC4x2_BDF_COMMIT $RFSOC4x2_BDF_DIR
     fetch_repo $KV260_BDF_URL $KV260_BDF_COMMIT $KV260_SOM_BDF_DIR
-    
+
     # download extra board files and extract if needed
     if [ ! -d "$BSMITH_DIR/deps/board_files" ]; then
         fetch_board_files

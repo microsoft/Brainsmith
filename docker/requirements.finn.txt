@@ -3,6 +3,7 @@ torch==2.7.0
 torchvision==0.22.0
 torchaudio==2.7.0 --extra-index-url https://download.pytorch.org/whl/cu121
 # extra Python package dependencies (for testing and interaction)
+onnxscript==0.5.0
 pygments==2.14.0
 ipykernel==6.21.2
 markupsafe==2.0.1

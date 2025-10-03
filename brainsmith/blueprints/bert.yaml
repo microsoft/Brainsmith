@@ -25,7 +25,6 @@ design_space:
     - HWSoftmax
     - Thresholding
     - MVAU
-    
   steps:
     - "qonnx_to_finn"  # custom_step_qonnx2finn
     # Topology optimization
@@ -34,6 +33,7 @@ design_space:
     - "infer_kernels" # Brainsmith dynamic kernel inference
     - "create_dataflow_partition"
     - "specialize_layers"
+    - "loop_rolling"
     - "target_fps_parallelization"
     - "apply_folding_config"
     - "minimize_bit_width"
