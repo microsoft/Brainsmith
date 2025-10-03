@@ -12,7 +12,10 @@ from brevitas.quant import Int8ActPerTensorFloat, Uint8ActPerTensorFloat, Int8We
 from brevitas.graph import ModuleToModuleByInstance
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
-from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
+# from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
+from brevitas.graph import TorchFunctionalToModule
+from brevitas.nn import ScaledDotProductAttention
+import torch.nn.functional as F
 from transformers.utils.fx import symbolic_trace
 import argparse
 import os
@@ -30,6 +33,13 @@ from qonnx.transformation.general import (
     GiveUniqueNodeNames,
     GiveUniqueParameterTensors,
 )
+
+
+def replace_sdpa_with_quantizable_layers(model):
+    """Replace scaled dot product attention with quantizable version"""
+    fn_to_module_map = ((F.scaled_dot_product_attention, ScaledDotProductAttention),)
+    model = TorchFunctionalToModule(fn_to_module_map=fn_to_module_map).apply(model)
+    return model
 
 
 def create_tinybert_config():
@@ -224,7 +234,6 @@ def apply_qonnx_cleanup(model_path):
 
 def export_quantized_to_onnx(model, output_path, max_length=128):
     """Export quantized model to clean ONNX"""
-    
     device = next(model.parameters()).device
     model.eval()
     
@@ -234,7 +243,9 @@ def export_quantized_to_onnx(model, output_path, max_length=128):
     dummy_input = torch.ones(1, max_length, dtype=torch.long).to(device)
     
     from brevitas.export import export_qonnx
+    print(f"Attempting QONNX export with dynamo=True...")
     export_qonnx(wrapped_model, dummy_input, output_path, dynamo=True)
+    print(f"QONNX export successful")
     
     print(f"Quantized ONNX model saved to: {output_path}")
     cleaned_path = apply_qonnx_cleanup(output_path)

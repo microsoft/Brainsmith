@@ -18,7 +18,7 @@ finn_config:
   fifosim_n_inferences: 2         # Speed up FIFO sizing
   verify_steps:
     - "stitched_ip_rtlsim"
-  verify_save_rtlsim_waveforms: true
+  #verify_save_rtlsim_waveforms: true #This is really big
   verify_save_full_context: true
   verification_atol: 0.1
 
