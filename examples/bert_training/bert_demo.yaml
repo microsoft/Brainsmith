@@ -17,6 +17,7 @@ finn_config:
   split_large_fifos: true
   auto_fifo_depths: false
   fifosim_n_inferences: 2         # Speed up FIFO sizing
+  stitched_ip_gen_dcp: True
   folding_config_file: "Layers1_config.json"
   verify_steps:
     - "stitched_ip_rtlsim"
