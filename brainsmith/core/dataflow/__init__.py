@@ -50,9 +50,6 @@ from .resolved_config import ResolvedInterfaceConfig, ResolvedKernelConfig
 from .tensor_context import TensorContext, TensorInfo
 from .model_factory import KernelModelFactory
 
-# Schema compilation for performance
-from .schema_compiler import CompiledSchema, SchemaCompiler
-
 # Validation layer
 from .validation import (
     KernelValidator,
@@ -72,14 +69,6 @@ from .reactive import (
     reactive_method
 )
 
-# Datatype resolution
-from .datatype_resolver import (
-    DatatypeResolver,
-    ResolutionResult,
-    ResolutionSource,
-    create_datatype_resolver,
-    resolve_interface_datatypes
-)
 
 # Utility modules
 from . import template_utils
@@ -111,10 +100,7 @@ __all__ = [
     # Two-phase model creation
     'ResolvedInterfaceConfig', 'ResolvedKernelConfig',
     'TensorContext', 'TensorInfo', 'KernelModelFactory',
-    
-    # Schema compilation
-    'CompiledSchema', 'SchemaCompiler',
-    
+
     # Validation
     'KernelValidator', 'validate_kernel_schema', 'validate_kernel_config',
     'validate_kernel_model',
@@ -124,11 +110,7 @@ __all__ = [
     
     # Reactive cache management
     'ReactiveDict', 'ComputedProperty', 'ReactiveState', 'reactive_method',
-    
-    # Datatype resolution
-    'DatatypeResolver', 'ResolutionResult', 'ResolutionSource',
-    'create_datatype_resolver', 'resolve_interface_datatypes',
-    
+
     # Utility modules
     'template_utils', 'shape_utils',
 ]

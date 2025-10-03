@@ -284,13 +284,13 @@ class KernelBuilder:
         inputs = []
         for i, input_schema in enumerate(schema.inputs):
             inputs.append(self._resolve_interface(
-                input_schema, i, is_input=True, get_attr, get_attr_types
+                input_schema, i, True, get_attr, get_attr_types
             ))
-        
+
         outputs = []
         for i, output_schema in enumerate(schema.outputs):
             outputs.append(self._resolve_interface(
-                output_schema, i, is_input=False, get_attr, get_attr_types
+                output_schema, i, False, get_attr, get_attr_types
             ))
         
         # Extract parameters

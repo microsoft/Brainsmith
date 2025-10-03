@@ -162,10 +162,7 @@ def main():
     
     # Test targeted invalidation
     print("\nTargeted Invalidation Test:")
-    
-    # Set up initial state
-    op.refresh_nodeattr_config()
-    
+
     # Test clock_freq_mhz (should only affect kernel_model)
     start = time.time()
     op.set_nodeattr("clock_freq_mhz", 250.0)

@@ -6,202 +6,185 @@
 ############################################################################
 
 """
-Template resolution utilities for tiling specifications.
+Shape resolution utilities for block and stream tiling.
 
-This module provides utilities for working with tiling templates, including
-parameter extraction, validation, and resolution.
+This module provides focused utilities for resolving shape dimensions
+in the context of hardware tiling specifications.
 """
 
-from typing import List, Union, Set, Dict, Any, Tuple, Optional
+from typing import List, Union, Tuple, Dict, Any
 
 
-def extract_tiling_parameters(template: List[Union[int, str]]) -> Set[str]:
-    """Extract parameter names from a tiling template.
-    
-    Args:
-        template: Tiling template with literals, ":", and parameter names
-        
-    Returns:
-        Set of parameter names (excluding ":")
-        
-    Example:
-        >>> extract_tiling_parameters([1, "PE", ":", "SIMD"])
-        {"PE", "SIMD"}
+def resolve_shape_template(
+    template: List[Union[int, str]],
+    shape: Tuple[int, ...],
+    nodeattrs: Dict[str, Any]
+) -> Tuple[int, ...]:
     """
-    return {item for item in template if isinstance(item, str) and item != ":"}
+    Resolve a shape template against actual tensor shape and node attributes.
+
+    This is the primary function for resolving block and stream tiling dimensions.
+    It handles:
+    - ":" for full dimension
+    - Integer literals (only 1 allowed as singleton)
+    - String parameter names resolved from nodeattrs
+
+    Args:
+        template: Shape template with ":", 1, or parameter names
+        shape: Reference shape to resolve against
+        nodeattrs: Node attributes containing parameter values
+
+    Returns:
+        Resolved shape tuple
+
+    Raises:
+        ValueError: If resolution fails or constraints are violated
+    """
+    if not template:
+        raise ValueError("Shape template cannot be empty")
+
+    if len(template) > len(shape):
+        raise ValueError(
+            f"Template has {len(template)} dimensions but shape has only {len(shape)}"
+        )
+
+    # Left-pad with 1s if shape has more dimensions
+    padding = len(shape) - len(template)
+    result = [1] * padding
+
+    # Process each template element
+    for i, (tmpl_item, shape_dim) in enumerate(zip(template, shape[padding:])):
+        actual_idx = padding + i
+
+        if tmpl_item == ":":
+            # Full dimension
+            result.append(shape_dim)
+
+        elif tmpl_item == 1:
+            # Singleton literal (only 1 allowed)
+            result.append(1)
+
+        elif isinstance(tmpl_item, int):
+            # No other integer literals allowed
+            raise ValueError(
+                f"Dimension {actual_idx}: Only singleton literal (1) allowed, "
+                f"got {tmpl_item}. Use parameters for other values."
+            )
+
+        elif isinstance(tmpl_item, str):
+            # Parameter reference - must exist in nodeattrs
+            if tmpl_item not in nodeattrs:
+                raise ValueError(
+                    f"Dimension {actual_idx}: Parameter '{tmpl_item}' not found in nodeattrs"
+                )
+
+            value = nodeattrs[tmpl_item]
+
+            # Handle FINN's single-element list encoding
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
+
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Dimension {actual_idx}: Parameter '{tmpl_item}' has non-integer "
+                    f"value: {value}"
+                )
+
+            if value <= 0:
+                raise ValueError(
+                    f"Dimension {actual_idx}: Parameter '{tmpl_item}' must be positive, "
+                    f"got {value}"
+                )
+
+            if shape_dim % value != 0:
+                raise ValueError(
+                    f"Dimension {actual_idx}: Parameter '{tmpl_item}'={value} does not "
+                    f"evenly divide shape dimension {shape_dim}"
+                )
+
+            result.append(value)
+
+        else:
+            raise ValueError(
+                f"Dimension {actual_idx}: Invalid template item {tmpl_item!r} "
+                f"(type: {type(tmpl_item).__name__})"
+            )
+
+    return tuple(result)
+
+
+def validate_stream_divides_block(
+    stream_shape: Tuple[int, ...],
+    block_shape: Tuple[int, ...]
+) -> None:
+    """
+    Validate that stream dimensions evenly divide block dimensions.
+
+    Args:
+        stream_shape: Stream tiling dimensions
+        block_shape: Block tiling dimensions
+
+    Raises:
+        ValueError: If stream doesn't divide block evenly
+    """
+    if len(stream_shape) != len(block_shape):
+        raise ValueError(
+            f"Shape mismatch: stream has {len(stream_shape)} dims, "
+            f"block has {len(block_shape)} dims"
+        )
+
+    for i, (stream_dim, block_dim) in enumerate(zip(stream_shape, block_shape)):
+        if block_dim % stream_dim != 0:
+            raise ValueError(
+                f"Dimension {i}: Stream dim {stream_dim} does not evenly divide "
+                f"block dim {block_dim}"
+            )
 
 
 def resolve_template_params(
     template: List[Union[int, str]],
     param_getter: callable,
-    nodeattr_types: Optional[Dict[str, tuple]] = None
+    nodeattr_types: Dict[str, tuple] = None
 ) -> List[Union[int, str]]:
-    """Resolve nodeattr references in template to their values.
-    
+    """
+    Backward compatibility function for resolving template parameters.
+
+    This function is maintained for compatibility but should be replaced
+    with resolve_shape_template in new code.
+
     Args:
-        template: Template with nodeattr references
-        param_getter: Function to get parameter value by name
-        nodeattr_types: Optional dict of nodeattr type definitions
-        
+        template: Template with parameter references
+        param_getter: Function to get parameter values
+        nodeattr_types: Optional nodeattr type definitions
+
     Returns:
-        Resolved template with nodeattr values substituted
-        
-    Raises:
-        ValueError: If a required parameter is not found
+        Resolved template
     """
     resolved = []
     for item in template:
         if isinstance(item, str) and item != ":":
-            # This is a nodeattr reference
+            # Parameter reference
             try:
                 value = param_getter(item)
             except (AttributeError, Exception):
-                # Try to get from nodeattr_types default
+                # Try default from nodeattr_types
                 if nodeattr_types and item in nodeattr_types:
                     value = nodeattr_types[item][2]  # default value
                 else:
                     value = None
-                    
+
             if value is None:
-                raise ValueError(f"Nodeattr '{item}' not found")
-                
+                raise ValueError(f"Parameter '{item}' not found")
+
             # Handle FINN's list encoding
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
-                
+
             resolved.append(int(value))
         else:
             # Keep literals and ":" as-is
             resolved.append(item)
-            
+
     return resolved
-
-
-def validate_tiling_template(
-    template: List[Union[int, str]],
-    shape_len: int
-) -> List[str]:
-    """Validate a tiling template for consistency.
-    
-    Args:
-        template: Tiling template to validate
-        shape_len: Expected length of shape it will be applied to
-        
-    Returns:
-        List of validation errors (empty if valid)
-    """
-    errors = []
-    
-    if not template:
-        errors.append("Tiling template cannot be empty")
-        return errors
-    
-    if len(template) > shape_len:
-        errors.append(
-            f"Template has {len(template)} dimensions "
-            f"but shape has only {shape_len}"
-        )
-    
-    for i, item in enumerate(template):
-        if not isinstance(item, (int, str)):
-            errors.append(
-                f"Invalid tiling item {item!r} at position {i} - "
-                f"must be int or str"
-            )
-        elif isinstance(item, int) and item <= 0:
-            errors.append(
-                f"Invalid tiling value {item} at position {i} - "
-                f"must be positive"
-            )
-        elif isinstance(item, str) and item != ":" and not item.isidentifier():
-            errors.append(
-                f"Invalid parameter name '{item}' at position {i}"
-            )
-    
-    return errors
-
-
-def apply_tiling_to_shape(
-    resolved_template: List[Union[int, str]],
-    shape: Tuple[int, ...]
-) -> Tuple[int, ...]:
-    """Apply a resolved tiling template to a concrete shape.
-    
-    Args:
-        resolved_template: Template with all parameters resolved to values
-        shape: Shape to tile
-        
-    Returns:
-        Tuple of tiling dimensions
-        
-    Raises:
-        ValueError: If template cannot be applied to shape
-    """
-    if len(resolved_template) > len(shape):
-        raise ValueError(
-            f"Template has {len(resolved_template)} dimensions "
-            f"but shape has only {len(shape)}"
-        )
-    
-    # Left-pad result with 1s if shape has more dims
-    padding = len(shape) - len(resolved_template)
-    result = [1] * padding
-    
-    # Process each template item aligned to the right of shape
-    for i, (item, dim_size) in enumerate(zip(resolved_template, shape[padding:])):
-        actual_idx = padding + i
-        
-        if item == ":":
-            # Full dimension
-            result.append(dim_size)
-            
-        elif isinstance(item, int):
-            if item <= 0:
-                raise ValueError(
-                    f"Dimension {actual_idx}: Value must be positive, got {item}"
-                )
-            elif dim_size % item != 0:
-                raise ValueError(
-                    f"Dimension {actual_idx}: {item} does not evenly divide {dim_size}"
-                )
-            else:
-                result.append(item)
-        else:
-            # This should never happen after parameter resolution
-            raise ValueError(
-                f"Invalid template item at {i}: {item} (type: {type(item).__name__})"
-            )
-    
-    # Final validation
-    final_result = tuple(result)
-    for i, (tile, shape_dim) in enumerate(zip(final_result, shape)):
-        if shape_dim % tile != 0:
-            raise ValueError(
-                f"Dimension {i}: Tiling value {tile} does not evenly divide "
-                f"shape dimension {shape_dim}"
-            )
-    
-    return final_result
-
-
-def merge_tiling_templates(
-    block_template: List[Union[int, str]],
-    stream_template: List[Union[int, str]]
-) -> Dict[str, Set[str]]:
-    """Merge parameters from block and stream tiling templates.
-    
-    Args:
-        block_template: Block tiling template
-        stream_template: Stream tiling template
-        
-    Returns:
-        Dict with 'block_only', 'stream_only', and 'shared' parameter sets
-    """
-    block_params = extract_tiling_parameters(block_template)
-    stream_params = extract_tiling_parameters(stream_template)
-    
-    return {
-        'block_only': block_params - stream_params,
-        'stream_only': stream_params - block_params,
-        'shared': block_params & stream_params
-    }
