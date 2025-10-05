@@ -169,4 +169,4 @@ class SDIMParameterInfo:
     total_dimensions: int
     free_dimensions: List[int]
     constrained_dimensions: Dict[int, str]  # dim -> constraint type
-    block_dims: Shape
+    block_shape: Shape

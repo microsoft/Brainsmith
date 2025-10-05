@@ -165,53 +165,115 @@ class ParameterDependency:
 
 @dataclass
 class ConstraintViolation:
-    """Detailed information about a constraint violation"""
-    constraint_type: str  # "relationship", "constraint", "dependency"
-    constraint_name: str
-    description: str
-    expected: Any
-    actual: Any
+    """Detailed information about a constraint violation
+
+    Unified violation class supporting both detailed (expected/actual) and
+    simple (message-only) reporting styles.
+    """
+    constraint_type: str  # "relationship", "constraint", "dependency", etc.
+
+    # Message-based reporting (simple style)
+    message: Optional[str] = None
+
+    # Detailed reporting (structured style)
+    constraint_name: Optional[str] = None
+    description: Optional[str] = None
+    expected: Optional[Any] = None
+    actual: Optional[Any] = None
     suggestion: str = ""
-    
+
+    # Severity level
+    severity: str = "error"  # "error", "warning", "info"
+
+    # Additional context
+    details: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        """Ensure at least one reporting style is used"""
+        if not self.message and not self.constraint_name and not self.description:
+            raise ValueError("ConstraintViolation must have either message or constraint_name/description")
+
     def __str__(self) -> str:
         """Formatted error message"""
-        msg = f"{self.constraint_type.title()} violation: {self.constraint_name}\n"
-        msg += f"  Description: {self.description}\n"
-        msg += f"  Expected: {self.expected}\n"
-        msg += f"  Actual: {self.actual}"
-        if self.suggestion:
-            msg += f"\n  Suggestion: {self.suggestion}"
+        # Use detailed format if available
+        if self.constraint_name or (self.expected is not None and self.actual is not None):
+            msg = f"{self.constraint_type.title()} violation"
+            if self.constraint_name:
+                msg += f": {self.constraint_name}"
+            msg += "\n"
+
+            if self.description:
+                msg += f"  Description: {self.description}\n"
+            elif self.message:
+                msg += f"  Description: {self.message}\n"
+
+            if self.expected is not None:
+                msg += f"  Expected: {self.expected}\n"
+            if self.actual is not None:
+                msg += f"  Actual: {self.actual}"
+
+            if self.suggestion:
+                msg += f"\n  Suggestion: {self.suggestion}"
+
+            if self.details:
+                msg += f"\n  Details: {self.details}"
+        else:
+            # Use simple format
+            msg = f"[{self.severity.upper()}] {self.constraint_type}: {self.message}"
+            if self.details:
+                msg += f"\n  Details: {self.details}"
+
         return msg
 
 
 class ValidationResult:
-    """Result of constraint validation with detailed error reporting"""
-    
-    def __init__(self):
-        self.violations: List[ConstraintViolation] = []
-        self._is_valid = True
-    
+    """Result of constraint validation with detailed error reporting
+
+    Supports both constructor patterns:
+    - ValidationResult() - empty result, add violations later
+    - ValidationResult(violations=[...]) - initialize with violations
+    """
+
+    def __init__(self, violations: Optional[List[ConstraintViolation]] = None):
+        """Initialize validation result
+
+        Args:
+            violations: Optional list of violations to initialize with
+        """
+        self.violations: List[ConstraintViolation] = violations if violations is not None else []
+        self._is_valid = len(self.violations) == 0
+
     def add_violation(self, violation: ConstraintViolation):
         """Add a constraint violation"""
         self.violations.append(violation)
         self._is_valid = False
-    
+
     @property
     def is_valid(self) -> bool:
         """Check if validation passed"""
         return self._is_valid
-    
+
+    @property
+    def has_errors(self) -> bool:
+        """Check if result contains error-level violations"""
+        return any(v.severity == "error" for v in self.violations)
+
+    @property
+    def has_warnings(self) -> bool:
+        """Check if result contains warning-level violations"""
+        return any(v.severity == "warning" for v in self.violations)
+
     def get_detailed_report(self) -> str:
         """Get detailed validation report"""
         if self.is_valid:
             return "All constraints satisfied"
-        
+
         report = f"Validation failed with {len(self.violations)} violations:\n\n"
         for i, violation in enumerate(self.violations, 1):
             report += f"{i}. {violation}\n\n"
-        
+
         return report
-    
+
     def raise_if_invalid(self, kernel_name: str = ""):
         """Raise exception if validation failed"""
         if not self.is_valid:

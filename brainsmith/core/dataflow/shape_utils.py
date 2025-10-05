@@ -16,27 +16,27 @@ from typing import List, Tuple, Union
 
 
 def create_folded_shape(
-    tensor_dims: Tuple[int, ...],
-    block_dims: Tuple[int, ...]
+    tensor_shape: Tuple[int, ...],
+    block_shape: Tuple[int, ...]
 ) -> List[int]:
     """Create folded shape from tensor and block dimensions.
-    
+
     When a dimension is folded (block_dim < tensor_dim), it's split into
     two dimensions: [num_blocks, block_size].
-    
+
     Args:
-        tensor_dims: Full tensor dimensions
-        block_dims: Block tiling dimensions
-        
+        tensor_shape: Full tensor dimensions
+        block_shape: Block tiling dimensions
+
     Returns:
         List of folded dimensions
-        
+
     Example:
         >>> create_folded_shape((32, 64), (8, 64))
         [4, 8, 64]  # First dim folded: 32/8 = 4 blocks of size 8
     """
     folded = []
-    for tensor_dim, block_dim in zip(tensor_dims, block_dims):
+    for tensor_dim, block_dim in zip(tensor_shape, block_shape):
         if block_dim < tensor_dim:
             # Dimension is folded
             num_blocks = tensor_dim // block_dim
@@ -44,38 +44,38 @@ def create_folded_shape(
         else:
             # Dimension is not folded
             folded.append(tensor_dim)
-    
+
     return folded
 
 
 def unfold_shape(
     folded_shape: List[int],
-    block_dims: Tuple[int, ...]
+    block_shape: Tuple[int, ...]
 ) -> Tuple[int, ...]:
     """Reconstruct original tensor shape from folded shape.
-    
+
     Args:
         folded_shape: Folded shape with potentially split dimensions
-        block_dims: Block dimensions used for folding
-        
+        block_shape: Block dimensions used for folding
+
     Returns:
         Original tensor dimensions
     """
-    tensor_dims = []
+    tensor_shape = []
     folded_idx = 0
-    
-    for block_dim in block_dims:
+
+    for block_dim in block_shape:
         if folded_idx + 1 < len(folded_shape) and folded_shape[folded_idx + 1] == block_dim:
             # This was a folded dimension
             num_blocks = folded_shape[folded_idx]
-            tensor_dims.append(num_blocks * block_dim)
+            tensor_shape.append(num_blocks * block_dim)
             folded_idx += 2
         else:
             # This was not folded
-            tensor_dims.append(folded_shape[folded_idx])
+            tensor_shape.append(folded_shape[folded_idx])
             folded_idx += 1
-    
-    return tuple(tensor_dims)
+
+    return tuple(tensor_shape)
 
 
 def calculate_stream_width(
@@ -209,32 +209,32 @@ def merge_shapes(
 
 
 def compute_streaming_cycles(
-    tensor_dims: Tuple[int, ...],
-    block_dims: Tuple[int, ...],
-    stream_dims: Tuple[int, ...]
+    tensor_shape: Tuple[int, ...],
+    block_shape: Tuple[int, ...],
+    stream_shape: Tuple[int, ...]
 ) -> int:
     """Compute total cycles to stream a tensor.
-    
+
     Args:
-        tensor_dims: Full tensor dimensions
-        block_dims: Block tiling dimensions
-        stream_dims: Streaming dimensions
-        
+        tensor_shape: Full tensor dimensions
+        block_shape: Block tiling dimensions
+        stream_shape: Streaming dimensions
+
     Returns:
         Total number of cycles
     """
     import math
-    
+
     # Calculate number of blocks
     total_blocks = 1
-    for t, b in zip(tensor_dims, block_dims):
+    for t, b in zip(tensor_shape, block_shape):
         total_blocks *= math.ceil(t / b)
-    
+
     # Calculate cycles per block
     cycles_per_block = 1
-    for b, s in zip(block_dims, stream_dims):
+    for b, s in zip(block_shape, stream_shape):
         cycles_per_block *= math.ceil(b / s)
-    
+
     return total_blocks * cycles_per_block
 
 

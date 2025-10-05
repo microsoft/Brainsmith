@@ -108,27 +108,27 @@ class KernelModelFactory:
         final_datatype = datatype or tensor_info.datatype
         
         # Resolve block dimensions
-        block_dims = KernelModelFactory._resolve_tiling_params(
+        block_shape = KernelModelFactory._resolve_tiling_params(
             config.block_params,
             tensor_info.shape,
             parameters
         )
         
         # Resolve stream dimensions if present
-        stream_dims = block_dims  # Default to full block
+        stream_shape = block_shape  # Default to full block
         if config.stream_params:
-            stream_dims = KernelModelFactory._resolve_tiling_params(
+            stream_shape = KernelModelFactory._resolve_tiling_params(
                 config.stream_params,
-                block_dims,  # Stream tiles against block dims
+                block_shape,  # Stream tiles against block dims
                 parameters
             )
         
         return InputModel(
             name=config.name,
-            tensor_dims=tensor_info.shape,
-            block_dims=block_dims,
+            tensor_shape=tensor_info.shape,
+            block_shape=block_shape,
             datatype=final_datatype,
-            stream_dims=stream_dims,
+            stream_shape=stream_shape,
             is_weight=config.is_weight
         )
     
@@ -142,20 +142,19 @@ class KernelModelFactory:
         """Create OutputModel from config and tensor info."""
         # Use provided datatype or fall back to tensor datatype
         final_datatype = datatype or tensor_info.datatype
-        
+
         # Resolve block dimensions
-        block_dims = KernelModelFactory._resolve_tiling_params(
+        block_shape = KernelModelFactory._resolve_tiling_params(
             config.block_params,
             tensor_info.shape,
             parameters
         )
-        
+
         return OutputModel(
             name=config.name,
-            tensor_dims=tensor_info.shape,
-            block_dims=block_dims,
-            datatype=final_datatype,
-            streaming_rate=1  # Will be computed by kernel model
+            tensor_shape=tensor_info.shape,
+            block_shape=block_shape,
+            datatype=final_datatype
         )
     
     @staticmethod
