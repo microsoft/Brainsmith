@@ -45,72 +45,48 @@ from .models import (
     update_kernel_stream_config
 )
 
-# Two-phase model creation components
-from .resolved_config import ResolvedInterfaceConfig, ResolvedKernelConfig
+# Tensor context extraction
 from .tensor_context import TensorContext, TensorInfo
-from .model_factory import KernelModelFactory
 
 # Validation layer
 from .validation import (
     KernelValidator,
     validate_kernel_schema,
-    validate_kernel_config,
     validate_kernel_model
 )
 
-# Simplified factory pattern
-from .kernel_builder import KernelBuilder, build_kernel_model
-
-# Reactive cache management
-from .reactive import (
-    ReactiveDict,
-    ComputedProperty,
-    ReactiveState,
-    reactive_method
-)
-
-
 # Utility modules
 from . import template_utils
-from . import shape_utils
 
 
 
 __all__ = [
     # Core types
     'Shape',
-    
+
     # Relationships
     'DimensionRelationship', 'RelationType',
-    
+
     # QONNX types
     'DataType', 'BaseDataType',
-    
+
     # Constraint types
     'DatatypeConstraintGroup', 'validate_datatype_against_constraints',
-    
+
     # Core architecture
     'InputSchema', 'OutputSchema', 'KernelSchema',
-    
+
     # Immutable models and factory functions
     'InputModel', 'OutputModel', 'KernelModel',
     'create_kernel_model', 'create_input_model', 'create_output_model',
     'update_kernel_stream_config',
-    
-    # Two-phase model creation
-    'ResolvedInterfaceConfig', 'ResolvedKernelConfig',
-    'TensorContext', 'TensorInfo', 'KernelModelFactory',
+
+    # Tensor context extraction
+    'TensorContext', 'TensorInfo',
 
     # Validation
-    'KernelValidator', 'validate_kernel_schema', 'validate_kernel_config',
-    'validate_kernel_model',
-    
-    # Simplified factory
-    'KernelBuilder', 'build_kernel_model',
-    
-    # Reactive cache management
-    'ReactiveDict', 'ComputedProperty', 'ReactiveState', 'reactive_method',
+    'KernelValidator', 'validate_kernel_schema', 'validate_kernel_model',
 
     # Utility modules
-    'template_utils', 'shape_utils',
+    'template_utils',
 ]

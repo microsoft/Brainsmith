@@ -43,7 +43,6 @@ from brainsmith.core.dataflow import (
     validate_datatype_against_constraints,
     RelationType
 )
-from brainsmith.core.dataflow.template_utils import resolve_template_params
 from brainsmith.core.dataflow.types import prod
 
 

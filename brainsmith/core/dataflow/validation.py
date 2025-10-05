@@ -20,7 +20,6 @@ from abc import ABC, abstractmethod
 
 from .relationships import ValidationResult, ConstraintViolation, DimensionRelationship
 from .schemas import KernelSchema, InterfaceSchema
-from .resolved_config import ResolvedKernelConfig, ResolvedInterfaceConfig
 from .models import KernelModel, InputModel, OutputModel
 from .types import Shape
 from .tensor_context import TensorContext
@@ -76,116 +75,6 @@ class SchemaValidator:
                     severity="error"
                 ))
             interface_names.add(out.name)
-
-        return ValidationResult(violations=violations)
-
-
-class ConfigValidator:
-    """Validates resolved configurations."""
-
-    def __init__(self, schema: KernelSchema):
-        self.schema = schema
-
-    def validate(self, config: ResolvedKernelConfig) -> ValidationResult:
-        """Validate resolved configuration against schema."""
-        violations = []
-
-        # Validate config matches schema structure
-        if config.kernel_name != self.schema.name:
-            violations.append(ConstraintViolation(
-                constraint_type="config_schema_mismatch",
-                message=f"Config kernel name '{config.kernel_name}' doesn't match schema '{self.schema.name}'",
-                severity="error"
-            ))
-
-        # Validate interface counts
-        if len(config.inputs) != len(self.schema.inputs):
-            violations.append(ConstraintViolation(
-                constraint_type="interface_count",
-                message=f"Input count mismatch: config has {len(config.inputs)}, schema has {len(self.schema.inputs)}",
-                severity="error"
-            ))
-
-        if len(config.outputs) != len(self.schema.outputs):
-            violations.append(ConstraintViolation(
-                constraint_type="interface_count",
-                message=f"Output count mismatch: config has {len(config.outputs)}, schema has {len(self.schema.outputs)}",
-                severity="error"
-            ))
-
-        # Validate resolved parameters
-        param_result = self._validate_parameters(config.parameters)
-        violations.extend(param_result.violations)
-
-        # Validate each interface config
-        for i, inp_config in enumerate(config.inputs):
-            if i < len(self.schema.inputs):
-                interface_result = self._validate_interface_config(
-                    inp_config, self.schema.inputs[i], f"input[{i}]"
-                )
-                violations.extend(interface_result.violations)
-
-        for i, out_config in enumerate(config.outputs):
-            if i < len(self.schema.outputs):
-                interface_result = self._validate_interface_config(
-                    out_config, self.schema.outputs[i], f"output[{i}]"
-                )
-                violations.extend(interface_result.violations)
-
-        return ValidationResult(violations=violations)
-
-    def _validate_interface_config(
-        self,
-        config: ResolvedInterfaceConfig,
-        schema: InterfaceSchema,
-        context: str
-    ) -> ValidationResult:
-        """Validate interface configuration against schema."""
-        violations = []
-
-        # Name must match
-        if config.name != schema.name:
-            violations.append(ConstraintViolation(
-                constraint_type="interface_name",
-                message=f"{context}: Name mismatch - config '{config.name}' vs schema '{schema.name}'",
-                severity="error"
-            ))
-
-        # Validate resolved tiling parameters
-        if config.block_params:
-            for i, param in enumerate(config.block_params):
-                if not isinstance(param, int) or param <= 0:
-                    violations.append(ConstraintViolation(
-                        constraint_type="tiling_parameter",
-                        message=f"{context}.block_params[{i}]: Must be positive integer, got {param}",
-                        severity="error"
-                    ))
-
-        if config.stream_params:
-            for i, param in enumerate(config.stream_params):
-                if not isinstance(param, int) or param <= 0:
-                    violations.append(ConstraintViolation(
-                        constraint_type="tiling_parameter",
-                        message=f"{context}.stream_params[{i}]: Must be positive integer, got {param}",
-                        severity="error"
-                    ))
-
-        return ValidationResult(violations=violations)
-
-    def _validate_parameters(self, parameters: Dict[str, Any]) -> ValidationResult:
-        """Validate kernel parameters."""
-        violations = []
-
-        # Check for required parameters based on schema
-        # This would be expanded based on actual parameter requirements
-
-        for name, value in parameters.items():
-            if value is None:
-                violations.append(ConstraintViolation(
-                    constraint_type="parameter_value",
-                    message=f"Parameter '{name}' cannot be None",
-                    severity="warning"
-                ))
 
         return ValidationResult(violations=violations)
 
@@ -360,11 +249,6 @@ class KernelValidator:
         """Compile-time schema validation."""
         return self._schema_validator.validate(schema)
 
-    def validate_config(self, config: ResolvedKernelConfig, schema: KernelSchema) -> ValidationResult:
-        """Phase 1 validation (nodeattrs)."""
-        config_validator = ConfigValidator(schema)
-        return config_validator.validate(config)
-
     def validate_model(
         self,
         model: KernelModel,
@@ -375,42 +259,12 @@ class KernelValidator:
         model_validator = ModelValidator(schema)
         return model_validator.validate(model, tensor_context)
 
-    def validate_full_pipeline(
-        self,
-        schema: KernelSchema,
-        config: ResolvedKernelConfig,
-        model: KernelModel,
-        tensor_context: TensorContext
-    ) -> ValidationResult:
-        """Validate entire pipeline and collect all violations."""
-        all_violations = []
-
-        # Schema validation
-        schema_result = self.validate_schema(schema)
-        all_violations.extend(schema_result.violations)
-
-        # Config validation
-        config_result = self.validate_config(config, schema)
-        all_violations.extend(config_result.violations)
-
-        # Model validation
-        model_result = self.validate_model(model, schema, tensor_context)
-        all_violations.extend(model_result.violations)
-
-        return ValidationResult(violations=all_violations)
-
 
 # Convenience functions for common validation tasks
 def validate_kernel_schema(schema: KernelSchema) -> ValidationResult:
     """Validate a kernel schema."""
     validator = KernelValidator()
     return validator.validate_schema(schema)
-
-
-def validate_kernel_config(config: ResolvedKernelConfig, schema: KernelSchema) -> ValidationResult:
-    """Validate a resolved kernel configuration."""
-    validator = KernelValidator()
-    return validator.validate_config(config, schema)
 
 
 def validate_kernel_model(
