@@ -10,12 +10,12 @@ Immutable kernel models for the dataflow system.
 
 These models represent runtime instances created from schemas. They are
 immutable snapshots that reflect the current state of nodeattrs at creation
-time. Models should always be created fresh to avoid staleness.
+time. Models are cached and refreshed when nodeattrs change.
 
 Key principles:
 - All models are immutable (frozen dataclasses)
-- Create fresh models for each use via factory functions
-- Never store model instances - always recreate from current state
+- Models are cached for performance
+- Refresh cached models when nodeattrs change
 """
 
 from dataclasses import dataclass, field
@@ -43,17 +43,8 @@ class InputModel:
     tensor_shape: Shape
     block_shape: Shape
     datatype: BaseDataType
-
-    # Streaming configuration
     stream_shape: Shape
-
-    # Optional properties
     is_weight: bool = False
-    
-    @property
-    def streaming_bandwidth(self) -> int:
-        """Elements streamed per cycle."""
-        return prod(self.stream_shape)
 
     @property
     def tensor_folding_factor(self) -> int:
@@ -75,6 +66,11 @@ class InputModel:
     def initiation_interval(self) -> int:
         """Cycles to stream entire tensor."""
         return self.tensor_folding_factor * self.block_folding_factor
+
+    @property
+    def streaming_bandwidth(self) -> int:
+        """Elements streamed per cycle."""
+        return prod(self.stream_shape)
 
     @property
     def stream_width_bits(self) -> int:
@@ -112,12 +108,9 @@ class OutputModel:
 @dataclass(frozen=True)
 class KernelModel:
     """Immutable kernel model representing a configured kernel instance.
-    
+
     This model is a snapshot of a kernel's configuration at a point in time.
-    It should be created fresh whenever needed to ensure it reflects current
-    nodeattr values.
-    
-    Create via create_kernel_model() factory function.
+    Models are cached and refreshed when nodeattrs change.
     """
     
     # Kernel identity
@@ -126,9 +119,6 @@ class KernelModel:
     # Interface models
     inputs: Tuple[InputModel, ...]
     outputs: Tuple[OutputModel, ...]
-    
-    # Resolved parameter values
-    parameters: Dict[str, Any] = field(default_factory=dict)
     
     # Performance characteristics
     latency_cycles: Tuple[int, int] = (1, 1)
@@ -211,6 +201,42 @@ class KernelModel:
             stream_shape[-1] = rate
         return tuple(stream_shape)
 
+    # =========================================================================
+    # Unified Accessor Methods
+    # =========================================================================
+
+    def input_datatype(self, ind: int = 0) -> BaseDataType:
+        """Get input datatype."""
+        return self.inputs[ind].datatype
+
+    def output_datatype(self, ind: int = 0) -> BaseDataType:
+        """Get output datatype."""
+        return self.outputs[ind].datatype
+
+    def input_tensor_shape(self, ind: int = 0) -> Shape:
+        """Get input tensor shape."""
+        return self.inputs[ind].tensor_shape
+
+    def output_tensor_shape(self, ind: int = 0) -> Shape:
+        """Get output tensor shape."""
+        return self.outputs[ind].tensor_shape
+
+    def input_block_shape(self, ind: int = 0) -> Shape:
+        """Get input block shape."""
+        return self.inputs[ind].block_shape
+
+    def output_block_shape(self, ind: int = 0) -> Shape:
+        """Get output block shape."""
+        return self.outputs[ind].block_shape
+
+    def input_stream_shape(self, ind: int = 0) -> Shape:
+        """Get input stream shape."""
+        return self.inputs[ind].stream_shape
+
+    def input_stream_width_bits(self, ind: int = 0) -> int:
+        """Get input stream width in bits."""
+        return self.inputs[ind].stream_width_bits
+
     @property
     def throughput_fps(self) -> float:
         """Throughput in inferences per second."""
@@ -219,169 +245,3 @@ class KernelModel:
         return clock_hz / cycles_per_inf
 
 
-# Factory functions for creating models
-
-def create_input_model(
-    name: str,
-    tensor_shape: Tuple[int, ...],
-    block_shape: Tuple[int, ...],
-    datatype: BaseDataType,
-    stream_shape: Tuple[int, ...],
-    is_weight: bool = False
-) -> InputModel:
-    """Factory function to create an InputModel.
-
-    Args:
-        name: Interface name
-        tensor_shape: Full tensor dimensions
-        block_shape: Block tiling dimensions
-        datatype: Data type
-        stream_shape: Streaming dimensions per cycle
-        is_weight: Whether this is a weight input
-
-    Returns:
-        Immutable InputModel instance
-    """
-    return InputModel(
-        name=name,
-        tensor_shape=tensor_shape,
-        block_shape=block_shape,
-        datatype=datatype,
-        stream_shape=stream_shape,
-        is_weight=is_weight
-    )
-
-
-def create_output_model(
-    name: str,
-    tensor_shape: Tuple[int, ...],
-    block_shape: Tuple[int, ...],
-    datatype: BaseDataType,
-    streaming_rate: int = None  # Deprecated, ignored
-) -> OutputModel:
-    """Factory function to create an OutputModel.
-
-    Args:
-        name: Interface name
-        tensor_shape: Full tensor dimensions
-        block_shape: Block tiling dimensions
-        datatype: Data type
-        streaming_rate: DEPRECATED - Ignored. Streaming rate is computed by KernelModel.
-
-    Returns:
-        Immutable OutputModel instance
-    """
-    if streaming_rate is not None:
-        import warnings
-        warnings.warn(
-            "streaming_rate parameter is deprecated. Output streaming is computed by KernelModel.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-    return OutputModel(
-        name=name,
-        tensor_shape=tensor_shape,
-        block_shape=block_shape,
-        datatype=datatype
-    )
-
-
-def create_kernel_model(
-    name: str,
-    inputs: List[InputModel],
-    outputs: List[OutputModel],
-    parameters: Optional[Dict[str, Any]] = None,
-    **kwargs
-) -> KernelModel:
-    """Factory function to create a KernelModel.
-
-    Args:
-        name: Kernel name
-        inputs: List of InputModel instances
-        outputs: List of OutputModel instances (will NOT be mutated)
-        parameters: Resolved parameter values (e.g., CHANNELS, PE)
-        **kwargs: Performance characteristics (clock_freq_mhz, etc.)
-
-    Returns:
-        Immutable KernelModel instance
-    """
-    return KernelModel(
-        name=name,
-        inputs=tuple(inputs),
-        outputs=tuple(outputs),
-        parameters=parameters or {},
-        **kwargs
-    )
-
-
-def update_kernel_stream_config(
-    kernel: KernelModel,
-    stream_config: Dict[str, Union[int, List[int]]]
-) -> KernelModel:
-    """Create new KernelModel with updated streaming configuration.
-
-    This function creates a new immutable KernelModel with updated stream_shape
-    values for the specified inputs.
-
-    Args:
-        kernel: Original KernelModel
-        stream_config: Maps input names to new stream dimensions
-
-    Returns:
-        New KernelModel with updated configuration
-    """
-    updated_inputs = []
-
-    for inp in kernel.inputs:
-        if inp.name in stream_config:
-            stream_spec = stream_config[inp.name]
-
-            # Convert spec to shape
-            if isinstance(stream_spec, int):
-                # Uniform streaming
-                new_stream_shape = tuple(
-                    min(stream_spec, b) for b in inp.block_shape
-                )
-            else:
-                new_stream_shape = tuple(stream_spec)
-
-            # Validate dimensions
-            if len(new_stream_shape) != len(inp.block_shape):
-                raise ValueError(
-                    f"Stream shape {len(new_stream_shape)} must match "
-                    f"block shape {len(inp.block_shape)} for input '{inp.name}'"
-                )
-
-            for i, (s, b) in enumerate(zip(new_stream_shape, inp.block_shape)):
-                if s <= 0:
-                    raise ValueError(f"Stream shape[{i}]={s} must be positive")
-                if s > b:
-                    raise ValueError(
-                        f"Stream shape[{i}]={s} exceeds block shape {b} "
-                        f"for input '{inp.name}'"
-                    )
-
-            # Create new input with updated stream shape
-            updated_inp = create_input_model(
-                inp.name,
-                inp.tensor_shape,
-                inp.block_shape,
-                inp.datatype,
-                new_stream_shape,
-                is_weight=inp.is_weight
-            )
-            updated_inputs.append(updated_inp)
-        else:
-            updated_inputs.append(inp)
-
-    # Create new kernel with updated inputs
-    return create_kernel_model(
-        kernel.name,
-        updated_inputs,
-        list(kernel.outputs),
-        kernel.parameters,
-        latency_cycles=kernel.latency_cycles,
-        pipeline_depth=kernel.pipeline_depth,
-        clock_freq_mhz=kernel.clock_freq_mhz
-    )

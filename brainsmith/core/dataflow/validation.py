@@ -107,6 +107,10 @@ class ModelValidator:
         shape_result = self._validate_shapes(model, tensor_context)
         violations.extend(shape_result.violations)
 
+        # Validate dimension constraints (NEW)
+        constraint_result = self._validate_dimension_constraints(model)
+        violations.extend(constraint_result.violations)
+
         # Validate performance metrics
         perf_result = self._validate_performance(model)
         violations.extend(perf_result.violations)
@@ -234,6 +238,58 @@ class ModelValidator:
                     severity="warning",
                     expected="> 0",
                     actual=streaming_rate
+                ))
+
+        return ValidationResult(violations=violations)
+
+    def _validate_dimension_constraints(self, model: KernelModel) -> ValidationResult:
+        """Validate dimension constraints on interfaces.
+
+        Validates both:
+        1. Per-interface atomic constraints (from InterfaceSchema.dimension_constraints)
+        2. Cross-interface relationship constraints (from KernelSchema.relationships)
+
+        Args:
+            model: KernelModel to validate
+
+        Returns:
+            ValidationResult with constraint violations
+        """
+        violations = []
+
+        # Build context for constraint evaluation
+        # Context contains interface models and would contain nodeattrs if available
+        context = {inp.name: inp for inp in model.inputs}
+        context.update({out.name: out for out in model.outputs})
+
+        # 1. Validate per-interface dimension constraints
+        for i, inp in enumerate(model.inputs):
+            schema = self.schema.inputs[i]
+            for constraint in schema.dimension_constraints:
+                result = constraint.validate_with_context(context)
+                violations.extend(result.violations)
+
+        for i, out in enumerate(model.outputs):
+            schema = self.schema.outputs[i]
+            for constraint in schema.dimension_constraints:
+                result = constraint.validate_with_context(context)
+                violations.extend(result.violations)
+
+        # 2. Validate cross-interface relationships via their constraints
+        for relationship in self.schema.relationships:
+            # Get constraints from relationship
+            try:
+                constraints = relationship.get_constraints()
+                for constraint in constraints:
+                    result = constraint.validate_with_context(context)
+                    violations.extend(result.violations)
+            except Exception as e:
+                # If constraint generation fails, fall back to legacy evaluate()
+                violations.append(ConstraintViolation(
+                    constraint_type="constraint_generation",
+                    message=f"Failed to generate constraints from relationship: {str(e)}",
+                    severity="warning",
+                    details={"relationship": relationship.describe()}
                 ))
 
         return ValidationResult(violations=violations)

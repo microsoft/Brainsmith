@@ -40,12 +40,11 @@ class TensorContext:
     inputs[i] corresponds to node.input[i]
     outputs[i] corresponds to node.output[i]
 
-    Optional/missing inputs are represented as None.
-    This preserves the positional correspondence between schema and ONNX node.
+    Optional inputs (empty strings in ONNX) are represented as None.
     """
 
     inputs: List[Optional[TensorInfo]]
-    outputs: List[Optional[TensorInfo]]
+    outputs: List[TensorInfo]  # Outputs are never optional in ONNX
 
     @staticmethod
     def from_model_wrapper(node, model: ModelWrapper) -> 'TensorContext':

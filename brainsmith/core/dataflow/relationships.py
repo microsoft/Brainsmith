@@ -9,21 +9,28 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Union, Optional, List, Callable
+from typing import Dict, Any, Union, Optional, List, Callable, TYPE_CHECKING
 from abc import ABC, abstractmethod
+
+if TYPE_CHECKING:
+    from .dimension_constraints import DimensionConstraint
 
 
 class RelationType(Enum):
     """Types of relationships between interface dimensions
-    
+
     Simplified to only include actively used relationship types:
     - EQUAL: Dimensions must be exactly equal
-    - DEPENDENT: Target dimension depends on source (with optional scaling)
-    - MULTIPLE: Target is a multiple of source (kept for future use)
+    - DIVISIBLE: Target must be divisible by source
+    - SCALED: Target equals source * factor
+    - DEPENDENT: Target dimension depends on source (with optional scaling) [DEPRECATED: use SCALED]
+    - MULTIPLE: Target is a multiple of source [DEPRECATED: use SCALED]
     """
     EQUAL = "equal"
-    MULTIPLE = "multiple"
-    DEPENDENT = "dependent"  # Dimension-specific dependency
+    DIVISIBLE = "divisible"
+    SCALED = "scaled"
+    MULTIPLE = "multiple"  # Deprecated: use SCALED
+    DEPENDENT = "dependent"  # Deprecated: use SCALED or EQUAL
 
 
 @dataclass(frozen=True)
@@ -119,12 +126,117 @@ class DimensionRelationship:
         # Evaluate relationship
         if self.relation == RelationType.EQUAL:
             return src_val == tgt_val
+        elif self.relation == RelationType.DIVISIBLE:
+            return tgt_val % src_val == 0
+        elif self.relation == RelationType.SCALED:
+            return tgt_val == src_val * self.factor
         elif self.relation == RelationType.MULTIPLE:
+            # Deprecated: MULTIPLE means source == factor * target
             return src_val == self.factor * tgt_val
         elif self.relation == RelationType.DEPENDENT:
             # For DEPENDENT, we validate during SDIM propagation
             # Here we just return True as it's a valid relationship type
             return True
+        else:
+            raise ValueError(f"Unknown relation type: {self.relation}")
+
+    def get_constraints(self) -> List['DimensionConstraint']:
+        """Generate atomic constraints from this relationship.
+
+        Relationships are convenience mechanisms that generate one or more
+        dimension constraints. This method converts the relationship into
+        its constituent constraints.
+
+        Returns:
+            List of DimensionConstraints that enforce this relationship
+        """
+        from .dimension_constraints import (
+            EqualityConstraint,
+            DivisibleByDimensionConstraint,
+            ScaledEqualityConstraint
+        )
+
+        if self.relation == RelationType.EQUAL:
+            # source[i] == target[j]
+            return [
+                EqualityConstraint(
+                    source_interface=self.source_interface,
+                    source_dim=self.source_dim,
+                    target_interface=self.target_interface,
+                    target_dim=self.target_dim
+                )
+            ]
+
+        elif self.relation == RelationType.DIVISIBLE:
+            # target[j] % source[i] == 0
+            return [
+                DivisibleByDimensionConstraint(
+                    interface_name=self.target_interface,
+                    dim_index=self.target_dim,
+                    divisor_interface=self.source_interface,
+                    divisor_dim=self.source_dim
+                )
+            ]
+
+        elif self.relation == RelationType.SCALED:
+            # target[j] == source[i] * factor
+            return [
+                ScaledEqualityConstraint(
+                    target_interface=self.target_interface,
+                    target_dim=self.target_dim,
+                    source_interface=self.source_interface,
+                    source_dim=self.source_dim,
+                    scale_factor=self.factor
+                )
+            ]
+
+        elif self.relation == RelationType.MULTIPLE:
+            # Deprecated: source == factor * target => target == source / factor
+            # Convert to SCALED constraint
+            if self.factor == 0:
+                raise ValueError("MULTIPLE relationship factor cannot be zero")
+            return [
+                ScaledEqualityConstraint(
+                    target_interface=self.target_interface,
+                    target_dim=self.target_dim,
+                    source_interface=self.source_interface,
+                    source_dim=self.source_dim,
+                    scale_factor=1.0 / self.factor
+                )
+            ]
+
+        elif self.relation == RelationType.DEPENDENT:
+            # Deprecated: map to appropriate modern constraint
+            if self.dependency_type == "copy":
+                return [
+                    EqualityConstraint(
+                        source_interface=self.source_interface,
+                        source_dim=self.source_dim,
+                        target_interface=self.target_interface,
+                        target_dim=self.target_dim
+                    )
+                ]
+            elif self.dependency_type == "scaled":
+                return [
+                    ScaledEqualityConstraint(
+                        target_interface=self.target_interface,
+                        target_dim=self.target_dim,
+                        source_interface=self.source_interface,
+                        source_dim=self.source_dim,
+                        scale_factor=self.factor or 1.0
+                    )
+                ]
+            else:
+                # For "min" and other types, just use equality for now
+                return [
+                    EqualityConstraint(
+                        source_interface=self.source_interface,
+                        source_dim=self.source_dim,
+                        target_interface=self.target_interface,
+                        target_dim=self.target_dim
+                    )
+                ]
+
         else:
             raise ValueError(f"Unknown relation type: {self.relation}")
 
@@ -279,3 +391,134 @@ class ValidationResult:
         if not self.is_valid:
             kernel_info = f" in kernel '{kernel_name}'" if kernel_name else ""
             raise ValueError(f"Constraint validation failed{kernel_info}:\n\n{self.get_detailed_report()}")
+
+
+# ===========================================================================
+# Simple Relationship Builder Functions
+# ===========================================================================
+
+def equal_shapes(source: str, target: str, description: str = "") -> DimensionRelationship:
+    """Create relationship: all dimensions must match (total size equality).
+
+    Args:
+        source: Source interface name
+        target: Target interface name
+        description: Optional human-readable description
+
+    Returns:
+        DimensionRelationship enforcing source.total == target.total
+
+    Example:
+        schema.relationships.append(equal_shapes("input", "output"))
+    """
+    return DimensionRelationship(
+        source_interface=source,
+        target_interface=target,
+        relation=RelationType.EQUAL,
+        source_dim=None,
+        target_dim=None,
+        description=description or f"{source} total equals {target} total"
+    )
+
+
+def equal_dimension(source: str, target: str,
+                   source_dim: int, target_dim: int,
+                   description: str = "") -> DimensionRelationship:
+    """Create relationship: specific dimensions must match.
+
+    Args:
+        source: Source interface name
+        target: Target interface name
+        source_dim: Source dimension index
+        target_dim: Target dimension index
+        description: Optional human-readable description
+
+    Returns:
+        DimensionRelationship enforcing source[source_dim] == target[target_dim]
+
+    Example:
+        # Matrix-vector multiplication: matrix columns == vector length
+        schema.relationships.append(
+            equal_dimension("matrix", "vector", 1, 0)
+        )
+    """
+    return DimensionRelationship(
+        source_interface=source,
+        target_interface=target,
+        relation=RelationType.EQUAL,
+        source_dim=source_dim,
+        target_dim=target_dim,
+        description=description or f"{source}[{source_dim}] equals {target}[{target_dim}]"
+    )
+
+
+def divisible_dimension(target: str, source: str,
+                       target_dim: Optional[int] = None,
+                       source_dim: Optional[int] = None,
+                       description: str = "") -> DimensionRelationship:
+    """Create relationship: target dimension divisible by source dimension.
+
+    Args:
+        target: Target interface name (must be divisible)
+        source: Source interface name (divisor)
+        target_dim: Target dimension index (None = total)
+        source_dim: Source dimension index (None = total)
+        description: Optional human-readable description
+
+    Returns:
+        DimensionRelationship enforcing target[target_dim] % source[source_dim] == 0
+
+    Example:
+        # Block size must divide tensor size
+        schema.relationships.append(
+            divisible_dimension("tensor", "block", 0, 0)
+        )
+    """
+    return DimensionRelationship(
+        source_interface=source,
+        target_interface=target,
+        relation=RelationType.DIVISIBLE,
+        source_dim=source_dim,
+        target_dim=target_dim,
+        description=description or f"{target}[{target_dim}] divisible by {source}[{source_dim}]"
+    )
+
+
+def scaled_dimension(source: str, target: str,
+                    scale_factor: Union[int, float, str],
+                    source_dim: Optional[int] = None,
+                    target_dim: Optional[int] = None,
+                    description: str = "") -> DimensionRelationship:
+    """Create relationship: target equals source * scale_factor.
+
+    Args:
+        source: Source interface name
+        target: Target interface name
+        scale_factor: Scaling factor (literal or nodeattr name)
+        source_dim: Source dimension index (None = total)
+        target_dim: Target dimension index (None = total)
+        description: Optional human-readable description
+
+    Returns:
+        DimensionRelationship enforcing target[target_dim] == source[source_dim] * scale_factor
+
+    Example:
+        # Output is 4x input size
+        schema.relationships.append(
+            scaled_dimension("input", "output", 4)
+        )
+
+        # Output scaled by parameter
+        schema.relationships.append(
+            scaled_dimension("input", "output", "UPSAMPLE_FACTOR", 0, 0)
+        )
+    """
+    return DimensionRelationship(
+        source_interface=source,
+        target_interface=target,
+        relation=RelationType.SCALED,
+        source_dim=source_dim,
+        target_dim=target_dim,
+        factor=scale_factor,
+        description=description or f"{target}[{target_dim}] equals {source}[{source_dim}] * {scale_factor}"
+    )

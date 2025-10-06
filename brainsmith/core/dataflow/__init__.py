@@ -20,7 +20,15 @@ Key Components:
 from .types import Shape
 
 # Relationships
-from .relationships import DimensionRelationship, RelationType
+from .relationships import (
+    DimensionRelationship,
+    RelationType,
+    # Relationship builder functions
+    equal_shapes,
+    equal_dimension,
+    divisible_dimension,
+    scaled_dimension,
+)
 
 # QONNX types (direct from QONNX)
 from qonnx.core.datatype import DataType, BaseDataType
@@ -31,18 +39,29 @@ from .constraint_types import (
     validate_datatype_against_constraints,
 )
 
+# Dimension constraints
+from .dimension_constraints import (
+    DimensionConstraint,
+    # Atomic constraints
+    DivisibleConstraint,
+    MinValueConstraint,
+    MaxValueConstraint,
+    RangeConstraint,
+    PowerOfTwoConstraint,
+    # Cross-interface constraints
+    EqualityConstraint,
+    DivisibleByDimensionConstraint,
+    ScaledEqualityConstraint,
+)
+
 # Core architecture - schemas consolidated in schemas.py
 from .schemas import InputSchema, OutputSchema, KernelSchema
 
-# Immutable models and factory functions
+# Immutable models
 from .models import (
     InputModel,
     OutputModel,
     KernelModel,
-    create_kernel_model,
-    create_input_model,
-    create_output_model,
-    update_kernel_stream_config
 )
 
 # Tensor context extraction
@@ -55,9 +74,6 @@ from .validation import (
     validate_kernel_model
 )
 
-# Utility modules
-from . import template_utils
-
 
 
 __all__ = [
@@ -66,6 +82,8 @@ __all__ = [
 
     # Relationships
     'DimensionRelationship', 'RelationType',
+    # Relationship builders
+    'equal_shapes', 'equal_dimension', 'divisible_dimension', 'scaled_dimension',
 
     # QONNX types
     'DataType', 'BaseDataType',
@@ -73,20 +91,23 @@ __all__ = [
     # Constraint types
     'DatatypeConstraintGroup', 'validate_datatype_against_constraints',
 
+    # Dimension constraints
+    'DimensionConstraint',
+    # Atomic constraints
+    'DivisibleConstraint', 'MinValueConstraint', 'MaxValueConstraint',
+    'RangeConstraint', 'PowerOfTwoConstraint',
+    # Cross-interface constraints
+    'EqualityConstraint', 'DivisibleByDimensionConstraint', 'ScaledEqualityConstraint',
+
     # Core architecture
     'InputSchema', 'OutputSchema', 'KernelSchema',
 
-    # Immutable models and factory functions
+    # Immutable models
     'InputModel', 'OutputModel', 'KernelModel',
-    'create_kernel_model', 'create_input_model', 'create_output_model',
-    'update_kernel_stream_config',
 
     # Tensor context extraction
     'TensorContext', 'TensorInfo',
 
     # Validation
     'KernelValidator', 'validate_kernel_schema', 'validate_kernel_model',
-
-    # Utility modules
-    'template_utils',
 ]
