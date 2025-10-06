@@ -175,6 +175,9 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             outputs=tuple(output_models),
         )
 
+        # Validate cross-interface constraints now that all interfaces exist
+        self._validate_cross_interface_constraints(model)
+
         validation_result = self.kernel_schema.validate(model)
         if not validation_result.is_valid:
             error_msgs = [v.message for v in validation_result.violations if v.severity == "error"]
@@ -206,7 +209,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         datatype_attr = self.kernel_schema.get_datatype_attr(index)
         datatype = DataType[self.get_nodeattr(datatype_attr)]
 
-        return InputModel(
+        input_model = InputModel(
             name=schema.name,
             tensor_shape=tensor.shape,
             block_shape=block_shape,
@@ -214,6 +217,15 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             datatype=datatype,
             is_weight=schema.is_weight
         )
+
+        # Validate atomic dimension constraints AFTER creating model
+        self._validate_atomic_constraints(
+            schema.name,
+            input_model,
+            schema.dimension_constraints
+        )
+
+        return input_model
 
     def _create_output_model(self, index: int) -> OutputModel:
         """Create output model from schema and tensor context."""
@@ -229,12 +241,21 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
         datatype = DataType[self.get_nodeattr(datatype_attr)]
 
-        return OutputModel(
+        output_model = OutputModel(
             name=schema.name,
             tensor_shape=tensor.shape,
             block_shape=block_shape,
             datatype=datatype
         )
+
+        # Validate atomic dimension constraints AFTER creating model
+        self._validate_atomic_constraints(
+            schema.name,
+            output_model,
+            schema.dimension_constraints
+        )
+
+        return output_model
 
     def _resolve_dimensions(
         self,
@@ -285,3 +306,59 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             resolved.append(value)
 
         return resolved
+
+    def _validate_atomic_constraints(
+        self,
+        interface_name: str,
+        interface_model: Any,
+        constraints: List['DimensionConstraint']
+    ) -> None:
+        """Validate atomic dimension constraints for an interface.
+
+        Called during _create_input_model/_create_output_model to validate
+        constraints that only reference the current interface.
+
+        Args:
+            interface_name: Name of interface being validated
+            interface_model: Interface model (InputModel or OutputModel) to validate against
+            constraints: List of constraints from schema
+
+        Raises:
+            HWCustomOpError: If any constraint is violated
+        """
+        for constraint in constraints:
+            error_msg = constraint.check_interface(
+                interface_name,
+                interface_model,
+                self.get_nodeattr
+            )
+            if error_msg:
+                raise self._error(f"{interface_name}: {error_msg}")
+
+    def _validate_cross_interface_constraints(self, model: 'KernelModel') -> None:
+        """Validate cross-interface constraints after all interfaces created.
+
+        Called in build_model() after all interface models are constructed.
+
+        Args:
+            model: Complete KernelModel with all interfaces
+
+        Raises:
+            HWCustomOpError: If any constraint is violated
+        """
+        # Build interface lookup
+        interfaces = {inp.name: inp for inp in model.inputs}
+        interfaces.update({out.name: out for out in model.outputs})
+
+        # Collect all constraints from all interfaces
+        all_constraints = []
+        for schema in self.kernel_schema.inputs:
+            all_constraints.extend(schema.dimension_constraints)
+        for schema in self.kernel_schema.outputs:
+            all_constraints.extend(schema.dimension_constraints)
+
+        # Validate cross-interface constraints
+        for constraint in all_constraints:
+            error_msg = constraint.check_relationship(interfaces)
+            if error_msg:
+                raise self._error(error_msg)

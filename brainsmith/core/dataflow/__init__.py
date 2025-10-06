@@ -46,8 +46,6 @@ from .dimension_constraints import (
     DivisibleConstraint,
     MinValueConstraint,
     MaxValueConstraint,
-    RangeConstraint,
-    PowerOfTwoConstraint,
     # Cross-interface constraints
     EqualityConstraint,
     DivisibleByDimensionConstraint,
@@ -95,7 +93,6 @@ __all__ = [
     'DimensionConstraint',
     # Atomic constraints
     'DivisibleConstraint', 'MinValueConstraint', 'MaxValueConstraint',
-    'RangeConstraint', 'PowerOfTwoConstraint',
     # Cross-interface constraints
     'EqualityConstraint', 'DivisibleByDimensionConstraint', 'ScaledEqualityConstraint',
 

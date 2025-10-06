@@ -245,9 +245,9 @@ class ModelValidator:
     def _validate_dimension_constraints(self, model: KernelModel) -> ValidationResult:
         """Validate dimension constraints on interfaces.
 
-        Validates both:
-        1. Per-interface atomic constraints (from InterfaceSchema.dimension_constraints)
-        2. Cross-interface relationship constraints (from KernelSchema.relationships)
+        Uses the new two-phase validation approach:
+        1. Atomic constraints validated per-interface with check_interface()
+        2. Cross-interface constraints validated with check_relationship()
 
         Args:
             model: KernelModel to validate
@@ -257,39 +257,76 @@ class ModelValidator:
         """
         violations = []
 
-        # Build context for constraint evaluation
-        # Context contains interface models and would contain nodeattrs if available
-        context = {inp.name: inp for inp in model.inputs}
-        context.update({out.name: out for out in model.outputs})
+        # Build interface map for cross-interface validation
+        interfaces = {inp.name: inp for inp in model.inputs}
+        interfaces.update({out.name: out for out in model.outputs})
 
-        # 1. Validate per-interface dimension constraints
+        # Dummy nodeattr getter (validation.py doesn't have access to nodeattrs)
+        # In actual AutoHWCustomOp usage, this would be self.get_nodeattr
+        def dummy_nodeattr_getter(name: str) -> Any:
+            raise AttributeError(f"Nodeattr '{name}' not available in validation context")
+
+        # Phase 1: Validate atomic constraints per-interface
         for i, inp in enumerate(model.inputs):
             schema = self.schema.inputs[i]
             for constraint in schema.dimension_constraints:
-                result = constraint.validate_with_context(context)
-                violations.extend(result.violations)
+                # Try atomic validation first
+                error = constraint.check_interface(
+                    inp.name,
+                    inp,
+                    dummy_nodeattr_getter
+                )
+                if error:
+                    violations.append(ConstraintViolation(
+                        constraint_type="dimension_constraint",
+                        message=error,
+                        severity="error"
+                    ))
 
         for i, out in enumerate(model.outputs):
             schema = self.schema.outputs[i]
             for constraint in schema.dimension_constraints:
-                result = constraint.validate_with_context(context)
-                violations.extend(result.violations)
+                # Try atomic validation first
+                error = constraint.check_interface(
+                    out.name,
+                    out,
+                    dummy_nodeattr_getter
+                )
+                if error:
+                    violations.append(ConstraintViolation(
+                        constraint_type="dimension_constraint",
+                        message=error,
+                        severity="error"
+                    ))
 
-        # 2. Validate cross-interface relationships via their constraints
+        # Phase 2: Validate cross-interface constraints
+        # Collect all constraints from all interfaces
+        all_constraints = []
+        for schema in self.schema.inputs:
+            all_constraints.extend(schema.dimension_constraints)
+        for schema in self.schema.outputs:
+            all_constraints.extend(schema.dimension_constraints)
+
+        # Also get constraints from relationships
         for relationship in self.schema.relationships:
-            # Get constraints from relationship
             try:
-                constraints = relationship.get_constraints()
-                for constraint in constraints:
-                    result = constraint.validate_with_context(context)
-                    violations.extend(result.violations)
+                all_constraints.extend(relationship.get_constraints())
             except Exception as e:
-                # If constraint generation fails, fall back to legacy evaluate()
                 violations.append(ConstraintViolation(
                     constraint_type="constraint_generation",
                     message=f"Failed to generate constraints from relationship: {str(e)}",
                     severity="warning",
                     details={"relationship": relationship.describe()}
+                ))
+
+        # Validate cross-interface constraints
+        for constraint in all_constraints:
+            error = constraint.check_relationship(interfaces)
+            if error:
+                violations.append(ConstraintViolation(
+                    constraint_type="dimension_relationship",
+                    message=error,
+                    severity="error"
                 ))
 
         return ValidationResult(violations=violations)
