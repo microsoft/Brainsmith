@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Streamlined context management for Brainsmith dual CLI system."""
 
 import logging

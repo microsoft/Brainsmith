@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Minimal exceptions for Brainsmith CLI.
 
 This module provides only the exceptions that are actually used in the codebase.

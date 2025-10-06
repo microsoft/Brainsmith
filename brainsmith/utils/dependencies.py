@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Simple dependency management for non-Python dependencies."""
 
 import logging

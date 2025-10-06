@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Unified CLI implementation for Brainsmith.
 
 This module provides a factory function to create CLI instances for both

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Design Space Exploration command for smith CLI."""
 
 import logging

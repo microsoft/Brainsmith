@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Unified YAML parsing utility with environment variable resolution."""
 
 import os

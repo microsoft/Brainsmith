@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 # validate_env.sh - Check if system meets Brainsmith requirements
 # Validates local system against Docker environment dependencies
 

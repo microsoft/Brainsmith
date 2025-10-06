@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Essential utilities for the Brainsmith CLI interface."""
 
 import logging

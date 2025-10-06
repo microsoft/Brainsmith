@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Formatters for displaying Brainsmith configuration and output."""
 
 import os

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Brainsmith configuration schema using Pydantic.
 
 This module defines the complete configuration schema for Brainsmith,

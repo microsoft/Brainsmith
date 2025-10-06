@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Configuration management commands for brainsmith CLI."""
 
 # Standard library imports

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Hardware kernel generation command for the smith CLI."""
 
 # Standard library imports

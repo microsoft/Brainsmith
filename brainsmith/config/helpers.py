@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Convenience helper functions for accessing configuration values.
 
 These functions provide quick access to commonly used configuration values

@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 # Git dependency management for Brainsmith
 # Downloads and updates local dependencies to match pyproject.toml specifications
 

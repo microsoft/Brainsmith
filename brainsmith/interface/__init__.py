@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Brainsmith command-line interface.
 
 Provides both brainsmith and smith CLI tools for neural network hardware acceleration.

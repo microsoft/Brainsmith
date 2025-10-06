@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Brainsmith configuration module.
 
 Provides type-safe configuration management with Pydantic Settings.
