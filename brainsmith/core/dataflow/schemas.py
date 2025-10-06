@@ -19,11 +19,7 @@ from typing import List, Optional, Sequence, Union, Dict, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
-from .constraint_types import DatatypeConstraintGroup, validate_datatype_against_constraints
-from .relationships import DimensionRelationship, RelationType, ValidationResult, ConstraintViolation
-
-if TYPE_CHECKING:
-    from .dimension_constraints import DimensionConstraint
+from .constraints import InterfaceConstraint, InterfaceRelationship
 
 # Type aliases for better clarity
 TilingSpec = Sequence[Union[int, str]]
@@ -66,32 +62,27 @@ class InterfaceSchema:
     """
 
     name: str
-    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
-    dimension_constraints: List['DimensionConstraint'] = field(default_factory=list)
+    constraints: List[InterfaceConstraint] = field(default_factory=list)
     block_tiling: Optional[TilingSpec] = None
     optional: bool = False
 
     # Node attribute name for datatype (e.g., "inputDataType", "outputDataType")
     datatype_attr: Optional[str] = None
 
-    def add_dimension_constraint(self, constraint: 'DimensionConstraint') -> None:
-        """Add a constraint on this interface's dimensions.
+    def add_constraint(self, constraint: InterfaceConstraint) -> None:
+        """Add a constraint to this interface.
 
         Args:
-            constraint: DimensionConstraint to add
+            constraint: InterfaceConstraint to add
 
         Raises:
             ValueError: If constraint interface name doesn't match schema name
         """
-        # Validate constraint applies to this interface
-        # Note: Some constraints (like EqualityConstraint) reference multiple interfaces
-        # so we only check atomic constraints that have interface_name attribute
-        if hasattr(constraint, 'interface_name'):
-            if constraint.interface_name != self.name:
-                raise ValueError(
-                    f"Constraint interface '{constraint.interface_name}' must match schema name '{self.name}'"
-                )
-        self.dimension_constraints.append(constraint)
+        if constraint.interface_name != self.name:
+            raise ValueError(
+                f"Constraint interface '{constraint.interface_name}' must match schema name '{self.name}'"
+            )
+        self.constraints.append(constraint)
 
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this interface's datatype.
@@ -127,7 +118,7 @@ class InputSchema(InterfaceSchema):
         return _build_repr(
             "InputSchema",
             self.name,
-            datatype_constraints=self.datatype_constraints,
+            constraints=self.constraints,
             datatype_attr=self.datatype_attr,
             block_tiling=self.block_tiling,
             stream_tiling=self.stream_tiling,
@@ -140,18 +131,22 @@ class InputSchema(InterfaceSchema):
 class OutputSchema(InterfaceSchema):
     """Schema for an output interface.
 
-    Outputs don't have configurable streaming - their rate is determined
-    by the kernel computation.
+    Outputs can have explicit streaming (stream_tiling) or derived streaming
+    (computed from relationships or default derivation logic).
     """
+
+    # Output-specific fields
+    stream_tiling: Optional[TilingSpec] = None  # None = derive from relationships/inputs
 
     def __repr__(self) -> str:
         """String representation of OutputSchema."""
         return _build_repr(
             "OutputSchema",
             self.name,
-            datatype_constraints=self.datatype_constraints,
+            constraints=self.constraints,
             datatype_attr=self.datatype_attr,
             block_tiling=self.block_tiling,
+            stream_tiling=self.stream_tiling,
             optional=self.optional
         )
 
@@ -159,58 +154,25 @@ class OutputSchema(InterfaceSchema):
 @dataclass
 class KernelSchema:
     """Schema for a complete kernel definition.
-    
-    Defines a kernel with its input/output interfaces and relationships
-    between dimensions. This is a pure schema definition - model creation
+
+    Defines a kernel with its input/output interfaces and cross-interface
+    relationships. This is a pure schema definition - model creation
     happens in AutoHWCustomOp.
     """
-    
+
     name: str
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
-    relationships: List[DimensionRelationship] = field(default_factory=list)
+    relationships: List[InterfaceRelationship] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def add_relationship(self,
-                        source_name: str,
-                        target_name: str,
-                        relationship_type: RelationType,
-                        source_dim: Optional[int] = None,
-                        target_dim: Optional[int] = None,
-                        **kwargs) -> None:
-        """Add a relationship between interfaces.
-        
+
+    def add_relationship(self, relationship: InterfaceRelationship) -> None:
+        """Add a cross-interface relationship to this kernel.
+
         Args:
-            source_name: Name of source interface
-            target_name: Name of target interface
-            relationship_type: Type of relationship
-            source_dim: Optional dimension index for source
-            target_dim: Optional dimension index for target
-            **kwargs: Additional relationship parameters
-            
-        Raises:
-            ValueError: If interfaces don't exist
+            relationship: InterfaceRelationship to add
         """
-        # Validate interfaces exist
-        all_names = ({inp.name for inp in self.inputs} |
-                    {out.name for out in self.outputs})
-        
-        if source_name not in all_names:
-            raise ValueError(f"Source interface '{source_name}' not found")
-        if target_name not in all_names:
-            raise ValueError(f"Target interface '{target_name}' not found")
-        
-        # Create relationship
-        rel = DimensionRelationship(
-            source_interface=source_name,
-            target_interface=target_name,
-            relation=relationship_type,
-            source_dim=source_dim,
-            target_dim=target_dim,
-            **kwargs
-        )
-        
-        self.relationships.append(rel)
+        self.relationships.append(relationship)
     
     def get_input(self, name: str) -> Optional[InputSchema]:
         """Get input schema by name."""
@@ -258,6 +220,5 @@ class KernelSchema:
             inputs=self.inputs,
             outputs=self.outputs,
             relationships=self.relationships,
-            metadata=self.metadata,
-            weights=self.weight_inputs
+            metadata=self.metadata
         )

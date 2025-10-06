@@ -169,19 +169,13 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         for i in range(len(self.kernel_schema.outputs)):
             output_models.append(self._create_output_model(i))
 
+        # KernelModel.__post_init__ handles dimension resolution and validation
         model = KernelModel(
             name=self.kernel_schema.name,
             inputs=tuple(input_models),
             outputs=tuple(output_models),
+            relationships=self.kernel_schema.relationships,
         )
-
-        # Validate cross-interface constraints now that all interfaces exist
-        self._validate_cross_interface_constraints(model)
-
-        validation_result = self.kernel_schema.validate(model)
-        if not validation_result.is_valid:
-            error_msgs = [v.message for v in validation_result.violations if v.severity == "error"]
-            raise self._error(f"Model validation failed: {'; '.join(error_msgs)}")
 
         self._kernel_model = model
         return model
@@ -218,17 +212,17 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             is_weight=schema.is_weight
         )
 
-        # Validate atomic dimension constraints AFTER creating model
-        self._validate_atomic_constraints(
+        # Validate interface constraints AFTER creating model
+        self._validate_interface_constraints(
             schema.name,
             input_model,
-            schema.dimension_constraints
+            schema.constraints
         )
 
         return input_model
 
     def _create_output_model(self, index: int) -> OutputModel:
-        """Create output model from schema and tensor context."""
+        """Create output model from schema - stream_shape may be unset."""
         schema = self.kernel_schema.outputs[index]
         tensor = self.tensor_context.outputs[index]
 
@@ -238,6 +232,17 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             f"Output '{schema.name}' block"
         )
 
+        # Resolve stream tiling if specified in schema
+        if schema.stream_tiling is not None:
+            stream_shape = self._resolve_dimensions(
+                schema.stream_tiling,
+                block_shape,
+                f"Output '{schema.name}' stream"
+            )
+        else:
+            # Leave unset - will be resolved by KernelModel.__post_init__
+            stream_shape = tuple([None] * len(block_shape))
+
         datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
         datatype = DataType[self.get_nodeattr(datatype_attr)]
 
@@ -245,15 +250,17 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             name=schema.name,
             tensor_shape=tensor.shape,
             block_shape=block_shape,
+            stream_shape=stream_shape,
             datatype=datatype
         )
 
-        # Validate atomic dimension constraints AFTER creating model
-        self._validate_atomic_constraints(
-            schema.name,
-            output_model,
-            schema.dimension_constraints
-        )
+        # Validate interface constraints (only if stream_shape fully resolved)
+        if not output_model.has_unset_dims():
+            self._validate_interface_constraints(
+                schema.name,
+                output_model,
+                schema.constraints
+            )
 
         return output_model
 
@@ -307,58 +314,24 @@ class AutoHWCustomOp(HWCustomOp, ABC):
 
         return resolved
 
-    def _validate_atomic_constraints(
+    def _validate_interface_constraints(
         self,
         interface_name: str,
         interface_model: Any,
-        constraints: List['DimensionConstraint']
+        constraints: List['InterfaceConstraint']
     ) -> None:
-        """Validate atomic dimension constraints for an interface.
-
-        Called during _create_input_model/_create_output_model to validate
-        constraints that only reference the current interface.
+        """Validate interface constraints for a single interface.
 
         Args:
             interface_name: Name of interface being validated
-            interface_model: Interface model (InputModel or OutputModel) to validate against
-            constraints: List of constraints from schema
+            interface_model: Interface model (InputModel or OutputModel) to validate
+            constraints: List of InterfaceConstraints from schema
 
         Raises:
             HWCustomOpError: If any constraint is violated
         """
         for constraint in constraints:
-            error_msg = constraint.check_interface(
-                interface_name,
-                interface_model,
-                self.get_nodeattr
-            )
+            error_msg = constraint.check(interface_model, self.get_nodeattr)
             if error_msg:
                 raise self._error(f"{interface_name}: {error_msg}")
 
-    def _validate_cross_interface_constraints(self, model: 'KernelModel') -> None:
-        """Validate cross-interface constraints after all interfaces created.
-
-        Called in build_model() after all interface models are constructed.
-
-        Args:
-            model: Complete KernelModel with all interfaces
-
-        Raises:
-            HWCustomOpError: If any constraint is violated
-        """
-        # Build interface lookup
-        interfaces = {inp.name: inp for inp in model.inputs}
-        interfaces.update({out.name: out for out in model.outputs})
-
-        # Collect all constraints from all interfaces
-        all_constraints = []
-        for schema in self.kernel_schema.inputs:
-            all_constraints.extend(schema.dimension_constraints)
-        for schema in self.kernel_schema.outputs:
-            all_constraints.extend(schema.dimension_constraints)
-
-        # Validate cross-interface constraints
-        for constraint in all_constraints:
-            error_msg = constraint.check_relationship(interfaces)
-            if error_msg:
-                raise self._error(error_msg)

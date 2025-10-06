@@ -24,6 +24,19 @@ ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
 
 # === Enums ===
 
+class ShapeHierarchy(Enum):
+    """Shape hierarchy level for dimension constraints and relationships.
+
+    Specifies which level of the shape hierarchy to validate or manipulate:
+    - STREAM: stream_shape (streaming parallelism, elements per cycle)
+    - BLOCK: block_shape (block tiling dimensions)
+    - TENSOR: tensor_shape (full logical dimensions)
+    """
+    STREAM = "stream"
+    BLOCK = "block"
+    TENSOR = "tensor"
+
+
 class ProtocolType(Enum):
     """Supported hardware protocols for kernel interfaces."""
     AXI_STREAM = "axi_stream"
