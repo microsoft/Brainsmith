@@ -19,7 +19,8 @@ from typing import List, Optional, Sequence, Union, Dict, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
-from .constraints import InterfaceConstraint, InterfaceRelationship
+from .constraints import InterfaceConstraint
+from .relationships import InterfaceRelationship
 
 # Type aliases for better clarity
 TilingSpec = Sequence[Union[int, str]]
@@ -64,6 +65,7 @@ class InterfaceSchema:
     name: str
     constraints: List[InterfaceConstraint] = field(default_factory=list)
     block_tiling: Optional[TilingSpec] = None
+    stream_tiling: Optional[TilingSpec] = None
     optional: bool = False
 
     # Node attribute name for datatype (e.g., "inputDataType", "outputDataType")
@@ -110,7 +112,6 @@ class InputSchema(InterfaceSchema):
     """
     
     # Input-specific fields
-    stream_tiling: Optional[TilingSpec] = None
     is_weight: bool = False  # Explicitly mark weight inputs for FINN
     
     def __repr__(self) -> str:
@@ -134,9 +135,6 @@ class OutputSchema(InterfaceSchema):
     Outputs can have explicit streaming (stream_tiling) or derived streaming
     (computed from relationships or default derivation logic).
     """
-
-    # Output-specific fields
-    stream_tiling: Optional[TilingSpec] = None  # None = derive from relationships/inputs
 
     def __repr__(self) -> str:
         """String representation of OutputSchema."""

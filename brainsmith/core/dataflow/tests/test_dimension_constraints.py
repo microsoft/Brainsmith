@@ -12,7 +12,7 @@ not tensor_shape (logical tensor dimensions).
 """
 
 import pytest
-from brainsmith.core.dataflow.constraints import (
+from brainsmith.core.dataflow import (
     ShapeHierarchy,
     DatatypeConstraint,
     DimensionDivisible,
@@ -21,8 +21,10 @@ from brainsmith.core.dataflow.constraints import (
     DimensionEquality,
     DimensionDivisibleBy,
     DimensionScaled,
+    InputModel,
+    OutputModel,
+    KernelModel,
 )
-from brainsmith.core.dataflow.models import InputModel, OutputModel, KernelModel
 from qonnx.core.datatype import DataType
 
 
@@ -513,6 +515,117 @@ def test_mixed_shape_targets():
     # stream[1] = 8 % 8 == 0 ✓
     error = stream_constraint.check(model, make_nodeattr_getter({}))
     assert error is None
+
+
+def test_multi_index_divisible_pass():
+    """Test divisibility constraint on multiple dimensions (all pass)."""
+    input_model = InputModel(
+        name="input",
+        tensor_shape=(128, 64, 32),
+        block_shape=(128, 64, 32),
+        stream_shape=(16, 8, 16),  # All divisible by 8
+        datatype=DataType["INT8"]
+    )
+
+    # Test: stream[0,1,2] all % 8 == 0 ✓
+    constraint = DimensionDivisible("input", [0, 1, 2], 8)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is None
+
+
+def test_multi_index_divisible_fail():
+    """Test divisibility constraint on multiple dimensions (some fail)."""
+    input_model = InputModel(
+        name="input",
+        tensor_shape=(128, 64, 32),
+        block_shape=(128, 64, 32),
+        stream_shape=(17, 8, 15),  # 17 and 15 not divisible by 8
+        datatype=DataType["INT8"]
+    )
+
+    # Test: stream[0,1,2] % 8 - should fail for dims 0 and 2
+    constraint = DimensionDivisible("input", [0, 1, 2], 8)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is not None
+    assert "stream[0]" in error  # First failure
+    assert "stream[2]" in error  # Second failure
+    assert "17" in error  # Value of dim 0
+    assert "15" in error  # Value of dim 2
+
+
+def test_multi_index_min_value():
+    """Test minimum value constraint on multiple dimensions."""
+    input_model = InputModel(
+        name="input",
+        tensor_shape=(128, 64, 32),
+        block_shape=(128, 64, 32),
+        stream_shape=(16, 8, 4),
+        datatype=DataType["INT8"]
+    )
+
+    # Test: stream[0,1] all >= 8 (16 >= 8 ✓, 8 >= 8 ✓)
+    constraint = DimensionMinValue("input", [0, 1], 8)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is None
+
+    # Test: stream[1,2] >= 10 (8 >= 10 ✗, 4 >= 10 ✗)
+    constraint = DimensionMinValue("input", [1, 2], 10)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is not None
+    assert "stream[1]" in error
+    assert "stream[2]" in error
+
+
+def test_multi_index_max_value():
+    """Test maximum value constraint on multiple dimensions."""
+    input_model = InputModel(
+        name="input",
+        tensor_shape=(128, 64, 32),
+        block_shape=(128, 64, 32),
+        stream_shape=(16, 8, 4),
+        datatype=DataType["INT8"]
+    )
+
+    # Test: stream[0,1,2] all <= 20 ✓
+    constraint = DimensionMaxValue("input", [0, 1, 2], 20)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is None
+
+    # Test: stream[0,1] <= 10 (16 <= 10 ✗, 8 <= 10 ✓)
+    constraint = DimensionMaxValue("input", [0, 1], 10)
+    error = constraint.check(input_model, make_nodeattr_getter({}))
+    assert error is not None
+    assert "stream[0]" in error
+    assert "16" in error
+
+
+def test_multi_index_with_nodeattr():
+    """Test multi-index constraint with nodeattr reference."""
+    input_model = InputModel(
+        name="input",
+        tensor_shape=(128, 64, 32),
+        block_shape=(128, 64, 32),
+        stream_shape=(16, 8, 16),
+        datatype=DataType["INT8"]
+    )
+
+    # Test: stream[0,1,2] all % SIMD == 0, SIMD=8
+    constraint = DimensionDivisible("input", [0, 1, 2], "SIMD")
+    error = constraint.check(input_model, make_nodeattr_getter({"SIMD": 8}))
+    assert error is None
+
+
+def test_multi_index_describe():
+    """Test describe() method with multi-index."""
+    constraint = DimensionDivisible("input", [0, 1, 2], 8)
+    desc = constraint.describe()
+    assert "stream[0,1,2]" in desc
+    assert "% 8 == 0" in desc
+
+    constraint = DimensionMinValue("output", [1, 3], "MIN", ShapeHierarchy.BLOCK)
+    desc = constraint.describe()
+    assert "block[1,3]" in desc
+    assert ">= MIN" in desc
 
 
 if __name__ == "__main__":

@@ -13,7 +13,8 @@ Key Components:
 - InputSchema/OutputSchema: Schema definitions for kernel interfaces
 - KernelSchema: Kernel definition with input/output schemas
 - Immutable models: Created via factory functions in models.py
-- Unified constraint system: InterfaceConstraint and KernelConstraint
+- Constraint system: InterfaceConstraint for single-interface validation
+- Relationship system: InterfaceRelationship for cross-interface constraints
 """
 
 # Core types
@@ -22,17 +23,23 @@ from .types import Shape, ShapeHierarchy
 # QONNX types (direct from QONNX)
 from qonnx.core.datatype import DataType, BaseDataType
 
-# Unified constraint system
+# Constraint system
 from .constraints import (
     # Base classes
     InterfaceConstraint,
-    InterfaceRelationship,
-    # Interface constraints (single interface scope)
+    DimensionConstraint,
+    # Concrete constraints
     DatatypeConstraint,
     DimensionDivisible,
     DimensionMinValue,
     DimensionMaxValue,
-    # Interface relationships (cross-interface scope)
+)
+
+# Relationship system
+from .relationships import (
+    # Base class
+    InterfaceRelationship,
+    # Concrete relationships
     DimensionEquality,
     DimensionDivisibleBy,
     DimensionScaled,
@@ -43,6 +50,7 @@ from .schemas import InputSchema, OutputSchema, KernelSchema
 
 # Immutable models
 from .models import (
+    InterfaceModel,
     InputModel,
     OutputModel,
     KernelModel,
@@ -61,7 +69,7 @@ __all__ = [
     'DataType', 'BaseDataType',
 
     # Unified constraint system
-    'ShapeHierarchy', 'InterfaceConstraint', 'InterfaceRelationship',
+    'ShapeHierarchy', 'InterfaceConstraint', 'DimensionConstraint', 'InterfaceRelationship',
     # Interface constraints
     'DatatypeConstraint', 'DimensionDivisible', 'DimensionMinValue', 'DimensionMaxValue',
     # Interface relationships
@@ -71,7 +79,7 @@ __all__ = [
     'InputSchema', 'OutputSchema', 'KernelSchema',
 
     # Immutable models
-    'InputModel', 'OutputModel', 'KernelModel',
+    'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
 
     # Tensor context extraction
     'TensorContext', 'TensorInfo',

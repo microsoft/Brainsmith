@@ -269,7 +269,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         template: Any,  # TilingSpec or similar sequence
         reference_shape: Tuple[int, ...],
         context_name: str
-    ) -> List[int]:
+    ) -> Tuple[int, ...]:
         """Resolve template dimensions to concrete values."""
         if len(template) < len(reference_shape):
             padding = len(reference_shape) - len(template)
@@ -312,7 +312,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
 
             resolved.append(value)
 
-        return resolved
+        return tuple(resolved)
 
     def _validate_interface_constraints(
         self,

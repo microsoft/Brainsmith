@@ -20,6 +20,7 @@ Key principles:
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, Union, Any
+from abc import ABC
 import math
 
 from .types import Shape, ShapeHierarchy, prod
@@ -27,24 +28,22 @@ from qonnx.core.datatype import BaseDataType
 
 
 @dataclass(frozen=True)
-class InputModel:
-    """Immutable input interface model.
+class InterfaceModel(ABC):
+    """Base class for input/output interface models.
 
-    Represents a concrete input with resolved dimensions and datatypes.
+    Provides common fields and methods for all interface model types.
 
     Shape hierarchy:
     - tensor_shape: Full logical tensor dimensions
-    - block_shape: Block tiling dimensions (tensor_shape / block_shape = tensor_folding_factor)
-    - stream_shape: Streaming dimensions per cycle (block_shape / stream_shape = block_folding_factor)
+    - block_shape: Block tiling dimensions
+    - stream_shape: Streaming dimensions per cycle
     """
 
-    # Core properties
     name: str
     tensor_shape: Shape
     block_shape: Shape
     datatype: BaseDataType
-    stream_shape: Shape
-    is_weight: bool = False
+    stream_shape: Tuple[Optional[int], ...]
 
     @property
     def tensor_folding_factor(self) -> int:
@@ -63,11 +62,6 @@ class InputModel:
         return cycles
 
     @property
-    def initiation_interval(self) -> int:
-        """Cycles to stream entire tensor."""
-        return self.tensor_folding_factor * self.block_folding_factor
-
-    @property
     def streaming_bandwidth(self) -> int:
         """Elements streamed per cycle."""
         return prod(self.stream_shape)
@@ -77,7 +71,7 @@ class InputModel:
         """Stream width in bits."""
         return self.streaming_bandwidth * self.datatype.bitwidth()
 
-    def get_shape(self, hierarchy: ShapeHierarchy) -> Shape:
+    def get_shape(self, hierarchy: ShapeHierarchy) -> Tuple[Optional[int], ...]:
         """Get shape at specified hierarchy level.
 
         Args:
@@ -100,36 +94,31 @@ class InputModel:
 
 
 @dataclass(frozen=True)
-class OutputModel:
+class InputModel(InterfaceModel):
+    """Immutable input interface model.
+
+    Represents a concrete input with resolved dimensions and datatypes.
+    """
+
+    is_weight: bool = False
+
+    @property
+    def initiation_interval(self) -> int:
+        """Cycles to stream entire tensor."""
+        return self.tensor_folding_factor * self.block_folding_factor
+
+
+@dataclass(frozen=True)
+class OutputModel(InterfaceModel):
     """Immutable output interface model.
 
     Pure specification of output tensor characteristics.
     Stream shape may contain None values during construction (resolved by KernelModel).
-
-    Shape hierarchy:
-    - tensor_shape: Full logical tensor dimensions
-    - block_shape: Block tiling dimensions
-    - stream_shape: Streaming dimensions per cycle (may contain None during construction)
     """
-
-    # Core properties
-    name: str
-    tensor_shape: Shape
-    block_shape: Shape
-    stream_shape: Tuple[Optional[int], ...]  # Can contain None during construction
-    datatype: BaseDataType
 
     def has_unset_dims(self) -> bool:
         """Check if any stream dimensions are unset (None)."""
         return any(d is None for d in self.stream_shape)
-
-    @property
-    def tensor_folding_factor(self) -> int:
-        """Number of blocks to cover full tensor."""
-        num_blocks = 1
-        for t, b in zip(self.tensor_shape, self.block_shape):
-            num_blocks *= math.ceil(t / b)
-        return num_blocks
 
     @property
     def block_folding_factor(self) -> int:
@@ -138,11 +127,7 @@ class OutputModel:
             raise ValueError(
                 f"Cannot compute block_folding_factor for '{self.name}' with unset stream dimensions"
             )
-
-        cycles = 1
-        for b, s in zip(self.block_shape, self.stream_shape):
-            cycles *= math.ceil(b / s)
-        return cycles
+        return super().block_folding_factor
 
     @property
     def streaming_bandwidth(self) -> int:
@@ -151,33 +136,16 @@ class OutputModel:
             raise ValueError(
                 f"Cannot compute streaming_bandwidth for '{self.name}' with unset stream dimensions"
             )
-        return prod(self.stream_shape)
+        return super().streaming_bandwidth
 
     @property
     def stream_width_bits(self) -> int:
         """Stream width in bits."""
-        return self.streaming_bandwidth * self.datatype.bitwidth()
-
-    def get_shape(self, hierarchy: ShapeHierarchy) -> Tuple[Optional[int], ...]:
-        """Get shape at specified hierarchy level.
-
-        Args:
-            hierarchy: Which level of the shape hierarchy to retrieve
-
-        Returns:
-            Shape at the specified level (may contain None for STREAM if unset)
-
-        Raises:
-            ValueError: If hierarchy is invalid
-        """
-        if hierarchy == ShapeHierarchy.STREAM:
-            return self.stream_shape
-        elif hierarchy == ShapeHierarchy.BLOCK:
-            return self.block_shape
-        elif hierarchy == ShapeHierarchy.TENSOR:
-            return self.tensor_shape
-        else:
-            raise ValueError(f"Invalid hierarchy: {hierarchy}")
+        if self.has_unset_dims():
+            raise ValueError(
+                f"Cannot compute stream_width_bits for '{self.name}' with unset stream dimensions"
+            )
+        return super().stream_width_bits
 
 
 @dataclass(frozen=True)
