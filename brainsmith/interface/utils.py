@@ -47,14 +47,21 @@ def error_exit(message: str, details: Optional[List[str]] = None, code: int = 1)
 @contextmanager
 def progress_spinner(description: str, transient: bool = True):
     """Context manager for showing a progress spinner.
-    
+
     Args:
         description: Description to show next to the spinner
         transient: Whether to remove the spinner after completion
-        
+
     Yields:
         The progress task object
     """
+    import os
+
+    # Skip spinner in quiet mode
+    if os.environ.get('BSMITH_QUIET') == '1':
+        yield None
+        return
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),

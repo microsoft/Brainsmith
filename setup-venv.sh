@@ -15,6 +15,7 @@ SKIP_POETRY=""
 SKIP_BOARDS=""
 SKIP_SIM=""
 DOCKER_MODE=""
+QUIET_MODE=""
 
 # Function to check if a component should be skipped
 should_skip() {
@@ -62,11 +63,15 @@ while [[ $# -gt 0 ]]; do
             DOCKER_MODE="1"
             shift
             ;;
+        --quiet|-q)
+            QUIET_MODE="1"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--force|-f] [--skip <component>...] [--docker]"
+            echo "Usage: $0 [--force|-f] [--skip <component>...] [--docker] [--quiet|-q]"
             echo "  Components: repos, poetry, boards, sim"
-            echo "  Example: $0 --skip boards sim --docker"
+            echo "  Example: $0 --skip boards sim --docker --quiet"
             exit 1
             ;;
     esac
@@ -77,6 +82,11 @@ should_skip "repos" && SKIP_REPOS="1"
 should_skip "poetry" && SKIP_POETRY="1"
 should_skip "boards" && SKIP_BOARDS="1"
 should_skip "sim" && SKIP_SIM="1"
+
+# Export quiet mode for child processes
+if [ "$QUIET_MODE" == "1" ]; then
+    export BSMITH_QUIET="1"
+fi
 
 echo "🔧 Setting up Brainsmith developer environment..."
 
@@ -187,7 +197,11 @@ fi
 # Step 4: Install Python dependencies
 echo ""
 echo "📦 Installing Python dependencies..."
-poetry install
+if [ "$QUIET_MODE" == "1" ]; then
+    poetry install -q
+else
+    poetry install
+fi
 
 if [ $? -eq 0 ]; then
     echo "✅ Dependencies installed successfully"

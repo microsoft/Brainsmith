@@ -121,6 +121,7 @@ Container Commands:
     start          Start container and run complete setup automatically
                    Options: --force (re-fetch repos and force reinstall)
                            --skip <component>... (skip specific setup components)
+                           --quiet (suppress verbose output for CI/CD)
                    Components: repos, poetry, boards, sim
     shell          Interactive shell in running container
     build          Build Docker image
@@ -142,6 +143,7 @@ Examples:
     ./ctl-docker.sh start                                   # Start and set up everything automatically
     ./ctl-docker.sh start --force                           # Force re-fetch repos and reinstall everything
     ./ctl-docker.sh start --skip boards sim                 # Start but skip boards and simulation setup
+    ./ctl-docker.sh start --quiet                           # Start with minimal output (for CI/CD)
     ./ctl-docker.sh shell                                   # Interactive development
     ./ctl-docker.sh "smith build model.py"                  # Run smith commands
     ./ctl-docker.sh "brainsmith setup cppsim"              # Install additional components
@@ -314,7 +316,8 @@ create_container() {
     DOCKER_CMD+=" -e BSMITH_SKIP_SETUP=${BSMITH_SKIP_SETUP:-0}"
     DOCKER_CMD+=" -e BSMITH_FORCE_SETUP=${BSMITH_FORCE_SETUP:-}"
     [ -n "${BSMITH_SKIP_COMPONENTS:-}" ] && DOCKER_CMD+=" -e BSMITH_SKIP_COMPONENTS='$BSMITH_SKIP_COMPONENTS'"
-    
+    [ "${BSMITH_QUIET:-}" == "1" ] && DOCKER_CMD+=" -e BSMITH_QUIET=1"
+
     # Set Poetry to use project-local virtual environments
     DOCKER_CMD+=" -e POETRY_VIRTUALENVS_IN_PROJECT=true"
 
@@ -411,7 +414,8 @@ start_daemon() {
     # Parse arguments
     local skip_components=""
     local force_setup=""
-    
+    local quiet_mode=""
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force|-f)
@@ -426,15 +430,20 @@ start_daemon() {
                     shift
                 done
                 ;;
+            --quiet|-q)
+                quiet_mode="1"
+                shift
+                ;;
             *)
                 shift
                 ;;
         esac
     done
-    
+
     # Set environment variables for container setup
     [ -n "$force_setup" ] && export BSMITH_FORCE_SETUP="1"
     [ -n "$skip_components" ] && export BSMITH_SKIP_COMPONENTS="${skip_components# }"
+    [ -n "$quiet_mode" ] && export BSMITH_QUIET="1"
     
     setup_container_if_needed
     local result=$?

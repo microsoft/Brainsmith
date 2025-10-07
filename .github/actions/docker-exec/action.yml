@@ -21,10 +21,10 @@ runs:
         
         # Make ctl-docker.sh executable
         chmod +x ctl-docker.sh
-        
-        # Start container using ctl-docker.sh
+
+        # Start container using ctl-docker.sh (with --quiet for CI/CD)
         echo "Starting container..."
-        ./ctl-docker.sh start
+        ./ctl-docker.sh start --quiet
         
         # Wait for container to be ready
         echo "Waiting for container to be ready..."

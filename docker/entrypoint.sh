@@ -33,7 +33,8 @@ if [ "$BSMITH_SKIP_SETUP" != "1" ]; then
     # Build setup flags
     SETUP_FLAGS="--docker"  # Always use docker mode
     [ -n "$BSMITH_FORCE_SETUP" ] && SETUP_FLAGS="$SETUP_FLAGS --force"
-    
+    [ "$BSMITH_QUIET" == "1" ] && SETUP_FLAGS="$SETUP_FLAGS --quiet"
+
     # Parse skip components from environment
     if [ -n "$BSMITH_SKIP_COMPONENTS" ]; then
         SETUP_FLAGS="$SETUP_FLAGS --skip $BSMITH_SKIP_COMPONENTS"

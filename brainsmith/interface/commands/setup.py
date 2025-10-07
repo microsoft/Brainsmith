@@ -58,8 +58,13 @@ def setup():
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
 @click.option('--remove', '-r', is_flag=True, help='Remove all dependencies')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def setup_all(force: bool, remove: bool, yes: bool) -> None:
+@click.option('--quiet', '-q', is_flag=True, help='Suppress verbose output')
+def setup_all(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     """Install all dependencies (cppsim, xsim, boards)."""
+    import os
+    if quiet:
+        os.environ['BSMITH_QUIET'] = '1'
+
     if force and remove:
         error_exit("Cannot use --force and --remove together")
         
@@ -92,8 +97,13 @@ def setup_all(force: bool, remove: bool, yes: bool) -> None:
 @click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
 @click.option('--remove', '-r', is_flag=True, help='Remove C++ simulation dependencies')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def cppsim(force: bool, remove: bool, yes: bool) -> None:
+@click.option('--quiet', '-q', is_flag=True, help='Suppress verbose output')
+def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     """Setup C++ simulation dependencies (cnpy, finn-hlslib)."""
+    import os
+    if quiet:
+        os.environ['BSMITH_QUIET'] = '1'
+
     if force and remove:
         error_exit("Cannot use --force and --remove together")
         
@@ -157,8 +167,13 @@ def cppsim(force: bool, remove: bool, yes: bool) -> None:
 @click.option('--force', '-f', is_flag=True, help='Force rebuild even if already built')
 @click.option('--remove', '-r', is_flag=True, help='Remove Xilinx simulation dependencies')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def xsim(force: bool, remove: bool, yes: bool) -> None:
+@click.option('--quiet', '-q', is_flag=True, help='Suppress verbose output')
+def xsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     """Setup Xilinx simulation (build finn-xsim with Vivado)."""
+    import os
+    if quiet:
+        os.environ['BSMITH_QUIET'] = '1'
+
     if force and remove:
         error_exit("Cannot use --force and --remove together")
         
@@ -306,8 +321,13 @@ def _handle_existing_boards(board_mgr: BoardManager, requested_repos: List[str],
 @click.option('--repo', '-r', multiple=True, help='Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed list of all board files')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> None:
+@click.option('--quiet', '-q', is_flag=True, help='Suppress verbose output')
+def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool, quiet: bool) -> None:
     """Download FPGA board definition files."""
+    import os
+    if quiet:
+        os.environ['BSMITH_QUIET'] = '1'
+
     if force and remove:
         error_exit("Cannot use --force and --remove together")
     config = get_config()
