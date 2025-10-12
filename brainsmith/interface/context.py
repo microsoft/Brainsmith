@@ -12,14 +12,13 @@ import click
 
 logger = logging.getLogger(__name__)
 
-from brainsmith.config import BrainsmithConfig, load_config, get_default_config
-from brainsmith.utils import load_yaml, dump_yaml
+from brainsmith.config import BrainsmithConfig, load_config
 
 
 @dataclass
 class ApplicationContext:
     """Manages CLI settings and configuration.
-    
+
     Handles the settings hierarchy:
     1. Command-line arguments (highest priority)
     2. Environment variables
@@ -27,9 +26,8 @@ class ApplicationContext:
     4. User configuration (~/.brainsmith/config.yaml)
     5. Built-in defaults (lowest priority)
     """
-    
+
     # Core settings
-    verbose: bool = False
     debug: bool = False
     config_file: Optional[Path] = None
     overrides: Dict[str, Any] = field(default_factory=dict)
@@ -68,10 +66,8 @@ class ApplicationContext:
             
             # Recreate config with overrides
             self.config = BrainsmithConfig(**config_dict)
-        
-        # Apply verbose/debug from context
-        if self.verbose:
-            self.config.verbose = True
+
+        # Apply debug from context
         if self.debug:
             self.config.debug = True
     

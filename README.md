@@ -65,9 +65,7 @@ brainsmith setup check
 # Initialize user configuration
 brainsmith config init --user
 
-# Set your Xilinx installation path
-brainsmith config set xilinx_path /tools/Xilinx
-brainsmith config set xilinx_version 2024.2
+# Edit ~/.brainsmith/config.yaml to set xilinx_path and xilinx_version as needed
 
 # View current configuration
 brainsmith config show
@@ -107,7 +105,6 @@ For detailed command reference, see the [CLI API documentation](docs/cli_api_ref
 ```bash
 # Setup and configuration
 brainsmith setup all              # Install all dependencies
-brainsmith config set verbose true # Set user preferences
 eval $(brainsmith config export)  # Export environment for Xilinx tools
 
 # Operations

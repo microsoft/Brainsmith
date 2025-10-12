@@ -258,7 +258,7 @@ class BrainsmithConfig(BaseSettings):
     # Debug and output settings
     debug: bool = Field(
         default=False,
-        description="Enable debug output"
+        description="Enable DEBUG-level logging and error traces"
     )
     verbose: bool = Field(
         default=False,

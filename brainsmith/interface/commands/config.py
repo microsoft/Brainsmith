@@ -62,10 +62,6 @@ def show(ctx: ApplicationContext, verbose: bool) -> None:
         error_exit(f"Failed to load configuration: {e}")
 
 
-
-
-
-
 @config.command()
 @click.option('--shell', type=click.Choice(['bash', 'zsh', 'fish', 'powershell']),
               default='bash', help='Shell format for output')

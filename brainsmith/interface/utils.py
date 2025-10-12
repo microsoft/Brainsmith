@@ -16,9 +16,9 @@ from rich.panel import Panel
 console = Console()
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(debug: bool = False) -> None:
     """Configure logging with Rich handler."""
-    level = logging.DEBUG if verbose else logging.INFO
+    level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
         format="%(message)s",

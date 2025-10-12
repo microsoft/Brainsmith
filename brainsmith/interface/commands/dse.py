@@ -64,12 +64,12 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
                       "Ensure you have read permissions for both files"
                   ])
     except Exception as e:
-        if config.verbose:
+        if config.debug:
             console.print_exception()
         error_exit(f"Failed during exploration: {e}",
                   details=[
                       "Check the model is a valid ONNX file",
                       "Verify the blueprint YAML syntax is correct",
                       "Ensure all required dependencies are installed",
-                      "Run with --verbose for more details"
+                      "Run with --debug for more details"
                   ])

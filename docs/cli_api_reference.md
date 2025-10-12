@@ -17,12 +17,9 @@ brainsmith [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Global Options:**
-- `--verbose, -v` - Enable verbose/debug output globally
 - `--config, -c PATH` - Use specific configuration file
 - `--build-dir PATH` - Override build directory
-- `--xilinx-path PATH` - Override Xilinx installation path
-- `--xilinx-version VERSION` - Override Xilinx version (e.g., 2024.2)
-- `--debug` - Enable debug mode
+- `--debug` - Enable debug mode with detailed logging
 - `--version` - Show Brainsmith version
 - `--help` - Show help message
 
@@ -62,25 +59,6 @@ brainsmith config show --format yaml --verbose
 
 # Show environment variables
 brainsmith config show --format env
-```
-
-#### `brainsmith config set`
-Set a configuration value in user defaults.
-
-```bash
-brainsmith config set KEY VALUE
-```
-
-**Examples:**
-```bash
-# Set verbose mode as default
-brainsmith config set verbose true
-
-# Set build directory
-brainsmith config set build_dir /opt/brainsmith/builds
-
-# Set nested configuration
-brainsmith config set finn.num_default_workers 8
 ```
 
 #### `brainsmith config init`
@@ -218,8 +196,8 @@ smith model.onnx blueprint.yaml
 # With custom output directory
 smith model.onnx blueprint.yaml --output-dir ./results
 
-# Using brainsmith context with verbose mode
-brainsmith --verbose smith model.onnx blueprint.yaml
+# Using brainsmith context with debug mode
+brainsmith --debug smith model.onnx blueprint.yaml
 ```
 
 ## Hardware Kernel Generation
@@ -274,8 +252,8 @@ Configuration is resolved in the following priority order (highest to lowest):
 ### Available Settings
 
 #### Core Settings
-- `verbose` (bool) - Enable verbose output
-- `debug` (bool) - Enable debug mode
+- `verbose` (bool) - Enable verbose output (legacy field, not used by CLI)
+- `debug` (bool) - Enable DEBUG-level logging and detailed error traces
 - `build_dir` (path) - Build directory for artifacts
 - `deps_dir` (path) - Dependencies directory
 
@@ -321,9 +299,7 @@ brainsmith setup all
 # Initialize user configuration
 brainsmith config init --user
 
-# Configure Xilinx tools
-brainsmith config set xilinx_path /opt/Xilinx
-brainsmith config set xilinx_version 2024.2
+# Edit ~/.brainsmith/config.yaml to configure Xilinx tools as needed
 
 # Verify setup
 brainsmith setup check
@@ -382,11 +358,10 @@ brainsmith setup check --verbose
 
 ### Debug Mode
 ```bash
-# Enable debug output globally
+# Enable DEBUG-level logging and detailed error information
 brainsmith --debug smith model.onnx blueprint.yaml
 
-# Or set as default
-brainsmith config set debug true
+# Or edit config to set debug: true as default
 ```
 
 ### Reset Configuration

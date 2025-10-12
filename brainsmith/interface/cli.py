@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from rich.logging import RichHandler
 
-from brainsmith.config import BrainsmithConfig
 from .commands import OPERATIONAL_COMMANDS, ADMIN_COMMANDS
 from .context import ApplicationContext
 from .utils import console, setup_logging
@@ -56,11 +54,11 @@ def _create_smith_subcommand() -> click.Command:
     @click.pass_context
     def smith(ctx: click.Context, args):
         """Create hardware designs and components.
-        
+
         Provides access to dataflow accelerator and kernel generation tools.
         Inherits configuration from parent brainsmith command.
-        
-        Example: brainsmith --verbose smith dse model.onnx blueprint.yaml
+
+        Example: brainsmith --debug smith dse model.onnx blueprint.yaml
         """
         # Get the application context
         app_ctx = ctx.obj
@@ -98,42 +96,40 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
     """
     
     @click.group(invoke_without_command=True)
-    @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-    @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path), 
+    @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path),
                   help='Configuration file (overrides default locations)')
     @click.option('--build-dir', type=click.Path(path_type=Path),
                   help='Override build directory')
-    @click.option('--debug', is_flag=True, help='Enable debug mode')
+    @click.option('--debug', is_flag=True, help='Enable DEBUG-level logging and error traces')
     @click.version_option(package_name='brainsmith', prog_name=name)
     @click.pass_context
-    def cli(ctx: click.Context, verbose: bool, config: Optional[Path], 
+    def cli(ctx: click.Context, config: Optional[Path],
             build_dir: Optional[Path], debug: bool):
         """Brainsmith - Neural network hardware acceleration toolkit."""
-        
+
         # Initialize application context
         context = ApplicationContext(
-            verbose=verbose,
             debug=debug,
             config_file=config
         )
-        
+
         # Apply overrides
         if build_dir:
             context.overrides['build_dir'] = str(build_dir)
-        
+
         # Load configuration
         context.load_configuration()
-        
+
         # Store in Click context
         ctx.obj = context
-        
+
         # Set up logging
-        setup_logging(verbose)
-        logger.debug(f"{name} CLI initialized with verbose={verbose}")
-        
+        setup_logging(debug)
+        logger.debug(f"{name} CLI initialized with debug={debug}")
+
         # Export to environment for legacy compatibility
         effective_config = context.get_effective_config()
-        effective_config.export_to_environment(verbose=verbose)
+        effective_config.export_to_environment(verbose=False)
         
         # Handle default behavior when no subcommand is provided
         if ctx.invoked_subcommand is None:
