@@ -8,7 +8,7 @@ runs:
       shell: bash
       run: |
         echo "=== Docker container scoped cleanup ==="
-        
+
         # Clean container and build artifacts
         if [ -x ./ctl-docker.sh ]; then
             # Use the clean command which handles both container and artifacts
@@ -17,5 +17,18 @@ runs:
         else
             echo "No ctl-docker.sh script found, skipping cleanup"
         fi
-        
+
+        # Remove the tagged image for this specific commit
+        if [ -n "$BSMITH_DOCKER_TAG" ]; then
+            echo "Removing commit-specific image: $BSMITH_DOCKER_TAG"
+            docker rmi -f "$BSMITH_DOCKER_TAG" 2>/dev/null || echo "Image already removed or not found"
+        fi
+
+        # Prune dangling images (untagged intermediates)
+        echo "Removing dangling images..."
+        docker image prune -f || echo "No dangling images to remove"
+
+        # Note: BuildKit cache layers are preserved automatically
+        echo "✓ BuildKit cache layers preserved for future builds"
+
         echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"

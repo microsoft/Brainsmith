@@ -43,6 +43,15 @@ Comprehensive testing for large model validation.
 2. Setup workflow (disk check, cleanup, build)
 3. Run BERT Large test with artifact collection
 
+## Build Caching
+
+BuildKit layer caching enabled (`BSMITH_DOCKER_NO_CACHE: "0"`). Typical build times:
+- First build: ~12 min
+- Code changes: ~1-2 min
+- Dependency/Dockerfile changes: ~3-10 min
+
+Cache (~5GB) persists on runner. Cleanup removes commit-tagged images but preserves cache layers.
+
 ## Action Architecture
 
 ### Layer 2: Composite Actions (Orchestration)
