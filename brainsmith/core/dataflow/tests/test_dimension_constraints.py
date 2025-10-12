@@ -18,9 +18,6 @@ from brainsmith.core.dataflow import (
     DimensionDivisible,
     DimensionMinValue,
     DimensionMaxValue,
-    DimensionEquality,
-    DimensionDivisibleBy,
-    DimensionScaled,
     InputModel,
     OutputModel,
     KernelModel,
@@ -67,7 +64,7 @@ def test_datatype_constraint_fail():
     constraint = DatatypeConstraint("input", "INT", 4, 16)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "INT" in error
+    assert "INT" in str(error)
 
 
 def test_divisible_constraint_pass():
@@ -105,7 +102,7 @@ def test_divisible_constraint_fail():
     constraint = DimensionDivisible("input", 1, 8)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "divisible" in error.lower()
+    assert "divisible" in str(error).lower()
 
 
 def test_min_value_constraint():
@@ -127,7 +124,7 @@ def test_min_value_constraint():
     constraint = DimensionMinValue("input", 1, 10)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "must be >=" in error
+    assert "must be >=" in str(error)
 
 
 def test_max_value_constraint():
@@ -149,7 +146,7 @@ def test_max_value_constraint():
     constraint = DimensionMaxValue("input", 0, 10)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "must be <=" in error
+    assert "must be <=" in str(error)
 
 
 def test_range_constraint_via_composition():
@@ -181,100 +178,6 @@ def test_range_constraint_via_composition():
 
     assert min_error is None  # 8 >= 5
     assert max_error is not None  # 8 <= 7 fails
-
-
-def test_equality_constraint():
-    """Test equality constraint between stream dimensions."""
-    input_model = InputModel(
-        name="input",
-        tensor_shape=(128, 64),
-        block_shape=(128, 64),
-        stream_shape=(16, 8),  # stream[0] = 16, stream[1] = 8
-        datatype=DataType["INT8"]
-    )
-
-    output_model = OutputModel(
-        name="output",
-        tensor_shape=(128, 64),
-        block_shape=(16, 8),
-        stream_shape=(16, 8),  # Same stream shape as input
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"input": input_model, "output": output_model}
-
-    # Test: input.stream[0] == output.stream[0] (16 == 16) ✓
-    constraint = DimensionEquality("input", 0, "output", 0)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: input.stream[1] == output.stream[0] (8 == 16) ✗
-    constraint = DimensionEquality("input", 1, "output", 0)
-    error = constraint.check(interfaces)
-    assert error is not None
-    assert "must equal" in error
-
-
-def test_divisible_by_dimension_constraint():
-    """Test divisibility constraint between stream dimensions."""
-    tensor_model = InputModel(
-        name="tensor",
-        tensor_shape=(128, 64),
-        block_shape=(128, 64),
-        stream_shape=(16, 8),  # stream[0] = 16, stream[1] = 8
-        datatype=DataType["INT8"]
-    )
-
-    block_model = InputModel(
-        name="block",
-        tensor_shape=(16, 8),
-        block_shape=(16, 8),
-        stream_shape=(4, 2),  # stream[0] = 4, stream[1] = 2
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"tensor": tensor_model, "block": block_model}
-
-    # Test: tensor.stream[0] % block.stream[0] == 0 (16 % 4 == 0) ✓
-    constraint = DimensionDivisibleBy("tensor", 0, "block", 0)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: tensor.stream[1] % block.stream[0] == 0 (8 % 4 == 0) ✓
-    constraint = DimensionDivisibleBy("tensor", 1, "block", 0)
-    error = constraint.check(interfaces)
-    assert error is None
-
-
-def test_scaled_equality_constraint():
-    """Test scaled equality constraint on stream dimensions."""
-    input_model = InputModel(
-        name="input",
-        tensor_shape=(128, 64),
-        block_shape=(128, 64),
-        stream_shape=(8, 4),  # stream[0] = 8, stream[1] = 4
-        datatype=DataType["INT8"]
-    )
-
-    output_model = OutputModel(
-        name="output",
-        tensor_shape=(256, 128),
-        block_shape=(16, 8),
-        stream_shape=(16, 8),  # stream[0] = 16 (2x input), stream[1] = 8 (2x input)
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"input": input_model, "output": output_model}
-
-    # Test: output.stream[0] == input.stream[0] * 2 (16 == 8 * 2) ✓
-    constraint = DimensionScaled("input", 0, "output", 0, 2)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: output.stream[1] == input.stream[1] * 4 (8 == 4 * 4) ✗
-    constraint = DimensionScaled("input", 1, "output", 1, 4)
-    error = constraint.check(interfaces)
-    assert error is not None
 
 
 def test_constraint_with_nodeattr_reference():
@@ -338,8 +241,8 @@ def test_block_dimension_divisible():
     constraint = DimensionDivisible("input", 1, 100, ShapeHierarchy.BLOCK)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "block[1]" in error
-    assert "divisible" in error.lower()
+    assert "block[1]" in str(error)
+    assert "divisible" in str(error).lower()
 
 
 def test_tensor_dimension_min_value():
@@ -361,8 +264,8 @@ def test_tensor_dimension_min_value():
     constraint = DimensionMinValue("input", 1, 100, ShapeHierarchy.TENSOR)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "tensor[1]" in error
-    assert "must be >=" in error
+    assert "tensor[1]" in str(error)
+    assert "must be >=" in str(error)
 
 
 def test_block_dimension_max_value():
@@ -384,109 +287,8 @@ def test_block_dimension_max_value():
     constraint = DimensionMaxValue("input", 0, 100, ShapeHierarchy.BLOCK)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "block[0]" in error
-    assert "must be <=" in error
-
-
-def test_block_dimension_equality():
-    """Test equality constraint on block_shape."""
-    input_model = InputModel(
-        name="input",
-        tensor_shape=(128, 64),
-        block_shape=(128, 64),  # block[0] = 128, block[1] = 64
-        stream_shape=(16, 8),
-        datatype=DataType["INT8"]
-    )
-
-    output_model = OutputModel(
-        name="output",
-        tensor_shape=(128, 64),
-        block_shape=(128, 32),  # block[0] = 128, block[1] = 32
-        stream_shape=(16, 4),
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"input": input_model, "output": output_model}
-
-    # Test: input.block[0] == output.block[0] (128 == 128) ✓
-    constraint = DimensionEquality("input", 0, "output", 0, ShapeHierarchy.BLOCK)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: input.block[1] == output.block[1] (64 == 32) ✗
-    constraint = DimensionEquality("input", 1, "output", 1, ShapeHierarchy.BLOCK)
-    error = constraint.check(interfaces)
-    assert error is not None
-    assert "block[1]" in error
-    assert "must equal" in error
-
-
-def test_tensor_dimension_divisible_by():
-    """Test divisibility constraint on tensor_shape."""
-    input_model = InputModel(
-        name="input",
-        tensor_shape=(128, 64),  # tensor[0] = 128, tensor[1] = 64
-        block_shape=(128, 64),
-        stream_shape=(16, 8),
-        datatype=DataType["INT8"]
-    )
-
-    output_model = OutputModel(
-        name="output",
-        tensor_shape=(256, 128),  # tensor[0] = 256, tensor[1] = 128
-        block_shape=(128, 64),
-        stream_shape=(16, 8),
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"input": input_model, "output": output_model}
-
-    # Test: output.tensor[0] % input.tensor[0] == 0 (256 % 128 == 0) ✓
-    constraint = DimensionDivisibleBy("output", 0, "input", 0, ShapeHierarchy.TENSOR)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: output.tensor[1] % input.tensor[1] == 0 (128 % 64 == 0) ✓
-    constraint = DimensionDivisibleBy("output", 1, "input", 1, ShapeHierarchy.TENSOR)
-    error = constraint.check(interfaces)
-    assert error is None
-
-
-def test_block_dimension_scaled():
-    """Test scaled equality constraint on block_shape."""
-    input_model = InputModel(
-        name="input",
-        tensor_shape=(128, 64),
-        block_shape=(64, 32),  # block[0] = 64, block[1] = 32
-        stream_shape=(8, 4),
-        datatype=DataType["INT8"]
-    )
-
-    output_model = OutputModel(
-        name="output",
-        tensor_shape=(256, 128),
-        block_shape=(128, 64),  # block[0] = 128 (2x input), block[1] = 64 (2x input)
-        stream_shape=(16, 8),
-        datatype=DataType["INT8"]
-    )
-
-    interfaces = {"input": input_model, "output": output_model}
-
-    # Test: output.block[0] == input.block[0] * 2 (128 == 64 * 2) ✓
-    constraint = DimensionScaled("input", 0, "output", 0, 2, ShapeHierarchy.BLOCK)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: output.block[1] == input.block[1] * 2 (64 == 32 * 2) ✓
-    constraint = DimensionScaled("input", 1, "output", 1, 2, ShapeHierarchy.BLOCK)
-    error = constraint.check(interfaces)
-    assert error is None
-
-    # Test: output.block[0] == input.block[0] * 3 (128 == 64 * 3) ✗
-    constraint = DimensionScaled("input", 0, "output", 0, 3, ShapeHierarchy.BLOCK)
-    error = constraint.check(interfaces)
-    assert error is not None
-    assert "block[0]" in error
+    assert "block[0]" in str(error)
+    assert "must be <=" in str(error)
 
 
 def test_mixed_shape_targets():
@@ -543,14 +345,12 @@ def test_multi_index_divisible_fail():
         datatype=DataType["INT8"]
     )
 
-    # Test: stream[0,1,2] % 8 - should fail for dims 0 and 2
+    # Test: stream[0,1,2] % 8 - should fail fast on dim 0
     constraint = DimensionDivisible("input", [0, 1, 2], 8)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "stream[0]" in error  # First failure
-    assert "stream[2]" in error  # Second failure
-    assert "17" in error  # Value of dim 0
-    assert "15" in error  # Value of dim 2
+    assert "stream[0]" in str(error)  # First failure (fail-fast)
+    assert "17" in str(error)  # Value of dim 0
 
 
 def test_multi_index_min_value():
@@ -568,12 +368,11 @@ def test_multi_index_min_value():
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is None
 
-    # Test: stream[1,2] >= 10 (8 >= 10 ✗, 4 >= 10 ✗)
+    # Test: stream[1,2] >= 10 (8 >= 10 ✗ - fail fast on first)
     constraint = DimensionMinValue("input", [1, 2], 10)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "stream[1]" in error
-    assert "stream[2]" in error
+    assert "stream[1]" in str(error)  # First failure (fail-fast)
 
 
 def test_multi_index_max_value():
@@ -591,12 +390,12 @@ def test_multi_index_max_value():
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is None
 
-    # Test: stream[0,1] <= 10 (16 <= 10 ✗, 8 <= 10 ✓)
+    # Test: stream[0,1] <= 10 (16 <= 10 ✗ - fail fast on first)
     constraint = DimensionMaxValue("input", [0, 1], 10)
     error = constraint.check(input_model, make_nodeattr_getter({}))
     assert error is not None
-    assert "stream[0]" in error
-    assert "16" in error
+    assert "stream[0]" in str(error)
+    assert "16" in str(error)
 
 
 def test_multi_index_with_nodeattr():

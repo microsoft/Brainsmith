@@ -14,11 +14,11 @@ Key Components:
 - KernelSchema: Kernel definition with input/output schemas
 - Immutable models: Created via factory functions in models.py
 - Constraint system: InterfaceConstraint for single-interface validation
-- Relationship system: InterfaceRelationship for cross-interface constraints
+- Dimension sources: DerivedDim/ScaledDim for explicit dimension derivation
 """
 
 # Core types
-from .types import Shape, ShapeHierarchy
+from .types import Shape, ShapeHierarchy, DerivedDim, ScaledDim
 
 # QONNX types (direct from QONNX)
 from qonnx.core.datatype import DataType, BaseDataType
@@ -35,16 +35,6 @@ from .constraints import (
     DimensionMaxValue,
 )
 
-# Relationship system
-from .relationships import (
-    # Base class
-    InterfaceRelationship,
-    # Concrete relationships
-    DimensionEquality,
-    DimensionDivisibleBy,
-    DimensionScaled,
-)
-
 # Core architecture - schemas consolidated in schemas.py
 from .schemas import InputSchema, OutputSchema, KernelSchema
 
@@ -59,21 +49,25 @@ from .models import (
 # Tensor context extraction
 from .tensor_context import TensorContext, TensorInfo
 
+# Template resolution
+from .template_resolution import resolve_template
+
+# Validation
+from .validation import ValidationError
+
 
 
 __all__ = [
     # Core types
-    'Shape',
+    'Shape', 'DerivedDim', 'ScaledDim',
 
     # QONNX types
     'DataType', 'BaseDataType',
 
     # Unified constraint system
-    'ShapeHierarchy', 'InterfaceConstraint', 'DimensionConstraint', 'InterfaceRelationship',
+    'ShapeHierarchy', 'InterfaceConstraint', 'DimensionConstraint',
     # Interface constraints
     'DatatypeConstraint', 'DimensionDivisible', 'DimensionMinValue', 'DimensionMaxValue',
-    # Interface relationships
-    'DimensionEquality', 'DimensionDivisibleBy', 'DimensionScaled',
 
     # Core architecture
     'InputSchema', 'OutputSchema', 'KernelSchema',
@@ -83,4 +77,10 @@ __all__ = [
 
     # Tensor context extraction
     'TensorContext', 'TensorInfo',
+
+    # Template resolution
+    'resolve_template',
+
+    # Validation
+    'ValidationError',
 ]

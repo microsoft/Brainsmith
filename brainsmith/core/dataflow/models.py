@@ -156,9 +156,7 @@ class KernelModel:
     Models are cached and refreshed when nodeattrs change.
 
     Resolution flow in __post_init__:
-    1. Apply generative relationships to set unset output dimensions
-    2. Derive any remaining unset dimensions (default logic)
-    3. Validate all relationships
+    1. Derive any remaining unset output dimensions (default logic)
     """
 
     # Kernel identity
@@ -168,61 +166,22 @@ class KernelModel:
     inputs: Tuple[InputModel, ...]
     outputs: Tuple[OutputModel, ...]
 
-    # Interface relationships (applied during construction)
-    relationships: Tuple[Any, ...] = field(default_factory=tuple)  # List[InterfaceRelationship]
-
     # Performance characteristics
     latency_cycles: Tuple[int, int] = (1, 1)
     pipeline_depth: int = 1
     clock_freq_mhz: float = 100.0
 
     def __post_init__(self):
-        """Resolve output dimensions and validate relationships."""
+        """Resolve output dimensions."""
         # Convert lists to tuples for immutability
         if isinstance(self.inputs, list):
             object.__setattr__(self, 'inputs', tuple(self.inputs))
         if isinstance(self.outputs, list):
             object.__setattr__(self, 'outputs', tuple(self.outputs))
-        if isinstance(self.relationships, list):
-            object.__setattr__(self, 'relationships', tuple(self.relationships))
 
-        # Resolve output dimensions (generative relationships + derivation)
-        resolved_outputs = self._resolve_output_dimensions()
+        # Derive any remaining unset output dimensions
+        resolved_outputs = self._derive_unset_dimensions(list(self.outputs))
         object.__setattr__(self, 'outputs', tuple(resolved_outputs))
-
-        # Validate all relationships after resolution
-        self._validate_relationships()
-    
-    def _resolve_output_dimensions(self) -> List[OutputModel]:
-        """Apply generative relationships and derive remaining dimensions.
-
-        Returns:
-            List of OutputModels with all dimensions resolved
-        """
-        outputs = list(self.outputs)
-
-        # Build interface lookup
-        interfaces = {inp.name: inp for inp in self.inputs}
-        interfaces.update({out.name: out for out in outputs})
-
-        # Phase 1: Apply generative relationships iteratively
-        max_iterations = 10  # Prevent infinite loops
-        for iteration in range(max_iterations):
-            any_resolved = False
-
-            for relationship in self.relationships:
-                if relationship.resolve(interfaces, outputs):
-                    any_resolved = True
-                    # Update interfaces dict
-                    interfaces.update({out.name: out for out in outputs})
-
-            if not any_resolved:
-                break  # Fixed point reached
-
-        # Phase 2: Derive any remaining unset dimensions
-        outputs = self._derive_unset_dimensions(outputs)
-
-        return outputs
 
     def _derive_unset_dimensions(self, outputs: List[OutputModel]) -> List[OutputModel]:
         """Fill in unset dimensions using default derivation logic.
@@ -261,20 +220,6 @@ class KernelModel:
             resolved.append(output)
 
         return resolved
-
-    def _validate_relationships(self) -> None:
-        """Validate all relationships after dimensions resolved.
-
-        Raises:
-            ValueError: If any relationship is violated
-        """
-        interfaces = {inp.name: inp for inp in self.inputs}
-        interfaces.update({out.name: out for out in self.outputs})
-
-        for relationship in self.relationships:
-            error = relationship.check(interfaces)
-            if error:
-                raise ValueError(f"Relationship validation failed in '{self.name}': {error}")
 
     def get_input(self, name: str) -> Optional[InputModel]:
         """Get input model by name."""
@@ -326,9 +271,13 @@ class KernelModel:
         return max(inp.block_folding_factor for inp in self.inputs)
 
     def output_stream_width_bits(self, output_idx: int = 0) -> int:
-        """Stream width in bits for output."""
+        """Stream width in bits for output.
+
+        Returns the actual stream width based on the output's stream_shape,
+        not derived from input block folding factors.
+        """
         output = self.outputs[output_idx]
-        return self.output_streaming_rate(output_idx) * output.datatype.bitwidth()
+        return output.stream_width_bits
 
     def output_stream_shape(self, output_idx: int = 0) -> Shape:
         """Stream shape for output.

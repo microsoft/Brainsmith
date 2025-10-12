@@ -28,7 +28,8 @@ from brainsmith.core.dataflow import (
     TensorContext,
     InputModel,
     OutputModel,
-    KernelModel
+    KernelModel,
+    resolve_template
 )
 
 
@@ -159,29 +160,39 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             RuntimeError: If tensor context not initialized
             HWCustomOpError: If validation fails
         """
+        # Build interfaces dict incrementally for DerivedDim/ScaledDim resolution
+        interfaces = {}
+
         input_models = []
         for i in range(len(self.kernel_schema.inputs)):
-            input_model = self._create_input_model(i)
+            input_model = self._create_input_model(i, interfaces)
             if input_model is not None:
                 input_models.append(input_model)
+                interfaces[input_model.name] = input_model
 
         output_models = []
         for i in range(len(self.kernel_schema.outputs)):
-            output_models.append(self._create_output_model(i))
+            output_model = self._create_output_model(i, interfaces)
+            output_models.append(output_model)
+            interfaces[output_model.name] = output_model
 
-        # KernelModel.__post_init__ handles dimension resolution and validation
+        # KernelModel.__post_init__ handles dimension resolution
         model = KernelModel(
             name=self.kernel_schema.name,
             inputs=tuple(input_models),
             outputs=tuple(output_models),
-            relationships=self.kernel_schema.relationships,
         )
 
         self._kernel_model = model
         return model
 
-    def _create_input_model(self, index: int) -> Optional[InputModel]:
-        """Create input model from schema and tensor context."""
+    def _create_input_model(self, index: int, interfaces: dict) -> Optional[InputModel]:
+        """Create input model from schema and tensor context.
+
+        Args:
+            index: Index of input in schema
+            interfaces: Dict of already-built interface models for DerivedDim resolution
+        """
         schema = self.kernel_schema.inputs[index]
         tensor = self.tensor_context.inputs[index]
 
@@ -191,13 +202,15 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         block_shape = self._resolve_dimensions(
             schema.block_tiling,
             tensor.shape,
-            f"Input '{schema.name}' block"
+            f"Input '{schema.name}' block",
+            interfaces
         )
 
         stream_shape = self._resolve_dimensions(
             schema.stream_tiling,
             block_shape,
-            f"Input '{schema.name}' stream"
+            f"Input '{schema.name}' stream",
+            interfaces
         )
 
         datatype_attr = self.kernel_schema.get_datatype_attr(index)
@@ -221,15 +234,21 @@ class AutoHWCustomOp(HWCustomOp, ABC):
 
         return input_model
 
-    def _create_output_model(self, index: int) -> OutputModel:
-        """Create output model from schema - stream_shape may be unset."""
+    def _create_output_model(self, index: int, interfaces: dict) -> OutputModel:
+        """Create output model from schema - stream_shape may be unset.
+
+        Args:
+            index: Index of output in schema
+            interfaces: Dict of already-built interface models for DerivedDim resolution
+        """
         schema = self.kernel_schema.outputs[index]
         tensor = self.tensor_context.outputs[index]
 
         block_shape = self._resolve_dimensions(
             schema.block_tiling,
             tensor.shape,
-            f"Output '{schema.name}' block"
+            f"Output '{schema.name}' block",
+            interfaces
         )
 
         # Resolve stream tiling if specified in schema
@@ -237,7 +256,8 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             stream_shape = self._resolve_dimensions(
                 schema.stream_tiling,
                 block_shape,
-                f"Output '{schema.name}' stream"
+                f"Output '{schema.name}' stream",
+                interfaces
             )
         else:
             # Leave unset - will be resolved by KernelModel.__post_init__
@@ -268,51 +288,23 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         self,
         template: Any,  # TilingSpec or similar sequence
         reference_shape: Tuple[int, ...],
-        context_name: str
+        context_name: str,
+        interfaces: dict
     ) -> Tuple[int, ...]:
-        """Resolve template dimensions to concrete values."""
-        if len(template) < len(reference_shape):
-            padding = len(reference_shape) - len(template)
-            template = [1] * padding + template
-        elif len(template) > len(reference_shape):
-            raise self._error(
-                f"{context_name}: template length {len(template)} exceeds "
-                f"tensor rank {len(reference_shape)}"
+        """Resolve template dimensions to concrete values.
+
+        Args:
+            template: Template specification (e.g., [":", "PE", DerivedDim("Q", 1)])
+            reference_shape: Reference shape to resolve against
+            context_name: Context string for error messages
+            interfaces: Dict of already-built interface models for DerivedDim resolution
+        """
+        try:
+            return resolve_template(
+                template, reference_shape, self.get_nodeattr, context_name, interfaces
             )
-
-        resolved = []
-        for i, (dim, ref) in enumerate(zip(template, reference_shape)):
-            if isinstance(dim, str):
-                if dim == ":":
-                    value = ref
-                else:
-                    try:
-                        value = self.get_nodeattr(dim)
-                    except AttributeError:
-                        raise self._error(
-                            f"{context_name}[{i}]: parameter '{dim}' not found in node attributes"
-                        )
-                    if ref % value != 0:
-                        raise self._error(
-                            f"{context_name}[{i}]: parameter '{dim}' value {value} "
-                            f"does not divide parent dimension size {ref}"
-                        )
-            elif isinstance(dim, int):
-                if dim == 1:
-                    value = 1
-                else:
-                    raise self._error(
-                        f"{context_name}[{i}]: only singleton (1) allowed for literals, "
-                        f"got {dim}. Use parameters for other values."
-                    )
-            else:
-                raise self._error(
-                    f"{context_name}[{i}]: invalid template element '{dim}'"
-                )
-
-            resolved.append(value)
-
-        return tuple(resolved)
+        except ValueError as e:
+            raise self._error(str(e))
 
     def _validate_interface_constraints(
         self,
@@ -331,7 +323,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             HWCustomOpError: If any constraint is violated
         """
         for constraint in constraints:
-            error_msg = constraint.check(interface_model, self.get_nodeattr)
-            if error_msg:
-                raise self._error(f"{interface_name}: {error_msg}")
+            error = constraint.check(interface_model, self.get_nodeattr)
+            if error:
+                raise self._error(str(error))
 

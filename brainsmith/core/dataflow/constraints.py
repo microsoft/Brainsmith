@@ -26,6 +26,7 @@ from typing import Any, Callable, List, Optional, Union
 from abc import ABC, abstractmethod
 
 from .types import ShapeHierarchy
+from .validation import ValidationError
 
 
 # =============================================================================
@@ -47,7 +48,7 @@ class InterfaceConstraint(ABC):
         self,
         interface_model: Any,  # InputModel or OutputModel
         nodeattr_getter: Callable[[str], Any]
-    ) -> Optional[str]:
+    ) -> Optional[ValidationError]:
         """Check constraint on interface model.
 
         Args:
@@ -56,7 +57,7 @@ class InterfaceConstraint(ABC):
 
         Returns:
             None if constraint is satisfied
-            Error message string if constraint is violated
+            ValidationError if constraint is violated
         """
         pass
 
@@ -94,22 +95,25 @@ class DatatypeConstraint(InterfaceConstraint):
         if self.base_type not in valid_base_types:
             raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_base_types}")
 
-    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[str]:
+    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[ValidationError]:
         """Validate datatype against constraints."""
         datatype = interface_model.datatype
         bitwidth = datatype.bitwidth()
+        canonical_name = datatype.get_canonical_name()
 
         # Check bitwidth range
         if not (self.min_width <= bitwidth <= self.max_width):
-            return f"Datatype {datatype.get_canonical_name()} bitwidth {bitwidth} not in range [{self.min_width}, {self.max_width}]"
+            return ValidationError(
+                message=f"Datatype {canonical_name} bitwidth {bitwidth} not in range [{self.min_width}, {self.max_width}]",
+                location=f"{interface_model.name}.datatype",
+                suggestions=[f"Use {self.base_type} type with width in [{self.min_width}, {self.max_width}]"]
+            )
 
         # Special case: ANY matches any type (only bitwidth matters)
         if self.base_type == "ANY":
             return None
 
         # Check base type using validation mapping
-        canonical_name = datatype.get_canonical_name()
-
         type_validators = {
             "INT": lambda: canonical_name.startswith("INT") and datatype.signed(),
             "UINT": lambda: canonical_name.startswith("UINT") or canonical_name == "BINARY",
@@ -122,7 +126,11 @@ class DatatypeConstraint(InterfaceConstraint):
 
         validator = type_validators.get(self.base_type)
         if validator and not validator():
-            return f"Datatype {canonical_name} does not match {self.base_type} constraint"
+            return ValidationError(
+                message=f"Datatype {canonical_name} does not match {self.base_type} constraint",
+                location=f"{interface_model.name}.datatype",
+                suggestions=[f"Use {self.base_type} datatype"]
+            )
 
         return None
 
@@ -158,12 +166,12 @@ class DimensionConstraint(InterfaceConstraint, ABC):
         dim_value: int,
         constraint_value: Union[int, float],
         dim_desc: str
-    ) -> Optional[str]:
-        """Validate dimension value against constraint. Returns error message or None."""
+    ) -> Optional[ValidationError]:
+        """Validate dimension value against constraint. Returns ValidationError or None."""
         pass
 
-    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[str]:
-        """Check constraint on interface model. Returns error message or None."""
+    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[ValidationError]:
+        """Check constraint on interface model. Returns ValidationError or None."""
         # Handle multiple dimensions
         if isinstance(self.dim_index, list):
             return self._check_multiple_dimensions(interface_model, nodeattr_getter)
@@ -188,23 +196,26 @@ class DimensionConstraint(InterfaceConstraint, ABC):
     def _extract_dimension(
         self,
         interface_model: Any
-    ) -> tuple[Optional[int], Optional[str], Optional[str]]:
-        """Extract dimension value and descriptor. Returns (dim_value, dim_desc, error_msg)."""
+    ) -> tuple[Optional[int], Optional[str], Optional[ValidationError]]:
+        """Extract dimension value and descriptor. Returns (dim_value, dim_desc, error)."""
         target_shape = interface_model.get_shape(self.shape_hierarchy)
         shape_name = self.shape_hierarchy.value
 
         if self.dim_index is None:
             # Total size (product of all dimensions)
             dim_value = math.prod(target_shape)
-            dim_desc = f"{shape_name}_total"
+            dim_desc = f"{interface_model.name}.{shape_name}_total"
         else:
             # Specific dimension index
             if self.dim_index >= len(target_shape):
-                error = (f"{shape_name} dimension index {self.dim_index} "
-                        f"out of range for shape {target_shape}")
+                error = ValidationError(
+                    message=f"Dimension index {self.dim_index} out of range for shape {target_shape}",
+                    location=f"{interface_model.name}.{shape_name}[{self.dim_index}]",
+                    suggestions=[]
+                )
                 return None, None, error
             dim_value = target_shape[self.dim_index]
-            dim_desc = f"{shape_name}[{self.dim_index}]"
+            dim_desc = f"{interface_model.name}.{shape_name}[{self.dim_index}]"
 
         return dim_value, dim_desc, None
 
@@ -212,15 +223,20 @@ class DimensionConstraint(InterfaceConstraint, ABC):
         self,
         value: Union[int, str, float],
         nodeattr_getter: Callable[[str], Any]
-    ) -> tuple[Optional[Union[int, float]], Optional[str]]:
-        """Resolve literal value or nodeattr reference. Returns (resolved_value, error_msg)."""
+    ) -> tuple[Optional[Union[int, float]], Optional[ValidationError]]:
+        """Resolve literal value or nodeattr reference. Returns (resolved_value, error)."""
         if isinstance(value, str):
             # Nodeattr reference - look it up
             try:
                 resolved = nodeattr_getter(value)
                 return resolved, None
             except (AttributeError, KeyError):
-                return None, f"Nodeattr '{value}' not found"
+                error = ValidationError(
+                    message=f"Parameter '{value}' not found",
+                    location=f"{self.interface_name}",
+                    suggestions=[f"Define '{value}' in node attributes"]
+                )
+                return None, error
         else:
             # Literal value - use directly
             return value, None
@@ -229,39 +245,42 @@ class DimensionConstraint(InterfaceConstraint, ABC):
         self,
         interface_model: Any,
         nodeattr_getter: Callable[[str], Any]
-    ) -> Optional[str]:
-        """Check constraint across multiple dimensions. Returns aggregated error or None."""
+    ) -> Optional[ValidationError]:
+        """Check constraint across multiple dimensions. Returns first error or None."""
         target_shape = interface_model.get_shape(self.shape_hierarchy)
         shape_name = self.shape_hierarchy.value
 
         # Resolve constraint value once (shared across all dimensions)
-        constraint_value, error = self._resolve_value(
+        constraint_value, error_msg = self._resolve_value(
             self._get_constraint_value(),
             nodeattr_getter
         )
-        if error:
-            return error
+        if error_msg:
+            return ValidationError(
+                message=error_msg,
+                location=f"{interface_model.name}.{shape_name}",
+                suggestions=[]
+            )
 
-        # Check each dimension
-        failures = []
+        # Check each dimension - fail fast on first error
         for idx in self.dim_index:
             # Validate index is in range
             if idx >= len(target_shape):
-                failures.append(f"{shape_name}[{idx}] out of range for shape {target_shape}")
-                continue
+                return ValidationError(
+                    message=f"Dimension index {idx} out of range for shape {target_shape}",
+                    location=f"{interface_model.name}.{shape_name}[{idx}]",
+                    suggestions=[]
+                )
 
             # Get dimension value and descriptor
             dim_value = target_shape[idx]
-            dim_desc = f"{shape_name}[{idx}]"
+            dim_desc = f"{interface_model.name}.{shape_name}[{idx}]"
 
-            # Validate this dimension
+            # Validate this dimension - return first error
             error = self._validate_dimension(dim_value, constraint_value, dim_desc)
             if error:
-                failures.append(error)
+                return error
 
-        # Return aggregated error or None
-        if failures:
-            return "; ".join(failures)
         return None
 
     def _make_dim_descriptor(self) -> str:
@@ -302,10 +321,14 @@ class DimensionDivisible(DimensionConstraint):
         dim_value: int,
         constraint_value: int,
         dim_desc: str
-    ) -> Optional[str]:
+    ) -> Optional[ValidationError]:
         """Validate divisibility constraint."""
         if dim_value % constraint_value != 0:
-            return f"{dim_desc} ({dim_value}) not divisible by {constraint_value}"
+            return ValidationError(
+                message=f"Value {dim_value} not divisible by {constraint_value}",
+                location=dim_desc,
+                suggestions=[f"Use value divisible by {constraint_value}"]
+            )
         return None
 
     def describe(self) -> str:
@@ -336,10 +359,14 @@ class DimensionMinValue(DimensionConstraint):
         dim_value: int,
         constraint_value: Union[int, float],
         dim_desc: str
-    ) -> Optional[str]:
+    ) -> Optional[ValidationError]:
         """Validate minimum value constraint."""
         if dim_value < constraint_value:
-            return f"{dim_desc} ({dim_value}) must be >= {constraint_value}"
+            return ValidationError(
+                message=f"Value {dim_value} must be >= {constraint_value}",
+                location=dim_desc,
+                suggestions=[f"Increase to at least {constraint_value}"]
+            )
         return None
 
     def describe(self) -> str:
@@ -370,10 +397,14 @@ class DimensionMaxValue(DimensionConstraint):
         dim_value: int,
         constraint_value: Union[int, float],
         dim_desc: str
-    ) -> Optional[str]:
+    ) -> Optional[ValidationError]:
         """Validate maximum value constraint."""
         if dim_value > constraint_value:
-            return f"{dim_desc} ({dim_value}) must be <= {constraint_value}"
+            return ValidationError(
+                message=f"Value {dim_value} must be <= {constraint_value}",
+                location=dim_desc,
+                suggestions=[f"Decrease to at most {constraint_value}"]
+            )
         return None
 
     def describe(self) -> str:

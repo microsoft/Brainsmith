@@ -11,7 +11,7 @@ This module contains all schema classes for defining kernel interfaces:
 - InterfaceSchema: Base class for input/output interfaces
 - InputSchema: Schema for input interfaces with optional streaming
 - OutputSchema: Schema for output interfaces
-- KernelSchema: Complete kernel definition with inputs, outputs, and relationships
+- KernelSchema: Complete kernel definition with inputs and outputs
 """
 
 from dataclasses import dataclass, field
@@ -20,10 +20,10 @@ from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
 from .constraints import InterfaceConstraint
-from .relationships import InterfaceRelationship
+from .types import DerivedDim, ScaledDim
 
 # Type aliases for better clarity
-TilingSpec = Sequence[Union[int, str]]
+TilingSpec = Sequence[Union[int, str, DerivedDim, ScaledDim]]
 
 
 def _build_repr(class_name: str, name: str, **kwargs) -> str:
@@ -153,25 +153,96 @@ class OutputSchema(InterfaceSchema):
 class KernelSchema:
     """Schema for a complete kernel definition.
 
-    Defines a kernel with its input/output interfaces and cross-interface
-    relationships. This is a pure schema definition - model creation
-    happens in AutoHWCustomOp.
+    Defines a kernel with its input/output interfaces. This is a pure schema
+    definition - model creation happens in AutoHWCustomOp.
     """
 
     name: str
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
-    relationships: List[InterfaceRelationship] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def add_relationship(self, relationship: InterfaceRelationship) -> None:
-        """Add a cross-interface relationship to this kernel.
+    def __post_init__(self):
+        """Validate schema structure."""
+        # Check unique input names
+        input_names = [inp.name for inp in self.inputs]
+        if len(input_names) != len(set(input_names)):
+            raise ValueError(f"Duplicate input names in kernel '{self.name}'")
+
+        # Check unique output names
+        output_names = [out.name for out in self.outputs]
+        if len(output_names) != len(set(output_names)):
+            raise ValueError(f"Duplicate output names in kernel '{self.name}'")
+
+        # Validate constraint targets match interface names
+        for inp in self.inputs:
+            for constraint in inp.constraints:
+                if constraint.interface_name != inp.name:
+                    raise ValueError(
+                        f"Input '{inp.name}' constraint targets wrong interface '{constraint.interface_name}'"
+                    )
+
+        for out in self.outputs:
+            for constraint in out.constraints:
+                if constraint.interface_name != out.name:
+                    raise ValueError(
+                        f"Output '{out.name}' constraint targets wrong interface '{constraint.interface_name}'"
+                    )
+
+        # Validate DerivedDim/ScaledDim references
+        self._validate_dimension_references(input_names, output_names)
+
+    def _validate_dimension_references(self, input_names: List[str], output_names: List[str]) -> None:
+        """Validate DerivedDim/ScaledDim references in tiling specs.
 
         Args:
-            relationship: InterfaceRelationship to add
+            input_names: List of input interface names
+            output_names: List of output interface names
+
+        Raises:
+            ValueError: If dimension references are invalid
         """
-        self.relationships.append(relationship)
-    
+        all_interface_names = set(input_names + output_names)
+
+        # Check inputs
+        for inp in self.inputs:
+            for spec_name, spec in [("block_tiling", inp.block_tiling), ("stream_tiling", inp.stream_tiling)]:
+                if spec is None:
+                    continue
+
+                for dim_idx, dim in enumerate(spec):
+                    if isinstance(dim, (DerivedDim, ScaledDim)):
+                        # Validate source interface exists
+                        if dim.source_interface not in all_interface_names:
+                            raise ValueError(
+                                f"Input '{inp.name}' {spec_name}[{dim_idx}] references "
+                                f"unknown interface '{dim.source_interface}'"
+                            )
+
+                        # Inputs can reference any interface (including other inputs)
+
+        # Check outputs
+        for out in self.outputs:
+            for spec_name, spec in [("block_tiling", out.block_tiling), ("stream_tiling", out.stream_tiling)]:
+                if spec is None:
+                    continue
+
+                for dim_idx, dim in enumerate(spec):
+                    if isinstance(dim, (DerivedDim, ScaledDim)):
+                        # Validate source interface exists
+                        if dim.source_interface not in all_interface_names:
+                            raise ValueError(
+                                f"Output '{out.name}' {spec_name}[{dim_idx}] references "
+                                f"unknown interface '{dim.source_interface}'"
+                            )
+
+                        # Prevent output-to-output dependencies (dependency chains)
+                        if dim.source_interface in output_names:
+                            raise ValueError(
+                                f"Output '{out.name}' {spec_name}[{dim_idx}] cannot reference "
+                                f"another output '{dim.source_interface}' (dependency chains not allowed)"
+                            )
+
     def get_input(self, name: str) -> Optional[InputSchema]:
         """Get input schema by name."""
         for inp in self.inputs:
@@ -217,6 +288,5 @@ class KernelSchema:
             self.name,
             inputs=self.inputs,
             outputs=self.outputs,
-            relationships=self.relationships,
             metadata=self.metadata
         )

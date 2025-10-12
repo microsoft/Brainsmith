@@ -22,6 +22,39 @@ Shape = Tuple[int, ...]
 ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
 ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
 
+
+# === Dimension Source Types ===
+
+@dataclass(frozen=True)
+class DerivedDim:
+    """Dimension derived from another interface.
+
+    Used in templates to reference dimensions from other interfaces:
+
+    Examples:
+        stream_shape=[":", DerivedDim("Q", 1)]  # K[1] := Q[1]
+    """
+    source_interface: str
+    source_dim: int
+
+
+@dataclass(frozen=True)
+class ScaledDim:
+    """Dimension scaled from another interface.
+
+    Used in templates to scale dimensions from other interfaces:
+
+    Examples:
+        stream_shape=[ScaledDim("input", 0, 2.0)]  # output[0] := input[0] * 2
+    """
+    source_interface: str
+    source_dim: int
+    scale_factor: float
+
+
+# Template dimension specification (for schemas)
+DimSpec = Union[str, int, DerivedDim, ScaledDim]
+
 # === Enums ===
 
 class ShapeHierarchy(Enum):
