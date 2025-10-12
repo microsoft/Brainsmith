@@ -121,7 +121,12 @@ class FINNRunner:
             # For now, we mandate save_intermediate_models=True to ensure we can find
             # the transformed model that needs to be passed to the next DSE segment
             finn_config["save_intermediate_models"] = True
-            
+
+            # CRITICAL: Set verbose=True to prevent FINN from redirecting stdout/stderr
+            # FINN's stdout redirection (build_dataflow.py:151-153) conflicts with Rich
+            # console logging, causing hangs when running via CLI
+            finn_config["verbose"] = True
+
             # Convert dict to DataflowBuildConfig
             logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
             config = DataflowBuildConfig(**finn_config)
