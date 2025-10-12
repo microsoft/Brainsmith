@@ -138,6 +138,8 @@ def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
         parallel_builds=config_data.get('parallel_builds', 4),
         debug=config_data.get('debug', False),
         save_intermediate_models=config_data.get('save_intermediate_models', False),
+        start_step=config_data.get('start_step'),
+        stop_step=config_data.get('stop_step'),
         finn_overrides=data.get('finn_config', {})
     )
 

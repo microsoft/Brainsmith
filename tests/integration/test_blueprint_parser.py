@@ -19,6 +19,7 @@ from tests.utils.blueprint_helpers import (
     create_step_replace_blueprint,
     create_step_remove_blueprint,
     create_branch_points_blueprint,
+    create_step_range_blueprint,
     create_blueprint_file
 )
 
@@ -328,6 +329,60 @@ design_space:
         kernel_names = [kb[0] for kb in design_space.kernel_backends]
         assert "TestKernel" in kernel_names
         assert "TestKernelWithBackends" in kernel_names
-        
+
         # Note: This is placeholder functionality
         # Backend resolution will be updated when FINN integration is complete
+
+
+class TestStepRangeConfiguration:
+    """Test suite for step range control in blueprints."""
+
+    def test_parse_start_step_from_blueprint(self, tmp_path):
+        """Test parsing start_step from blueprint."""
+        blueprint_path = create_step_range_blueprint(
+            tmp_path,
+            name="test_start",
+            start_step="test_step1",
+            steps=["test_step", "test_step1", "test_step2", "test_step3"]
+        )
+
+        design_space, forge_config = parse_blueprint(str(blueprint_path), "model.onnx")
+        assert forge_config.start_step == "test_step1"
+
+    def test_parse_stop_step_from_blueprint(self, tmp_path):
+        """Test parsing stop_step from blueprint."""
+        blueprint_path = create_step_range_blueprint(
+            tmp_path,
+            name="test_stop",
+            stop_step="test_step2",
+            steps=["test_step", "test_step1", "test_step2", "test_step3"]
+        )
+
+        design_space, forge_config = parse_blueprint(str(blueprint_path), "model.onnx")
+        assert forge_config.stop_step == "test_step2"
+
+    def test_parse_both_start_and_stop(self, tmp_path):
+        """Test parsing both start_step and stop_step."""
+        blueprint_path = create_step_range_blueprint(
+            tmp_path,
+            name="test_both",
+            start_step="test_step1",
+            stop_step="test_step2",
+            steps=["test_step", "test_step1", "test_step2", "test_step3"]
+        )
+
+        design_space, forge_config = parse_blueprint(str(blueprint_path), "model.onnx")
+        assert forge_config.start_step == "test_step1"
+        assert forge_config.stop_step == "test_step2"
+
+    def test_default_values_when_not_specified(self, tmp_path):
+        """Test that start_step and stop_step default to None."""
+        blueprint_path = create_minimal_blueprint(
+            tmp_path,
+            name="test_defaults",
+            steps=["test_step1", "test_step2"]
+        )
+
+        design_space, forge_config = parse_blueprint(str(blueprint_path), "model.onnx")
+        assert forge_config.start_step is None
+        assert forge_config.stop_step is None

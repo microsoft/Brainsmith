@@ -24,7 +24,11 @@ class ForgeConfig:
     parallel_builds: int = 4
     debug: bool = False
     save_intermediate_models: bool = False
-    
+
+    # Step range control for testing/debugging
+    start_step: Optional[str] = None
+    stop_step: Optional[str] = None
+
     # Direct FINN parameter overrides
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
     

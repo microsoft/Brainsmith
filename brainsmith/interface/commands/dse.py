@@ -21,8 +21,13 @@ from ..utils import console, error_exit, success
 @click.argument('blueprint', type=click.Path(exists=True, path_type=Path))
 @click.option('--output-dir', '-o', type=click.Path(path_type=Path),
               help='Output directory (defaults to build dir with timestamp)')
+@click.option('--start-step', type=str,
+              help='Override blueprint start_step - start execution from this step (inclusive)')
+@click.option('--stop-step', type=str,
+              help='Override blueprint stop_step - stop execution at this step (inclusive)')
 @click.pass_context
-def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[Path]) -> None:
+def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[Path],
+        start_step: Optional[str], stop_step: Optional[str]) -> None:
     """Run design space exploration for neural network acceleration.
 
     \b
@@ -32,22 +37,28 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
     # Get context from parent or create default
     app_ctx = get_context_from_parent(ctx) or ApplicationContext()
     config = app_ctx.get_effective_config()
-    
+
     console.print(f"[bold blue]Brainsmith DSE[/bold blue] - Design Space Exploration")
     console.print(f"Model: {model}")
     console.print(f"Blueprint: {blueprint}")
-    
+
     if output_dir:
         console.print(f"Output: {output_dir}")
-    
+    if start_step:
+        console.print(f"Start step: {start_step}")
+    if stop_step:
+        console.print(f"Stop step: {stop_step}")
+
     logger.info(f"Starting DSE with model={model}, blueprint={blueprint}, output_dir={output_dir}")
-    
+
     try:
         # Run design space exploration
         result = explore_design_space(
             model_path=str(model),
             blueprint_path=str(blueprint),
-            output_dir=str(output_dir) if output_dir else None
+            output_dir=str(output_dir) if output_dir else None,
+            start_step_override=start_step,
+            stop_step_override=stop_step
         )
         
         success("Design space exploration completed successfully!")

@@ -112,6 +112,15 @@ design_space:
   steps: {steps}
 """
 
+STEP_RANGE_BLUEPRINT = """
+name: {name}
+clock_ns: {clock_ns}
+start_step: {start_step}
+stop_step: {stop_step}
+design_space:
+  steps: {steps}
+"""
+
 
 def create_blueprint_file(
     tmp_path: Path,
@@ -380,11 +389,41 @@ def create_inheritance_grandparent(
     """Create a grandparent blueprint for inheritance testing."""
     if steps is None:
         steps = ["test_step1"]
-    
+
     return create_blueprint_file(
         tmp_path,
         INHERITANCE_GRANDPARENT_BLUEPRINT,
         name,
+        steps=steps,
+        **kwargs
+    )
+
+
+def create_step_range_blueprint(
+    tmp_path: Path,
+    name: str = "test_step_range",
+    start_step: Optional[str] = None,
+    stop_step: Optional[str] = None,
+    steps: Optional[List[str]] = None,
+    **kwargs
+) -> Path:
+    """Create a blueprint with step range control."""
+    if steps is None:
+        steps = ["test_step", "test_step1", "test_step2", "test_step3"]
+
+    # Build template conditionally
+    template = STEP_RANGE_BLUEPRINT
+    if start_step is None:
+        template = template.replace("start_step: {start_step}\n", "")
+    if stop_step is None:
+        template = template.replace("stop_step: {stop_step}\n", "")
+
+    return create_blueprint_file(
+        tmp_path,
+        template,
+        name,
+        start_step=start_step or "",
+        stop_step=stop_step or "",
         steps=steps,
         **kwargs
     )
