@@ -252,7 +252,6 @@ Configuration is resolved in the following priority order (highest to lowest):
 ### Available Settings
 
 #### Core Settings
-- `verbose` (bool) - Enable verbose output (legacy field, not used by CLI)
 - `debug` (bool) - Enable DEBUG-level logging and detailed error traces
 - `build_dir` (path) - Build directory for artifacts
 - `deps_dir` (path) - Dependencies directory
@@ -281,7 +280,7 @@ Configuration is resolved in the following priority order (highest to lowest):
 All settings can be overridden using environment variables with the `BSMITH_` prefix:
 
 ```bash
-export BSMITH_VERBOSE=true
+export BSMITH_DEBUG=true
 export BSMITH_BUILD_DIR=/tmp/builds
 export BSMITH_XILINX_VERSION=2024.2
 export BSMITH_FINN__NUM_DEFAULT_WORKERS=8

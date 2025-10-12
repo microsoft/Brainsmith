@@ -260,11 +260,7 @@ class BrainsmithConfig(BaseSettings):
         default=False,
         description="Enable DEBUG-level logging and error traces"
     )
-    verbose: bool = Field(
-        default=False,
-        description="Enable verbose output"
-    )
-    
+
     # Plugin settings
     plugins_strict: bool = Field(
         default=True,
