@@ -30,11 +30,11 @@ def save_debug_model(model, cfg, step_name):
     if getattr(cfg, 'preserve_intermediate_models', False):
         debug_dir = os.path.join(cfg.output_dir, "debug_models")
         os.makedirs(debug_dir, exist_ok=True)
-        
+
         # Save ONNX model
         model_path = os.path.join(debug_dir, f"{step_name}.onnx")
         model.save(model_path)
-        
+
         # Log model structure info
         logger.info(f"Saved debug model: {step_name}")
         logger.info(f"  - Inputs: {[i.name for i in model.graph.input]}")
@@ -59,12 +59,12 @@ def save_debug_model(model, cfg, step_name):
 def shell_metadata_handover_step(model, cfg):
     """
     Extract metadata for shell integration process.
-    
+
     This information is stored in a json file that is passed to the build process.
     It adds this to the stitched_ip output directory and checks it exists ahead of time.
     """
     from finn.builder.build_dataflow_config import DataflowOutputType
-    
+
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
             # Brainsmith native transform - load when needed
@@ -91,7 +91,7 @@ def shell_metadata_handover_step(model, cfg):
 )
 def bert_cleanup_step(model: Any, cfg: Any) -> Any:
     """Basic cleanup with identity removal and input sorting."""
-    
+
     model = apply_transforms(model, [
         'SortCommutativeInputsInitializerLast',
         'RemoveIdentityOps'
@@ -118,7 +118,7 @@ def bert_streamlining_step(model, cfg):
 
     In particular, we need to move the Mul operation
     at the output of the QuantSoftMax lower in the graph
-    so that it has the option to be merged into a MultiThreshold 
+    so that it has the option to be merged into a MultiThreshold
     node. In particular:
 
         * MoveScalarMulPastMatMul : moves the Mul past the DynMatMul
@@ -126,23 +126,24 @@ def bert_streamlining_step(model, cfg):
           reshape and transpose
         * AbsorbMulIntoMultiThreshold : absorbs the Mul into the MT
     """
-    
+
     model = apply_transforms(model, [
         'AbsorbSignBiasIntoMultiThreshold',
         'AbsorbAddIntoMultiThreshold',
         'AbsorbMulIntoMultiThreshold',
         'RoundAndClipThresholds'
     ])
-    
+
     # Apply transform with parameter
     MoveOpPastFork = get_transform('MoveOpPastFork')
     model = model.transform(MoveOpPastFork(["Mul"]))
-    
+
     model = apply_transforms(model, [
         'MoveScalarMulPastMatMul',
         'MoveScalarLinearPastInvariants',
         'AbsorbMulIntoMultiThreshold',
-        'AbsorbAddIntoMultiThreshold'
+        'AbsorbAddIntoMultiThreshold',
+        'RoundAndClipThresholds'
     ])
     
     CollapseRepeatedOp = get_transform('CollapseRepeatedOp')
@@ -153,5 +154,5 @@ def bert_streamlining_step(model, cfg):
     GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(GiveUniqueNodeNames())
-    
+
     return model

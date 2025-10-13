@@ -10,7 +10,6 @@ output: "bitfile"                   # estimates | rtl | bitfile
 finn_config:
   # Quicktest-specific optimizations
   target_fps: 1                     # Low FPS for quick test (vs 3000 in demo)
-  # NOTE: Quicktest pre-calculated folding is currently broken
-  # folding_config_file: "${BSMITH_DIR}/examples/bert/configs/quicktest_folding.json"  # Quicktest-specific folding
+  folding_config_file: "${BSMITH_DIR}/examples/bert/configs/quicktest_folding.json"  # Quicktest-specific folding
   fifosim_n_inferences: 2           # Speed up FIFO sizing
   verbose: false

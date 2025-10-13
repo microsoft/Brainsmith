@@ -35,7 +35,7 @@ python bert_demo.py \
     -l 2 \
     -z 64 \
     -i 256 \
-    -b 4 \
+    -b 8 \
     -q 32 \
     --blueprint ./bert_mlo_demo.yaml
 

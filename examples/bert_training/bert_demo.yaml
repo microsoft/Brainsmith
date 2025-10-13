@@ -15,10 +15,9 @@ finn_config:
   standalone_thresholds: true
   target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
   split_large_fifos: true
-  auto_fifo_depths: false
+  auto_fifo_depths: true
   fifosim_n_inferences: 2         # Speed up FIFO sizing
   stitched_ip_gen_dcp: True
-  folding_config_file: "Layers1_config.json"
   verify_steps:
     - "stitched_ip_rtlsim"
   #verify_save_rtlsim_waveforms: true #This is really big
