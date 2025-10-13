@@ -27,21 +27,7 @@ import torch
 import brainsmith
 from brainsmith.config import get_build_dir, get_config
 # Export configuration to environment for FINN
-print(f"[DEBUG_XSI] bert_demo.py starting", file=sys.stderr)  # DEBUG_XSI
-print(f"[DEBUG_XSI] About to export environment", file=sys.stderr)  # DEBUG_XSI
-config = get_config()  # DEBUG_XSI
-print(f"[DEBUG_XSI] Config effective_finn_root: {config.effective_finn_root}", file=sys.stderr)  # DEBUG_XSI
-config.export_to_environment()
-print(f"[DEBUG_XSI] FINN_ROOT after export: {os.environ.get('FINN_ROOT', 'NOT SET')}", file=sys.stderr)  # DEBUG_XSI
-# Check xsi.so  # DEBUG_XSI
-xsi_so_path = Path(os.environ.get("FINN_ROOT", "/missing")) / "finn_xsi" / "xsi.so"  # DEBUG_XSI
-print(f"[DEBUG_XSI] xsi.so exists at bert_demo start: {xsi_so_path.exists()}", file=sys.stderr)  # DEBUG_XSI
-if xsi_so_path.exists():  # DEBUG_XSI
-    import stat  # DEBUG_XSI
-    st = xsi_so_path.stat()  # DEBUG_XSI
-    print(f"[DEBUG_XSI] xsi.so size: {st.st_size} bytes", file=sys.stderr)  # DEBUG_XSI
-    print(f"[DEBUG_XSI] xsi.so mtime: {st.st_mtime}", file=sys.stderr)  # DEBUG_XSI
-    print(f"[DEBUG_XSI] xsi.so permissions: {stat.filemode(st.st_mode)}", file=sys.stderr)  # DEBUG_XSI
+get_config().export_to_environment()
 
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize

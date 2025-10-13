@@ -80,18 +80,8 @@ class FINNRunner:
         # and pass configuration directly to FINN components. For now, FINN
         # requires certain environment variables to be set (FINN_ROOT, FINN_BUILD_DIR, etc.)
         from brainsmith.config import load_config
-        import sys  # DEBUG_XSI
-        from pathlib import Path  # DEBUG_XSI
-        print(f"[DEBUG_XSI] finn_runner.py exporting environment", file=sys.stderr)  # DEBUG_XSI
         config = load_config()
-        print(f"[DEBUG_XSI] effective_finn_root: {config.effective_finn_root}", file=sys.stderr)  # DEBUG_XSI
-        env_dict = config.export_to_environment()  # DEBUG_XSI
-        print(f"[DEBUG_XSI] FINN_ROOT exported: {env_dict.get('FINN_ROOT', 'NOT SET')}", file=sys.stderr)  # DEBUG_XSI
-        print(f"[DEBUG_XSI] FINN_ROOT in os.environ: {os.environ.get('FINN_ROOT', 'NOT SET')}", file=sys.stderr)  # DEBUG_XSI
-        # Check if xsi.so exists at this point  # DEBUG_XSI
-        xsi_so_check = Path(os.environ.get("FINN_ROOT", "/missing")) / "finn_xsi" / "xsi.so"  # DEBUG_XSI
-        print(f"[DEBUG_XSI] xsi.so exists at export time: {xsi_so_check.exists()}", file=sys.stderr)  # DEBUG_XSI
-
+        config.export_to_environment()
 
         # Import FINN lazily to avoid circular dependencies
         from finn.builder.build_dataflow import build_dataflow_cfg

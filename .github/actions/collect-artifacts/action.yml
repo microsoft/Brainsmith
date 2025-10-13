@@ -46,7 +46,7 @@ runs:
         fi
 
         echo "=== Collecting container diagnostics ==="
-        # Collect diagnostics extracted by docker-exec action
+        # Collect diagnostics extracted by docker-exec action (if COLLECT_DIAGNOSTICS=1 was enabled)
         if [ -d diagnostics-from-container ]; then
           echo "Including diagnostics extracted from container"
           mkdir -p "$ARTIFACT_DIR/finn-xsi-diagnostics"
@@ -55,14 +55,6 @@ runs:
           ls -la "$ARTIFACT_DIR/finn-xsi-diagnostics/" || true
         else
           echo "No container diagnostics found (expected if test succeeded or COLLECT_DIAGNOSTICS not enabled)"
-        fi
-
-        # Capture live container state if still running
-        CONTAINER_ID=$(docker ps --filter "name=brainsmith" --format "{{.ID}}" | head -1)
-        if [ -n "$CONTAINER_ID" ]; then
-          echo "=== Capturing live container state ==="
-          docker exec ${CONTAINER_ID} env > "$ARTIFACT_DIR/live_container_env.txt" 2>&1 || true
-          docker exec ${CONTAINER_ID} bash -c 'ls -la $FINN_ROOT/finn_xsi/ 2>&1 || echo "FINN_ROOT not set"' > "$ARTIFACT_DIR/live_finn_xsi.txt" 2>&1 || true
         fi
 
         echo "✓ Artifacts collected in $ARTIFACT_DIR"

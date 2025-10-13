@@ -43,7 +43,8 @@ runs:
             EXIT_CODE=1
         fi
 
-        # Extract diagnostics before stopping container
+        # Optional: Extract diagnostics if COLLECT_DIAGNOSTICS=1 was set
+        # This section only runs if the test script created /tmp/brainsmith_diagnostics
         CONTAINER_ID=$(docker ps -a --filter "name=brainsmith" --format "{{.ID}}" | head -1)
 
         if [ -n "$CONTAINER_ID" ]; then

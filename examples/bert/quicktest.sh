@@ -23,35 +23,21 @@ collect_diagnostics() {
     DIAG_DIR="/tmp/brainsmith_diagnostics"
     mkdir -p ${DIAG_DIR}
 
-    # Environment snapshot
-    env | sort > ${DIAG_DIR}/env_vars.txt
+    # Environment check
+    echo "FINN_ROOT=${FINN_ROOT:-NOT SET}" > ${DIAG_DIR}/env_check.txt
+    echo "FINN_BUILD_DIR=${FINN_BUILD_DIR:-NOT SET}" >> ${DIAG_DIR}/env_check.txt
 
-    # FINN structure and xsi.so info
-    if [ -n "$FINN_ROOT" ] && [ -d "$FINN_ROOT" ]; then
-        ls -laR $FINN_ROOT > ${DIAG_DIR}/finn_root_listing.txt 2>&1
-        find $FINN_ROOT/finn_xsi -type f -exec file {} \; > ${DIAG_DIR}/finn_xsi_files.txt 2>&1 || true
-
-        if [ -f "$FINN_ROOT/finn_xsi/xsi.so" ]; then
-            file $FINN_ROOT/finn_xsi/xsi.so > ${DIAG_DIR}/xsi_file_info.txt 2>&1
-            ldd $FINN_ROOT/finn_xsi/xsi.so > ${DIAG_DIR}/xsi_dependencies.txt 2>&1 || true
-            ls -l $FINN_ROOT/finn_xsi/xsi.so > ${DIAG_DIR}/xsi_stat.txt 2>&1
-        else
-            echo "xsi.so not found at $FINN_ROOT/finn_xsi/xsi.so" > ${DIAG_DIR}/xsi_missing.txt
-        fi
+    # Check xsi.so availability
+    if [ -n "$FINN_ROOT" ] && [ -f "$FINN_ROOT/finn_xsi/xsi.so" ]; then
+        echo "xsi.so: FOUND" >> ${DIAG_DIR}/env_check.txt
     else
-        echo "FINN_ROOT not set or directory does not exist" > ${DIAG_DIR}/finn_root_missing.txt
+        echo "xsi.so: NOT FOUND" >> ${DIAG_DIR}/env_check.txt
     fi
 
-    # Build logs
-    find /tmp -name "build_dataflow.log" -exec cp {} ${DIAG_DIR}/ \; 2>&1 || true
-    find /tmp -name "*rtlsim*.log" -exec cp {} ${DIAG_DIR}/ \; 2>&1 || true
-
-    # Python info
-    python --version > ${DIAG_DIR}/python_version.txt 2>&1
-    pip list > ${DIAG_DIR}/pip_list.txt 2>&1 || true
+    # Copy build logs if present
+    find /tmp -name "build_dataflow.log" -o -name "*rtlsim*.log" 2>/dev/null | head -5 | xargs -I {} cp {} ${DIAG_DIR}/ 2>&1 || true
 
     echo "✓ Diagnostics collected in ${DIAG_DIR}"
-    ls -la ${DIAG_DIR} || true
 }
 
 # Set trap to collect diagnostics on exit (only if enabled)

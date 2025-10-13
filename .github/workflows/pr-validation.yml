@@ -15,7 +15,8 @@ env:
   BSMITH_XILINX_PATH: ${{ vars.BSMITH_XILINX_PATH }}
   NUM_DEFAULT_WORKERS: ${{ vars.NUM_DEFAULT_WORKERS }}
   BSMITH_DOCKER_TAG: "microsoft/brainsmith:pr-${{ github.sha }}"
-  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} -e BSMITH_SKIP_DEP_REPOS=0 -e COLLECT_DIAGNOSTICS=1"
+  # To enable diagnostics collection for debugging, add: -e COLLECT_DIAGNOSTICS=1
+  BSMITH_DOCKER_FLAGS: "-e XILINXD_LICENSE_FILE=${{ secrets.XILINXD_LICENSE_FILE }} -e BSMITH_SKIP_DEP_REPOS=0"
 
 permissions:
   contents: read

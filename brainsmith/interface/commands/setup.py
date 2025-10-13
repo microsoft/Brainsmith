@@ -80,31 +80,16 @@ def setup_all(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
         )
     
     # Run all setup tasks
-    import sys  # DEBUG
     ctx = click.get_current_context()
 
-    print("[DEBUG_SETUP] Starting setup_all", file=sys.stderr, flush=True)
     console.print(f"\n[bold cyan]1. {'Removing' if remove else 'Setting up'} C++ Simulation[/bold cyan]")
-    print("[DEBUG_SETUP] About to invoke cppsim", file=sys.stderr, flush=True)
-    try:
-        ctx.invoke(cppsim, force=force, remove=remove, yes=yes)
-        print("[DEBUG_SETUP] cppsim completed successfully", file=sys.stderr, flush=True)
-    except SystemExit as e:
-        print(f"[DEBUG_SETUP] cppsim called sys.exit({e.code})", file=sys.stderr, flush=True)
-        raise
-    except Exception as e:
-        print(f"[DEBUG_SETUP] cppsim raised exception: {e}", file=sys.stderr, flush=True)
-        raise
+    ctx.invoke(cppsim, force=force, remove=remove, yes=yes)
 
     console.print(f"\n[bold cyan]2. {'Removing' if remove else 'Setting up'} Xilinx Simulation[/bold cyan]")
-    print("[DEBUG_SETUP] About to invoke xsim", file=sys.stderr, flush=True)
     ctx.invoke(xsim, force=force, remove=remove, yes=yes)
-    print("[DEBUG_SETUP] xsim completed successfully", file=sys.stderr, flush=True)
 
     console.print(f"\n[bold cyan]3. {'Removing' if remove else 'Downloading'} Board Files[/bold cyan]")
-    print("[DEBUG_SETUP] About to invoke boards", file=sys.stderr, flush=True)
     ctx.invoke(boards, force=force, remove=remove, repo=(), verbose=False, yes=yes)
-    print("[DEBUG_SETUP] boards completed successfully", file=sys.stderr, flush=True)
 
     success(f"All {'removal' if remove else 'setup'} tasks completed!")
 
@@ -117,9 +102,6 @@ def setup_all(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
 def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     """Setup C++ simulation dependencies (cnpy, finn-hlslib)."""
     import os
-    import sys  # DEBUG
-    print(f"[DEBUG_SETUP] cppsim called with force={force}, remove={remove}, yes={yes}, quiet={quiet}", file=sys.stderr, flush=True)
-
     if quiet:
         os.environ['BSMITH_QUIET'] = '1'
 
@@ -127,7 +109,6 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
         error_exit("Cannot use --force and --remove together")
 
     deps_mgr = DependencyManager()
-    print(f"[DEBUG_SETUP] DependencyManager created", file=sys.stderr, flush=True)
 
     if remove:
         # Get list of installed cppsim dependencies
@@ -154,30 +135,22 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
         return
     
     # Check if both are already installed
-    print(f"[DEBUG_SETUP] Checking if cppsim deps already installed", file=sys.stderr, flush=True)
     cnpy_installed = _is_cnpy_installed(deps_mgr)
     hlslib_installed = _are_hlslib_headers_installed(deps_mgr)
-    print(f"[DEBUG_SETUP] cnpy_installed={cnpy_installed}, hlslib_installed={hlslib_installed}, force={force}", file=sys.stderr, flush=True)
 
     if not force and cnpy_installed and hlslib_installed:
-        print(f"[DEBUG_SETUP] Dependencies already installed, returning early", file=sys.stderr, flush=True)
         warning("C++ simulation dependencies already installed (use --force to reinstall)")
         return
 
     # Install what's needed
-    print(f"[DEBUG_SETUP] Installing cppsim dependencies", file=sys.stderr, flush=True)
     with progress_spinner("Setting up C++ simulation dependencies...") as task:
         try:
             # Use the group install method with quiet mode
-            print(f"[DEBUG_SETUP] Calling install_group('cppsim', force={force}, quiet={quiet})", file=sys.stderr, flush=True)
             results = deps_mgr.install_group('cppsim', force=force, quiet=quiet)
-            print(f"[DEBUG_SETUP] install_group returned: {results}", file=sys.stderr, flush=True)
             if not all(results.values()):
-                print(f"[DEBUG_SETUP] Some installations failed, calling error_exit", file=sys.stderr, flush=True)
                 error_exit("Failed to setup C++ simulation dependencies")
 
         except Exception as e:
-            print(f"[DEBUG_SETUP] Exception during install: {e}", file=sys.stderr, flush=True)
             # Check if it's likely a missing g++ issue
             details = []
             if not shutil.which('g++'):
@@ -188,7 +161,6 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
             error_exit(f"Failed to setup C++ simulation: {e}", details=details)
 
     # Show result
-    print(f"[DEBUG_SETUP] cppsim installation successful", file=sys.stderr, flush=True)
     success("C++ simulation dependencies installed successfully")
 
 
