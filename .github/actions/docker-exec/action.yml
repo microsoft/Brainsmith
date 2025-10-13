@@ -24,7 +24,7 @@ runs:
 
         # Start container using ctl-docker.sh (quiet mode: suppresses spinners, keeps build output)
         echo "Starting container..."
-        ./ctl-docker.sh start --quiet
+        ./ctl-docker.sh start
         
         # Wait for container to be ready
         echo "Waiting for container to be ready..."
