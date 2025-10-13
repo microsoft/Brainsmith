@@ -42,9 +42,26 @@ runs:
             ./ctl-docker.sh logs --tail 50 || echo "No logs available"
             EXIT_CODE=1
         fi
-        
+
+        # Extract diagnostics before stopping container
+        CONTAINER_ID=$(docker ps -a --filter "name=brainsmith" --format "{{.ID}}" | head -1)
+
+        if [ -n "$CONTAINER_ID" ]; then
+          echo "=== Extracting diagnostics from container ${CONTAINER_ID} ==="
+
+          # Check if diagnostics directory exists in container
+          if docker exec ${CONTAINER_ID} test -d /tmp/brainsmith_diagnostics 2>/dev/null; then
+            mkdir -p diagnostics-from-container
+            docker cp ${CONTAINER_ID}:/tmp/brainsmith_diagnostics/. diagnostics-from-container/ 2>&1 || true
+            echo "✓ Diagnostics extracted"
+            ls -la diagnostics-from-container/ || true
+          else
+            echo "No diagnostics directory in container (expected if COLLECT_DIAGNOSTICS not set)"
+          fi
+        fi
+
         # Always stop container
         echo "Stopping container..."
         ./ctl-docker.sh stop || true
-        
+
         exit $EXIT_CODE
