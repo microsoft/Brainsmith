@@ -16,6 +16,8 @@ Cache invalidation:
   refresh_tensor_context() → updates _tensor_context, invalidates _kernel_model if context changed
 """
 
+import logging
+import math
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Tuple
 
@@ -31,6 +33,8 @@ from brainsmith.core.dataflow import (
     KernelModel,
     resolve_template
 )
+
+logger = logging.getLogger(__name__)
 
 
 class HWCustomOpError(Exception):
@@ -117,10 +121,55 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         return list(self.kernel_model.output_tensor_shape(ind))
 
     def get_folded_input_shape(self, ind=0) -> List[int]:
-        return list(self.kernel_model.input_stream_shape(ind))
+        """Get FINN-compatible folded input shape.
+
+        FINN's dataflow infrastructure expects folded shapes to represent the full
+        tensor with time-multiplexing dimensions. This method computes the folded
+        shape by dividing each tensor dimension by its corresponding stream dimension,
+        then appending the flattened stream parallelism as the final dimension.
+
+        Algorithm:
+        1. For each dimension i: fold_factor[i] = tensor_shape[i] / stream_shape[i]
+        2. flattened_stream = product(stream_shape)
+        3. folded_shape = fold_factors + [flattened_stream]
+
+        Example for tensor=[1, 128, 768], stream=[1, 1, 8]:
+            fold_factors = [1/1, 128/1, 768/8] = [1, 128, 96]
+            flattened_stream = 1 * 1 * 8 = 8
+            folded_shape = [1, 128, 96, 8]
+
+        Returns:
+            Folded shape with time-multiplexing and parallelism dimensions
+        """
+        tensor_shape = self.kernel_model.input_tensor_shape(ind)
+        stream_shape = self.kernel_model.input_stream_shape(ind)
+
+        # Compute fold factor for each dimension
+        fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
+
+        # Flatten stream parallelism into single dimension
+        flattened_stream = math.prod(stream_shape)
+
+        return tuple(fold_factors + [flattened_stream])
 
     def get_folded_output_shape(self, ind=0):
-        return list(self.kernel_model.output_stream_shape(ind))
+        """Get FINN-compatible folded output shape.
+
+        See get_folded_input_shape() for explanation of folded shape computation.
+
+        Returns:
+            Folded shape with time-multiplexing and parallelism dimensions
+        """
+        tensor_shape = self.kernel_model.output_tensor_shape(ind)
+        stream_shape = self.kernel_model.output_stream_shape(ind)
+
+        # Compute fold factor for each dimension
+        fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
+
+        # Flatten stream parallelism into single dimension
+        flattened_stream = math.prod(stream_shape)
+
+        return tuple(fold_factors + [flattened_stream])
 
     def get_instream_width(self, ind=0) -> int:
         return self.kernel_model.input_stream_width_bits(ind)
@@ -129,10 +178,44 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         return self.kernel_model.output_stream_width_bits(ind)
 
     def get_number_output_values(self):
-        return self.kernel_model.total_output_values
+        """Get number of output values for FINN.
+
+        FINN expects this to return the number of time-multiplexed output values,
+        which is the product of the folded output shape excluding the parallelism
+        dimension (i.e., folded_shape[:-1]).
+
+        This represents the number of cycles/transfers needed to stream the output.
+
+        Returns:
+            Number of time-multiplexed output values
+        """
+        folded_shape = self.get_folded_output_shape()
+        return math.prod(folded_shape[:-1])
 
     def get_exp_cycles(self):
         return self.kernel_model.initiation_interval
+
+    def make_shape_compatible_op(self, model):
+        """Create shape-compatible operation for InferShapes transformation.
+
+        This is called by QONNX InferShapes before tensor context initialization,
+        so it must access shapes directly from model rather than via kernel_model.
+
+        Default implementation uses input[0] shape (assumes shape-preserving kernel).
+
+        Subclasses should override for:
+        - Multi-input kernels with shape dependencies
+        - Shape-transforming kernels (Crop, Pool, Upsample, etc.)
+        - Kernels without inputs (constant generators)
+
+        Args:
+            model: ModelWrapper instance
+
+        Returns:
+            ONNX node for shape inference (typically RandomNormal via make_const_shape_op)
+        """
+        input_shape = tuple(model.get_tensor_shape(self.onnx_node.input[0]))
+        return super().make_const_shape_op(input_shape)
 
     # Overrides
 
@@ -160,6 +243,8 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             RuntimeError: If tensor context not initialized
             HWCustomOpError: If validation fails
         """
+        logger.debug(f"Building KernelModel for {self.onnx_node.name} ({self.kernel_schema.name})")
+
         # Build interfaces dict incrementally for DerivedDim/ScaledDim resolution
         interfaces = {}
 
@@ -169,12 +254,24 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             if input_model is not None:
                 input_models.append(input_model)
                 interfaces[input_model.name] = input_model
+                logger.debug(
+                    f"  Input '{input_model.name}': "
+                    f"tensor={input_model.tensor_shape}, "
+                    f"block={input_model.block_shape}, "
+                    f"stream={input_model.stream_shape}"
+                )
 
         output_models = []
         for i in range(len(self.kernel_schema.outputs)):
             output_model = self._create_output_model(i, interfaces)
             output_models.append(output_model)
             interfaces[output_model.name] = output_model
+            logger.debug(
+                f"  Output '{output_model.name}': "
+                f"tensor={output_model.tensor_shape}, "
+                f"block={output_model.block_shape}, "
+                f"stream={output_model.stream_shape}"
+            )
 
         # KernelModel.__post_init__ handles dimension resolution
         model = KernelModel(
@@ -183,6 +280,30 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             outputs=tuple(output_models),
         )
 
+        # Unified validation: validate all interfaces in one pass
+        logger.debug(f"Validating all interfaces for {self.onnx_node.name}")
+
+        # Validate all inputs
+        for i, input_model in enumerate(model.inputs):
+            schema = self.kernel_schema.inputs[i]
+            if schema.constraints:
+                self._validate_interface_constraints(
+                    schema.name,
+                    input_model,
+                    schema.constraints
+                )
+
+        # Validate all outputs
+        for i, output_model in enumerate(model.outputs):
+            schema = self.kernel_schema.outputs[i]
+            if schema.constraints:
+                self._validate_interface_constraints(
+                    schema.name,
+                    output_model,
+                    schema.constraints
+                )
+
+        logger.debug(f"KernelModel built successfully for {self.onnx_node.name}")
         self._kernel_model = model
         return model
 
@@ -223,13 +344,6 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             stream_shape=stream_shape,
             datatype=datatype,
             is_weight=schema.is_weight
-        )
-
-        # Validate interface constraints AFTER creating model
-        self._validate_interface_constraints(
-            schema.name,
-            input_model,
-            schema.constraints
         )
 
         return input_model
@@ -273,14 +387,6 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             stream_shape=stream_shape,
             datatype=datatype
         )
-
-        # Validate interface constraints (only if stream_shape fully resolved)
-        if not output_model.has_unset_dims():
-            self._validate_interface_constraints(
-                schema.name,
-                output_model,
-                schema.constraints
-            )
 
         return output_model
 

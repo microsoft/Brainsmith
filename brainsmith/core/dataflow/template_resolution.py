@@ -14,8 +14,12 @@ Template Syntax:
   ScaledDim -> Scale dimension from another interface
 """
 
+import logging
+import math
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from .types import DerivedDim, ScaledDim
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_template(
@@ -49,10 +53,13 @@ def resolve_template(
         ...                  interfaces={"input": input_model})
         (768,)  # Copies input[1]
     """
+    logger.debug(f"{context}: Resolving template {template} against reference {reference_shape}")
+
     # Pad template to match reference rank (prepend singletons)
     if len(template) < len(reference_shape):
         padding = len(reference_shape) - len(template)
         template = [1] * padding + template
+        logger.debug(f"{context}: Auto-padded template with {padding} singletons → {template}")
     elif len(template) > len(reference_shape):
         raise ValueError(
             f"{context}: template length {len(template)} exceeds "
@@ -101,18 +108,22 @@ def resolve_template(
 
             source_model = interfaces[dim.source_interface]
             try:
-                # Get the appropriate shape hierarchy (assuming stream_shape for now)
-                source_shape = source_model.stream_shape
-                value = source_shape[dim.source_dim]
+                # Get the appropriate shape hierarchy
+                source_shape = source_model.get_shape(dim.hierarchy)
+                # Support negative indexing (Python convention)
+                source_dim = dim.source_dim
+                if source_dim < 0:
+                    source_dim = len(source_shape) + source_dim
+                value = source_shape[source_dim]
             except (IndexError, AttributeError) as e:
                 raise ValueError(
                     f"{context}[{i}]: cannot access dimension {dim.source_dim} "
-                    f"from interface '{dim.source_interface}': {e}"
+                    f"from interface '{dim.source_interface}' at {dim.hierarchy.value} level: {e}"
                 )
 
             if value is None:
                 raise ValueError(
-                    f"{context}[{i}]: source dimension '{dim.source_interface}'[{dim.source_dim}] "
+                    f"{context}[{i}]: source dimension '{dim.source_interface}'.{dim.hierarchy.value}[{dim.source_dim}] "
                     f"is not yet resolved"
                 )
         elif isinstance(dim, ScaledDim):
@@ -128,25 +139,60 @@ def resolve_template(
 
             source_model = interfaces[dim.source_interface]
             try:
-                source_shape = source_model.stream_shape
-                source_value = source_shape[dim.source_dim]
+                source_shape = source_model.get_shape(dim.hierarchy)
+                # Support negative indexing (Python convention)
+                source_dim = dim.source_dim
+                if source_dim < 0:
+                    source_dim = len(source_shape) + source_dim
+                source_value = source_shape[source_dim]
             except (IndexError, AttributeError) as e:
                 raise ValueError(
                     f"{context}[{i}]: cannot access dimension {dim.source_dim} "
-                    f"from interface '{dim.source_interface}': {e}"
+                    f"from interface '{dim.source_interface}' at {dim.hierarchy.value} level: {e}"
                 )
 
             if source_value is None:
                 raise ValueError(
-                    f"{context}[{i}]: source dimension '{dim.source_interface}'[{dim.source_dim}] "
+                    f"{context}[{i}]: source dimension '{dim.source_interface}'.{dim.hierarchy.value}[{dim.source_dim}] "
                     f"is not yet resolved"
                 )
 
-            value = int(source_value * dim.scale_factor)
+            # Validate scaling produces exact integer
+            if dim.scale_factor <= 0:
+                raise ValueError(
+                    f"{context}[{i}]: scale_factor must be positive, got {dim.scale_factor}"
+                )
+
+            # For scale_down, check divisibility upfront
+            if dim.scale_factor < 1.0:
+                divisor = 1.0 / dim.scale_factor
+                # Divisor must be an integer (or very close)
+                int_divisor = round(divisor)
+                if not math.isclose(divisor, int_divisor, abs_tol=1e-9):
+                    raise ValueError(
+                        f"{context}[{i}]: scale_factor {dim.scale_factor} is not 1/n for integer n "
+                        f"(divisor = {divisor})"
+                    )
+                # Source must divide evenly
+                if source_value % int_divisor != 0:
+                    raise ValueError(
+                        f"{context}[{i}]: source dimension {source_value} not evenly divisible by {int_divisor} "
+                        f"(scale_factor = {dim.scale_factor} = 1/{int_divisor})"
+                    )
+                value = source_value // int_divisor
+            else:
+                # For scale_up, compute and verify exactness
+                raw_value = source_value * dim.scale_factor
+                value = round(raw_value)
+                if not math.isclose(raw_value, value, abs_tol=1e-9):
+                    raise ValueError(
+                        f"{context}[{i}]: scaled dimension {source_value} * {dim.scale_factor} "
+                        f"= {raw_value} is not an exact integer"
+                    )
+
             if value <= 0:
                 raise ValueError(
-                    f"{context}[{i}]: scaled dimension must be positive, "
-                    f"got {source_value} * {dim.scale_factor} = {value}"
+                    f"{context}[{i}]: scaled dimension must be positive, got {value}"
                 )
         else:
             raise ValueError(
@@ -155,7 +201,9 @@ def resolve_template(
 
         resolved.append(value)
 
-    return tuple(resolved)
+    result = tuple(resolved)
+    logger.debug(f"{context}: Resolved to {result}")
+    return result
 
 
 __all__ = ['resolve_template']

@@ -18,6 +18,7 @@ Key principles:
 - Refresh cached models when nodeattrs change
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, Union, Any
 from abc import ABC
@@ -25,6 +26,8 @@ import math
 
 from .types import Shape, ShapeHierarchy, prod
 from qonnx.core.datatype import BaseDataType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -186,8 +189,12 @@ class KernelModel:
     def _derive_unset_dimensions(self, outputs: List[OutputModel]) -> List[OutputModel]:
         """Fill in unset dimensions using default derivation logic.
 
-        Default: max(input block_folding_factors) along last dimension.
-        This preserves current KernelModel.output_stream_shape() behavior.
+        Default Strategy:
+        - All unset dimensions → 1 (singleton)
+
+        This simple default provides a predictable fallback when stream_tiling
+        is not explicitly specified in the schema. Kernels should specify
+        stream_tiling explicitly for non-trivial streaming patterns.
 
         Args:
             outputs: List of OutputModels (may have unset dimensions)
@@ -195,26 +202,22 @@ class KernelModel:
         Returns:
             List of OutputModels with all dimensions set
         """
-        if not self.inputs:
-            default_value = 1
-        else:
-            default_value = max(inp.block_folding_factor for inp in self.inputs)
-
         resolved = []
         for output in outputs:
             if output.has_unset_dims():
-                stream_shape = list(output.stream_shape)
-                for i, dim in enumerate(stream_shape):
-                    if dim is None:
-                        # Default: stream along last dimension
-                        stream_shape[i] = default_value if i == len(stream_shape) - 1 else 1
+                old_stream = output.stream_shape
+                stream_shape = tuple(1 if dim is None else dim for dim in output.stream_shape)
 
                 output = OutputModel(
                     name=output.name,
                     tensor_shape=output.tensor_shape,
                     block_shape=output.block_shape,
-                    stream_shape=tuple(stream_shape),
+                    stream_shape=stream_shape,
                     datatype=output.datatype
+                )
+                logger.debug(
+                    f"KernelModel '{self.name}': Derived output '{output.name}' "
+                    f"stream_shape: {old_stream} → {stream_shape} (singleton default)"
                 )
 
             resolved.append(output)
