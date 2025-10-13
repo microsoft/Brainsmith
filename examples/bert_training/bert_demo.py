@@ -87,46 +87,16 @@ def run_brainsmith_dse(model, args):
     os.makedirs(args.output_dir, exist_ok=True)
     model_dir = os.path.join(args.output_dir, "intermediate_models")
     os.makedirs(model_dir, exist_ok=True)
-    
-    # Simplify model (matches old hw_compiler.py)
-    model, check = simplify(model)
-    if not check:
-        raise RuntimeError("Unable to simplify the Brevitas BERT model")
-    
-    # Save simplified model
-    onnx.save(model, os.path.join(model_dir, "simp.onnx"))
 
-    from pathlib import Path
-    directory_path = Path(os.path.join(args.output_dir, "debug_models"))
-    directory_path.mkdir(parents=True, exist_ok=True)
+    onnx.save(model, os.path.join(args.output_dir, "input.onnx"))
 
-    # Also save to debug directory for comparison
-    debug_dir = os.path.join(args.output_dir, "debug_models")
-    onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
-    
-    # Run cleanup
-    cleanup(
-        in_file=os.path.join(model_dir, "simp.onnx"),
-        out_file=os.path.join(args.output_dir, "df_input.onnx")
-    )
-    
-    # Save a copy of the cleaned model for visualization
-    import shutil
-    debug_dir = os.path.join(args.output_dir, "debug_models")
-    os.makedirs(debug_dir, exist_ok=True)
-    shutil.copy(
-        os.path.join(args.output_dir, "df_input.onnx"),
-        os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
-    )
-    
     # Get blueprint path from args
     blueprint_path = Path(__file__).parent / args.blueprint
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
     results = forge(
-        model_path=os.path.join(args.output_dir, "df_input.onnx"),
+        model_path=os.path.join(args.output_dir, "input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
     )
