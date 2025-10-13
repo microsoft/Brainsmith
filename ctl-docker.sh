@@ -595,8 +595,14 @@ clean_all() {
         gecho "Removing container $DOCKER_INST_NAME"
         docker rm -f "$DOCKER_INST_NAME" >/dev/null
     fi
-    
-    # 3. Always clean build artifacts
+
+    # 3. Always clean container directory (setup markers, poetry cache, etc.)
+    if [ -d "$BSMITH_CONTAINER_DIR" ]; then
+        gecho "Removing container directory: $BSMITH_CONTAINER_DIR"
+        rm -rf "$BSMITH_CONTAINER_DIR"
+    fi
+
+    # 4. Always clean build artifacts
     clean_build_artifacts
     
     # 4. Deep clean specific targets if requested

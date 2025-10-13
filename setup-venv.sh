@@ -93,6 +93,12 @@ echo "🔧 Setting up Brainsmith developer environment..."
 # Docker-specific configuration
 if [ "$DOCKER_MODE" == "1" ]; then
     if [ -n "$BSMITH_CONTAINER_DIR" ]; then
+        # Remove stale completion marker from previous runs
+        if [ -f "$BSMITH_CONTAINER_DIR/setup_complete" ]; then
+            rm -f "$BSMITH_CONTAINER_DIR/setup_complete"
+            echo "🗑️  Removed stale setup completion marker"
+        fi
+
         echo "📦 Configuring Poetry for Docker container..."
         export POETRY_CONFIG_DIR="$BSMITH_CONTAINER_DIR/poetry-config"
         export POETRY_CACHE_DIR="$BSMITH_CONTAINER_DIR/poetry-cache"
