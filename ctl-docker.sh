@@ -191,13 +191,14 @@ check_container_ready() {
             recho "Container stopped unexpectedly"
             return 1
         fi
-        
-        # Check if Poetry dependencies are installed and smith is available
-        if docker exec "$container_name" bash -c "cd $BSMITH_DIR && [ -f .venv/bin/smith ]" >/dev/null 2>&1; then
+
+        # Check if setup completion marker exists (written by setup-venv.sh)
+        if docker exec "$container_name" test -f "$BSMITH_CONTAINER_DIR/setup_complete" 2>/dev/null; then
             kill $LOG_PID 2>/dev/null || true
+            gecho "Container setup completed successfully"
             return 0
         fi
-        
+
         sleep 2
     done
 }

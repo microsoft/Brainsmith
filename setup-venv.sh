@@ -238,6 +238,13 @@ fi
 if [ $? -eq 0 ]; then
     echo ""
     echo "🎉 Development environment setup complete!"
+
+    # Write completion marker for container readiness check (Docker mode only)
+    if [ "$DOCKER_MODE" == "1" ] && [ -n "$BSMITH_CONTAINER_DIR" ]; then
+        touch "$BSMITH_CONTAINER_DIR/setup_complete"
+        echo "✓ Setup completion marker written to $BSMITH_CONTAINER_DIR/setup_complete"
+    fi
+
     echo ""
     echo "To activate the virtual environment, run:"
     echo "  source .venv/bin/activate"
