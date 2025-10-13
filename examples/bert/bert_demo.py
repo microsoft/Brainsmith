@@ -22,6 +22,13 @@ from pathlib import Path
 import numpy as np
 import onnx
 import torch
+
+# Import brainsmith early to set up paths
+import brainsmith
+from brainsmith.config import get_build_dir, get_config
+# Export configuration to environment for FINN
+get_config().export_to_environment()
+
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
@@ -41,7 +48,7 @@ import custom_steps  # Import custom steps to trigger registration
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import forge
+from brainsmith import explore_design_space
 
 warnings.simplefilter("ignore")
 
@@ -250,7 +257,7 @@ def run_brainsmith_dse(model, args):
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
-    results = forge(
+    results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
@@ -307,12 +314,21 @@ def main():
     parser.add_argument('--blueprint', type=str, default='bert_demo.yaml',
                        help='Blueprint YAML file to use (default: bert_demo.yaml)')
     
+    # Force flag
+    parser.add_argument('--force', action='store_true',
+                       help='Remove existing output directory before building')
+    
     args = parser.parse_args()
     
     # Determine output directory
-    build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
+    build_dir = get_build_dir()
     print(build_dir)
-    args.output_dir = os.path.join(build_dir, args.output)
+    args.output_dir = os.path.join(str(build_dir), args.output)
+    
+    # Clean up existing directory if --force flag is set
+    if args.force and os.path.exists(args.output_dir):
+        print(f"Removing existing output directory: {args.output_dir}")
+        shutil.rmtree(args.output_dir)
     
     print("=" * 70)
     print("BERT Demo Using Brainsmith DSE")

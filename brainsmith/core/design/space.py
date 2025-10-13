@@ -110,3 +110,69 @@ class DesignSpace:
             f"  kernels: {len(self.kernel_backends)}\n"
             f")"
         )
+
+
+def find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str) -> int:
+    """Find index of step in steps list, checking inside branch points.
+
+    Args:
+        steps: List of step specifications
+        step_name: Name of step to find
+
+    Returns:
+        Index of the step
+
+    Raises:
+        ValueError: If step not found in steps list
+    """
+    for i, step in enumerate(steps):
+        if step == step_name:
+            return i
+        if isinstance(step, list) and step_name in step:
+            return i
+
+    # Step not found - create helpful error message
+    available = []
+    for s in steps:
+        if isinstance(s, str):
+            available.append(s)
+        elif isinstance(s, list):
+            available.append(f"[{', '.join(str(opt) for opt in s)}]")
+
+    raise ValueError(
+        f"Step '{step_name}' not found in steps list.\n"
+        f"Available steps: {', '.join(available)}"
+    )
+
+
+def slice_steps(
+    steps: List[Union[str, List[Optional[str]]]],
+    start_step: Optional[str] = None,
+    stop_step: Optional[str] = None
+) -> List[Union[str, List[Optional[str]]]]:
+    """Slice steps list by step names.
+
+    Handles both string steps and branch point lists.
+    Slicing is inclusive on both ends.
+
+    Args:
+        steps: List of step specifications
+        start_step: Name of step to start from (inclusive), None for beginning
+        stop_step: Name of step to stop at (inclusive), None for end
+
+    Returns:
+        Sliced steps list
+
+    Raises:
+        ValueError: If start_step or stop_step not found
+    """
+    start_idx = find_step_index(steps, start_step) if start_step else 0
+    stop_idx = find_step_index(steps, stop_step) if stop_step else len(steps) - 1
+
+    if start_idx > stop_idx:
+        raise ValueError(
+            f"Invalid step range: start_step '{start_step}' (index {start_idx}) "
+            f"comes after stop_step '{stop_step}' (index {stop_idx})"
+        )
+
+    return steps[start_idx:stop_idx + 1]

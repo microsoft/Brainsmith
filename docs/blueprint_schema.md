@@ -24,6 +24,10 @@ verify_data: "path/to/verify_data/"   # Directory with input.npy and expected_ou
 save_intermediate_models: false       # Save intermediate models (default: false)
 parallel_builds: 4                    # Concurrent FINN builds during DSE (default: 4)
 
+# Optional: Step range control (for testing/debugging)
+start_step: "streamline"              # Start execution from this step (inclusive)
+stop_step: "specialize_layers"        # Stop execution at this step (inclusive)
+
 # Optional: Direct FINN parameter overrides
 finn_config:                          # Maps internally to finn_overrides
   minimize_bit_width: false
@@ -107,6 +111,36 @@ Number of concurrent FINN builds to run during design space exploration. Higher 
 ```yaml
 parallel_builds: 4  # Default: 4
 ```
+
+#### start_step & stop_step
+Control the execution range of steps for testing and debugging. Both parameters are optional and specify step boundaries (inclusive).
+
+```yaml
+start_step: "streamline"        # Start from this step (inclusive)
+stop_step: "specialize_layers"  # Stop at this step (inclusive)
+```
+
+**Use Cases:**
+- **Testing individual steps**: Set both to the same value to run only that step
+- **Creating checkpoints**: Use `stop_step` to build up to a certain point
+- **Resuming from intermediate**: Use `start_step` with a previously saved intermediate model
+- **Debugging failures**: Isolate problematic steps for investigation
+
+**CLI Overrides:**
+CLI flags `--start-step` and `--stop-step` override blueprint values:
+```bash
+# Override blueprint to test single step
+smith dse model.onnx blueprint.yaml --start-step streamline --stop-step streamline
+
+# Run from beginning up to a checkpoint
+smith dse model.onnx blueprint.yaml --stop-step specialize_layers
+```
+
+**Notes:**
+- Steps are identified by name and must match step names in the `steps` list
+- For branch points (list of steps), specify any step name within the branch
+- Slicing preserves branch structure within the specified range
+- Use with `save_intermediate_models: true` to enable checkpointing
 
 ### FINN Configuration Overrides
 

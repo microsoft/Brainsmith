@@ -235,3 +235,58 @@ class TestArtifactManagement:
             child_file = tmp_path / child.segment_id / "test_artifact.txt"
             assert child_file.exists()
             assert child_file.read_text() == "root content"
+
+
+class TestStepRangeExecution:
+    """Test suite for step range control during DSE execution."""
+
+    def test_apply_step_slicing_in_dse(self, simple_onnx_model, forge_config):
+        """Test that step slicing is applied before tree building."""
+        from brainsmith.core.design.space import DesignSpace, slice_steps
+        from brainsmith.core.design.builder import DSETreeBuilder
+
+        # Create design space with 5 steps
+        design_space = DesignSpace(
+            model_path=str(simple_onnx_model),
+            steps=["test_step", "test_step1", "test_step2", "test_step3", "export_to_build"],
+            kernel_backends=[],
+            max_combinations=100
+        )
+
+        # Slice to middle 3 steps
+        design_space.steps = slice_steps(design_space.steps, "test_step1", "test_step3")
+
+        # Build tree with sliced steps
+        builder = DSETreeBuilder()
+        tree = builder.build_tree(design_space, forge_config)
+
+        # Verify tree only contains sliced steps
+        all_transforms = tree.root.get_all_transforms()
+        assert len(all_transforms) == 3
+        assert all_transforms[0]["name"] == "test_step1"
+        assert all_transforms[1]["name"] == "test_step2"
+        assert all_transforms[2]["name"] == "test_step3"
+
+    def test_slice_preserves_branches_in_tree(self, simple_onnx_model, forge_config):
+        """Test that slicing preserves branch structure."""
+        from brainsmith.core.design.space import DesignSpace, slice_steps
+        from brainsmith.core.design.builder import DSETreeBuilder
+
+        # Create design space with branches
+        design_space = DesignSpace(
+            model_path=str(simple_onnx_model),
+            steps=["test_step", ["test_step1", "test_step2"], "test_step3", "export_to_build"],
+            kernel_backends=[],
+            max_combinations=100
+        )
+
+        # Slice to include the branch
+        design_space.steps = slice_steps(design_space.steps, "test_step", "test_step3")
+
+        # Build tree
+        builder = DSETreeBuilder()
+        tree = builder.build_tree(design_space, forge_config)
+
+        # Verify branch structure is preserved
+        assert tree.root.is_branch_point
+        assert len(tree.root.children) == 2
