@@ -44,7 +44,7 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 # Open interactive shell
 ./ctl-docker.sh shell
 
-# Run commands directly
+# OR run commands directly
 ./ctl-docker.sh "smith model.onnx blueprint.yaml"
 ```
 
@@ -58,24 +58,14 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 source .venv/bin/activate
 
 # Initialize configuration file
-brainsmith config init --user
+brainsmith config init
 # Edit ~/.brainsmith/config.yaml to set xilinx_path and xilinx_version as needed
 
 # View current configuration
 brainsmith config show
 ```
 
-### 3. Run Design Space Exploration
-
-```bash
-# Run DSE with default command
-smith model.onnx blueprint.yaml
-
-# Or specify output directory
-smith model.onnx blueprint.yaml --output-dir ./results
-```
-
-### 4. Validate Installation
+### 3. Validate installation with simple example
 
 ```bash
 # For Docker setup:
@@ -83,6 +73,16 @@ smith model.onnx blueprint.yaml --output-dir ./results
 
 # For local setup:
 ./examples/bert/quicktest.sh
+```
+
+### 4. Run Design Space Exploration on your own model
+
+```bash
+# Run DSE with default command
+smith model.onnx blueprint.yaml
+
+# Or specify output directory
+smith model.onnx blueprint.yaml --output-dir ./results
 ```
 
 ## CLI Overview
