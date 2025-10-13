@@ -22,9 +22,9 @@ runs:
         # Make ctl-docker.sh executable
         chmod +x ctl-docker.sh
 
-        # Start container using ctl-docker.sh (with --quiet for CI/CD)
+        # Start container using ctl-docker.sh (TEMPORARILY REMOVED --quiet FOR DEBUGGING)
         echo "Starting container..."
-        ./ctl-docker.sh start --quiet
+        ./ctl-docker.sh start
         
         # Wait for container to be ready
         echo "Waiting for container to be ready..."
