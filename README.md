@@ -33,6 +33,11 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 #### Option A: Docker-based Development
 
 ```bash
+# Customize key environment variables in ctl-docker.sh as needed
+export BSMITH_XILINX_PATH=/opt/Xilinx/Vivado/2024.2
+export BSMITH_XILINX_VERSION=2024.2
+export XILINXD_LICENSE_FILE=/path/to/your/license.lic
+
 # Start container with automatic setup
 ./ctl-docker.sh start
 
@@ -41,9 +46,6 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 
 # Run commands directly
 ./ctl-docker.sh "smith model.onnx blueprint.yaml"
-
-# Optional: Enable persistent user configuration
-BSMITH_DOCKER_USER_MOUNT=1 ./ctl-docker.sh start
 ```
 
 #### Option B: Local Development with Poetry
@@ -55,16 +57,8 @@ BSMITH_DOCKER_USER_MOUNT=1 ./ctl-docker.sh start
 # Activate the virtual environment
 source .venv/bin/activate
 
-# Check installation status
-brainsmith setup check
-```
-
-### 2. Configure Brainsmith
-
-```bash
-# Initialize user configuration
+# Initialize configuration file
 brainsmith config init --user
-
 # Edit ~/.brainsmith/config.yaml to set xilinx_path and xilinx_version as needed
 
 # View current configuration
