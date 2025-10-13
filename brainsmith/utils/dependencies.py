@@ -347,26 +347,19 @@ class DependencyManager:
             python_cmd = ' '.join(build_cmd)
             bash_cmd = f"source {settings_script} && {python_cmd}"
 
-            # Run build with Vivado environment
-            if quiet:
-                # In quiet mode, capture output
-                result = subprocess.run(
-                    ['bash', '-c', bash_cmd],
-                    capture_output=True,
-                    text=True
-                )
-            else:
-                # In non-quiet mode, stream output to terminal
-                result = subprocess.run(
-                    ['bash', '-c', bash_cmd],
-                    text=True
-                )
+            # Always stream build output for transparency (even in quiet mode)
+            # This ensures we can see what's happening and debug build failures
+            if not quiet:
+                print(f"[BUILD] Running: {bash_cmd}", file=sys.stderr)
 
-            # Always print errors to stderr for visibility
+            result = subprocess.run(
+                ['bash', '-c', bash_cmd],
+                text=True
+            )
+
+            # Print errors to stderr for visibility
             if result.returncode != 0:
-                error_msg = f"Failed to build {name}"
-                if hasattr(result, 'stderr') and result.stderr:
-                    error_msg += f": {result.stderr}"
+                error_msg = f"Failed to build {name} (exit code: {result.returncode})"
                 print(error_msg, file=sys.stderr)
                 logger.error(error_msg)
                 return False
@@ -388,19 +381,24 @@ class DependencyManager:
                     return False
                     
             # Run build command in source directory
+            # Always stream build output for transparency
+            if not quiet:
+                print(f"[BUILD] Running build in {source_dir}", file=sys.stderr)
+
             env = os.environ.copy()
             result = subprocess.run(
                 dep['build_cmd'],
                 cwd=source_dir,
-                capture_output=True,
                 text=True,
                 env=env
             )
-            
+
             if result.returncode != 0:
-                logger.error(f"Failed to build {name}: {result.stderr}")
+                error_msg = f"Failed to build {name} (exit code: {result.returncode})"
+                print(error_msg, file=sys.stderr)
+                logger.error(error_msg)
                 return False
-                
+
             return True
     
     def remove(self, name: str, quiet: bool = False) -> bool:
