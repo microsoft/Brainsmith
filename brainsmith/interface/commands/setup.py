@@ -80,16 +80,32 @@ def setup_all(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
         )
     
     # Run all setup tasks
+    import sys  # DEBUG
     ctx = click.get_current_context()
+
+    print("[DEBUG_SETUP] Starting setup_all", file=sys.stderr, flush=True)
     console.print(f"\n[bold cyan]1. {'Removing' if remove else 'Setting up'} C++ Simulation[/bold cyan]")
-    ctx.invoke(cppsim, force=force, remove=remove, yes=yes)
-    
+    print("[DEBUG_SETUP] About to invoke cppsim", file=sys.stderr, flush=True)
+    try:
+        ctx.invoke(cppsim, force=force, remove=remove, yes=yes)
+        print("[DEBUG_SETUP] cppsim completed successfully", file=sys.stderr, flush=True)
+    except SystemExit as e:
+        print(f"[DEBUG_SETUP] cppsim called sys.exit({e.code})", file=sys.stderr, flush=True)
+        raise
+    except Exception as e:
+        print(f"[DEBUG_SETUP] cppsim raised exception: {e}", file=sys.stderr, flush=True)
+        raise
+
     console.print(f"\n[bold cyan]2. {'Removing' if remove else 'Setting up'} Xilinx Simulation[/bold cyan]")
+    print("[DEBUG_SETUP] About to invoke xsim", file=sys.stderr, flush=True)
     ctx.invoke(xsim, force=force, remove=remove, yes=yes)
-    
+    print("[DEBUG_SETUP] xsim completed successfully", file=sys.stderr, flush=True)
+
     console.print(f"\n[bold cyan]3. {'Removing' if remove else 'Downloading'} Board Files[/bold cyan]")
+    print("[DEBUG_SETUP] About to invoke boards", file=sys.stderr, flush=True)
     ctx.invoke(boards, force=force, remove=remove, repo=(), verbose=False, yes=yes)
-    
+    print("[DEBUG_SETUP] boards completed successfully", file=sys.stderr, flush=True)
+
     success(f"All {'removal' if remove else 'setup'} tasks completed!")
 
 
@@ -101,14 +117,18 @@ def setup_all(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
 def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     """Setup C++ simulation dependencies (cnpy, finn-hlslib)."""
     import os
+    import sys  # DEBUG
+    print(f"[DEBUG_SETUP] cppsim called with force={force}, remove={remove}, yes={yes}, quiet={quiet}", file=sys.stderr, flush=True)
+
     if quiet:
         os.environ['BSMITH_QUIET'] = '1'
 
     if force and remove:
         error_exit("Cannot use --force and --remove together")
-        
+
     deps_mgr = DependencyManager()
-    
+    print(f"[DEBUG_SETUP] DependencyManager created", file=sys.stderr, flush=True)
+
     if remove:
         # Get list of installed cppsim dependencies
         from brainsmith.utils.dependencies import DEPENDENCIES
@@ -125,7 +145,7 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
             
         # Remove dependencies
         with progress_spinner("Removing C++ simulation dependencies...") as task:
-            results = deps_mgr.remove_group('cppsim', quiet=True)
+            results = deps_mgr.remove_group('cppsim', quiet=quiet)
             if all(results.values()):
                 success("C++ simulation dependencies removed successfully")
             else:
@@ -134,22 +154,30 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
         return
     
     # Check if both are already installed
+    print(f"[DEBUG_SETUP] Checking if cppsim deps already installed", file=sys.stderr, flush=True)
     cnpy_installed = _is_cnpy_installed(deps_mgr)
     hlslib_installed = _are_hlslib_headers_installed(deps_mgr)
-    
+    print(f"[DEBUG_SETUP] cnpy_installed={cnpy_installed}, hlslib_installed={hlslib_installed}, force={force}", file=sys.stderr, flush=True)
+
     if not force and cnpy_installed and hlslib_installed:
+        print(f"[DEBUG_SETUP] Dependencies already installed, returning early", file=sys.stderr, flush=True)
         warning("C++ simulation dependencies already installed (use --force to reinstall)")
         return
-    
+
     # Install what's needed
+    print(f"[DEBUG_SETUP] Installing cppsim dependencies", file=sys.stderr, flush=True)
     with progress_spinner("Setting up C++ simulation dependencies...") as task:
         try:
             # Use the group install method with quiet mode
-            results = deps_mgr.install_group('cppsim', force=force, quiet=True)
+            print(f"[DEBUG_SETUP] Calling install_group('cppsim', force={force}, quiet={quiet})", file=sys.stderr, flush=True)
+            results = deps_mgr.install_group('cppsim', force=force, quiet=quiet)
+            print(f"[DEBUG_SETUP] install_group returned: {results}", file=sys.stderr, flush=True)
             if not all(results.values()):
+                print(f"[DEBUG_SETUP] Some installations failed, calling error_exit", file=sys.stderr, flush=True)
                 error_exit("Failed to setup C++ simulation dependencies")
-                    
+
         except Exception as e:
+            print(f"[DEBUG_SETUP] Exception during install: {e}", file=sys.stderr, flush=True)
             # Check if it's likely a missing g++ issue
             details = []
             if not shutil.which('g++'):
@@ -158,8 +186,9 @@ def cppsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
                     "Install it with: sudo apt install g++"
                 ]
             error_exit(f"Failed to setup C++ simulation: {e}", details=details)
-    
+
     # Show result
+    print(f"[DEBUG_SETUP] cppsim installation successful", file=sys.stderr, flush=True)
     success("C++ simulation dependencies installed successfully")
 
 
@@ -198,7 +227,7 @@ def xsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
             
         # Remove dependencies
         with progress_spinner("Removing Xilinx simulation dependencies...") as task:
-            results = deps_mgr.remove_group('xsim', quiet=True)
+            results = deps_mgr.remove_group('xsim', quiet=quiet)
             if all(results.values()):
                 success("Xilinx simulation dependencies removed successfully")
             else:
@@ -227,12 +256,12 @@ def xsim(force: bool, remove: bool, yes: bool, quiet: bool) -> None:
     with progress_spinner("Setting up Xilinx simulation dependencies...") as task:
         try:
             # First install oh-my-xilinx
-            oh_my_xilinx_result = deps_mgr.install('oh-my-xilinx', force=force, quiet=True)
+            oh_my_xilinx_result = deps_mgr.install('oh-my-xilinx', force=force, quiet=quiet)
             if not oh_my_xilinx_result:
                 error_exit("Failed to install oh-my-xilinx")
-            
+
             # Then build finn-xsim
-            result = deps_mgr.install('finn-xsim', force=force, quiet=True)
+            result = deps_mgr.install('finn-xsim', force=force, quiet=quiet)
             if not result:
                 error_exit("Failed to build finn-xsim")
         except Exception as e:
@@ -366,7 +395,7 @@ def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool, qui
         with progress_spinner("Removing board repositories...") as task:
             success_count = 0
             for repo_name in repos_to_remove:
-                if deps_mgr.remove(repo_name, quiet=True):
+                if deps_mgr.remove(repo_name, quiet=quiet):
                     success_count += 1
                 else:
                     warning(f"Failed to remove {repo_name}")
@@ -402,13 +431,13 @@ def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool, qui
         try:
             if repos_to_download:
                 # Download specific boards
-                results = {board: deps_mgr.install(board, force=force, quiet=True) 
+                results = {board: deps_mgr.install(board, force=force, quiet=quiet)
                           for board in repos_to_download}
                 if not all(results.values()):
                     error_exit("Failed to download board files")
             else:
                 # Download all board dependencies
-                results = deps_mgr.install_group('boards', force=force, quiet=True)
+                results = deps_mgr.install_group('boards', force=force, quiet=quiet)
                 if not all(results.values()):
                     error_exit("Failed to download board files")
         except Exception as e:
