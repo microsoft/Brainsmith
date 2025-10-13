@@ -7,6 +7,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -142,9 +143,13 @@ class DependencyManager:
         # Check requirements first
         missing = self._check_requirements(dep)
         if missing:
-            logger.error(f"Error: {name} requires the following tools to be installed:")
+            error_msg = f"Error: {name} requires the following tools to be installed:"
+            print(error_msg, file=sys.stderr)
+            logger.error(error_msg)
             for tool, message in missing:
-                logger.error(f"  ✗ {tool} - {message}")
+                tool_error = f"  ✗ {tool} - {message}"
+                print(tool_error, file=sys.stderr)
+                logger.error(tool_error)
             return False
         
         # Handle build dependencies differently
@@ -234,7 +239,9 @@ class DependencyManager:
             
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"Failed to clone {name}: {result.stderr}")
+            error_msg = f"Failed to clone {name}: {result.stderr}"
+            print(error_msg, file=sys.stderr)
+            logger.error(error_msg)
             return False
             
         # Checkout specific ref
@@ -279,7 +286,9 @@ class DependencyManager:
                 zf.extractall(dest)
                 
         except Exception as e:
-            logger.error(f"Failed to download/extract {name}: {e}")
+            error_msg = f"Failed to download/extract {name}: {e}"
+            print(error_msg, file=sys.stderr)
+            logger.error(error_msg)
             return False
         finally:
             # Cleanup zip file
@@ -310,24 +319,66 @@ class DependencyManager:
             # Run build command - Python modules can be run from any directory
             if not quiet:
                 logger.info(f"Building {name}...")
-                
+
+            # Get Vivado settings path from config
+            from brainsmith.config import get_config
+            config = get_config()
+            vivado_path = config.effective_vivado_path
+
+            if not vivado_path:
+                error_msg = f"Failed to build {name}: Vivado path not configured"
+                print(error_msg, file=sys.stderr)
+                logger.error(error_msg)
+                return False
+
+            settings_script = Path(vivado_path) / "settings64.sh"
+            if not settings_script.exists():
+                error_msg = f"Failed to build {name}: settings64.sh not found at {settings_script}"
+                print(error_msg, file=sys.stderr)
+                logger.error(error_msg)
+                return False
+
+            # Construct build command
             build_cmd = dep['build_cmd'].copy()
             if force:
                 build_cmd.append('--force')
-                
-            env = os.environ.copy()
-            result = subprocess.run(
-                build_cmd,
-                capture_output=True,
-                text=True,
-                env=env
-            )
-            
+
+            # Build bash command that sources Vivado settings before running build
+            python_cmd = ' '.join(build_cmd)
+            bash_cmd = f"source {settings_script} && {python_cmd}"
+
+            # Run build with Vivado environment
+            if quiet:
+                # In quiet mode, capture output
+                result = subprocess.run(
+                    ['bash', '-c', bash_cmd],
+                    capture_output=True,
+                    text=True
+                )
+            else:
+                # In non-quiet mode, stream output to terminal
+                result = subprocess.run(
+                    ['bash', '-c', bash_cmd],
+                    text=True
+                )
+
+            # Always print errors to stderr for visibility
             if result.returncode != 0:
-                logger.error(f"Failed to build {name}: {result.stderr}")
+                error_msg = f"Failed to build {name}"
+                if hasattr(result, 'stderr') and result.stderr:
+                    error_msg += f": {result.stderr}"
+                print(error_msg, file=sys.stderr)
+                logger.error(error_msg)
                 return False
-                
-            return output_file.exists()
+
+            # Verify output file exists after build
+            if not output_file.exists():
+                error_msg = f"Build command completed but output file not found: {output_file}"
+                print(error_msg, file=sys.stderr)
+                logger.error(error_msg)
+                return False
+
+            return True
         else:
             # Generic build dependency handling (for future use)
             source_dir = self.deps_dir / dep['source']
