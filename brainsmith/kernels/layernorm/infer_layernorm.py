@@ -77,6 +77,8 @@ class InferLayerNorm(Transformation):
                     outputDataType=odt.name,
                     name="LayerNorm_" + node.name,
                 )
+                if hasattr(node, "metadata_props"):
+                    new_node.metadata_props.extend(node.metadata_props)
                 graph.node.insert(insert_point, new_node)
                 # remove old node
                 graph.node.remove(node)

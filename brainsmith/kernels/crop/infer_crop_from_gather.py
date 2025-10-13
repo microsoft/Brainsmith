@@ -111,6 +111,8 @@ class InferCropFromGather(Transformation):
                     input_shape=input_shape,
                     output_shape=output_shape,
                 )
+                if hasattr(n, "metadata_props"):
+                    new_node.metadata_props.extend(n.metadata_props)
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
                 # remove multithreshold too
