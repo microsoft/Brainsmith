@@ -50,6 +50,8 @@ class InferHWSoftmax(Transformation):
                     SIMD=1,
                     NumChannels=input_shape[-1],
                 )
+                if hasattr(n, "metadata_props"):
+                    new_node.metadata_props.extend(n.metadata_props)
                 graph.node.insert(node_ind, new_node)
                 graph.node.remove(n)
                 graph_modified = True

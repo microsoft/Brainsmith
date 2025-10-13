@@ -108,12 +108,18 @@ class ExpandNorms(Transformation):
 
                 # Insert new nodes
                 insert_point = node_ind
+                if hasattr(node, "metadata_props"):
+                    func_ln_node.metadata_props.extend(node.metadata_props)
                 graph.node.insert(insert_point, func_ln_node)
                 if elementwise_affine:
                     insert_point += 1
+                    if hasattr(node, "metadata_props"):
+                        mul_node.metadata_props.extend(node.metadata_props)
                     graph.node.insert(insert_point, mul_node)
                 if has_bias:
                     insert_point += 1
+                    if hasattr(node, "metadata_props"):
+                        add_node.metadata_props.extend(node.metadata_props)
                     graph.node.insert(insert_point, add_node)
                 # Remove old node
                 graph.node.remove(node)
