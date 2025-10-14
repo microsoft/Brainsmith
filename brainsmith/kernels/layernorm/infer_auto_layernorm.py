@@ -7,32 +7,33 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-InferAutoLayerNorm - Transform FuncLayerNorm to AutoLayerNorm hardware operations.
+InferLayerNorm - Transform FuncLayerNorm to LayerNorm hardware operations.
 
-This is the modern version of InferLayerNorm that targets AutoLayerNorm instead of
-the legacy LayerNorm implementation.
+Transforms FuncLayerNorm functional nodes into hardware LayerNorm operations
+using the modern AutoHWCustomOp infrastructure with Dataflow Modeling.
 
-Key differences from InferLayerNorm:
-- Creates "AutoLayerNorm" nodes (not "LayerNorm")
+Key features:
+- Creates "LayerNorm" nodes using AutoHWCustomOp base class
 - Does NOT set ifm_dim or NumChannels (inferred from tensor context via kernel_model)
 - Relies on declarative KernelSchema for shape information
-- Uses AutoHWCustomOp base class with automatic shape inference
+- Automatic shape inference and validation
 
 The transformation process:
 1. Find FuncLayerNorm nodes in the graph
 2. Extract epsilon and axis attributes
 3. Handle NCHW layout conversion if needed
-4. Create AutoLayerNorm node with minimal attributes
+4. Create LayerNorm node with minimal attributes
 5. Remove old FuncLayerNorm node
 6. Rerun shape and datatype inference
+7. Initialize tensor context for all LayerNorm nodes (enables kernel_model)
 
 Example:
-    from brainsmith.kernels.layernorm.infer_auto_layernorm import InferAutoLayerNorm
+    from brainsmith.kernels.layernorm.infer_auto_layernorm import InferLayerNorm
 
     model = ModelWrapper(...)
-    model = model.transform(InferAutoLayerNorm())
+    model = model.transform(InferLayerNorm())
 
-    # Result: FuncLayerNorm nodes replaced with AutoLayerNorm nodes
+    # Result: FuncLayerNorm nodes replaced with LayerNorm nodes
 """
 
 import qonnx.core.data_layout as DataLayout
@@ -41,19 +42,20 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.onnx import nchw_to_nhwc
+from qonnx.custom_op.registry import getCustomOp
 from brainsmith.core.plugins import transform
 
 
 @transform(
     kernel="LayerNorm",
-    description="Convert FuncLayerNorm to AutoLayerNorm hardware operations",
+    description="Convert FuncLayerNorm to LayerNorm hardware operations",
     author="Thomas Keller"
 )
-class InferAutoLayerNorm(Transformation):
-    """Convert FuncLayerNorm into AutoLayerNorm HW operations.
+class InferLayerNorm(Transformation):
+    """Convert FuncLayerNorm into LayerNorm HW operations.
 
-    This transform targets the modern AutoLayerNorm implementation which uses
-    AutoHWCustomOp and the Dataflow Modeling system for automatic shape inference.
+    This transform uses the modern AutoHWCustomOp infrastructure with
+    Dataflow Modeling system for automatic shape inference.
 
     The key benefit is that shape information (ifm_dim, NumChannels) is inferred
     automatically from the tensor context via kernel_model, eliminating redundancy
@@ -61,7 +63,7 @@ class InferAutoLayerNorm(Transformation):
 
     Only normalizes over the channel dimension (last axis).
 
-    Attributes created on AutoLayerNorm node:
+    Attributes created on LayerNorm node:
     - SIMD: Parallelization factor (default 1)
     - epsilon: Small value to prevent division by zero
     - inputDataType: FINN DataType name (e.g., "INT8")
@@ -74,7 +76,7 @@ class InferAutoLayerNorm(Transformation):
     """
 
     def apply(self, model):
-        """Apply InferAutoLayerNorm transformation to model.
+        """Apply InferLayerNorm transformation to model.
 
         Args:
             model: ModelWrapper containing ONNX graph
@@ -127,10 +129,10 @@ class InferAutoLayerNorm(Transformation):
                 simd = 1
                 assert ch % simd == 0, "Requirement channel divisible by SIMD is violated."
 
-                # Create and insert AutoLayerNorm node
+                # Create and insert LayerNorm node
                 # IMPORTANT: No ifm_dim or NumChannels - these are inferred automatically!
                 new_node = helper.make_node(
-                    "AutoLayerNorm",  # Modern implementation
+                    "LayerNorm",
                     [act_in],
                     [act_out],
                     domain="brainsmith.kernels",
@@ -139,7 +141,7 @@ class InferAutoLayerNorm(Transformation):
                     epsilon=helper.get_node_attr_value(node, "epsilon"),
                     inputDataType=idt.name,
                     outputDataType=odt.name,
-                    name="AutoLayerNorm_" + node.name,
+                    name="LayerNorm_" + node.name,
                 )
                 graph.node.insert(insert_point, new_node)
 
@@ -149,7 +151,16 @@ class InferAutoLayerNorm(Transformation):
 
         if graph_modified:
             # Re-infer shapes and datatypes after transformation
+            # This ensures intermediate tensors have consistent shapes, which is critical
+            # when multiple LayerNorm nodes are connected (e.g., node1 -> mid -> node2)
             model = model.transform(InferShapes())
             model = model.transform(InferDataTypes())
+
+            # Initialize tensor context for newly created LayerNorm nodes
+            # This must happen AFTER InferShapes to ensure intermediate tensors have valid shapes
+            for node in model.graph.node:
+                if node.op_type == "LayerNorm" and node.domain == "brainsmith.kernels":
+                    op_inst = getCustomOp(node)
+                    op_inst.refresh_tensor_context(model)
 
         return (model, graph_modified)

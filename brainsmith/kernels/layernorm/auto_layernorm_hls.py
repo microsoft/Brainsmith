@@ -7,9 +7,9 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 """
-AutoLayerNorm HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
+LayerNorm HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
 
-This backend provides cppsim and rtlsim execution modes for AutoLayerNorm,
+This backend provides cppsim and rtlsim execution modes for LayerNorm,
 generating optimized HLS code using the kernel_model for automatic shape inference.
 
 Key differences from legacy implementation:
@@ -27,21 +27,21 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
-from brainsmith.kernels.layernorm.auto_layernorm import AutoLayerNorm
+from brainsmith.kernels.layernorm.auto_layernorm import LayerNorm
 from brainsmith.core.plugins import backend
 
 
 @backend(
-    name="AutoLayerNormHLS",
+    name="LayerNormHLS",
     kernel="LayerNorm",
     language="hls",
-    description="HLS backend for AutoLayerNorm kernel using Dataflow Modeling",
+    description="HLS backend for LayerNorm kernel using Dataflow Modeling",
     author="Shane Fleming",
 )
-class AutoLayerNorm_hls(AutoLayerNorm, HLSBackend):
-    """HLS backend for AutoLayerNorm using kernel_model for shape information.
+class LayerNorm_hls(LayerNorm, HLSBackend):
+    """HLS backend for LayerNorm using kernel_model for shape information.
 
-    This class inherits from both AutoLayerNorm (provides kernel_schema and Python execution)
+    This class inherits from both LayerNorm (provides kernel_schema and Python execution)
     and HLSBackend (provides HLS code generation infrastructure).
 
     The key innovation is using kernel_model properties instead of nodeattrs for shape info:
@@ -60,11 +60,11 @@ class AutoLayerNorm_hls(AutoLayerNorm, HLSBackend):
         """Merge node attributes from both parent classes.
 
         Returns:
-            dict: Combined attributes from HLSBackend and AutoLayerNorm
+            dict: Combined attributes from HLSBackend and LayerNorm
         """
         my_attrs = {}
         my_attrs.update(HLSBackend.get_nodeattr_types(self))
-        my_attrs.update(AutoLayerNorm.get_nodeattr_types(self))
+        my_attrs.update(LayerNorm.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
@@ -164,7 +164,7 @@ class AutoLayerNorm_hls(AutoLayerNorm, HLSBackend):
             graph: ONNX graph
 
         Modes:
-        - python: Delegates to AutoLayerNorm._execute_python() from parent
+        - python: Delegates to LayerNorm._execute_python() from parent
         - cppsim: Executes compiled C++ simulation
         - rtlsim: Executes RTL simulation with PyVerilator
 

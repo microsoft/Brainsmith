@@ -6,15 +6,15 @@
 # SPDX-License-Identifier: MIT
 ############################################################################
 """
-Tests for InferAutoLayerNorm transformation.
+Tests for InferLayerNorm transformation.
 
-This test suite validates that the InferAutoLayerNorm transform correctly
-converts FuncLayerNorm nodes to AutoLayerNorm nodes with proper attributes.
+This test suite validates that the InferLayerNorm transform correctly
+converts FuncLayerNorm nodes to LayerNorm nodes with proper attributes.
 
 Key validation points:
-1. Transformation occurs (FuncLayerNorm → AutoLayerNorm)
+1. Transformation occurs (FuncLayerNorm → LayerNorm)
 2. Node attributes are correct (SIMD, epsilon, datatypes)
-3. ifm_dim and NumChannels are NOT present (key difference from legacy)
+3. ifm_dim and NumChannels are NOT present (inferred from kernel_model)
 4. Shape and datatype inference works
 5. Multiple scenarios (different shapes, datatypes, layouts)
 """
@@ -28,8 +28,8 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.kernels.layernorm.infer_auto_layernorm import InferAutoLayerNorm
-from brainsmith.kernels.layernorm.auto_layernorm import AutoLayerNorm
+from brainsmith.kernels.layernorm.infer_auto_layernorm import InferLayerNorm
+from brainsmith.kernels.layernorm.auto_layernorm import LayerNorm
 
 
 # ============================================================================
@@ -79,7 +79,7 @@ def create_funclayernorm_model(shape, datatype="FLOAT32", epsilon=1e-5, axis=-1)
 # ============================================================================
 
 def test_infer_auto_layernorm_basic():
-    """Test that InferAutoLayerNorm converts FuncLayerNorm to AutoLayerNorm."""
+    """Test that InferLayerNorm converts FuncLayerNorm to LayerNorm."""
     print("\n=== Test 1: Basic Transformation ===")
 
     # Create model with FuncLayerNorm
@@ -92,13 +92,13 @@ def test_infer_auto_layernorm_basic():
     print(f"  ✓ Created model with FuncLayerNorm")
 
     # Apply transform
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
     print(f"  ✓ Transform applied")
 
-    # Verify AutoLayerNorm exists
-    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"]
-    assert len(auto_nodes) == 1, f"Expected 1 AutoLayerNorm node, got {len(auto_nodes)}"
-    print(f"  ✓ AutoLayerNorm node created")
+    # Verify LayerNorm exists
+    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
+    assert len(auto_nodes) == 1, f"Expected 1 LayerNorm node, got {len(auto_nodes)}"
+    print(f"  ✓ LayerNorm node created")
 
     # Verify FuncLayerNorm removed
     func_nodes_after = [n for n in model_transformed.graph.node if n.op_type == "FuncLayerNorm"]
@@ -107,7 +107,7 @@ def test_infer_auto_layernorm_basic():
 
 
 def test_auto_layernorm_node_attributes():
-    """Test that AutoLayerNorm node has correct attributes."""
+    """Test that LayerNorm node has correct attributes."""
     print("\n=== Test 2: Node Attributes ===")
 
     shape = [1, 128, 768]
@@ -116,10 +116,10 @@ def test_auto_layernorm_node_attributes():
 
     # Create and transform model
     model = create_funclayernorm_model(shape, datatype=datatype, epsilon=epsilon)
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    # Get AutoLayerNorm node
-    node = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"][0]
+    # Get LayerNorm node
+    node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
 
     # Check required attributes
     attr_names = [a.name for a in node.attribute]
@@ -160,10 +160,10 @@ def test_no_redundant_attributes():
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    # Get AutoLayerNorm node
-    node = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"][0]
+    # Get LayerNorm node
+    node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
     attr_names = [a.name for a in node.attribute]
 
     # Should NOT have these attributes (inferred from tensor context)
@@ -190,9 +190,9 @@ def test_different_shapes(shape):
     print(f"\n=== Test 4: Shape {shape} ===")
 
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"]
+    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
     assert len(auto_nodes) == 1
 
     print(f"  ✓ Transformation successful for shape {shape}")
@@ -205,10 +205,10 @@ def test_different_datatypes(datatype):
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype=datatype)
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    # Get AutoLayerNorm node
-    node = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"][0]
+    # Get LayerNorm node
+    node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
 
     # Verify datatypes preserved (decode bytes if necessary)
     idt_val = helper.get_node_attr_value(node, "inputDataType")
@@ -229,19 +229,19 @@ def test_different_datatypes(datatype):
 # ============================================================================
 
 def test_auto_layernorm_instantiation():
-    """Test that created AutoLayerNorm node can be instantiated."""
-    print("\n=== Test 6: AutoLayerNorm Instantiation ===")
+    """Test that created LayerNorm node can be instantiated."""
+    print("\n=== Test 6: LayerNorm Instantiation ===")
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype="INT8")
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    # Get AutoLayerNorm node
-    node = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"][0]
+    # Get LayerNorm node
+    node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
 
-    # Instantiate AutoLayerNorm operator
-    op_inst = AutoLayerNorm(node)
-    print(f"  ✓ AutoLayerNorm instantiated successfully")
+    # Instantiate LayerNorm operator
+    op_inst = LayerNorm(node)
+    print(f"  ✓ LayerNorm instantiated successfully")
 
     # Refresh tensor context (required for kernel_model)
     op_inst.refresh_tensor_context(model_transformed)
@@ -263,18 +263,18 @@ def test_auto_layernorm_instantiation():
 
 
 def test_auto_layernorm_execution():
-    """Test that AutoLayerNorm can execute in Python mode."""
-    print("\n=== Test 7: AutoLayerNorm Execution ===")
+    """Test that LayerNorm can execute in Python mode."""
+    print("\n=== Test 7: LayerNorm Execution ===")
 
     shape = [2, 64, 256]
     model = create_funclayernorm_model(shape, datatype="FLOAT32")
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    # Get AutoLayerNorm node
-    node = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"][0]
+    # Get LayerNorm node
+    node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
 
     # Instantiate and setup
-    op_inst = AutoLayerNorm(node)
+    op_inst = LayerNorm(node)
     op_inst.refresh_tensor_context(model_transformed)
     op_inst.set_nodeattr("exec_mode", "python")
 
@@ -329,15 +329,15 @@ def test_multiple_funclayernorm_nodes():
     model = model.transform(InferDataTypes())
 
     # Apply transform
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
-    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"]
-    assert len(auto_nodes) == 2, f"Expected 2 AutoLayerNorm nodes, got {len(auto_nodes)}"
+    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
+    assert len(auto_nodes) == 2, f"Expected 2 LayerNorm nodes, got {len(auto_nodes)}"
 
     func_nodes = [n for n in model_transformed.graph.node if n.op_type == "FuncLayerNorm"]
     assert len(func_nodes) == 0, "All FuncLayerNorm nodes should be removed"
 
-    print(f"  ✓ Transformed 2 FuncLayerNorm nodes to 2 AutoLayerNorm nodes")
+    print(f"  ✓ Transformed 2 FuncLayerNorm nodes to 2 LayerNorm nodes")
 
 
 def test_non_channel_axis_ignored():
@@ -350,14 +350,14 @@ def test_non_channel_axis_ignored():
     model = create_funclayernorm_model(shape, axis=1)
 
     # Apply transform
-    model_transformed = model.transform(InferAutoLayerNorm())
+    model_transformed = model.transform(InferLayerNorm())
 
     # Should NOT transform (normalization not on last axis)
     func_nodes = [n for n in model_transformed.graph.node if n.op_type == "FuncLayerNorm"]
     assert len(func_nodes) == 1, "FuncLayerNorm should remain (not channel axis)"
 
-    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "AutoLayerNorm"]
-    assert len(auto_nodes) == 0, "No AutoLayerNorm should be created"
+    auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
+    assert len(auto_nodes) == 0, "No LayerNorm should be created"
 
     print(f"  ✓ FuncLayerNorm on non-channel axis correctly ignored")
 
@@ -367,9 +367,9 @@ def test_non_channel_axis_ignored():
 # ============================================================================
 
 def main():
-    """Run all InferAutoLayerNorm tests."""
+    """Run all InferLayerNorm tests."""
     print("=" * 60)
-    print("InferAutoLayerNorm Transformation Tests")
+    print("InferLayerNorm Transformation Tests")
     print("=" * 60)
 
     try:
@@ -396,12 +396,12 @@ def main():
         print("\n" + "=" * 60)
         print("✓ ALL TESTS PASSED")
         print("=" * 60)
-        print("\nInferAutoLayerNorm transform validated:")
-        print("  ✓ Correctly transforms FuncLayerNorm to AutoLayerNorm")
+        print("\nInferLayerNorm transform validated:")
+        print("  ✓ Correctly transforms FuncLayerNorm to LayerNorm")
         print("  ✓ Sets proper attributes (SIMD, epsilon, datatypes)")
         print("  ✓ Does NOT set ifm_dim or NumChannels (inferred)")
         print("  ✓ Works with multiple shapes and datatypes")
-        print("  ✓ AutoLayerNorm instances work correctly")
+        print("  ✓ LayerNorm instances work correctly")
         print("  ✓ Handles edge cases properly")
 
         return 0

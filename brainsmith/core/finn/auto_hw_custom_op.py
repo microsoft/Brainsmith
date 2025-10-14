@@ -71,24 +71,46 @@ class AutoHWCustomOp(HWCustomOp, ABC):
 
     @property
     def tensor_context(self) -> TensorContext:
-        """Get tensor context, raising if not initialized.
+        """Get tensor context from cache or node metadata.
+
+        Tries to read from:
+        1. Instance cache (_tensor_context)
+        2. Node metadata (persisted from previous initialization)
 
         Raises:
-            RuntimeError: If tensor context not initialized
+            RuntimeError: If tensor context not available from either source
         """
         if self._tensor_context is None:
-            raise RuntimeError(
-                "Tensor context not initialized. Call refresh_tensor_context() first."
-            )
+            # Try to read from node metadata
+            cached_tc = TensorContext.from_node_metadata(self.onnx_node)
+            if cached_tc:
+                self._tensor_context = cached_tc
+            else:
+                raise RuntimeError(
+                    f"Tensor context not available for node '{self.onnx_node.name}'. "
+                    f"Either attach it during node creation or call refresh_tensor_context(model)."
+                )
         return self._tensor_context
 
     def refresh_tensor_context(self, model: ModelWrapper) -> None:
-        """Update tensor context from model, invalidate kernel model if context changed."""
+        """Update tensor context from model and persist to node metadata.
+
+        This method:
+        1. Extracts tensor context from ModelWrapper (shapes, dtypes)
+        2. Caches it in the instance
+        3. Attaches it to node.metadata_props for persistence
+        4. Invalidates kernel_model if context changed
+
+        Args:
+            model: ModelWrapper to extract tensor information from
+        """
         new_context = TensorContext.from_model_wrapper(self.onnx_node, model)
 
         if self._tensor_context != new_context:
             self._tensor_context = new_context
             self._kernel_model = None
+            # Persist to node metadata for future use
+            new_context.attach_to_node(self.onnx_node)
 
     @property
     def kernel_model(self) -> KernelModel:

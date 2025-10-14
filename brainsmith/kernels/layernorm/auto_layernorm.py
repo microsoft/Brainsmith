@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-AutoLayerNorm - LayerNorm kernel using AutoHWCustomOp and Dataflow Modeling.
+LayerNorm - Hardware LayerNorm kernel using AutoHWCustomOp and Dataflow Modeling.
 
 This implementation uses the modern Brainsmith Dataflow Modeling system for:
 - Declarative KernelSchema with constraints and relationships
@@ -43,9 +43,6 @@ LAYERNORM_SCHEMA = KernelSchema(
             constraints=[
                 # Validate SIMD divisibility on stream shape
                 DimensionDivisible("input", -1, "SIMD", ShapeHierarchy.STREAM),
-
-                # Validate datatype (FLOAT32 only)
-                DatatypeConstraint("input", "FLOAT", 32, 32),
             ]
         )
     ],
@@ -68,7 +65,7 @@ LAYERNORM_SCHEMA = KernelSchema(
     description="Hardware LayerNorm using AutoHWCustomOp and Dataflow Modeling",
     author="Thomas Keller"
 )
-class AutoLayerNorm(AutoHWCustomOp):
+class LayerNorm(AutoHWCustomOp):
     """LayerNorm implementation using AutoHWCustomOp base class.
 
     This kernel normalizes activations over the last dimension (channels) with:
