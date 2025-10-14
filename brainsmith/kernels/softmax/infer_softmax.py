@@ -20,7 +20,7 @@ Key features:
 
 The transformation process:
 1. Find Softmax nodes in the graph
-2. Extract axis attribute (must be -1 or last dimension)
+2. Validate axis attribute (must be -1 or None)
 3. Create Softmax node with minimal attributes (SIMD=1)
 4. Remove old Softmax node
 5. Rerun shape and datatype inference
@@ -58,7 +58,7 @@ class InferSoftmax(Transformation):
     automatically from the tensor context via kernel_model, eliminating redundancy
     and potential inconsistency.
 
-    Only normalizes over the channel dimension (last axis).
+    Only processes Softmax nodes with axis=-1 or axis=None (last dimension).
 
     Attributes explicitly set on Softmax node:
     - SIMD: Parallelization factor (default 1)
@@ -87,7 +87,8 @@ class InferSoftmax(Transformation):
 
         for node in graph.node:
             node_ind += 1
-            if node.op_type == "Softmax":
+            # Only process ONNX Softmax nodes (not our hardware Softmax nodes)
+            if node.op_type == "Softmax" and node.domain != "brainsmith.kernels":
                 # Get input/output tensor names
                 input_tensor = node.input[0]
                 output_tensor = node.output[0]
@@ -97,19 +98,9 @@ class InferSoftmax(Transformation):
                 if input_shape is None or len(input_shape) == 0:
                     continue
 
-                # Extract and validate axis attribute
-                # Softmax axis defaults to -1 (last dimension)
+                # Only support normalization over last dimension (axis=-1)
                 axis = helper.get_node_attr_value(node, "axis")
-                if axis is None:
-                    axis = -1
-
-                # Normalize axis to positive index
-                if axis < 0:
-                    axis = len(input_shape) + axis
-
-                # Only support normalization over last dimension (channel axis)
-                if axis != len(input_shape) - 1:
-                    # Skip this node - not normalizing over channel dimension
+                if axis is not None and axis != -1:
                     continue
 
                 # Get channel count
