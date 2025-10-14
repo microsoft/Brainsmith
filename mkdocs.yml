@@ -54,6 +54,8 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+use_directory_urls: true
+
 plugins:
   - search
   - mkdocstrings:
