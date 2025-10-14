@@ -131,7 +131,7 @@ onnxsim = "~=0.4.36"
 netron = "~=8.6"
 ipython = "~=8.12.2"
 ipykernel = "~=6.21.2"
-pygments = "~=2.14.0"
+pygments = ">=2.16,<3.0"  # Updated for mkdocs-material compatibility
 tqdm = "~=4.64.1"
 
 # Hardware and optimization
@@ -174,7 +174,7 @@ qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}
 onnxscript = {path = "deps/onnxscript", develop = true}
 finn-experimental = {path = "deps/finn-experimental", develop = true}
-dataset-loading = {path = "deps/dataset-loading", develop = true}
+# dataset-loading = {path = "deps/dataset-loading", develop = true}  # Temporarily commented - missing
 
 [tool.poetry.scripts]
 brainsmith = "brainsmith.interface.cli:brainsmith_main"
@@ -202,5 +202,15 @@ optional = true
 [tool.poetry.group.boards.dependencies]
 pyserial = "~=3.5"
 
-# Documentation and benchmarking groups removed for alpha stage
-# Add back when project matures and these become relevant
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "~=1.6.0"
+mkdocs-material = "~=9.5.0"
+mkdocstrings = {extras = ["python"], version = "~=0.26.0"}
+mkdocs-autorefs = "~=1.2.0"
+mkdocs-git-revision-date-localized-plugin = "~=1.2.0"
+mkdocs-minify-plugin = "~=0.8.0"
+mike = "~=2.1.0"
+pymdown-extensions = "~=10.8.0"

@@ -1,0 +1,119 @@
+site_name: Brainsmith
+site_description: From PyTorch to RTL - FPGA Accelerator Compiler for AI
+site_author: Microsoft & AMD
+site_url: https://microsoft.github.io/brainsmith/
+
+repo_name: microsoft/brainsmith
+repo_url: https://github.com/microsoft/brainsmith
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; Microsoft Corporation
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    - navigation.instant      # Fast page loads
+    - navigation.tracking     # URL updates with scroll
+    - navigation.tabs         # Top-level tabs
+    - navigation.sections     # Collapsible sections
+    - navigation.expand       # Expand all sections
+    - navigation.top          # Back to top button
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search terms
+    - content.code.copy       # Copy button for code blocks
+    - content.code.annotate   # Annotations in code blocks
+
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            merge_init_into_class: true
+            heading_level: 2
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+
+markdown_extensions:
+  # Code highlighting
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+  # Content features
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+  # Navigation
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Typography
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Plugin System: architecture/plugin-system.md
+  - API Reference:
+    - Core: api-reference/core.md
+    - Plugins: api-reference/plugins.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/microsoft/brainsmith
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/brainsmith/
+  version:
+    provider: mike

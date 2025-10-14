@@ -1,5 +1,7 @@
 ## Brainsmith
 
+[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://microsoft.github.io/brainsmith/)
+
 Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
 
 ## Pre-Release
