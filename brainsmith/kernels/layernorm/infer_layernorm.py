@@ -28,7 +28,7 @@ The transformation process:
 7. Initialize tensor context for all LayerNorm nodes (enables kernel_model)
 
 Example:
-    from brainsmith.kernels.layernorm.infer_auto_layernorm import InferLayerNorm
+    from brainsmith.kernels.layernorm.infer_layernorm import InferLayerNorm
 
     model = ModelWrapper(...)
     model = model.transform(InferLayerNorm())

@@ -7,13 +7,13 @@
 # Softmax kernel package
 ############################################################################
 
-# Import the main HWSoftmax operator
-from .hwsoftmax import HWSoftmax
+# Softmax implementations using AutoHWCustomOp and Dataflow Modeling
+from .softmax import Softmax
+from .softmax_hls import Softmax_hls as SoftmaxHLS
+from .infer_softmax import InferSoftmax
 
-# Import HLS backend if needed
-from .hwsoftmax_hls import HWSoftmax_hls
-
-# Import inference transform
-from .infer_hwsoftmax import InferHWSoftmax
-
-__all__ = ["HWSoftmax", "HWSoftmax_hls", "InferHWSoftmax"]
+__all__ = [
+    "Softmax",
+    "SoftmaxHLS",
+    "InferSoftmax",
+]

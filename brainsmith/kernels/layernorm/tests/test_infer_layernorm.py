@@ -28,8 +28,8 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.kernels.layernorm.infer_auto_layernorm import InferLayerNorm
-from brainsmith.kernels.layernorm.auto_layernorm import LayerNorm
+from brainsmith.kernels.layernorm.infer_layernorm import InferLayerNorm
+from brainsmith.kernels.layernorm.layernorm import LayerNorm
 
 
 # ============================================================================

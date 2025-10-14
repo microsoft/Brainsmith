@@ -71,21 +71,6 @@ class InterfaceSchema:
     # Node attribute name for datatype (e.g., "inputDataType", "outputDataType")
     datatype_attr: Optional[str] = None
 
-    def add_constraint(self, constraint: InterfaceConstraint) -> None:
-        """Add a constraint to this interface.
-
-        Args:
-            constraint: InterfaceConstraint to add
-
-        Raises:
-            ValueError: If constraint interface name doesn't match schema name
-        """
-        if constraint.interface_name != self.name:
-            raise ValueError(
-                f"Constraint interface '{constraint.interface_name}' must match schema name '{self.name}'"
-            )
-        self.constraints.append(constraint)
-
     def get_datatype_attr(self, index: int) -> str:
         """Get the nodeattr name for this interface's datatype.
 

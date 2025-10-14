@@ -20,7 +20,7 @@ design_space:
     - DuplicateStreams
     - ElementwiseBinaryOperation
     - Shuffle
-    - HWSoftmax
+    - Softmax
     - Thresholding
     - MVAU
     

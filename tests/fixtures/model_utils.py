@@ -119,11 +119,84 @@ def _save_model(model: onnx.ModelProto, path: str) -> None:
     onnx.save(model, path)
 
 
+def create_softmax_model(
+    batch_size: int = 1,
+    seq_len: int = 128,
+    channels: int = 768,
+    input_dtype: str = "INT8",
+    output_dtype: str = "FLOAT32",
+    model_name: str = "softmax_test_model"
+) -> onnx.ModelProto:
+    """Create an ONNX model with a Softmax operation.
+
+    Args:
+        batch_size: Batch dimension
+        seq_len: Sequence length dimension
+        channels: Channel dimension (softmax normalizes over this)
+        input_dtype: QONNX DataType name for input (e.g., "INT8", "FLOAT32")
+        output_dtype: QONNX DataType name for output (usually "FLOAT32")
+        model_name: Name of the model
+
+    Returns:
+        ONNX model proto with Softmax node
+    """
+    from qonnx.core.datatype import DataType
+
+    # Map QONNX DataType names to ONNX TensorProto types
+    dtype_map = {
+        "INT8": TensorProto.INT8,
+        "UINT8": TensorProto.UINT8,
+        "INT16": TensorProto.INT16,
+        "UINT16": TensorProto.UINT16,
+        "INT32": TensorProto.INT32,
+        "FLOAT32": TensorProto.FLOAT,
+        "FLOAT16": TensorProto.FLOAT16,
+    }
+
+    input_shape = [batch_size, seq_len, channels]
+    output_shape = [batch_size, seq_len, channels]
+
+    # Create input/output tensors with specified datatypes
+    input_tensor = helper.make_tensor_value_info(
+        "input", dtype_map.get(input_dtype, TensorProto.FLOAT), input_shape
+    )
+    output_tensor = helper.make_tensor_value_info(
+        "output", dtype_map.get(output_dtype, TensorProto.FLOAT), output_shape
+    )
+
+    # Create Softmax node (normalizes over axis=-1, the channel dimension)
+    softmax_node = helper.make_node(
+        "Softmax",
+        inputs=["input"],
+        outputs=["output"],
+        axis=-1  # Normalize over last dimension (channels)
+    )
+
+    # Create graph
+    graph_proto = helper.make_graph(
+        [softmax_node],
+        model_name,
+        [input_tensor],
+        [output_tensor]
+    )
+
+    # Create model
+    model_proto = helper.make_model(
+        graph_proto,
+        producer_name="brainsmith_test"
+    )
+
+    # Set opset version
+    model_proto.opset_import[0].version = 11
+
+    return model_proto
+
+
 @pytest.fixture
 def simple_onnx_model(tmp_path):
     """Create a simple ONNX model for testing."""
     model = create_simple_model()
     model_path = tmp_path / "simple_model.onnx"
     _save_model(model, str(model_path))
-    
+
     return model_path

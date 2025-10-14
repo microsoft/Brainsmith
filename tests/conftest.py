@@ -21,3 +21,6 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: marks tests as integration tests"
     )
+    config.addinivalue_line(
+        "markers", "parity: marks tests comparing manual vs auto HWCustomOp implementations"
+    )

@@ -4,12 +4,12 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# @author       Shane T. Fleming <shane.fleming@amd.com>
+# @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-LayerNorm HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
+Softmax HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
 
-This backend provides cppsim and rtlsim execution modes for LayerNorm,
+This backend provides cppsim and rtlsim execution modes for Softmax,
 generating optimized HLS code using the kernel_model for automatic shape inference.
 
 Key differences from legacy implementation:
@@ -27,21 +27,21 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
-from brainsmith.kernels.layernorm.auto_layernorm import LayerNorm
+from brainsmith.kernels.softmax.softmax import Softmax
 from brainsmith.core.plugins import backend
 
 
 @backend(
-    name="LayerNormHLS",
-    kernel="LayerNorm",
+    name="SoftmaxHLS",
+    kernel="Softmax",
     language="hls",
-    description="HLS backend for LayerNorm kernel using Dataflow Modeling",
-    author="Shane Fleming",
+    description="HLS backend for Softmax kernel using Dataflow Modeling",
+    author="Thomas Keller",
 )
-class LayerNorm_hls(LayerNorm, HLSBackend):
-    """HLS backend for LayerNorm using kernel_model for shape information.
+class Softmax_hls(Softmax, HLSBackend):
+    """HLS backend for Softmax using kernel_model for shape information.
 
-    This class inherits from both LayerNorm (provides kernel_schema and Python execution)
+    This class inherits from both Softmax (provides kernel_schema and Python execution)
     and HLSBackend (provides HLS code generation infrastructure).
 
     The key innovation is using kernel_model properties instead of nodeattrs for shape info:
@@ -60,11 +60,11 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         """Merge node attributes from both parent classes.
 
         Returns:
-            dict: Combined attributes from HLSBackend and LayerNorm
+            dict: Combined attributes from HLSBackend and Softmax
         """
         my_attrs = {}
         my_attrs.update(HLSBackend.get_nodeattr_types(self))
-        my_attrs.update(LayerNorm.get_nodeattr_types(self))
+        my_attrs.update(Softmax.get_nodeattr_types(self))
         return my_attrs
 
     def global_includes(self):
@@ -72,12 +72,12 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
         Sets code_gen_dict["$GLOBALS$"] with required headers:
         - hls_vector.h: HLS vector types
-        - layernorm.hpp: LayerNorm kernel implementation
+        - softmax.hpp: Softmax kernel implementation
         - bs_utils.hpp: Brainsmith utility functions
         """
         self.code_gen_dict["$GLOBALS$"] = [
             "#include <hls_vector.h>",
-            '#include "layernorm.hpp"',
+            '#include "softmax.hpp"',
             '#include "bs_utils.hpp"'
         ]
 
@@ -90,7 +90,6 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         Sets code_gen_dict["$DEFINES$"] with:
         - SIMD: Stream parallelism from kernel_model.inputs[0].stream_shape[-1]
         - W: Total channels from kernel_model.inputs[0].tensor_shape[-1]
-        - epsilon: Small value from nodeattr
         - TI: Input type from kernel_model.inputs[0].datatype
         - TO: Output type from kernel_model.outputs[0].datatype
         """
@@ -100,7 +99,6 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
         simd = input_model.stream_shape[-1]
         width = input_model.tensor_shape[-1]
-        epsilon = self.get_nodeattr('epsilon')
 
         idtype = input_model.datatype
         odtype = output_model.datatype
@@ -108,7 +106,6 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         self.code_gen_dict["$DEFINES$"] = [
             f"constexpr unsigned SIMD = {simd};",
             f"constexpr unsigned W = {width};",
-            f"constexpr float epsilon = {epsilon};",
             f"using TI = {idtype.get_hls_datatype_str()};",
             f"using TO = {odtype.get_hls_datatype_str()};"
         ]
@@ -117,10 +114,18 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         """Define computation function call for IPgen mode.
 
         Sets code_gen_dict["$DOCOMPUTE$"] with the kernel function call.
-        This is used by the IP generation template to invoke the LayerNorm pipeline.
+        This is used by the IP generation template to invoke the Softmax pipeline.
         """
         self.code_gen_dict["$DOCOMPUTE$"] = [
-            "layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out0_V);"
+            """
+            static hls::stream<hls::vector<TI,SIMD>>  src0;
+            static hls::stream<hls::vector<TO,SIMD>>  dst0;
+
+            move(in0_V, src0);
+            static SoftMax<TI, TO, W, SIMD> sm_inst;
+            sm_inst.execute(src0, dst0);
+            move(dst0, out0_V);
+            """
         ]
 
     def blackboxfunction(self):
@@ -157,14 +162,14 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         ]
 
     def execute_node(self, context, graph):
-        """Execute LayerNorm in cppsim, rtlsim, or python mode.
+        """Execute Softmax in cppsim, rtlsim, or python mode.
 
         Args:
             context: Execution context containing input/output tensors
             graph: ONNX graph
 
         Modes:
-        - python: Delegates to LayerNorm._execute_python() from parent
+        - python: Delegates to Softmax._execute_python() from parent
         - cppsim: Executes compiled C++ simulation
         - rtlsim: Executes RTL simulation with PyVerilator
 
@@ -285,8 +290,10 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             npy2vectorstream<TI, float, SIMD>("{path}/input_0.npy", in0_V);
             int stream_size = in0_V.size();
 
+            static SoftMax<TI, TO, W, SIMD> sm_inst;
+
             while(out0_V.size() != stream_size){{
-                layernorm_pipeline<TI, TO, W, SIMD>(epsilon, in0_V, out0_V);
+                sm_inst.execute(in0_V, out0_V);
             }}
 
             vectorstream2npy<TO, float, SIMD>(out0_V, {oshape_str}, "{path}/output_0.npy");
@@ -383,13 +390,13 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         return f"-I{kernel_dir} -I{utils_dir}"
 
     def generate_params(self, model, path):
-        """Generate parameter files for kernel (no-op for LayerNorm).
+        """Generate parameter files for kernel (no-op for Softmax).
 
         Args:
             model: ModelWrapper instance
             path: Output directory path
 
-        LayerNorm has no weight matrices or lookup tables, so this is empty.
+        Softmax has no weight matrices or lookup tables, so this is empty.
         Other kernels (e.g., MatrixVectorActivation) use this to generate
         weight/threshold parameter files.
         """
