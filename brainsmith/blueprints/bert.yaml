@@ -32,7 +32,7 @@ design_space:
     - "infer_kernels" # Brainsmith dynamic kernel inference
     - "create_dataflow_partition"
     - "specialize_layers"
-    - "target_fps_parallelization"
+    # - "target_fps_parallelization"
     - "apply_folding_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"

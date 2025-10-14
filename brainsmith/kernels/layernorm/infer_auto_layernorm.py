@@ -63,14 +63,15 @@ class InferLayerNorm(Transformation):
 
     Only normalizes over the channel dimension (last axis).
 
-    Attributes created on LayerNorm node:
+    Attributes explicitly set on LayerNorm node:
     - SIMD: Parallelization factor (default 1)
     - epsilon: Small value to prevent division by zero
-    - inputDataType: FINN DataType name (e.g., "INT8")
-    - outputDataType: FINN DataType name
-    - exec_mode: Execution mode (default "python")
 
-    Attributes NOT created (inferred automatically):
+    Attributes set automatically by refresh_tensor_context():
+    - inputDataType: Populated from tensor context
+    - outputDataType: Populated from tensor context
+
+    Attributes inferred dynamically from tensor context (not stored):
     - ifm_dim: Input feature map dimensions (from tensor context)
     - NumChannels: Number of channels (from tensor context)
     """
@@ -94,12 +95,8 @@ class InferLayerNorm(Transformation):
                 act_in = node.input[0]
                 act_out = node.output[0]
 
-                # Get shape and datatypes from tensor context
-                shape_in = model.get_tensor_shape(act_in)
-                idt = model.get_tensor_datatype(act_in)
-                odt = model.get_tensor_datatype(act_out)
-
                 # Skip if shape not available (shouldn't happen with proper inference)
+                shape_in = model.get_tensor_shape(act_in)
                 if shape_in is None or len(shape_in) == 0:
                     continue
 
@@ -130,7 +127,6 @@ class InferLayerNorm(Transformation):
                 assert ch % simd == 0, "Requirement channel divisible by SIMD is violated."
 
                 # Create and insert LayerNorm node
-                # IMPORTANT: No ifm_dim or NumChannels - these are inferred automatically!
                 new_node = helper.make_node(
                     "LayerNorm",
                     [act_in],
@@ -139,8 +135,6 @@ class InferLayerNorm(Transformation):
                     backend="fpgadataflow",
                     SIMD=simd,
                     epsilon=helper.get_node_attr_value(node, "epsilon"),
-                    inputDataType=idt.name,
-                    outputDataType=odt.name,
                     name="LayerNorm_" + node.name,
                 )
                 graph.node.insert(insert_point, new_node)

@@ -99,7 +99,8 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         1. Extracts tensor context from ModelWrapper (shapes, dtypes)
         2. Caches it in the instance
         3. Attaches it to node.metadata_props for persistence
-        4. Invalidates kernel_model if context changed
+        4. Sets datatype nodeattrs from tensor context (for optimizations)
+        5. Invalidates kernel_model if context changed
 
         Args:
             model: ModelWrapper to extract tensor information from
@@ -111,6 +112,17 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             self._kernel_model = None
             # Persist to node metadata for future use
             new_context.attach_to_node(self.onnx_node)
+
+            # Set datatype nodeattrs from tensor context
+            # These are the "working copy" where optimizations will be applied
+            for i, tensor in enumerate(new_context.inputs):
+                if tensor is not None:
+                    datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
+                    super().set_nodeattr(datatype_attr, tensor.datatype.name)
+
+            for i, tensor in enumerate(new_context.outputs):
+                datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
+                super().set_nodeattr(datatype_attr, tensor.datatype.name)
 
     @property
     def kernel_model(self) -> KernelModel:
