@@ -1,6 +1,6 @@
 # Blueprint Schema Reference
 
-Blueprints are YAML files that declaratively define the design space for FPGA accelerator generation, including hardware kernels, build steps, and exploration parameters.
+Blueprints are YAML files that define the design space for FPGA accelerator generation, including hardware kernels, build steps, and exploration parameters.
 
 ## Schema Structure
 
@@ -22,9 +22,14 @@ board: "Pynq-Z1"                      # Target FPGA board (required for rtl/bitf
 verify: false                         # Enable verification (default: false)
 verify_data: "path/to/verify_data/"   # Directory with input.npy and expected_output.npy
 save_intermediate_models: false       # Save intermediate models (default: false)
+parallel_builds: 4                    # Concurrent FINN builds during DSE (default: 4)
+
+# Optional: Step range control (for testing/debugging)
+start_step: "streamline"              # Start execution from this step (inclusive)
+stop_step: "specialize_layers"        # Stop execution at this step (inclusive)
 
 # Optional: Direct FINN parameter overrides
-finn_config:
+finn_config:                          # Maps internally to finn_overrides
   minimize_bit_width: false
   rtlsim_batch_size: 100
   shell_flow_type: "vivado_zynq"
@@ -96,10 +101,46 @@ verify_data: "path/to/verify_data/"  # Directory containing input.npy and expect
 ```
 
 #### debug
-Enable debug logging and additional diagnostics (not currently implemented).
+Enable debug logging and additional diagnostics (**not currently implemented**).
 
 #### save_intermediate_models
 Save model state after each transformation step (useful for debugging).
+
+#### parallel_builds
+Number of concurrent FINN builds to run during design space exploration. Higher values can speed up exploration but require more memory.
+```yaml
+parallel_builds: 4  # Default: 4
+```
+
+#### start_step & stop_step
+Control the execution range of steps for testing and debugging. Both parameters are optional and specify step boundaries (inclusive).
+
+```yaml
+start_step: "streamline"        # Start from this step (inclusive)
+stop_step: "specialize_layers"  # Stop at this step (inclusive)
+```
+
+**Use Cases:**
+- **Testing individual steps**: Set both to the same value to run only that step
+- **Creating checkpoints**: Use `stop_step` to build up to a certain point
+- **Resuming from intermediate**: Use `start_step` with a previously saved intermediate model
+- **Debugging failures**: Isolate problematic steps for investigation
+
+**CLI Overrides:**
+CLI flags `--start-step` and `--stop-step` override blueprint values:
+```bash
+# Override blueprint to test single step
+smith dse model.onnx blueprint.yaml --start-step streamline --stop-step streamline
+
+# Run from beginning up to a checkpoint
+smith dse model.onnx blueprint.yaml --stop-step specialize_layers
+```
+
+**Notes:**
+- Steps are identified by name and must match step names in the `steps` list
+- For branch points (list of steps), specify any step name within the branch
+- Slicing preserves branch structure within the specified range
+- Use with `save_intermediate_models: true` to enable checkpointing
 
 ### FINN Configuration Overrides
 
@@ -118,7 +159,7 @@ finn_config:
 
 Kernels define the hardware implementations available for neural network layers. When the `infer_kernels` step is executed, Brainsmith automatically maps layers to these kernels.
 
-**Pre-Release Note**: Backend registration is to support future features in the FINN Kernel backend rework. As of now, specifying backends in the blueprint *has no impact on the build* and it will default based on the `preferred_impl_style` nodeattr in the HWCustomOp.
+**Pre-Release Note**: Backend specifications are validated and stored in the design space, but backend selection is not yet implemented. Currently, the build will use the default backend based on the `preferred_impl_style` nodeattr in the HWCustomOp. Full backend selection support is planned for a future release.
 
 ```yaml
 kernels:
@@ -129,6 +170,14 @@ kernels:
   - LayerNorm: LayerNorm_hls          # Use HLS backend only
   - MVAU: [MVAU_hls, MVAU_rtl]        # Use both HLS and RTL backends
 ```
+
+Backend names must match the full registered name from the backend implementation. For example, if a backend is registered as:
+```python
+@backend(name="LayerNorm_hls", kernel="LayerNorm", language="hls")
+class LayerNorm_hls(LayerNorm, HLSBackend):
+    ...
+```
+Then use `LayerNorm_hls` in the blueprint, not just `hls`.
 
 Common FINN kernels:
 - `MVAU` - Matrix-Vector-Activation Unit (dense/linear layers)
@@ -168,6 +217,20 @@ steps:
   - "apply_folding_config"            # Apply parallelization
   - "generate_estimate_reports"       # Generate resource estimates
 ```
+
+**Step Validation**: Invalid step names will raise a `ValueError` with helpful suggestions. For example, if you misspell "streamline" as "steamline", you'll get an error suggesting the correct name.
+
+**Branch Point Restrictions**: 
+- Branch points (lists) can only contain strings or skip indicators
+- Nested lists are not allowed within branch points
+- To insert a branch point via step operations, use double brackets: `with: [["option1", "option2"]]`
+
+**Skip Values**: The following values all indicate a step should be skipped:
+- `~` (recommended)
+- `null` or `None`
+- Empty string `""`
+
+All skip values are normalized to `~` internally.
 
 ### Step Operations
 
@@ -253,7 +316,7 @@ design_space:
 1. **Simple fields** (name, clock_ns, etc.) - Child overrides parent
 2. **finn_config** - Deep merged (child fields override parent fields)
 3. **steps** - Parent steps are inherited. Use step operations to modify them. If child specifies direct steps without operations, parent steps are replaced entirely.
-4. **kernels** - Child replaces parent entirely (no merge)
+4. **kernels** - Child replaces parent entirely (no merge). Note: If child blueprint has no `kernels` section at all, parent kernels are inherited. An empty `kernels: []` list explicitly clears parent kernels.
 
 ## Execution Semantics
 
@@ -289,3 +352,17 @@ To optimize performance, Brainsmith groups sequential steps into segments:
 - Artifacts are shared at branch points to avoid redundant computation
 
 **Pre-Release Note**: Segment-based execution is functional but requires further testing and refinement for large design spaces.
+
+## Environment Variables
+
+### BRAINSMITH_MAX_COMBINATIONS
+
+Controls the maximum number of design space combinations (execution paths) allowed:
+
+```bash
+export BRAINSMITH_MAX_COMBINATIONS=100000  # Default: 100000
+```
+
+This limit prevents accidentally creating design spaces that are too large to explore. If your blueprint generates more paths than this limit, you'll receive an error with the actual count. You can then either:
+- Reduce the design space by removing some branch points
+- Increase the limit if you have sufficient computational resources

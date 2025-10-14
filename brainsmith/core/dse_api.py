@@ -13,8 +13,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from .design.parser import BlueprintParser
+from brainsmith.config import get_build_dir
+from .design.parser import parse_blueprint
 from .design.builder import DSETreeBuilder
+from .design.space import slice_steps
 from .dse.tree import DSETree
 from .dse.runner import SegmentRunner
 from .dse.finn_runner import FINNRunner
@@ -23,21 +25,29 @@ from .dse.types import TreeExecutionResult
 logger = logging.getLogger(__name__)
 
 
-def explore_design_space(model_path: str, blueprint_path: str, output_dir: str = None):
+def explore_design_space(
+    model_path: str,
+    blueprint_path: str,
+    output_dir: str = None,
+    start_step_override: str = None,
+    stop_step_override: str = None
+):
     """
     Explore the design space for an FPGA accelerator.
-    
+
     Transforms a neural network model into an FPGA accelerator through
     blueprint-driven design space exploration and synthesis.
-    
+
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
         output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/forge_YYYYMMDD_HHMMSS)
-        
+        start_step_override: Override blueprint start_step (CLI takes precedence)
+        stop_step_override: Override blueprint stop_step (CLI takes precedence)
+
     Returns:
         TreeExecutionResult containing build artifacts and statistics
-        
+
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
@@ -48,24 +58,32 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
         raise FileNotFoundError(f"Model file not found: {model_path}")
     if not Path(blueprint_path).exists():
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-    
+
     # Determine output directory
     if output_dir is None:
-        build_dir = Path(os.environ.get("BSMITH_BUILD_DIR", "./build"))
+        build_dir = get_build_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = str(build_dir / f"dse_{timestamp}")
-    
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     logger.info(f"Exploring design space for FPGA accelerator:")
     logger.info(f"  Model: {model_path}")
     logger.info(f"  Blueprint: {blueprint_path}")
     logger.info(f"  Output: {output_dir}")
-    
+
     # Parse blueprint
-    parser = BlueprintParser()
-    design_space, forge_config = parser.parse(blueprint_path, str(Path(model_path).absolute()))
+    design_space, forge_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
+
+    # Apply CLI overrides (CLI > blueprint)
+    start_step = start_step_override or forge_config.start_step
+    stop_step = stop_step_override or forge_config.stop_step
+
+    # Slice steps if specified
+    if start_step or stop_step:
+        logger.info(f"Applying step range: start={start_step or 'beginning'}, stop={stop_step or 'end'}")
+        design_space.steps = slice_steps(design_space.steps, start_step, stop_step)
     
     # Build DSE tree
     tree_builder = DSETreeBuilder()

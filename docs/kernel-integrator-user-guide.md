@@ -1,5 +1,8 @@
 # Kernel Integrator User Guide
 
+## ***PRE-RELEASE NOTE***
+**The Kernel Integrator is an experimental feature that offers signficiant automation potential and will work for most simple kernels, it has some rough edges and limitations for complex corner cases (particularly including AXI-Lite config signals).**
+
 ## Overview
 
 The Kernel Integrator is an automated tool that bridges the gap between SystemVerilog RTL hardware designs and the FINN compiler framework. It generates Python integration code that allows custom RTL kernels to be seamlessly used within neural network accelerator designs.
@@ -90,7 +93,7 @@ See the [Pragma Reference](./kernel-integrator-pragma-reference.md) guide.
 
 Your RTL module should follow these conventions:
 
-1. **Clear Port Definitions**: Use standard SystemVerilog port declarations
+1. **Clear Port Definitions**: Use standard SystemVerilog ANSI-style port declarations
 2. **Parameter Declaration**: Use `parameter` or `localparam` appropriately
 3. **Protocol Compliance**: Follow AXI-Stream or AXI-Lite protocols for interfaces
 

@@ -20,9 +20,9 @@ The execution tree organizes how Brainsmith explores the design space for neural
 Design space exploration often involves paths with significant overlap, differing only in specific optimizations or kernel choices. The execution tree exploits this by merging shared pipeline segments and splitting at *branch points*, enabling artifact reuse and reducing redundant computation.
 
 ```
-                                 ┌→ streamline → fold_constants → finalize
-start → tidy_up → convert_to_hw →┤
-                                 └→ streamline_aggressive → minimize_bit_width → finalize
+                                          ┌→ step_minimize_bit_width → step_hw_codegen
+cleanup → qonnx_to_finn → infer_kernels →┤
+                                          └→ step_apply_folding_config → step_hw_codegen
 ``` 
 
 Steps are collected into *segments* of contiguous, non-branching steps that are run as a single FINN build.
@@ -50,21 +50,25 @@ class DSESegment:
 - **Sequential steps** → Single segment
 - **Alternatives** → Branch points with child segments
 - **Kernel inference** → Expands to kernel/backend combinations
+- **Skip option** → Use `~` to create optional paths
 
 ```yaml
 steps:
   - "qonnx_to_finn"      # These become
-  - "tidy_up"            # one segment
-  - ["streamline", "streamline_aggressive"]  # Branch point
+  - "cleanup"            # one segment
+  - ["step_minimize_bit_width", "step_apply_folding_config"]  # Branch point
+  - ["~", "step_set_fifo_depths"]  # Optional step (skip or execute)
   
 kernels:
   - LayerNorm: [LayerNorm_hls, LayerNorm_rtl]  # Creates paths
 ```
 
+The skip indicator `~` allows creating paths that bypass certain optimizations, useful for comparing performance with and without specific transformations.
+
 ## Execution Flow
 
 ### 1. Tree Building
-`tree_builder.py` converts blueprint → execution tree:
+`DSETreeBuilder` in `brainsmith/core/design/builder.py` converts blueprint → execution tree:
 - Groups sequential steps into segments
 - Creates branches for alternatives
 - Expands kernel inference into transforms
@@ -96,10 +100,19 @@ Each segment = one FINN build:
 ### 4. Artifact Sharing
 At branch points, the parent's output is shared with all children to avoid redundant computation:
 ```python
-def share_artifacts_at_branch(self, parent: DSESegment, children: List[DSESegment]):
-    """Share parent output with all children."""
-    parent_out = parent.output_dir / "output.onnx"
-    for child in children:
-        child_out = child.output_dir / "output.onnx"
-        shutil.copy2(parent_out, child_out)
+def share_artifacts_at_branch(
+    parent_result: SegmentResult,
+    child_segments: List[DSESegment],
+    base_output_dir: Path
+) -> None:
+    """Copy build artifacts to child segments."""
+    if not parent_result.success:
+        return
+    
+    for child in child_segments:
+        child_dir = base_output_dir / child.segment_id
+        # Full directory copy for FINN compatibility
+        if child_dir.exists():
+            shutil.rmtree(child_dir)
+        shutil.copytree(parent_result.output_dir, child_dir)
 ```

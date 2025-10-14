@@ -75,6 +75,14 @@ class FINNRunner:
         Raises:
             RuntimeError: If build fails
         """
+        # Ensure FINN environment variables are set before importing FINN
+        # TODO: In the future, we hope to move away from environment variables
+        # and pass configuration directly to FINN components. For now, FINN
+        # requires certain environment variables to be set (FINN_ROOT, FINN_BUILD_DIR, etc.)
+        from brainsmith.config import load_config
+        config = load_config()
+        config.export_to_environment()
+
         # Import FINN lazily to avoid circular dependencies
         from finn.builder.build_dataflow import build_dataflow_cfg
         from finn.builder.build_dataflow_config import DataflowBuildConfig
@@ -103,7 +111,12 @@ class FINNRunner:
             # For now, we mandate save_intermediate_models=True to ensure we can find
             # the transformed model that needs to be passed to the next DSE segment
             finn_config["save_intermediate_models"] = True
-            
+
+            # CRITICAL: Set verbose=True to prevent FINN from redirecting stdout/stderr
+            # FINN's stdout redirection (build_dataflow.py:151-153) conflicts with Rich
+            # console logging, causing hangs when running via CLI
+            finn_config["verbose"] = True
+
             # Convert dict to DataflowBuildConfig
             logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
             config = DataflowBuildConfig(**finn_config)

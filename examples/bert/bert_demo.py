@@ -22,6 +22,13 @@ from pathlib import Path
 import numpy as np
 import onnx
 import torch
+
+# Import brainsmith early to set up paths
+import brainsmith
+from brainsmith.config import get_build_dir, get_config
+# Export configuration to environment for FINN
+get_config().export_to_environment()
+
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
@@ -41,7 +48,7 @@ import custom_steps  # Import custom steps to trigger registration
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import forge
+from brainsmith import explore_design_space
 
 warnings.simplefilter("ignore")
 
@@ -224,12 +231,11 @@ def run_brainsmith_dse(model, args):
         raise RuntimeError("Unable to simplify the Brevitas BERT model")
     
     # Save simplified model
-    if args.save_intermediate:
-        onnx.save(model, os.path.join(model_dir, "simp.onnx"))
-        # Also save to debug directory for comparison
-        debug_dir = os.path.join(args.output_dir, "debug_models")
-        onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-        print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
+    onnx.save(model, os.path.join(model_dir, "simp.onnx"))
+    # Also save to debug directory for comparison
+    debug_dir = os.path.join(args.output_dir, "debug_models")
+    onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
+    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
     
     # Run cleanup
     cleanup(
@@ -246,12 +252,12 @@ def run_brainsmith_dse(model, args):
         os.path.join(debug_dir, "02_after_qonnx_cleanup.onnx")
     )
     
-    # Get static blueprint path
-    blueprint_path = Path(__file__).parent / "bert_demo.yaml"
+    # Get blueprint path from args
+    blueprint_path = Path(__file__).parent / args.blueprint
     
     # Forge the FPGA accelerator
     print("Forging FPGA accelerator...")
-    results = forge(
+    results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
@@ -304,40 +310,28 @@ def main():
     parser.add_argument('-q', '--seqlen', type=int, default=128, 
                        help='Sequence length parameter')
     
-    # Build configuration
-    parser.add_argument('-f', '--fps', type=int, default=3000, 
-                       help='Target FPS for auto folding')
-    parser.add_argument('-c', '--clk', type=float, default=3.33, 
-                       help='Target clock period in ns')
-    parser.add_argument('-s', '--stop_step', type=str, default=None, 
-                       help='Step to stop at in build flow')
-    parser.add_argument('-p', '--param', type=str, default=None, 
-                       help='Preconfigured folding parameters file')
-    parser.add_argument('-x', '--run_fifo_sizing', action='store_true', 
-                       help='Run FIFO sizing step')
-    parser.add_argument('-d', '--dcp', action='store_true',
-                       help='Generate DCP file (default: disabled for quicktest)')
-    parser.add_argument('--board', type=str, default='V80', 
-                       help='Target board (V80, Pynq-Z1, U250)')
-    parser.add_argument('-v', '--verbose', action='store_true', 
-                       help='Enable verbose logging')
+    # Blueprint configuration
+    parser.add_argument('--blueprint', type=str, default='bert_demo.yaml',
+                       help='Blueprint YAML file to use (default: bert_demo.yaml)')
+    
+    # Force flag
+    parser.add_argument('--force', action='store_true',
+                       help='Remove existing output directory before building')
     
     args = parser.parse_args()
     
-    # Set hardcoded values to match old system
-    args.save_intermediate = True
-    args.standalone_thresholds = True
-    args.fifosim_n_inferences = 2
-    args.verification_atol = 1e-1
-    args.split_large_fifos = True
-    
     # Determine output directory
-    build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
+    build_dir = get_build_dir()
     print(build_dir)
-    args.output_dir = os.path.join(build_dir, args.output)
+    args.output_dir = os.path.join(str(build_dir), args.output)
+    
+    # Clean up existing directory if --force flag is set
+    if args.force and os.path.exists(args.output_dir):
+        print(f"Removing existing output directory: {args.output_dir}")
+        shutil.rmtree(args.output_dir)
     
     print("=" * 70)
-    print("BERT Modern Demo - Using Brainsmith DSE v3")
+    print("BERT Demo Using Brainsmith DSE")
     print("=" * 70)
     print(f"Configuration:")
     print(f"  Hidden layers: {args.num_hidden_layers}")
@@ -346,9 +340,7 @@ def main():
     print(f"  Intermediate size: {args.intermediate_size}")
     print(f"  Bitwidth: {args.bitwidth}")
     print(f"  Sequence length: {args.seqlen}")
-    print(f"  Target FPS: {args.fps}")
-    print(f"  Clock period: {args.clk} ns")
-    print(f"  Board: {args.board}")
+    print(f"  Blueprint: {args.blueprint}")
     print(f"  Output directory: {args.output_dir}")
     print("=" * 70)
     

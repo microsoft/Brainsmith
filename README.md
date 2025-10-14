@@ -25,34 +25,90 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 ### Dependencies
 1. Ubuntu 22.04+
 2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
-3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+3. For Docker setup: Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+4. For local setup: Python 3.10+ and [Poetry](https://python-poetry.org/docs/#installation)
 
+### 1. Installation Options
 
-### 1. Set key environment variables
+#### Option A: Docker-based Development
 
 ```bash
-# Brainsmith env vars with example paths
-export BSMITH_ROOT=/home/user/brainsmith/
-export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
-export BSMITH_XILINX_PATH="/tools/Xilinx"
-export BSMITH_XILINX_VERSION="2024.2"
-export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+# Customize key environment variables in ctl-docker.sh as needed
+export BSMITH_XILINX_PATH=/opt/Xilinx/Vivado/2024.2
+export BSMITH_XILINX_VERSION=2024.2
+export XILINXD_LICENSE_FILE=/path/to/your/license.lic
+
+# Start container with automatic setup
+./ctl-docker.sh start
+
+# Open interactive shell
+./ctl-docker.sh shell
+
+# OR run commands directly
+./ctl-docker.sh "smith model.onnx blueprint.yaml"
 ```
 
-### 2. Run end-to-end test to validate environment 
+#### Option B: Local Development with Poetry
 
 ```bash
-# Start persistent development container
-./smithy start
+# Run automated setup script
+./setup-venv.sh
 
-# Attach shell to container 
-./smithy shell
-# Run example
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Initialize configuration file
+brainsmith config init
+# Edit ~/.brainsmith/config.yaml to set xilinx_path and xilinx_version as needed
+
+# View current configuration
+brainsmith config show
+```
+
+### 3. Validate installation with simple example
+
+```bash
+# For Docker setup:
+./ctl-docker.sh ./examples/bert/quicktest.sh
+
+# For local setup:
 ./examples/bert/quicktest.sh
-
-# OR execute one-off command 
-./smithy ./examples/bert/quicktest.sh
 ```
+
+### 4. Run Design Space Exploration on your own model
+
+```bash
+# Run DSE with default command
+smith model.onnx blueprint.yaml
+
+# Or specify output directory
+smith model.onnx blueprint.yaml --output-dir ./results
+```
+
+## CLI Overview
+
+Brainsmith provides two complementary CLI commands:
+
+- **`brainsmith`** - Application configuration, setup, and environment management
+- **`smith`** - Operational commands for DSE and kernel generation
+
+For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
+
+### Quick Examples
+
+```bash
+# Setup and configuration
+brainsmith setup all              # Install all dependencies
+eval $(brainsmith config export)  # Export environment for Xilinx tools
+
+# Operations
+smith model.onnx blueprint.yaml   # Run design space exploration
+smith kernel accelerator.sv       # Generate hardware kernel from RTL
+```
+
+## Documentation
+
+For detailed documentation and guides, see the [documentation overview](docs/README.md).
 
 ## License
 
