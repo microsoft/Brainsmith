@@ -12,6 +12,22 @@ save_intermediate_models: true      # Save intermediate ONNX models
 
 # Direct override FINN configuration options
 finn_config:
+  loop_body_hierarchy: [
+      ['', 'bert.bert.encoder.layer.0.attention.self.query'], 
+      ['', 'bert.bert.encoder.layer.0.attention.self.key'], 
+      ['', 'bert.bert.encoder.layer.0.attention.self.value'],
+      ['', 'permute'],
+      ['', 'bert.scaled_dot_product_attention'],
+      ['', 'permute_2'],
+      ['', 'transpose_1'],
+      ['', 'bert.bert.encoder.layer.0.attention.output.dense'],
+      ['', 'add_4'],
+      ['', 'bert.bert.encoder.layer.0.attention.output.LayerNorm'],
+      ['', 'bert.bert.encoder.layer.0.intermediate.dense'],
+      ['', 'bert.bert.encoder.layer.0.output.dense'],
+      ['', 'add_5'],
+      ['', 'bert.bert.encoder.layer.0.output.LayerNorm']
+  ]
   standalone_thresholds: true
   target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
   split_large_fifos: true
