@@ -9,6 +9,16 @@ edit_uri: edit/main/docs/
 
 copyright: Copyright &copy; Microsoft Corporation
 
+# Exclude legacy docs until they're updated
+exclude_docs: |
+  blueprint_schema.md
+  cli_api_reference.md
+  design_space_exploration.md
+  hardware_kernels.md
+  kernel-integrator-pragma-reference.md
+  kernel-integrator-user-guide.md
+  plugin_registry.md
+
 theme:
   name: material
   palette:
