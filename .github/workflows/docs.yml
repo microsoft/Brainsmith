@@ -82,9 +82,9 @@ jobs:
           
           # Delete existing versions to force fresh deployment (prevents "nothing changed" errors)
           # This is a pre-release measure until proper dev/main split is created at launch
+          # Note: Only delete "dev" - "latest" is an alias, not a separate version
           poetry run mike delete --push dev 2>/dev/null || echo "No existing dev version to delete"
-          poetry run mike delete --push latest 2>/dev/null || echo "No existing latest version to delete"
 
-          # Deploy fresh versions
+          # Deploy fresh versions with aliases
           poetry run mike deploy --push --update-aliases dev latest
           poetry run mike set-default --push latest
