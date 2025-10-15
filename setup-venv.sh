@@ -16,6 +16,7 @@ SKIP_BOARDS=""
 SKIP_SIM=""
 DOCKER_MODE=""
 QUIET_MODE=""
+DOCS_MODE=""
 
 # Function to check if a component should be skipped
 should_skip() {
@@ -67,11 +68,15 @@ while [[ $# -gt 0 ]]; do
             QUIET_MODE="1"
             shift
             ;;
+        --docs)
+            DOCS_MODE="1"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--force|-f] [--skip <component>...] [--docker] [--quiet|-q]"
+            echo "Usage: $0 [--force|-f] [--skip <component>...] [--docker] [--quiet|-q] [--docs]"
             echo "  Components: repos, poetry, boards, sim"
-            echo "  Example: $0 --skip boards sim --docker --quiet"
+            echo "  Example: $0 --skip boards sim --docker --quiet --docs"
             exit 1
             ;;
     esac
@@ -203,10 +208,21 @@ fi
 # Step 4: Install Python dependencies
 echo ""
 echo "📦 Installing Python dependencies..."
+if [ "$DOCS_MODE" == "1" ]; then
+    echo "  Including documentation dependencies (mkdocs, mike, etc.)..."
+fi
 if [ "$QUIET_MODE" == "1" ]; then
-    poetry install -q
+    if [ "$DOCS_MODE" == "1" ]; then
+        poetry install -q --with docs
+    else
+        poetry install -q
+    fi
 else
-    poetry install
+    if [ "$DOCS_MODE" == "1" ]; then
+        poetry install --with docs
+    else
+        poetry install
+    fi
 fi
 
 if [ $? -eq 0 ]; then
