@@ -47,12 +47,16 @@ class LayerNorm(AutoHWCustomOp):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
+        """Add kernel-specific nodeattrs.
+
+        Schema auto-generates:
+        - "SIMD" from stream_tiling=["SIMD"]
+        - "inputDataType" from input datatype="inputDataType"
+        - "outputDataType" from output datatype="outputDataType"
+        """
         my_attrs = super().get_nodeattr_types()
         my_attrs.update({
-            "SIMD": ("i", True, 1),
-            "epsilon": ("f", True, 1e-5),
-            "inputDataType": ("s", True, ""),
-            "outputDataType": ("s", True, ""),
+            "epsilon": ("f", True, 1e-5),  # Kernel-specific parameter
         })
         return my_attrs
 

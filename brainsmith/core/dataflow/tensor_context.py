@@ -25,87 +25,68 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 
 @dataclass(frozen=True)
-class TensorInfo:
-    """Information about a single tensor.
-
-    Captures the minimal tensor information needed for model creation
-    without holding references to the full ONNX graph.
-    """
-
-    name: str
-    shape: Tuple[int, ...]
-    datatype: DataType
-
-
-@dataclass(frozen=True)
 class TensorContext:
-    """Tensor information for a node, preserving ONNX positional order.
+    """Tensor shape information for a node, preserving ONNX positional order.
 
-    inputs[i] corresponds to node.input[i]
-    outputs[i] corresponds to node.output[i]
+    Stores only tensor shapes. Datatypes are stored in nodeattrs following
+    the schema-driven design.
+
+    input_shapes[i] corresponds to node.input[i]
+    output_shapes[i] corresponds to node.output[i]
 
     Optional inputs (empty strings in ONNX) are represented as None.
     """
 
-    inputs: List[Optional[TensorInfo]]
-    outputs: List[TensorInfo]  # Outputs are never optional in ONNX
+    input_shapes: Tuple[Optional[Tuple[int, ...]], ...]
+    output_shapes: Tuple[Tuple[int, ...], ...]  # Outputs are never optional in ONNX
 
     @staticmethod
     def from_model_wrapper(node, model: ModelWrapper) -> 'TensorContext':
-        """Extract tensor context from ModelWrapper, preserving positions.
+        """Extract tensor shapes from ModelWrapper, preserving positions.
+
+        Datatypes are NOT extracted - they are stored in nodeattrs following
+        the schema-driven design.
 
         Args:
             node: ONNX node
             model: ModelWrapper instance
 
         Returns:
-            TensorContext where inputs[i] corresponds to node.input[i].
+            TensorContext where input_shapes[i] corresponds to node.input[i].
             Optional/missing inputs (empty strings in ONNX) are stored as None.
         """
-        inputs = []
+        input_shapes = []
         for tensor_name in node.input:
             if tensor_name:  # Present input
-                inputs.append(TensorInfo(
-                    name=tensor_name,
-                    shape=tuple(model.get_tensor_shape(tensor_name)),
-                    datatype=model.get_tensor_datatype(tensor_name)
-                ))
+                input_shapes.append(tuple(model.get_tensor_shape(tensor_name)))
             else:  # Optional input omitted (empty string in ONNX)
-                inputs.append(None)
+                input_shapes.append(None)
 
-        outputs = []
+        output_shapes = []
         for tensor_name in node.output:
             # Outputs are always present (no optional outputs in ONNX)
-            outputs.append(TensorInfo(
-                name=tensor_name,
-                shape=tuple(model.get_tensor_shape(tensor_name)),
-                datatype=model.get_tensor_datatype(tensor_name)
-            ))
+            output_shapes.append(tuple(model.get_tensor_shape(tensor_name)))
 
-        return TensorContext(inputs=inputs, outputs=outputs)
+        return TensorContext(
+            input_shapes=tuple(input_shapes),
+            output_shapes=tuple(output_shapes)
+        )
 
     def to_json(self) -> str:
         """Serialize TensorContext to JSON string for ONNX metadata storage.
+
+        Only stores shapes. Datatypes are stored in nodeattrs.
 
         Returns:
             JSON string representation suitable for node.metadata_props
         """
         data = {
-            'inputs': [
-                {
-                    'name': inp.name,
-                    'shape': list(inp.shape),
-                    'datatype': inp.datatype.name,
-                }
-                for inp in self.inputs if inp is not None
+            'input_shapes': [
+                list(shape) if shape is not None else None
+                for shape in self.input_shapes
             ],
-            'outputs': [
-                {
-                    'name': out.name,
-                    'shape': list(out.shape),
-                    'datatype': out.datatype.name,
-                }
-                for out in self.outputs
+            'output_shapes': [
+                list(shape) for shape in self.output_shapes
             ],
         }
         return json.dumps(data)
@@ -113,6 +94,8 @@ class TensorContext:
     @classmethod
     def from_json(cls, json_str: str) -> 'TensorContext':
         """Deserialize TensorContext from JSON string.
+
+        Only restores shapes. Datatypes are read from nodeattrs.
 
         Args:
             json_str: JSON string from node.metadata_props
@@ -125,23 +108,16 @@ class TensorContext:
         """
         data = json.loads(json_str)
 
-        inputs = []
-        for inp_data in data['inputs']:
-            inputs.append(TensorInfo(
-                name=inp_data['name'],
-                shape=tuple(inp_data['shape']),
-                datatype=DataType[inp_data['datatype']],
-            ))
+        input_shapes = tuple(
+            tuple(shape) if shape is not None else None
+            for shape in data['input_shapes']
+        )
 
-        outputs = []
-        for out_data in data['outputs']:
-            outputs.append(TensorInfo(
-                name=out_data['name'],
-                shape=tuple(out_data['shape']),
-                datatype=DataType[out_data['datatype']],
-            ))
+        output_shapes = tuple(
+            tuple(shape) for shape in data['output_shapes']
+        )
 
-        return cls(inputs=inputs, outputs=outputs)
+        return cls(input_shapes=input_shapes, output_shapes=output_shapes)
 
     @classmethod
     def from_node_metadata(cls, node) -> Optional['TensorContext']:

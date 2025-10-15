@@ -51,14 +51,10 @@ class Softmax(AutoHWCustomOp):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
-    def get_nodeattr_types(self):
-        my_attrs = super().get_nodeattr_types()
-        my_attrs.update({
-            "SIMD": ("i", True, 1),
-            "inputDataType": ("s", True, ""),
-            "outputDataType": ("s", True, ""),
-        })
-        return my_attrs
+    # All nodeattrs auto-generated from schema:
+    # - "SIMD" from stream_tiling=["SIMD"]
+    # - "inputDataType" from datatype="inputDataType"
+    # - "output0Datatype" from output (default naming)
 
     def execute_node(self, context, graph):
         node = self.onnx_node

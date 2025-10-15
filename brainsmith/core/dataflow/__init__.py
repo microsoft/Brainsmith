@@ -73,7 +73,7 @@ from .models import (
 )
 
 # Tensor context extraction
-from .tensor_context import TensorContext, TensorInfo
+from .tensor_context import TensorContext
 
 # Template resolution
 from .template_resolution import resolve_template
@@ -114,7 +114,7 @@ __all__ = [
     'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
 
     # Tensor context extraction
-    'TensorContext', 'TensorInfo',
+    'TensorContext',
 
     # Template resolution
     'resolve_template',

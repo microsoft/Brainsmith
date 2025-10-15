@@ -65,8 +65,8 @@ class InterfaceSchema:
     Provides common fields and validation for all interface types.
 
     The datatype field can be:
-    - None: Use default naming (input{i}Datatype/output{i}Datatype), value from tensor context
-    - str: Custom nodeattr name override, value from tensor context
+    - None: Use default naming (input{i}Datatype/output{i}Datatype), value from ONNX graph
+    - str: Custom nodeattr name override, value from ONNX graph
     - DatatypeSource: Use default naming, value derived from other interfaces
     """
 
@@ -284,7 +284,7 @@ class KernelSchema:
 
     @property
     def protected_attr_names(self) -> List[str]:
-        """Get all node attribute names that are protected (set by tensor context).
+        """Get all node attribute names that are protected (set by infer_node_datatype).
 
         These are node attribute names that should not be modified by external
         code because they control datatype constraints.
@@ -331,6 +331,65 @@ class KernelSchema:
             return f"input{index}Datatype"
         else:
             return f"output{index}Datatype"
+
+    def _extract_template_params(self, spec: Optional[TilingSpec]) -> List[str]:
+        """Extract template parameter names from a tiling spec.
+
+        Template params are string values that are not ":" (copy dimension).
+
+        Args:
+            spec: Tiling specification (block or stream)
+
+        Returns:
+            List of unique template parameter names
+        """
+        if spec is None:
+            return []
+
+        params = []
+        for dim in spec:
+            if isinstance(dim, str) and dim != ":":
+                params.append(dim)
+
+        return params
+
+    def get_nodeattr_types(self) -> Dict[str, tuple]:
+        """Generate node attribute type registry from schema.
+
+        Extracts:
+        1. Datatype attributes from inputs/outputs (string nodeattrs)
+        2. Template parameters from tiling specs (integer nodeattrs)
+
+        Returns:
+            Dict mapping nodeattr name to (type, required, default_value)
+            Format: {"attrName": ("i"|"s"|"f", True|False, default)}
+        """
+        attrs = {}
+
+        # 1. Add datatype attributes (string type)
+        for i, inp in enumerate(self.inputs):
+            attr_name = self.get_datatype_attr(i, is_input=True)
+            attrs[attr_name] = ("s", True, "")  # String, required, empty default
+
+        for i, out in enumerate(self.outputs):
+            attr_name = self.get_datatype_attr(i, is_input=False)
+            attrs[attr_name] = ("s", True, "")  # String, required, empty default
+
+        # 2. Extract template parameters from tiling specs (integer type)
+        template_params = set()
+
+        for inp in self.inputs:
+            template_params.update(self._extract_template_params(inp.block_tiling))
+            template_params.update(self._extract_template_params(inp.stream_tiling))
+
+        for out in self.outputs:
+            template_params.update(self._extract_template_params(out.block_tiling))
+            template_params.update(self._extract_template_params(out.stream_tiling))
+
+        for param in template_params:
+            attrs[param] = ("i", True, 1)  # Integer, required, default 1
+
+        return attrs
 
     def __repr__(self) -> str:
         """String representation of KernelSchema."""

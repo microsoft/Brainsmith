@@ -25,6 +25,8 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
+# TAFK TODO: Clean these up, check __init__ organization
+from brainsmith.core.dataflow.datatype_sources import DatatypeSource
 from brainsmith.core.dataflow import (
     KernelSchema,
     TensorContext,
@@ -96,11 +98,13 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         """Update tensor context from model and persist to node metadata.
 
         This method:
-        1. Extracts tensor context from ModelWrapper (shapes, dtypes)
+        1. Extracts tensor context from ModelWrapper (shapes only)
         2. Caches it in the instance
         3. Attaches it to node.metadata_props for persistence
-        4. Sets datatype nodeattrs from tensor context (for optimizations)
-        5. Invalidates kernel_model if context changed
+        4. Invalidates kernel_model if context changed
+
+        Note: Datatypes are set separately by infer_node_datatype() which reads
+        from ModelWrapper and stores them in nodeattrs.
 
         Args:
             model: ModelWrapper to extract tensor information from
@@ -112,23 +116,6 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             self._kernel_model = None
             # Persist to node metadata for future use
             new_context.attach_to_node(self.onnx_node)
-
-            # Set datatype nodeattrs from tensor context
-            # These are the "working copy" where optimizations will be applied
-            for i, tensor in enumerate(new_context.inputs):
-                if tensor is not None:
-                    datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
-                    super().set_nodeattr(datatype_attr, tensor.datatype.name)
-
-            # Set output datatypes ONLY if not derived
-            # Derived outputs set in build_model() to avoid staleness
-            from brainsmith.core.dataflow.datatype_sources import DatatypeSource
-            for i, tensor in enumerate(new_context.outputs):
-                schema = self.kernel_schema.outputs[i]
-                if not isinstance(schema.datatype, DatatypeSource):
-                    # Not derived - set from tensor context
-                    datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
-                    super().set_nodeattr(datatype_attr, tensor.datatype.name)
 
     @property
     def kernel_model(self) -> KernelModel:
@@ -142,9 +129,54 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             assert self._kernel_model is not None  # build_model() sets this
         return self._kernel_model
 
+    def get_nodeattr_types(self):
+        """Get node attribute types registry.
+
+        Merges attributes from:
+        1. FINN base class (HWCustomOp infrastructure attrs)
+        2. KernelSchema-derived attrs (datatypes + template params)
+
+        Subclasses should override to add kernel-specific attrs:
+            def get_nodeattr_types(self):
+                my_attrs = super().get_nodeattr_types()
+                my_attrs.update({
+                    "epsilon": ("f", True, 1e-5),  # Only kernel-specific
+                })
+                return my_attrs
+
+        Returns:
+            Dict mapping attr name to (type, required, default_value)
+        """
+        # Start with FINN infrastructure attributes
+        base_attrs = super().get_nodeattr_types()
+
+        # Add schema-derived attributes
+        schema_attrs = self.kernel_schema.get_nodeattr_types()
+
+        # Merge: schema attrs override base if there are conflicts
+        # (though typically there shouldn't be conflicts)
+        merged = {**base_attrs, **schema_attrs}
+
+        return merged
+
     def infer_node_datatype(self, model):
         """FINN compatibility wrapper. Modern code should use refresh_tensor_context()."""
         self.refresh_tensor_context(model)
+
+        # Set ALL input datatype nodeattrs from ModelWrapper
+        # TensorContext now only stores shapes, not datatypes
+        for i, inp_name in enumerate(self.onnx_node.input):
+            if inp_name:  # Skip optional inputs
+                datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
+                datatype = model.get_tensor_datatype(inp_name)
+                super().set_nodeattr(datatype_attr, datatype.name)
+
+        # Set ALL output datatype nodeattrs from ModelWrapper
+        # DatatypeSource becomes a validation check, not a generator
+        for i, out_name in enumerate(self.onnx_node.output):
+            datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
+            datatype = model.get_tensor_datatype(out_name)
+            super().set_nodeattr(datatype_attr, datatype.name)
 
     # Public API - FINN HWCustomOp Interface
 
@@ -404,14 +436,14 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             interfaces: Dict of already-built interface models for DerivedDim resolution
         """
         schema = self.kernel_schema.inputs[index]
-        tensor = self.tensor_context.inputs[index]
+        tensor_shape = self.tensor_context.input_shapes[index]
 
-        if tensor is None:
+        if tensor_shape is None:
             return None
 
         block_shape = self._resolve_dimensions(
             schema.block_tiling,
-            tensor.shape,
+            tensor_shape,
             f"Input '{schema.name}' block",
             interfaces
         )
@@ -423,12 +455,13 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             interfaces
         )
 
+        # Datatype from nodeattr (set by infer_node_datatype)
         datatype_attr = self.kernel_schema.get_datatype_attr(index)
         datatype = DataType[self.get_nodeattr(datatype_attr)]
 
         input_model = InputModel(
             name=schema.name,
-            tensor_shape=tensor.shape,
+            tensor_shape=tensor_shape,
             block_shape=block_shape,
             stream_shape=stream_shape,
             datatype=datatype,
@@ -445,11 +478,11 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             interfaces: Dict of already-built interface models for DerivedDim resolution
         """
         schema = self.kernel_schema.outputs[index]
-        tensor = self.tensor_context.outputs[index]
+        tensor_shape = self.tensor_context.output_shapes[index]
 
         block_shape = self._resolve_dimensions(
             schema.block_tiling,
-            tensor.shape,
+            tensor_shape,
             f"Output '{schema.name}' block",
             interfaces
         )
@@ -466,29 +499,29 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             # Leave unset - will be resolved by KernelModel.__post_init__
             stream_shape = tuple([None] * len(block_shape))
 
-        # Resolve datatype based on schema.datatype field
-        from brainsmith.core.dataflow.datatype_sources import DatatypeSource
+        # Read datatype from nodeattr (set by infer_node_datatype)
+        datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
+        datatype = DataType[self.get_nodeattr(datatype_attr)]
 
+        # If schema specifies derivation, VALIDATE it matches expectation
+        from brainsmith.core.dataflow.datatype_sources import DatatypeSource
         if isinstance(schema.datatype, DatatypeSource):
-            # Derive datatype from other interfaces
             try:
-                datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
-                # Update nodeattr to match derived datatype (for ONNX persistence)
-                datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
-                super().set_nodeattr(datatype_attr, datatype.name)
+                expected_datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
+                if datatype != expected_datatype:
+                    raise self._error(
+                        f"Output '{schema.name}' datatype validation failed: "
+                        f"nodeattr has {datatype.name}, "
+                        f"but schema derivation expects {expected_datatype.name}"
+                    )
             except ValueError as e:
                 raise self._error(
-                    f"Output '{schema.name}' datatype derivation failed: {e}"
+                    f"Output '{schema.name}' datatype validation failed: {e}"
                 )
-        else:
-            # From nodeattr (set in refresh_tensor_context or manually)
-            # schema.datatype can be str (custom name) or None (default name)
-            datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
-            datatype = DataType[self.get_nodeattr(datatype_attr)]
 
         output_model = OutputModel(
             name=schema.name,
-            tensor_shape=tensor.shape,
+            tensor_shape=tensor_shape,
             block_shape=block_shape,
             stream_shape=stream_shape,
             datatype=datatype
