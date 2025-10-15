@@ -16,14 +16,16 @@ from rich.panel import Panel
 console = Console()
 
 
-def setup_logging(debug: bool = False) -> None:
-    """Configure logging with Rich handler."""
-    level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        handlers=[RichHandler(console=console, rich_tracebacks=True)]
-    )
+def setup_logging(quiet: bool = False, verbose: bool = False, debug: bool = False) -> None:
+    """Configure logging with unified logging system.
+
+    Args:
+        quiet: Enable quiet mode (minimal output)
+        verbose: Enable verbose mode (INFO logs)
+        debug: Enable debug mode (DEBUG logs)
+    """
+    from brainsmith.core.logging import setup_logging as core_setup_logging
+    core_setup_logging(quiet=quiet, verbose=verbose, debug=debug)
 
 
 def error_exit(message: str, details: Optional[List[str]] = None, code: int = 1) -> None:

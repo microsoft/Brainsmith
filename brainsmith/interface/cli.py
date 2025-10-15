@@ -100,11 +100,13 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
                   help='Configuration file (overrides default locations)')
     @click.option('--build-dir', type=click.Path(path_type=Path),
                   help='Override build directory')
+    @click.option('--quiet', '-q', is_flag=True, help='Minimal output (errors and results only)')
+    @click.option('--verbose', '-v', is_flag=True, help='Verbose output (show INFO logs)')
     @click.option('--debug', is_flag=True, help='Enable DEBUG-level logging and error traces')
     @click.version_option(package_name='brainsmith', prog_name=name)
     @click.pass_context
     def cli(ctx: click.Context, config: Optional[Path],
-            build_dir: Optional[Path], debug: bool):
+            build_dir: Optional[Path], quiet: bool, verbose: bool, debug: bool):
         """Brainsmith - Neural network hardware acceleration toolkit."""
 
         # Initialize application context
@@ -123,9 +125,9 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         # Store in Click context
         ctx.obj = context
 
-        # Set up logging
-        setup_logging(debug)
-        logger.debug(f"{name} CLI initialized with debug={debug}")
+        # Set up unified logging system
+        setup_logging(quiet=quiet, verbose=verbose, debug=debug)
+        logger.debug(f"{name} CLI initialized with quiet={quiet}, verbose={verbose}, debug={debug}")
 
         # Export to environment for legacy compatibility
         effective_config = context.get_effective_config()

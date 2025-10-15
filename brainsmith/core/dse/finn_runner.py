@@ -120,11 +120,15 @@ class FINNRunner:
             # Convert dict to DataflowBuildConfig
             logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
             config = DataflowBuildConfig(**finn_config)
-            
-            # Execute build
+
+            # Execute build with output capture
+            # Use capture_finn_output() to control subprocess visibility based on logging level
+            from brainsmith.core.logging import capture_finn_output
+
             logger.info(f"Executing FINN build with {len(config.steps)} steps")
-            exit_code = build_dataflow_cfg(str(abs_input), config)
-            
+            with capture_finn_output():
+                exit_code = build_dataflow_cfg(str(abs_input), config)
+
             logger.info(f"FINN exit code: {exit_code}")
             
             if exit_code != 0:
