@@ -1,0 +1,90 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git-revision-date-localized and mike
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Configure Git
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: |
+          # NOTE: Currently installs only docs dependencies (mkdocs, mike, etc.)
+          # mkdocstrings is disabled in mkdocs.yml, so brainsmith package not needed
+          # --only docs installs just the docs group, skipping main deps (which need deps/ directory)
+          # --no-root skips installing brainsmith package itself (which also needs deps/ directory)
+          # For November 2025 launch: add ./docker/fetch-repos.sh step and change to: --with docs
+          poetry install --only docs --no-root
+
+      # Uncomment this step to enable PR preview deployments for debugging
+      # - name: Deploy PR preview
+      #   if: github.event_name == 'pull_request'
+      #   run: |
+      #     set -x  # Enable verbose output
+      #     PR_NUMBER="${{ github.event.pull_request.number }}"
+      #     echo "Deploying PR #${PR_NUMBER} preview..."
+      #
+      #     # Delete existing preview version to force fresh deployment
+      #     poetry run mike delete --push "pr-${PR_NUMBER}" 2>/dev/null || echo "No existing pr-${PR_NUMBER} version to delete"
+      #
+      #     # Deploy fresh version
+      #     poetry run mike deploy --push "pr-${PR_NUMBER}" || { echo "❌ Mike deploy failed"; exit 1; }
+      #
+      #     echo "Verifying push to gh-pages..."
+      #     git ls-remote origin gh-pages || { echo "❌ gh-pages branch not found"; exit 1; }
+      #     echo "✅ PR preview deployed to: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/"
+      #     echo "Preview URL: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deploy stable version (main branch)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          poetry run mike deploy --push --update-aliases stable latest
+          poetry run mike set-default --push latest
+
+      - name: Deploy dev version as default (develop branch)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          # NOTE: For pre-release splash page, develop deploys to root URL
+          # At November 2025 launch, change this to just: poetry run mike deploy --push dev
+          # This will move develop to /dev/ and let main be the default at root
+          
+          # Delete existing versions to force fresh deployment (prevents "nothing changed" errors)
+          # This is a pre-release measure until proper dev/main split is created at launch
+          poetry run mike delete --push dev 2>/dev/null || echo "No existing dev version to delete"
+          poetry run mike delete --push latest 2>/dev/null || echo "No existing latest version to delete"
+
+          # Deploy fresh versions
+          poetry run mike deploy --push --update-aliases dev latest
+          poetry run mike set-default --push latest
