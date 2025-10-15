@@ -276,7 +276,6 @@ def test_auto_layernorm_execution():
     # Instantiate and setup
     op_inst = LayerNorm(node)
     op_inst.refresh_tensor_context(model_transformed)
-    op_inst.set_nodeattr("exec_mode", "python")
 
     # Create input data
     np.random.seed(42)

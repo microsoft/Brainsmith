@@ -237,7 +237,16 @@ class KernelModel:
             if out.name == name:
                 return out
         return None
-    
+
+    def get_interface(self, name: str) -> Optional[Union[InputModel, OutputModel]]:
+        """Get interface model by name (searches inputs then outputs)."""
+        # Try inputs first
+        interface = self.get_input(name)
+        if interface is not None:
+            return interface
+        # Try outputs
+        return self.get_output(name)
+
     @property
     def initiation_interval(self) -> int:
         """Kernel initiation interval in cycles."""

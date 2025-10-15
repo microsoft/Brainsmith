@@ -24,52 +24,21 @@ ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
 
 
 # === Dimension Source Types ===
+# NOTE: DerivedDim and ScaledDim have been moved to dimension_sources.py for
+# the extensible derivation system. They are re-imported here for backward compatibility.
 
-@dataclass(frozen=True)
-class DerivedDim:
-    """Dimension derived from another interface.
-
-    Used in templates to reference dimensions from other interfaces at any
-    shape hierarchy level (stream/block/tensor).
-
-    Examples:
-        stream_shape=[":", DerivedDim("Q", 1)]  # stream[1] := Q.stream[1]
-        block_shape=[DerivedDim("input", 0, ShapeHierarchy.BLOCK)]  # block[0] := input.block[0]
-    """
-    source_interface: str
-    source_dim: int
-    hierarchy: 'ShapeHierarchy' = None  # Defaults to ShapeHierarchy.STREAM in resolve_template
-
-    def __post_init__(self):
-        """Set default hierarchy after construction."""
-        if self.hierarchy is None:
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
-
-
-@dataclass(frozen=True)
-class ScaledDim:
-    """Dimension scaled from another interface.
-
-    Used in templates to scale dimensions from other interfaces at any
-    shape hierarchy level (stream/block/tensor).
-
-    Examples:
-        stream_shape=[ScaledDim("input", 0, 2.0)]  # stream[0] := input.stream[0] * 2
-        block_shape=[ScaledDim("input", 0, 0.5, ShapeHierarchy.TENSOR)]  # block[0] := input.tensor[0] * 0.5
-    """
-    source_interface: str
-    source_dim: int
-    scale_factor: float
-    hierarchy: 'ShapeHierarchy' = None  # Defaults to ShapeHierarchy.STREAM in resolve_template
-
-    def __post_init__(self):
-        """Set default hierarchy after construction."""
-        if self.hierarchy is None:
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
-
+from .dimension_sources import (
+    DimensionSource,
+    DerivedDim,
+    ScaledDim,
+    SumDims,
+    MaxDim,
+    ComputedDim,
+)
 
 # Template dimension specification (for schemas)
-DimSpec = Union[str, int, DerivedDim, ScaledDim]
+# Supports both static values (str/int) and dynamic derivation (DimensionSource subclasses)
+DimSpec = Union[str, int, DimensionSource]
 
 # === Enums ===
 

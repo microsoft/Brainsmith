@@ -120,9 +120,15 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                     datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
                     super().set_nodeattr(datatype_attr, tensor.datatype.name)
 
+            # Set output datatypes ONLY if not derived
+            # Derived outputs set in build_model() to avoid staleness
+            from brainsmith.core.dataflow.datatype_sources import DatatypeSource
             for i, tensor in enumerate(new_context.outputs):
-                datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
-                super().set_nodeattr(datatype_attr, tensor.datatype.name)
+                schema = self.kernel_schema.outputs[i]
+                if not isinstance(schema.datatype, DatatypeSource):
+                    # Not derived - set from tensor context
+                    datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
+                    super().set_nodeattr(datatype_attr, tensor.datatype.name)
 
     @property
     def kernel_model(self) -> KernelModel:
@@ -230,26 +236,67 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         return self.kernel_model.initiation_interval
 
     def make_shape_compatible_op(self, model):
-        """Create shape-compatible operation for InferShapes transformation.
+        """Create standard ONNX op for shape inference.
 
-        This is called by QONNX InferShapes before tensor context initialization,
-        so it must access shapes directly from model rather than via kernel_model.
+        Auto-detects appropriate substitute based on I/O pattern:
+        - Single input, single output: RandomNormal with input shape (shape-preserving)
+        - Single input, multiple outputs: Split on last axis
+        - Multiple inputs (same shape), single output: RandomNormal with input shape
+        - Different input shapes or multi-I/O: Requires override
 
-        Default implementation uses input[0] shape (assumes shape-preserving kernel).
-
-        Subclasses should override for:
-        - Multi-input kernels with shape dependencies
-        - Shape-transforming kernels (Crop, Pool, Upsample, etc.)
-        - Kernels without inputs (constant generators)
+        Override for:
+        - Shape-transforming ops (output shape ≠ input shape)
+        - Multi-input ops with different input shapes (Concat, MatMul, etc.)
+        - Complex multi-input/multi-output patterns
+        - Ops without inputs (constant generators)
 
         Args:
             model: ModelWrapper instance
 
         Returns:
-            ONNX node for shape inference (typically RandomNormal via make_const_shape_op)
+            ONNX node for shape inference
+
+        Raises:
+            NotImplementedError: If pattern requires custom shape logic
         """
-        input_shape = tuple(model.get_tensor_shape(self.onnx_node.input[0]))
-        return super().make_const_shape_op(input_shape)
+        from onnx import helper
+
+        num_out = len(self.onnx_node.output)
+        num_in = len(self.onnx_node.input)
+
+        # Multiple outputs from single input: use Split
+        if num_in == 1 and num_out > 1:
+            return helper.make_node(
+                "Split",
+                inputs=[self.onnx_node.input[0]],
+                outputs=list(self.onnx_node.output),
+                axis=-1
+            )
+
+        # Single output: verify input shapes before using input[0]
+        if num_out == 1:
+            # Get all input shapes
+            input_shapes = [tuple(model.get_tensor_shape(inp))
+                           for inp in self.onnx_node.input]
+
+            # Strict check: all inputs must have identical shape
+            if len(set(input_shapes)) == 1:
+                # All inputs same shape -> output likely same shape
+                return super().make_const_shape_op(input_shapes[0])
+            else:
+                # Different input shapes -> ambiguous output shape
+                raise NotImplementedError(
+                    f"{self.__class__.__name__}: {num_in} inputs with different shapes "
+                    f"{input_shapes}. Override make_shape_compatible_op() to compute "
+                    f"output shape from inputs (e.g., Concat, MatMul, broadcasting ops)."
+                )
+
+        # Complex case: multi-input AND multi-output
+        raise NotImplementedError(
+            f"{self.__class__.__name__}: {num_in} inputs → {num_out} outputs. "
+            f"Override make_shape_compatible_op() to specify a standard ONNX op "
+            f"with matching shape inference behavior."
+        )
 
     # Overrides
 
@@ -337,6 +384,14 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                     schema.constraints
                 )
 
+        # Validate cross-interface relationships
+        if self.kernel_schema.relationships:
+            logger.debug(f"Validating {len(self.kernel_schema.relationships)} relationships")
+            for relationship in self.kernel_schema.relationships:
+                error = relationship.check(model, self.get_nodeattr)
+                if error:
+                    raise self._error(str(error))
+
         logger.debug(f"KernelModel built successfully for {self.onnx_node.name}")
         self._kernel_model = model
         return model
@@ -411,8 +466,25 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             # Leave unset - will be resolved by KernelModel.__post_init__
             stream_shape = tuple([None] * len(block_shape))
 
-        datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
-        datatype = DataType[self.get_nodeattr(datatype_attr)]
+        # Resolve datatype based on schema.datatype field
+        from brainsmith.core.dataflow.datatype_sources import DatatypeSource
+
+        if isinstance(schema.datatype, DatatypeSource):
+            # Derive datatype from other interfaces
+            try:
+                datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
+                # Update nodeattr to match derived datatype (for ONNX persistence)
+                datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
+                super().set_nodeattr(datatype_attr, datatype.name)
+            except ValueError as e:
+                raise self._error(
+                    f"Output '{schema.name}' datatype derivation failed: {e}"
+                )
+        else:
+            # From nodeattr (set in refresh_tensor_context or manually)
+            # schema.datatype can be str (custom name) or None (default name)
+            datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
+            datatype = DataType[self.get_nodeattr(datatype_attr)]
 
         output_model = OutputModel(
             name=schema.name,

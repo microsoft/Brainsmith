@@ -10,20 +10,25 @@ Template Syntax:
   ":" -> Copy dimension from reference shape
   1   -> Singleton dimension (only literal allowed)
   str -> Parameter name to look up
-  DerivedDim -> Copy dimension from another interface
-  ScaledDim -> Scale dimension from another interface
+  DimensionSource subclasses -> Derive dimension from cross-interface computation
+    - DerivedDim -> Copy dimension from another interface
+    - ScaledDim -> Scale dimension from another interface
+    - SumDims -> Sum dimensions from multiple interfaces
+    - MaxDim -> Maximum dimension across interfaces
+    - ComputedDim -> Custom computation
 """
 
 import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from .types import DerivedDim, ScaledDim
+from .dimension_sources import DimensionSource
+from .types import DerivedDim, ScaledDim  # Backward compatibility
 
 logger = logging.getLogger(__name__)
 
 
 def resolve_template(
-    template: List[Union[int, str, DerivedDim, ScaledDim]],
+    template: List[Union[int, str, DimensionSource]],
     reference_shape: Tuple[int, ...],
     param_getter: Callable[[str], Any],
     context: str = "",
@@ -36,7 +41,7 @@ def resolve_template(
         reference_shape: Reference shape to resolve against
         param_getter: Function to resolve parameter names (e.g., get_nodeattr)
         context: Context string for error messages (e.g., "input.block")
-        interfaces: Dict of interface models for DerivedDim/ScaledDim resolution (optional)
+        interfaces: Dict of interface models for DimensionSource resolution (optional)
 
     Returns:
         Resolved concrete shape
@@ -52,6 +57,9 @@ def resolve_template(
         >>> resolve_template([DerivedDim("input", 1)], (768,), lambda k: {},
         ...                  interfaces={"input": input_model})
         (768,)  # Copies input[1]
+        >>> resolve_template([SumDims((("in0", -1), ("in1", -1)))], (128,), lambda k: {},
+        ...                  interfaces={"in0": model0, "in1": model1})
+        (sum_of_last_dims,)  # Sums dimensions for concat
     """
     logger.debug(f"{context}: Resolving template {template} against reference {reference_shape}")
 
@@ -95,104 +103,18 @@ def resolve_template(
                     f"{context}[{i}]: only singleton (1) allowed for literals, "
                     f"got {dim}. Use parameters for other values."
                 )
-        elif isinstance(dim, DerivedDim):
-            # Copy dimension from another interface
+        elif isinstance(dim, DimensionSource):
+            # Use extensible DimensionSource resolution system
             if interfaces is None:
                 raise ValueError(
-                    f"{context}[{i}]: DerivedDim requires interfaces dict"
-                )
-            if dim.source_interface not in interfaces:
-                raise ValueError(
-                    f"{context}[{i}]: source interface '{dim.source_interface}' not found"
+                    f"{context}[{i}]: {type(dim).__name__} requires interfaces dict"
                 )
 
-            source_model = interfaces[dim.source_interface]
             try:
-                # Get the appropriate shape hierarchy
-                source_shape = source_model.get_shape(dim.hierarchy)
-                # Support negative indexing (Python convention)
-                source_dim = dim.source_dim
-                if source_dim < 0:
-                    source_dim = len(source_shape) + source_dim
-                value = source_shape[source_dim]
-            except (IndexError, AttributeError) as e:
+                value = dim.resolve(interfaces, param_getter)
+            except ValueError as e:
                 raise ValueError(
-                    f"{context}[{i}]: cannot access dimension {dim.source_dim} "
-                    f"from interface '{dim.source_interface}' at {dim.hierarchy.value} level: {e}"
-                )
-
-            if value is None:
-                raise ValueError(
-                    f"{context}[{i}]: source dimension '{dim.source_interface}'.{dim.hierarchy.value}[{dim.source_dim}] "
-                    f"is not yet resolved"
-                )
-        elif isinstance(dim, ScaledDim):
-            # Scale dimension from another interface
-            if interfaces is None:
-                raise ValueError(
-                    f"{context}[{i}]: ScaledDim requires interfaces dict"
-                )
-            if dim.source_interface not in interfaces:
-                raise ValueError(
-                    f"{context}[{i}]: source interface '{dim.source_interface}' not found"
-                )
-
-            source_model = interfaces[dim.source_interface]
-            try:
-                source_shape = source_model.get_shape(dim.hierarchy)
-                # Support negative indexing (Python convention)
-                source_dim = dim.source_dim
-                if source_dim < 0:
-                    source_dim = len(source_shape) + source_dim
-                source_value = source_shape[source_dim]
-            except (IndexError, AttributeError) as e:
-                raise ValueError(
-                    f"{context}[{i}]: cannot access dimension {dim.source_dim} "
-                    f"from interface '{dim.source_interface}' at {dim.hierarchy.value} level: {e}"
-                )
-
-            if source_value is None:
-                raise ValueError(
-                    f"{context}[{i}]: source dimension '{dim.source_interface}'.{dim.hierarchy.value}[{dim.source_dim}] "
-                    f"is not yet resolved"
-                )
-
-            # Validate scaling produces exact integer
-            if dim.scale_factor <= 0:
-                raise ValueError(
-                    f"{context}[{i}]: scale_factor must be positive, got {dim.scale_factor}"
-                )
-
-            # For scale_down, check divisibility upfront
-            if dim.scale_factor < 1.0:
-                divisor = 1.0 / dim.scale_factor
-                # Divisor must be an integer (or very close)
-                int_divisor = round(divisor)
-                if not math.isclose(divisor, int_divisor, abs_tol=1e-9):
-                    raise ValueError(
-                        f"{context}[{i}]: scale_factor {dim.scale_factor} is not 1/n for integer n "
-                        f"(divisor = {divisor})"
-                    )
-                # Source must divide evenly
-                if source_value % int_divisor != 0:
-                    raise ValueError(
-                        f"{context}[{i}]: source dimension {source_value} not evenly divisible by {int_divisor} "
-                        f"(scale_factor = {dim.scale_factor} = 1/{int_divisor})"
-                    )
-                value = source_value // int_divisor
-            else:
-                # For scale_up, compute and verify exactness
-                raw_value = source_value * dim.scale_factor
-                value = round(raw_value)
-                if not math.isclose(raw_value, value, abs_tol=1e-9):
-                    raise ValueError(
-                        f"{context}[{i}]: scaled dimension {source_value} * {dim.scale_factor} "
-                        f"= {raw_value} is not an exact integer"
-                    )
-
-            if value <= 0:
-                raise ValueError(
-                    f"{context}[{i}]: scaled dimension must be positive, got {value}"
+                    f"{context}[{i}]: {type(dim).__name__} resolution failed: {e}"
                 )
         else:
             raise ValueError(
