@@ -44,8 +44,9 @@ jobs:
           # NOTE: Currently installs only docs dependencies (mkdocs, mike, etc.)
           # mkdocstrings is disabled in mkdocs.yml, so brainsmith package not needed
           # --only docs installs just the docs group, skipping main deps (which need deps/ directory)
-          # For November 2025 launch: add ./docker/fetch-repos.sh step and change to --with docs
-          poetry install --only docs
+          # --no-root skips installing brainsmith package itself (which also needs deps/ directory)
+          # For November 2025 launch: add ./docker/fetch-repos.sh step and change to: --with docs
+          poetry install --only docs --no-root
 
       - name: Build documentation (PR validation)
         if: github.event_name == 'pull_request'
