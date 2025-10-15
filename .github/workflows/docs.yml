@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
   workflow_dispatch:
 
 permissions:
@@ -15,12 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for git-revision-date-localized
+          fetch-depth: 0  # Needed for git-revision-date-localized and mike
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Configure Git
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -33,6 +39,13 @@ jobs:
         run: |
           poetry install --with docs
 
-      - name: Build and deploy docs
+      - name: Deploy stable version (main branch)
+        if: github.ref == 'refs/heads/main'
         run: |
-          poetry run mkdocs gh-deploy --force
+          poetry run mike deploy --push --update-aliases stable latest
+          poetry run mike set-default --push latest
+
+      - name: Deploy dev version (develop branch)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          poetry run mike deploy --push dev
