@@ -43,7 +43,7 @@ use_directory_urls: true
 
 plugins:
   - search
-  # mkdocstrings disabled for splash page (pre-launch)
+  # mkdocstrings disabled for splash page (pre-release)
   # Reason: Requires brainsmith package installation, which needs deps/ (finn, qonnx, etc.)
   # Re-enable at November 2025 launch when full API documentation is published
   # Remember to also add ./docker/fetch-repos.sh step to CI workflow when re-enabling

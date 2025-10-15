@@ -48,7 +48,11 @@ jobs:
           poetry run mike deploy --push --update-aliases stable latest
           poetry run mike set-default --push latest
 
-      - name: Deploy dev version (develop branch)
+      - name: Deploy dev version as default (develop branch)
         if: github.ref == 'refs/heads/develop'
         run: |
-          poetry run mike deploy --push dev
+          # NOTE: For pre-release splash page, develop deploys to root URL
+          # At November 2025 launch, change this to just: poetry run mike deploy --push dev
+          # This will move develop to /dev/ and let main be the default at root
+          poetry run mike deploy --push --update-aliases dev latest
+          poetry run mike set-default --push latest
