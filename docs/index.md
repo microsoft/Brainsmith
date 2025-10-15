@@ -1,78 +1,65 @@
 # Brainsmith
 
-**From PyTorch to RTL - FPGA Accelerator Compiler for AI**
-
-Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL. It builds on FINN, QONNX, and Brevitas to create dataflow accelerators with tunable parameters.
+<div style="text-align: center; padding: 2rem 0;">
+  <h2 style="font-size: 2.5rem; font-weight: 300; margin-bottom: 1rem;">From PyTorch to RTL</h2>
+  <p style="font-size: 1.3rem; color: var(--md-default-fg-color--light);">FPGA Accelerator Compiler for AI</p>
+</div>
 
 ---
 
-## Pre-Release
+## Coming Soon
 
-!!! warning "Pre-Release Status"
-    This repository is in a pre-release state and under active co-development by Microsoft and AMD.
+!!! info "Launch Date: Early November 2025"
+    Brainsmith is an open-source compiler that automates the design and implementation of neural network accelerators on FPGAs. Stay tuned for our official release!
 
-## Key Features
+## What is Brainsmith?
 
-- **Plugin System** - Extensible architecture for registering custom kernels, transforms, and build steps
-- **Blueprint Interface** - YAML-based declarative configuration with inheritance support
-- **Segment-based Execution** - Efficient DSE through intelligent computation reuse
-- **BERT Demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL)
-
-## Quick Links
+Brainsmith simplifies the path from high-level AI models to optimized hardware accelerators. By automating design space exploration and leveraging state-of-the-art compilation techniques, Brainsmith enables researchers and engineers to rapidly prototype and deploy neural networks on FPGA platforms.
 
 <div class="grid cards" markdown>
 
-- :material-clock-fast: **[Quick Start](getting-started/quickstart.md)**
+- :material-chip: **Hardware Acceleration**
 
-    Get up and running in minutes
+    Transform PyTorch models into efficient FPGA accelerators with automated RTL generation
 
-- :material-cog: **[Installation](getting-started/installation.md)**
+- :material-chart-timeline: **Design Space Exploration**
 
-    Set up your development environment
+    Intelligently explore optimization trade-offs to find the best hardware configuration
 
-- :material-book-open-variant: **[Architecture](architecture/overview.md)**
+- :material-puzzle: **Extensible Architecture**
 
-    Understand how Brainsmith works
+    Plugin-based system for custom kernels, transforms, and optimization strategies
 
-- :material-code-braces: **[API Reference](api-reference/core.md)**
+- :material-open-source-initiative: **Open Source**
 
-    Explore the codebase
+    Developed collaboratively by Microsoft and AMD, built on proven open-source frameworks
 
 </div>
 
-## Architecture Overview
+## Get Involved
 
-```mermaid
-graph LR
-    A[PyTorch Model] --> B[Brevitas Quantization]
-    B --> C[ONNX Export]
-    C --> D[QONNX]
-    D --> E[Brainsmith DSE]
-    E --> F[FINN Dataflow]
-    F --> G[RTL Generation]
-    G --> H[Vivado Synthesis]
-    H --> I[FPGA Bitstream]
-```
+<div class="grid cards" markdown>
 
-## Example: Design Space Exploration
+- :material-github: **[Star on GitHub](https://github.com/microsoft/brainsmith)**
 
-```bash
-# Run DSE with ONNX model and blueprint
-smith model.onnx blueprint.yaml --output-dir ./results
-```
+    Follow our development and be notified when we launch
 
-## Built With
+- :material-bell: **[Watch Repository](https://github.com/microsoft/brainsmith/subscription)**
 
-Brainsmith builds upon:
+    Get updates on releases and major announcements
 
-- [FINN](https://github.com/Xilinx/finn) - Dataflow compiler for quantized neural networks
-- [QONNX](https://github.com/fastmachinelearning/qonnx) - Quantized ONNX representation
-- [Brevitas](https://github.com/Xilinx/brevitas) - PyTorch quantization library
+- :material-forum: **[GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)**
 
-## License
+    Join the conversation about FPGA acceleration for AI
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/microsoft/brainsmith/blob/main/LICENSE) file for details.
+</div>
 
-## Acknowledgments
+---
 
-Brainsmith is developed through a collaboration between Microsoft and AMD.
+## About
+
+Brainsmith is developed through a collaboration between **Microsoft** and **AMD**, building upon industry-leading open-source frameworks including [FINN](https://github.com/Xilinx/finn), [QONNX](https://github.com/fastmachinelearning/qonnx), and [Brevitas](https://github.com/Xilinx/brevitas).
+
+<div style="text-align: center; padding: 2rem 0; color: var(--md-default-fg-color--light);">
+  <p>Copyright © Microsoft Corporation</p>
+</div>
