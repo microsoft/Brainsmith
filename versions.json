@@ -3,5 +3,12 @@
     "version": "pr-76",
     "title": "pr-76",
     "aliases": []
+  },
+  {
+    "version": "dev",
+    "title": "dev",
+    "aliases": [
+      "latest"
+    ]
   }
 ]
