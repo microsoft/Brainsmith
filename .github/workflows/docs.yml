@@ -48,11 +48,14 @@ jobs:
           # For November 2025 launch: add ./docker/fetch-repos.sh step and change to: --with docs
           poetry install --only docs --no-root
 
-      - name: Build documentation (PR validation)
+      - name: Deploy PR preview
         if: github.event_name == 'pull_request'
         run: |
-          poetry run mkdocs build --strict
-          echo "✅ Documentation built successfully! No deployment on PR."
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "Deploying PR #${PR_NUMBER} preview..."
+          poetry run mike deploy --push "pr-${PR_NUMBER}"
+          echo "✅ PR preview deployed to: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/"
+          echo "Preview URL: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/" >> $GITHUB_STEP_SUMMARY
 
       - name: Deploy stable version (main branch)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
