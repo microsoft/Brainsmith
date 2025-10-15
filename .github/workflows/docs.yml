@@ -37,6 +37,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # NOTE: Currently installs only docs dependencies (mkdocs, mike, etc.)
+          # mkdocstrings is disabled in mkdocs.yml, so brainsmith package not needed
+          # For November 2025 launch: add ./docker/fetch-repos.sh step before this
           poetry install --with docs
 
       - name: Deploy stable version (main branch)

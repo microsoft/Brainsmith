@@ -1,27 +1,13 @@
 site_name: Brainsmith
 site_description: From PyTorch to RTL - FPGA Accelerator Compiler for AI
-site_author: Microsoft & AMD
+site_author: Microsoft
 site_url: https://microsoft.github.io/brainsmith/
 
 repo_name: microsoft/brainsmith
 repo_url: https://github.com/microsoft/brainsmith
 edit_uri: edit/main/docs/
 
-copyright: Copyright &copy; Microsoft Corporation
-
-# Exclude all detailed docs until launch (November 2025)
-exclude_docs: |
-  blueprint_schema.md
-  cli_api_reference.md
-  design_space_exploration.md
-  hardware_kernels.md
-  kernel-integrator-pragma-reference.md
-  kernel-integrator-user-guide.md
-  plugin_registry.md
-  getting-started/
-  architecture/
-  api-reference/
-  contributing.md
+copyright: Copyright &copy; Microsoft. All rights reserved.
 
 theme:
   name: material
@@ -57,17 +43,21 @@ use_directory_urls: true
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: google
-            show_source: true
-            show_root_heading: true
-            show_root_full_path: false
-            show_signature_annotations: true
-            merge_init_into_class: true
-            heading_level: 2
+  # mkdocstrings disabled for splash page (pre-launch)
+  # Reason: Requires brainsmith package installation, which needs deps/ (finn, qonnx, etc.)
+  # Re-enable at November 2025 launch when full API documentation is published
+  # Remember to also add ./docker/fetch-repos.sh step to CI workflow when re-enabling
+  # - mkdocstrings:
+  #     handlers:
+  #       python:
+  #         options:
+  #           docstring_style: google
+  #           show_source: true
+  #           show_root_heading: true
+  #           show_root_full_path: false
+  #           show_signature_annotations: true
+  #           merge_init_into_class: true
+  #           heading_level: 2
   - git-revision-date-localized:
       enable_creation_date: true
       type: timeago
