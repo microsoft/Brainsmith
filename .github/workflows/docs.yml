@@ -1,0 +1,58 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git-revision-date-localized and mike
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Configure Git
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: |
+          # NOTE: Currently installs only docs dependencies (mkdocs, mike, etc.)
+          # mkdocstrings is disabled in mkdocs.yml, so brainsmith package not needed
+          # For November 2025 launch: add ./docker/fetch-repos.sh step before this
+          poetry install --with docs
+
+      - name: Deploy stable version (main branch)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          poetry run mike deploy --push --update-aliases stable latest
+          poetry run mike set-default --push latest
+
+      - name: Deploy dev version as default (develop branch)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          # NOTE: For pre-release splash page, develop deploys to root URL
+          # At November 2025 launch, change this to just: poetry run mike deploy --push dev
+          # This will move develop to /dev/ and let main be the default at root
+          poetry run mike deploy --push --update-aliases dev latest
+          poetry run mike set-default --push latest
