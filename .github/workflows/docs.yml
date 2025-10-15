@@ -51,9 +51,12 @@ jobs:
       - name: Deploy PR preview
         if: github.event_name == 'pull_request'
         run: |
+          set -x  # Enable verbose output
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "Deploying PR #${PR_NUMBER} preview..."
-          poetry run mike deploy --push "pr-${PR_NUMBER}"
+          poetry run mike deploy --push "pr-${PR_NUMBER}" || { echo "❌ Mike deploy failed"; exit 1; }
+          echo "Verifying push to gh-pages..."
+          git ls-remote origin gh-pages || { echo "❌ gh-pages branch not found"; exit 1; }
           echo "✅ PR preview deployed to: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/"
           echo "Preview URL: https://microsoft.github.io/brainsmith/pr-${PR_NUMBER}/" >> $GITHUB_STEP_SUMMARY
 
