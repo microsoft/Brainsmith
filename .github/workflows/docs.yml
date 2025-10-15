@@ -79,5 +79,12 @@ jobs:
           # NOTE: For pre-release splash page, develop deploys to root URL
           # At November 2025 launch, change this to just: poetry run mike deploy --push dev
           # This will move develop to /dev/ and let main be the default at root
+          
+          # Delete existing versions to force fresh deployment (prevents "nothing changed" errors)
+          # This is a pre-release measure until proper dev/main split is created at launch
+          poetry run mike delete --push dev 2>/dev/null || echo "No existing dev version to delete"
+          poetry run mike delete --push latest 2>/dev/null || echo "No existing latest version to delete"
+
+          # Deploy fresh versions
           poetry run mike deploy --push --update-aliases dev latest
           poetry run mike set-default --push latest
