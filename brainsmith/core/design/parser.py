@@ -14,16 +14,36 @@ from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 from dataclasses import dataclass
 
 from .space import DesignSpace
-from brainsmith.core.config import ForgeConfig
+from brainsmith.core.config import BlueprintConfig
+from brainsmith.core.constants import SKIP_VALUES, SKIP_INDICATOR
+from brainsmith.core.types import OutputType
 from brainsmith.core.plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
 from brainsmith.utils.yaml_parser import load_yaml, expand_env_vars_with_context
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]
 
-# Skip indicators
-SKIP_VALUES = frozenset([None, "~", ""])
-SKIP_NORMALIZED = "~"
+
+def _parse_output_type(output_str: str) -> OutputType:
+    """Parse output type string to enum.
+
+    Args:
+        output_str: String representation of output type
+
+    Returns:
+        OutputType enum value
+
+    Raises:
+        ValueError: If output string is invalid
+    """
+    try:
+        return OutputType(output_str)
+    except ValueError:
+        valid_values = ', '.join(t.value for t in OutputType)
+        raise ValueError(
+            f"Invalid output type '{output_str}'. "
+            f"Must be one of: {valid_values}"
+        )
 
 
 @dataclass
@@ -52,9 +72,9 @@ class StepOperation:
         return None
 
 
-def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ForgeConfig]:
+def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, BlueprintConfig]:
     """
-    Parse blueprint YAML and return DesignSpace and ForgeConfig.
+    Parse blueprint YAML and return DesignSpace and BlueprintConfig.
     
     Inheritance is resolved bottom-up:
     1. Start from the root parent (no extends)
@@ -97,7 +117,7 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
         context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
     )
     
-    forge_config = _extract_config_and_mappings(blueprint_data)
+    blueprint_config = _extract_config_and_mappings(blueprint_data)
     
     # Parse steps from THIS blueprint only (not inherited steps)
     # Use raw_data to get only the steps defined in this file
@@ -117,11 +137,11 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
         max_combinations=max_combinations
     )
     design_space.validate_size()
-    return design_space, forge_config
+    return design_space, blueprint_config
 
 
-def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
-    """Extract ForgeConfig from blueprint data."""
+def _extract_config_and_mappings(data: Dict[str, Any]) -> BlueprintConfig:
+    """Extract BlueprintConfig from blueprint data."""
     # Extract config - check both flat and global_config
     config_data = {**data.get('global_config', {}), **data}
     
@@ -129,9 +149,9 @@ def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
     if 'clock_ns' not in config_data:
         raise ValueError("Missing required field 'clock_ns' in blueprint")
     
-    return ForgeConfig(
+    return BlueprintConfig(
         clock_ns=float(config_data['clock_ns']),
-        output=config_data.get('output', 'estimates'),
+        output=_parse_output_type(config_data.get('output', 'estimates')),
         board=config_data.get('board'),
         verify=config_data.get('verify', False),
         verify_data=Path(config_data['verify_data']) if 'verify_data' in config_data else None,
@@ -335,7 +355,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
             if isinstance(opt, str) or opt is None:
                 validated_opt = _validate_step(opt)
                 validated.append(validated_opt)
-                if validated_opt == SKIP_NORMALIZED:
+                if validated_opt == SKIP_INDICATOR:
                     skip_count += 1
                 else:
                     non_skip_count += 1
@@ -371,7 +391,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
 def _validate_step(step: Optional[str]) -> str:
     """Validate a step name against the registry, handle skip."""
     if step in SKIP_VALUES:
-        return SKIP_NORMALIZED
+        return SKIP_INDICATOR
     if not has_step(step):
         raise ValueError(f"Step '{step}' not found in registry")
     return step    

@@ -85,16 +85,23 @@ def test_capture_finn_output_suppresses_in_quiet(reset_logging):
 
 
 def test_cli_flags_smoke_test():
-    """Smoke test: CLI accepts verbosity flags without crashing."""
+    """Smoke test: Both CLIs accept verbosity flags without crashing."""
     runner = CliRunner()
-    cli = create_cli('smith', include_admin=False)
 
-    # Just verify these don't crash
-    result = runner.invoke(cli, ['--quiet'])
+    # Test smith CLI
+    smith_cli = create_cli('smith', include_admin=False)
+    result = runner.invoke(smith_cli, ['--quiet'])
+    assert result.exit_code == 0
+    result = runner.invoke(smith_cli, ['--verbose'])
+    assert result.exit_code == 0
+    result = runner.invoke(smith_cli, ['--debug'])
     assert result.exit_code == 0
 
-    result = runner.invoke(cli, ['--verbose'])
+    # Test brainsmith CLI
+    brainsmith_cli = create_cli('brainsmith', include_admin=True)
+    result = runner.invoke(brainsmith_cli, ['--quiet'])
     assert result.exit_code == 0
-
-    result = runner.invoke(cli, ['--debug'])
+    result = runner.invoke(brainsmith_cli, ['--verbose'])
+    assert result.exit_code == 0
+    result = runner.invoke(brainsmith_cli, ['--debug'])
     assert result.exit_code == 0

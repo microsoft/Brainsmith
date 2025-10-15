@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
+from brainsmith.core.types import SegmentStatus
+
 
 @dataclass
 class ArtifactState:
@@ -25,13 +27,13 @@ class ArtifactState:
 class DSESegment:
     """
     A segment in the design space exploration tree.
-    
+
     Each segment is executed as a single FINN build, containing all
-    transforms from the last branch point (or root) to the next branch point
+    steps from the last branch point (or root) to the next branch point
     (or leaf).
     """
     # Core identity
-    transforms: List[Dict[str, Any]]  # was: segment_steps
+    steps: List[Dict[str, Any]]  # Execution steps for this segment
     branch_choice: Optional[str] = None  # was: branch_decision
     
     # Tree structure
@@ -39,7 +41,7 @@ class DSESegment:
     children: Dict[str, 'DSESegment'] = field(default_factory=dict)
     
     # Execution state
-    status: str = "pending"  # pending, running, completed, failed
+    status: SegmentStatus = SegmentStatus.PENDING
     output_dir: Optional[Path] = None
     error: Optional[str] = None
     execution_time: Optional[float] = None
@@ -72,10 +74,10 @@ class DSESegment:
         """Check if this is a complete path endpoint."""
         return len(self.children) == 0
     
-    def add_child(self, branch_id: str, transforms: List[Dict[str, Any]]) -> 'DSESegment':
+    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> 'DSESegment':
         """Create a child segment for a branch."""
         child = DSESegment(
-            transforms=transforms,
+            steps=steps,
             branch_choice=branch_id,
             parent=self,
             finn_config=self.finn_config.copy()
@@ -93,12 +95,12 @@ class DSESegment:
         path.reverse()
         return path
     
-    def get_all_transforms(self) -> List[Dict[str, Any]]:
-        """Get all transforms from root to end of this segment."""
-        transforms = []
+    def get_all_steps(self) -> List[Dict[str, Any]]:
+        """Get all steps from root to end of this segment."""
+        steps = []
         for segment in self.get_path():
-            transforms.extend(segment.transforms)
-        return transforms
+            steps.extend(segment.steps)
+        return steps
     
     def get_cache_key(self) -> str:
         """Simple, deterministic cache key."""

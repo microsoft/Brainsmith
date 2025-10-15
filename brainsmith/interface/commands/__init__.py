@@ -8,13 +8,13 @@ availability in different entry points.
 """
 
 from .config import config
-from .dse import dse
+from .dfc import dfc
 from .kernel import kernel
 from .setup import setup
 
 # Commands available in both brainsmith and smith CLIs
 OPERATIONAL_COMMANDS = {
-    'dse': dse,
+    'dfc': dfc,
     'kernel': kernel
 }
 
@@ -29,10 +29,10 @@ ALL_COMMANDS = {**OPERATIONAL_COMMANDS, **ADMIN_COMMANDS}
 
 __all__ = [
     'OPERATIONAL_COMMANDS',
-    'ADMIN_COMMANDS', 
+    'ADMIN_COMMANDS',
     'ALL_COMMANDS',
     'config',
-    'dse',
+    'dfc',
     'kernel',
     'setup'
 ]

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Design Space Exploration command for smith CLI."""
+"""Dataflow Core creation command for smith CLI."""
 
 import logging
 from pathlib import Path
@@ -26,19 +26,19 @@ from ..utils import console, error_exit, success
 @click.option('--stop-step', type=str,
               help='Override blueprint stop_step - stop execution at this step (inclusive)')
 @click.pass_context
-def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[Path],
+def dfc(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[Path],
         start_step: Optional[str], stop_step: Optional[str]) -> None:
-    """Run design space exploration for neural network acceleration.
+    """Create a dataflow core accelerator for neural network acceleration.
 
     \b
     MODEL: Path to ONNX model file
-    BLUEPRINT: Path to Blueprint YAML file defining exploration strategy
+    BLUEPRINT: Path to Blueprint YAML file defining the dataflow architecture
     """
     # Get context from parent or create default
     app_ctx = get_context_from_parent(ctx) or ApplicationContext()
     config = app_ctx.get_effective_config()
 
-    console.print(f"[bold blue]Brainsmith DSE[/bold blue] - Design Space Exploration")
+    console.print(f"[bold blue]Brainsmith DFC[/bold blue] - Dataflow Core Creation")
     console.print(f"Model: {model}")
     console.print(f"Blueprint: {blueprint}")
 
@@ -49,10 +49,10 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
     if stop_step:
         console.print(f"Stop step: {stop_step}")
 
-    logger.info(f"Starting DSE with model={model}, blueprint={blueprint}, output_dir={output_dir}")
+    logger.info(f"Starting dataflow core creation with model={model}, blueprint={blueprint}, output_dir={output_dir}")
 
     try:
-        # Run design space exploration
+        # Run design space exploration to create dataflow core
         result = explore_design_space(
             model_path=str(model),
             blueprint_path=str(blueprint),
@@ -60,13 +60,13 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
             start_step_override=start_step,
             stop_step_override=stop_step
         )
-        
-        success("Design space exploration completed successfully!")
-        
+
+        success("Dataflow core created successfully!")
+
         # Display summary if available
         if hasattr(result, 'summary'):
             console.print(f"\nSummary: {result.summary}")
-            
+
     except FileNotFoundError as e:
         error_exit(str(e),
                   details=[
@@ -77,7 +77,7 @@ def dse(ctx: click.Context, model: Path, blueprint: Path, output_dir: Optional[P
     except Exception as e:
         if config.debug:
             console.print_exception()
-        error_exit(f"Failed during exploration: {e}",
+        error_exit(f"Failed during dataflow core creation: {e}",
                   details=[
                       "Check the model is a valid ONNX file",
                       "Verify the blueprint YAML syntax is correct",

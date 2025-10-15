@@ -10,31 +10,31 @@ from brainsmith.core.dse.segment import DSESegment
 from brainsmith.core.dse.tree import DSETree
 from brainsmith.core.plugins import get_step
 from .types import SegmentResult, TreeExecutionResult, ExecutionError
-from .finn_runner import FINNRunner
+from .finn_adapter import FINNAdapter
 from .utils import share_artifacts_at_branch
 
 
 class SegmentRunner:
     """Runs DSE segments using FINN.
-    
+
     Handles both tree traversal and individual segment execution
-    using FINNRunner for all FINN interactions.
+    using FINNAdapter for all FINN interactions.
     """
     
     def __init__(
         self,
-        finn_runner: FINNRunner,
+        finn_adapter: FINNAdapter,
         base_config: Dict[str, Any],
         kernel_selections: list = None
     ) -> None:
         """Initialize runner.
-        
+
         Args:
-            finn_runner: Runner for FINN-specific operations
+            finn_adapter: Adapter for FINN-specific operations
             base_config: FINN configuration from blueprint
             kernel_selections: Optional list of (kernel, backend) tuples
         """
-        self.finn_runner = finn_runner
+        self.finn_adapter = finn_adapter
         self.base_config = base_config
         self.kernel_selections = kernel_selections or []
         
@@ -111,7 +111,7 @@ class SegmentRunner:
             print(f"{indent}→ {segment.segment_id}")
             
             # Skip empty segments (e.g., root with immediate branches)
-            if not segment.transforms:
+            if not segment.steps:
                 print(f"{indent}  (empty segment, passing through)")
                 # Create a pass-through result
                 results[segment.segment_id] = SegmentResult(
@@ -233,18 +233,18 @@ class SegmentRunner:
         # Prepare directory and model
         segment_dir.mkdir(parents=True, exist_ok=True)
         segment_input = segment_dir / "input.onnx"
-        self.finn_runner.prepare_model(input_model, segment_input)
+        self.finn_adapter.prepare_model(input_model, segment_input)
         
         # Execute build
         start_time = time.time()
         
         try:
-            # Use runner for clean FINN interaction
-            final_model = self.finn_runner.build(segment_input, finn_config, segment_dir)
+            # Use adapter for clean FINN interaction
+            final_model = self.finn_adapter.build(segment_input, finn_config, segment_dir)
             
             if final_model:
                 # Copy to expected location
-                self.finn_runner.prepare_model(final_model, output_model)
+                self.finn_adapter.prepare_model(final_model, output_model)
                 print(f"✓ Completed: {segment.segment_id}")
                 return SegmentResult(
                     success=True,
@@ -280,11 +280,11 @@ class SegmentRunner:
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_map[self.output_product]
         
-        # Extract kernel_selections from segment transforms if present
+        # Extract kernel_selections from segment steps if present
         kernel_selections = []
-        for transform in segment.transforms:
-            if transform.get("name") == "infer_kernels" and "kernel_backends" in transform:
-                for kernel_name, backend_classes in transform["kernel_backends"]:
+        for step in segment.steps:
+            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
+                for kernel_name, backend_classes in step["kernel_backends"]:
                     if backend_classes:
                         backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
                         kernel_selections.append((kernel_name, backend_name))
@@ -295,20 +295,20 @@ class SegmentRunner:
         elif "kernel_selections" in self.base_config:
             config["kernel_selections"] = self.base_config["kernel_selections"]
         
-        # Process transforms - resolve to callable functions
+        # Process steps - resolve to callable functions
         steps = []
-        for transform in segment.transforms:
-            if "name" in transform:
-                transform_name = transform["name"]
+        for step in segment.steps:
+            if "name" in step:
+                step_name = step["name"]
                 try:
                     # Try to get callable from plugin registry
-                    transform_fn = get_step(transform_name)
-                    steps.append(transform_fn)
+                    step_fn = get_step(step_name)
+                    steps.append(step_fn)
                 except KeyError:
                     # Not in registry, pass as string for FINN's internal lookup
-                    steps.append(transform_name)
+                    steps.append(step_name)
             else:
-                raise ValueError(f"Transform missing name: {transform}")
+                raise ValueError(f"Step missing name: {step}")
         
         config["steps"] = steps
         return config

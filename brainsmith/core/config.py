@@ -3,17 +3,19 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
+
+from brainsmith.core.types import OutputType
 
 
 @dataclass
-class ForgeConfig:
-    """Configuration that actually works."""
+class BlueprintConfig:
+    """Configuration extracted from blueprint YAML files."""
     # Always required
     clock_ns: float
-    
+
     # Output type (clear names)
-    output: Literal["estimates", "rtl", "bitfile"] = "estimates"
+    output: OutputType = OutputType.ESTIMATES
     
     # Target (required for rtl/bitfile)
     board: Optional[str] = None
@@ -33,5 +35,5 @@ class ForgeConfig:
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
     
     def __post_init__(self):
-        if self.output != "estimates" and not self.board:
-            raise ValueError(f"{self.output} requires board specification")
+        if self.output != OutputType.ESTIMATES and not self.board:
+            raise ValueError(f"{self.output.value} requires board specification")

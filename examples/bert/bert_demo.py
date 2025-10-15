@@ -255,15 +255,15 @@ def run_brainsmith_dse(model, args):
     # Get blueprint path from args
     blueprint_path = Path(__file__).parent / args.blueprint
     
-    # Forge the FPGA accelerator
-    print("Forging FPGA accelerator...")
+    # Create the FPGA accelerator
+    print("Creating FPGA accelerator...")
     results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
     )
     
-    # Results are automatically logged by forge()
+    # Results are automatically logged by explore_design_space()
     # Just check if we succeeded
     stats = results.stats
     if stats['successful'] == 0:
@@ -292,7 +292,7 @@ def run_brainsmith_dse(model, args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Modern BERT FINN demo - Exact parity with old system using Brainsmith DSE'
+        description='Modern BERT FINN demo - Exact parity with old system using Brainsmith DFC'
     )
     
     # Model configuration
@@ -331,7 +331,7 @@ def main():
         shutil.rmtree(args.output_dir)
     
     print("=" * 70)
-    print("BERT Demo Using Brainsmith DSE")
+    print("BERT Demo Using Brainsmith DFC")
     print("=" * 70)
     print(f"Configuration:")
     print(f"  Hidden layers: {args.num_hidden_layers}")
@@ -349,8 +349,8 @@ def main():
         print("\nStep 1: Generating quantized BERT model...")
         model = generate_bert_model(args)
         
-        # Step 2: Run Brainsmith DSE
-        print("\nStep 2: Running Brainsmith DSE pipeline...")
+        # Step 2: Create dataflow core accelerator
+        print("\nStep 2: Creating dataflow core accelerator...")
         result = run_brainsmith_dse(model, args)
         
         print("\n" + "=" * 70)

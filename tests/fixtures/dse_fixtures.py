@@ -2,7 +2,8 @@
 
 import pytest
 from brainsmith.core.design.space import DesignSpace
-from brainsmith.core.config import ForgeConfig
+from brainsmith.core.config import BlueprintConfig
+from brainsmith.core.types import OutputType
 from tests.utils.test_constants import (
     DEFAULT_CLOCK_PERIOD_NS,
     DEFAULT_PARALLEL_BUILDS,
@@ -13,11 +14,11 @@ from tests.utils.test_constants import (
 # Configuration Fixtures
 
 @pytest.fixture
-def forge_config():
-    """Create a basic ForgeConfig for testing."""
-    return ForgeConfig(
+def blueprint_config():
+    """Create a basic BlueprintConfig for testing."""
+    return BlueprintConfig(
         clock_ns=DEFAULT_CLOCK_PERIOD_NS,
-        output="estimates",
+        output=OutputType.ESTIMATES,
         board="test_board",
         verify=False,
         parallel_builds=DEFAULT_PARALLEL_BUILDS,

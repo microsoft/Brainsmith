@@ -34,7 +34,7 @@ from tests.fixtures.dse_fixtures import (
     simple_design_space,
     branching_design_space,
     multi_branch_design_space,
-    forge_config,
+    blueprint_config,
     base_finn_config
 )
 
@@ -42,10 +42,10 @@ from tests.fixtures.dse_fixtures import (
 class TestDSETreeConstruction:
     """Test suite for DSE tree construction."""
     
-    def test_build_linear_tree(self, simple_design_space, forge_config):
+    def test_build_linear_tree(self, simple_design_space, blueprint_config):
         """Test building a tree from linear steps."""
         builder = DSETreeBuilder()
-        tree = builder.build_tree(simple_design_space, forge_config)
+        tree = builder.build_tree(simple_design_space, blueprint_config)
         
         # Verify tree structure
         assert tree.root is not None
@@ -54,12 +54,12 @@ class TestDSETreeConstruction:
         assert not tree.root.is_branch_point
         assert tree.root.is_leaf
         
-        # Verify transforms
-        transforms = tree.root.transforms
-        assert len(transforms) == 3
-        assert transforms[0]["name"] == "test_step"
-        assert transforms[1]["name"] == "test_step1"
-        assert transforms[2]["name"] == "test_step2"
+        # Verify steps
+        steps = tree.root.steps
+        assert len(steps) == 3
+        assert steps[0]["name"] == "test_step"
+        assert steps[1]["name"] == "test_step1"
+        assert steps[2]["name"] == "test_step2"
         
         # Verify tree statistics
         stats = tree.get_statistics()
@@ -68,10 +68,10 @@ class TestDSETreeConstruction:
         # For linear tree, efficiency is 0% because no sharing possible
         assert stats['segment_efficiency'] == 0.0
         
-    def test_build_single_branch_tree(self, branching_design_space, forge_config):
+    def test_build_single_branch_tree(self, branching_design_space, blueprint_config):
         """Test building a tree with one branch point."""
         builder = DSETreeBuilder()
-        tree = builder.build_tree(branching_design_space, forge_config)
+        tree = builder.build_tree(branching_design_space, blueprint_config)
         
         # Calculate expected efficiency: 1 - (5 transforms with segments / 6 without) = 16.7%
         expected_efficiency = calculate_segment_efficiency(
@@ -90,8 +90,8 @@ class TestDSETreeConstruction:
         TreeAssertions.assert_complete_tree_validation(tree, expected)
         
         # Check root only has the first transform
-        assert len(tree.root.transforms) == 1
-        assert tree.root.transforms[0]["name"] == "test_step"
+        assert len(tree.root.steps) == 1
+        assert tree.root.steps[0]["name"] == "test_step"
         
         # Check children structure
         assert len(tree.root.children) == 2
@@ -100,14 +100,14 @@ class TestDSETreeConstruction:
         
         # Each child should have their branch transform + the step
         for child in tree.root.children.values():
-            assert len(child.transforms) == 2
-            assert child.transforms[0]["name"] in ["test_step1", "test_step2"]
-            assert child.transforms[1]["name"] == "test_step3"
+            assert len(child.steps) == 2
+            assert child.steps[0]["name"] in ["test_step1", "test_step2"]
+            assert child.steps[1]["name"] == "test_step3"
             
-    def test_build_multi_level_tree(self, multi_branch_design_space, forge_config):
+    def test_build_multi_level_tree(self, multi_branch_design_space, blueprint_config):
         """Test building a tree with multiple branch levels."""
         builder = DSETreeBuilder()
-        tree = builder.build_tree(multi_branch_design_space, forge_config)
+        tree = builder.build_tree(multi_branch_design_space, blueprint_config)
         
         # Should have: root + 2 first level branches + 2×2 second level branches = 7 nodes
         assert tree.count_nodes() == MULTI_LEVEL_TOTAL_NODES
@@ -146,14 +146,14 @@ class TestDSETreeConstruction:
         # Complex calculation - just verify it's positive (indicates sharing benefit)
         assert stats['segment_efficiency'] > 0
         
-    def test_segment_id_generation(self, multi_branch_design_space, forge_config):
+    def test_segment_id_generation(self, multi_branch_design_space, blueprint_config):
         """Test that segment IDs are generated deterministically."""
         builder = DSETreeBuilder()
         
         # Build tree multiple times
         trees = []
         for _ in range(DETERMINISM_TEST_ITERATIONS):
-            tree = builder.build_tree(multi_branch_design_space, forge_config)
+            tree = builder.build_tree(multi_branch_design_space, blueprint_config)
             trees.append(tree)
         
         # Collect all segment IDs from each tree
@@ -171,7 +171,7 @@ class TestDSETreeConstruction:
         for segment_id in all_segment_ids[0][1:]:
             assert "/" in segment_id or segment_id in ["test_step1", "test_step2"]
             
-    def test_build_empty_design_space(self, forge_config):
+    def test_build_empty_design_space(self, blueprint_config):
         """Test building a tree from empty design space (edge case)."""
         from brainsmith.core.design.space import DesignSpace
         
@@ -184,7 +184,7 @@ class TestDSETreeConstruction:
         )
         
         builder = DSETreeBuilder()
-        tree = builder.build_tree(empty_design_space, forge_config)
+        tree = builder.build_tree(empty_design_space, blueprint_config)
         
         # Verify empty tree structure
         assert tree.root is not None
@@ -192,7 +192,7 @@ class TestDSETreeConstruction:
         assert tree.count_leaves() == 1
         assert tree.root.is_leaf
         assert not tree.root.is_branch_point
-        assert len(tree.root.transforms) == 0
+        assert len(tree.root.steps) == 0
         
         # Verify statistics for empty tree
         stats = tree.get_statistics()
@@ -205,11 +205,11 @@ class TestDSETreeConstruction:
 class TestArtifactManagement:
     """Test suite for artifact management."""
     
-    def test_artifact_sharing_logic(self, branching_design_space, forge_config, tmp_path):
+    def test_artifact_sharing_logic(self, branching_design_space, blueprint_config, tmp_path):
         """Test artifact sharing function works correctly."""
         # Build tree to get structure
         builder = DSETreeBuilder()
-        tree = builder.build_tree(branching_design_space, forge_config)
+        tree = builder.build_tree(branching_design_space, blueprint_config)
         
         # Create mock result and directories
         root_dir = tmp_path / "root"
@@ -240,7 +240,7 @@ class TestArtifactManagement:
 class TestStepRangeExecution:
     """Test suite for step range control during DSE execution."""
 
-    def test_apply_step_slicing_in_dse(self, simple_onnx_model, forge_config):
+    def test_apply_step_slicing_in_dse(self, simple_onnx_model, blueprint_config):
         """Test that step slicing is applied before tree building."""
         from brainsmith.core.design.space import DesignSpace, slice_steps
         from brainsmith.core.design.builder import DSETreeBuilder
@@ -258,16 +258,16 @@ class TestStepRangeExecution:
 
         # Build tree with sliced steps
         builder = DSETreeBuilder()
-        tree = builder.build_tree(design_space, forge_config)
+        tree = builder.build_tree(design_space, blueprint_config)
 
         # Verify tree only contains sliced steps
-        all_transforms = tree.root.get_all_transforms()
-        assert len(all_transforms) == 3
-        assert all_transforms[0]["name"] == "test_step1"
-        assert all_transforms[1]["name"] == "test_step2"
-        assert all_transforms[2]["name"] == "test_step3"
+        all_steps = tree.root.get_all_steps()
+        assert len(all_steps) == 3
+        assert all_steps[0]["name"] == "test_step1"
+        assert all_steps[1]["name"] == "test_step2"
+        assert all_steps[2]["name"] == "test_step3"
 
-    def test_slice_preserves_branches_in_tree(self, simple_onnx_model, forge_config):
+    def test_slice_preserves_branches_in_tree(self, simple_onnx_model, blueprint_config):
         """Test that slicing preserves branch structure."""
         from brainsmith.core.design.space import DesignSpace, slice_steps
         from brainsmith.core.design.builder import DSETreeBuilder
@@ -285,7 +285,7 @@ class TestStepRangeExecution:
 
         # Build tree
         builder = DSETreeBuilder()
-        tree = builder.build_tree(design_space, forge_config)
+        tree = builder.build_tree(design_space, blueprint_config)
 
         # Verify branch structure is preserved
         assert tree.root.is_branch_point

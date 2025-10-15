@@ -7,6 +7,7 @@ Design Space Exploration Tree structure and operations.
 
 from typing import Dict, List, Any
 from .segment import DSESegment
+from brainsmith.core.types import SegmentStatus
 
 
 class DSETree:
@@ -61,13 +62,13 @@ class DSETree:
             
             # Format segment info
             segment_info = f"{node.branch_choice or 'root'}"
-            if node.transforms:
-                transform_count = len(node.transforms)
-                segment_info += f" ({transform_count} transforms)"
+            if node.steps:
+                step_count = len(node.steps)
+                segment_info += f" ({step_count} steps)"
             
             # Add status if not pending
-            if node.status != "pending":
-                segment_info += f" [{node.status}]"
+            if node.status != SegmentStatus.PENDING:
+                segment_info += f" [{node.status.value}]"
             
             print(f"{indent}{prefix}{segment_info}")
         
@@ -101,7 +102,7 @@ class DSETree:
         Returns:
             List of nodes in execution order
         """
-        if self.root.segment_id == "root" and not self.root.transforms:
+        if self.root.segment_id == "root" and not self.root.steps:
             # Skip empty root node in execution
             queue = list(self.root.children.values())
         else:
@@ -137,31 +138,31 @@ class DSETree:
         
         calculate_depth(self.root)
         
-        # Count total transforms
-        total_transforms = 0
-        
-        def count_transforms(node: DSESegment):
-            nonlocal total_transforms
-            total_transforms += len(node.transforms)
+        # Count total steps
+        total_steps = 0
+
+        def count_steps(node: DSESegment):
+            nonlocal total_steps
+            total_steps += len(node.steps)
             for child in node.children.values():
-                count_transforms(child)
-        
-        count_transforms(self.root)
-        
+                count_steps(child)
+
+        count_steps(self.root)
+
         # Calculate segment efficiency
-        # Without segments, we'd execute all transforms for each path
-        transforms_without_segments = 0
+        # Without segments, we'd execute all steps for each path
+        steps_without_segments = 0
         for leaf in self.get_leaf_segments():
-            transforms_without_segments += len(leaf.get_all_transforms())
-        
-        segment_efficiency = 1 - (total_transforms / transforms_without_segments) if transforms_without_segments > 0 else 0
+            steps_without_segments += len(leaf.get_all_steps())
+
+        segment_efficiency = 1 - (total_steps / steps_without_segments) if steps_without_segments > 0 else 0
         
         return {
             'total_paths': leaf_count,
             'total_segments': node_count,
             'max_depth': max_depth,
-            'total_transforms': total_transforms,
-            'transforms_without_segments': transforms_without_segments,
+            'total_steps': total_steps,
+            'steps_without_segments': steps_without_segments,
             'segment_efficiency': round(segment_efficiency * 100, 1),  # As percentage
-            'avg_transforms_per_segment': round(total_transforms / node_count, 1) if node_count > 0 else 0
+            'avg_steps_per_segment': round(total_steps / node_count, 1) if node_count > 0 else 0
         }

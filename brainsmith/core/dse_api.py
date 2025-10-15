@@ -19,7 +19,7 @@ from .design.builder import DSETreeBuilder
 from .design.space import slice_steps
 from .dse.tree import DSETree
 from .dse.runner import SegmentRunner
-from .dse.finn_runner import FINNRunner
+from .dse.finn_adapter import FINNAdapter
 from .dse.types import TreeExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def explore_design_space(
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
-        output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/forge_YYYYMMDD_HHMMSS)
+        output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/dfc_YYYYMMDD_HHMMSS)
         start_step_override: Override blueprint start_step (CLI takes precedence)
         stop_step_override: Override blueprint stop_step (CLI takes precedence)
 
@@ -63,7 +63,7 @@ def explore_design_space(
     if output_dir is None:
         build_dir = get_build_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = str(build_dir / f"dse_{timestamp}")
+        output_dir = str(build_dir / f"dfc_{timestamp}")
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -74,11 +74,11 @@ def explore_design_space(
     logger.info(f"  Output: {output_dir}")
 
     # Parse blueprint
-    design_space, forge_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
+    design_space, blueprint_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
 
     # Apply CLI overrides (CLI > blueprint)
-    start_step = start_step_override or forge_config.start_step
-    stop_step = stop_step_override or forge_config.stop_step
+    start_step = start_step_override or blueprint_config.start_step
+    stop_step = stop_step_override or blueprint_config.stop_step
 
     # Slice steps if specified
     if start_step or stop_step:
@@ -87,7 +87,7 @@ def explore_design_space(
     
     # Build DSE tree
     tree_builder = DSETreeBuilder()
-    tree = tree_builder.build_tree(design_space, forge_config)
+    tree = tree_builder.build_tree(design_space, blueprint_config)
     
     logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
@@ -103,8 +103,8 @@ def explore_design_space(
     logger.info("Starting design space exploration...")
     
     # Create runner and execute
-    finn_runner = FINNRunner()
-    runner = SegmentRunner(finn_runner, tree.root.finn_config)
+    finn_adapter = FINNAdapter()
+    runner = SegmentRunner(finn_adapter, tree.root.finn_config)
     results = runner.run_tree(
         tree=tree,
         initial_model=Path(model_path),

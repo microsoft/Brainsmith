@@ -11,7 +11,7 @@ exploring different design points in FPGA accelerator synthesis.
 from .segment import DSESegment, ArtifactState
 from .tree import DSETree
 from .runner import SegmentRunner
-from .finn_runner import FINNRunner
+from .finn_adapter import FINNAdapter
 from .types import SegmentResult, TreeExecutionResult, ExecutionError
 
 __all__ = [
@@ -19,7 +19,7 @@ __all__ = [
     'ArtifactState', 
     'DSETree',
     'SegmentRunner',
-    'FINNRunner',
+    'FINNAdapter',
     'SegmentResult',
     'TreeExecutionResult',
     'ExecutionError'

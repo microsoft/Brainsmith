@@ -13,24 +13,23 @@ from typing import Dict, Any, List
 from brainsmith.core.dse.segment import DSESegment
 from brainsmith.core.dse.tree import DSETree
 from .space import DesignSpace
-from brainsmith.core.config import ForgeConfig
+from brainsmith.core.config import BlueprintConfig
+from brainsmith.core.constants import SKIP_INDICATOR
+from brainsmith.core.types import OutputType
 from brainsmith.core.plugins.registry import has_step, list_all_steps
 
 
 class DSETreeBuilder:
     """Builds DSE trees from design spaces."""
     
-    # Skip indicator
-    SKIP_INDICATOR = "~"
-    
-    def build_tree(self, space: DesignSpace, forge_config: ForgeConfig) -> DSETree:
+    def build_tree(self, space: DesignSpace, blueprint_config: BlueprintConfig) -> DSETree:
         """Build DSE tree with unified branching.
-        
+
         Steps can now be direct strings or lists for variations.
-        
+
         Args:
             space: DesignSpace containing steps and configuration
-            forge_config: ForgeConfig with FINN parameters
+            blueprint_config: BlueprintConfig with FINN parameters
             
         Returns:
             DSETree containing the built tree
@@ -40,8 +39,8 @@ class DSETreeBuilder:
         """
         # Root node starts empty, will accumulate initial steps
         root = DSESegment(
-            transforms=[],
-            finn_config=self._extract_finn_config(forge_config)
+            steps=[],
+            finn_config=self._extract_finn_config(blueprint_config)
         )
         
         current_segments = [root]
@@ -98,46 +97,46 @@ class DSETreeBuilder:
             }
         return {"name": step_spec}
     
-    def _extract_finn_config(self, forge_config: ForgeConfig) -> Dict[str, Any]:
-        """Extract FINN-relevant configuration from ForgeConfig.
-        
+    def _extract_finn_config(self, blueprint_config: BlueprintConfig) -> Dict[str, Any]:
+        """Extract FINN-relevant configuration from BlueprintConfig.
+
         Args:
-            forge_config: ForgeConfig containing FINN parameters
-            
+            blueprint_config: BlueprintConfig containing FINN parameters
+
         Returns:
             Dictionary of FINN configuration values
         """
-        # Map ForgeConfig to FINN's expected format
+        # Map BlueprintConfig to FINN's expected format
         output_products = []
-        if forge_config.output == "estimates":
+        if blueprint_config.output == OutputType.ESTIMATES:
             output_products = ["estimates"]
-        elif forge_config.output == "rtl":
-            output_products = ["rtl_sim", "ip_gen"]  
-        elif forge_config.output == "bitfile":
+        elif blueprint_config.output == OutputType.RTL:
+            output_products = ["rtl_sim", "ip_gen"]
+        elif blueprint_config.output == OutputType.BITFILE:
             output_products = ["bitfile"]
-        
+
         finn_config = {
             'output_products': output_products,
-            'board': forge_config.board,
-            'synth_clk_period_ns': forge_config.clock_ns,
-            'save_intermediate_models': forge_config.save_intermediate_models
+            'board': blueprint_config.board,
+            'synth_clk_period_ns': blueprint_config.clock_ns,
+            'save_intermediate_models': blueprint_config.save_intermediate_models
         }
-        
+
         # Apply any finn_config overrides from blueprint
-        finn_config.update(forge_config.finn_overrides)
+        finn_config.update(blueprint_config.finn_overrides)
         
         return finn_config
     
     def _flush_steps(self, segments: List[DSESegment], steps: List[Dict]) -> None:
         """Add accumulated steps to segments.
-        
+
         Args:
             segments: List of DSESegment segments to update
             steps: List of step dictionaries to add
         """
         if steps:
             for segment in segments:
-                segment.transforms.extend(steps)
+                segment.steps.extend(steps)
     
     def _create_branches(self, segments: List[DSESegment],
                         branch_index: int,
@@ -158,7 +157,7 @@ class DSETreeBuilder:
         
         for segment in segments:
             for i, option in enumerate(branch_options):
-                if option == self.SKIP_INDICATOR:
+                if option == SKIP_INDICATOR:
                     # Skip branch
                     branch_id = f"step_{branch_index}_skip"
                     child = segment.add_child(branch_id, [])

@@ -130,10 +130,10 @@ stop_step: "specialize_layers"  # Stop at this step (inclusive)
 CLI flags `--start-step` and `--stop-step` override blueprint values:
 ```bash
 # Override blueprint to test single step
-smith dse model.onnx blueprint.yaml --start-step streamline --stop-step streamline
+smith dfc model.onnx blueprint.yaml --start-step streamline --stop-step streamline
 
 # Run from beginning up to a checkpoint
-smith dse model.onnx blueprint.yaml --stop-step specialize_layers
+smith dfc model.onnx blueprint.yaml --stop-step specialize_layers
 ```
 
 **Notes:**

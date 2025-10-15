@@ -19,7 +19,7 @@ def serialize_tree(root: DSESegment) -> str:
     def node_to_dict(node: DSESegment) -> Dict[str, Any]:
         # Serialize steps, handling kernel_backends specially
         serialized_steps = []
-        for step in node.transforms:
+        for step in node.steps:
             if isinstance(step, dict) and "kernel_backends" in step:
                 # Convert backend classes to string names
                 step_copy = step.copy()
@@ -31,18 +31,18 @@ def serialize_tree(root: DSESegment) -> str:
                 serialized_steps.append(step_copy)
             else:
                 serialized_steps.append(step)
-        
+
         return {
             "segment_id": node.segment_id,
-            "transforms": serialized_steps,
+            "steps": serialized_steps,
             "branch_choice": node.branch_choice,
             "is_branch_point": node.is_branch_point,
             "children": {
-                name: node_to_dict(child) 
+                name: node_to_dict(child)
                 for name, child in node.children.items()
             }
         }
-    
+
     return json.dumps(node_to_dict(root), indent=2)
 
 

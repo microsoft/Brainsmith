@@ -58,7 +58,7 @@ def _create_smith_subcommand() -> click.Command:
         Provides access to dataflow accelerator and kernel generation tools.
         Inherits configuration from parent brainsmith command.
 
-        Example: brainsmith --debug smith dse model.onnx blueprint.yaml
+        Example: brainsmith --debug smith dfc model.onnx blueprint.yaml
         """
         # Get the application context
         app_ctx = ctx.obj
@@ -136,10 +136,10 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         # Handle default behavior when no subcommand is provided
         if ctx.invoked_subcommand is None:
             if name == 'smith':
-                # Smith: run DSE with positional args if provided
+                # Smith: run DFC with positional args if provided
                 if len(ctx.args) >= 2:
-                    from .commands.dse import dse
-                    ctx.invoke(dse, model=ctx.args[0], blueprint=ctx.args[1], 
+                    from .commands.dfc import dfc
+                    ctx.invoke(dfc, model=ctx.args[0], blueprint=ctx.args[1],
                               output_dir=ctx.args[2] if len(ctx.args) > 2 else None)
                 else:
                     click.echo(ctx.get_help())
@@ -151,7 +151,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
     if name == 'smith':
         cli.help = """Smith - Operational commands for Brainsmith.
 
-When invoked without a subcommand, runs design space exploration
+When invoked without a subcommand, runs dataflow core creation
 if model and blueprint arguments are provided."""
     else:
         cli.help = """Brainsmith - Neural network hardware acceleration toolkit.
@@ -181,15 +181,15 @@ def brainsmith_main() -> None:
 def smith_main() -> None:
     """Main entry point for the smith CLI."""
     try:
-        # Handle the case where positional args are passed for default DSE
+        # Handle the case where positional args are passed for default DFC
         # Click doesn't handle default commands with positional args well,
         # so we need to preprocess sys.argv
         if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
             # Check if first arg is a subcommand
-            subcommands = ['dse', 'kernel']
+            subcommands = ['dfc', 'kernel']
             if sys.argv[1] not in subcommands:
-                # Assume it's a model path for DSE, inject 'dse' command
-                sys.argv.insert(1, 'dse')
+                # Assume it's a model path for DFC, inject 'dfc' command
+                sys.argv.insert(1, 'dfc')
         
         cli = create_cli('smith', include_admin=False)
         cli()

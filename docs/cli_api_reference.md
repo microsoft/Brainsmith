@@ -172,32 +172,37 @@ Setup Status:
 ✓ Board files (47 boards)
 ```
 
-## Design Space Exploration
+## Dataflow Core Creation
 
-### `smith` (default command)
-Run design space exploration for neural network acceleration.
+### `smith dfc` (default command)
+Create a dataflow core accelerator for neural network acceleration.
 
 ```bash
-smith MODEL BLUEPRINT [OPTIONS]
+smith dfc MODEL BLUEPRINT [OPTIONS]
 ```
 
 **Arguments:**
 - `MODEL` - Path to ONNX model file
-- `BLUEPRINT` - Path to Blueprint YAML file defining exploration strategy
+- `BLUEPRINT` - Path to Blueprint YAML file defining the dataflow architecture
 
 **Options:**
 - `--output-dir, -o PATH` - Output directory (defaults to build dir with timestamp)
+- `--start-step STEP` - Start execution from this step (inclusive)
+- `--stop-step STEP` - Stop execution at this step (inclusive)
 
 **Examples:**
 ```bash
-# Basic DSE
+# Basic dataflow core creation
+smith dfc model.onnx blueprint.yaml
+
+# Shorthand (dfc is the default command)
 smith model.onnx blueprint.yaml
 
 # With custom output directory
-smith model.onnx blueprint.yaml --output-dir ./results
+smith dfc model.onnx blueprint.yaml --output-dir ./results
 
 # Using brainsmith context with debug mode
-brainsmith --debug smith model.onnx blueprint.yaml
+brainsmith --debug smith dfc model.onnx blueprint.yaml
 ```
 
 ## Hardware Kernel Generation
@@ -306,7 +311,7 @@ brainsmith setup check
 
 ### Daily Workflow
 ```bash
-# Run DSE with user defaults
+# Create dataflow core with user defaults
 smith model.onnx blueprint.yaml
 
 # Generate hardware kernel
@@ -377,13 +382,14 @@ brainsmith config init --user
 
 ## Migration from Legacy CLI
 
-The previous single `smith` command structure is still supported:
+The previous single `smith` command structure has been updated:
 
 | Old Command | New Command |
 |------------|-------------|
 | `smith config show` | `brainsmith config show` |
 | `smith config export` | `brainsmith config export` |
 | `smith setup all` | `brainsmith setup all` |
+| `smith dse model.onnx bp.yaml` | `smith dfc model.onnx bp.yaml` |
 | `smith model.onnx bp.yaml` | `smith model.onnx bp.yaml` (unchanged) |
 | `smith kernel rtl.sv` | `smith kernel rtl.sv` (unchanged) |
 

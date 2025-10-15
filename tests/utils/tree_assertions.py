@@ -166,20 +166,20 @@ class TreeAssertions:
 
 
 def calculate_segment_efficiency(
-    total_transforms_with_segments: int,
-    total_transforms_without_segments: int
+    total_steps_with_segments: int,
+    total_steps_without_segments: int
 ) -> float:
     """Calculate expected segment efficiency.
-    
+
     Args:
-        total_transforms_with_segments: Total transforms when using segments
-        total_transforms_without_segments: Total transforms without segments
-        
+        total_steps_with_segments: Total steps when using segments
+        total_steps_without_segments: Total steps without segments
+
     Returns:
         Efficiency percentage rounded to 1 decimal place
     """
-    if total_transforms_without_segments == 0:
+    if total_steps_without_segments == 0:
         return NO_EFFICIENCY
-    
-    efficiency = EFFICIENCY_PERCENTAGE_MULTIPLIER * (1 - total_transforms_with_segments / total_transforms_without_segments)
+
+    efficiency = EFFICIENCY_PERCENTAGE_MULTIPLIER * (1 - total_steps_with_segments / total_steps_without_segments)
     return round(efficiency, EFFICIENCY_DECIMAL_PLACES)
