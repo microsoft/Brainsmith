@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-from brainsmith.dse._types import SegmentStatus
+from brainsmith.dse.types import SegmentStatus
 
 
 @dataclass

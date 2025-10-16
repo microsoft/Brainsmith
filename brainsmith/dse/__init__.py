@@ -16,22 +16,42 @@ Public API:
 Internal modules (prefixed with _) are implementation details.
 """
 
-from .api import explore_design_space
+from .api import explore_design_space, build_tree, execute_tree
 from .config import DSEConfig
 from .design_space import DesignSpace
 from ._parser import parse_blueprint
-from ._tree import DSETree
-from ._segment import DSESegment
+from .tree import DSETree
+from .segment import DSESegment
+from .runner import SegmentRunner
 
-# Backwards compatibility alias (same object, different name)
-from .config import BlueprintConfig
+# Result types
+from .types import (
+    TreeExecutionResult,
+    SegmentResult,
+    SegmentStatus,
+    OutputType,
+    ExecutionError,
+)
+
 
 __all__ = [
+    # High-level API (recommended for most users)
     'explore_design_space',
+    'parse_blueprint',
+    # Advanced API (power users)
+    'build_tree',
+    'execute_tree',
+    'SegmentRunner',
+    # Configuration
     'DSEConfig',
     'DesignSpace',
+    # Tree structures
     'DSETree',
     'DSESegment',
-    'parse_blueprint',
-    'BlueprintConfig',  # Alias for DSEConfig
+    # Result types
+    'TreeExecutionResult',
+    'SegmentResult',
+    'SegmentStatus',
+    'OutputType',
+    'ExecutionError',
 ]

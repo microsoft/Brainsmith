@@ -3,15 +3,42 @@
 
 """DSE segment runner for executing segment builds."""
 
+import shutil
 import time
 from pathlib import Path
-from typing import Dict, Any, Set
-from brainsmith.dse._segment import DSESegment
-from brainsmith.dse._tree import DSETree
+from typing import Dict, Any, Set, List
+from brainsmith.dse.segment import DSESegment
+from brainsmith.dse.tree import DSETree
 from brainsmith.registry import get_step
-from brainsmith.dse._types import SegmentResult, TreeExecutionResult, ExecutionError
+from brainsmith.dse.types import SegmentResult, TreeExecutionResult, ExecutionError
 from brainsmith._internal.finn.adapter import FINNAdapter
-from brainsmith.dse._artifacts import share_artifacts_at_branch
+
+
+def _share_artifacts_at_branch(
+    parent_result: SegmentResult,
+    child_segments: List[DSESegment],
+    base_output_dir: Path
+) -> None:
+    """Copy build artifacts to child segments at branch points.
+
+    Uses full directory copies for compatibility.
+
+    Args:
+        parent_result: Result from parent segment execution
+        child_segments: List of child segments to share artifacts with
+        base_output_dir: Base directory for DSE outputs
+    """
+    if not parent_result.success:
+        return
+
+    print(f"\n  Sharing artifacts to {len(child_segments)} children...")
+
+    for child in child_segments:
+        child_dir = base_output_dir / child.segment_id
+        # Full copy required for compatibility
+        if child_dir.exists():
+            shutil.rmtree(child_dir)
+        shutil.copytree(parent_result.output_dir, child_dir)
 
 
 class SegmentRunner:
@@ -173,7 +200,7 @@ class SegmentRunner:
             
             # Share artifacts at branch points
             if segment.is_branch_point:
-                share_artifacts_at_branch(result, list(segment.children.values()), output_dir)
+                _share_artifacts_at_branch(result, list(segment.children.values()), output_dir)
             
             # Add children to stack (reversed for correct order)
             for child in reversed(list(segment.children.values())):

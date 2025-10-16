@@ -13,8 +13,15 @@ Main Features:
     - Kernel integration tools
 
 Quick Start:
-    >>> from brainsmith import explore_design_space
-    >>> results = explore_design_space(model, blueprint)
+    >>> from brainsmith import explore_design_space, TreeExecutionResult
+    >>> results: TreeExecutionResult = explore_design_space(model, blueprint)
+    >>> print(f"Successful builds: {results.stats['successful']}")
+
+Advanced DSE (Power Users):
+    >>> from brainsmith import build_tree, execute_tree, SegmentRunner
+    >>> # Separate build and execution for custom strategies
+    >>> tree = build_tree(design_space, config)
+    >>> results = execute_tree(tree, model, config, output_dir, runner=custom_runner)
 
 For component development:
     >>> from brainsmith import kernel, step
@@ -34,11 +41,23 @@ except Exception:
 
 # DSE - Main API
 from .dse import (
+    # High-level API
     explore_design_space,
+    # Advanced API
+    build_tree,
+    execute_tree,
+    # Configuration and structures
     DesignSpace,
     DSEConfig,
     DSETree,
     DSESegment,
+    SegmentRunner,
+    # Result types
+    TreeExecutionResult,
+    SegmentResult,
+    SegmentStatus,
+    OutputType,
+    ExecutionError,
 )
 
 # Component System
@@ -70,12 +89,23 @@ from .settings import SystemConfig
 __version__ = "0.1.0"
 
 __all__ = [
-    # DSE
+    # DSE - High-level API
     'explore_design_space',
+    # DSE - Advanced API
+    'build_tree',
+    'execute_tree',
+    # DSE - Configuration and structures
     'DesignSpace',
     'DSEConfig',
     'DSETree',
     'DSESegment',
+    'SegmentRunner',
+    # DSE - Result types
+    'TreeExecutionResult',
+    'SegmentResult',
+    'SegmentStatus',
+    'OutputType',
+    'ExecutionError',
 
     # Component System
     'kernel',

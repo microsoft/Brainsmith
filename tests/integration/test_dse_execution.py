@@ -8,8 +8,8 @@ import pytest
 from pathlib import Path
 
 from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse._types import SegmentResult
-from brainsmith.dse._artifacts import share_artifacts_at_branch
+from brainsmith.dse.types import SegmentResult
+from brainsmith.dse.runner import _share_artifacts_at_branch as share_artifacts_at_branch
 from tests.utils.tree_assertions import (
     TreeAssertions,
     ExpectedTreeStructure,

@@ -2,7 +2,7 @@
 
 import pytest
 from brainsmith.dse import DesignSpace, DSEConfig
-from brainsmith.dse._types import OutputType
+from brainsmith.dse.types import OutputType
 from tests.utils.test_constants import (
     DEFAULT_CLOCK_PERIOD_NS,
     DEFAULT_PARALLEL_BUILDS,

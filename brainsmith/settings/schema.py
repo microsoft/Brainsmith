@@ -399,12 +399,7 @@ class SystemConfig(BaseSettings):
         env_dict['BSMITH_DIR'] = str(self.bsmith_dir)
         
         return env_dict
-    
-    # Keep old method for backwards compatibility, but have it use the new one
-    def to_env_dict(self) -> Dict[str, str]:
-        """Deprecated: Use to_external_env_dict() instead."""
-        return self.to_external_env_dict()
-    
+
     @cached_property
     def effective_vivado_path(self) -> Optional[Path]:
         """Get effective Vivado path with auto-detection."""

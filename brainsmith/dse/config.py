@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from brainsmith.dse._types import OutputType
+from brainsmith.dse.types import OutputType
 
 
 @dataclass
@@ -106,5 +106,3 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
     )
 
 
-# Backwards compatibility alias
-BlueprintConfig = DSEConfig
