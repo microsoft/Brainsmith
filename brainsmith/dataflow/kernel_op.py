@@ -7,13 +7,10 @@
 """
 Base class for hardware custom operators automated with Dataflow Modeling.
 
-Two-level caching system:
-1. _tensor_context: Cached from ModelWrapper (changes with graph updates)
-2. _kernel_model: Computed from schema + context + nodeattrs (invalidated on nodeattr changes)
-
-Cache invalidation:
-  set_nodeattr() → invalidates _kernel_model only
-  refresh_tensor_context() → updates _tensor_context, invalidates _kernel_model if context changed
+State Management:
+- Nodeattrs: Single source of truth (shapes, datatypes, params)
+- Metadata: Optional KernelModel cache for performance
+- Cache invalidated on refresh_df_model() or set_nodeattr()
 """
 
 import logging
@@ -28,7 +25,6 @@ from qonnx.core.modelwrapper import ModelWrapper
 from brainsmith.dataflow.datatype_sources import DatatypeSource
 from brainsmith.dataflow import (
     KernelSchema,
-    TensorContext,
     InputModel,
     OutputModel,
     KernelModel,
@@ -63,70 +59,150 @@ class KernelOp(HWCustomOp, ABC):
                 f"{self.__class__.__name__} must define kernel_schema class attribute"
             )
 
-        self._tensor_context: Optional[TensorContext] = None
+        # Single cache: KernelModel (lazy-built from nodeattrs)
         self._kernel_model: Optional[KernelModel] = None
 
     def _error(self, message: str) -> KernelOpError:
         """Create exception with node context."""
         return KernelOpError(self.onnx_node, message)
 
-    @property
-    def tensor_context(self) -> TensorContext:
-        """Get tensor context from cache or node metadata.
+    # ====================================================================
+    # Public API: FINN Integration
+    # ====================================================================
 
-        Tries to read from:
-        1. Instance cache (_tensor_context)
-        2. Node metadata (persisted from previous initialization)
+    def refresh_df_model(self, model: ModelWrapper) -> None:
+        """Update all node state from ModelWrapper.
 
-        Raises:
-            RuntimeError: If tensor context not available from either source
-        """
-        if self._tensor_context is None:
-            # Try to read from node metadata
-            cached_tc = TensorContext.from_node_metadata(self.onnx_node)
-            if cached_tc:
-                self._tensor_context = cached_tc
-            else:
-                raise RuntimeError(
-                    f"Tensor context not available for node '{self.onnx_node.name}'. "
-                    f"Either attach it during node creation or call refresh_tensor_context(model)."
-                )
-        return self._tensor_context
+        This is the ONLY method that updates protected nodeattrs.
+        Called by FINN transforms after graph modifications.
 
-    def refresh_tensor_context(self, model: ModelWrapper) -> None:
-        """Update tensor context from model and persist to node metadata.
-
-        This method:
-        1. Extracts tensor context from ModelWrapper (shapes only)
-        2. Caches it in the instance
-        3. Attaches it to node.metadata_props for persistence
-        4. Invalidates kernel_model if context changed
-
-        Note: Datatypes are set separately by infer_node_datatype() which reads
-        from ModelWrapper and stores them in nodeattrs.
+        Updates:
+        1. Tensor shapes from graph → _input*TensorShape, _output*TensorShape
+        2. Datatypes from graph → _input*Datatype, _output*Datatype
+        3. Builds KernelModel to compute derived shapes
+        4. Stores derived shapes → _input*BlockShape, _input*StreamShape
+        5. Resolves internal datatypes → _*Datatype
+        6. Invalidates cached KernelModel
 
         Args:
             model: ModelWrapper to extract tensor information from
         """
-        new_context = TensorContext.from_model_wrapper(self.onnx_node, model)
+        logger.debug(f"Refreshing state for {self.onnx_node.name}")
 
-        if self._tensor_context != new_context:
-            self._tensor_context = new_context
-            self._kernel_model = None
-            # Persist to node metadata for future use
-            new_context.attach_to_node(self.onnx_node)
+        # ============================================================
+        # Step 1: Extract and store tensor shapes
+        # ============================================================
+
+        for i, inp_name in enumerate(self.onnx_node.input):
+            if inp_name:  # Skip optional inputs
+                shape = model.get_tensor_shape(inp_name)
+                self._set_protected(f"_input{i}TensorShape", list(shape))
+
+        for i, out_name in enumerate(self.onnx_node.output):
+            shape = model.get_tensor_shape(out_name)
+            self._set_protected(f"_output{i}TensorShape", list(shape))
+
+        # ============================================================
+        # Step 2: Extract and store datatypes
+        # ============================================================
+
+        for i, inp_name in enumerate(self.onnx_node.input):
+            if inp_name:
+                dtype = model.get_tensor_datatype(inp_name)
+                self._set_protected(f"_input{i}Datatype", dtype.name)
+
+        for i, out_name in enumerate(self.onnx_node.output):
+            dtype = model.get_tensor_datatype(out_name)
+            self._set_protected(f"_output{i}Datatype", dtype.name)
+
+        # ============================================================
+        # Step 3: Build KernelModel to compute derived values
+        # ============================================================
+
+        # Build from graph shapes
+        kernel_model = self._build_from_graph_shapes(model)
+
+        # ============================================================
+        # Step 4: Store derived hardware shapes
+        # ============================================================
+
+        for i, inp_model in enumerate(kernel_model.inputs):
+            self._set_protected(f"_input{i}BlockShape", list(inp_model.block_shape))
+            self._set_protected(f"_input{i}StreamShape", list(inp_model.stream_shape))
+
+        for i, out_model in enumerate(kernel_model.outputs):
+            self._set_protected(f"_output{i}BlockShape", list(out_model.block_shape))
+            self._set_protected(f"_output{i}StreamShape", list(out_model.stream_shape))
+
+        # ============================================================
+        # Step 5: Store resolved internal datatypes
+        # ============================================================
+
+        # Internal datatypes were already resolved during _build_from_graph_shapes()
+        # and stored in nodeattrs by _resolve_internal_datatypes()
+
+        # ============================================================
+        # Step 6: Cache complete KernelModel (optional optimization)
+        # ============================================================
+
+        self._kernel_model = kernel_model
+        self._cache_kernel_model_to_metadata(kernel_model)
+
+        logger.debug(f"State refresh complete for {self.onnx_node.name}")
 
     @property
     def kernel_model(self) -> KernelModel:
-        """Lazy-built kernel model from tensor context and nodeattrs.
+        """Lazy-built KernelModel with two-tier reconstruction.
+
+        Reconstruction strategy:
+        1. Return cached model if available
+        2. Try deserializing from metadata cache
+        3. Rebuild from nodeattrs (source of truth)
+        4. Fail with helpful error
+
+        Returns:
+            Immutable KernelModel instance
 
         Raises:
-            RuntimeError: If tensor context not initialized
+            RuntimeError: If node not initialized (no nodeattrs set)
         """
-        if self._kernel_model is None:
-            self.build_model()
-            assert self._kernel_model is not None  # build_model() sets this
-        return self._kernel_model
+        if self._kernel_model is not None:
+            return self._kernel_model
+
+        # ============================================================
+        # Tier 1: Try deserializing from metadata cache (fast)
+        # ============================================================
+
+        try:
+            model_json = self._read_kernel_model_from_metadata()
+            if model_json:
+                logger.debug(
+                    f"Reconstructing {self.onnx_node.name} from cached KernelModel"
+                )
+                self._kernel_model = KernelModel.from_json(model_json)
+                return self._kernel_model
+        except Exception as e:
+            logger.debug(f"Could not deserialize KernelModel: {e}")
+
+        # ============================================================
+        # Tier 2: Rebuild from nodeattrs (source of truth)
+        # ============================================================
+
+        try:
+            logger.debug(f"Rebuilding {self.onnx_node.name} from nodeattrs")
+            self._kernel_model = self._build_kernel_model_from_nodeattrs()
+
+            # Cache for next time
+            self._cache_kernel_model_to_metadata(self._kernel_model)
+
+            return self._kernel_model
+        except Exception as e:
+            logger.debug(f"Could not rebuild from nodeattrs: {e}")
+            raise RuntimeError(
+                f"Cannot build KernelModel for {self.onnx_node.name}. "
+                f"Node not initialized. Call refresh_df_model(model) first.\n"
+                f"Error: {e}"
+            )
 
     def get_nodeattr_types(self):
         """Get node attribute types registry.
@@ -150,96 +226,101 @@ class KernelOp(HWCustomOp, ABC):
         return {**super().get_nodeattr_types(), **self.kernel_schema.get_nodeattr_types()}
 
     def infer_node_datatype(self, model):
-        """FINN compatibility wrapper. Modern code should use refresh_tensor_context()."""
-        self.refresh_tensor_context(model)
+        """FINN compatibility wrapper. Modern code should use refresh_df_model()."""
+        self.refresh_df_model(model)
 
-        # Set ALL input datatype nodeattrs from ModelWrapper
-        # TensorContext now only stores shapes, not datatypes
-        for i, inp_name in enumerate(self.onnx_node.input):
-            datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
-            datatype = model.get_tensor_datatype(inp_name)
-            super().set_nodeattr(datatype_attr, datatype.name)
-
-        # Set ALL output datatype nodeattrs from ModelWrapper
-        # DatatypeSource becomes a validation check, not a generator
-        for i, out_name in enumerate(self.onnx_node.output):
-            datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
-            datatype = model.get_tensor_datatype(out_name)
-            super().set_nodeattr(datatype_attr, datatype.name)
-
-        # NOTE: Internal datatypes are NOT set here - they have no ONNX tensors
-        # They are resolved by _resolve_internal_datatypes() during build_model()
-
-    # Public API - FINN HWCustomOp Interface
+    # ====================================================================
+    # Public API: Shape/Datatype Queries (HWCustomOp Interface)
+    # ====================================================================
 
     def get_input_datatype(self, ind=0) -> DataType:
-        return self.kernel_model.input_datatype(ind)
+        """Get input datatype from nodeattr or KernelModel."""
+        try:
+            # Fast path: read from nodeattr
+            return DataType[self.get_nodeattr(f"_input{ind}Datatype")]
+        except (AttributeError, KeyError):
+            # Fallback: from cached model
+            return self.kernel_model.input_datatype(ind)
 
     def get_output_datatype(self, ind=0) -> DataType:
-        return self.kernel_model.output_datatype(ind)
+        """Get output datatype from nodeattr or KernelModel."""
+        try:
+            return DataType[self.get_nodeattr(f"_output{ind}Datatype")]
+        except (AttributeError, KeyError):
+            return self.kernel_model.output_datatype(ind)
 
     def get_normal_input_shape(self, ind=0) -> List[int]:
-        return list(self.kernel_model.input_tensor_shape(ind))
+        """Get input tensor shape from nodeattr or KernelModel."""
+        try:
+            # Fast path: read from nodeattr
+            return self.get_nodeattr(f"_input{ind}TensorShape")
+        except (AttributeError, KeyError):
+            # Fallback: from cached model
+            return list(self.kernel_model.input_tensor_shape(ind))
 
     def get_normal_output_shape(self, ind=0) -> List[int]:
-        return list(self.kernel_model.output_tensor_shape(ind))
+        """Get output tensor shape from nodeattr or KernelModel."""
+        try:
+            return self.get_nodeattr(f"_output{ind}TensorShape")
+        except (AttributeError, KeyError):
+            return list(self.kernel_model.output_tensor_shape(ind))
 
-    def get_folded_input_shape(self, ind=0) -> List[int]:
+    def get_folded_input_shape(self, ind=0) -> Tuple[int, ...]:
         """Get FINN-compatible folded input shape.
 
-        FINN's dataflow infrastructure expects folded shapes to represent the full
-        tensor with time-multiplexing dimensions. This method computes the folded
-        shape by dividing each tensor dimension by its corresponding stream dimension,
-        then appending the flattened stream parallelism as the final dimension.
+        Computed from tensor_shape and stream_shape.
+        Format: [fold_factors..., flattened_stream]
 
-        Algorithm:
-        1. For each dimension i: fold_factor[i] = tensor_shape[i] / stream_shape[i]
-        2. flattened_stream = product(stream_shape)
-        3. folded_shape = fold_factors + [flattened_stream]
-
-        Example for tensor=[1, 128, 768], stream=[1, 1, 8]:
-            fold_factors = [1/1, 128/1, 768/8] = [1, 128, 96]
-            flattened_stream = 1 * 1 * 8 = 8
-            folded_shape = [1, 128, 96, 8]
-
-        Returns:
-            Folded shape with time-multiplexing and parallelism dimensions
+        Example: tensor=[1, 128, 768], stream=[1, 1, 64]
+            → fold_factors=[1, 128, 12], flattened=64
+            → result=(1, 128, 12, 64)
         """
-        tensor_shape = self.kernel_model.input_tensor_shape(ind)
-        stream_shape = self.kernel_model.input_stream_shape(ind)
+        try:
+            # Read from nodeattrs
+            tensor_shape = self.get_nodeattr(f"_input{ind}TensorShape")
+            stream_shape = self.get_nodeattr(f"_input{ind}StreamShape")
 
-        # Compute fold factor for each dimension
-        fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
+            # Compute fold factors
+            fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
+            flattened_stream = math.prod(stream_shape)
 
-        # Flatten stream parallelism into single dimension
-        flattened_stream = math.prod(stream_shape)
+            return tuple(fold_factors + [flattened_stream])
+        except (AttributeError, KeyError):
+            # Fallback: from cached model
+            return self.kernel_model.get_folded_input_shape(ind)
 
-        return tuple(fold_factors + [flattened_stream])
+    def get_folded_output_shape(self, ind=0) -> Tuple[int, ...]:
+        """Get FINN-compatible folded output shape."""
+        try:
+            tensor_shape = self.get_nodeattr(f"_output{ind}TensorShape")
+            stream_shape = self.get_nodeattr(f"_output{ind}StreamShape")
 
-    def get_folded_output_shape(self, ind=0):
-        """Get FINN-compatible folded output shape.
+            fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
+            flattened_stream = math.prod(stream_shape)
 
-        See get_folded_input_shape() for explanation of folded shape computation.
-
-        Returns:
-            Folded shape with time-multiplexing and parallelism dimensions
-        """
-        tensor_shape = self.kernel_model.output_tensor_shape(ind)
-        stream_shape = self.kernel_model.output_stream_shape(ind)
-
-        # Compute fold factor for each dimension
-        fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
-
-        # Flatten stream parallelism into single dimension
-        flattened_stream = math.prod(stream_shape)
-
-        return tuple(fold_factors + [flattened_stream])
+            return tuple(fold_factors + [flattened_stream])
+        except (AttributeError, KeyError):
+            return self.kernel_model.get_folded_output_shape(ind)
 
     def get_instream_width(self, ind=0) -> int:
-        return self.kernel_model.input_stream_width_bits(ind)
+        """Get input stream width in bits."""
+        try:
+            datatype = self.get_input_datatype(ind)
+            stream_shape = self.get_nodeattr(f"_input{ind}StreamShape")
+            streaming_bandwidth = math.prod(stream_shape)
+            return streaming_bandwidth * datatype.bitwidth()
+        except (AttributeError, KeyError):
+            return self.kernel_model.input_stream_width_bits(ind)
 
     def get_outstream_width(self, ind=0) -> int:
-        return self.kernel_model.output_stream_width_bits(ind)
+        """Get output stream width in bits."""
+        try:
+            datatype = self.get_output_datatype(ind)
+            stream_shape = self.get_nodeattr(f"_output{ind}StreamShape")
+            streaming_bandwidth = math.prod(stream_shape)
+            return streaming_bandwidth * datatype.bitwidth()
+        except (AttributeError, KeyError):
+            return self.kernel_model.output_stream_width_bits(ind)
 
     def get_number_output_values(self):
         """Get number of output values for FINN.
@@ -322,13 +403,28 @@ class KernelOp(HWCustomOp, ABC):
             f"with matching shape inference behavior."
         )
 
-    # Overrides
-
     def set_nodeattr(self, name: str, value: Any) -> None:
-        """Set attribute and invalidate kernel model cache if value changed."""
-        if name in self.kernel_schema.protected_attr_names:
-            raise self._error(f"Cannot modify protected attribute '{name}'")
+        """Set attribute and invalidate cache.
 
+        Overrides base class to:
+        1. Prevent modification of protected attributes
+        2. Invalidate KernelModel cache on user param changes
+
+        Args:
+            name: Attribute name
+            value: New value
+
+        Raises:
+            KernelOpError: If attempting to modify protected attribute
+        """
+        # Enforce protection
+        if name in self.kernel_schema.protected_attr_names:
+            raise self._error(
+                f"Cannot modify protected attribute '{name}'. "
+                f"Protected attributes are managed by refresh_df_model()."
+            )
+
+        # Check if value actually changed
         old_value = None
         try:
             old_value = self.get_nodeattr(name)
@@ -336,204 +432,320 @@ class KernelOp(HWCustomOp, ABC):
             pass
 
         if old_value != value:
+            # Update value
             super().set_nodeattr(name, value)
-            self._kernel_model = None
 
-    # Private Implementation
+            # Invalidate cache (user param changed)
+            self._invalidate_cache()
 
-    def build_model(self) -> KernelModel:
-        """Create KernelModel from schema, tensor context, and nodeattrs.
+    # ====================================================================
+    # Internal Implementation
+    # ====================================================================
+
+    def _set_protected(self, name: str, value: Any) -> None:
+        """Set protected attribute, bypassing protection check.
+
+        Internal use only by refresh_df_model().
+        """
+        super().set_nodeattr(name, value)
+
+    def _invalidate_cache(self) -> None:
+        """Invalidate cached KernelModel.
+
+        Called when user params change or refresh_df_model() runs.
+        """
+        self._kernel_model = None
+        # Note: Metadata cache is stale but not deleted
+        # Will be overwritten next time cache is built
+
+    def _build_from_graph_shapes(self, model: ModelWrapper) -> KernelModel:
+        """Build KernelModel from ModelWrapper (called by refresh_df_model).
+
+        This method:
+        1. Reads tensor shapes/datatypes from ModelWrapper
+        2. Resolves dimensions using template_resolution
+        3. Creates InputModel/OutputModel instances
+        4. Resolves internal datatypes
+        5. Returns complete KernelModel
+
+        The caller (refresh_df_model) then extracts the computed shapes
+        and stores them in nodeattrs.
+
+        Args:
+            model: ModelWrapper to read graph information from
+
+        Returns:
+            Complete KernelModel instance
 
         Raises:
-            RuntimeError: If tensor context not initialized
             KernelOpError: If validation fails
         """
-        logger.debug(f"Building KernelModel for {self.onnx_node.name} ({self.kernel_schema.name})")
+        logger.debug(f"Building KernelModel from graph for {self.onnx_node.name}")
 
-        # Build interfaces dict incrementally for DerivedDim/ScaledDim resolution
         interfaces = {}
 
-        input_models = []
-        for i in range(len(self.kernel_schema.inputs)):
-            input_model = self._create_input_model(i, interfaces)
-            if input_model is not None:
-                input_models.append(input_model)
-                interfaces[input_model.name] = input_model
-                logger.debug(
-                    f"  Input '{input_model.name}': "
-                    f"tensor={input_model.tensor_shape}, "
-                    f"block={input_model.block_shape}, "
-                    f"stream={input_model.stream_shape}"
-                )
+        # ================================================================
+        # Build InputModels
+        # ================================================================
 
-        # Resolve internal datatypes (can reference inputs)
+        input_models = []
+        for i, schema in enumerate(self.kernel_schema.inputs):
+            inp_name = self.onnx_node.input[i]
+            if not inp_name:
+                continue  # Skip optional inputs
+
+            # Get tensor shape from graph
+            tensor_shape = tuple(model.get_tensor_shape(inp_name))
+
+            # Resolve block shape from schema
+            block_shape = self._resolve_dimensions(
+                schema.block_tiling,
+                tensor_shape,
+                f"Input '{schema.name}' block",
+                interfaces
+            )
+
+            # Resolve stream shape from schema
+            stream_shape = self._resolve_dimensions(
+                schema.stream_tiling,
+                block_shape,
+                f"Input '{schema.name}' stream",
+                interfaces
+            )
+
+            # Get datatype from graph
+            datatype = model.get_tensor_datatype(inp_name)
+
+            input_model = InputModel(
+                name=schema.name,
+                tensor_shape=tensor_shape,
+                block_shape=block_shape,
+                stream_shape=stream_shape,
+                datatype=datatype,
+                is_weight=schema.is_weight
+            )
+
+            input_models.append(input_model)
+            interfaces[schema.name] = input_model
+
+        # ================================================================
+        # Resolve Internal Datatypes
+        # ================================================================
+
         if self.kernel_schema.internal_datatypes:
-            logger.debug(f"Resolving {len(self.kernel_schema.internal_datatypes)} internal datatypes")
             internal_datatypes = self._resolve_internal_datatypes(interfaces)
 
-            # Add internal datatypes to interfaces dict for output resolution
+            # Add to interfaces dict for output resolution
             for internal_name, datatype in internal_datatypes.items():
-                # Create a simple object that has a datatype attribute
                 class InternalDatatype:
                     def __init__(self, dt):
                         self.datatype = dt
-
                 interfaces[internal_name] = InternalDatatype(datatype)
 
+        # ================================================================
+        # Build OutputModels
+        # ================================================================
+
         output_models = []
-        for i in range(len(self.kernel_schema.outputs)):
-            output_model = self._create_output_model(i, interfaces)
-            output_models.append(output_model)
-            interfaces[output_model.name] = output_model
-            logger.debug(
-                f"  Output '{output_model.name}': "
-                f"tensor={output_model.tensor_shape}, "
-                f"block={output_model.block_shape}, "
-                f"stream={output_model.stream_shape}"
+        for i, schema in enumerate(self.kernel_schema.outputs):
+            out_name = self.onnx_node.output[i]
+
+            # Get tensor shape from graph
+            tensor_shape = tuple(model.get_tensor_shape(out_name))
+
+            # Resolve block shape
+            block_shape = self._resolve_dimensions(
+                schema.block_tiling,
+                tensor_shape,
+                f"Output '{schema.name}' block",
+                interfaces
             )
 
-        # KernelModel.__post_init__ handles dimension resolution
+            # Resolve stream shape (may be None if not specified)
+            if schema.stream_tiling is not None:
+                stream_shape = self._resolve_dimensions(
+                    schema.stream_tiling,
+                    block_shape,
+                    f"Output '{schema.name}' stream",
+                    interfaces
+                )
+            else:
+                # Unset - will be resolved by KernelModel.__post_init__
+                stream_shape = tuple([None] * len(block_shape))
+
+            # Get datatype from graph
+            datatype = model.get_tensor_datatype(out_name)
+
+            # Validate against schema derivation if specified
+            if isinstance(schema.datatype, DatatypeSource):
+                expected_datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
+                if datatype != expected_datatype:
+                    raise self._error(
+                        f"Output '{schema.name}' datatype mismatch: "
+                        f"graph has {datatype.name}, schema expects {expected_datatype.name}"
+                    )
+
+            output_model = OutputModel(
+                name=schema.name,
+                tensor_shape=tensor_shape,
+                block_shape=block_shape,
+                stream_shape=stream_shape,
+                datatype=datatype
+            )
+
+            output_models.append(output_model)
+            interfaces[schema.name] = output_model
+
+        # ================================================================
+        # Create and validate KernelModel
+        # ================================================================
+
+        kernel_model = KernelModel(
+            name=self.kernel_schema.name,
+            inputs=tuple(input_models),
+            outputs=tuple(output_models)
+        )
+
+        self._validate_kernel_model(kernel_model)
+
+        return kernel_model
+
+    def _build_kernel_model_from_nodeattrs(self) -> KernelModel:
+        """Reconstruct KernelModel from nodeattrs.
+
+        This is the core reconstruction logic. Reads protected nodeattrs
+        to rebuild InputModel/OutputModel instances.
+
+        Returns:
+            Fully resolved KernelModel
+
+        Raises:
+            RuntimeError: If required nodeattrs missing
+            KernelOpError: If validation fails
+        """
+        logger.debug(
+            f"Building KernelModel for {self.onnx_node.name} "
+            f"({self.kernel_schema.name})"
+        )
+
+        # ============================================================
+        # Build InputModels from nodeattrs
+        # ============================================================
+
+        input_models = []
+        for i, schema in enumerate(self.kernel_schema.inputs):
+            try:
+                tensor_shape = tuple(self.get_nodeattr(f"_input{i}TensorShape"))
+                block_shape = tuple(self.get_nodeattr(f"_input{i}BlockShape"))
+                stream_shape = tuple(self.get_nodeattr(f"_input{i}StreamShape"))
+                datatype = DataType[self.get_nodeattr(f"_input{i}Datatype")]
+
+                input_model = InputModel(
+                    name=schema.name,
+                    tensor_shape=tensor_shape,
+                    block_shape=block_shape,
+                    stream_shape=stream_shape,
+                    datatype=datatype,
+                    is_weight=schema.is_weight
+                )
+                input_models.append(input_model)
+
+                logger.debug(
+                    f"  Input '{input_model.name}': "
+                    f"tensor={tensor_shape}, block={block_shape}, "
+                    f"stream={stream_shape}, dtype={datatype.name}"
+                )
+            except (AttributeError, KeyError) as e:
+                raise RuntimeError(
+                    f"Missing nodeattr for input {i} ({schema.name}): {e}"
+                )
+
+        # ============================================================
+        # Build OutputModels from nodeattrs
+        # ============================================================
+
+        output_models = []
+        for i, schema in enumerate(self.kernel_schema.outputs):
+            try:
+                tensor_shape = tuple(self.get_nodeattr(f"_output{i}TensorShape"))
+                block_shape = tuple(self.get_nodeattr(f"_output{i}BlockShape"))
+                stream_shape = tuple(self.get_nodeattr(f"_output{i}StreamShape"))
+                datatype = DataType[self.get_nodeattr(f"_output{i}Datatype")]
+
+                output_model = OutputModel(
+                    name=schema.name,
+                    tensor_shape=tensor_shape,
+                    block_shape=block_shape,
+                    stream_shape=stream_shape,
+                    datatype=datatype
+                )
+                output_models.append(output_model)
+
+                logger.debug(
+                    f"  Output '{output_model.name}': "
+                    f"tensor={tensor_shape}, block={block_shape}, "
+                    f"stream={stream_shape}, dtype={datatype.name}"
+                )
+            except (AttributeError, KeyError) as e:
+                raise RuntimeError(
+                    f"Missing nodeattr for output {i} ({schema.name}): {e}"
+                )
+
+        # ============================================================
+        # Create KernelModel
+        # ============================================================
+
         model = KernelModel(
             name=self.kernel_schema.name,
             inputs=tuple(input_models),
-            outputs=tuple(output_models),
+            outputs=tuple(output_models)
         )
 
-        # Unified validation: validate all interfaces in one pass
-        logger.debug(f"Validating all interfaces for {self.onnx_node.name}")
+        # ============================================================
+        # Validate constraints and relationships
+        # ============================================================
 
-        # Validate all inputs
+        self._validate_kernel_model(model)
+
+        logger.debug(f"KernelModel built successfully for {self.onnx_node.name}")
+        return model
+
+    def _validate_kernel_model(self, model: KernelModel) -> None:
+        """Validate constraints and relationships on KernelModel.
+
+        Args:
+            model: KernelModel to validate
+
+        Raises:
+            KernelOpError: If validation fails
+        """
+        logger.debug(f"Validating KernelModel for {self.onnx_node.name}")
+
+        # Validate input constraints
         for i, input_model in enumerate(model.inputs):
             schema = self.kernel_schema.inputs[i]
             if schema.constraints:
                 self._validate_interface_constraints(
-                    schema.name,
-                    input_model,
-                    schema.constraints
+                    schema.name, input_model, schema.constraints
                 )
 
-        # Validate all outputs
+        # Validate output constraints
         for i, output_model in enumerate(model.outputs):
             schema = self.kernel_schema.outputs[i]
             if schema.constraints:
                 self._validate_interface_constraints(
-                    schema.name,
-                    output_model,
-                    schema.constraints
+                    schema.name, output_model, schema.constraints
                 )
 
         # Validate cross-interface relationships
         if self.kernel_schema.relationships:
-            logger.debug(f"Validating {len(self.kernel_schema.relationships)} relationships")
+            logger.debug(
+                f"Validating {len(self.kernel_schema.relationships)} relationships"
+            )
             for relationship in self.kernel_schema.relationships:
                 error = relationship.check(model, self.get_nodeattr)
                 if error:
                     raise self._error(str(error))
-
-        logger.debug(f"KernelModel built successfully for {self.onnx_node.name}")
-        self._kernel_model = model
-        return model
-
-    def _create_input_model(self, index: int, interfaces: dict) -> Optional[InputModel]:
-        """Create input model from schema and tensor context.
-
-        Args:
-            index: Index of input in schema
-            interfaces: Dict of already-built interface models for DerivedDim resolution
-        """
-        schema = self.kernel_schema.inputs[index]
-        tensor_shape = self.tensor_context.input_shapes[index]
-
-        if tensor_shape is None:
-            return None
-
-        block_shape = self._resolve_dimensions(
-            schema.block_tiling,
-            tensor_shape,
-            f"Input '{schema.name}' block",
-            interfaces
-        )
-
-        stream_shape = self._resolve_dimensions(
-            schema.stream_tiling,
-            block_shape,
-            f"Input '{schema.name}' stream",
-            interfaces
-        )
-
-        # Datatype from nodeattr (set by infer_node_datatype)
-        datatype_attr = self.kernel_schema.get_datatype_attr(index)
-        datatype = DataType[self.get_nodeattr(datatype_attr)]
-
-        input_model = InputModel(
-            name=schema.name,
-            tensor_shape=tensor_shape,
-            block_shape=block_shape,
-            stream_shape=stream_shape,
-            datatype=datatype,
-            is_weight=schema.is_weight
-        )
-
-        return input_model
-
-    def _create_output_model(self, index: int, interfaces: dict) -> OutputModel:
-        """Create output model from schema - stream_shape may be unset.
-
-        Args:
-            index: Index of output in schema
-            interfaces: Dict of already-built interface models for DerivedDim resolution
-        """
-        schema = self.kernel_schema.outputs[index]
-        tensor_shape = self.tensor_context.output_shapes[index]
-
-        block_shape = self._resolve_dimensions(
-            schema.block_tiling,
-            tensor_shape,
-            f"Output '{schema.name}' block",
-            interfaces
-        )
-
-        # Resolve stream tiling if specified in schema
-        if schema.stream_tiling is not None:
-            stream_shape = self._resolve_dimensions(
-                schema.stream_tiling,
-                block_shape,
-                f"Output '{schema.name}' stream",
-                interfaces
-            )
-        else:
-            # Leave unset - will be resolved by KernelModel.__post_init__
-            stream_shape = tuple([None] * len(block_shape))
-
-        # Read datatype from nodeattr (set by infer_node_datatype)
-        datatype_attr = self.kernel_schema.get_datatype_attr(index, False)
-        datatype = DataType[self.get_nodeattr(datatype_attr)]
-
-        # If schema specifies derivation, VALIDATE it matches expectation
-        from brainsmith.dataflow.datatype_sources import DatatypeSource
-        if isinstance(schema.datatype, DatatypeSource):
-            try:
-                expected_datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
-                if datatype != expected_datatype:
-                    raise self._error(
-                        f"Output '{schema.name}' datatype validation failed: "
-                        f"nodeattr has {datatype.name}, "
-                        f"but schema derivation expects {expected_datatype.name}"
-                    )
-            except ValueError as e:
-                raise self._error(
-                    f"Output '{schema.name}' datatype validation failed: {e}"
-                )
-
-        output_model = OutputModel(
-            name=schema.name,
-            tensor_shape=tensor_shape,
-            block_shape=block_shape,
-            stream_shape=stream_shape,
-            datatype=datatype
-        )
-
-        return output_model
 
     def _resolve_dimensions(
         self,
@@ -579,19 +791,16 @@ class KernelOp(HWCustomOp, ABC):
                 raise self._error(str(error))
 
     def _resolve_internal_datatypes(self, interfaces: dict) -> dict:
-        """Resolve internal datatypes and set nodeattrs.
+        """Resolve internal datatypes and store in nodeattrs.
 
-        Internal datatypes are resolved using DatatypeSource patterns and stored
-        in nodeattrs for access by outputs and relationships.
+        Internal datatypes are resolved using DatatypeSource patterns
+        and stored in nodeattrs for persistence.
 
         Args:
-            interfaces: Dict of input models (internals can only reference inputs)
+            interfaces: Dict of input models
 
         Returns:
-            Dict mapping internal name -> resolved DataType
-
-        Raises:
-            KernelOpError: If resolution fails
+            Dict mapping internal name → resolved DataType
         """
         internal_datatypes = {}
 
@@ -601,8 +810,8 @@ class KernelOp(HWCustomOp, ABC):
                 internal_datatypes[internal_name] = resolved_datatype
 
                 # Store in nodeattr for persistence
-                attr_name = f"{internal_name}Datatype"
-                super().set_nodeattr(attr_name, resolved_datatype.name)
+                attr_name = f"_{internal_name}Datatype"
+                self._set_protected(attr_name, resolved_datatype.name)
 
                 logger.debug(f"  Internal '{internal_name}': {resolved_datatype.name}")
 
@@ -612,3 +821,64 @@ class KernelOp(HWCustomOp, ABC):
                 )
 
         return internal_datatypes
+
+    # ====================================================================
+    # Metadata Caching (Optional Performance Optimization)
+    # ====================================================================
+
+    def _cache_kernel_model_to_metadata(self, model: KernelModel) -> None:
+        """Cache serialized KernelModel to node metadata.
+
+        Optional performance optimization. Allows fast reconstruction
+        without rebuilding from nodeattrs.
+
+        Args:
+            model: KernelModel to serialize
+        """
+        try:
+            from onnx import StringStringEntryProto
+            from qonnx.util.basic import get_by_name
+
+            # Serialize model to JSON
+            model_json = model.to_json()
+
+            # Remove existing cache if present
+            existing = get_by_name(
+                self.onnx_node.metadata_props,
+                'ai.brainsmith.kernel_model',
+                'key'
+            )
+            if existing:
+                self.onnx_node.metadata_props.remove(existing)
+
+            # Add new cache
+            metadata = StringStringEntryProto()
+            metadata.key = 'ai.brainsmith.kernel_model'
+            metadata.value = model_json
+            self.onnx_node.metadata_props.append(metadata)
+
+            logger.debug(f"Cached KernelModel to metadata for {self.onnx_node.name}")
+        except Exception as e:
+            # Cache failure is non-fatal
+            logger.debug(f"Failed to cache KernelModel: {e}")
+
+    def _read_kernel_model_from_metadata(self) -> Optional[str]:
+        """Read serialized KernelModel from node metadata.
+
+        Returns:
+            JSON string if cache exists, None otherwise
+        """
+        try:
+            from qonnx.util.basic import get_by_name
+
+            metadata = get_by_name(
+                self.onnx_node.metadata_props,
+                'ai.brainsmith.kernel_model',
+                'key'
+            )
+            if metadata:
+                return metadata.value
+        except Exception as e:
+            logger.debug(f"Failed to read KernelModel cache: {e}")
+
+        return None

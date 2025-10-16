@@ -121,11 +121,7 @@ class KernelSchema:
                 )
 
     def get_nodeattr_types(self) -> Dict[str, tuple]:
-        """Generate node attribute type registry from schema.
-
-        Extracts:
-        1. Datatype attributes from inputs/outputs/internals (string nodeattrs)
-        2. Template parameters from tiling specs (integer nodeattrs)
+        """Generate complete nodeattr registry from schema.
 
         Returns:
             Dict mapping nodeattr name to (type, required, default_value)
@@ -133,29 +129,113 @@ class KernelSchema:
         """
         attrs = {}
 
-        # 1. Generate all datatype attribute names (string type)
-        dtype_attr_names = [f"input{i}Datatype" for i in range(len(self.inputs))]
-        dtype_attr_names += [f"output{i}Datatype" for i in range(len(self.outputs))]
+        # ================================================================
+        # 1. Interface Datatypes (protected, _ prefix)
+        # ================================================================
+
+        for i in range(len(self.inputs)):
+            attrs[f"_input{i}Datatype"] = ("s", False, "")
+
+        for i in range(len(self.outputs)):
+            attrs[f"_output{i}Datatype"] = ("s", False, "")
+
+        # ================================================================
+        # 2. Internal Datatypes (prefix "_")
+        # ================================================================
 
         for internal_name in self.internal_datatypes.keys():
-            internal_attr_name = f"{internal_name}Datatype"
-            if internal_attr_name in dtype_attr_names:
-                raise ValueError(
-                    f"Internal datatype name '{internal_name}' conflicts with input/output datatype attribute in kernel '{self.name}'"
-                )
-            dtype_attr_names.append(f"{internal_name}Datatype")
+            attr_name = f"_{internal_name}Datatype"
+            attrs[attr_name] = ("s", False, "")
 
-        for attr_name in dtype_attr_names:
-            attrs[attr_name] = ("s", True, "")  # String, required, empty default
+        # ================================================================
+        # 3. Protected Shape Attributes (prefix "_")
+        # ================================================================
 
-        # 2. Extract template parameters from tiling specs (integer type)
-        template_params = set()
+        for i in range(len(self.inputs)):
+            attrs[f"_input{i}TensorShape"] = ("ints", False, [])
+            attrs[f"_input{i}BlockShape"] = ("ints", False, [])
+            attrs[f"_input{i}StreamShape"] = ("ints", False, [])
 
-        for interface in self.inputs + self.outputs:
-            template_params.update(interface.tiling_attrs)
+        for i in range(len(self.outputs)):
+            attrs[f"_output{i}TensorShape"] = ("ints", False, [])
+            attrs[f"_output{i}BlockShape"] = ("ints", False, [])
+            attrs[f"_output{i}StreamShape"] = ("ints", False, [])
 
+        # ================================================================
+        # 4. Template Parameters (user-configurable, no prefix)
+        # ================================================================
+
+        template_params = self._extract_template_params()
         for param in template_params:
-            attrs[param] = ("i", True, 1)  # Integer, required, default 1
+            attrs[param] = ("i", True, 1)
 
         return attrs
+
+    def _extract_template_params(self) -> set:
+        """Extract unique template parameter names from tiling specs.
+
+        Returns:
+            Set of template parameter names (strings found in tiling specs)
+        """
+        params = set()
+        for interface in self.inputs + self.outputs:
+            params.update(interface.tiling_attrs)
+        return params
+
+    @property
+    def protected_attr_names(self) -> set:
+        """Attributes that cannot be modified by users.
+
+        Protected attributes are managed by refresh_df_model() and
+        internal resolution logic.
+
+        Returns:
+            Set of protected attribute names
+        """
+        protected = set()
+
+        # All attributes with "_" prefix
+        for i in range(len(self.inputs)):
+            protected.add(f"_input{i}TensorShape")
+            protected.add(f"_input{i}BlockShape")
+            protected.add(f"_input{i}StreamShape")
+            protected.add(f"_input{i}Datatype")
+
+        for i in range(len(self.outputs)):
+            protected.add(f"_output{i}TensorShape")
+            protected.add(f"_output{i}BlockShape")
+            protected.add(f"_output{i}StreamShape")
+            protected.add(f"_output{i}Datatype")
+
+        # Internal datatypes
+        for internal_name in self.internal_datatypes.keys():
+            protected.add(f"_{internal_name}Datatype")
+
+        return protected
+
+    def get_datatype_attr(self, index: int, is_input: bool = True) -> str:
+        """Get nodeattr name for interface datatype.
+
+        Args:
+            index: Interface index (0-based)
+            is_input: True for inputs, False for outputs
+
+        Returns:
+            Nodeattr name (e.g., "_input0Datatype", "_output2Datatype")
+
+        Raises:
+            IndexError: If index out of range
+        """
+        if is_input:
+            if index >= len(self.inputs):
+                raise IndexError(
+                    f"Input index {index} out of range (have {len(self.inputs)})"
+                )
+            return f"_input{index}Datatype"
+        else:
+            if index >= len(self.outputs):
+                raise IndexError(
+                    f"Output index {index} out of range (have {len(self.outputs)})"
+                )
+            return f"_output{index}Datatype"
     

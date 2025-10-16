@@ -120,10 +120,10 @@ class TestInternalDatatypeSchemaDefinition:
         )
 
         protected = schema.protected_attr_names
-        assert "accumulatorDatatype" in protected
-        assert "biasDatatype" in protected
-        assert "input0Datatype" in protected
-        assert "output0Datatype" in protected
+        assert "_accumulatorDatatype" in protected
+        assert "_biasDatatype" in protected
+        assert "_input0Datatype" in protected
+        assert "_output0Datatype" in protected
 
     def test_get_nodeattr_types_includes_internals(self):
         """Test that get_nodeattr_types includes internal datatype attributes."""
@@ -139,10 +139,10 @@ class TestInternalDatatypeSchemaDefinition:
         nodeattr_types = schema.get_nodeattr_types()
 
         # Check internal datatype attribute is registered
-        assert "accumulatorDatatype" in nodeattr_types
-        attr_type, required, default = nodeattr_types["accumulatorDatatype"]
+        assert "_accumulatorDatatype" in nodeattr_types
+        attr_type, required, default = nodeattr_types["_accumulatorDatatype"]
         assert attr_type == "s"  # String type
-        assert required is True
+        assert required is False  # Protected attributes are not required
         assert default == ""
 
 

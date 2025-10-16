@@ -72,9 +72,6 @@ from .models import (
     KernelModel,
 )
 
-# Tensor context extraction
-from .tensor_context import TensorContext
-
 # Template resolution
 from .template_resolution import resolve_template
 
@@ -114,9 +111,6 @@ __all__ = [
 
     # Immutable models
     'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
-
-    # Tensor context extraction
-    'TensorContext',
 
     # Template resolution
     'resolve_template',

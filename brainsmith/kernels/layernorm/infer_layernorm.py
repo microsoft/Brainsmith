@@ -67,13 +67,11 @@ class InferLayerNorm(Transformation):
     - SIMD: Parallelization factor (default 1)
     - epsilon: Small value to prevent division by zero
 
-    Attributes set automatically by refresh_tensor_context():
-    - inputDataType: Populated from tensor context
-    - outputDataType: Populated from tensor context
-
-    Attributes inferred dynamically from tensor context (not stored):
-    - ifm_dim: Input feature map dimensions (from tensor context)
-    - NumChannels: Number of channels (from tensor context)
+    Attributes set automatically by refresh_df_model():
+    - _input0Datatype: Populated from model graph
+    - _output0Datatype: Populated from model graph
+    - _input0TensorShape, _input0BlockShape, _input0StreamShape
+    - _output0TensorShape, _output0BlockShape, _output0StreamShape
     """
 
     def apply(self, model):
@@ -155,6 +153,6 @@ class InferLayerNorm(Transformation):
             for node in model.graph.node:
                 if node.op_type == "LayerNorm" and node.domain == "brainsmith.kernels":
                     op_inst = getCustomOp(node)
-                    op_inst.refresh_tensor_context(model)
+                    op_inst.refresh_df_model(model)
 
         return (model, graph_modified)

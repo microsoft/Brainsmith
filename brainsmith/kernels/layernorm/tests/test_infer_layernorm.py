@@ -127,15 +127,15 @@ def test_auto_layernorm_node_attributes():
     # Should have these attributes
     assert "SIMD" in attr_names, "SIMD attribute missing"
     assert "epsilon" in attr_names, "epsilon attribute missing"
-    assert "input0Datatype" in attr_names, "input0Datatype attribute missing"
-    assert "output0Datatype" in attr_names, "output0Datatype attribute missing"
+    assert "_input0Datatype" in attr_names, "_input0Datatype attribute missing"
+    assert "_output0Datatype" in attr_names, "_output0Datatype attribute missing"
     print(f"  ✓ Required attributes present: SIMD, epsilon, datatypes")
 
     # Verify attribute values
     simd_val = helper.get_node_attr_value(node, "SIMD")
     epsilon_val = helper.get_node_attr_value(node, "epsilon")
-    idt_val = helper.get_node_attr_value(node, "input0Datatype")
-    odt_val = helper.get_node_attr_value(node, "output0Datatype")
+    idt_val = helper.get_node_attr_value(node, "_input0Datatype")
+    odt_val = helper.get_node_attr_value(node, "_output0Datatype")
 
     # Decode bytes to string if necessary
     if isinstance(idt_val, bytes):
@@ -145,13 +145,13 @@ def test_auto_layernorm_node_attributes():
 
     assert simd_val == 1, f"SIMD should default to 1, got {simd_val}"
     assert abs(epsilon_val - epsilon) < 1e-10, f"Epsilon should be {epsilon}, got {epsilon_val}"
-    assert idt_val == datatype, f"input0Datatype should be {datatype}, got {idt_val}"
-    assert odt_val == datatype, f"output0Datatype should be {datatype}, got {odt_val}"
+    assert idt_val == datatype, f"_input0Datatype should be {datatype}, got {idt_val}"
+    assert odt_val == datatype, f"_output0Datatype should be {datatype}, got {odt_val}"
     print(f"  ✓ Attribute values correct:")
     print(f"    - SIMD: {helper.get_node_attr_value(node, 'SIMD')}")
     print(f"    - epsilon: {helper.get_node_attr_value(node, 'epsilon')}")
-    print(f"    - input0Datatype: {helper.get_node_attr_value(node, 'input0Datatype')}")
-    print(f"    - output0Datatype: {helper.get_node_attr_value(node, 'output0Datatype')}")
+    print(f"    - _input0Datatype: {helper.get_node_attr_value(node, '_input0Datatype')}")
+    print(f"    - _output0Datatype: {helper.get_node_attr_value(node, '_output0Datatype')}")
 
 
 def test_no_redundant_attributes():
@@ -211,8 +211,8 @@ def test_different_datatypes(datatype):
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
 
     # Verify datatypes preserved (decode bytes if necessary)
-    idt_val = helper.get_node_attr_value(node, "input0Datatype")
-    odt_val = helper.get_node_attr_value(node, "output0Datatype")
+    idt_val = helper.get_node_attr_value(node, "_input0Datatype")
+    odt_val = helper.get_node_attr_value(node, "_output0Datatype")
     if isinstance(idt_val, bytes):
         idt_val = idt_val.decode()
     if isinstance(odt_val, bytes):
@@ -243,8 +243,8 @@ def test_auto_layernorm_instantiation():
     op_inst = LayerNorm(node)
     print(f"  ✓ LayerNorm instantiated successfully")
 
-    # Refresh tensor context (required for kernel_model)
-    op_inst.refresh_tensor_context(model_transformed)
+    # Refresh from model (required for kernel_model)
+    op_inst.refresh_df_model(model_transformed)
     print(f"  ✓ Tensor context refreshed")
 
     # Access kernel_model (triggers validation and shape inference)
@@ -275,7 +275,7 @@ def test_auto_layernorm_execution():
 
     # Instantiate and setup
     op_inst = LayerNorm(node)
-    op_inst.refresh_tensor_context(model_transformed)
+    op_inst.refresh_df_model(model_transformed)
 
     # Create input data
     np.random.seed(42)

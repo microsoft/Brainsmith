@@ -54,8 +54,8 @@ class Softmax(KernelOp):
 
     # All nodeattrs auto-generated from schema:
     # - "SIMD" from stream_tiling=["SIMD"]
-    # - "input0Datatype" from input interface (default naming)
-    # - "output0Datatype" from output interface (default naming, derived from input)
+    # - "_input0Datatype" from input interface (protected)
+    # - "_output0Datatype" from output interface (protected)
 
     def execute_node(self, context, graph):
         node = self.onnx_node

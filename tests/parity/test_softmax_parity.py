@@ -133,8 +133,8 @@ class TestSoftmaxParity(ParityTestBase):
         """Configure op for testing - override SIMD to 16."""
         op.set_nodeattr("SIMD", 16)
         if is_auto:
-            # Auto ops need tensor context refresh after SIMD change
-            op.refresh_tensor_context(model)
+            # Auto ops need state refresh after SIMD change
+            op.refresh_df_model(model)
 
 
 # Additional test: Verify Softmax numerical correctness with custom tolerance

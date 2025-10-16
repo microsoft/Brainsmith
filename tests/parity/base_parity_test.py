@@ -156,7 +156,7 @@ class ParityTestBase(ABC):
             def configure_test_op(self, op, model, is_auto):
                 op.set_nodeattr("SIMD", 16)  # Override default
                 if is_auto:
-                    op.refresh_tensor_context(model)  # Refresh with new SIMD
+                    op.refresh_df_model(model)  # Refresh with new SIMD
         """
         pass
 

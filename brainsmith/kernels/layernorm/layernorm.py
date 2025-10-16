@@ -51,8 +51,8 @@ class LayerNorm(KernelOp):
 
         Schema auto-generates:
         - "SIMD" from stream_tiling=["SIMD"]
-        - "input0Datatype" from input interface (default naming)
-        - "output0Datatype" from output interface (default naming)
+        - "_input0Datatype" from input interface (protected)
+        - "_output0Datatype" from output interface (protected)
         """
         my_attrs = super().get_nodeattr_types()
         my_attrs.update({

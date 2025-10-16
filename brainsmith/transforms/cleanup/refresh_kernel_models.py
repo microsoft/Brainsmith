@@ -65,9 +65,9 @@ class RefreshKernelModels(Transformation):
             # Check if it's a KernelOp
             if isinstance(inst, KernelOp):
                 # Refresh the kernel model
-                inst.refresh_kernel_model(model)
+                inst.refresh_df_model(model)
                 graph_modified = True
-                
+
                 # Optionally update output shapes/types from kernel model
                 # This makes it a replacement for InferShapes/InferDataTypes
                 self._update_tensor_info_from_kernel(model, node, inst)
@@ -81,12 +81,12 @@ class RefreshKernelModels(Transformation):
         op: KernelOp
     ) -> None:
         """Update tensor shapes and datatypes from kernel model.
-        
+
         This allows RefreshKernelModels to serve as a replacement for
         InferShapes and InferDataTypes for Brainsmith operators.
         """
         try:
-            kernel_model = op.get_kernel_model()
+            kernel_model = op.kernel_model
             
             # Update input tensor info
             for i, inp in enumerate(kernel_model.inputs):
@@ -130,7 +130,7 @@ class InferBrainsmithTypes(Transformation):
             try:
                 inst = getCustomOp(node, model=model.model)
                 if isinstance(inst, KernelOp):
-                    kernel_model = inst.get_kernel_model()
+                    kernel_model = inst.kernel_model
                     
                     # Update output datatypes only
                     for i, out in enumerate(kernel_model.outputs):
@@ -165,7 +165,7 @@ class InferBrainsmithShapes(Transformation):
             try:
                 inst = getCustomOp(node, model=model.model)
                 if isinstance(inst, KernelOp):
-                    kernel_model = inst.get_kernel_model()
+                    kernel_model = inst.kernel_model
                     
                     # Update output shapes only
                     for i, out in enumerate(kernel_model.outputs):
