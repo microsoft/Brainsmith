@@ -7,7 +7,7 @@ Blueprint kernel parsing.
 Handles parsing of kernel specifications and backend resolution.
 """
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Type
 
 from brainsmith.registry import list_backends_by_kernel, get_backend
 
@@ -34,7 +34,7 @@ def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:
         raise ValueError(f"Invalid kernel spec: {spec}")
 
 
-def parse_kernels(kernels_data: list) -> list:
+def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
     """Parse kernels section.
 
     Args:
@@ -70,3 +70,4 @@ def parse_kernels(kernels_data: list) -> list:
         kernel_backends.append((kernel_name, backend_classes))
 
     return kernel_backends
+

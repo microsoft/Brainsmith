@@ -8,6 +8,8 @@ Handles parsing of step specifications, including variations (branch points)
 and step manipulation operations (before, after, replace, etc.).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union, Literal
 
@@ -27,7 +29,7 @@ class StepOperation:
     with_step: Optional[StepSpec] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Optional['StepOperation']:
+    def from_dict(cls, data: Dict[str, Any]) -> Optional[StepOperation]:
         """Parse operation from YAML dict"""
         op_mappings = {
             "after": lambda d: cls(op_type="after", target=d["after"], insert=d.get("insert")),
@@ -273,3 +275,4 @@ def _validate_step(step: Optional[str]) -> str:
     if not has_step(step):
         raise ValueError(f"Step '{step}' not found in registry")
     return step
+

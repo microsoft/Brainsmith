@@ -208,7 +208,7 @@ if __name__ == "__main__":
     # Determine which CLI to run based on invocation
     import os
     prog_name = os.path.basename(sys.argv[0])
-    
+
     if 'brainsmith' in prog_name:
         brainsmith_main()
     else:

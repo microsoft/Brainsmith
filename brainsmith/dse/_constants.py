@@ -14,3 +14,4 @@ SKIP_VALUES = frozenset([None, "~", ""])
 # Normalized representation (internal)
 # All skip values are normalized to this symbol
 SKIP_INDICATOR = "~"
+

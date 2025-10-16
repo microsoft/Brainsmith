@@ -54,7 +54,7 @@ class DSETree:
     def print_tree(self) -> None:
         """Pretty print the DSE tree."""
         self._print_node(self.root, "", True)
-    
+
     def _print_node(self, node: DSESegment, indent: str, last: bool) -> None:
         """Pretty print a node and its children."""
         if node.segment_id != "root":

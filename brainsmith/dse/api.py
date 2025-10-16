@@ -8,6 +8,8 @@ This module provides the DSE API that transforms neural network models
 into FPGA accelerators through blueprint-driven design space exploration.
 """
 
+from __future__ import annotations
+
 import os
 import logging
 from datetime import datetime
@@ -145,8 +147,8 @@ def explore_design_space(
 
 
 def build_tree(
-    design_space: 'DesignSpace',
-    config: 'DSEConfig'
+    design_space: DesignSpace,
+    config: DSEConfig
 ) -> DSETree:
     """Build execution tree from design space.
 
@@ -172,9 +174,6 @@ def build_tree(
     Raises:
         ValueError: If tree exceeds max_combinations limit
     """
-    from brainsmith.dse.design_space import DesignSpace
-    from brainsmith.dse.config import DSEConfig
-
     builder = DSETreeBuilder()
     return builder.build_tree(design_space, config)
 
@@ -182,7 +181,7 @@ def build_tree(
 def execute_tree(
     tree: DSETree,
     model_path: str,
-    config: 'DSEConfig',
+    config: DSEConfig,
     output_dir: str,
     runner: Optional[SegmentRunner] = None
 ) -> TreeExecutionResult:
@@ -219,8 +218,6 @@ def execute_tree(
     Raises:
         RuntimeError: If no successful builds were produced
     """
-    from brainsmith.dse.config import DSEConfig
-
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -251,4 +248,5 @@ def execute_tree(
     results.design_space = None  # Not available in this path
 
     return results
+
 

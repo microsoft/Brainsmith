@@ -585,4 +585,3 @@ def _is_finnxsim_built(deps_mgr) -> bool:
     from finn import xsi
     return xsi.is_available()
 
-

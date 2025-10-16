@@ -64,3 +64,4 @@ def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any]
     )
 
     return raw_data, merged_data, parent_path
+

@@ -72,3 +72,4 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
 
 
 __all__ = ['parse_blueprint']
+

@@ -8,6 +8,8 @@ This module implements the segment-based DSE tree architecture where
 each node represents a segment of execution between branch points.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -37,8 +39,8 @@ class DSESegment:
     branch_choice: Optional[str] = None  # was: branch_decision
     
     # Tree structure
-    parent: Optional['DSESegment'] = None
-    children: Dict[str, 'DSESegment'] = field(default_factory=dict)
+    parent: Optional[DSESegment] = None
+    children: Dict[str, DSESegment] = field(default_factory=dict)
     
     # Execution state
     status: SegmentStatus = SegmentStatus.PENDING
@@ -74,7 +76,7 @@ class DSESegment:
         """Check if this is a complete path endpoint."""
         return len(self.children) == 0
     
-    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> 'DSESegment':
+    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> DSESegment:
         """Create a child segment for a branch."""
         child = DSESegment(
             steps=steps,
@@ -85,7 +87,7 @@ class DSESegment:
         self.children[branch_id] = child
         return child
     
-    def get_path(self) -> List['DSESegment']:
+    def get_path(self) -> List[DSESegment]:
         """Get all segments from root to here."""
         path = []
         node = self

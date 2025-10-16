@@ -81,7 +81,7 @@ def get_config() -> SystemConfig:
     return _config
 
 
-def reset_config():
+def reset_config() -> None:
     """Reset the singleton configuration (mainly for testing)."""
     global _config
     _config = None

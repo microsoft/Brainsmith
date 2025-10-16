@@ -45,7 +45,7 @@ class DSEConfig:
     # Direct FINN parameter overrides
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.output != OutputType.ESTIMATES and not self.board:
             raise ValueError(f"{self.output.value} requires board specification")
 

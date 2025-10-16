@@ -17,7 +17,7 @@ from brainsmith.settings import SystemConfig
 class ConfigFormatter:
     """Formatter for displaying Brainsmith configuration."""
     
-    def __init__(self, console=None):
+    def __init__(self, console: Optional[RichConsole] = None):
         self.console = console or RichConsole()
     
     def format_table(self, config: SystemConfig, verbose: bool = False) -> Table:
