@@ -1,8 +1,7 @@
 """Combined DSE fixtures for testing - design spaces and configurations."""
 
 import pytest
-from brainsmith.core.design.space import DesignSpace
-from brainsmith.core.config import BlueprintConfig
+from brainsmith.dse import DesignSpace, DSEConfig
 from brainsmith.core.types import OutputType
 from tests.utils.test_constants import (
     DEFAULT_CLOCK_PERIOD_NS,
@@ -15,8 +14,8 @@ from tests.utils.test_constants import (
 
 @pytest.fixture
 def blueprint_config():
-    """Create a basic BlueprintConfig for testing."""
-    return BlueprintConfig(
+    """Create a basic DSEConfig for testing."""
+    return DSEConfig(
         clock_ns=DEFAULT_CLOCK_PERIOD_NS,
         output=OutputType.ESTIMATES,
         board="test_board",

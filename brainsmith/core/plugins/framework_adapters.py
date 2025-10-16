@@ -18,7 +18,7 @@ import logging
 import os
 from typing import Dict, Any, List, Tuple
 
-from brainsmith.config import is_plugins_strict
+from brainsmith.settings import is_plugins_strict
 
 logger = logging.getLogger(__name__)
 

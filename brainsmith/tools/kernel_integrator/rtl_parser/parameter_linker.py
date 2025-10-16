@@ -22,7 +22,7 @@ from brainsmith.tools.kernel_integrator.metadata import (
     KernelMetadata, AXIStreamMetadata, AXILiteMetadata, DatatypeParameters
 )
 from .types import Parameter
-from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.dataflow.types import InterfaceType
 
 logger = logging.getLogger(__name__)
 

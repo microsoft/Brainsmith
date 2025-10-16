@@ -9,8 +9,8 @@ import sys
 from io import StringIO
 from click.testing import CliRunner
 
-from brainsmith.core.logging import setup_logging, capture_finn_output
-from brainsmith.interface.cli import create_cli
+from brainsmith._internal.logging import setup_logging, capture_finn_output
+from brainsmith.cli.cli import create_cli
 
 
 @pytest.fixture

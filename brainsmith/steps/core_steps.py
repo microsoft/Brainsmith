@@ -14,7 +14,7 @@ import logging
 from typing import Any
 
 from brainsmith.core.plugins import step, get_transform
-from brainsmith.utils import apply_transforms
+from brainsmith._internal.io.transform_utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 

@@ -25,7 +25,7 @@ import torch
 
 # Import brainsmith early to set up paths
 import brainsmith
-from brainsmith.config import get_build_dir, get_config
+from brainsmith.settings import get_build_dir, get_config
 # Export configuration to environment for FINN
 get_config().export_to_environment()
 

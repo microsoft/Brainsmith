@@ -32,7 +32,7 @@ import finn.core.onnx_exec as oxe
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
 from brainsmith.core.plugins import step
-from brainsmith.utils import apply_transforms
+from brainsmith._internal.io.transform_utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 

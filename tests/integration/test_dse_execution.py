@@ -7,9 +7,9 @@ Tests the DSE tree construction, segment execution, and result aggregation.
 import pytest
 from pathlib import Path
 
-from brainsmith.core.design.builder import DSETreeBuilder
-from brainsmith.core.dse import SegmentResult
-from brainsmith.core.dse.utils import share_artifacts_at_branch
+from brainsmith.dse._builder import DSETreeBuilder
+from brainsmith.dse._types import SegmentResult
+from brainsmith.dse._artifacts import share_artifacts_at_branch
 from tests.utils.tree_assertions import (
     TreeAssertions,
     ExpectedTreeStructure,
@@ -173,7 +173,7 @@ class TestDSETreeConstruction:
             
     def test_build_empty_design_space(self, blueprint_config):
         """Test building a tree from empty design space (edge case)."""
-        from brainsmith.core.design.space import DesignSpace
+        from brainsmith.dse import DesignSpace
         
         # Create empty design space
         empty_design_space = DesignSpace(
@@ -242,8 +242,9 @@ class TestStepRangeExecution:
 
     def test_apply_step_slicing_in_dse(self, simple_onnx_model, blueprint_config):
         """Test that step slicing is applied before tree building."""
-        from brainsmith.core.design.space import DesignSpace, slice_steps
-        from brainsmith.core.design.builder import DSETreeBuilder
+        from brainsmith.dse import DesignSpace
+        from brainsmith.dse.design_space import slice_steps
+        from brainsmith.dse._builder import DSETreeBuilder
 
         # Create design space with 5 steps
         design_space = DesignSpace(
@@ -269,8 +270,9 @@ class TestStepRangeExecution:
 
     def test_slice_preserves_branches_in_tree(self, simple_onnx_model, blueprint_config):
         """Test that slicing preserves branch structure."""
-        from brainsmith.core.design.space import DesignSpace, slice_steps
-        from brainsmith.core.design.builder import DSETreeBuilder
+        from brainsmith.dse import DesignSpace
+        from brainsmith.dse.design_space import slice_steps
+        from brainsmith.dse._builder import DSETreeBuilder
 
         # Create design space with branches
         design_space = DesignSpace(

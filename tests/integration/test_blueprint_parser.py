@@ -3,9 +3,7 @@
 import pytest
 from pathlib import Path
 
-from brainsmith.core.design.parser import parse_blueprint
-from brainsmith.core.design.space import DesignSpace
-from brainsmith.core.config import BlueprintConfig
+from brainsmith.dse import parse_blueprint, DesignSpace, DSEConfig
 from brainsmith.core.types import OutputType
 from tests.utils.blueprint_helpers import (
     create_minimal_blueprint,

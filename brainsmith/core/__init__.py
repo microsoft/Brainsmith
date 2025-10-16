@@ -2,30 +2,10 @@
 # Licensed under the MIT License.
 
 """
-Brainsmith Core - DSE Architecture
+Brainsmith Core - Shared constants, types, and plugins.
 
-This package implements the DSE architecture for FPGA accelerator design.
+Note: DSE functionality has moved to brainsmith.dse
+      Import from brainsmith.dse directly.
 """
 
-# Main API
-from .dse_api import explore_design_space
-
-# Key components exported for external use
-from .dse import DSESegment, DSETree, SegmentRunner
-from .design import DesignSpace, parse_blueprint, DSETreeBuilder
-from .config import BlueprintConfig
-
-__all__ = [
-    # Main API
-    "explore_design_space",
-    # DSE components
-    "DSESegment",
-    "DSETree", 
-    "SegmentRunner",
-    # Design components
-    "DesignSpace",
-    "parse_blueprint",
-    "DSETreeBuilder",
-    # Config
-    "BlueprintConfig",
-]
+__all__ = []

@@ -172,7 +172,7 @@ def test_transform_chain(model: Any, cfg: Any) -> Any:
     ))
     
     # 3. Apply standard transforms
-    from brainsmith.utils import apply_transforms
+    from brainsmith._internal.io.transform_utils import apply_transforms
     model = apply_transforms(model, [
         'InferShapes',
         'FoldConstants'
@@ -288,7 +288,7 @@ def test_apply_custom_transforms_step(model: Any, cfg: Any) -> Any:
 )  
 def test_transform_chain_step(model: Any, cfg: Any) -> Any:
     """Step demonstrating transform chaining."""
-    from brainsmith.utils import apply_transforms_with_params
+    from brainsmith._internal.io.transform_utils import apply_transforms_with_params
     
     # Chain transforms with parameters
     transforms = [
@@ -298,9 +298,9 @@ def test_transform_chain_step(model: Any, cfg: Any) -> Any:
     ]
     
     model = apply_transforms_with_params(model, transforms)
-    
+
     # Also apply standard transforms
-    from brainsmith.utils import apply_transforms
+    from brainsmith._internal.io.transform_utils import apply_transforms
     model = apply_transforms(model, ['GiveUniqueNodeNames', 'InferShapes'])
     
     return model
