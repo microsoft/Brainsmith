@@ -11,7 +11,7 @@ import pytest
 from dataclasses import dataclass
 
 from qonnx.core.datatype import DataType
-from brainsmith.core.dataflow.datatype_sources import (
+from brainsmith.dataflow.datatype_sources import (
     DatatypeSource,
     DerivedDatatype,
     WidenedDatatype,
@@ -77,7 +77,7 @@ class TestDerivedDatatype:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dt = DerivedDatatype("nonexistent")
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dt.resolve(mock_interfaces, dummy_param_getter)
 
     def test_interface_no_datatype(self, dummy_param_getter):
@@ -132,7 +132,7 @@ class TestWidenedDatatype:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dt = WidenedDatatype("nonexistent", extra_bits=1)
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dt.resolve(mock_interfaces, dummy_param_getter)
 
     def test_preserves_signedness(self, mock_interfaces, dummy_param_getter):
@@ -204,7 +204,7 @@ class TestUnionDatatype:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dt = UnionDatatype(("input0", "nonexistent"))
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dt.resolve(mock_interfaces, dummy_param_getter)
 
     def test_union_single_value_unsigned(self, dummy_param_getter):

@@ -6,9 +6,9 @@ import numpy as np
 import torch.nn.functional as F
 from onnx.helper import make_node
 
-from brainsmith.core.finn import AutoHWCustomOp
-import brainsmith.core.dataflow as df
-from brainsmith.core.dataflow import DerivedDatatype, DerivedDim
+from brainsmith.dataflow import KernelOp
+import brainsmith.dataflow as df
+from brainsmith.dataflow import DerivedDatatype, DerivedDim, FULL_DIM
 from brainsmith.core.plugins import kernel
 
 
@@ -18,7 +18,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[":"],              # (1, 1, channels)
+            block_tiling=[FULL_DIM],         # (1, 1, channels)
             stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
             # Datatype always from ONNX: input0Datatype
         )
@@ -26,7 +26,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[":"],                        # (1, 1, channels)
+            block_tiling=[FULL_DIM],                   # (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
             datatype=None,                             # From ONNX: output0Datatype
         )
@@ -35,10 +35,10 @@ LAYERNORM_SCHEMA = df.KernelSchema(
 
 
 @kernel(
-    description="Hardware LayerNorm using AutoHWCustomOp and Dataflow Modeling",
+    description="Hardware LayerNorm using KernelOp and Dataflow Modeling",
     author="Shane Fleming"
 )
-class LayerNorm(AutoHWCustomOp):
+class LayerNorm(KernelOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""
 
     kernel_schema = LAYERNORM_SCHEMA

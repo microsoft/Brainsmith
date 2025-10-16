@@ -2,7 +2,7 @@
 
 This package provides infrastructure for testing equivalence between:
 - Manual FINN HWCustomOp implementations
-- Brainsmith AutoHWCustomOp implementations
+- Brainsmith KernelOp implementations
 
 The ParityTestBase class provides generic test methods for validating:
 - Shape methods (normal, folded)

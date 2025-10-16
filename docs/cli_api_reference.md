@@ -216,7 +216,7 @@ smith kernel RTL_FILE [OPTIONS]
 - `--output-dir, -o PATH` - Directory for generated files (default: RTL file location)
 - `--validate` - Validate RTL only without generating files
 - `--info` - Display parsed kernel metadata and exit
-- `--artifacts [autohwcustomop|rtlbackend|wrapper]` - Generate specific files only
+- `--artifacts [kernelop|rtlbackend|wrapper]` - Generate specific files only
 - `--no-strict` - Disable strict validation
 - `--include-rtl PATH` - Additional RTL files to include (can specify multiple)
 - `--rtl-path PATHS` - Colon-separated paths to search for RTL files
@@ -231,7 +231,7 @@ smith kernel my_accelerator.sv
 smith kernel my_accelerator.sv --validate
 
 # Generate specific artifacts
-smith kernel my_accelerator.sv --artifacts autohwcustomop --artifacts wrapper
+smith kernel my_accelerator.sv --artifacts kernelop --artifacts wrapper
 
 # With additional RTL files
 smith kernel top.sv --include-rtl helper.sv --include-rtl memory.sv

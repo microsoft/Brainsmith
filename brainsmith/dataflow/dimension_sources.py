@@ -74,7 +74,7 @@ class DerivedDim(DimensionSource):
         >>> DerivedDim("input", -1)
 
         Copy specific dimension at specific hierarchy:
-        >>> from brainsmith.core.dataflow.types import ShapeHierarchy
+        >>> from brainsmith.dataflow.types import ShapeHierarchy
         >>> DerivedDim("input", 0, hierarchy=ShapeHierarchy.TENSOR)
     """
     source_interface: str
@@ -231,7 +231,7 @@ class SumDims(DimensionSource):
         >>> SumDims([("input0", -1), ("input1", -1), ("input2", -1)])
 
         Custom hierarchy:
-        >>> from brainsmith.core.dataflow.types import ShapeHierarchy
+        >>> from brainsmith.dataflow.types import ShapeHierarchy
         >>> SumDims([("input0", -1), ("input1", -1)], hierarchy=ShapeHierarchy.BLOCK)
     """
     sources: Tuple[Tuple[str, int], ...]  # Immutable list of (interface, dim_index)

@@ -71,7 +71,7 @@ python -m brainsmith.tools.kernel_integrator design.sv --validate
 python -m brainsmith.tools.kernel_integrator design.sv --info
 
 # Generate specific artifacts only
-python -m brainsmith.tools.kernel_integrator design.sv --artifacts autohwcustomop,wrapper
+python -m brainsmith.tools.kernel_integrator design.sv --artifacts kernelop,wrapper
 ```
 
 ### With Brainsmith Container

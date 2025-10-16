@@ -10,10 +10,10 @@
 InferSoftmax - Transform ONNX Softmax nodes to hardware Softmax operations.
 
 Transforms standard ONNX Softmax nodes into hardware Softmax operations
-using the modern AutoHWCustomOp infrastructure with Dataflow Modeling.
+using the modern KernelOp infrastructure with Dataflow Modeling.
 
 Key features:
-- Creates "Softmax" nodes using AutoHWCustomOp base class
+- Creates "Softmax" nodes using KernelOp base class
 - Does NOT set ifm_dim or NumChannels (inferred from tensor context via kernel_model)
 - Relies on declarative KernelSchema for shape information
 - Automatic shape inference and validation
@@ -51,7 +51,7 @@ from brainsmith.core.plugins import transform
 class InferSoftmax(Transformation):
     """Convert standard ONNX Softmax into hardware Softmax operations.
 
-    This transform uses the modern AutoHWCustomOp infrastructure with
+    This transform uses the modern KernelOp infrastructure with
     Dataflow Modeling system for automatic shape inference.
 
     The key benefit is that shape information (ifm_dim, NumChannels) is inferred

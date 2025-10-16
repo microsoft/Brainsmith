@@ -15,7 +15,7 @@ import pytest
 from dataclasses import dataclass
 
 from qonnx.core.datatype import DataType
-from brainsmith.core.dataflow import (
+from brainsmith.dataflow import (
     # Schemas
     InputSchema,
     OutputSchema,

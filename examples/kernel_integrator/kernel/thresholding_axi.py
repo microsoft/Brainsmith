@@ -3,22 +3,22 @@
 
 from qonnx.core.datatype import DataType
 
-from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
-from brainsmith.core.dataflow import (
+from brainsmith.dataflow import KernelOp
+from brainsmith.dataflow import (
     KernelDefinition,
     InputDefinition,
     OutputDefinition,
     RelationType
 )
-from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
+from brainsmith.dataflow.constraint_types import DatatypeConstraintGroup
 
 
-class ThresholdingAxi(AutoHWCustomOp):
+class ThresholdingAxi(KernelOp):
     """
-    Auto-generated HWCustomOp for thresholding_axi kernel.
+    Auto-generated KernelOp for thresholding_axi kernel.
     
     Generated from RTL: /home/tafk/dev/brainsmith-1/examples/kernel_integrator/source/thresholding_axi.sv
-    Uses direct KernelMetadata access with AutoHWCustomOp base class.
+    Uses direct KernelMetadata access with KernelOp base class.
     """
     
     def __init__(self, onnx_node, **kwargs):

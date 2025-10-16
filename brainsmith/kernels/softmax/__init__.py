@@ -7,7 +7,7 @@
 # Softmax kernel package
 ############################################################################
 
-# Softmax implementations using AutoHWCustomOp and Dataflow Modeling
+# Softmax implementations using KernelOp and Dataflow Modeling
 from .softmax import Softmax
 from .softmax_hls import Softmax_hls as SoftmaxHLS
 from .infer_softmax import InferSoftmax

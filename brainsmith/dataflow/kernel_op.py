@@ -25,9 +25,8 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-# TAFK TODO: Clean these up, check __init__ organization
-from brainsmith.core.dataflow.datatype_sources import DatatypeSource
-from brainsmith.core.dataflow import (
+from brainsmith.dataflow.datatype_sources import DatatypeSource
+from brainsmith.dataflow import (
     KernelSchema,
     TensorContext,
     InputModel,
@@ -39,14 +38,14 @@ from brainsmith.core.dataflow import (
 logger = logging.getLogger(__name__)
 
 
-class HWCustomOpError(Exception):
-    """Exception raised by hardware custom operators with automatic node context."""
+class KernelOpError(Exception):
+    """Exception raised by kernel operators with automatic node context."""
     def __init__(self, node, message):
         self.node = node
         super().__init__(f"{node.name}: {message}")
 
 
-class AutoHWCustomOp(HWCustomOp, ABC):
+class KernelOp(HWCustomOp, ABC):
     """Base class for automatic hardware custom operators.
 
     Subclasses must:
@@ -67,9 +66,9 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         self._tensor_context: Optional[TensorContext] = None
         self._kernel_model: Optional[KernelModel] = None
 
-    def _error(self, message: str) -> HWCustomOpError:
+    def _error(self, message: str) -> KernelOpError:
         """Create exception with node context."""
-        return HWCustomOpError(self.onnx_node, message)
+        return KernelOpError(self.onnx_node, message)
 
     @property
     def tensor_context(self) -> TensorContext:
@@ -132,32 +131,23 @@ class AutoHWCustomOp(HWCustomOp, ABC):
     def get_nodeattr_types(self):
         """Get node attribute types registry.
 
-        Merges attributes from:
+        Combines attributes from:
         1. FINN base class (HWCustomOp infrastructure attrs)
         2. KernelSchema-derived attrs (datatypes + template params)
 
-        Subclasses should override to add kernel-specific attrs:
+        Subclasses can override this to add kernel-specific attributes:
             def get_nodeattr_types(self):
                 my_attrs = super().get_nodeattr_types()
                 my_attrs.update({
-                    "epsilon": ("f", True, 1e-5),  # Only kernel-specific
+                    "epsilon": ("f", True, 1e-5),  # Example kernel-specific attribute
                 })
                 return my_attrs
 
         Returns:
-            Dict mapping attr name to (type, required, default_value)
+            dict: Mapping of attribute name to (type, required, default_value)
         """
-        # Start with FINN infrastructure attributes
-        base_attrs = super().get_nodeattr_types()
-
-        # Add schema-derived attributes
-        schema_attrs = self.kernel_schema.get_nodeattr_types()
-
-        # Merge: schema attrs override base if there are conflicts
-        # (though typically there shouldn't be conflicts)
-        merged = {**base_attrs, **schema_attrs}
-
-        return merged
+        # Merge FINN infrastructure and schema-derived attributes (schema overrides base)
+        return {**super().get_nodeattr_types(), **self.kernel_schema.get_nodeattr_types()}
 
     def infer_node_datatype(self, model):
         """FINN compatibility wrapper. Modern code should use refresh_tensor_context()."""
@@ -166,10 +156,9 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         # Set ALL input datatype nodeattrs from ModelWrapper
         # TensorContext now only stores shapes, not datatypes
         for i, inp_name in enumerate(self.onnx_node.input):
-            if inp_name:  # Skip optional inputs
-                datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
-                datatype = model.get_tensor_datatype(inp_name)
-                super().set_nodeattr(datatype_attr, datatype.name)
+            datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=True)
+            datatype = model.get_tensor_datatype(inp_name)
+            super().set_nodeattr(datatype_attr, datatype.name)
 
         # Set ALL output datatype nodeattrs from ModelWrapper
         # DatatypeSource becomes a validation check, not a generator
@@ -177,6 +166,9 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             datatype_attr = self.kernel_schema.get_datatype_attr(i, is_input=False)
             datatype = model.get_tensor_datatype(out_name)
             super().set_nodeattr(datatype_attr, datatype.name)
+
+        # NOTE: Internal datatypes are NOT set here - they have no ONNX tensors
+        # They are resolved by _resolve_internal_datatypes() during build_model()
 
     # Public API - FINN HWCustomOp Interface
 
@@ -354,7 +346,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
 
         Raises:
             RuntimeError: If tensor context not initialized
-            HWCustomOpError: If validation fails
+            KernelOpError: If validation fails
         """
         logger.debug(f"Building KernelModel for {self.onnx_node.name} ({self.kernel_schema.name})")
 
@@ -373,6 +365,20 @@ class AutoHWCustomOp(HWCustomOp, ABC):
                     f"block={input_model.block_shape}, "
                     f"stream={input_model.stream_shape}"
                 )
+
+        # Resolve internal datatypes (can reference inputs)
+        if self.kernel_schema.internal_datatypes:
+            logger.debug(f"Resolving {len(self.kernel_schema.internal_datatypes)} internal datatypes")
+            internal_datatypes = self._resolve_internal_datatypes(interfaces)
+
+            # Add internal datatypes to interfaces dict for output resolution
+            for internal_name, datatype in internal_datatypes.items():
+                # Create a simple object that has a datatype attribute
+                class InternalDatatype:
+                    def __init__(self, dt):
+                        self.datatype = dt
+
+                interfaces[internal_name] = InternalDatatype(datatype)
 
         output_models = []
         for i in range(len(self.kernel_schema.outputs)):
@@ -504,7 +510,7 @@ class AutoHWCustomOp(HWCustomOp, ABC):
         datatype = DataType[self.get_nodeattr(datatype_attr)]
 
         # If schema specifies derivation, VALIDATE it matches expectation
-        from brainsmith.core.dataflow.datatype_sources import DatatypeSource
+        from brainsmith.dataflow.datatype_sources import DatatypeSource
         if isinstance(schema.datatype, DatatypeSource):
             try:
                 expected_datatype = schema.datatype.resolve(interfaces, self.get_nodeattr)
@@ -565,10 +571,44 @@ class AutoHWCustomOp(HWCustomOp, ABC):
             constraints: List of InterfaceConstraints from schema
 
         Raises:
-            HWCustomOpError: If any constraint is violated
+            KernelOpError: If any constraint is violated
         """
         for constraint in constraints:
             error = constraint.check(interface_model, self.get_nodeattr)
             if error:
                 raise self._error(str(error))
 
+    def _resolve_internal_datatypes(self, interfaces: dict) -> dict:
+        """Resolve internal datatypes and set nodeattrs.
+
+        Internal datatypes are resolved using DatatypeSource patterns and stored
+        in nodeattrs for access by outputs and relationships.
+
+        Args:
+            interfaces: Dict of input models (internals can only reference inputs)
+
+        Returns:
+            Dict mapping internal name -> resolved DataType
+
+        Raises:
+            KernelOpError: If resolution fails
+        """
+        internal_datatypes = {}
+
+        for internal_name, datatype_source in self.kernel_schema.internal_datatypes.items():
+            try:
+                resolved_datatype = datatype_source.resolve(interfaces, self.get_nodeattr)
+                internal_datatypes[internal_name] = resolved_datatype
+
+                # Store in nodeattr for persistence
+                attr_name = f"{internal_name}Datatype"
+                super().set_nodeattr(attr_name, resolved_datatype.name)
+
+                logger.debug(f"  Internal '{internal_name}': {resolved_datatype.name}")
+
+            except ValueError as e:
+                raise self._error(
+                    f"Internal datatype '{internal_name}' resolution failed: {e}"
+                )
+
+        return internal_datatypes

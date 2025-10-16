@@ -2,7 +2,7 @@
 
 This module provides ParityTestBase, an abstract base class that automates
 testing equivalence between FINN's manual HWCustomOp implementations and
-Brainsmith's AutoHWCustomOp implementations.
+Brainsmith's KernelOp implementations.
 
 Key features:
 - **Transform-based testing (default)**: Tests production Infer transform workflow

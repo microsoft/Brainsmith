@@ -89,11 +89,11 @@ class AutoRTLBackend(RTLBackend):
     
     @property
     def kernel_model(self):
-        """Access KernelModel from our AutoHWCustomOp inheritance.
-        
+        """Access KernelModel from our KernelOp inheritance.
+
         Since AutoRTLBackend is always used with multiple inheritance
-        alongside AutoHWCustomOp, we can directly access _kernel_model.
-        
+        alongside KernelOp, we can directly access _kernel_model.
+
         Raises:
             RuntimeError: If KernelModel is not initialized
         """
@@ -175,19 +175,19 @@ class AutoRTLBackend(RTLBackend):
     def execute_node(self, context, graph):
         """
         Execute node using standard dual execution mode pattern.
-        
+
         This implements the common pattern used by RTLBackend implementations:
-        - cppsim mode: Delegate to AutoHWCustomOp's execute_node
+        - cppsim mode: Delegate to KernelOp's execute_node
         - rtlsim mode: Delegate to RTLBackend's execute_node
-        
+
         Subclasses can override for custom execution handling.
         """
         mode = self.get_nodeattr("exec_mode")
         if mode == "cppsim":
             # Import here to avoid circular dependency
-            from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
-            # Call AutoHWCustomOp's execute_node directly
-            AutoHWCustomOp.execute_node(self, context, graph)
+            from brainsmith.dataflow import KernelOp
+            # Call KernelOp's execute_node directly
+            KernelOp.execute_node(self, context, graph)
         elif mode == "rtlsim":
             RTLBackend.execute_node(self, context, graph)
         else:

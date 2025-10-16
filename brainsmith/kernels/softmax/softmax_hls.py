@@ -7,7 +7,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-Softmax HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
+Softmax HLS Backend - HLS implementation using KernelOp and Dataflow Modeling.
 
 This backend provides cppsim and rtlsim execution modes for Softmax,
 generating optimized HLS code using the kernel_model for automatic shape inference.

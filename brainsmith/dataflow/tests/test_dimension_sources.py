@@ -11,7 +11,7 @@ import pytest
 from dataclasses import dataclass
 from typing import Optional
 
-from brainsmith.core.dataflow.dimension_sources import (
+from brainsmith.dataflow.dimension_sources import (
     DimensionSource,
     DerivedDim,
     ScaledDim,
@@ -19,7 +19,7 @@ from brainsmith.core.dataflow.dimension_sources import (
     MaxDim,
     ComputedDim,
 )
-from brainsmith.core.dataflow.types import ShapeHierarchy
+from brainsmith.dataflow.types import ShapeHierarchy
 
 
 # Mock interface model for testing
@@ -116,7 +116,7 @@ class TestDerivedDim:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dim = DerivedDim("nonexistent", 0)
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
     def test_index_out_of_range(self, mock_interfaces, dummy_param_getter):
@@ -190,7 +190,7 @@ class TestScaledDim:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dim = ScaledDim("nonexistent", 0, 2.0)
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
 
@@ -237,7 +237,7 @@ class TestSumDims:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dim = SumDims((("input0", 0), ("nonexistent", 0)))
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
     def test_index_out_of_range(self, mock_interfaces, dummy_param_getter):
@@ -287,7 +287,7 @@ class TestMaxDim:
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
         dim = MaxDim((("input0", 0), ("nonexistent", 0)))
-        with pytest.raises(ValueError, match="Source interface 'nonexistent' not found"):
+        with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
 

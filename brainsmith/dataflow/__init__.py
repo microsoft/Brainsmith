@@ -19,7 +19,7 @@ Key Components:
 """
 
 # Core types
-from .types import Shape, ShapeHierarchy, DerivedDim, ScaledDim
+from .types import Shape, ShapeHierarchy, DerivedDim, ScaledDim, FULL_DIM
 
 # QONNX types (direct from QONNX)
 from qonnx.core.datatype import DataType, BaseDataType
@@ -81,11 +81,13 @@ from .template_resolution import resolve_template
 # Validation
 from .validation import ValidationError
 
+# Kernel operator base class
+from .kernel_op import KernelOp, KernelOpError
 
 
 __all__ = [
     # Core types
-    'Shape', 'ShapeHierarchy',
+    'Shape', 'ShapeHierarchy', 'FULL_DIM',
 
     # QONNX types
     'DataType', 'BaseDataType',
@@ -121,4 +123,7 @@ __all__ = [
 
     # Validation
     'ValidationError',
+
+    # Kernel operator base class
+    'KernelOp', 'KernelOpError',
 ]

@@ -81,9 +81,13 @@ class DerivedDatatype(DatatypeSource):
     source_interface: str
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> DataType:
-        """Copy datatype from source interface."""
+        """Copy datatype from source interface or internal datatype."""
         if self.source_interface not in interfaces:
-            raise ValueError(f"Source interface '{self.source_interface}' not found")
+            available = ', '.join(sorted(interfaces.keys()))
+            raise ValueError(
+                f"Source '{self.source_interface}' not found. "
+                f"Available interfaces/internals: {available}"
+            )
 
         source = interfaces[self.source_interface]
 
@@ -91,7 +95,7 @@ class DerivedDatatype(DatatypeSource):
             return source.datatype
         except AttributeError:
             raise ValueError(
-                f"Source interface '{self.source_interface}' does not have "
+                f"Source '{self.source_interface}' does not have "
                 f"datatype attribute"
             )
 
@@ -116,7 +120,11 @@ class WidenedDatatype(DatatypeSource):
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> DataType:
         """Add extra bits to source datatype."""
         if self.source_interface not in interfaces:
-            raise ValueError(f"Source interface '{self.source_interface}' not found")
+            available = ', '.join(sorted(interfaces.keys()))
+            raise ValueError(
+                f"Source '{self.source_interface}' not found. "
+                f"Available interfaces/internals: {available}"
+            )
 
         if self.extra_bits < 0:
             raise ValueError(f"extra_bits must be non-negative, got {self.extra_bits}")
@@ -161,7 +169,11 @@ class UnionDatatype(DatatypeSource):
 
         for name in self.source_interfaces:
             if name not in interfaces:
-                raise ValueError(f"Source interface '{name}' not found")
+                available = ', '.join(sorted(interfaces.keys()))
+                raise ValueError(
+                    f"Source '{name}' not found. "
+                    f"Available interfaces/internals: {available}"
+                )
 
             interface = interfaces[name]
             dt = interface.datatype

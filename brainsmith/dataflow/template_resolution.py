@@ -7,9 +7,9 @@
 """Template resolution for shape tiling specifications.
 
 Template Syntax:
-  ":" -> Copy dimension from reference shape
-  1   -> Singleton dimension (only literal allowed)
-  str -> Parameter name to look up
+  FULL_DIM -> Copy dimension from reference shape (full dimension)
+  1        -> Singleton dimension (only literal allowed)
+  str      -> Parameter name to look up
   DimensionSource subclasses -> Derive dimension from cross-interface computation
     - DerivedDim -> Copy dimension from another interface
     - ScaledDim -> Scale dimension from another interface
@@ -22,7 +22,7 @@ import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from .dimension_sources import DimensionSource
-from .types import DerivedDim, ScaledDim  # Backward compatibility
+from .types import DerivedDim, ScaledDim, FULL_DIM  # Backward compatibility
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def resolve_template(
     """Resolve template dimensions to concrete shape.
 
     Args:
-        template: Template specification (e.g., [":", "PE", 1, DerivedDim("Q", 1)])
+        template: Template specification (e.g., [FULL_DIM, "PE", 1, DerivedDim("Q", 1)])
         reference_shape: Reference shape to resolve against
         param_getter: Function to resolve parameter names (e.g., get_nodeattr)
         context: Context string for error messages (e.g., "input.block")
@@ -50,9 +50,9 @@ def resolve_template(
         ValueError: If template is invalid or parameters not found
 
     Examples:
-        >>> resolve_template([":", "PE"], (128, 768), lambda k: {"PE": 64}[k])
+        >>> resolve_template([FULL_DIM, "PE"], (128, 768), lambda k: {"PE": 64}[k])
         (128, 64)
-        >>> resolve_template([1, ":"], (128, 768), lambda k: {})
+        >>> resolve_template([1, FULL_DIM], (128, 768), lambda k: {})
         (1, 768)
         >>> resolve_template([DerivedDim("input", 1)], (768,), lambda k: {},
         ...                  interfaces={"input": input_model})
@@ -76,25 +76,24 @@ def resolve_template(
 
     resolved = []
     for i, (dim, ref) in enumerate(zip(template, reference_shape)):
-        if isinstance(dim, str):
-            if dim == ":":
-                # Copy from reference
-                value = ref
-            else:
-                # Parameter lookup
-                try:
-                    value = param_getter(dim)
-                except (AttributeError, KeyError):
-                    raise ValueError(
-                        f"{context}[{i}]: parameter '{dim}' not found"
-                    )
+        if isinstance(dim, type(FULL_DIM)) or dim is FULL_DIM:
+            # Copy from reference (full dimension)
+            value = ref
+        elif isinstance(dim, str):
+            # Parameter lookup
+            try:
+                value = param_getter(dim)
+            except (AttributeError, KeyError):
+                raise ValueError(
+                    f"{context}[{i}]: parameter '{dim}' not found"
+                )
 
-                # Validate divisibility
-                if ref % value != 0:
-                    raise ValueError(
-                        f"{context}[{i}]: parameter '{dim}' value {value} "
-                        f"does not divide parent dimension {ref}"
-                    )
+            # Validate divisibility
+            if ref % value != 0:
+                raise ValueError(
+                    f"{context}[{i}]: parameter '{dim}' value {value} "
+                    f"does not divide parent dimension {ref}"
+                )
         elif isinstance(dim, int):
             if dim == 1:
                 value = 1

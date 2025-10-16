@@ -4,12 +4,13 @@
 import numpy as np
 from scipy.special import softmax
 
-from brainsmith.core.finn import AutoHWCustomOp
-import brainsmith.core.dataflow as df 
-from brainsmith.core.dataflow import (
+from brainsmith.dataflow import KernelOp
+import brainsmith.dataflow as df
+from brainsmith.dataflow import (
     DatatypeConstraint,
     DerivedDatatype,
-    DerivedDim
+    DerivedDim,
+    FULL_DIM
 )
 from brainsmith.core.plugins import kernel
 
@@ -20,7 +21,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[":"],            # One Softmax op: (1, 1, channels)
+            block_tiling=[FULL_DIM],       # One Softmax op: (1, 1, channels)
             stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
             # Datatype always from ONNX: input0Datatype
             constraints=[
@@ -31,7 +32,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[":"],                        # Same as input: (1, 1, channels)
+            block_tiling=[FULL_DIM],                   # Same as input: (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
             datatype=DerivedDatatype("input"),         # Derive FLOAT32 from input
         )
@@ -43,7 +44,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     description="Float32 Softmax",
     author="Shane Fleming"
 )
-class Softmax(AutoHWCustomOp):
+class Softmax(KernelOp):
     """Abstraction layer for HW implementation of Softmax layers."""
 
     kernel_schema = SOFTMAX_SCHEMA

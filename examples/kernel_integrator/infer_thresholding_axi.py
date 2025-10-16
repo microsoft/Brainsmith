@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-Transform to convert MultiThreshold nodes to ThresholdingAxi AutoHWCustomOp.
+Transform to convert MultiThreshold nodes to ThresholdingAxi KernelOp.
 
 Matches the behavior of InferThresholdingLayer but targets the auto-generated
 ThresholdingAxi RTL implementation.

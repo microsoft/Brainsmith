@@ -7,7 +7,7 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 """
-LayerNorm HLS Backend - HLS implementation using AutoHWCustomOp and Dataflow Modeling.
+LayerNorm HLS Backend - HLS implementation using KernelOp and Dataflow Modeling.
 
 This backend provides cppsim and rtlsim execution modes for LayerNorm,
 generating optimized HLS code using the kernel_model for automatic shape inference.

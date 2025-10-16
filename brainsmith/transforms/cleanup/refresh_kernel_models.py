@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 """
-Transform to refresh kernel model state in AutoHWCustomOp nodes.
+Transform to refresh kernel model state in KernelOp nodes.
 
 This transform serves two purposes:
 1. Refreshes cached kernel models when shapes/types change
@@ -18,16 +18,16 @@ from qonnx.transformation.base import Transformation
 from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.general import ApplyConfig
 
-from brainsmith.core.finn.auto_hw_custom_op import AutoHWCustomOp
+from brainsmith.dataflow import KernelOp
 
 
 class RefreshKernelModels(Transformation):
-    """Refresh kernel model state for all AutoHWCustomOp nodes.
-    
+    """Refresh kernel model state for all KernelOp nodes.
+
     This transform should be called:
     - After any transform that changes tensor shapes
     - After any transform that changes datatypes
-    - Before using any AutoHWCustomOp methods that rely on kernel models
+    - Before using any KernelOp methods that rely on kernel models
     - As a replacement for InferShapes/InferDataTypes for Brainsmith ops
     """
     
@@ -36,34 +36,34 @@ class RefreshKernelModels(Transformation):
         
         Args:
             node_types: Optional list of specific node types to refresh.
-                       If None, refreshes all AutoHWCustomOp nodes.
+                       If None, refreshes all KernelOp nodes.
         """
         super().__init__()
         self.node_types = node_types
-        
+
     def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
         """Apply the transform to refresh kernel models.
-        
+
         Returns:
             Tuple of (model, modified) where modified indicates if any
             nodes were refreshed.
         """
         graph_modified = False
-        
+
         for node in model.graph.node:
             # Skip if node type filtering is enabled and doesn't match
             if self.node_types is not None and node.op_type not in self.node_types:
                 continue
-                
+
             # Try to get custom op instance
             try:
                 inst = getCustomOp(node, model=model.model)
             except:
                 # Not a custom op or failed to instantiate
                 continue
-                
-            # Check if it's an AutoHWCustomOp
-            if isinstance(inst, AutoHWCustomOp):
+
+            # Check if it's a KernelOp
+            if isinstance(inst, KernelOp):
                 # Refresh the kernel model
                 inst.refresh_kernel_model(model)
                 graph_modified = True
@@ -75,10 +75,10 @@ class RefreshKernelModels(Transformation):
         return (model, graph_modified)
     
     def _update_tensor_info_from_kernel(
-        self, 
-        model: ModelWrapper, 
-        node, 
-        op: AutoHWCustomOp
+        self,
+        model: ModelWrapper,
+        node,
+        op: KernelOp
     ) -> None:
         """Update tensor shapes and datatypes from kernel model.
         
@@ -114,22 +114,22 @@ class RefreshKernelModels(Transformation):
 
 class InferBrainsmithTypes(Transformation):
     """Infer datatypes for Brainsmith operators using kernel models.
-    
+
     This is a more targeted version of RefreshKernelModels that only
     updates datatypes, similar to qonnx.transformation.infer_datatypes.
     """
-    
+
     def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
         """Apply datatype inference."""
         # First refresh all kernel models
         model, _ = RefreshKernelModels().apply(model)
-        
+
         graph_modified = False
-        
+
         for node in model.graph.node:
             try:
                 inst = getCustomOp(node, model=model.model)
-                if isinstance(inst, AutoHWCustomOp):
+                if isinstance(inst, KernelOp):
                     kernel_model = inst.get_kernel_model()
                     
                     # Update output datatypes only
@@ -149,22 +149,22 @@ class InferBrainsmithTypes(Transformation):
 
 class InferBrainsmithShapes(Transformation):
     """Infer shapes for Brainsmith operators using kernel models.
-    
+
     This is a more targeted version of RefreshKernelModels that only
     updates shapes, similar to qonnx.transformation.infer_shapes.
     """
-    
+
     def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
         """Apply shape inference."""
         # First refresh all kernel models
         model, _ = RefreshKernelModels().apply(model)
-        
+
         graph_modified = False
-        
+
         for node in model.graph.node:
             try:
                 inst = getCustomOp(node, model=model.model)
-                if isinstance(inst, AutoHWCustomOp):
+                if isinstance(inst, KernelOp):
                     kernel_model = inst.get_kernel_model()
                     
                     # Update output shapes only

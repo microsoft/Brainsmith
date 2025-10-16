@@ -12,13 +12,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 from qonnx.core.datatype import DataType
-from brainsmith.core.dataflow.relationships import (
+from brainsmith.dataflow.relationships import (
     InterfaceRelationship,
     DatatypesEqual,
     DimensionsEqual,
     CustomRelationship,
 )
-from brainsmith.core.dataflow.types import ShapeHierarchy
+from brainsmith.dataflow.types import ShapeHierarchy
 
 
 # Mock interface and kernel model for testing

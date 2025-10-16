@@ -22,6 +22,18 @@ Shape = Tuple[int, ...]
 ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
 ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
 
+# Sentinel value for tiling specs: "copy full dimension from reference shape"
+# Used in block_tiling and stream_tiling to indicate that a dimension should
+# be taken as-is from the parent shape (analogous to ":" in NumPy slicing).
+# Example: block_tiling=[FULL_DIM] means "use the full tensor dimension"
+class _FullDimType:
+    """Sentinel type for FULL_DIM constant."""
+    def __repr__(self):
+        return "FULL_DIM"
+    __str__ = __repr__
+
+FULL_DIM = _FullDimType()
+
 
 # === Dimension Source Types ===
 # NOTE: DerivedDim and ScaledDim have been moved to dimension_sources.py for

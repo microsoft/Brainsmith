@@ -588,7 +588,7 @@ This test ensures that both the getter methods (`get_input_datatype()`) AND the 
 - **Migration Guide**: `docs/AutoHWCustomOp_Migration_Guide.md`
 - **Design Document**: `docs/parity_testing_design.md`
 - **AutoHWCustomOp**: `brainsmith/core/finn/auto_hw_custom_op.py`
-- **Dataflow System**: `brainsmith/core/dataflow/`
+- **Dataflow System**: `brainsmith/dataflow/`
 
 ## Example: Complete Test File
 
