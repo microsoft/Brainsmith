@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 
 from brainsmith.dse import parse_blueprint, DesignSpace, DSEConfig
-from brainsmith.core.types import OutputType
+from brainsmith.dse._types import OutputType
 from tests.utils.blueprint_helpers import (
     create_minimal_blueprint,
     create_full_blueprint,

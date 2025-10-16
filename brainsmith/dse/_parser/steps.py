@@ -11,8 +11,8 @@ and step manipulation operations (before, after, replace, etc.).
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union, Literal
 
-from brainsmith.core.constants import SKIP_VALUES, SKIP_INDICATOR
-from brainsmith.core.plugins.registry import get_registry, has_step
+from brainsmith.dse._constants import SKIP_VALUES, SKIP_INDICATOR
+from brainsmith.registry import get_registry, has_step
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]

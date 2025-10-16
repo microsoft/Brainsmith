@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Any, Set
 from brainsmith.dse._segment import DSESegment
 from brainsmith.dse._tree import DSETree
-from brainsmith.core.plugins import get_step
+from brainsmith.registry import get_step
 from brainsmith.dse._types import SegmentResult, TreeExecutionResult, ExecutionError
 from brainsmith._internal.finn.adapter import FINNAdapter
 from brainsmith.dse._artifacts import share_artifacts_at_branch

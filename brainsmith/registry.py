@@ -33,14 +33,14 @@ class Registry:
             
             # 1. External framework plugins (FINN, QONNX)
             try:
-                from . import framework_adapters
-                framework_adapters.ensure_initialized()
+                from . import registry_adapters as adapters
+                adapters.ensure_initialized()
             except ImportError as e:
-                logger.debug(f"Could not import framework_adapters: {e}")
-            
+                logger.debug(f"Could not import adapters: {e}")
+
             # 2. Brainsmith plugins
-            modules = ['transforms', 'kernels', 'steps', 'operators']
-    
+            modules = ['primitives.transforms', 'kernels', 'steps']
+
             for module in modules:
                 full_name = f'brainsmith.{module}'
                 if full_name not in sys.modules:
@@ -106,8 +106,8 @@ class Registry:
         
         # Reset framework adapter initialization state
         try:
-            from . import framework_adapters
-            framework_adapters._initialized = False
+            from . import registry_adapters as adapters
+            adapters._initialized = False
         except ImportError:
             pass
         

@@ -14,7 +14,7 @@ from qonnx.core.datatype import DataType
 from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
 @kernel(

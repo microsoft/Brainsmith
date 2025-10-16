@@ -518,7 +518,7 @@ def _register_steps(steps: List[Tuple[str, str]], framework: str) -> int:
 def initialize_framework_integrations() -> Dict[str, int]:
     """
     Initialize all framework integrations.
-    
+
     Returns counts of registered components by type.
     """
     from .registry import get_registry

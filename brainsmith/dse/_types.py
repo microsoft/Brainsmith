@@ -1,47 +1,51 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Minimal data structures for segment execution."""
-
+from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
-import time
+from typing import Optional, Dict
+
+
+class SegmentStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class OutputType(Enum):
+    ESTIMATES = "estimates"
+    RTL = "rtl"
+    BITFILE = "bitfile"
 
 
 @dataclass
 class SegmentResult:
-    """Result of executing a single segment."""
     success: bool
     segment_id: str
     output_model: Optional[Path] = None
     output_dir: Optional[Path] = None
     error: Optional[str] = None
-    execution_time: float = 0.0
+    execution_time: float = 0
     cached: bool = False
 
 
-@dataclass 
+@dataclass
 class TreeExecutionResult:
-    """Result of executing the entire tree."""
     segment_results: Dict[str, SegmentResult]
     total_time: float
-    
+
     @property
     def stats(self) -> Dict[str, int]:
-        """Calculate statistics from results."""
         return {
-            "total": len(self.segment_results),
-            "successful": sum(1 for r in self.segment_results.values() 
-                            if r.success and not r.cached),
-            "failed": sum(1 for r in self.segment_results.values() 
-                         if not r.success and r.error != "Skipped"),
-            "skipped": sum(1 for r in self.segment_results.values() 
-                          if r.error == "Skipped"),
-            "cached": sum(1 for r in self.segment_results.values() if r.cached)
+            'total': len(self.segment_results),
+            'successful': sum(1 for r in self.segment_results.values() if r.success and not r.cached),
+            'failed': sum(1 for r in self.segment_results.values() if not r.success),
+            'cached': sum(1 for r in self.segment_results.values() if r.cached),
+            'skipped': sum(1 for r in self.segment_results.values() if r.error == "Skipped")
         }
 
 
 class ExecutionError(Exception):
-    """Raised when fail-fast mode is enabled and execution fails."""
     pass

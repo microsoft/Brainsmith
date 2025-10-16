@@ -136,7 +136,7 @@ docs/
 │   └── backend-development.md   # Adding backends
 ├── api-reference/
 │   ├── core.md                  # ::: brainsmith.core
-│   ├── plugins.md               # ::: brainsmith.core.plugins
+│   ├── plugins.md               # ::: brainsmith.registry
 │   ├── kernels.md               # ::: brainsmith.kernels
 │   └── transforms.md            # ::: brainsmith.transforms
 ├── tutorials/

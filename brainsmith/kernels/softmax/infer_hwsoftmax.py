@@ -11,7 +11,7 @@ from onnx import helper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
-from brainsmith.core.plugins import transform
+from brainsmith.registry import transform
 
 
 @transform(name="InferHWSoftmax", kernel="HWSoftmax",

@@ -7,7 +7,7 @@ Design Space Exploration Tree structure and operations.
 
 from typing import Dict, List, Any
 from ._segment import DSESegment
-from brainsmith.core.types import SegmentStatus
+from brainsmith.dse._types import SegmentStatus
 
 
 class DSETree:

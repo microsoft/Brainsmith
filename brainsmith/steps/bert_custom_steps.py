@@ -19,7 +19,7 @@ import logging
 from typing import Any
 import numpy as np
 
-from brainsmith.core.plugins import step, get_transform
+from brainsmith.registry import step, get_transform
 from brainsmith._internal.io.transform_utils import apply_transforms
 
 logger = logging.getLogger(__name__)

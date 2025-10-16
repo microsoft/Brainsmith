@@ -32,7 +32,7 @@ def apply_transforms(model: Any, transform_names: List[str], debug_path: Optiona
         ])
     """
     # Import inside function to avoid circular imports
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     
     for i, transform_name in enumerate(transform_names):
         logger.debug(f"Applying transform: {transform_name}")
@@ -68,7 +68,7 @@ def apply_transforms_with_params(model: Any, transforms: List[tuple]) -> Any:
         ])
     """
     # Import inside function to avoid circular imports
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     
     for transform_name, kwargs in transforms:
         logger.debug(f"Applying transform: {transform_name} with {kwargs}")

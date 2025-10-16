@@ -9,7 +9,7 @@ Handles parsing of kernel specifications and backend resolution.
 
 from typing import List, Optional, Tuple
 
-from brainsmith.core.plugins.registry import list_backends_by_kernel, get_backend
+from brainsmith.registry import list_backends_by_kernel, get_backend
 
 
 def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:

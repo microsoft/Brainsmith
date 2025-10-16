@@ -3,7 +3,7 @@
 
 """Kernel inference step for hardware mapping."""
 import logging
-from brainsmith.core.plugins import step, get_transforms_by_metadata, get_transform
+from brainsmith.registry import step, get_transforms_by_metadata, get_transform
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ import warnings
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 @kernel(
     description="Hardware cropping operation",

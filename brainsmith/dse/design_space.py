@@ -10,7 +10,7 @@ from the blueprint, ready for tree construction.
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
-from brainsmith.core.plugins.registry import has_step, list_all_steps
+from brainsmith.registry import has_step, list_all_steps
 
 
 @dataclass

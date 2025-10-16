@@ -13,7 +13,7 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.core.plugins import transform
+from brainsmith.registry import transform
 
 
 @transform(

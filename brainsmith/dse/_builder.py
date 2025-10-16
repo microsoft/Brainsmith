@@ -14,9 +14,9 @@ from brainsmith.dse._segment import DSESegment
 from brainsmith.dse._tree import DSETree
 from brainsmith.dse.design_space import DesignSpace
 from brainsmith.dse.config import DSEConfig
-from brainsmith.core.constants import SKIP_INDICATOR
-from brainsmith.core.types import OutputType
-from brainsmith.core.plugins.registry import has_step, list_all_steps
+from brainsmith.dse._constants import SKIP_INDICATOR
+from brainsmith.dse._types import OutputType
+from brainsmith.registry import has_step, list_all_steps
 
 
 class DSETreeBuilder:

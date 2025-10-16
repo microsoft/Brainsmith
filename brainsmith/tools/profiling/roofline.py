@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-from model_profiling import RooflineModel
+from .model_profiling import RooflineModel
 
 DEBUG = True
 

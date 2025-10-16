@@ -13,7 +13,7 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.crop.crop import Crop
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 @backend(
     name="CropHLS",

@@ -509,7 +509,7 @@ design_space:
 A singleton registry manages all extensible components:
 
 ```python
-from brainsmith.core.plugins import transform, kernel, step
+from brainsmith.registry import transform, kernel, step
 
 @transform(name="MyTransform")
 class MyTransform:
@@ -530,7 +530,7 @@ class MyKernel:
 - **Backends** - RTL/HLS implementations per kernel
 - **Steps** - Build pipeline operations
 
-**Location:** `brainsmith/core/plugins/registry.py`
+**Location:** `brainsmith/registry/registry.py`
 
 ### 3. Segment-Based DSE
 
@@ -730,7 +730,7 @@ The plugin system is the core of Brainsmith's extensibility.
 
 ## Registry
 
-::: brainsmith.core.plugins.registry.Registry
+::: brainsmith.registry.Registry
     options:
       show_root_heading: true
       heading_level: 3
@@ -743,66 +743,66 @@ The plugin system is the core of Brainsmith's extensibility.
 
 ## Registration Functions
 
-::: brainsmith.core.plugins.registry.plugin
+::: brainsmith.registry.plugin
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.transform
+::: brainsmith.registry.transform
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.kernel
+::: brainsmith.registry.kernel
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.backend
+::: brainsmith.registry.backend
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.step
+::: brainsmith.registry.step
     options:
       show_root_heading: true
       heading_level: 3
 
 ## Access Functions
 
-::: brainsmith.core.plugins.registry.get_transform
+::: brainsmith.registry.get_transform
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_kernel
+::: brainsmith.registry.get_kernel
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_backend
+::: brainsmith.registry.get_backend
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_step
+::: brainsmith.registry.get_step
     options:
       show_root_heading: true
       heading_level: 3
 
 ## Query Functions
 
-::: brainsmith.core.plugins.registry.list_transforms
+::: brainsmith.registry.list_transforms
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.list_kernels
+::: brainsmith.registry.list_kernels
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.has_transform
+::: brainsmith.registry.has_transform
     options:
       show_root_heading: true
       heading_level: 3

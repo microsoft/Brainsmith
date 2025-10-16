@@ -7,7 +7,7 @@ Brainsmith Steps Module
 Auto-imports step modules to trigger @step decorator registrations.
 All step functionality is available through the unified plugin system:
 
-    from brainsmith.core.plugins import get_step, list_steps
+    from brainsmith.registry import get_step, list_steps
     
     # Get step function by name
     step_fn = get_step("shell_metadata_handover")

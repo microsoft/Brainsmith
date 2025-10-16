@@ -12,7 +12,7 @@ from qonnx.core.datatype import DataType
 import warnings
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 # TODO: Explain any shape assumptions -- TAFK
 

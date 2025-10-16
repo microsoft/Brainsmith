@@ -24,7 +24,7 @@ Transforms modify ONNX graphs by pattern matching, node replacement, optimizatio
 **Interface**:
 ```python
 from qonnx.transformation.base import Transformation
-from brainsmith.core.plugins import transform
+from brainsmith.registry import transform
 
 @transform(
     name="MyTransform",   # Defaults to class name if not specified
@@ -40,7 +40,7 @@ class MyTransform(Transformation):
         return (model, graph_modified)
 ```
 
-**Example**: `brainsmith/transforms/kernel_opt/set_pumped_compute.py:16`
+**Example**: `brainsmith/primitives/transforms/kernel_opt/set_pumped_compute.py:16`
 ```python
 @transform(
     name="SetPumpedCompute",
@@ -64,7 +64,7 @@ Steps coordinate sequences of operations in the compilation pipeline. Unlike tra
 
 **Interface**:
 ```python
-from brainsmith.core.plugins import step
+from brainsmith.registry import step
 
 @step(
     name="my_step",  # Required as keyword argument
@@ -74,7 +74,7 @@ from brainsmith.core.plugins import step
 )
 def my_step(blueprint, context):  # Note: signature is (blueprint, context)
     # Apply transforms
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     
     transform = get_transform("SomeTransform")
     model = context.get("model")
@@ -107,7 +107,7 @@ Kernels implement neural network operations in hardware. They define the hardwar
 **Interface**:
 ```python
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 @kernel(
     name="MyKernel",  # Required as keyword argument
@@ -161,7 +161,7 @@ Backends generate synthesizable code (HLS C++ or RTL Verilog) from kernel specif
 **Interface**:
 ```python
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 @backend(
     name="MyKernel_hls",  # Convention: KernelName_language
@@ -191,7 +191,7 @@ class MyKernel_hls(MyKernel, HLSBackend):  # Multiple inheritance
 Retrieve plugins by name, with automatic namespace resolution for unique names.
 
 ```python
-from brainsmith.core.plugins import (
+from brainsmith.registry import (
     get_registry,  # Direct registry access
     get_transform, get_kernel, get_backend, get_step,
     list_transforms, list_kernels, list_backends, list_steps,
@@ -248,7 +248,7 @@ transform = get_transform("myframework:CommonName")
 Query plugins by their metadata attributes:
 
 ```python
-from brainsmith.core.plugins import (
+from brainsmith.registry import (
     get_transforms_by_metadata,
     get_backends_by_metadata
 )
@@ -282,7 +282,7 @@ finn_transforms = registry.find("transform", framework="finn")
 qonnx_transforms = registry.find("transform", framework="qonnx")
 
 # Get framework-specific kernel backends
-from brainsmith.core.plugins.registry import list_backends_by_kernel
+from brainsmith.registry import list_backends_by_kernel
 mvau_backends = list_backends_by_kernel("MVAU")  # Returns ['MVAU_hls', 'MVAU_rtl']
 ```
 
@@ -347,7 +347,7 @@ registry._load_plugins()
 For testing or debugging, access the registry directly:
 
 ```python
-from brainsmith.core.plugins import get_registry
+from brainsmith.registry import get_registry
 
 registry = get_registry()
 
@@ -371,7 +371,7 @@ registry._load_plugins()
 Kernel inference transforms are a special category of transform that bridge standard ONNX operations and custom hardware kernels. They analyze the graph to find patterns that can be implemented using specific kernels, then replace those patterns with kernel instances. These transforms typically reside within their kernel's directory rather than the general transforms folder.
 
 ```python
-from brainsmith.core.plugins import kernel_inference
+from brainsmith.registry import kernel_inference
 
 @kernel_inference(
     kernel="MyKernel",
@@ -388,4 +388,4 @@ class InferMyKernel(Transformation):
 **Note**: The `kernel_inference` decorator is an alias for the `transform` decorator that automatically tags the transform with kernel metadata for discovery.
 
 ---
-For Plugin Registry implementation details, see `brainsmith/core/plugins/registry.py`. For examples, browse the `brainsmith/transforms/`, `brainsmith/kernels/`, and `brainsmith/steps/` directories.
+For Plugin Registry implementation details, see `brainsmith/registry/registry.py`. For examples, browse the `brainsmith/primitives/transforms/`, `brainsmith/kernels/`, and `brainsmith/steps/` directories.

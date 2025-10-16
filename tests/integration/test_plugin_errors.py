@@ -1,7 +1,7 @@
 """Tests for plugin system error handling and edge cases."""
 
 import pytest
-from brainsmith.core.plugins import get_registry, transform, kernel, backend, step
+from brainsmith.registry import get_registry, transform, kernel, backend, step
 
 
 class TestPluginErrors:

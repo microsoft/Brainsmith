@@ -15,7 +15,7 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 @backend(
     name="LayerNormHLS", 

@@ -11,7 +11,7 @@
 
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.core.plugins import transform
+from brainsmith.registry import transform
 
 @transform(
     name="SetPumpedCompute",

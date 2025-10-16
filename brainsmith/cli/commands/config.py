@@ -124,7 +124,7 @@ def init(ctx: ApplicationContext, user: bool, force: bool) -> None:
         config_dict = {
             "__comment__": "Brainsmith Project Settings",
             "build_dir": "${HOME}/.brainsmith/builds",
-            "default_workers": 4
+            "default_workers": 4,
             "xilinx_path": "/tools/Xilinx",
             "xilinx_version": "2024.2",
             "plugins_strict": True,

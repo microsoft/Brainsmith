@@ -4,7 +4,7 @@ import onnx
 from typing import Dict, Any
 
 # Import decorators from brainsmith
-from brainsmith.core.plugins import kernel, backend, kernel_inference
+from brainsmith.registry import kernel, backend, kernel_inference
 
 
 # Test Kernel Plugins

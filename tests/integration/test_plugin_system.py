@@ -2,8 +2,7 @@
 
 import pytest
 
-from brainsmith.core.plugins import get_registry, transform, kernel, backend, step
-from brainsmith.core.plugins.registry import list_backends_by_kernel, get_default_backend
+from brainsmith.registry import get_registry, transform, kernel, backend, step, list_backends_by_kernel, get_default_backend
 from tests.fixtures.model_utils import create_simple_model
 from tests.utils.plugin_assertions import (
     PluginAssertions,
@@ -470,7 +469,7 @@ class TestPluginStateManagement:
     
     def test_registry_singleton_behavior(self):
         """Test that get_registry() returns the same instance."""
-        from brainsmith.core.plugins import get_registry
+        from brainsmith.registry import get_registry
         
         registry1 = get_registry()
         registry2 = get_registry()

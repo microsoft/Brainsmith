@@ -4,7 +4,7 @@ import logging
 import onnx
 from typing import Any
 from qonnx.transformation.base import Transformation
-from brainsmith.core.plugins import transform, step
+from brainsmith.registry import transform, step
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def test_apply_custom_transforms(model: Any, cfg: Any) -> Any:
     
     if add_attributes:
         # Apply the TestAttributeAdder transform
-        from brainsmith.core.plugins import get_transform
+        from brainsmith.registry import get_transform
         transform_class = get_transform('TestAttributeAdder')
         transform = transform_class(
             target_op_type=target_op,
@@ -138,7 +138,7 @@ def test_apply_custom_transforms(model: Any, cfg: Any) -> Any:
         model = model.transform(transform)
     
     # Always apply metadata transform
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     metadata_class = get_transform('TestAddMetadata')
     metadata_transform = metadata_class(
         metadata_key="custom_transforms_applied",
@@ -160,7 +160,7 @@ def test_transform_chain(model: Any, cfg: Any) -> Any:
     
     # Chain several transforms
     # 1. Count nodes
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     counter_class = get_transform('TestNodeCounter')
     model = model.transform(counter_class())
     
@@ -265,7 +265,7 @@ def test_apply_custom_transforms_step(model: Any, cfg: Any) -> Any:
     model = model.transform(transform1)
     
     # Use transform through plugin system
-    from brainsmith.core.plugins import get_transform
+    from brainsmith.registry import get_transform
     NodeCounter = get_transform("TestNodeCounter")
     model = model.transform(NodeCounter())
     
