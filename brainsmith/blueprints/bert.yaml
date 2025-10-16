@@ -20,7 +20,7 @@ design_space:
     - DuplicateStreams
     - ElementwiseBinaryOperation
     - Shuffle
-    - Crop 
+    - Crop
     - Lookup
     - HWSoftmax
     - Thresholding
@@ -36,7 +36,7 @@ design_space:
     - "loop_rolling"
     - "target_fps_parallelization"
     - "apply_folding_config"
-      #- "minimize_bit_width"
+    - "minimize_bit_width"
     - "generate_estimate_reports"
     - "hw_codegen"
     - "hw_ipgen"
