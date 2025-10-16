@@ -20,7 +20,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             name="input",
             block_tiling=[":"],              # (1, 1, channels)
             stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
-            datatype="inputDataType",        # Custom name (FINN compatibility)
+            # Datatype always from ONNX: input0Datatype
         )
     ],
     outputs=[
@@ -28,7 +28,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[":"],                        # (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
-            datatype="outputDataType",                 # Custom name for FINN compatibility
+            datatype=None,                             # From ONNX: output0Datatype
         )
     ]
 )
@@ -51,8 +51,8 @@ class LayerNorm(AutoHWCustomOp):
 
         Schema auto-generates:
         - "SIMD" from stream_tiling=["SIMD"]
-        - "inputDataType" from input datatype="inputDataType"
-        - "outputDataType" from output datatype="outputDataType"
+        - "input0Datatype" from input interface (default naming)
+        - "output0Datatype" from output interface (default naming)
         """
         my_attrs = super().get_nodeattr_types()
         my_attrs.update({

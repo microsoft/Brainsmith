@@ -23,39 +23,9 @@ from .constraints import InterfaceConstraint
 from .dimension_sources import DimensionSource
 from .datatype_sources import DatatypeSource
 from .relationships import InterfaceRelationship
-from .types import DerivedDim, ScaledDim  # Backward compatibility
 
 # Type aliases for better clarity
 TilingSpec = Sequence[Union[int, str, DimensionSource]]
-
-
-def _build_repr(class_name: str, name: str, **kwargs) -> str:
-    """Build consistent repr strings for schema classes.
-    
-    Args:
-        class_name: Name of the class
-        name: Name field value
-        **kwargs: Other fields to include (only non-default values shown)
-    
-    Returns:
-        Formatted repr string
-    """
-    parts = [f"name='{name}'"]
-    
-    for key, value in kwargs.items():
-        if value is None or (isinstance(value, (list, dict)) and not value):
-            continue  # Skip None and empty collections
-            
-        if isinstance(value, bool) and value:
-            parts.append(f"{key}=True")
-        elif isinstance(value, list):
-            parts.append(f"{key}={len(value)}")
-        elif isinstance(value, str):
-            parts.append(f"{key}='{value}'")
-        else:
-            parts.append(f"{key}={value}")
-    
-    return f"{class_name}({', '.join(parts)})"
 
 
 @dataclass
@@ -63,70 +33,34 @@ class InterfaceSchema:
     """Base class for input/output interface schemas.
 
     Provides common fields and validation for all interface types.
-
-    The datatype field can be:
-    - None: Use default naming (input{i}Datatype/output{i}Datatype), value from ONNX graph
-    - str: Custom nodeattr name override, value from ONNX graph
-    - DatatypeSource: Use default naming, value derived from other interfaces
+    Inputs always get their datatypes from the ONNX graph.
+    Outputs can derive datatypes from inputs or internal datatypes.
     """
 
     name: str
-    constraints: List[InterfaceConstraint] = field(default_factory=list)
     block_tiling: Optional[TilingSpec] = None
     stream_tiling: Optional[TilingSpec] = None
+    constraints: List[InterfaceConstraint] = field(default_factory=list)
     optional: bool = False
-
-    # Unified datatype field (replaces datatype_attr + datatype_source)
-    datatype: Union[str, DatatypeSource, None] = None
 
 
 @dataclass
 class InputSchema(InterfaceSchema):
-    """Schema for an input interface.
+    """Schema for an input interface."""
 
-    Extends InterfaceSchema with input-specific fields like streaming
-    configuration and weight marking.
-    """
-
-    # Input-specific fields
     is_weight: bool = False  # Explicitly mark weight inputs for FINN
-
-    def __repr__(self) -> str:
-        """String representation of InputSchema."""
-        return _build_repr(
-            "InputSchema",
-            self.name,
-            constraints=self.constraints,
-            datatype=self.datatype,
-            block_tiling=self.block_tiling,
-            stream_tiling=self.stream_tiling,
-            is_weight=self.is_weight,
-            optional=self.optional
-        )
 
 
 @dataclass
 class OutputSchema(InterfaceSchema):
     """Schema for an output interface.
 
-    Outputs can have explicit streaming (stream_tiling) or derived streaming
-    (computed from relationships or default derivation logic).
-
-    The datatype field allows output datatypes to be derived from input datatypes
-    using patterns like DerivedDatatype, WidenedDatatype, etc.
+    The datatype field specifies how the output datatype is determined:
+    - None: Use datatype from ONNX graph (pass-through/validation only)
+    - DatatypeSource: Derive datatype from inputs or internal datatypes
     """
 
-    def __repr__(self) -> str:
-        """String representation of OutputSchema."""
-        return _build_repr(
-            "OutputSchema",
-            self.name,
-            constraints=self.constraints,
-            datatype=self.datatype,
-            block_tiling=self.block_tiling,
-            stream_tiling=self.stream_tiling,
-            optional=self.optional
-        )
+    datatype: Optional[DatatypeSource] = None
 
 
 @dataclass
@@ -138,16 +72,27 @@ class KernelSchema:
 
     The relationships field allows cross-interface validation using patterns
     like DatatypesEqual, DimensionsEqual, or custom validation logic.
+
+    Internal datatypes represent intermediate computation datatypes not attached
+    to ONNX tensors (e.g., accumulators, bias values). They are derived from
+    inputs or other internals using DatatypeSource patterns.
     """
 
     name: str
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
+    internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
     relationships: List[InterfaceRelationship] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate schema structure."""
+        # Validate constraint targets match interface names
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate the schema structure."""
+
         # Check unique input names
         input_names = [inp.name for inp in self.inputs]
         if len(input_names) != len(set(input_names)):
@@ -158,20 +103,13 @@ class KernelSchema:
         if len(output_names) != len(set(output_names)):
             raise ValueError(f"Duplicate output names in kernel '{self.name}'")
 
-        # Validate constraint targets match interface names
-        for inp in self.inputs:
-            for constraint in inp.constraints:
-                if constraint.interface_name != inp.name:
-                    raise ValueError(
-                        f"Input '{inp.name}' constraint targets wrong interface '{constraint.interface_name}'"
-                    )
-
-        for out in self.outputs:
-            for constraint in out.constraints:
-                if constraint.interface_name != out.name:
-                    raise ValueError(
-                        f"Output '{out.name}' constraint targets wrong interface '{constraint.interface_name}'"
-                    )
+        # Check internal datatype names don't conflict with interfaces
+        all_interface_names = set(input_names + output_names)
+        for internal_name in self.internal_datatypes.keys():
+            if internal_name in all_interface_names:
+                raise ValueError(
+                    f"Internal datatype '{internal_name}' conflicts with interface name in kernel '{self.name}'"
+                )
 
         # Validate DimensionSource references
         self._validate_dimension_references(input_names, output_names)
@@ -188,11 +126,6 @@ class KernelSchema:
 
         Raises:
             ValueError: If dimension references are invalid
-
-        Note:
-            This validation is basic - only checks DerivedDim/ScaledDim which have
-            source_interface attributes. Other DimensionSource types (SumDims, etc.)
-            are validated at runtime when resolve() is called.
         """
         all_interface_names = set(input_names + output_names)
 
@@ -284,7 +217,7 @@ class KernelSchema:
 
     @property
     def protected_attr_names(self) -> List[str]:
-        """Get all node attribute names that are protected (set by infer_node_datatype).
+        """Get all node attribute names that are protected (set by datatype resolution).
 
         These are node attribute names that should not be modified by external
         code because they control datatype constraints.
@@ -294,39 +227,32 @@ class KernelSchema:
         """
         protected = []
 
-        # Add input datatype attrs (custom names or defaults)
-        for i, inp in enumerate(self.inputs):
-            if isinstance(inp.datatype, str):
-                protected.append(inp.datatype)  # Custom name
-            else:
-                protected.append(f"input{i}Datatype")  # Default
+        # Add input datatype attrs (always use default naming)
+        for i in range(len(self.inputs)):
+            protected.append(f"input{i}Datatype")
 
-        # Add output datatype attrs (custom names or defaults)
-        for i, out in enumerate(self.outputs):
-            if isinstance(out.datatype, str):
-                protected.append(out.datatype)  # Custom name
-            else:
-                protected.append(f"output{i}Datatype")  # Default
+        # Add output datatype attrs (always use default naming)
+        for i in range(len(self.outputs)):
+            protected.append(f"output{i}Datatype")
+
+        # Add internal datatype attrs
+        for internal_name in self.internal_datatypes.keys():
+            protected.append(f"{internal_name}Datatype")
 
         return protected
 
     def get_datatype_attr(self, index: int, is_input: bool = True) -> str:
         """Get the nodeattr name for an interface's datatype.
 
+        Always uses default naming pattern: input{i}Datatype or output{i}Datatype.
+
         Args:
             index: Index of the interface
             is_input: True for input, False for output
 
         Returns:
-            Node attribute name (custom or default)
+            Node attribute name following default naming pattern
         """
-        interface = (self.inputs[index] if is_input else self.outputs[index])
-
-        # Custom name (str) takes precedence
-        if isinstance(interface.datatype, str):
-            return interface.datatype
-
-        # Default naming
         if is_input:
             return f"input{index}Datatype"
         else:
@@ -357,7 +283,7 @@ class KernelSchema:
         """Generate node attribute type registry from schema.
 
         Extracts:
-        1. Datatype attributes from inputs/outputs (string nodeattrs)
+        1. Datatype attributes from inputs/outputs/internals (string nodeattrs)
         2. Template parameters from tiling specs (integer nodeattrs)
 
         Returns:
@@ -367,12 +293,19 @@ class KernelSchema:
         attrs = {}
 
         # 1. Add datatype attributes (string type)
+        # Input datatypes
         for i, inp in enumerate(self.inputs):
             attr_name = self.get_datatype_attr(i, is_input=True)
             attrs[attr_name] = ("s", True, "")  # String, required, empty default
 
+        # Output datatypes
         for i, out in enumerate(self.outputs):
             attr_name = self.get_datatype_attr(i, is_input=False)
+            attrs[attr_name] = ("s", True, "")  # String, required, empty default
+
+        # Internal datatypes
+        for internal_name in self.internal_datatypes.keys():
+            attr_name = f"{internal_name}Datatype"
             attrs[attr_name] = ("s", True, "")  # String, required, empty default
 
         # 2. Extract template parameters from tiling specs (integer type)
@@ -390,14 +323,3 @@ class KernelSchema:
             attrs[param] = ("i", True, 1)  # Integer, required, default 1
 
         return attrs
-
-    def __repr__(self) -> str:
-        """String representation of KernelSchema."""
-        return _build_repr(
-            "KernelSchema",
-            self.name,
-            inputs=self.inputs,
-            outputs=self.outputs,
-            relationships=self.relationships,
-            metadata=self.metadata
-        )

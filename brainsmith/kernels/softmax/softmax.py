@@ -22,7 +22,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
             name="input",
             block_tiling=[":"],            # One Softmax op: (1, 1, channels)
             stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
-            datatype="inputDataType",      # Custom name (FINN compatibility)
+            # Datatype always from ONNX: input0Datatype
             constraints=[
                 DatatypeConstraint("input", "FLOAT", 32, 32),
             ]
@@ -33,7 +33,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[":"],                        # Same as input: (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
-            datatype=DerivedDatatype("input"),         # Derive FLOAT32 from input (uses default "output0Datatype")
+            datatype=DerivedDatatype("input"),         # Derive FLOAT32 from input
         )
     ]
 )
@@ -53,8 +53,8 @@ class Softmax(AutoHWCustomOp):
 
     # All nodeattrs auto-generated from schema:
     # - "SIMD" from stream_tiling=["SIMD"]
-    # - "inputDataType" from datatype="inputDataType"
-    # - "output0Datatype" from output (default naming)
+    # - "input0Datatype" from input interface (default naming)
+    # - "output0Datatype" from output interface (default naming, derived from input)
 
     def execute_node(self, context, graph):
         node = self.onnx_node
