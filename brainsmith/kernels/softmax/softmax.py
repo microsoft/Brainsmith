@@ -23,10 +23,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
             name="input",
             block_tiling=[FULL_DIM],       # One Softmax op: (1, 1, channels)
             stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
-            # Datatype always from ONNX: input0Datatype
-            constraints=[
-                DatatypeConstraint("input", "FLOAT", 32, 32),
-            ]
+            constraints=[DatatypeConstraint("input", "FLOAT", 32, 32)]
         )
     ],
     outputs=[
@@ -45,17 +42,21 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     author="Shane Fleming"
 )
 class Softmax(KernelOp):
-    """Abstraction layer for HW implementation of Softmax layers."""
+    """Abstraction layer for HW implementation of Softmax layers.
 
-    kernel_schema = SOFTMAX_SCHEMA
+    Schema auto-generates:
+    - "SIMD" from stream_tiling=["SIMD"]
+    - "input0Datatype" from input interface
+    - "output0Datatype" from output interface
+    """
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
-    # All nodeattrs auto-generated from schema:
-    # - "SIMD" from stream_tiling=["SIMD"]
-    # - "_input0Datatype" from input interface (protected)
-    # - "_output0Datatype" from output interface (protected)
+    @property
+    def kernel_schema(self) -> df.KernelSchema:
+        """Return Softmax schema (static pattern)."""
+        return SOFTMAX_SCHEMA
 
     def execute_node(self, context, graph):
         node = self.onnx_node

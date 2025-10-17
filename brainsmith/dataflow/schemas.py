@@ -36,6 +36,7 @@ from .types import FULL_DIM
 
 if TYPE_CHECKING:
     from .models import KernelModel
+    from .inference import InferenceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,8 @@ class KernelSchema:
     - Input/output interfaces with tiling templates
     - Validation rules (constraints, relationships)
     - Internal datatype derivation patterns
+    - Kernel-specific parameters (algorithm, hardware, features)
+    - Inference configuration (optional, for automatic HW layer inference)
 
     Does NOT define STORAGE:
     - Shapes are extracted from ModelWrapper or computed from templates
@@ -106,6 +109,13 @@ class KernelSchema:
     Internal datatypes represent intermediate computation datatypes not attached
     to ONNX tensors (e.g., accumulators, bias values). They are derived from
     inputs or other internals using DatatypeSource patterns.
+
+    The kernel_params field specifies kernel-specific parameters not derived
+    from the interface structure (e.g., epsilon for LayerNorm, algorithm
+    selection for Pool). Format: {"paramName": ("i"|"s"|"f", required, default)}
+
+    The inference_config field (optional) enables automatic inference from ONNX
+    nodes by defining pattern matching rules. See InferenceConfig for details.
     """
 
     name: str
@@ -114,6 +124,8 @@ class KernelSchema:
     internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
     relationships: List[InterfaceRelationship] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    kernel_params: Dict[str, tuple] = field(default_factory=dict)
+    inference_config: Optional['InferenceConfig'] = None
 
     def __post_init__(self):
         """Validate schema structure."""
@@ -228,6 +240,7 @@ class KernelSchema:
         that need persistence:
         - Datatypes (for interfaces and internals)
         - User parameters (SIMD, PE, etc.)
+        - Kernel-specific parameters (epsilon, algorithm, etc.)
 
         Shapes are NEVER stored in nodeattrs. They are either:
         - Tensor shapes: extracted from ModelWrapper (ONNX graph)
@@ -264,6 +277,12 @@ class KernelSchema:
         template_params = self._extract_template_params()
         for param in template_params:
             attrs[param] = ("i", True, 1)
+
+        # ================================================================
+        # 4. Kernel-Specific Parameters (algorithm, hardware, features)
+        # ================================================================
+
+        attrs.update(self.kernel_params)
 
         return attrs
 

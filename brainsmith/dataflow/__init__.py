@@ -99,6 +99,9 @@ from .validation import ValidationError
 # Kernel operator base class
 from .kernel_op import KernelOp, KernelOpError
 
+# Inference infrastructure
+from .inference import InferenceConfig, InferenceResult, InferenceHelper
+
 
 __all__ = [
     # Core types
@@ -141,4 +144,7 @@ __all__ = [
 
     # Kernel operator base class
     'KernelOp', 'KernelOpError',
+
+    # Inference infrastructure
+    'InferenceConfig', 'InferenceResult', 'InferenceHelper',
 ]

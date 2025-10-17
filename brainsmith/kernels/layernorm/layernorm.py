@@ -26,10 +26,14 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],                   # (1, 1, channels)
-            stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
+            block_tiling=[FULL_DIM],                  # (1, 1, channels)
+            stream_tiling=[DerivedDim("input", -1)],  # Output streams at same rate as input
+            datatype=DerivedDatatype("input")         # Output datatype same as input
         )
-    ]
+    ],
+    kernel_params={
+        "epsilon": ("f", True, 1e-5),  # Normalization epsilon for numerical stability
+    }
 )
 
 
@@ -38,26 +42,22 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     author="Shane Fleming"
 )
 class LayerNorm(KernelOp):
-    """Abstraction layer for HW implementation of the LayerNorm layer."""
+    """Abstraction layer for HW implementation of the LayerNorm layer.
 
-    kernel_schema = LAYERNORM_SCHEMA
+    Schema auto-generates:
+    - "SIMD" from stream_tiling=["SIMD"]
+    - "input0Datatype" from input interface
+    - "output0Datatype" from output interface
+    - "epsilon" from kernel_params
+    """
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
-    def get_nodeattr_types(self):
-        """Add kernel-specific nodeattrs.
-
-        Schema auto-generates:
-        - "SIMD" from stream_tiling=["SIMD"]
-        - "_input0Datatype" from input interface (protected)
-        - "_output0Datatype" from output interface (protected)
-        """
-        my_attrs = super().get_nodeattr_types()
-        my_attrs.update({
-            "epsilon": ("f", True, 1e-5),  # Kernel-specific parameter
-        })
-        return my_attrs
+    @property
+    def kernel_schema(self) -> df.KernelSchema:
+        """Return LayerNorm schema (static pattern)."""
+        return LAYERNORM_SCHEMA
 
     def execute_node(self, context, graph):
         node = self.onnx_node

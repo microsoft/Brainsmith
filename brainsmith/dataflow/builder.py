@@ -20,8 +20,8 @@ Architecture:
 The builder follows a single-pass flow:
 1. Build InputModels (datatype + shapes from graph + templates)
 2. Resolve internal datatypes (datatype-only stubs)
-3. Build OutputModels (datatype + shapes from graph + templates)
-4. Create KernelModel
+3. Build OutputModels (datatype + shapes, resolving any unset dimensions)
+4. Create KernelModel (fully resolved, immutable)
 5. Validate constraints and relationships
 """
 
@@ -74,8 +74,8 @@ class KernelModelBuilder:
     The builder orchestrates a multi-phase construction process:
     1. Build InputModels with shapes resolved from templates
     2. Resolve internal datatypes (accumulator, etc.)
-    3. Build OutputModels with shapes and derived datatypes
-    4. Create KernelModel (derives any unset output dimensions)
+    3. Build OutputModels with shapes, datatypes, and dimension resolution
+    4. Create KernelModel (fully resolved, immutable)
     5. Validate all constraints and relationships
 
     Example:
@@ -98,8 +98,8 @@ class KernelModelBuilder:
         Single-pass flow:
         1. Build InputModels (datatype + shapes)
         2. Resolve internal datatypes (datatype-only stubs)
-        3. Build OutputModels (datatype + shapes)
-        4. Create KernelModel (derives unset output dims)
+        3. Build OutputModels (datatype + shapes, resolve unset dims)
+        4. Create KernelModel (fully resolved, immutable)
         5. Validate constraints and relationships
 
         Args:
@@ -251,6 +251,11 @@ class KernelModelBuilder:
                     schema, tensor_shape
                 )
 
+                # Resolve any unset stream dimensions (None → 1 singleton default)
+                stream_shape = self._resolve_unset_dimensions(
+                    stream_shape, schema.name
+                )
+
                 # Build full OutputModel
                 output_model = OutputModel(
                     name=schema.name,
@@ -348,6 +353,36 @@ class KernelModelBuilder:
 
         # Fixed datatype specified in schema (rare case)
         return schema.datatype
+
+    def _resolve_unset_dimensions(
+        self,
+        stream_shape: Tuple[Optional[int], ...],
+        interface_name: str
+    ) -> Tuple[int, ...]:
+        """Resolve any unset dimensions (None) to concrete values.
+
+        Default strategy: All unset dimensions → 1 (singleton)
+
+        This provides a predictable fallback when stream_tiling is not
+        explicitly specified in the schema. Kernels should specify
+        stream_tiling explicitly for non-trivial streaming patterns.
+
+        Args:
+            stream_shape: Stream shape (may contain None values)
+            interface_name: Interface name for logging
+
+        Returns:
+            Stream shape with all dimensions resolved
+        """
+        if not any(d is None for d in stream_shape):
+            return stream_shape
+
+        resolved = tuple(1 if d is None else d for d in stream_shape)
+        logger.debug(
+            f"  Resolved '{interface_name}' stream_shape: "
+            f"{stream_shape} → {resolved} (singleton default)"
+        )
+        return resolved
 
 
 __all__ = [

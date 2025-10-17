@@ -8,15 +8,14 @@
 """
 Immutable kernel models for the dataflow system.
 
-These models represent runtime instances created from schemas and context.
-They are immutable snapshots built from:
+These models represent runtime instances built by KernelModelBuilder from:
 - ModelWrapper context (tensor shapes, datatypes from ONNX graph)
 - KernelSchema (structural definition, tiling templates)
 - Nodeattrs (user parameters like SIMD, PE)
 
 Key principles:
 - All models are immutable (frozen dataclasses)
-- Models built from ModelWrapper context (source of truth)
+- Builder constructs fully resolved models (no post-processing)
 - Models are cached, rebuilt on context/parameter changes
 - Shapes are NEVER stored in nodeattrs (extracted from context)
 """
@@ -66,8 +65,8 @@ class InterfaceModel(ABC):
     name: str
     tensor_shape: Shape
     block_shape: Shape
+    stream_shape: Shape
     datatype: BaseDataType
-    stream_shape: Tuple[Optional[int], ...]
 
     @property
     def tensor_folding_factor(self) -> int:
@@ -136,63 +135,31 @@ class InputModel(InterfaceModel):
 class OutputModel(InterfaceModel):
     """Immutable output interface model.
 
-    Pure specification of output tensor characteristics.
-    Stream shape may contain None values during construction (resolved by KernelModel).
+    Represents a concrete output with fully resolved dimensions and datatypes.
+    All dimensions are resolved by KernelModelBuilder before construction.
     """
-
-    def has_unset_dims(self) -> bool:
-        """Check if any stream dimensions are unset (None)."""
-        return any(d is None for d in self.stream_shape)
-
-    @property
-    def block_folding_factor(self) -> int:
-        """Cycles to stream one block (block_shape / stream_shape)."""
-        if self.has_unset_dims():
-            raise ValueError(
-                f"Cannot compute block_folding_factor for '{self.name}' with unset stream dimensions"
-            )
-        return super().block_folding_factor
-
-    @property
-    def streaming_bandwidth(self) -> int:
-        """Elements streamed per cycle."""
-        if self.has_unset_dims():
-            raise ValueError(
-                f"Cannot compute streaming_bandwidth for '{self.name}' with unset stream dimensions"
-            )
-        return super().streaming_bandwidth
-
-    @property
-    def stream_width_bits(self) -> int:
-        """Stream width in bits."""
-        if self.has_unset_dims():
-            raise ValueError(
-                f"Cannot compute stream_width_bits for '{self.name}' with unset stream dimensions"
-            )
-        return super().stream_width_bits
+    pass
 
 
 @dataclass(frozen=True)
 class KernelModel:
     """Immutable kernel model representing a configured kernel instance.
 
-    This model is a runtime snapshot built from:
+    This model is a runtime snapshot built by KernelModelBuilder from:
     - ModelWrapper context (tensor shapes, datatypes from ONNX graph)
     - KernelSchema (structural definition, tiling templates)
     - Nodeattrs (user parameters like SIMD, PE)
 
+    All dimensions are fully resolved by the builder before model construction.
     Models are cached and rebuilt when:
     - User parameters change (via set_nodeattr())
     - Context updates (new call to get_kernel_model(ctx))
-
-    Resolution flow in __post_init__:
-    1. Derive any remaining unset output dimensions (default logic)
     """
 
     # Kernel identity
     name: str
 
-    # Interface models
+    # Interface models (fully resolved)
     inputs: Tuple[InputModel, ...]
     outputs: Tuple[OutputModel, ...]
 
@@ -200,56 +167,6 @@ class KernelModel:
     latency_cycles: Tuple[int, int] = (1, 1)
     pipeline_depth: int = 1
     clock_freq_mhz: float = 100.0
-
-    def __post_init__(self):
-        """Resolve output dimensions."""
-        # Convert lists to tuples for immutability
-        if isinstance(self.inputs, list):
-            object.__setattr__(self, 'inputs', tuple(self.inputs))
-        if isinstance(self.outputs, list):
-            object.__setattr__(self, 'outputs', tuple(self.outputs))
-
-        # Derive any remaining unset output dimensions
-        resolved_outputs = self._derive_unset_dimensions(list(self.outputs))
-        object.__setattr__(self, 'outputs', tuple(resolved_outputs))
-
-    def _derive_unset_dimensions(self, outputs: List[OutputModel]) -> List[OutputModel]:
-        """Fill in unset dimensions using default derivation logic.
-
-        Default Strategy:
-        - All unset dimensions → 1 (singleton)
-
-        This simple default provides a predictable fallback when stream_tiling
-        is not explicitly specified in the schema. Kernels should specify
-        stream_tiling explicitly for non-trivial streaming patterns.
-
-        Args:
-            outputs: List of OutputModels (may have unset dimensions)
-
-        Returns:
-            List of OutputModels with all dimensions set
-        """
-        resolved = []
-        for output in outputs:
-            if output.has_unset_dims():
-                old_stream = output.stream_shape
-                stream_shape = tuple(1 if dim is None else dim for dim in output.stream_shape)
-
-                output = OutputModel(
-                    name=output.name,
-                    tensor_shape=output.tensor_shape,
-                    block_shape=output.block_shape,
-                    stream_shape=stream_shape,
-                    datatype=output.datatype
-                )
-                logger.debug(
-                    f"KernelModel '{self.name}': Derived output '{output.name}' "
-                    f"stream_shape: {old_stream} → {stream_shape} (singleton default)"
-                )
-
-            resolved.append(output)
-
-        return resolved
 
     def get_input(self, name: str) -> Optional[InputModel]:
         """Get input model by name."""
@@ -300,15 +217,6 @@ class KernelModel:
         """Total output values across all outputs."""
         return sum(prod(out.tensor_shape) for out in self.outputs)
 
-    def output_streaming_rate(self, output_idx: int = 0) -> int:
-        """Streaming rate for output (elements per cycle).
-
-        Derived from the slowest input's block folding factor.
-        """
-        if not self.inputs:
-            return 1
-        return max(inp.block_folding_factor for inp in self.inputs)
-
     def output_stream_width_bits(self, output_idx: int = 0) -> int:
         """Stream width in bits for output.
 
@@ -321,46 +229,9 @@ class KernelModel:
     def output_stream_shape(self, output_idx: int = 0) -> Shape:
         """Stream shape for output.
 
-        Now simply returns the OutputModel's stream_shape attribute
-        (resolved during construction).
+        Returns the OutputModel's stream_shape attribute (resolved by builder).
         """
         return self.outputs[output_idx].stream_shape
-
-    # =========================================================================
-    # Unified Accessor Methods
-    # =========================================================================
-
-    def input_datatype(self, ind: int = 0) -> BaseDataType:
-        """Get input datatype."""
-        return self.inputs[ind].datatype
-
-    def output_datatype(self, ind: int = 0) -> BaseDataType:
-        """Get output datatype."""
-        return self.outputs[ind].datatype
-
-    def input_tensor_shape(self, ind: int = 0) -> Shape:
-        """Get input tensor shape."""
-        return self.inputs[ind].tensor_shape
-
-    def output_tensor_shape(self, ind: int = 0) -> Shape:
-        """Get output tensor shape."""
-        return self.outputs[ind].tensor_shape
-
-    def input_block_shape(self, ind: int = 0) -> Shape:
-        """Get input block shape."""
-        return self.inputs[ind].block_shape
-
-    def output_block_shape(self, ind: int = 0) -> Shape:
-        """Get output block shape."""
-        return self.outputs[ind].block_shape
-
-    def input_stream_shape(self, ind: int = 0) -> Shape:
-        """Get input stream shape."""
-        return self.inputs[ind].stream_shape
-
-    def input_stream_width_bits(self, ind: int = 0) -> int:
-        """Get input stream width in bits."""
-        return self.inputs[ind].stream_width_bits
 
     @property
     def throughput_fps(self) -> float:
