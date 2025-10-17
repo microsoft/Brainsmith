@@ -22,7 +22,7 @@ import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from .dimension_sources import DimensionSource
-from .types import DerivedDim, ScaledDim, FULL_DIM  # Backward compatibility
+from .types import FULL_DIM
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,6 @@ def resolve_template(
     template: List[Union[int, str, DimensionSource]],
     reference_shape: Tuple[int, ...],
     param_getter: Callable[[str], Any],
-    context: str = "",
     interfaces: Optional[Dict[str, Any]] = None
 ) -> Tuple[int, ...]:
     """Resolve template dimensions to concrete shape.
@@ -40,7 +39,6 @@ def resolve_template(
         template: Template specification (e.g., [FULL_DIM, "PE", 1, DerivedDim("Q", 1)])
         reference_shape: Reference shape to resolve against
         param_getter: Function to resolve parameter names (e.g., get_nodeattr)
-        context: Context string for error messages (e.g., "input.block")
         interfaces: Dict of interface models for DimensionSource resolution (optional)
 
     Returns:
@@ -61,17 +59,16 @@ def resolve_template(
         ...                  interfaces={"in0": model0, "in1": model1})
         (sum_of_last_dims,)  # Sums dimensions for concat
     """
-    logger.debug(f"{context}: Resolving template {template} against reference {reference_shape}")
+    logger.debug(f"Resolving template {template} against reference {reference_shape}")
 
     # Pad template to match reference rank (prepend singletons)
     if len(template) < len(reference_shape):
         padding = len(reference_shape) - len(template)
         template = [1] * padding + template
-        logger.debug(f"{context}: Auto-padded template with {padding} singletons → {template}")
+        logger.debug(f"Auto-padded template with {padding} singletons → {template}")
     elif len(template) > len(reference_shape):
         raise ValueError(
-            f"{context}: template length {len(template)} exceeds "
-            f"reference rank {len(reference_shape)}"
+            f"template length {len(template)} exceeds reference rank {len(reference_shape)}"
         )
 
     resolved = []
@@ -84,46 +81,36 @@ def resolve_template(
             try:
                 value = param_getter(dim)
             except (AttributeError, KeyError):
-                raise ValueError(
-                    f"{context}[{i}]: parameter '{dim}' not found"
-                )
+                raise ValueError(f"parameter '{dim}' not found")
 
             # Validate divisibility
             if ref % value != 0:
                 raise ValueError(
-                    f"{context}[{i}]: parameter '{dim}' value {value} "
-                    f"does not divide parent dimension {ref}"
+                    f"parameter '{dim}' value {value} does not divide parent dimension {ref}"
                 )
         elif isinstance(dim, int):
             if dim == 1:
                 value = 1
             else:
                 raise ValueError(
-                    f"{context}[{i}]: only singleton (1) allowed for literals, "
-                    f"got {dim}. Use parameters for other values."
+                    f"only singleton (1) allowed for literals, got {dim}. Use parameters for other values."
                 )
         elif isinstance(dim, DimensionSource):
             # Use extensible DimensionSource resolution system
             if interfaces is None:
-                raise ValueError(
-                    f"{context}[{i}]: {type(dim).__name__} requires interfaces dict"
-                )
+                raise ValueError(f"{type(dim).__name__} requires interfaces dict")
 
             try:
                 value = dim.resolve(interfaces, param_getter)
             except ValueError as e:
-                raise ValueError(
-                    f"{context}[{i}]: {type(dim).__name__} resolution failed: {e}"
-                )
+                raise ValueError(f"{type(dim).__name__} resolution failed: {e}") from e
         else:
-            raise ValueError(
-                f"{context}[{i}]: invalid template element '{dim}' (type {type(dim).__name__})"
-            )
+            raise ValueError(f"invalid template element '{dim}' (type {type(dim).__name__})")
 
         resolved.append(value)
 
     result = tuple(resolved)
-    logger.debug(f"{context}: Resolved to {result}")
+    logger.debug(f"Resolved to {result}")
     return result
 
 

@@ -22,8 +22,9 @@ Key classes:
 - KernelSchema: Complete kernel definition with inputs and outputs
 """
 
+import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Union, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Sequence, Union, Dict, Any, Callable, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
@@ -32,6 +33,11 @@ from .dimension_sources import DimensionSource
 from .datatype_sources import DatatypeSource
 from .relationships import InterfaceRelationship
 from .types import FULL_DIM
+
+if TYPE_CHECKING:
+    from .models import KernelModel
+
+logger = logging.getLogger(__name__)
 
 # Type aliases for better clarity
 TilingSpec = Sequence[Union[int, str, type(FULL_DIM), DimensionSource]]
@@ -133,6 +139,86 @@ class KernelSchema:
             if internal_name in all_interface_names:
                 raise ValueError(
                     f"Internal datatype '{internal_name}' conflicts with interface name in kernel '{self.name}'"
+                )
+
+    def validate_model(
+        self,
+        model: 'KernelModel',
+        param_getter: Callable[[str], Any]
+    ) -> None:
+        """Validate a KernelModel against this schema's constraints and relationships.
+
+        This is where validation logic belongs - with the schema definition that
+        specifies the rules. The schema knows what constraints and relationships
+        must hold, so it should validate them.
+
+        Args:
+            model: KernelModel to validate
+            param_getter: Function to retrieve nodeattr values (for constraint checking)
+
+        Raises:
+            ValueError: If any constraint or relationship validation fails
+
+        Example:
+            >>> schema = KernelSchema(name="LayerNorm", ...)
+            >>> model = builder.build(ctx)
+            >>> schema.validate_model(model, get_nodeattr)  # Validates model
+        """
+        logger.debug(f"Validating KernelModel against schema '{self.name}'")
+
+        # Validate input constraints
+        for i, input_model in enumerate(model.inputs):
+            schema = self.inputs[i]
+            if schema.constraints:
+                self._validate_interface_constraints(
+                    interface_name=schema.name,
+                    interface_model=input_model,
+                    constraints=schema.constraints,
+                    param_getter=param_getter
+                )
+
+        # Validate output constraints
+        for i, output_model in enumerate(model.outputs):
+            schema = self.outputs[i]
+            if schema.constraints:
+                self._validate_interface_constraints(
+                    interface_name=schema.name,
+                    interface_model=output_model,
+                    constraints=schema.constraints,
+                    param_getter=param_getter
+                )
+
+        # Validate relationships (cross-interface)
+        if self.relationships:
+            logger.debug(f"Validating {len(self.relationships)} relationships")
+            for relationship in self.relationships:
+                error = relationship.check(model, param_getter)
+                if error:
+                    raise ValueError(f"Relationship validation failed: {error}")
+
+    def _validate_interface_constraints(
+        self,
+        interface_name: str,
+        interface_model: Any,
+        constraints: List[InterfaceConstraint],
+        param_getter: Callable[[str], Any]
+    ) -> None:
+        """Validate constraints for a single interface.
+
+        Args:
+            interface_name: Interface name for error messages
+            interface_model: InputModel or OutputModel to validate
+            constraints: List of InterfaceConstraint instances to check
+            param_getter: Function to retrieve nodeattr values
+
+        Raises:
+            ValueError: If any constraint fails
+        """
+        for constraint in constraints:
+            error = constraint.check(interface_model, param_getter)
+            if error:
+                raise ValueError(
+                    f"Constraint validation failed for '{interface_name}': {error}"
                 )
 
     def get_nodeattr_types(self) -> Dict[str, tuple]:

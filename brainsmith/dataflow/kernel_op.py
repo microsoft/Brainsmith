@@ -16,9 +16,8 @@ from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 from .schemas import KernelSchema
-from .models import KernelModel, InputModel, OutputModel
-from .datatype_sources import DatatypeSource
-from .template_resolution import resolve_template
+from .models import KernelModel
+from .builder import BuildContext, KernelModelBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,7 @@ class KernelOp(HWCustomOp, ABC):
             )
 
         self._kernel_model: Optional[KernelModel] = None
+        self._builder = KernelModelBuilder()
 
     def _error(self, message: str) -> KernelOpError:
         """Create exception with node context."""
@@ -60,14 +60,27 @@ class KernelOp(HWCustomOp, ABC):
     def get_kernel_model(self, ctx: ModelWrapper) -> KernelModel:
         """Get KernelModel (cached or rebuilt from ctx + schema).
 
-        Flow:
-        1. Return cached model if available
-        2. Extract shapes from context (source of truth)
-        3. Resolve and store all datatypes
-        4. Build immutable KernelModel from resolved data
-        5. Validate constraints and relationships
-        6. Cache and return
+        Delegates to KernelModelBuilder for construction. This method provides:
+        - Caching of built models
+        - Error context (node name)
+        - FINN integration (nodeattr accessors)
+
+        The builder handles:
+        - Building InputModels with template resolution
+        - Resolving internal datatypes
+        - Building OutputModels with derived datatypes
+        - Validation of constraints and relationships
+
+        Args:
+            ctx: ModelWrapper for ONNX graph access
+
+        Returns:
+            Cached or newly built KernelModel
+
+        Raises:
+            KernelOpError: If model cannot be built or validation fails
         """
+        # Return cached model if available
         if self._kernel_model is not None:
             return self._kernel_model
 
@@ -78,32 +91,22 @@ class KernelOp(HWCustomOp, ABC):
                 "and validate hardware configurations."
             )
 
-        logger.debug(f"Building KernelModel for {self.onnx_node.name}")
+        # Build context for builder
+        build_ctx = BuildContext(
+            schema=self.kernel_schema,
+            ctx=ctx,
+            node_inputs=list(self.onnx_node.input),
+            node_outputs=list(self.onnx_node.output),
+            param_getter=self.get_nodeattr,
+            param_setter=self.set_nodeattr,
+            node_name=self.onnx_node.name
+        )
 
-        # Phase 1: Extract shapes from context (source of truth)
-        input_shapes = []
-        for i, inp_name in enumerate(self.onnx_node.input):
-            if inp_name:
-                shape = tuple(ctx.get_tensor_shape(inp_name))
-                input_shapes.append(shape)
-
-        output_shapes = []
-        for i, out_name in enumerate(self.onnx_node.output):
-            shape = tuple(ctx.get_tensor_shape(out_name))
-            output_shapes.append(shape)
-
-        # Phase 2: Resolve and store all datatypes
-        self._resolve_and_store_datatypes(ctx)
-
-        # Phase 3: Build model from schema + resolved datatypes
-        kernel_model = self._build_from_schema(input_shapes, output_shapes)
-
-        # Phase 4: Validate
-        self._validate_kernel_model(kernel_model)
-
-        # Phase 5: Cache
-        self._kernel_model = kernel_model
-        logger.debug(f"KernelModel built successfully for {self.onnx_node.name}")
+        # Delegate to builder
+        try:
+            self._kernel_model = self._builder.build(build_ctx)
+        except ValueError as e:
+            raise self._error(str(e))
 
         return self._kernel_model
 
@@ -120,80 +123,6 @@ class KernelOp(HWCustomOp, ABC):
                 f"Call get_kernel_model(ctx) first to build the model."
             )
         return self._kernel_model
-
-    def _resolve_and_store_datatypes(self, ctx: ModelWrapper) -> None:
-        """Resolve and store all datatypes (inputs, outputs, internals).
-
-        This is the authoritative datatype resolution phase:
-        - Input datatypes: Always from graph (ONNX determines inputs)
-        - Internal datatypes: Derived from schema (using input datatypes)
-        - Output datatypes: From schema if specified, else from graph
-
-        All resolved datatypes are stored in nodeattrs for FINN integration.
-        """
-        interfaces = {}
-
-        # Phase 1: Input datatypes - extract from graph and store
-        for i, inp_name in enumerate(self.onnx_node.input):
-            if inp_name:
-                dtype = ctx.get_tensor_datatype(inp_name)
-                self.set_nodeattr(f"input{i}Datatype", dtype.name)
-
-                # Add to interfaces for internal/output derivation
-                class TempInterface:
-                    def __init__(self, dt):
-                        self.datatype = dt
-
-                interfaces[self.kernel_schema.inputs[i].name] = TempInterface(dtype)
-
-        # Phase 2: Internal datatypes - derive from schema and store
-        if self.kernel_schema.internal_datatypes:
-            for internal_name, datatype_source in self.kernel_schema.internal_datatypes.items():
-                try:
-                    resolved_dt = datatype_source.resolve(interfaces, self.get_nodeattr)
-                    attr_name = f"{internal_name}Datatype"
-                    self.set_nodeattr(attr_name, resolved_dt.name)
-
-                    # Add to interfaces for output derivation
-                    interfaces[internal_name] = TempInterface(resolved_dt)
-
-                    logger.debug(f"  Internal '{internal_name}': {resolved_dt.name}")
-                except ValueError as e:
-                    raise self._error(
-                        f"Internal datatype '{internal_name}' resolution failed: {e}"
-                    )
-
-        # Phase 3: Output datatypes - derive from schema or extract from graph
-        for i, out_name in enumerate(self.onnx_node.output):
-            schema = self.kernel_schema.outputs[i]
-
-            if schema.datatype is not None:
-                # Schema specifies derivation - use it
-                if isinstance(schema.datatype, DatatypeSource):
-                    try:
-                        derived_dt = schema.datatype.resolve(interfaces, self.get_nodeattr)
-                        graph_dt = ctx.get_tensor_datatype(out_name)
-
-                        if derived_dt != graph_dt:
-                            logger.info(
-                                f"Output '{schema.name}' datatype: schema derived {derived_dt.name}, "
-                                f"graph has {graph_dt.name} - using schema"
-                            )
-
-                        dtype = derived_dt
-                    except ValueError as e:
-                        raise self._error(
-                            f"Output '{schema.name}' datatype resolution failed: {e}"
-                        )
-                else:
-                    # Schema specifies fixed datatype (rare)
-                    dtype = schema.datatype
-            else:
-                # No schema derivation - use graph datatype (pass-through)
-                dtype = ctx.get_tensor_datatype(out_name)
-
-            self.set_nodeattr(f"output{i}Datatype", dtype.name)
-            logger.debug(f"  Output '{schema.name}': {dtype.name}")
 
     # ====================================================================
     # Public API: Shape/Datatype Queries
@@ -302,152 +231,3 @@ class KernelOp(HWCustomOp, ABC):
     def _invalidate_cache(self) -> None:
         """Invalidate cached KernelModel."""
         self._kernel_model = None
-
-    def _build_from_schema(self, input_shapes, output_shapes) -> KernelModel:
-        """Build KernelModel from schema templates and extracted shapes."""
-        logger.debug(f"Building KernelModel from schema for {self.onnx_node.name}")
-
-        interfaces = {}
-
-        # Phase 1: Build InputModels
-        input_models = []
-        for i, schema in enumerate(self.kernel_schema.inputs):
-            tensor_shape = input_shapes[i]
-            datatype = DataType[self.get_nodeattr(f"input{i}Datatype")]
-
-            block_shape = resolve_template(
-                schema.block_tiling,
-                tensor_shape,
-                self.get_nodeattr,
-                f"Input '{schema.name}' block",
-                interfaces
-            )
-
-            stream_shape = resolve_template(
-                schema.stream_tiling,
-                block_shape,
-                self.get_nodeattr,
-                f"Input '{schema.name}' stream",
-                interfaces
-            )
-
-            input_model = InputModel(
-                name=schema.name,
-                tensor_shape=tensor_shape,
-                block_shape=block_shape,
-                stream_shape=stream_shape,
-                datatype=datatype,
-                is_weight=schema.is_weight
-            )
-
-            input_models.append(input_model)
-            interfaces[schema.name] = input_model
-
-            logger.debug(
-                f"  Input '{schema.name}': tensor={tensor_shape}, "
-                f"block={block_shape}, stream={stream_shape}"
-            )
-
-        # Phase 2: Add resolved internal datatypes to interfaces
-        # (Already resolved and stored in nodeattrs by _resolve_and_store_datatypes)
-        if self.kernel_schema.internal_datatypes:
-            for internal_name in self.kernel_schema.internal_datatypes.keys():
-                try:
-                    datatype = DataType[self.get_nodeattr(f"{internal_name}Datatype")]
-
-                    class InternalDatatype:
-                        def __init__(self, dt):
-                            self.datatype = dt
-
-                    interfaces[internal_name] = InternalDatatype(datatype)
-                except (AttributeError, KeyError) as e:
-                    raise self._error(
-                        f"Internal datatype '{internal_name}' not found in nodeattrs. "
-                        f"Should have been resolved in _resolve_and_store_datatypes(). Error: {e}"
-                    )
-
-        # Phase 3: Build OutputModels
-        output_models = []
-        for i, schema in enumerate(self.kernel_schema.outputs):
-            tensor_shape = output_shapes[i]
-            datatype = DataType[self.get_nodeattr(f"output{i}Datatype")]
-
-            block_shape = resolve_template(
-                schema.block_tiling,
-                tensor_shape,
-                self.get_nodeattr,
-                f"Output '{schema.name}' block",
-                interfaces
-            )
-
-            if schema.stream_tiling is not None:
-                stream_shape = resolve_template(
-                    schema.stream_tiling,
-                    block_shape,
-                    self.get_nodeattr,
-                    f"Output '{schema.name}' stream",
-                    interfaces
-                )
-            else:
-                stream_shape = tuple([None] * len(block_shape))
-
-            output_model = OutputModel(
-                name=schema.name,
-                tensor_shape=tensor_shape,
-                block_shape=block_shape,
-                stream_shape=stream_shape,
-                datatype=datatype
-            )
-
-            output_models.append(output_model)
-            interfaces[schema.name] = output_model
-
-            logger.debug(
-                f"  Output '{schema.name}': tensor={tensor_shape}, "
-                f"block={block_shape}, stream={stream_shape}"
-            )
-
-        return KernelModel(
-            name=self.kernel_schema.name,
-            inputs=tuple(input_models),
-            outputs=tuple(output_models)
-        )
-
-    def _validate_kernel_model(self, model: KernelModel) -> None:
-        """Validate constraints and relationships."""
-        logger.debug(f"Validating KernelModel for {self.onnx_node.name}")
-
-        for i, input_model in enumerate(model.inputs):
-            schema = self.kernel_schema.inputs[i]
-            if schema.constraints:
-                self._validate_interface_constraints(
-                    schema.name, input_model, schema.constraints
-                )
-
-        for i, output_model in enumerate(model.outputs):
-            schema = self.kernel_schema.outputs[i]
-            if schema.constraints:
-                self._validate_interface_constraints(
-                    schema.name, output_model, schema.constraints
-                )
-
-        if self.kernel_schema.relationships:
-            logger.debug(
-                f"Validating {len(self.kernel_schema.relationships)} relationships"
-            )
-            for relationship in self.kernel_schema.relationships:
-                error = relationship.check(model, self.get_nodeattr)
-                if error:
-                    raise self._error(str(error))
-
-    def _validate_interface_constraints(
-        self,
-        interface_name: str,
-        interface_model: Any,
-        constraints: List
-    ) -> None:
-        """Validate single interface constraints."""
-        for constraint in constraints:
-            error = constraint.check(interface_model, self.get_nodeattr)
-            if error:
-                raise self._error(str(error))

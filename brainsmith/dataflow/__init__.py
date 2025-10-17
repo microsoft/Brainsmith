@@ -16,16 +16,20 @@ This module provides the core classes for modeling dataflow kernels.
 
 Key Components:
 - InputSchema/OutputSchema: Schema definitions for kernel interfaces
-- KernelSchema: Kernel definition with input/output schemas
-- KernelOp: Base class for all kernels (extracts shapes from context)
-- Immutable models: Created from ModelWrapper context + schemas
+- KernelSchema: Kernel definition with input/output schemas + validates models
+- KernelModelBuilder: Constructs immutable models from schemas + context
+- KernelOp: Base class for all kernels (FINN adapter, delegates to builder)
+- Immutable models: InputModel, OutputModel, KernelModel
 - Constraint system: InterfaceConstraint for single-interface validation
 - Derivation system: DimensionSource/DatatypeSource for cross-interface derivation
 - Relationship system: InterfaceRelationship for cross-interface validation
+
+Architecture:
+    KernelSchema (defines + validates) → KernelModelBuilder (constructs) → KernelModel
 """
 
 # Core types
-from .types import Shape, ShapeHierarchy, DerivedDim, ScaledDim, FULL_DIM
+from .types import Shape, ShapeHierarchy, FULL_DIM
 
 # QONNX types (direct from QONNX)
 from qonnx.core.datatype import DataType, BaseDataType
@@ -33,7 +37,9 @@ from qonnx.core.datatype import DataType, BaseDataType
 # Extensible derivation system
 from .dimension_sources import (
     DimensionSource,
-    # Built-in patterns (DerivedDim and ScaledDim also re-exported from types.py)
+    # Built-in patterns
+    DerivedDim,
+    ScaledDim,
     SumDims,
     MaxDim,
     ComputedDim,
@@ -78,6 +84,12 @@ from .models import (
     KernelModel,
 )
 
+# Builder (constructs models from schemas + context)
+from .builder import (
+    BuildContext,
+    KernelModelBuilder,
+)
+
 # Template resolution
 from .template_resolution import resolve_template
 
@@ -117,6 +129,9 @@ __all__ = [
 
     # Immutable models
     'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
+
+    # Builder
+    'BuildContext', 'KernelModelBuilder',
 
     # Template resolution
     'resolve_template',
