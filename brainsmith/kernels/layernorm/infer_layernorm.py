@@ -67,11 +67,10 @@ class InferLayerNorm(Transformation):
     - SIMD: Parallelization factor (default 1)
     - epsilon: Small value to prevent division by zero
 
-    Attributes set automatically by refresh_df_model():
-    - _input0Datatype: Populated from model graph
-    - _output0Datatype: Populated from model graph
-    - _input0TensorShape, _input0BlockShape, _input0StreamShape
-    - _output0TensorShape, _output0BlockShape, _output0StreamShape
+    Attributes set automatically by get_kernel_model():
+    - input0Datatype: Populated from model graph
+    - output0Datatype: Populated from model graph
+    Shapes are inferred automatically from context (not stored in nodeattrs)
     """
 
     def apply(self, model):
@@ -148,11 +147,11 @@ class InferLayerNorm(Transformation):
             model = model.transform(InferShapes())
             model = model.transform(InferDataTypes())
 
-            # Initialize tensor context for newly created LayerNorm nodes
+            # Initialize kernel model for newly created LayerNorm nodes
             # This must happen AFTER InferShapes to ensure intermediate tensors have valid shapes
             for node in model.graph.node:
                 if node.op_type == "LayerNorm" and node.domain == "brainsmith.kernels":
                     op_inst = getCustomOp(node)
-                    op_inst.refresh_df_model(model)
+                    op_inst.get_kernel_model(model)
 
         return (model, graph_modified)

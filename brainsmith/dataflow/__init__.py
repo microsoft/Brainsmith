@@ -9,10 +9,16 @@
 
 This module provides the core classes for modeling dataflow kernels.
 
+**Key Principles:**
+- Schemas define STRUCTURE, not storage
+- ModelWrapper is the single source of truth for shapes
+- Only datatypes and user parameters persist in nodeattrs
+
 Key Components:
 - InputSchema/OutputSchema: Schema definitions for kernel interfaces
 - KernelSchema: Kernel definition with input/output schemas
-- Immutable models: Created via factory functions in models.py
+- KernelOp: Base class for all kernels (extracts shapes from context)
+- Immutable models: Created from ModelWrapper context + schemas
 - Constraint system: InterfaceConstraint for single-interface validation
 - Derivation system: DimensionSource/DatatypeSource for cross-interface derivation
 - Relationship system: InterfaceRelationship for cross-interface validation

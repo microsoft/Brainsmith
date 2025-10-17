@@ -7,7 +7,15 @@
 
 """Consolidated schema definitions for dataflow kernels.
 
-This module contains all schema classes for defining kernel interfaces:
+Schemas define STRUCTURE, not STORAGE. They specify:
+- Interface definitions (inputs, outputs)
+- Tiling templates (block_tiling, stream_tiling)
+- Validation rules (constraints, relationships)
+
+Schemas are stateless - they never define what gets stored in nodeattrs.
+Storage decisions are implementation details of operator classes.
+
+Key classes:
 - InterfaceSchema: Base class for input/output interfaces
 - InputSchema: Schema for input interfaces
 - OutputSchema: Schema for output interfaces
@@ -76,8 +84,15 @@ class OutputSchema(InterfaceSchema):
 class KernelSchema:
     """Schema for a complete kernel definition.
 
-    Defines a kernel with its input/output interfaces. This is a pure schema
-    definition - model creation happens in KernelOp.
+    Defines kernel STRUCTURE:
+    - Input/output interfaces with tiling templates
+    - Validation rules (constraints, relationships)
+    - Internal datatype derivation patterns
+
+    Does NOT define STORAGE:
+    - Shapes are extracted from ModelWrapper or computed from templates
+    - Only datatypes and user parameters persist in nodeattrs
+    - KernelOp handles storage implementation
 
     The relationships field allows cross-interface validation using patterns
     like DatatypesEqual, DimensionsEqual, or custom validation logic.
@@ -121,7 +136,16 @@ class KernelSchema:
                 )
 
     def get_nodeattr_types(self) -> Dict[str, tuple]:
-        """Generate complete nodeattr registry from schema.
+        """Generate nodeattr registry from schema.
+
+        Schemas define STRUCTURE, not STORAGE. Returns only attributes
+        that need persistence:
+        - Datatypes (for interfaces and internals)
+        - User parameters (SIMD, PE, etc.)
+
+        Shapes are NEVER stored in nodeattrs. They are either:
+        - Tensor shapes: extracted from ModelWrapper (ONNX graph)
+        - Block/stream shapes: computed from schema templates
 
         Returns:
             Dict mapping nodeattr name to (type, required, default_value)
@@ -130,39 +154,25 @@ class KernelSchema:
         attrs = {}
 
         # ================================================================
-        # 1. Interface Datatypes (protected, _ prefix)
+        # 1. Interface Datatypes (datatypes only, NO shapes)
         # ================================================================
 
         for i in range(len(self.inputs)):
-            attrs[f"_input{i}Datatype"] = ("s", False, "")
+            attrs[f"input{i}Datatype"] = ("s", False, "")
 
         for i in range(len(self.outputs)):
-            attrs[f"_output{i}Datatype"] = ("s", False, "")
+            attrs[f"output{i}Datatype"] = ("s", False, "")
 
         # ================================================================
-        # 2. Internal Datatypes (prefix "_")
+        # 2. Internal Datatypes
         # ================================================================
 
         for internal_name in self.internal_datatypes.keys():
-            attr_name = f"_{internal_name}Datatype"
+            attr_name = f"{internal_name}Datatype"
             attrs[attr_name] = ("s", False, "")
 
         # ================================================================
-        # 3. Protected Shape Attributes (prefix "_")
-        # ================================================================
-
-        for i in range(len(self.inputs)):
-            attrs[f"_input{i}TensorShape"] = ("ints", False, [])
-            attrs[f"_input{i}BlockShape"] = ("ints", False, [])
-            attrs[f"_input{i}StreamShape"] = ("ints", False, [])
-
-        for i in range(len(self.outputs)):
-            attrs[f"_output{i}TensorShape"] = ("ints", False, [])
-            attrs[f"_output{i}BlockShape"] = ("ints", False, [])
-            attrs[f"_output{i}StreamShape"] = ("ints", False, [])
-
-        # ================================================================
-        # 4. Template Parameters (user-configurable, no prefix)
+        # 3. User Parameters (template params from tiling specs)
         # ================================================================
 
         template_params = self._extract_template_params()
@@ -181,61 +191,3 @@ class KernelSchema:
         for interface in self.inputs + self.outputs:
             params.update(interface.tiling_attrs)
         return params
-
-    @property
-    def protected_attr_names(self) -> set:
-        """Attributes that cannot be modified by users.
-
-        Protected attributes are managed by refresh_df_model() and
-        internal resolution logic.
-
-        Returns:
-            Set of protected attribute names
-        """
-        protected = set()
-
-        # All attributes with "_" prefix
-        for i in range(len(self.inputs)):
-            protected.add(f"_input{i}TensorShape")
-            protected.add(f"_input{i}BlockShape")
-            protected.add(f"_input{i}StreamShape")
-            protected.add(f"_input{i}Datatype")
-
-        for i in range(len(self.outputs)):
-            protected.add(f"_output{i}TensorShape")
-            protected.add(f"_output{i}BlockShape")
-            protected.add(f"_output{i}StreamShape")
-            protected.add(f"_output{i}Datatype")
-
-        # Internal datatypes
-        for internal_name in self.internal_datatypes.keys():
-            protected.add(f"_{internal_name}Datatype")
-
-        return protected
-
-    def get_datatype_attr(self, index: int, is_input: bool = True) -> str:
-        """Get nodeattr name for interface datatype.
-
-        Args:
-            index: Interface index (0-based)
-            is_input: True for inputs, False for outputs
-
-        Returns:
-            Nodeattr name (e.g., "_input0Datatype", "_output2Datatype")
-
-        Raises:
-            IndexError: If index out of range
-        """
-        if is_input:
-            if index >= len(self.inputs):
-                raise IndexError(
-                    f"Input index {index} out of range (have {len(self.inputs)})"
-                )
-            return f"_input{index}Datatype"
-        else:
-            if index >= len(self.outputs):
-                raise IndexError(
-                    f"Output index {index} out of range (have {len(self.outputs)})"
-                )
-            return f"_output{index}Datatype"
-    

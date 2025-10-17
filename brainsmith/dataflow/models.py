@@ -8,14 +8,17 @@
 """
 Immutable kernel models for the dataflow system.
 
-These models represent runtime instances created from schemas. They are
-immutable snapshots that reflect the current state of nodeattrs at creation
-time. Models are cached and refreshed when nodeattrs change.
+These models represent runtime instances created from schemas and context.
+They are immutable snapshots built from:
+- ModelWrapper context (tensor shapes, datatypes from ONNX graph)
+- KernelSchema (structural definition, tiling templates)
+- Nodeattrs (user parameters like SIMD, PE)
 
 Key principles:
 - All models are immutable (frozen dataclasses)
-- Models are cached for performance
-- Refresh cached models when nodeattrs change
+- Models built from ModelWrapper context (source of truth)
+- Models are cached, rebuilt on context/parameter changes
+- Shapes are NEVER stored in nodeattrs (extracted from context)
 """
 
 import logging
@@ -155,8 +158,14 @@ class OutputModel(InterfaceModel):
 class KernelModel:
     """Immutable kernel model representing a configured kernel instance.
 
-    This model is a snapshot of a kernel's configuration at a point in time.
-    Models are cached and refreshed when nodeattrs change.
+    This model is a runtime snapshot built from:
+    - ModelWrapper context (tensor shapes, datatypes from ONNX graph)
+    - KernelSchema (structural definition, tiling templates)
+    - Nodeattrs (user parameters like SIMD, PE)
+
+    Models are cached and rebuilt when:
+    - User parameters change (via set_nodeattr())
+    - Context updates (new call to get_kernel_model(ctx))
 
     Resolution flow in __post_init__:
     1. Derive any remaining unset output dimensions (default logic)
@@ -341,5 +350,3 @@ class KernelModel:
         cycles_per_inf = self.initiation_interval
         clock_hz = self.clock_freq_mhz * 1e6
         return clock_hz / cycles_per_inf
-
-

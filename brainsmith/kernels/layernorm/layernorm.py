@@ -28,14 +28,13 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[FULL_DIM],                   # (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
-            datatype=None,                             # From ONNX: output0Datatype
         )
     ]
 )
 
 
 @kernel(
-    description="Hardware LayerNorm using KernelOp and Dataflow Modeling",
+    description="Hardware LayerNorm using Dataflow Modeling",
     author="Shane Fleming"
 )
 class LayerNorm(KernelOp):

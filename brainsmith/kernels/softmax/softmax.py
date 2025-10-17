@@ -41,7 +41,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
 
 
 @kernel(
-    description="Float32 Softmax",
+    description="Float32 Softmax using Dataflow Modeling",
     author="Shane Fleming"
 )
 class Softmax(KernelOp):
