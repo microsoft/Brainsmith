@@ -36,6 +36,7 @@ from .schemas import KernelSchema
 from .models import KernelModel, InputModel, OutputModel, InternalDatatypeModel
 from .template_resolution import resolve_template
 from .datatype_sources import DatatypeSource
+from .validation import KernelValidationContext
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +134,8 @@ class KernelModelBuilder:
             outputs=tuple(output_models)
         )
 
-        # Phase 5: Validate (delegate to schema)
-        ctx.schema.validate_model(kernel_model, ctx.param_getter)
+        # Phase 5: Validate using unified constraint system
+        self._validate_model(kernel_model, ctx)
 
         logger.debug(f"KernelModel built successfully for {ctx.node_name}")
         return kernel_model
@@ -173,6 +174,9 @@ class KernelModelBuilder:
                     schema, tensor_shape
                 )
 
+                # Infer is_weight from ONNX initializer presence
+                is_weight = self._ctx.ctx.get_initializer(inp_name) is not None
+
                 # Build full InputModel
                 input_model = InputModel(
                     name=schema.name,
@@ -180,7 +184,7 @@ class KernelModelBuilder:
                     block_shape=block_shape,
                     stream_shape=stream_shape,
                     datatype=datatype,
-                    is_weight=schema.is_weight
+                    is_weight=is_weight  # Inferred from ONNX, not from schema
                 )
 
                 input_models.append(input_model)
@@ -383,6 +387,40 @@ class KernelModelBuilder:
             f"{stream_shape} → {resolved} (singleton default)"
         )
         return resolved
+
+    def _validate_model(self, kernel_model: KernelModel, ctx: BuildContext) -> None:
+        """Validate kernel model using unified constraint system.
+
+        Creates a KernelValidationContext and runs all schema constraints through it.
+
+        Args:
+            kernel_model: Built KernelModel to validate
+            ctx: BuildContext with param_getter
+
+        Raises:
+            ValueError: If any constraint fails
+        """
+        if not ctx.schema.constraints:
+            return  # No constraints to validate
+
+        # Create kernel validation context
+        validation_ctx = KernelValidationContext(
+            kernel_model=kernel_model,
+            param_getter=ctx.param_getter
+        )
+
+        # Run all constraints
+        errors = []
+        for constraint in ctx.schema.constraints:
+            error = constraint.check(validation_ctx)
+            if error is not None:
+                errors.append(f"  - {constraint.describe()}: {error}")
+
+        if errors:
+            error_msg = f"Kernel validation failed for {ctx.node_name}:\n" + "\n".join(errors)
+            raise ValueError(error_msg)
+
+        logger.debug(f"  All {len(ctx.schema.constraints)} constraints passed")
 
 
 __all__ = [

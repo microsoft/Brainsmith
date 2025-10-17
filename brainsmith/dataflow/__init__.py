@@ -16,13 +16,13 @@ This module provides the core classes for modeling dataflow kernels.
 
 Key Components:
 - InputSchema/OutputSchema: Schema definitions for kernel interfaces
-- KernelSchema: Kernel definition with input/output schemas + validates models
+- KernelSchema: Kernel definition with unified constraints
 - KernelModelBuilder: Constructs immutable models from schemas + context
 - KernelOp: Base class for all kernels (FINN adapter, delegates to builder)
 - Immutable models: InputModel, OutputModel, KernelModel
-- Constraint system: InterfaceConstraint for single-interface validation
+- Unified Constraint system: Single abstraction for all validation (ONNX + kernel)
 - Derivation system: DimensionSource/DatatypeSource for cross-interface derivation
-- Relationship system: InterfaceRelationship for cross-interface validation
+- Inference system: InferencePattern for ONNX → HW layer inference
 
 Architecture:
     KernelSchema (defines + validates) → KernelModelBuilder (constructs) → KernelModel
@@ -53,24 +53,26 @@ from .datatype_sources import (
     ComputedDatatype,
 )
 
-# Extensible relationship validation system
-from .relationships import (
-    InterfaceRelationship,
-    DatatypesEqual,
-    DimensionsEqual,
-    CustomRelationship,
-)
-
-# Constraint system (single-interface validation)
+# Unified Constraint system (works in both ONNX and kernel contexts)
 from .constraints import (
-    # Base classes
-    InterfaceConstraint,
-    DimensionConstraint,
-    # Concrete constraints
-    DatatypeConstraint,
+    # Base class
+    Constraint,
+    # Datatype constraints
+    DatatypeInteger,
+    DatatypeFloat,
+    DatatypeInRange,
+    DatatypesEqual,
+    # Shape constraints
+    ShapesEqual,
     DimensionDivisible,
-    DimensionMinValue,
-    DimensionMaxValue,
+    DimensionInRange,
+    DimensionEquals,
+    # ONNX-specific constraints
+    IsDynamic,
+    IsStatic,
+    HasLayout,
+    # Custom constraint
+    Custom,
 )
 
 # Core architecture - schemas consolidated in schemas.py
@@ -94,13 +96,18 @@ from .builder import (
 from .template_resolution import resolve_template
 
 # Validation
-from .validation import ValidationError
+from .validation import (
+    ValidationError,
+    ValidationContext,
+    OnnxValidationContext,
+    KernelValidationContext,
+)
 
 # Kernel operator base class
 from .kernel_op import KernelOp, KernelOpError
 
 # Inference infrastructure
-from .inference import InferenceConfig, InferenceResult, InferenceHelper
+from .inference import InferencePattern, InferenceResult, InferenceHelper
 
 
 __all__ = [
@@ -119,13 +126,16 @@ __all__ = [
     'DatatypeSource',
     'DerivedDatatype', 'WidenedDatatype', 'UnionDatatype', 'ComputedDatatype',
 
-    # Extensible relationship validation system
-    'InterfaceRelationship',
-    'DatatypesEqual', 'DimensionsEqual', 'CustomRelationship',
-
-    # Constraint system (single-interface validation)
-    'InterfaceConstraint', 'DimensionConstraint',
-    'DatatypeConstraint', 'DimensionDivisible', 'DimensionMinValue', 'DimensionMaxValue',
+    # Unified Constraint system (works in both ONNX and kernel contexts)
+    'Constraint',
+    # Datatype constraints
+    'DatatypeInteger', 'DatatypeFloat', 'DatatypeInRange', 'DatatypesEqual',
+    # Shape constraints
+    'ShapesEqual', 'DimensionDivisible', 'DimensionInRange', 'DimensionEquals',
+    # ONNX-specific constraints
+    'IsDynamic', 'IsStatic', 'HasLayout',
+    # Custom constraint
+    'Custom',
 
     # Core architecture
     'InputSchema', 'OutputSchema', 'KernelSchema',
@@ -141,10 +151,13 @@ __all__ = [
 
     # Validation
     'ValidationError',
+    'ValidationContext',
+    'OnnxValidationContext',
+    'KernelValidationContext',
 
     # Kernel operator base class
     'KernelOp', 'KernelOpError',
 
     # Inference infrastructure
-    'InferenceConfig', 'InferenceResult', 'InferenceHelper',
+    'InferencePattern', 'InferenceResult', 'InferenceHelper',
 ]

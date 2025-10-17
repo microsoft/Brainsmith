@@ -28,15 +28,14 @@ from typing import List, Optional, Sequence, Union, Dict, Any, Callable, TYPE_CH
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
-from .constraints import InterfaceConstraint
 from .dimension_sources import DimensionSource
 from .datatype_sources import DatatypeSource
-from .relationships import InterfaceRelationship
 from .types import FULL_DIM
 
 if TYPE_CHECKING:
     from .models import KernelModel
-    from .inference import InferenceConfig
+    from .inference import InferencePattern
+    from .constraints import Constraint
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +50,14 @@ class InterfaceSchema:
     Provides common fields and validation for all interface types.
     Inputs always get their datatypes from the ONNX graph.
     Outputs can derive datatypes from inputs or internal datatypes.
+
+    Note: Validation constraints are now defined at KernelSchema level
+    using unified Constraint system.
     """
 
     name: str
     block_tiling: Optional[TilingSpec] = None
     stream_tiling: Optional[TilingSpec] = None
-    constraints: List[InterfaceConstraint] = field(default_factory=list)
 
     @property
     def tiling_attrs(self) -> List[str]:
@@ -70,9 +71,13 @@ class InterfaceSchema:
 
 @dataclass
 class InputSchema(InterfaceSchema):
-    """Schema for an input interface."""
+    """Schema for an input interface.
 
-    is_weight: bool = False  # Explicitly mark weight inputs for FINN
+    Note: Whether an input is a weight (static tensor with initializer) is
+    inferred automatically from the ONNX graph during model building, not
+    declared in the schema. Use IsStatic/IsDynamic constraints to validate.
+    """
+    pass  # No additional fields beyond InterfaceSchema
 
 
 @dataclass
@@ -93,18 +98,21 @@ class KernelSchema:
 
     Defines kernel STRUCTURE:
     - Input/output interfaces with tiling templates
-    - Validation rules (constraints, relationships)
+    - Unified validation constraints (datatype, shape, cross-interface)
     - Internal datatype derivation patterns
     - Kernel-specific parameters (algorithm, hardware, features)
-    - Inference configuration (optional, for automatic HW layer inference)
+    - Inference pattern (optional, for automatic HW layer inference)
 
     Does NOT define STORAGE:
     - Shapes are extracted from ModelWrapper or computed from templates
     - Only datatypes and user parameters persist in nodeattrs
     - KernelOp handles storage implementation
 
-    The relationships field allows cross-interface validation using patterns
-    like DatatypesEqual, DimensionsEqual, or custom validation logic.
+    The constraints field uses the unified Constraint system for all validation:
+    - Single-interface constraints (datatype, dimension ranges)
+    - Cross-interface constraints (shape equality, datatype equality)
+    - ONNX-specific constraints (dynamic/static inputs, layouts)
+    - Custom validation logic
 
     Internal datatypes represent intermediate computation datatypes not attached
     to ONNX tensors (e.g., accumulators, bias values). They are derived from
@@ -114,18 +122,18 @@ class KernelSchema:
     from the interface structure (e.g., epsilon for LayerNorm, algorithm
     selection for Pool). Format: {"paramName": ("i"|"s"|"f", required, default)}
 
-    The inference_config field (optional) enables automatic inference from ONNX
-    nodes by defining pattern matching rules. See InferenceConfig for details.
+    The inference field (optional) enables automatic inference from ONNX nodes.
+    See InferencePattern for details.
     """
 
     name: str
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
     internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
-    relationships: List[InterfaceRelationship] = field(default_factory=list)
+    constraints: List['Constraint'] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     kernel_params: Dict[str, tuple] = field(default_factory=dict)
-    inference_config: Optional['InferenceConfig'] = None
+    inference: Optional['InferencePattern'] = None
 
     def __post_init__(self):
         """Validate schema structure."""
@@ -151,86 +159,6 @@ class KernelSchema:
             if internal_name in all_interface_names:
                 raise ValueError(
                     f"Internal datatype '{internal_name}' conflicts with interface name in kernel '{self.name}'"
-                )
-
-    def validate_model(
-        self,
-        model: 'KernelModel',
-        param_getter: Callable[[str], Any]
-    ) -> None:
-        """Validate a KernelModel against this schema's constraints and relationships.
-
-        This is where validation logic belongs - with the schema definition that
-        specifies the rules. The schema knows what constraints and relationships
-        must hold, so it should validate them.
-
-        Args:
-            model: KernelModel to validate
-            param_getter: Function to retrieve nodeattr values (for constraint checking)
-
-        Raises:
-            ValueError: If any constraint or relationship validation fails
-
-        Example:
-            >>> schema = KernelSchema(name="LayerNorm", ...)
-            >>> model = builder.build(ctx)
-            >>> schema.validate_model(model, get_nodeattr)  # Validates model
-        """
-        logger.debug(f"Validating KernelModel against schema '{self.name}'")
-
-        # Validate input constraints
-        for i, input_model in enumerate(model.inputs):
-            schema = self.inputs[i]
-            if schema.constraints:
-                self._validate_interface_constraints(
-                    interface_name=schema.name,
-                    interface_model=input_model,
-                    constraints=schema.constraints,
-                    param_getter=param_getter
-                )
-
-        # Validate output constraints
-        for i, output_model in enumerate(model.outputs):
-            schema = self.outputs[i]
-            if schema.constraints:
-                self._validate_interface_constraints(
-                    interface_name=schema.name,
-                    interface_model=output_model,
-                    constraints=schema.constraints,
-                    param_getter=param_getter
-                )
-
-        # Validate relationships (cross-interface)
-        if self.relationships:
-            logger.debug(f"Validating {len(self.relationships)} relationships")
-            for relationship in self.relationships:
-                error = relationship.check(model, param_getter)
-                if error:
-                    raise ValueError(f"Relationship validation failed: {error}")
-
-    def _validate_interface_constraints(
-        self,
-        interface_name: str,
-        interface_model: Any,
-        constraints: List[InterfaceConstraint],
-        param_getter: Callable[[str], Any]
-    ) -> None:
-        """Validate constraints for a single interface.
-
-        Args:
-            interface_name: Interface name for error messages
-            interface_model: InputModel or OutputModel to validate
-            constraints: List of InterfaceConstraint instances to check
-            param_getter: Function to retrieve nodeattr values
-
-        Raises:
-            ValueError: If any constraint fails
-        """
-        for constraint in constraints:
-            error = constraint.check(interface_model, param_getter)
-            if error:
-                raise ValueError(
-                    f"Constraint validation failed for '{interface_name}': {error}"
                 )
 
     def get_nodeattr_types(self) -> Dict[str, tuple]:

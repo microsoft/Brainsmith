@@ -4,421 +4,599 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
+
+"""Unified constraint system for dataflow modeling.
+
+Constraints are pure predicates that validate properties across different
+contexts (ONNX inference, kernel build-time). They work with the ValidationContext
+protocol to provide context-agnostic validation.
+
+Architecture:
+    - Constraint(ABC): Base class with check(ctx) → Optional[str]
+    - ValidationContext: Protocol for accessing tensor/interface properties
+    - Concrete constraints: Datatype, shape, ONNX-specific validations
+
+Example usage:
+    # Define constraints once
+    constraints = [
+        DatatypeInteger(("input0", "input1")),
+        ShapesEqual(("input0", "input1")),
+        IsDynamic(("input0", "input1")),
+    ]
+
+    # Apply on ONNX (inference-time)
+    onnx_ctx = OnnxValidationContext(node, model)
+    for c in constraints:
+        if c.check(onnx_ctx):
+            return False  # Constraint violated
+
+    # Apply on kernel (build-time)
+    kernel_ctx = KernelValidationContext(kernel_model, get_nodeattr)
+    for c in constraints:
+        error = c.check(kernel_ctx)
+        if error:
+            raise ValueError(error)
 """
-Interface constraint system for dataflow modeling.
 
-InterfaceConstraints validate properties of single interfaces (datatype, dimensions).
-They are applied during interface model creation in the kernel build process.
-
-Shape Hierarchy:
-All dimension constraints support targeting different shape levels via the shape_hierarchy
-parameter (defaults to ShapeHierarchy.STREAM):
-- ShapeHierarchy.STREAM: Validate stream_shape (streaming parallelism)
-- ShapeHierarchy.BLOCK: Validate block_shape (block tiling dimensions)
-- ShapeHierarchy.TENSOR: Validate tensor_shape (full logical dimensions)
-
-For cross-interface relationships, see relationships.py.
-"""
-
-import math
-from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Union
+import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Union
 
-from .types import ShapeHierarchy
-from .validation import ValidationError
+from qonnx.core.datatype import DataType
+
+from .validation import ValidationContext, ShapeHierarchy
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# InterfaceConstraint Hierarchy (Single Interface Validation)
+# Base Constraint
 # =============================================================================
 
 @dataclass(frozen=True)
-class InterfaceConstraint(ABC):
-    """Constraint scoped to a single interface.
+class Constraint(ABC):
+    """A validation rule that can be checked in any context.
 
-    Validates properties of a single interface (datatype, dimensions).
-    Applied during interface model creation.
+    Constraints are pure predicates - they describe what must be true.
+    They can be checked on ONNX nodes (inference) or kernel models (build).
+
+    Subclasses must implement:
+    - check(ctx: ValidationContext) → Optional[str]
+    - describe() → str
     """
 
-    interface_name: str
-
     @abstractmethod
-    def check(
-        self,
-        interface_model: Any,  # InputModel or OutputModel
-        nodeattr_getter: Callable[[str], Any]
-    ) -> Optional[ValidationError]:
-        """Check constraint on interface model.
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Check constraint in given context.
 
         Args:
-            interface_model: InputModel or OutputModel to validate
-            nodeattr_getter: Function to resolve nodeattr names (e.g., self.get_nodeattr)
+            ctx: ValidationContext (ONNX or Kernel)
 
         Returns:
-            None if constraint is satisfied
-            ValidationError if constraint is violated
+            None if satisfied, error message string if violated
         """
         pass
 
     @abstractmethod
     def describe(self) -> str:
+        """Human-readable description of constraint."""
         pass
 
 
 # =============================================================================
-# Concrete Constraint Classes
+# Datatype Constraints
 # =============================================================================
 
 @dataclass(frozen=True)
-class DatatypeConstraint(InterfaceConstraint):
-    """Datatype must match base type and bit width constraints.
+class DatatypeInteger(Constraint):
+    """Specified interfaces must have integer datatypes.
 
-    Examples:
-        DatatypeConstraint("input", "INT", 4, 8)    # INT4-INT8
-        DatatypeConstraint("output", "UINT", 8, 16) # UINT8, UINT16
-        DatatypeConstraint("data", "ANY", 8, 32)    # Any type, 8-32 bits
+    Example:
+        DatatypeInteger(("input0", "input1"))
     """
 
-    base_type: str  # "INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY", "BINARY", "ANY"
-    min_width: int  # Minimum bit width (inclusive)
-    max_width: int  # Maximum bit width (inclusive)
+    interfaces: tuple[str, ...]
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces are integer types."""
+        for name in self.interfaces:
+            try:
+                dt = ctx.get_datatype(name)
+            except KeyError as e:
+                return f"Interface '{name}' not found: {e}"
+
+            if not dt.is_integer():
+                return f"Interface '{name}' has non-integer datatype {dt.name}"
+
+        return None
+
+    def describe(self) -> str:
+        return f"{self.interfaces} must be integer datatypes"
+
+
+@dataclass(frozen=True)
+class DatatypeFloat(Constraint):
+    """Specified interfaces must have floating-point datatypes.
+
+    Example:
+        DatatypeFloat(("input0", "input1"))
+    """
+
+    interfaces: tuple[str, ...]
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces are float types."""
+        for name in self.interfaces:
+            try:
+                dt = ctx.get_datatype(name)
+            except KeyError as e:
+                return f"Interface '{name}' not found: {e}"
+
+            canonical = dt.get_canonical_name()
+            if not canonical.startswith("FLOAT"):
+                return f"Interface '{name}' has non-float datatype {dt.name}"
+
+        return None
+
+    def describe(self) -> str:
+        return f"{self.interfaces} must be float datatypes"
+
+
+@dataclass(frozen=True)
+class DatatypeInRange(Constraint):
+    """Interface datatype must match base type and bit width range.
+
+    Examples:
+        DatatypeInRange("input", "INT", 4, 8)    # INT4-INT8
+        DatatypeInRange("output", "UINT", 8, 16) # UINT8, UINT16
+        DatatypeInRange("data", "ANY", 8, 32)    # Any type, 8-32 bits
+    """
+
+    interface: str
+    base_type: str  # "INT", "UINT", "FLOAT", "FIXED", "BIPOLAR", "TERNARY", "BINARY", "ANY"
+    min_bits: int
+    max_bits: int
 
     def __post_init__(self):
         """Validate constraint parameters."""
-        if self.min_width <= 0:
-            raise ValueError(f"min_width must be positive, got {self.min_width}")
-        if self.max_width < self.min_width:
-            raise ValueError(f"max_width ({self.max_width}) must be >= min_width ({self.min_width})")
+        if self.min_bits <= 0:
+            raise ValueError(f"min_bits must be positive, got {self.min_bits}")
+        if self.max_bits < self.min_bits:
+            raise ValueError(f"max_bits ({self.max_bits}) must be >= min_bits ({self.min_bits})")
 
-        valid_base_types = ["INT", "UINT", "FIXED", "FLOAT", "BIPOLAR", "TERNARY", "BINARY", "ANY"]
-        if self.base_type not in valid_base_types:
-            raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_base_types}")
+        valid_types = ["INT", "UINT", "FLOAT", "FIXED", "BIPOLAR", "TERNARY", "BINARY", "ANY"]
+        if self.base_type not in valid_types:
+            raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_types}")
 
-    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[ValidationError]:
-        """Validate datatype against constraints."""
-        datatype = interface_model.datatype
-        bitwidth = datatype.bitwidth()
-        canonical_name = datatype.get_canonical_name()
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate datatype matches base type and bit width range."""
+        try:
+            dt = ctx.get_datatype(self.interface)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
+
+        bitwidth = dt.bitwidth()
+        canonical = dt.get_canonical_name()
 
         # Check bitwidth range
-        if not (self.min_width <= bitwidth <= self.max_width):
-            return ValidationError(
-                message=f"Datatype {canonical_name} bitwidth {bitwidth} not in range [{self.min_width}, {self.max_width}]",
-                location=f"{interface_model.name}.datatype",
-                suggestions=[f"Use {self.base_type} type with width in [{self.min_width}, {self.max_width}]"]
+        if not (self.min_bits <= bitwidth <= self.max_bits):
+            return (
+                f"{self.interface} bitwidth {bitwidth} not in range "
+                f"[{self.min_bits}, {self.max_bits}]"
             )
 
         # Special case: ANY matches any type (only bitwidth matters)
         if self.base_type == "ANY":
             return None
 
-        # Check base type using validation mapping
+        # Type validation
         type_validators = {
-            "INT": lambda: canonical_name.startswith("INT") and datatype.signed(),
-            "UINT": lambda: canonical_name.startswith("UINT") or canonical_name == "BINARY",
-            "FIXED": lambda: canonical_name.startswith("FIXED<"),
-            "FLOAT": lambda: canonical_name.startswith("FLOAT"),
-            "BIPOLAR": lambda: canonical_name == "BIPOLAR",
-            "TERNARY": lambda: canonical_name == "TERNARY",
-            "BINARY": lambda: canonical_name == "BINARY",
+            "INT": lambda: canonical.startswith("INT") and dt.signed(),
+            "UINT": lambda: canonical.startswith("UINT") or canonical == "BINARY",
+            "FLOAT": lambda: canonical.startswith("FLOAT"),
+            "FIXED": lambda: canonical.startswith("FIXED<"),
+            "BIPOLAR": lambda: canonical == "BIPOLAR",
+            "TERNARY": lambda: canonical == "TERNARY",
+            "BINARY": lambda: canonical == "BINARY",
         }
 
         validator = type_validators.get(self.base_type)
         if validator and not validator():
-            return ValidationError(
-                message=f"Datatype {canonical_name} does not match {self.base_type} constraint",
-                location=f"{interface_model.name}.datatype",
-                suggestions=[f"Use {self.base_type} datatype"]
-            )
+            return f"{self.interface} type {canonical} does not match {self.base_type}"
 
         return None
 
     def describe(self) -> str:
-        return f"{self.interface_name}.datatype: {self.base_type}[{self.min_width}..{self.max_width}]"
+        return f"{self.interface} ∈ {self.base_type}[{self.min_bits}..{self.max_bits}]"
 
 
 @dataclass(frozen=True)
-class DimensionConstraint(InterfaceConstraint, ABC):
-    """Base class for constraints on dimension(s) of a single interface.
+class DatatypesEqual(Constraint):
+    """All specified interfaces must have identical datatypes.
 
-    Validates dimensions at any shape hierarchy level (stream/block/tensor).
-    Supports nodeattr references for constraint values.
-
-    Dimension Index Semantics:
-    - int: Single dimension index (e.g., 1 for dimension 1)
-    - List[int]: Multiple dimension indices (e.g., [0, 1, 2] for first three dimensions)
-    - None: Total size (product of all dimensions)
-
-    Subclasses must define shape_hierarchy field (defaults to ShapeHierarchy.STREAM).
+    Example:
+        DatatypesEqual(("input0", "input1", "output"))
     """
 
-    dim_index: Union[int, List[int], None]
+    interfaces: tuple[str, ...]
 
-    @abstractmethod
-    def _get_constraint_value(self) -> Union[int, str, float]:
-        """Return the constraint value (divisor, min_value, etc.)."""
-        pass
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces have identical datatypes."""
+        if len(self.interfaces) < 2:
+            return "DatatypesEqual requires at least 2 interfaces"
 
-    @abstractmethod
-    def _validate_dimension(
-        self,
-        dim_value: int,
-        constraint_value: Union[int, float],
-        dim_desc: str
-    ) -> Optional[ValidationError]:
-        """Validate dimension value against constraint. Returns ValidationError or None."""
-        pass
-
-    def check(self, interface_model: Any, nodeattr_getter: Callable[[str], Any]) -> Optional[ValidationError]:
-        """Check constraint on interface model. Returns ValidationError or None."""
-        # Handle multiple dimensions
-        if isinstance(self.dim_index, list):
-            return self._check_multiple_dimensions(interface_model, nodeattr_getter)
-
-        # Single dimension or total size (original logic)
-        # Extract dimension value and descriptor
-        dim_value, dim_desc, error = self._extract_dimension(interface_model)
-        if error:
-            return error
-
-        # Resolve constraint value (handles nodeattr lookup)
-        constraint_value, error = self._resolve_value(
-            self._get_constraint_value(),
-            nodeattr_getter
-        )
-        if error:
-            return error
-
-        # Delegate to subclass validation
-        return self._validate_dimension(dim_value, constraint_value, dim_desc)
-
-    def _extract_dimension(
-        self,
-        interface_model: Any
-    ) -> tuple[Optional[int], Optional[str], Optional[ValidationError]]:
-        """Extract dimension value and descriptor. Returns (dim_value, dim_desc, error)."""
-        target_shape = interface_model.get_shape(self.shape_hierarchy)
-        shape_name = self.shape_hierarchy.value
-
-        if self.dim_index is None:
-            # Total size (product of all dimensions)
-            dim_value = math.prod(target_shape)
-            dim_desc = f"{interface_model.name}.{shape_name}_total"
-        else:
-            # Specific dimension index
-            if self.dim_index >= len(target_shape):
-                error = ValidationError(
-                    message=f"Dimension index {self.dim_index} out of range for shape {target_shape}",
-                    location=f"{interface_model.name}.{shape_name}[{self.dim_index}]",
-                    suggestions=[]
-                )
-                return None, None, error
-            dim_value = target_shape[self.dim_index]
-            dim_desc = f"{interface_model.name}.{shape_name}[{self.dim_index}]"
-
-        return dim_value, dim_desc, None
-
-    def _resolve_value(
-        self,
-        value: Union[int, str, float],
-        nodeattr_getter: Callable[[str], Any]
-    ) -> tuple[Optional[Union[int, float]], Optional[ValidationError]]:
-        """Resolve literal value or nodeattr reference. Returns (resolved_value, error)."""
-        if isinstance(value, str):
-            # Nodeattr reference - look it up
+        # Collect all datatypes
+        datatypes = {}
+        for name in self.interfaces:
             try:
-                resolved = nodeattr_getter(value)
-                return resolved, None
-            except (AttributeError, KeyError):
-                error = ValidationError(
-                    message=f"Parameter '{value}' not found",
-                    location=f"{self.interface_name}",
-                    suggestions=[f"Define '{value}' in node attributes"]
+                datatypes[name] = ctx.get_datatype(name)
+            except KeyError as e:
+                return f"Interface '{name}' not found: {e}"
+
+        # Check all match the first
+        first_name = self.interfaces[0]
+        first_dt = datatypes[first_name]
+
+        for name in self.interfaces[1:]:
+            if datatypes[name] != first_dt:
+                return (
+                    f"Datatype mismatch: '{first_name}' has {first_dt.name}, "
+                    f"but '{name}' has {datatypes[name].name}"
                 )
-                return None, error
-        else:
-            # Literal value - use directly
-            return value, None
-
-    def _check_multiple_dimensions(
-        self,
-        interface_model: Any,
-        nodeattr_getter: Callable[[str], Any]
-    ) -> Optional[ValidationError]:
-        """Check constraint across multiple dimensions. Returns first error or None."""
-        target_shape = interface_model.get_shape(self.shape_hierarchy)
-        shape_name = self.shape_hierarchy.value
-
-        # Resolve constraint value once (shared across all dimensions)
-        constraint_value, error_msg = self._resolve_value(
-            self._get_constraint_value(),
-            nodeattr_getter
-        )
-        if error_msg:
-            return ValidationError(
-                message=error_msg,
-                location=f"{interface_model.name}.{shape_name}",
-                suggestions=[]
-            )
-
-        # Check each dimension - fail fast on first error
-        for idx in self.dim_index:
-            # Validate index is in range
-            if idx >= len(target_shape):
-                return ValidationError(
-                    message=f"Dimension index {idx} out of range for shape {target_shape}",
-                    location=f"{interface_model.name}.{shape_name}[{idx}]",
-                    suggestions=[]
-                )
-
-            # Get dimension value and descriptor
-            dim_value = target_shape[idx]
-            dim_desc = f"{interface_model.name}.{shape_name}[{idx}]"
-
-            # Validate this dimension - return first error
-            error = self._validate_dimension(dim_value, constraint_value, dim_desc)
-            if error:
-                return error
 
         return None
 
-    def _make_dim_descriptor(self) -> str:
-        """Build human-readable dimension descriptor."""
-        shape_name = self.shape_hierarchy.value
+    def describe(self) -> str:
+        return f"{self.interfaces} must have equal datatypes"
 
-        if self.dim_index is None:
-            return f"{shape_name}_total"
-        elif isinstance(self.dim_index, list):
-            # Multiple dimensions
-            indices = ",".join(str(i) for i in self.dim_index)
-            return f"{shape_name}[{indices}]"
-        else:
-            # Single dimension
-            return f"{shape_name}[{self.dim_index}]"
+
+# =============================================================================
+# Shape Constraints
+# =============================================================================
+
+@dataclass(frozen=True)
+class ShapesEqual(Constraint):
+    """Specified interfaces must have identical shapes.
+
+    Examples:
+        # Full tensor shape equality
+        ShapesEqual(("input0", "input1"), hierarchy=ShapeHierarchy.TENSOR)
+
+        # Stream shape equality
+        ShapesEqual(("input0", "input1"), hierarchy=ShapeHierarchy.STREAM)
+
+        # Partial shape equality (spatial dims only)
+        ShapesEqual(("input0", "input1"), dim_slice=slice(0, -1))
+    """
+
+    interfaces: tuple[str, ...]
+    hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
+    dim_slice: Optional[slice] = None
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces have identical shapes."""
+        if len(self.interfaces) < 2:
+            return "ShapesEqual requires at least 2 interfaces"
+
+        # Collect shapes
+        shapes = {}
+        for name in self.interfaces:
+            try:
+                shape = ctx.get_shape(name, self.hierarchy)
+                # Apply slice if specified
+                if self.dim_slice:
+                    shape = shape[self.dim_slice]
+                shapes[name] = shape
+            except KeyError as e:
+                return f"Interface '{name}' not found: {e}"
+
+        # Check all match the first
+        first_name = self.interfaces[0]
+        first_shape = shapes[first_name]
+
+        for name in self.interfaces[1:]:
+            if shapes[name] != first_shape:
+                return (
+                    f"Shape mismatch ({self.hierarchy.value}): "
+                    f"'{first_name}' has {first_shape}, but '{name}' has {shapes[name]}"
+                )
+
+        return None
+
+    def describe(self) -> str:
+        dim_desc = f"[{self.dim_slice}]" if self.dim_slice else ""
+        return f"{self.interfaces}{dim_desc} must have equal shapes ({self.hierarchy.value})"
 
 
 @dataclass(frozen=True)
-class DimensionDivisible(DimensionConstraint):
-    """Dimension(s) must be divisible by a value.
-
-    Validates: shape[dim_index] % divisor == 0
+class DimensionDivisible(Constraint):
+    """Interface dimension must be divisible by value.
 
     Examples:
         DimensionDivisible("input", 1, 8)       # stream[1] % 8 == 0
-        DimensionDivisible("input", 1, "SIMD")  # stream[1] % SIMD (nodeattr)
-        DimensionDivisible("input", [0, 1], 8)  # stream[0,1] all % 8 == 0
+        DimensionDivisible("input", -1, "PE")   # stream[-1] % PE (param)
     """
 
-    divisor: Union[int, str]
-    shape_hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
+    interface: str
+    dim_index: int
+    divisor: Union[int, str]  # int literal or param name
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def _get_constraint_value(self) -> Union[int, str]:
-        return self.divisor
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate dimension is divisible by divisor."""
+        try:
+            shape = ctx.get_shape(self.interface, self.hierarchy)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
 
-    def _validate_dimension(
-        self,
-        dim_value: int,
-        constraint_value: int,
-        dim_desc: str
-    ) -> Optional[ValidationError]:
-        """Validate divisibility constraint."""
-        if dim_value % constraint_value != 0:
-            return ValidationError(
-                message=f"Value {dim_value} not divisible by {constraint_value}",
-                location=dim_desc,
-                suggestions=[f"Use value divisible by {constraint_value}"]
+        # Handle negative indices
+        dim_idx = self.dim_index if self.dim_index >= 0 else len(shape) + self.dim_index
+
+        if not (0 <= dim_idx < len(shape)):
+            return f"{self.interface} dimension {self.dim_index} out of range for shape {shape}"
+
+        dim_value = shape[dim_idx]
+
+        # Resolve divisor (literal or param reference)
+        if isinstance(self.divisor, str):
+            try:
+                divisor = ctx.get_param(self.divisor)
+            except (RuntimeError, KeyError) as e:
+                # ONNX context doesn't support params - skip check (graceful degradation)
+                return None
+        else:
+            divisor = self.divisor
+
+        if dim_value % divisor != 0:
+            return (
+                f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] = {dim_value} "
+                f"not divisible by {divisor}"
             )
+
         return None
 
     def describe(self) -> str:
-        dim_str = self._make_dim_descriptor()
-        return f"{self.interface_name}.{dim_str} % {self.divisor} == 0"
+        return f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] % {self.divisor} == 0"
 
 
 @dataclass(frozen=True)
-class DimensionMinValue(DimensionConstraint):
-    """Dimension(s) must be >= minimum value.
-
-    Validates: shape[dim_index] >= min_value
+class DimensionInRange(Constraint):
+    """Interface dimension must be within range [min, max].
 
     Examples:
-        DimensionMinValue("input", 0, 1)            # stream[0] >= 1
-        DimensionMinValue("output", 1, "MIN_SIZE")  # stream[1] >= MIN_SIZE (nodeattr)
-        DimensionMinValue("input", [0, 1], 128)     # stream[0,1] all >= 128
+        DimensionInRange("input", 0, 1, 1024)       # tensor[0] ∈ [1, 1024]
+        DimensionInRange("input", -1, "MIN", "MAX") # tensor[-1] ∈ [MIN, MAX] (params)
     """
 
+    interface: str
+    dim_index: int
     min_value: Union[int, str]
-    shape_hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
+    max_value: Union[int, str]
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def _get_constraint_value(self) -> Union[int, str]:
-        return self.min_value
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate dimension is within range."""
+        try:
+            shape = ctx.get_shape(self.interface, self.hierarchy)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
 
-    def _validate_dimension(
-        self,
-        dim_value: int,
-        constraint_value: Union[int, float],
-        dim_desc: str
-    ) -> Optional[ValidationError]:
-        """Validate minimum value constraint."""
-        if dim_value < constraint_value:
-            return ValidationError(
-                message=f"Value {dim_value} must be >= {constraint_value}",
-                location=dim_desc,
-                suggestions=[f"Increase to at least {constraint_value}"]
+        # Handle negative indices
+        dim_idx = self.dim_index if self.dim_index >= 0 else len(shape) + self.dim_index
+
+        if not (0 <= dim_idx < len(shape)):
+            return f"{self.interface} dimension {self.dim_index} out of range for shape {shape}"
+
+        dim_value = shape[dim_idx]
+
+        # Resolve min/max (literals or param references)
+        try:
+            min_val = ctx.get_param(self.min_value) if isinstance(self.min_value, str) else self.min_value
+            max_val = ctx.get_param(self.max_value) if isinstance(self.max_value, str) else self.max_value
+        except (RuntimeError, KeyError):
+            # ONNX context doesn't support params - skip check
+            return None
+
+        if not (min_val <= dim_value <= max_val):
+            return (
+                f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] = {dim_value} "
+                f"not in range [{min_val}, {max_val}]"
             )
+
         return None
 
     def describe(self) -> str:
-        dim_str = self._make_dim_descriptor()
-        return f"{self.interface_name}.{dim_str} >= {self.min_value}"
+        return (
+            f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] "
+            f"∈ [{self.min_value}, {self.max_value}]"
+        )
 
 
 @dataclass(frozen=True)
-class DimensionMaxValue(DimensionConstraint):
-    """Dimension(s) must be <= maximum value.
-
-    Validates: shape[dim_index] <= max_value
+class DimensionEquals(Constraint):
+    """Interface dimension must equal specific value.
 
     Examples:
-        DimensionMaxValue("input", 1, 64)             # stream[1] <= 64
-        DimensionMaxValue("output", 0, "MAX_SIZE")    # stream[0] <= MAX_SIZE (nodeattr)
-        DimensionMaxValue("input", [0, 2, 3], 4096)   # stream[0,2,3] all <= 4096
+        DimensionEquals("input", 0, 1)      # tensor[0] == 1 (batch size)
+        DimensionEquals("input", -1, "PE")  # tensor[-1] == PE (param)
     """
 
-    max_value: Union[int, str]
-    shape_hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
+    interface: str
+    dim_index: int
+    value: Union[int, str]
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def _get_constraint_value(self) -> Union[int, str]:
-        return self.max_value
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate dimension equals value."""
+        try:
+            shape = ctx.get_shape(self.interface, self.hierarchy)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
 
-    def _validate_dimension(
-        self,
-        dim_value: int,
-        constraint_value: Union[int, float],
-        dim_desc: str
-    ) -> Optional[ValidationError]:
-        """Validate maximum value constraint."""
-        if dim_value > constraint_value:
-            return ValidationError(
-                message=f"Value {dim_value} must be <= {constraint_value}",
-                location=dim_desc,
-                suggestions=[f"Decrease to at most {constraint_value}"]
+        # Handle negative indices
+        dim_idx = self.dim_index if self.dim_index >= 0 else len(shape) + self.dim_index
+
+        if not (0 <= dim_idx < len(shape)):
+            return f"{self.interface} dimension {self.dim_index} out of range for shape {shape}"
+
+        dim_value = shape[dim_idx]
+
+        # Resolve value (literal or param reference)
+        try:
+            expected = ctx.get_param(self.value) if isinstance(self.value, str) else self.value
+        except (RuntimeError, KeyError):
+            # ONNX context doesn't support params - skip check
+            return None
+
+        if dim_value != expected:
+            return (
+                f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] = {dim_value}, "
+                f"expected {expected}"
             )
+
         return None
 
     def describe(self) -> str:
-        dim_str = self._make_dim_descriptor()
-        return f"{self.interface_name}.{dim_str} <= {self.max_value}"
+        return f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] == {self.value}"
+
+
+# =============================================================================
+# ONNX-Specific Constraints (gracefully degrade on kernel context)
+# =============================================================================
+
+@dataclass(frozen=True)
+class IsDynamic(Constraint):
+    """Interfaces must be dynamic (no initializer).
+
+    Only meaningful for ONNX contexts. Always passes on kernel contexts.
+
+    Example:
+        IsDynamic(("input0", "input1"))
+    """
+
+    interfaces: tuple[str, ...]
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces are dynamic."""
+        for name in self.interfaces:
+            if not ctx.is_dynamic(name):
+                return f"Interface '{name}' must be dynamic (has initializer)"
+        return None
+
+    def describe(self) -> str:
+        return f"{self.interfaces} must be dynamic (no initializers)"
+
+
+@dataclass(frozen=True)
+class IsStatic(Constraint):
+    """Interfaces must be static (have initializer).
+
+    Only meaningful for ONNX contexts. Always passes on kernel contexts.
+
+    Example:
+        IsStatic(("weight",))
+    """
+
+    interfaces: tuple[str, ...]
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate all interfaces are static."""
+        for name in self.interfaces:
+            if ctx.is_dynamic(name):
+                return f"Interface '{name}' must be static (needs initializer)"
+        return None
+
+    def describe(self) -> str:
+        return f"{self.interfaces} must be static (have initializers)"
+
+
+@dataclass(frozen=True)
+class HasLayout(Constraint):
+    """Interface must have specified layout.
+
+    Only meaningful for ONNX contexts. Always passes on kernel contexts.
+
+    Example:
+        HasLayout("input", "NHWC")
+    """
+
+    interface: str
+    layout: str  # "NHWC" or "NCHW"
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Validate interface has expected layout."""
+        actual_layout = ctx.get_layout(self.interface)
+
+        if actual_layout is None:
+            # Kernel context - layout not tracked (graceful degradation)
+            return None
+
+        # Import here to avoid circular dependency
+        import qonnx.core.data_layout as DataLayout
+        expected_layout = getattr(DataLayout, self.layout, None)
+
+        if actual_layout != expected_layout:
+            return f"{self.interface} has layout {actual_layout}, expected {self.layout}"
+
+        return None
+
+    def describe(self) -> str:
+        return f"{self.interface} must have layout {self.layout}"
+
+
+# =============================================================================
+# Custom Constraint
+# =============================================================================
+
+@dataclass(frozen=True)
+class Custom(Constraint):
+    """Custom validation logic.
+
+    The check function receives ValidationContext and returns Optional[str].
+
+    Example:
+        def check_matmul_compat(ctx):
+            input_shape = ctx.get_shape("input")
+            weight_shape = ctx.get_shape("weight")
+            if input_shape[-1] != weight_shape[0]:
+                return f"MatMul incompatible: {input_shape[-1]} vs {weight_shape[0]}"
+            return None
+
+        Custom(check_matmul_compat, "MatMul dimension compatibility")
+    """
+
+    check_fn: Callable[[ValidationContext], Optional[str]]
+    description: str
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Call custom validation function."""
+        try:
+            return self.check_fn(ctx)
+        except Exception as e:
+            return f"Custom constraint '{self.description}' failed: {e}"
+
+    def describe(self) -> str:
+        return self.description
 
 
 __all__ = [
-    # Base classes
-    "InterfaceConstraint",
-    "DimensionConstraint",
-    # Concrete constraints
-    "DatatypeConstraint",
-    "DimensionDivisible",
-    "DimensionMinValue",
-    "DimensionMaxValue",
+    # Base class
+    'Constraint',
+    # Datatype constraints
+    'DatatypeInteger',
+    'DatatypeFloat',
+    'DatatypeInRange',
+    'DatatypesEqual',
+    # Shape constraints
+    'ShapesEqual',
+    'DimensionDivisible',
+    'DimensionInRange',
+    'DimensionEquals',
+    # ONNX-specific constraints
+    'IsDynamic',
+    'IsStatic',
+    'HasLayout',
+    # Custom constraint
+    'Custom',
 ]

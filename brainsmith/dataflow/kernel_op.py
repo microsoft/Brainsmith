@@ -19,9 +19,10 @@ from onnx import NodeProto
 from .schemas import KernelSchema
 from .models import KernelModel
 from .builder import BuildContext, KernelModelBuilder
+from .validation import OnnxValidationContext, KernelValidationContext
 
 if TYPE_CHECKING:
-    from .inference import InferenceResult, InferenceConfig
+    from .inference import InferenceResult, InferencePattern
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class KernelOp(HWCustomOp, ABC):
         """Check if this kernel supports automatic inference.
 
         Returns True if the kernel has a class schema and either:
-        - Has an inference_config in the schema, OR
+        - Has an inference pattern in the schema, OR
         - Overrides can_infer_from() method
 
         Returns:
@@ -126,7 +127,7 @@ class KernelOp(HWCustomOp, ABC):
             return False
 
         return (
-            schema.inference_config is not None or
+            schema.inference is not None or
             hasattr(cls, 'can_infer_from') and
             cls.can_infer_from.__func__ is not KernelOp.can_infer_from.__func__
         )
@@ -135,8 +136,8 @@ class KernelOp(HWCustomOp, ABC):
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
         """Check if this kernel can be inferred from the given ONNX node.
 
-        Default implementation uses schema.inference_config for validation.
-        Override for custom matching logic beyond declarative config.
+        Default implementation uses unified constraint system with OnnxValidationContext.
+        Override for custom matching logic beyond declarative constraints.
 
         Args:
             node: ONNX node to check
@@ -146,19 +147,42 @@ class KernelOp(HWCustomOp, ABC):
             True if this kernel can be inferred from the node
 
         Example:
-            # Custom validation beyond InferenceConfig
+            # Custom validation beyond schema constraints
             @classmethod
             def can_infer_from(cls, node, model):
-                if node.op_type != "Add":
+                if not super().can_infer_from(node, model):
                     return False
-                # Custom logic...
+                # Additional custom logic...
                 return True
         """
         schema = cls.get_class_schema()
-        if schema is None or schema.inference_config is None:
+        if schema is None or schema.inference is None:
             return False
 
-        return cls._check_inference_config(node, model, schema.inference_config)
+        # Check op type matching
+        if node.op_type not in schema.inference.source_ops:
+            return False
+
+        # Run unified constraints through ONNX validation context
+        ctx = OnnxValidationContext(node=node, model=model)
+        for constraint in schema.constraints:
+            error = constraint.check(ctx)
+            if error is not None:
+                # Constraint failed - this node doesn't match
+                logger.debug(
+                    f"{cls.__name__} cannot infer from {node.name}: {error}"
+                )
+                return False
+
+        # Run custom matcher if provided
+        if schema.inference.matcher is not None:
+            if not schema.inference.matcher(node, model):
+                logger.debug(
+                    f"{cls.__name__} custom matcher rejected {node.name}"
+                )
+                return False
+
+        return True
 
     @classmethod
     def infer_from(
@@ -196,72 +220,6 @@ class KernelOp(HWCustomOp, ABC):
             f"{cls.__name__} does not implement infer_from(). "
             f"Override this method to support automatic inference."
         )
-
-    @classmethod
-    def _check_inference_config(
-        cls,
-        node: NodeProto,
-        model: ModelWrapper,
-        config: 'InferenceConfig'
-    ) -> bool:
-        """Default implementation checks inference config criteria.
-
-        Validates ONNX node against InferenceConfig rules:
-        - Op type matching
-        - Static/dynamic input requirements
-        - Datatype requirements
-        - Shape requirements
-        - Custom validator
-
-        Args:
-            node: ONNX node to validate
-            model: ModelWrapper for graph access
-            config: InferenceConfig with validation rules
-
-        Returns:
-            True if node matches all config criteria
-        """
-        # Check op type
-        if node.op_type not in config.source_ops:
-            return False
-
-        # Check static input requirements
-        if config.require_static_inputs:
-            for idx in config.require_static_inputs:
-                if idx >= len(node.input):
-                    return False
-                if model.get_initializer(node.input[idx]) is None:
-                    return False
-
-        # Check dynamic input requirements
-        if config.require_dynamic_inputs:
-            for idx in config.require_dynamic_inputs:
-                if idx >= len(node.input):
-                    return False
-                if model.get_initializer(node.input[idx]) is not None:
-                    return False
-
-        # Check integer datatype requirement
-        if config.require_integer_inputs:
-            for inp in node.input:
-                dt = model.get_tensor_datatype(inp)
-                if dt is None or not dt.is_integer():
-                    return False
-
-        # Check same shape requirement
-        if config.require_same_shapes:
-            if len(node.input) < 2:
-                return False
-            shapes = [model.get_tensor_shape(inp) for inp in node.input]
-            if not all(s == shapes[0] for s in shapes):
-                return False
-
-        # Custom validator
-        if config.custom_validator is not None:
-            if not config.custom_validator(node, model):
-                return False
-
-        return True
 
     def _error(self, message: str) -> KernelOpError:
         """Create exception with node context."""

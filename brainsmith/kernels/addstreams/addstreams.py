@@ -4,8 +4,8 @@
 """AddStreams hardware kernel for element-wise addition of two streams.
 
 This kernel implements element-wise addition of two integer streams with
-identical shapes. It demonstrates the new kernel inference pattern with
-declarative InferenceConfig.
+identical shapes. It demonstrates the unified constraint system with
+declarative validation.
 
 Example ONNX pattern:
     Add(input0: INT8[1,224,224,64], input1: INT8[1,224,224,64])
@@ -24,7 +24,7 @@ from brainsmith.core.plugins import kernel
 from qonnx.core.modelwrapper import ModelWrapper
 
 
-# Module-level KernelSchema definition with InferenceConfig
+# Module-level KernelSchema definition with unified constraints
 ADDSTREAMS_SCHEMA = df.KernelSchema(
     name="AddStreams",
     inputs=[
@@ -47,17 +47,27 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
             datatype=df.DerivedDatatype("input0"),  # Output datatype same as input0
         )
     ],
+    constraints=[
+        # Both inputs must be dynamic (not initializers/weights)
+        df.IsDynamic("input0"),
+        df.IsDynamic("input1"),
+        # Both inputs must be integers
+        df.DatatypeInteger("input0"),
+        df.DatatypeInteger("input1"),
+        # Inputs must have same shape
+        df.ShapesEqual("input0", "input1"),
+    ],
     kernel_params={
         "PE": ("i", True, 1),
         "NumChannels": ("i", True, 1),
     },
-    inference_config=df.InferenceConfig(
+    inference=df.InferencePattern(
         source_ops=["Add"],
-        require_dynamic_inputs=[0, 1],  # Both inputs must be dynamic (not initializers)
-        require_integer_inputs=True,
-        require_same_shapes=True,
-        input_layouts=["NHWC", "NHWC"],
-        output_layout="NHWC",
+        layout_conversions={
+            "input0": "NHWC",
+            "input1": "NHWC",
+            "output": "NHWC",
+        }
     )
 )
 
@@ -78,9 +88,13 @@ class AddStreams(KernelOp):
     - "output0Datatype" from output interface (derived from input0)
     - "NumChannels" from kernel_params (set during inference)
 
+    Validation (unified constraints):
+    - IsDynamic("input0"), IsDynamic("input1"): Both inputs must be dynamic tensors
+    - DatatypeInteger("input0"), DatatypeInteger("input1"): Integer datatypes required
+    - ShapesEqual("input0", "input1"): Inputs must have identical shapes
+
     Inference pattern:
-    - Matches ONNX Add nodes with two dynamic integer inputs
-    - Requires inputs to have identical shapes
+    - Matches ONNX Add nodes
     - Automatically converts to NHWC layout if needed
     """
 
@@ -124,7 +138,7 @@ class AddStreams(KernelOp):
         """
         helper = InferenceHelper(model)
 
-        # Handle layout conversion (automatic via inference_config)
+        # Handle layout conversion (guided by InferencePattern)
         in0 = helper.ensure_layout(node.input[0], "NHWC", insert_index)
         in1 = helper.ensure_layout(node.input[1], "NHWC", insert_index)
         result = helper.ensure_layout(node.output[0], "NHWC", insert_index)

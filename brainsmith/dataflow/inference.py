@@ -5,20 +5,20 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Kernel inference infrastructure for declarative HW layer inference.
+"""Kernel inference infrastructure for HW layer inference.
 
 This module provides the core infrastructure for kernel inference:
-- InferenceConfig: Declarative pattern matching configuration
+- InferencePattern: Defines ONNX → HW kernel pattern matching
 - InferenceResult: Structured result from inference operations
 - InferenceHelper: Utility methods for common inference operations
 
+Validation is handled by unified Constraint system (see constraints.py).
+
 Example usage:
-    # Simple declarative inference
-    config = InferenceConfig(
+    # Define inference pattern
+    pattern = InferencePattern(
         source_ops=["Add"],
-        require_dynamic_inputs=[0, 1],
-        require_integer_inputs=True,
-        require_same_shapes=True,
+        layout_conversions={"input0": "NHWC", "input1": "NHWC"},
     )
 
     # Using helper for graph manipulation
@@ -42,44 +42,47 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class InferenceConfig:
-    """Declarative inference configuration for kernel pattern matching.
+class InferencePattern:
+    """Defines ONNX → HW kernel pattern matching.
 
-    Defines what ONNX nodes can be converted to this kernel and validation
-    rules for the conversion.
+    Specifies which ONNX operations can be converted to this kernel and
+    provides hints for layout conversion. Validation is handled by the
+    unified Constraint system (see KernelSchema.constraints).
+
+    This is NOT about validation - that's in schema.constraints.
+    This is about:
+    - Which ONNX ops to match
+    - Layout conversion hints
+    - Custom matching logic beyond constraints
 
     Attributes:
         source_ops: ONNX op types that can be converted to this kernel
-        require_integer_inputs: If True, all inputs must be integer datatypes
-        require_static_inputs: Indices of inputs that must have initializers
-        require_dynamic_inputs: Indices of inputs that must NOT have initializers
-        require_same_shapes: If True, all inputs must have identical shapes
-        input_layouts: Required data layouts for inputs (None = any layout)
-        output_layout: Required data layout for outputs
-        auto_convert_layout: If True, automatically insert Transpose nodes
-        custom_validator: Optional function for additional validation
+        layout_conversions: Optional dict mapping tensor names to target layouts
+            Example: {"input0": "NHWC", "input1": "NHWC", "output": "NHWC"}
+        matcher: Optional custom matching function beyond constraints
             Signature: (node: NodeProto, model: ModelWrapper) -> bool
 
     Example:
-        # AddStreams: requires two dynamic integer inputs with same shape
-        InferenceConfig(
+        # AddStreams: Convert ONNX Add to AddStreams HW kernel
+        InferencePattern(
             source_ops=["Add"],
-            require_dynamic_inputs=[0, 1],
-            require_integer_inputs=True,
-            require_same_shapes=True,
-            input_layouts=["NHWC", "NHWC"],
+            layout_conversions={
+                "input0": "NHWC",
+                "input1": "NHWC",
+                "output": "NHWC",
+            }
+        )
+
+        # MVAU: MatMul with custom matching
+        InferencePattern(
+            source_ops=["MatMul"],
+            matcher=lambda node, model: check_weight_is_static(node, model)
         )
     """
 
     source_ops: List[str]
-    require_integer_inputs: bool = False
-    require_static_inputs: Optional[List[int]] = None
-    require_dynamic_inputs: Optional[List[int]] = None
-    require_same_shapes: bool = False
-    input_layouts: Optional[List[str]] = None
-    output_layout: Optional[str] = None
-    auto_convert_layout: bool = True
-    custom_validator: Optional[Callable[[NodeProto, ModelWrapper], bool]] = None
+    layout_conversions: Optional[Dict[str, str]] = None
+    matcher: Optional[Callable[[NodeProto, ModelWrapper], bool]] = None
 
 
 @dataclass
