@@ -7,8 +7,10 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict, Any, Callable
 from enum import Enum
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import functools
 
 
@@ -31,16 +33,6 @@ class _FullDimType:
 
 FULL_DIM = _FullDimType()
 
-
-# === Dimension Source Types ===
-# NOTE: DimensionSource is imported for type hints only.
-# Concrete dimension sources (DerivedDim, ScaledDim, etc.) live in dimension_sources.py
-
-from .dimension_sources import DimensionSource
-
-# Template dimension specification (for schemas)
-# Supports both static values (str/int) and dynamic derivation (DimensionSource subclasses)
-DimSpec = Union[str, int, DimensionSource]
 
 # === Enums ===
 
@@ -69,6 +61,43 @@ class Direction(Enum):
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
+
+
+# === Base Classes ===
+
+@dataclass(frozen=True)
+class DimensionSource(ABC):
+    """Base class for dimension derivation strategies.
+
+    Subclass to add new dimension derivation patterns.
+    All subclasses must be frozen dataclasses for immutability and hashability.
+
+    The resolve() method is called during model building to compute the
+    dimension value from available interfaces and parameters.
+
+    Concrete implementations (DerivedDim, ScaledDim, etc.) are in dimension_sources.py
+    """
+
+    @abstractmethod
+    def resolve(self, interfaces: Dict[str, Any], param_getter: Callable[[str], Any]) -> int:
+        """Compute dimension value from interfaces and parameters.
+
+        Args:
+            interfaces: Dict mapping interface name -> InterfaceModel
+            param_getter: Function to retrieve nodeattr values (e.g., get_nodeattr)
+
+        Returns:
+            Resolved dimension value (positive integer)
+
+        Raises:
+            ValueError: If dimension cannot be resolved or is invalid
+        """
+        pass
+
+
+# Template dimension specification (for schemas)
+# Supports both static values (str/int) and dynamic derivation (DimensionSource subclasses)
+DimSpec = Union[str, int, DimensionSource]
 
 
 class InterfaceType(Enum):

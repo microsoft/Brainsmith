@@ -34,6 +34,7 @@ import math
 import numpy as np
 
 from qonnx.core.datatype import DataType, BaseDataType
+from .utils import get_interface
 
 
 @dataclass(frozen=True)
@@ -82,14 +83,7 @@ class DerivedDatatype(DatatypeSource):
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> DataType:
         """Copy datatype from source interface or internal datatype."""
-        if self.source_interface not in interfaces:
-            available = ', '.join(sorted(interfaces.keys()))
-            raise ValueError(
-                f"Source '{self.source_interface}' not found. "
-                f"Available interfaces/internals: {available}"
-            )
-
-        source = interfaces[self.source_interface]
+        source = get_interface(interfaces, self.source_interface, "DerivedDatatype")
 
         try:
             return source.datatype
@@ -119,17 +113,10 @@ class WidenedDatatype(DatatypeSource):
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> DataType:
         """Add extra bits to source datatype."""
-        if self.source_interface not in interfaces:
-            available = ', '.join(sorted(interfaces.keys()))
-            raise ValueError(
-                f"Source '{self.source_interface}' not found. "
-                f"Available interfaces/internals: {available}"
-            )
-
         if self.extra_bits < 0:
             raise ValueError(f"extra_bits must be non-negative, got {self.extra_bits}")
 
-        source = interfaces[self.source_interface]
+        source = get_interface(interfaces, self.source_interface, "WidenedDatatype")
         base_dt = source.datatype
         new_width = base_dt.bitwidth() + self.extra_bits
 
@@ -168,14 +155,7 @@ class UnionDatatype(DatatypeSource):
         max_val = 0
 
         for name in self.source_interfaces:
-            if name not in interfaces:
-                available = ', '.join(sorted(interfaces.keys()))
-                raise ValueError(
-                    f"Source '{name}' not found. "
-                    f"Available interfaces/internals: {available}"
-                )
-
-            interface = interfaces[name]
+            interface = get_interface(interfaces, name, "UnionDatatype")
             dt = interface.datatype
 
             min_val = min(min_val, dt.min())

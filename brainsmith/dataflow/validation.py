@@ -68,28 +68,14 @@ class ValidationError:
 # =============================================================================
 
 class ValidationContext(Protocol):
-    """Unified interface for validation contexts (ONNX or Kernel).
+    """Protocol for accessing tensor/interface properties across ONNX and kernel contexts.
 
-    This protocol defines a common interface for accessing tensor/interface
-    properties during constraint validation. Implementations adapt different
-    data sources (ONNX ModelWrapper, KernelModel) to this unified interface.
-
-    Context-specific operations (like is_dynamic, get_layout) gracefully
-    degrade when not applicable to a context.
+    Implementations: OnnxValidationContext, KernelValidationContext
+    Context-specific operations (is_dynamic, get_layout) gracefully degrade when not applicable.
     """
 
     def get_datatype(self, name: str) -> DataType:
-        """Get datatype for tensor/interface.
-
-        Args:
-            name: Tensor/interface name
-
-        Returns:
-            QONNX DataType
-
-        Raises:
-            KeyError: If name not found
-        """
+        """Get datatype (raises KeyError if not found)."""
         ...
 
     def get_shape(
@@ -97,73 +83,23 @@ class ValidationContext(Protocol):
         name: str,
         hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
     ) -> tuple[int, ...]:
-        """Get shape at specified hierarchy level.
-
-        Args:
-            name: Tensor/interface name
-            hierarchy: Which shape level to retrieve
-
-        Returns:
-            Shape tuple
-
-        Raises:
-            KeyError: If name not found
-
-        Note:
-            ONNX contexts only support TENSOR hierarchy.
-            Kernel contexts support all hierarchy levels.
-        """
+        """Get shape at hierarchy level (ONNX supports TENSOR only)."""
         ...
 
     def is_dynamic(self, name: str) -> bool:
-        """Check if tensor is dynamic (no initializer).
-
-        Args:
-            name: Tensor/interface name
-
-        Returns:
-            True if dynamic (no initializer), False if static (has initializer)
-
-        Note:
-            Always returns True for kernel contexts (weights identified in schema).
-        """
+        """Check if tensor is dynamic - no initializer (always True for kernel contexts)."""
         ...
 
     def get_layout(self, name: str) -> Optional[Any]:
-        """Get data layout (NCHW/NHWC).
-
-        Args:
-            name: Tensor/interface name
-
-        Returns:
-            DataLayout enum value or None
-
-        Note:
-            Returns None for kernel contexts (layout not tracked after conversion).
-        """
+        """Get data layout - NCHW/NHWC (None for kernel contexts)."""
         ...
 
     def get_param(self, name: str) -> Any:
-        """Get kernel parameter (nodeattr).
-
-        Args:
-            name: Parameter name
-
-        Returns:
-            Parameter value
-
-        Raises:
-            RuntimeError: If context doesn't support parameters (ONNX)
-            KeyError: If parameter not found
-        """
+        """Get kernel parameter (raises RuntimeError on ONNX contexts, KeyError if not found)."""
         ...
 
     def get_interfaces(self) -> List[str]:
-        """Get all interface/tensor names in scope.
-
-        Returns:
-            List of tensor/interface names
-        """
+        """Get all interface/tensor names in scope."""
         ...
 
 

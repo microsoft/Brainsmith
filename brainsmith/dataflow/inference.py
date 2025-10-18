@@ -232,7 +232,7 @@ class InferenceHelper:
         self.model.graph.value_info.append(tensor)
         self.model.set_tensor_datatype(tensor.name, dtype)
 
-        if layout:
+        if layout is not None:
             self.model.set_tensor_layout(tensor.name, DataLayout[layout])
 
         logger.debug(f"Created intermediate tensor {tensor.name} with shape {shape}")

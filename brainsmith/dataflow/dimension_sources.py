@@ -28,38 +28,58 @@ Example:
     >>> SumDims([("input0", -1), ("input1", -1), ("input2", -1)])
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 import math
 
+from .types import ShapeHierarchy, DimensionSource
+from .utils import get_interface
 
-@dataclass(frozen=True)
-class DimensionSource(ABC):
-    """Base class for dimension derivation strategies.
 
-    Subclass to add new dimension derivation patterns.
-    All subclasses must be frozen dataclasses for immutability and hashability.
+def _resolve_dimension_value(
+    shape: Tuple[Optional[int], ...],
+    dim_index: int,
+    interface_name: str,
+    hierarchy: ShapeHierarchy
+) -> int:
+    """Extract and validate dimension value from shape.
 
-    The resolve() method is called during model building to compute the
-    dimension value from available interfaces and parameters.
+    Handles negative indexing (Python-style) and validates that:
+    - Index is within bounds
+    - Dimension value is resolved (not None)
+
+    Args:
+        shape: Shape tuple (may contain None for unresolved dimensions)
+        dim_index: Dimension index (supports negative indexing like Python lists)
+        interface_name: Interface name (for error messages)
+        hierarchy: Shape hierarchy level (for error messages)
+
+    Returns:
+        Resolved dimension value (positive integer)
+
+    Raises:
+        ValueError: If index out of range or dimension unresolved
+
+    Example:
+        >>> shape = (128, 768, 64)
+        >>> _resolve_dimension_value(shape, -1, "input", ShapeHierarchy.TENSOR)
+        64
     """
+    try:
+        value = shape[dim_index]
+    except IndexError as e:
+        raise ValueError(
+            f"Index {dim_index} out of range for shape {shape} "
+            f"(interface '{interface_name}' at {hierarchy.value} level)"
+        ) from e
 
-    @abstractmethod
-    def resolve(self, interfaces: Dict[str, Any], param_getter: Callable[[str], Any]) -> int:
-        """Compute dimension value from interfaces and parameters.
+    if value is None:
+        raise ValueError(
+            f"Dimension '{interface_name}'.{hierarchy.value}[{dim_index}] "
+            f"is not yet resolved"
+        )
 
-        Args:
-            interfaces: Dict mapping interface name -> InterfaceModel
-            param_getter: Function to retrieve nodeattr values (e.g., get_nodeattr)
-
-        Returns:
-            Resolved dimension value (positive integer)
-
-        Raises:
-            ValueError: If dimension cannot be resolved or is invalid
-        """
-        pass
+    return value
 
 
 @dataclass(frozen=True)
@@ -79,21 +99,11 @@ class DerivedDim(DimensionSource):
     """
     source_interface: str
     source_dim: int  # Supports negative indexing (-1 for last dimension)
-    hierarchy: Optional['ShapeHierarchy'] = None  # Defaults to STREAM
-
-    def __post_init__(self):
-        """Set default hierarchy to STREAM if not specified."""
-        if self.hierarchy is None:
-            # Import here to avoid circular dependency
-            from .types import ShapeHierarchy
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> int:
         """Copy dimension from source interface."""
-        if self.source_interface not in interfaces:
-            raise ValueError(f"Source interface '{self.source_interface}' not found")
-
-        source = interfaces[self.source_interface]
+        source = get_interface(interfaces, self.source_interface, "DerivedDim")
 
         try:
             shape = source.get_shape(self.hierarchy)
@@ -103,26 +113,9 @@ class DerivedDim(DimensionSource):
                 f"get_shape() method"
             )
 
-        # Support negative indexing
-        dim_index = self.source_dim
-        if dim_index < 0:
-            dim_index = len(shape) + dim_index
-
-        if not (0 <= dim_index < len(shape)):
-            raise ValueError(
-                f"Dimension index {self.source_dim} out of range for "
-                f"shape {shape} (interface '{self.source_interface}' "
-                f"at {self.hierarchy.value} level)"
-            )
-
-        value = shape[dim_index]
-        if value is None:
-            raise ValueError(
-                f"Dimension '{self.source_interface}'.{self.hierarchy.value}[{self.source_dim}] "
-                f"is not yet resolved"
-            )
-
-        return value
+        return _resolve_dimension_value(
+            shape, self.source_dim, self.source_interface, self.hierarchy
+        )
 
 
 @dataclass(frozen=True)
@@ -145,39 +138,16 @@ class ScaledDim(DimensionSource):
     source_interface: str
     source_dim: int
     scale_factor: float
-    hierarchy: Optional['ShapeHierarchy'] = None  # Defaults to STREAM
-
-    def __post_init__(self):
-        """Set default hierarchy to STREAM if not specified."""
-        if self.hierarchy is None:
-            from .types import ShapeHierarchy
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> int:
         """Scale dimension by factor."""
-        if self.source_interface not in interfaces:
-            raise ValueError(f"Source interface '{self.source_interface}' not found")
-
-        source = interfaces[self.source_interface]
+        source = get_interface(interfaces, self.source_interface, "ScaledDim")
         shape = source.get_shape(self.hierarchy)
 
-        # Support negative indexing
-        dim_index = self.source_dim
-        if dim_index < 0:
-            dim_index = len(shape) + dim_index
-
-        if not (0 <= dim_index < len(shape)):
-            raise ValueError(
-                f"Dimension index {self.source_dim} out of range for "
-                f"shape {shape} (interface '{self.source_interface}')"
-            )
-
-        base_value = shape[dim_index]
-        if base_value is None:
-            raise ValueError(
-                f"Source dimension '{self.source_interface}'.{self.hierarchy.value}[{self.source_dim}] "
-                f"is not yet resolved"
-            )
+        base_value = _resolve_dimension_value(
+            shape, self.source_dim, self.source_interface, self.hierarchy
+        )
 
         if self.scale_factor <= 0:
             raise ValueError(f"scale_factor must be positive, got {self.scale_factor}")
@@ -235,13 +205,7 @@ class SumDims(DimensionSource):
         >>> SumDims([("input0", -1), ("input1", -1)], hierarchy=ShapeHierarchy.BLOCK)
     """
     sources: Tuple[Tuple[str, int], ...]  # Immutable list of (interface, dim_index)
-    hierarchy: Optional['ShapeHierarchy'] = None  # Defaults to STREAM
-
-    def __post_init__(self):
-        """Set default hierarchy to STREAM if not specified."""
-        if self.hierarchy is None:
-            from .types import ShapeHierarchy
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> int:
         """Sum dimensions from all sources."""
@@ -250,28 +214,12 @@ class SumDims(DimensionSource):
 
         total = 0
         for interface_name, dim_index in self.sources:
-            if interface_name not in interfaces:
-                raise ValueError(f"Source interface '{interface_name}' not found")
-
-            source = interfaces[interface_name]
+            source = get_interface(interfaces, interface_name, "SumDims")
             shape = source.get_shape(self.hierarchy)
 
-            # Support negative indexing
-            idx = dim_index if dim_index >= 0 else len(shape) + dim_index
-
-            if not (0 <= idx < len(shape)):
-                raise ValueError(
-                    f"Dimension index {dim_index} out of range for "
-                    f"shape {shape} (interface '{interface_name}' "
-                    f"at {self.hierarchy.value} level)"
-                )
-
-            value = shape[idx]
-            if value is None:
-                raise ValueError(
-                    f"Dimension '{interface_name}'.{self.hierarchy.value}[{dim_index}] "
-                    f"is not yet resolved"
-                )
+            value = _resolve_dimension_value(
+                shape, dim_index, interface_name, self.hierarchy
+            )
 
             total += value
 
@@ -293,13 +241,7 @@ class MaxDim(DimensionSource):
         >>> MaxDim([("input0", 1), ("input1", 1), ("input2", 1)])
     """
     sources: Tuple[Tuple[str, int], ...]
-    hierarchy: Optional['ShapeHierarchy'] = None  # Defaults to STREAM
-
-    def __post_init__(self):
-        """Set default hierarchy to STREAM if not specified."""
-        if self.hierarchy is None:
-            from .types import ShapeHierarchy
-            object.__setattr__(self, 'hierarchy', ShapeHierarchy.STREAM)
+    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
     def resolve(self, interfaces: Dict[str, Any], param_getter: Callable) -> int:
         """Return maximum dimension across all sources."""
@@ -308,27 +250,12 @@ class MaxDim(DimensionSource):
 
         max_value = 0
         for interface_name, dim_index in self.sources:
-            if interface_name not in interfaces:
-                raise ValueError(f"Source interface '{interface_name}' not found")
-
-            source = interfaces[interface_name]
+            source = get_interface(interfaces, interface_name, "MaxDim")
             shape = source.get_shape(self.hierarchy)
 
-            # Support negative indexing
-            idx = dim_index if dim_index >= 0 else len(shape) + dim_index
-
-            if not (0 <= idx < len(shape)):
-                raise ValueError(
-                    f"Dimension index {dim_index} out of range for "
-                    f"shape {shape} (interface '{interface_name}')"
-                )
-
-            value = shape[idx]
-            if value is None:
-                raise ValueError(
-                    f"Dimension '{interface_name}'.{self.hierarchy.value}[{dim_index}] "
-                    f"is not yet resolved"
-                )
+            value = _resolve_dimension_value(
+                shape, dim_index, interface_name, self.hierarchy
+            )
 
             max_value = max(max_value, value)
 

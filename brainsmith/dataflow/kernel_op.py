@@ -139,41 +139,18 @@ class KernelOp(HWCustomOp, ABC):
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
         """Check if this ONNX node can be converted to this hardware kernel.
 
-        This is a validation gate called by InferKernels to determine which kernel
-        (if any) should handle a given ONNX node. It performs three checks:
+        Validation gate for InferKernels. Performs: (1) op type matching,
+        (2) schema constraints validation, (3) optional custom matcher.
 
-        1. Op type matching: node.op_type in InferencePattern.source_ops
-        2. Schema constraints: All KernelSchema.constraints pass (using OnnxValidationContext)
-        3. Custom matcher: Optional InferencePattern.matcher(node, model) returns True
-
-        This method should NOT have side effects or raise exceptions - it's a pure
-        boolean check. If this returns True, infer_from() will be called to perform
-        the actual conversion.
-
-        Override only for validation logic that cannot be expressed declaratively
-        in schema constraints or the InferencePattern matcher.
+        Pure boolean check - no side effects. Override for custom validation beyond
+        declarative constraints.
 
         Args:
             node: ONNX node to validate
-            model: ModelWrapper for graph context (shapes, datatypes, layouts)
+            model: ModelWrapper for graph context
 
         Returns:
-            True if this kernel can convert the node, False otherwise
-
-        Example:
-            # Custom validation beyond declarative constraints
-            @classmethod
-            def can_infer_from(cls, node, model):
-                # First run default validation
-                if not super().can_infer_from(node, model):
-                    return False
-
-                # Additional imperative checks
-                kernel_shape = get_attr(node, "kernel_shape")
-                if kernel_shape[0] != kernel_shape[1]:
-                    return False  # Only square kernels
-
-                return True
+            True if this kernel can convert the node
         """
         schema = cls.build_schema(node, model)
         pattern = cls.get_inference_pattern()
@@ -278,16 +255,7 @@ class KernelOp(HWCustomOp, ABC):
     def get_kernel_model(self, ctx: ModelWrapper) -> KernelModel:
         """Get KernelModel (cached or rebuilt from ctx + schema).
 
-        Delegates to KernelModelBuilder for construction. This method provides:
-        - Caching of built models
-        - Error context (node name)
-        - FINN integration (nodeattr accessors)
-
-        The builder handles:
-        - Building InputModels with template resolution
-        - Resolving internal datatypes
-        - Building OutputModels with derived datatypes
-        - Validation of constraints and relationships
+        Delegates to KernelModelBuilder for construction with caching and error context.
 
         Args:
             ctx: ModelWrapper for ONNX graph access

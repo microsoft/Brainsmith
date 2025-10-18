@@ -122,13 +122,13 @@ class TestDerivedDim:
     def test_index_out_of_range(self, mock_interfaces, dummy_param_getter):
         """Test error when dimension index out of range."""
         dim = DerivedDim("input", 5, hierarchy=ShapeHierarchy.STREAM)
-        with pytest.raises(ValueError, match="Dimension index 5 out of range"):
+        with pytest.raises(ValueError, match="Index 5 out of range"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
     def test_negative_index_out_of_range(self, mock_interfaces, dummy_param_getter):
         """Test error when negative index out of range."""
         dim = DerivedDim("input", -10, hierarchy=ShapeHierarchy.STREAM)
-        with pytest.raises(ValueError, match="Dimension index -10 out of range"):
+        with pytest.raises(ValueError, match="Index -10 out of range"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
 
@@ -243,7 +243,7 @@ class TestSumDims:
     def test_index_out_of_range(self, mock_interfaces, dummy_param_getter):
         """Test error when dimension index out of range."""
         dim = SumDims((("input0", 0), ("input1", 10)))
-        with pytest.raises(ValueError, match="Dimension index 10 out of range"):
+        with pytest.raises(ValueError, match="Index 10 out of range"):
             dim.resolve(mock_interfaces, dummy_param_getter)
 
 
