@@ -26,9 +26,11 @@ class SetPumpedCompute(Transformation):
 
     def apply(self, model):
         graph = model.graph
+        graph_modified = False
 
         for node in graph.node:
-            if (node.op_type == "MVAU_rtl"):
+            if node.op_type == "MVAU_rtl":
                 inst = registry.getCustomOp(node)
                 inst.set_nodeattr("pumpedCompute", 1)
-        return (model, False)
+                graph_modified = True
+        return (model, graph_modified)

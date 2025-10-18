@@ -218,7 +218,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
 
     Rules:
     - Strings are regular steps
-    - Lists are branch points (can only contain strings or None/~)
+    - Lists are branch points (can only contain strings or ~)
     - No nested lists allowed within branch points
     - Branch points must have at least one non-skip option
     - Branch points can have at most one skip option
@@ -226,39 +226,36 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
     if isinstance(spec, str):
         return _validate_step(spec)
     elif isinstance(spec, list):
-        # This is a branch point - validate each option
+        # Branch point - validate structure first, then normalize
         validated = []
         skip_count = 0
-        non_skip_count = 0
 
+        # Phase 1: Validate types (fail fast on structural errors)
         for opt in spec:
-            if isinstance(opt, str) or opt is None:
-                validated_opt = _validate_step(opt)
-                validated.append(validated_opt)
-                if validated_opt == SKIP_INDICATOR:
-                    skip_count += 1
-                else:
-                    non_skip_count += 1
-            elif isinstance(opt, list):
+            if isinstance(opt, list):
                 raise ValueError(
-                    f"Invalid branch point: contains nested list {opt}. "
-                    "Branch points can only contain strings or skip (~). "
-                    "To insert a branch point via operations, use double brackets: [[option1, option2]]"
+                    f"Branch point contains nested list {opt}. "
+                    "Use double brackets [[opt1, opt2]] for branch insertion."
                 )
-            else:
-                raise ValueError(f"Invalid option in branch point: {opt}. Expected string or None, got {type(opt)}")
+            if not isinstance(opt, str):
+                raise ValueError(
+                    f"Branch option must be string, got {type(opt).__name__}"
+                )
 
-        # Validate branch point constraints
+        # Phase 2: Normalize and count
+        for opt in spec:
+            normalized = _validate_step(opt)
+            validated.append(normalized)
+            if normalized == SKIP_INDICATOR:
+                skip_count += 1
+
+        # Phase 3: Validate constraints
+        non_skip_count = len(validated) - skip_count
+
         if skip_count > 1:
-            raise ValueError(
-                f"Invalid branch point {spec}: contains {skip_count} skip options. "
-                "Branch points can have at most one skip option."
-            )
+            raise ValueError(f"Branch point has {skip_count} skip options (max 1)")
         if non_skip_count == 0:
-            raise ValueError(
-                f"Invalid branch point {spec}: contains only skip options. "
-                "Branch points must have at least one non-skip step."
-            )
+            raise ValueError("Branch point must have at least one non-skip step")
 
         return validated
     elif spec is None:
@@ -269,7 +266,19 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
 
 
 def _validate_step(step: Optional[str]) -> str:
-    """Validate a step name against the registry, handle skip."""
+    """Validate a step name against the registry.
+
+    Normalizes skip indicators (None, "", ~) to canonical form (~).
+
+    Args:
+        step: Step name or skip indicator
+
+    Returns:
+        Validated step name or SKIP_INDICATOR
+
+    Raises:
+        ValueError: If step not found in registry
+    """
     if step in SKIP_VALUES:
         return SKIP_INDICATOR
     if not has_step(step):

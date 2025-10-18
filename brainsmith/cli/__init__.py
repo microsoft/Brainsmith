@@ -3,20 +3,27 @@
 
 """Brainsmith command-line interface.
 
-Provides both brainsmith and smith CLI tools for neural network hardware acceleration.
+Provides two CLI entry points with shared implementation:
+
+1. brainsmith - Administrative toolkit
+   Commands: config, setup, smith (subcommand)
+   Usage: brainsmith config show
+
+2. smith - Operational toolkit
+   Commands: dfc, kernel
+   Usage: smith dfc model.onnx blueprint.yaml
+
+Architecture:
+- Shared implementation via create_cli() factory in cli.py
+- Configuration managed through ApplicationContext (context.py)
+- Commands auto-receive context via @click.pass_obj decorator
+
+Entry points defined in pyproject.toml.
 """
 
 from .cli import brainsmith_main, smith_main
-from .exceptions import (
-    BrainsmithError,
-    ConfigurationError,
-    ValidationError
-)
 
 __all__ = [
     "brainsmith_main",
     "smith_main",
-    "BrainsmithError",
-    "ConfigurationError",
-    "ValidationError"
 ]

@@ -39,13 +39,12 @@ class TreeAssertions:
             tree: The DSE tree to validate
             expected: Expected structure properties
         """
-        assert tree.count_nodes() == expected.total_nodes, \
-            f"Expected {expected.total_nodes} nodes, got {tree.count_nodes()}"
-            
-        assert tree.count_leaves() == expected.total_leaves, \
-            f"Expected {expected.total_leaves} leaves, got {tree.count_leaves()}"
-            
         stats = tree.get_statistics()
+        assert stats['total_segments'] == expected.total_nodes, \
+            f"Expected {expected.total_nodes} nodes, got {stats['total_segments']}"
+
+        assert stats['total_paths'] == expected.total_leaves, \
+            f"Expected {expected.total_leaves} leaves, got {stats['total_paths']}"
         assert stats['total_paths'] == expected.total_paths, \
             f"Expected {expected.total_paths} paths, got {stats['total_paths']}"
             

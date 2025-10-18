@@ -35,7 +35,7 @@ def apply_transforms(model: Any, transform_names: List[str], debug_path: Optiona
     from brainsmith.registry import get_transform
     
     for i, transform_name in enumerate(transform_names):
-        logger.debug(f"Applying transform: {transform_name}")
+        logger.debug("Applying transform: %s", transform_name)
         
         # Get and apply transform
         Transform = get_transform(transform_name)
@@ -71,7 +71,7 @@ def apply_transforms_with_params(model: Any, transforms: List[tuple]) -> Any:
     from brainsmith.registry import get_transform
     
     for transform_name, kwargs in transforms:
-        logger.debug(f"Applying transform: {transform_name} with {kwargs}")
+        logger.debug("Applying transform: %s with %s", transform_name, kwargs)
         
         Transform = get_transform(transform_name)
         model = model.transform(Transform(**kwargs))

@@ -124,20 +124,25 @@ def explore_design_space(
     
     # Consider both successful and cached builds as valid outcomes
     valid_builds = result_stats['successful'] + result_stats['cached']
-    
+
     if valid_builds == 0:
-        raise RuntimeError(f"DSE failed: No successful builds "
-                         f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
+        raise RuntimeError(
+            f"DSE failed: No successful builds\n"
+            f"  Failed: {result_stats['failed']}\n"
+            f"  Skipped: {result_stats['skipped']}\n"
+            f"  Check segment logs in: {output_dir}/*/\n"
+            f"  Run with --log-level debug for detailed output"
+        )
     
     # Warn if only cached results were used
     if result_stats['successful'] == 0 and result_stats['cached'] > 0:
-        logger.warning(f"⚠️  All builds used cached results ({result_stats['cached']} cached). "
+        logger.warning(f"All builds used cached results ({result_stats['cached']} cached). "
                       f"No new builds were executed.")
     
-    logger.info(f"✅ Design space exploration completed successfully!")
-    logger.info(f"   Successful builds: {result_stats['successful']}/{result_stats['total']}")
-    logger.info(f"   Total time: {results.total_time:.2f}s")
-    logger.info(f"   Output directory: {output_dir}")
+    logger.info("Design space exploration completed successfully")
+    logger.info(f"  Successful builds: {result_stats['successful']}/{result_stats['total']}")
+    logger.info(f"  Total time: {results.total_time:.2f}s")
+    logger.info(f"  Output directory: {output_dir}")
     
     # Attach design space and tree to results for inspection
     results.design_space = design_space
@@ -240,8 +245,13 @@ def execute_tree(
     valid_builds = result_stats['successful'] + result_stats['cached']
 
     if valid_builds == 0:
-        raise RuntimeError(f"DSE failed: No successful builds "
-                         f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
+        raise RuntimeError(
+            f"DSE failed: No successful builds\n"
+            f"  Failed: {result_stats['failed']}\n"
+            f"  Skipped: {result_stats['skipped']}\n"
+            f"  Check segment logs in: {output_dir}/*/\n"
+            f"  Run with --log-level debug for detailed output"
+        )
 
     # Attach tree for inspection
     results.dse_tree = tree

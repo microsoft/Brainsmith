@@ -27,139 +27,55 @@ Usage:
 """
 
 import logging
-import sys
 import warnings
-from contextlib import contextmanager
-from io import StringIO
-from typing import Iterator
 
 
-def setup_logging(quiet: bool = False, verbose: bool = False, debug: bool = False) -> None:
+def setup_logging(level: str = "warning") -> None:
     """Configure Python logging with Rich handler.
 
-    Maps CLI flags to standard Python logging levels:
-    - quiet:   ERROR (40) - Only show errors
-    - normal:  WARNING (30) - Default, show warnings and errors
-    - verbose: INFO (20) - Show informational messages
-    - debug:   DEBUG (10) - Show everything including debug traces
-
-    Flag precedence: debug > verbose > quiet > normal (default)
-
     Args:
-        quiet: Enable quiet mode (minimal output)
-        verbose: Enable verbose mode (show INFO logs)
-        debug: Enable debug mode (show DEBUG logs and tracebacks)
+        level: Logging level as string: 'error', 'warning', 'info', or 'debug'
+               Maps to Python logging levels (ERROR=40, WARNING=30, INFO=20, DEBUG=10)
 
     Example:
-        setup_logging(debug=args.debug, verbose=args.verbose, quiet=args.quiet)
+        setup_logging(level="debug")
+        setup_logging(level="error")
     """
     from rich.logging import RichHandler
 
-    # Determine logging level from flags
-    if debug:
-        level = logging.DEBUG
-    elif verbose:
-        level = logging.INFO
-    elif quiet:
-        level = logging.ERROR
-    else:
-        level = logging.WARNING
+    # Map string to logging level
+    level_map = {
+        'error': logging.ERROR,
+        'warning': logging.WARNING,
+        'info': logging.INFO,
+        'debug': logging.DEBUG
+    }
+    log_level = level_map.get(level.lower(), logging.WARNING)
 
-    # Configure root logger with RichHandler
-    # Note: basicConfig only works if no handlers exist, so we need to
-    # handle both first-time and subsequent calls
+    # Get root logger and set level
     root = logging.getLogger()
+    root.setLevel(log_level)
 
+    # Add handler if first time, otherwise update existing handlers
     if not root.handlers:
-        # First time - use basicConfig
-        logging.basicConfig(
-            level=level,
-            format="%(message)s",
-            datefmt="[%X]",
-            handlers=[RichHandler(
-                rich_tracebacks=True,
-                show_path=False,
-                markup=True,
-                show_time=False
-            )]
+        # First time - add RichHandler
+        handler = RichHandler(
+            rich_tracebacks=(log_level == logging.DEBUG),
+            show_path=False,
+            markup=True,
+            show_time=False
         )
+        handler.setLevel(log_level)
+        handler.setFormatter(logging.Formatter("%(message)s", datefmt="[%X]"))
+        root.addHandler(handler)
     else:
-        # Already configured - just update level
-        root.setLevel(level)
+        # Already configured - update handler levels
         for handler in root.handlers:
-            handler.setLevel(level)
+            handler.setLevel(log_level)
 
-    # Suppress noisy FINN/QONNX loggers and warnings unless in debug mode
-    # Use module-based filtering (not content heuristics)
-    if level > logging.DEBUG:
+    # Suppress noisy FINN/QONNX loggers unless in debug mode
+    if log_level > logging.DEBUG:
         logging.getLogger('finn').setLevel(logging.ERROR)
         logging.getLogger('qonnx').setLevel(logging.ERROR)
         warnings.filterwarnings('ignore', module='finn.*')
         warnings.filterwarnings('ignore', module='qonnx.*')
-
-
-@contextmanager
-def capture_finn_output() -> Iterator[None]:
-    """Context manager for FINN builds - currently disabled (pass-through).
-
-    TEMPORARY FIX: Output capture is DISABLED because it causes hangs.
-    The capture logic below is commented out but preserved for investigation.
-
-    ISSUE: When we redirect stdout/stderr to StringIO:
-    - FINN subprocesses inherit StringIO objects instead of real file descriptors
-    - TTY detection fails (StringIO.isatty() returns False)
-    - File descriptor operations fail on StringIO
-    - Result: FINN hangs during subprocess execution
-
-    TODO: Investigate proper subprocess output capture that doesn't break TTY behavior.
-    Consider using os.pipe() or pty for proper file descriptor handling.
-
-    Example:
-        with capture_finn_output():
-            build_dataflow_cfg(model, config)  # Outputs directly to console
-
-    Yields:
-        None
-    """
-    # DISABLED: Pass through without capture to prevent hangs
-    yield
-
-    # # Original capture logic (COMMENTED OUT - causes hangs):
-    # root_level = logging.getLogger().level
-    #
-    # # In verbose modes (INFO/DEBUG), pass through all output
-    # if root_level <= logging.INFO:
-    #     yield
-    #     return
-    #
-    # # In quiet/normal modes, capture output for filtering
-    # stdout_orig = sys.stdout
-    # stderr_orig = sys.stderr
-    # stdout_capture = StringIO()
-    # stderr_capture = StringIO()
-    #
-    # try:
-    #     sys.stdout = stdout_capture
-    #     sys.stderr = stderr_capture
-    #     yield
-    # finally:
-    #     # Always restore stdout/stderr
-    #     sys.stdout = stdout_orig
-    #     sys.stderr = stderr_orig
-    #
-    #     # Control visibility based on logging level
-    #     # Don't try to parse content - just show/hide based on level
-    #
-    #     if root_level == logging.WARNING:
-    #         # Normal mode: Show captured stdout
-    #         # This includes build_dataflow.py's "Running step" messages
-    #         output = stdout_capture.getvalue()
-    #         if output.strip():
-    #             print(output, file=stdout_orig, end='')
-    #
-    #     # In ERROR mode: stdout is suppressed entirely
-    #
-    #     # Always show stderr regardless of level (errors are important)
-    #     err_output = stderr_capture.getvalue()
-    #     if err_output.strip():
-    #         print(err_output, file=stderr_orig, end='')

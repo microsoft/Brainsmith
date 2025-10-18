@@ -33,7 +33,7 @@ class FuncLayerNorm(CustomOp):
         my_attrs = {
             "axis": ("i", True, -1),
             "epsilon": ("f", True, 1e-5),
-            # FINN DataTypes for inputs, weight, bias, outputs
+            # FINN DataTypes for normalization input/output
             "InputDataType": ("s", True, ""),
             "OutputDataType": ("s", True, ""),
             "backend": ("s", True, "general"),
@@ -60,26 +60,15 @@ class FuncLayerNorm(CustomOp):
     
     def execute_node(self, context, graph):
         node = self.onnx_node
-        # Get tensor values
         in_act = context[node.input[0]]
-        out_act = context[node.output[0]]
-        # Get any shape info that needs reuse
         ishape = in_act.shape
-        assert ishape == out_act.shape, "In/out shapes don't match"
-        # Get attributes
+        out_shape = context[node.output[0]].shape
+        assert ishape == out_shape, "In/out shapes don't match"
         norm_shape = ishape[self.get_nodeattr("axis"):]
         epsilon = self.get_nodeattr("epsilon")
-        # Compute functional LayerNorm (no learned params)    
         mean = np.mean(in_act, axis=-1)
         variance = np.var(in_act, axis=-1)
         mean = np.expand_dims(mean, axis=-1)
         variance = np.expand_dims(variance, axis=-1)
         std_dev = np.sqrt(variance + epsilon)
-        context[node.output[0]] = (in_act - mean)/std_dev
-        # return context[node.output[0]]
-    
-    def verify_node(self):
-        """Verifies that all attributes the node needs are there and
-        that particular attributes are set correctly. Also checks if
-        the number of inputs is equal to the expected number."""
-        pass
+        context[node.output[0]] = (in_act - mean) / std_dev

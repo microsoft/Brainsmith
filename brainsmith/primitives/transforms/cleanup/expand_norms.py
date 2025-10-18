@@ -32,8 +32,7 @@ class ExpandNorms(Transformation):
         graph = model.graph
         node_ind = 0
         graph_modified = False
-        
-        # Check if we need to add the brainsmith.operators.general domain
+
         existing_domains = {op.domain for op in model.model.opset_import}
         if "brainsmith.operators.general" not in existing_domains:
             model.model.opset_import.append(
@@ -42,18 +41,16 @@ class ExpandNorms(Transformation):
         
         for node in graph.node:
             node_ind += 1
-            # Handle LayerNorm
             if node.op_type == "LayerNormalization":
                 graph_modified = True
-                # Get tensors
                 ln_act_in = node.input[0]
                 act_out = node.output[0]
                 scale = node.input[1]
                 bias = node.input[2] if len(node.input) > 2 else None
-                # Get node attributes
-                axis = getattr(get_by_name(node.attribute, "axis"), "i", -1)
-                epsilon = getattr(get_by_name(node.attribute, "epsilon"), "f", 1e-5)
-                # Get tensor attributes
+                axis_attr = get_by_name(node.attribute, "axis")
+                axis = axis_attr.i if axis_attr is not None else -1
+                epsilon_attr = get_by_name(node.attribute, "epsilon")
+                epsilon = epsilon_attr.f if epsilon_attr is not None else 1e-5
                 idt = model.get_tensor_datatype(ln_act_in)
                 wdt = model.get_tensor_datatype(scale)
                 if bias:
@@ -61,8 +58,7 @@ class ExpandNorms(Transformation):
                 odt = model.get_tensor_datatype(act_out)
 
                 act_shape = model.get_tensor_shape(ln_act_in)
-                
-                # Create functional layernorm node
+
                 func_ln_node = oh.make_node(
                     "FuncLayerNorm",
                     [ln_act_in],
@@ -77,15 +73,12 @@ class ExpandNorms(Transformation):
                 )
 
                 # Get scale, eliminate if all ones
-                elementwise_affine = not np.all(scale==1)
-                if elementwise_affine:
-                    # Create new input tensor
+                has_scale = not np.all(scale == 1)
+                if has_scale:
                     scale_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(scale_act_in)
-                    
-                    # Update previous output tensor
+
                     func_ln_node.output[0] = scale_act_in.name
-                    # Create Mul node to replace scale
                     mul_node = oh.make_node("Mul", [scale_act_in.name, scale], [act_out])
                     
                     model.set_tensor_datatype(scale_act_in.name, idt)
@@ -93,35 +86,26 @@ class ExpandNorms(Transformation):
                 # Check if optional bias exists
                 has_bias = bias is not None
                 if has_bias:
-                    # Create new input tensor
                     bias_act_in = oh.make_tensor_value_info(model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape)
                     graph.value_info.append(bias_act_in)
-                    # Update previous output tensor
-                    if elementwise_affine:
+                    if has_scale:
                         mul_node.output[0] = bias_act_in.name
                     else:
-                        func_ln_node.output[0] = scale_act_in.name
-                    # Create Add node to replace bias
+                        func_ln_node.output[0] = bias_act_in.name
                     add_node = oh.make_node("Add", [bias_act_in.name, bias], [act_out])
-                    
+
                     model.set_tensor_datatype(bias_act_in.name, wdt)
 
-                # Insert new nodes
                 insert_point = node_ind
                 graph.node.insert(insert_point, func_ln_node)
-                if elementwise_affine:
+                if has_scale:
                     insert_point += 1
                     graph.node.insert(insert_point, mul_node)
                 if has_bias:
                     insert_point += 1
                     graph.node.insert(insert_point, add_node)
-                # Remove old node
                 graph.node.remove(node)
                 graph_modified = True
-
-            # Handle RMSNorm
-            if node.op_type == "SimplifiedLayerNormFusion":
-                pass
 
         model = model.transform(InferShapes())
         return (model, graph_modified)

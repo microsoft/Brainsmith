@@ -8,10 +8,18 @@ consistency and single source of truth.
 """
 
 # Skip indicators in blueprint steps
-# These values in YAML all mean "skip this step"
-SKIP_VALUES = frozenset([None, "~", ""])
+# YAML can use ~, null, or empty string - all normalized to "~" during parsing
+SKIP_VALUES = frozenset([None, "~", ""])  # For parsing only
 
-# Normalized representation (internal)
-# All skip values are normalized to this symbol
+# Canonical skip indicator (used internally after parsing)
 SKIP_INDICATOR = "~"
+
+
+def is_skip(value) -> bool:
+    """Check if value is the skip indicator.
+
+    Note: After parsing, all skip values are normalized to SKIP_INDICATOR.
+    This function checks the canonical form only.
+    """
+    return value == SKIP_INDICATOR
 

@@ -26,27 +26,25 @@ class ExtractShellIntegrationMetadata(Transformation):
     def apply(self, model):
         graph = model.graph
 
-        # Extract instream widths
         instreams = {}
         for input_tensor in graph.input:
             consumer = model.find_consumer(input_tensor.name)
             inst = registry.getCustomOp(consumer)
-            instream = {}
-            instream['width'] = inst.get_instream_width() 
-            instreams[input_tensor.name] = instream
-            instream['shape'] = inst.get_normal_input_shape() 
-        self.md['insteams'] = instreams
+            instreams[input_tensor.name] = {
+                'width': inst.get_instream_width(),
+                'shape': inst.get_normal_input_shape()
+            }
+        self.md['instreams'] = instreams
 
-        # Extract outstream widths
         outstreams = {}
         for output_tensor in graph.output:
             producer = model.find_producer(output_tensor.name)
             inst = registry.getCustomOp(producer)
-            outstream = {}
-            outstream['width'] = inst.get_outstream_width() 
-            outstreams[output_tensor.name] = outstream
-            outstream['shape'] = inst.get_normal_output_shape()
-        self.md['outsteams'] = outstreams
+            outstreams[output_tensor.name] = {
+                'width': inst.get_outstream_width(),
+                'shape': inst.get_normal_output_shape()
+            }
+        self.md['outstreams'] = outstreams
     
         static_matmuls = {}
         for node in graph.node:
@@ -63,4 +61,4 @@ class ExtractShellIntegrationMetadata(Transformation):
         with open(self.metadata_file, "w") as fp:
             json.dump(self.md, fp, indent=4)
 
-        return(model, False)
+        return (model, False)

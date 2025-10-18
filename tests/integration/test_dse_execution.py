@@ -49,8 +49,9 @@ class TestDSETreeConstruction:
         
         # Verify tree structure
         assert tree.root is not None
-        assert tree.count_nodes() == 1  # Just the root node
-        assert tree.count_leaves() == 1
+        stats = tree.get_statistics()
+        assert stats['total_segments'] == 1  # Just the root node
+        assert stats['total_paths'] == 1
         assert not tree.root.is_branch_point
         assert tree.root.is_leaf
         
@@ -110,8 +111,9 @@ class TestDSETreeConstruction:
         tree = builder.build_tree(multi_branch_design_space, blueprint_config)
         
         # Should have: root + 2 first level branches + 2×2 second level branches = 7 nodes
-        assert tree.count_nodes() == MULTI_LEVEL_TOTAL_NODES
-        assert tree.count_leaves() == MULTI_LEVEL_TOTAL_LEAVES
+        stats = tree.get_statistics()
+        assert stats['total_segments'] == MULTI_LEVEL_TOTAL_NODES
+        assert stats['total_paths'] == MULTI_LEVEL_TOTAL_LEAVES
         
         # Get execution order and verify BFS
         execution_order = tree.get_execution_order()
@@ -188,8 +190,9 @@ class TestDSETreeConstruction:
         
         # Verify empty tree structure
         assert tree.root is not None
-        assert tree.count_nodes() == 1  # Just the root
-        assert tree.count_leaves() == 1
+        stats = tree.get_statistics()
+        assert stats['total_segments'] == 1  # Just the root
+        assert stats['total_paths'] == 1
         assert tree.root.is_leaf
         assert not tree.root.is_branch_point
         assert len(tree.root.steps) == 0

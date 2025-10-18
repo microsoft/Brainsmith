@@ -1,129 +1,72 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Formatters for displaying Brainsmith configuration and output."""
-
 import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from rich.table import Table
 from rich.console import Console as RichConsole
 
 from brainsmith.settings import SystemConfig
+from .constants import PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT
+
+# Source constants for configuration display
+_SOURCE_DERIVED = "derived"
+_SOURCE_DEFAULT = "default"
 
 
 class ConfigFormatter:
     """Formatter for displaying Brainsmith configuration."""
-    
-    def __init__(self, console: Optional[RichConsole] = None):
+
+    def __init__(self, console: RichConsole | None = None):
         self.console = console or RichConsole()
     
-    def format_table(self, config: SystemConfig, verbose: bool = False) -> Table:
-        """Format configuration as a Rich table.
-        
+    def format_table(self, config: SystemConfig, finn: bool = False) -> Table:
+        """Format configuration as Rich table with source information.
+
         Args:
-            config: The configuration to display
-            verbose: Whether to include source information
-            
+            config: System configuration
+            finn: Include FINN-specific settings
+
         Returns:
-            Formatted Rich table
+            Rich table with configuration details (always detailed view with sources)
         """
-        if verbose:
-            return self._create_verbose_table(config)
-        else:
-            return self._create_simple_table(config)
+        return self._create_detailed_table(config, include_finn=finn)
     
-    def _create_simple_table(self, config: SystemConfig) -> Table:
-        """Create a simple configuration table."""
+    def _create_detailed_table(self, config: SystemConfig, include_finn: bool = False) -> Table:
+        """Create detailed configuration table with sources."""
         table = Table(title="Brainsmith Configuration")
-        table.add_column("Setting", style="cyan")
-        table.add_column("Value")  # No style to allow markup
-        
-        # Core paths section
-        table.add_row("Core Paths", "")
-        table.add_row("  Build Directory", self._format_path(config.build_dir, config.bsmith_dir))
-        table.add_row("  Dependencies Directory", 
-                      self._format_path(config.deps_dir, config.bsmith_dir, config.deps_dir))
-        
-        # Toolchain settings section
-        table.add_row("", "")
-        table.add_row("Toolchain Settings", "")
-        table.add_row("  Plugins Strict", str(config.plugins_strict))
-        table.add_row("  Debug Mode", str(config.debug))
-        table.add_row("  Netron Port", str(config.netron_port))
-        if config.vivado_ip_cache:
-            table.add_row("  Vivado IP Cache", 
-                          self._format_path(config.vivado_ip_cache, config.bsmith_dir))
-        
-        # Xilinx tools section
-        self._add_xilinx_tools_section(table, config)
-        
-        return table
-    
-    def _create_verbose_table(self, config: SystemConfig) -> Table:
-        """Create a verbose configuration table with source information."""
-        table = Table(title="Brainsmith Configuration (Verbose)")
         table.add_column("Setting", style="cyan")
         table.add_column("Value")
         table.add_column("Source", style="yellow")
-        
-        # Core paths section
+
         table.add_row("Core Paths", "", "")
-        table.add_row("  Build Directory", 
+        table.add_row("  Build Directory",
                       self._format_path(config.build_dir, config.bsmith_dir),
                       self._get_source("build_dir", "BSMITH_BUILD_DIR"))
         table.add_row("  Dependencies Directory",
                       self._format_path(config.deps_dir, config.bsmith_dir, config.deps_dir),
                       self._get_source("deps_dir", "BSMITH_DEPS_DIR"))
-        
-        # Toolchain settings section
+
         table.add_row("", "", "")
         table.add_row("Toolchain Settings", "", "")
-        table.add_row("  Debug Mode", str(config.debug),
-                      self._get_source("debug", "BSMITH_DEBUG"))
         table.add_row("  Plugins Strict", str(config.plugins_strict),
                       self._get_source("plugins_strict", "BSMITH_PLUGINS_STRICT"))
         table.add_row("  Netron Port", str(config.netron_port),
                       self._get_source("netron_port", "BSMITH_NETRON_PORT"))
-        
-        # Xilinx tools section with sources
-        self._add_xilinx_tools_verbose_section(table, config)
-        
-        # FINN configuration section
-        self._add_finn_section(table, config)
-        
+        if config.default_workers:
+            table.add_row("  Default Workers", str(config.default_workers),
+                          self._get_source("default_workers", "BSMITH_DEFAULT_WORKERS"))
+
+        self._add_xilinx_tools_section(table, config)
+
+        if include_finn:
+            self._add_finn_section(table, config)
+
         return table
-    
+
     def _add_xilinx_tools_section(self, table: Table, config: SystemConfig) -> None:
-        """Add Xilinx tools section to the table."""
-        table.add_row("", "")
-        table.add_row("Xilinx Tools", "")
-        
-        # Vivado
-        vivado_display = self._format_xilinx_tool_path(
-            config.effective_vivado_path, config.xilinx_path, 
-            config.xilinx_version, "Vivado"
-        )
-        table.add_row("  Vivado", vivado_display)
-        
-        # Vitis
-        vitis_display = self._format_xilinx_tool_path(
-            config.effective_vitis_path, config.xilinx_path,
-            config.xilinx_version, "Vitis"
-        )
-        table.add_row("  Vitis", vitis_display)
-        
-        # Vitis HLS
-        vitis_hls_display = self._format_xilinx_tool_path(
-            config.effective_vitis_hls_path, config.xilinx_path,
-            config.xilinx_version, "Vitis_HLS"
-        )
-        table.add_row("  Vitis HLS", vitis_hls_display)
-    
-    def _add_xilinx_tools_verbose_section(self, table: Table, config: SystemConfig) -> None:
-        """Add Xilinx tools section with source information."""
         table.add_row("", "", "")
         table.add_row("Xilinx Tools", "", "")
         table.add_row("  Base Path", 
@@ -141,90 +84,82 @@ class ConfigFormatter:
             path = getattr(config, path_attr)
             if path:
                 display = self._format_xilinx_tool_path(
-                    path, config.xilinx_path, config.xilinx_version, 
+                    path, config.xilinx_path, config.xilinx_version,
                     tool_name.replace(" ", "_")
                 )
-                source = "derived" if not getattr(config, path_attr.replace("effective_", "")) else self._get_source(path_attr.replace("effective_", ""), env_var)
+                source = _SOURCE_DERIVED if not getattr(config, path_attr.replace("effective_", "")) else self._get_source(path_attr.replace("effective_", ""), env_var)
             else:
                 display = "[yellow]Not found[/yellow]"
                 source = "—"
             table.add_row(f"  {tool_name}", display, source)
     
     def _add_finn_section(self, table: Table, config: SystemConfig) -> None:
-        """Add FINN configuration section to verbose table."""
         table.add_row("", "", "")
         table.add_row("FINN Configuration", "", "")
-        
-        # FINN_ROOT
+
         finn_root = config.effective_finn_root
         finn_root_is_derived = config.finn.finn_root is None
         finn_root_original = Path("deps/finn") if finn_root_is_derived else config.finn.finn_root
-        
-        table.add_row("  FINN_ROOT", 
+
+        table.add_row("  FINN_ROOT",
                       self._format_path(finn_root, config.bsmith_dir, finn_root_original),
-                      "derived" if finn_root_is_derived else self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
-        
-        # FINN_BUILD_DIR
+                      _SOURCE_DERIVED if finn_root_is_derived else self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
+
         finn_build = config.effective_finn_build_dir
         finn_build_is_derived = config.finn.finn_build_dir is None
-        table.add_row("  FINN_BUILD_DIR", 
+        table.add_row("  FINN_BUILD_DIR",
                       self._format_path(finn_build, config.bsmith_dir),
-                      "derived" if finn_build_is_derived else self._get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
-        
-        # FINN_DEPS_DIR
+                      _SOURCE_DERIVED if finn_build_is_derived else self._get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
+
         finn_deps = config.effective_finn_deps_dir
         finn_deps_is_derived = config.finn.finn_deps_dir is None
         finn_deps_original = config.deps_dir if finn_deps_is_derived and finn_deps == config.deps_dir else config.finn.finn_deps_dir
-        
+
         table.add_row("  FINN_DEPS_DIR",
                       self._format_path(finn_deps, config.bsmith_dir, finn_deps_original),
-                      "derived" if finn_deps_is_derived else self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
+                      _SOURCE_DERIVED if finn_deps_is_derived else self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
 
-        if config.default_workers:
-            table.add_row("  Default Workers", str(config.default_workers),
-                          self._get_source("default_workers", "BSMITH_DEFAULT_WORKERS"))
-    
-    def _format_path(self, path: Optional[Path], base_path: Optional[Path] = None, 
-                     original_value: Optional[Path] = None) -> str:
-        """Format a path for display with color coding."""
+    def _format_path(
+        self,
+        path: Path | None,
+        base_path: Path | None = None,
+        original_value: Path | None = None
+    ) -> str:
         if path is None:
             return "None"
-        
+
         path_obj = Path(path)
-        
-        # Determine the actual path to check for existence
+
         if not path_obj.is_absolute() and base_path:
             check_path = base_path / path_obj
         else:
             check_path = path_obj
-        
-        # Color based on existence
+
         color = "green" if check_path.exists() else "yellow"
-        
-        # Format the display
+
         if not path_obj.is_absolute() and base_path:
-            return f"[dim]{base_path}/[/dim][{color}]{path}[/{color}]"
-        
-        # Use original_value if provided
+            return f"[dim]{base_path}/[/dim][{color}]{path_obj}[/{color}]"
+
         if original_value is not None and not Path(original_value).is_absolute():
             base_str = str(base_path) if base_path else str(path_obj.parent)
-            rel_str = str(original_value)
-            return f"[dim]{base_str}/[/dim][{color}]{rel_str}[/{color}]"
-        
-        # Try to show as relative to base_path
-        if base_path and path_obj.is_absolute() and base_path.is_absolute():
+            return f"[dim]{base_str}/[/dim][{color}]{original_value}[/{color}]"
+
+        if base_path and path_obj.is_absolute():
             try:
                 rel_path = path_obj.relative_to(base_path)
                 return f"[dim]{base_path}/[/dim][{color}]{rel_path}[/{color}]"
             except ValueError:
                 pass
-        
-        # Show as-is
-        return f"[{color}]{path}[/{color}]"
-    
-    def _format_xilinx_tool_path(self, path: Optional[Path], base: Optional[Path],
-                                 version: str, tool: str) -> str:
-        """Format Xilinx tool path with base and version highlighted."""
+
+        return f"[{color}]{path_obj}[/{color}]"
+
+    def _format_xilinx_tool_path(
+        self,
+        path: Path | None,
+        base: Path | None,
+        version: str,
+        tool: str
+    ) -> str:
         if path and path.exists():
             color = "green"
             return f"[{color}]{base}[/{color}][dim]/{tool}/[/dim][{color}]{version}[/{color}]"
@@ -232,35 +167,17 @@ class ConfigFormatter:
             return "[yellow]Not found[/yellow]"
     
     def _get_source(self, setting_name: str, env_var: str) -> str:
-        """Determine the source of a configuration value.
-        
-        Args:
-            setting_name: Name of the setting to check
-            env_var: Environment variable name
-            
-        Returns:
-            String describing where the value came from (env, yaml, or default)
-        """
         if os.environ.get(env_var):
             return f"env: {env_var}"
-        
-        # Check for YAML files
+
         yaml_file = self._check_yaml_files(setting_name)
         if yaml_file:
             return f"yaml: {yaml_file}"
-        
-        return "default"
+
+        return _SOURCE_DEFAULT
     
-    def _check_yaml_files(self, setting_name: str) -> Optional[str]:
-        """Check if setting exists in YAML files.
-        
-        Args:
-            setting_name: Name of the setting to look for
-            
-        Returns:
-            Filename containing the setting, or None if not found
-        """
-        for filename in ["brainsmith_settings.yaml", ".brainsmith.yaml"]:
+    def _check_yaml_files(self, setting_name: str) -> str | None:
+        for filename in [PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT]:
             yaml_path = Path(filename)
             if yaml_path.exists():
                 try:
@@ -268,12 +185,11 @@ class ConfigFormatter:
                         data = yaml.safe_load(f)
                         if data and setting_name in data:
                             return filename
-                except:
+                except (OSError, yaml.YAMLError):
                     pass
         return None
     
     def show_validation_warnings(self, config: SystemConfig) -> None:
-        """Display validation warnings for the configuration."""
         warnings = []
         
         if config.deps_dir and not config.deps_dir.is_absolute():

@@ -23,7 +23,7 @@ class DSEConfig:
     Design Space Exploration behavior.
     """
     # Always required
-    clock_ns: float
+    clock_ns: float  # Required field, mapped to synth_clk_period_ns in FINN config
 
     # Output type (clear names)
     output: OutputType = OutputType.ESTIMATES

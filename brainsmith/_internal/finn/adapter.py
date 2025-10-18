@@ -8,12 +8,12 @@ This allows the main executor to remain clean while documenting why these
 workarounds exist.
 """
 
+import importlib.util
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
-import importlib.util
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,18 @@ logger = logging.getLogger(__name__)
 class FINNAdapter:
     """Adapter for FINN build system.
 
+    WARNING: This adapter is NOT thread-safe. FINN requires changing the
+    working directory during builds (os.chdir), which affects the entire
+    process. Do not run multiple builds concurrently in the same process.
+
     Isolates all FINN-specific workarounds:
-    - Working directory changes (os.chdir)
-    - Model discovery in intermediate_models
+    - Working directory changes (os.chdir) - FINN requirement, NOT thread-safe
+    - Model discovery in intermediate_models directory
     - Dynamic import handling
     - Configuration format conversion
+    - Environment variable management
+
+    For concurrent builds, use separate processes instead of threads.
     """
 
     def __init__(self):
@@ -76,9 +83,10 @@ class FINNAdapter:
             RuntimeError: If build fails
         """
         # Ensure FINN environment variables are set before importing FINN
-        # TODO: In the future, we hope to move away from environment variables
-        # and pass configuration directly to FINN components. For now, FINN
-        # requires certain environment variables to be set (FINN_ROOT, FINN_BUILD_DIR, etc.)
+        # TODO (blocked on FINN upstream): Move away from environment variables
+        # FINN currently requires FINN_ROOT, FINN_BUILD_DIR, etc. to be set via
+        # os.environ. Ideally these would be passed directly to FINN components.
+        # This requires changes to finn-base library.
         from brainsmith.settings import load_config
         config = load_config()
         config.export_to_environment()
@@ -91,9 +99,11 @@ class FINNAdapter:
         abs_input = input_model.absolute()
         abs_output = output_dir.absolute()
 
-        logger.info(f"FINN build: input={abs_input}, output={abs_output}")
+        logger.info("FINN build: input=%s, output=%s", abs_input, abs_output)
 
-        # FINN requires working directory change
+        # TAFK TODO: Figure this out
+        # FINN requires working directory change - NOT THREAD-SAFE
+        # This affects the entire process. Do not run concurrent builds in same process.
         old_cwd = os.getcwd()
 
         try:
@@ -107,9 +117,12 @@ class FINNAdapter:
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
 
-            # TODO: Improve FINN/Brainsmith coupling to get output model path directly
-            # For now, we mandate save_intermediate_models=True to ensure we can find
-            # the transformed model that needs to be passed to the next DSE segment
+            # TODO (requires FINN API changes): Get output model path directly from FINN
+            # Currently FINN's build_dataflow_cfg() doesn't return the final model path,
+            # so we must:
+            # 1. Mandate save_intermediate_models=True
+            # 2. Discover the last model in intermediate_models/ directory
+            # This coupling should be improved in future FINN versions.
             finn_config["save_intermediate_models"] = True
 
             # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr
@@ -118,34 +131,32 @@ class FINNAdapter:
             finn_config["verbose"] = True
 
             # Convert dict to DataflowBuildConfig
-            logger.debug(f"Creating DataflowBuildConfig with: {finn_config}")
+            logger.debug("Creating DataflowBuildConfig with: %s", finn_config)
             config = DataflowBuildConfig(**finn_config)
 
-            # Execute build with output capture
-            # Use capture_finn_output() to control subprocess visibility based on logging level
-            from brainsmith._internal.logging import capture_finn_output
+            # Execute build
+            # FINN output goes directly to console (controlled by no_stdout_redirect flag)
+            steps_count = len(config.steps) if config.steps else 0
+            logger.info("Executing FINN build with %d steps", steps_count)
+            exit_code = build_dataflow_cfg(str(abs_input), config)
 
-            logger.info(f"Executing FINN build with {len(config.steps)} steps")
-            with capture_finn_output():
-                exit_code = build_dataflow_cfg(str(abs_input), config)
-
-            logger.info(f"FINN exit code: {exit_code}")
+            logger.info("FINN exit code: %d", exit_code)
 
             if exit_code != 0:
                 raise RuntimeError(f"FINN build failed with exit code {exit_code}")
 
-            # Discovery now uses absolute path
+            # Discovery now uses absolute path (raises if not found)
             output_model = self._discover_output_model(abs_output)
             self._verify_output_model(output_model)
 
-            logger.info(f"Found output: {output_model}")
+            logger.info("Found output: %s", output_model)
             return output_model
 
         finally:
             # Always restore working directory
             os.chdir(old_cwd)
 
-    def _discover_output_model(self, build_dir: Path) -> Optional[Path]:
+    def _discover_output_model(self, build_dir: Path) -> Path:
         """Find the actual output model from FINN build.
 
         Since we mandate save_intermediate_models=True, FINN will save
@@ -156,10 +167,10 @@ class FINNAdapter:
             build_dir: Directory where build was executed
 
         Returns:
-            Path to discovered model
+            Path to discovered model (guaranteed to exist)
 
         Raises:
-            RuntimeError: If no models found
+            RuntimeError: If no models found or intermediate_models missing
         """
         intermediate_dir = build_dir / "intermediate_models"
         if not intermediate_dir.exists():
@@ -170,7 +181,7 @@ class FINNAdapter:
         if not onnx_files:
             raise RuntimeError(f"No ONNX files found in {intermediate_dir}")
 
-        logger.debug(f"ONNX files in {intermediate_dir}: {[f.name for f in onnx_files]}")
+        logger.debug("ONNX files in %s: %s", intermediate_dir, [f.name for f in onnx_files])
 
         # Return the last (most recent) file - this is the output of the last transform
         onnx_files.sort(key=lambda p: p.stat().st_mtime)
@@ -191,7 +202,7 @@ class FINNAdapter:
         # Verify it's a valid ONNX file
         try:
             import onnx
-            onnx.load(str(model_path))
+            onnx.load(model_path)
         except Exception as e:
             raise RuntimeError(f"Invalid ONNX model at {model_path}: {e}")
 

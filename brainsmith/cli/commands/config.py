@@ -1,15 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Configuration management commands for brainsmith CLI."""
-
-# Standard library imports
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional, Dict
+from textwrap import dedent
 
-# Third-party imports
 import click
 import yaml
 from rich.table import Table
@@ -18,64 +14,73 @@ from rich.console import Console as RichConsole
 
 logger = logging.getLogger(__name__)
 
-# Local imports
 from brainsmith.settings import SystemConfig
-from brainsmith._internal.io.yaml import dump_yaml
 from ..context import ApplicationContext
 from ..utils import console, error_exit, success
-from ..exceptions import ConfigurationError, ValidationError
 from ..formatters import ConfigFormatter
 
 
-@click.group()
+def _generate_config_template(defaults: SystemConfig) -> str:
+    return dedent(f"""\
+        # Brainsmith Configuration
+
+        # Build directory (relative paths resolve from project root)
+        build_dir: {defaults.build_dir}
+
+        # Parallel workers for builds
+        default_workers: {defaults.default_workers}
+
+        # Xilinx tools
+        xilinx_path: {defaults.xilinx_path}
+        xilinx_version: "{defaults.xilinx_version}"
+    """)
+
+
+@click.group(context_settings={'help_option_names': ['-h', '--help']})
 def config():
     """Manage Brainsmith configuration.
 
     \b
     Configuration can be managed by editing YAML files directly:
       Project: ./brainsmith_settings.yaml
-      User:    ~/.brainsmith/config.yaml
+      User:    ~/.brainsmith/settings.yaml
     """
     pass
 
 
-@config.command()
-@click.option('--verbose', '-v', is_flag=True, help='Include source information and path validation')
+@config.command(context_settings={'help_option_names': ['-h', '--help']})
+@click.option('--finn', is_flag=True, help='Include FINN-specific configuration settings')
 @click.pass_obj
-def show(ctx: ApplicationContext, verbose: bool) -> None:
-    """Display current configuration.
-    
-    Shows the effective configuration after merging all sources:
-    user defaults, project settings, environment variables, and CLI overrides.
-    """
+def show(app_ctx: ApplicationContext, finn: bool) -> None:
+    """Display current configuration with source information."""
     try:
-        logger.debug(f"Showing config with verbose={verbose}")
-        config = ctx.get_effective_config()
+        logger.debug(f"Showing config with finn={finn}")
+        config = app_ctx.get_effective_config()
         formatter = ConfigFormatter(console)
-        
-        table = formatter.format_table(config, verbose=verbose)
+
+        # Always show detailed view with sources
+        table = formatter.format_table(config, finn=finn)
         console.print(table)
-        if verbose:
-            formatter.show_validation_warnings(config)
-                
+        formatter.show_validation_warnings(config)
+
     except Exception as e:
         error_exit(f"Failed to load configuration: {e}")
 
 
-@config.command()
+@config.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('--shell', type=click.Choice(['bash', 'zsh', 'fish', 'powershell']),
               default='bash', help='Shell format for output')
 @click.pass_obj
-def export(ctx: ApplicationContext, shell: str) -> None:
+def export(app_ctx: ApplicationContext, shell: str) -> None:
     """Export configuration as shell environment script.
-    
+
     \b
     Usage:
       eval $(brainsmith config export)
       eval $(brainsmith config export --shell fish)
     """
     try:
-        activation_script = ctx.export_environment(shell)
+        activation_script = app_ctx.export_environment(shell)
         
         # Print to stdout for eval
         click.echo(activation_script)
@@ -94,81 +99,57 @@ def export(ctx: ApplicationContext, shell: str) -> None:
         error_exit(f"Failed to export configuration: {e}")
 
 
-@config.command()
-@click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
+@config.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
+@click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/settings.yaml)')
 @click.pass_obj
-def init(ctx: ApplicationContext, user: bool, force: bool) -> None:
-    """Initialize a new configuration file.
-    
+def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
+    """Initialize a new configuration file with sensible defaults.
+
     By default creates project-level config (./brainsmith_settings.yaml).
+    Use --user to create user-level config (~/.brainsmith/settings.yaml).
     """
     # Determine output path
-    if user:
-        output = ctx.user_config_path
-    else:
-        # Default to project config
-        output = Path("brainsmith_settings.yaml")
-    
+    output = app_ctx.user_config_path if user else Path("brainsmith_settings.yaml")
+
     if output.exists() and not force:
         error_exit(f"{output} already exists. Use --force to overwrite.")
-    
+
     try:
         # Create parent directory if needed (especially for user config)
         output.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Load current config to get sensible defaults
-        config = ctx.get_effective_config()
-        
-        # Always create simple config matching brainsmith_settings.yaml format
-        config_dict = {
-            "__comment__": "Brainsmith Project Settings",
-            "build_dir": "${HOME}/.brainsmith/builds",
-            "default_workers": 4,
-            "xilinx_path": "/tools/Xilinx",
-            "xilinx_version": "2024.2",
-            "plugins_strict": True,
-            "debug": False,
-        }
-        
-        # Write formatted YAML matching the target style
-        lines = []
-        
-        # Add header comment
-        lines.append("# Brainsmith Project Settings")
-        lines.append("")
-        
-        # Build directory comment and value
-        lines.append("# Build directory for compilation artifacts")
-        lines.append(f"build_dir: {config_dict['build_dir']}")
-        lines.append("")
 
-        # Worker settings
-        lines.append("# Default number of workers for parallel operations")
-        lines.append(f"default_workers: {config_dict['default_workers']}")
-        lines.append("")
-        
-        # Xilinx tool configuration
-        lines.append("# Xilinx tool configuration")
-        lines.append(f"xilinx_path: {config_dict['xilinx_path']}")
-        lines.append(f'xilinx_version: "{config_dict["xilinx_version"]}"')
-        lines.append("")
-        
-        # Debug settings
-        lines.append("# Debug settings")
-        lines.append(f"plugins_strict: {str(config_dict['plugins_strict']).lower()}")
-        lines.append(f"debug: {str(config_dict['debug']).lower()}")
-        lines.append("")
+        # Get actual defaults WITHOUT loading from existing config files
+        # Temporarily override env vars to prevent loading existing configs
+        original_user_file = os.environ.pop('_BRAINSMITH_USER_FILE', None)
+        original_project_file = os.environ.pop('_BRAINSMITH_PROJECT_FILE', None)
+
+        try:
+            # Set dummy values to prevent YamlSettingsSource from loading real files
+            os.environ['_BRAINSMITH_USER_FILE'] = '/dev/null'
+            os.environ['_BRAINSMITH_PROJECT_FILE'] = '/dev/null'
+            defaults = SystemConfig()
+        finally:
+            # Restore original env vars
+            os.environ.pop('_BRAINSMITH_USER_FILE', None)
+            os.environ.pop('_BRAINSMITH_PROJECT_FILE', None)
+            if original_user_file:
+                os.environ['_BRAINSMITH_USER_FILE'] = original_user_file
+            if original_project_file:
+                os.environ['_BRAINSMITH_PROJECT_FILE'] = original_project_file
+
+        yaml_content = _generate_config_template(defaults)
 
         with open(output, 'w') as f:
-            f.write('\n'.join(lines) + '\n')
-        
+            f.write(yaml_content)
+
         success(f"Created configuration file: {output}")
-        console.print("\nYou can now edit this file to customize your settings.")
+        console.print("\n[dim]Edit the file to customize settings for your environment.[/dim]")
+
         if user:
-            console.print("These settings will be used as defaults for all Brainsmith projects.")
+            console.print("These settings apply to all Brainsmith projects.")
         else:
-            console.print("These settings will be used for this project.")
-        
+            console.print("These settings apply to this project only.")
+
     except Exception as e:
         error_exit(f"Failed to create configuration: {e}")

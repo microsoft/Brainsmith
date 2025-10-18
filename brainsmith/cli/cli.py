@@ -1,58 +1,52 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unified CLI implementation for Brainsmith.
-
-This module provides a factory function to create CLI instances for both
-'brainsmith' and 'smith' entry points, sharing common implementation.
-"""
-
 import logging
+import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
 from .commands import OPERATIONAL_COMMANDS, ADMIN_COMMANDS
 from .context import ApplicationContext
 from .utils import console, setup_logging
+from .constants import (
+    CLI_NAME_BRAINSMITH,
+    CLI_NAME_SMITH,
+    ENV_QUIET,
+    EXIT_INTERRUPTED,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def _register_commands(cli: click.Group, name: str, include_admin: bool) -> None:
-    """Register appropriate commands to the CLI group.
-    
-    Args:
-        cli: Click group to register commands to
-        name: CLI name ('brainsmith' or 'smith')
-        include_admin: Whether to include administrative commands
+    """Register commands based on CLI type and admin privileges.
+
+    name='smith': Registers operational commands (dfc, kernel)
+    include_admin=True: Registers admin commands (config, setup) + smith subcommand
+
+    Valid combinations:
+    - name='smith', include_admin=False → operational commands only
+    - name='brainsmith', include_admin=True → admin + smith subcommand + operational (via subcommand)
     """
-    # Add operational commands (smith CLI only)
-    if name == 'smith':
+    if name == CLI_NAME_SMITH:
         for cmd_name, cmd in OPERATIONAL_COMMANDS.items():
             cli.add_command(cmd, name=cmd_name)
-    
-    # Add admin commands (brainsmith only)
+
     if include_admin:
         for cmd_name, cmd in ADMIN_COMMANDS.items():
             cli.add_command(cmd, name=cmd_name)
-        
-        # Add smith as a subcommand for "brainsmith smith" invocation
-        cli.add_command(_create_smith_subcommand(), name='smith')
+
+        cli.add_command(_create_smith_subcommand(), name=CLI_NAME_SMITH)
 
 
 def _create_smith_subcommand() -> click.Command:
-    """Create the smith subcommand for brainsmith CLI.
-    
-    Returns:
-        Click command that proxies to smith CLI
-    """
-    @click.command()
+    @click.command(context_settings={'help_option_names': ['-h', '--help']})
     @click.argument('args', nargs=-1, type=click.UNPROCESSED)
     @click.pass_context
-    def smith(ctx: click.Context, args):
+    def smith(ctx: click.Context, args: tuple[str, ...]) -> None:
         """Create hardware designs and components.
 
         Provides access to dataflow accelerator and kernel generation tools.
@@ -60,156 +54,113 @@ def _create_smith_subcommand() -> click.Command:
 
         Example: brainsmith --debug smith dfc model.onnx blueprint.yaml
         """
-        # Get the application context
-        app_ctx = ctx.obj
-        
-        # Create smith CLI and run with inherited context
-        smith_cli = create_cli('smith', include_admin=False)
-        
-        # Convert args to sys.argv format
-        original_argv = sys.argv
-        try:
-            sys.argv = ['smith'] + list(args)
-            
-            # Pass context through Click's obj
-            smith_cli(obj=app_ctx, standalone_mode=False)
-            
-        except SystemExit as e:
-            # Re-raise to preserve exit code
-            raise
-        finally:
-            # Restore original argv
-            sys.argv = original_argv
-    
+        smith_cli = create_cli(CLI_NAME_SMITH, include_admin=False)
+
+        with smith_cli.make_context(CLI_NAME_SMITH, list(args), parent=ctx, obj=ctx.obj) as smith_ctx:
+            smith_cli.invoke(smith_ctx)
+
     return smith
 
 
 def create_cli(name: str, include_admin: bool = True) -> click.Group:
-    """Factory to create CLI with appropriate commands.
-    
-    Args:
-        name: CLI name ('brainsmith' or 'smith')
-        include_admin: Whether to include administrative commands
-        
-    Returns:
-        Configured Click group
-    """
-    
-    @click.group(invoke_without_command=True)
-    @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path),
-                  help='Configuration file (overrides default locations)')
-    @click.option('--build-dir', type=click.Path(path_type=Path),
+    @click.group(
+        invoke_without_command=True,
+        context_settings={'help_option_names': ['-h', '--help']}
+    )
+    @click.option('-b', '--build-dir', type=click.Path(path_type=Path),
                   help='Override build directory')
-    @click.option('--quiet', '-q', is_flag=True, help='Minimal output (errors and results only)')
-    @click.option('--verbose', '-v', is_flag=True, help='Verbose output (show INFO logs)')
-    @click.option('--debug', is_flag=True, help='Enable DEBUG-level logging and error traces')
+    @click.option('-c', '--config', type=click.Path(exists=True, path_type=Path),
+                  help='Override configuration file')
+    @click.option('-l', '--logs',
+                  type=click.Choice(['error', 'warning', 'info', 'debug']),
+                  default='warning',
+                  metavar='LEVEL',
+                  help='Set log level (error|warning|info|debug)')
+    @click.option('--no-progress', is_flag=True,
+                  help='Disable progress spinners and animations')
     @click.version_option(package_name='brainsmith', prog_name=name)
     @click.pass_context
-    def cli(ctx: click.Context, config: Optional[Path],
-            build_dir: Optional[Path], quiet: bool, verbose: bool, debug: bool):
-        """Brainsmith - Neural network hardware acceleration toolkit."""
-
-        # Initialize application context
+    def cli(
+        ctx: click.Context,
+        build_dir: Path | None,
+        config: Path | None,
+        logs: str,
+        no_progress: bool
+    ) -> None:
+        """Brainsmith - Hardware acceleration for neural networks."""
         context = ApplicationContext(
-            debug=debug,
-            config_file=config
+            config_file=config,
+            no_progress=no_progress
         )
 
-        # Apply overrides
         if build_dir:
             context.overrides['build_dir'] = str(build_dir)
 
-        # Load configuration
         context.load_configuration()
 
-        # Store in Click context
         ctx.obj = context
 
-        # Set up unified logging system
-        setup_logging(quiet=quiet, verbose=verbose, debug=debug)
-        logger.debug(f"{name} CLI initialized with quiet={quiet}, verbose={verbose}, debug={debug}")
+        setup_logging(level=logs)
+        logger.debug(f"{name} CLI initialized with logs={logs}, no_progress={no_progress}")
 
-        # Export to environment for legacy compatibility
+        # Set ENV_QUIET for progress spinners when --no-progress is used
+        if no_progress:
+            os.environ[ENV_QUIET] = '1'
+
+        # Legacy compatibility: export config to environment variables
         effective_config = context.get_effective_config()
         effective_config.export_to_environment(verbose=False)
-        
-        # Handle default behavior when no subcommand is provided
-        if ctx.invoked_subcommand is None:
-            if name == 'smith':
-                # Smith: run DFC with positional args if provided
-                if len(ctx.args) >= 2:
-                    from .commands.dfc import dfc
-                    ctx.invoke(dfc, model=ctx.args[0], blueprint=ctx.args[1],
-                              output_dir=ctx.args[2] if len(ctx.args) > 2 else None)
-                else:
-                    click.echo(ctx.get_help())
-            else:
-                # Brainsmith: always show help when no subcommand
-                click.echo(ctx.get_help())
-    
-    # Update docstring based on CLI type
-    if name == 'smith':
-        cli.help = """Smith - Operational commands for Brainsmith.
 
-When invoked without a subcommand, runs dataflow core creation
-if model and blueprint arguments are provided."""
+        if ctx.invoked_subcommand is None:
+            click.echo(ctx.get_help())
+
+    if name == CLI_NAME_SMITH:
+        cli.help = """Smith - Create hardware designs and components.
+
+\b
+COMMANDS:
+  smith dfc MODEL BLUEPRINT           Create dataflow core
+  smith kernel RTL_FILE               Generate hardware kernel
+
+\b
+Use --help with any command for detailed options."""
     else:
         cli.help = """Brainsmith - Neural network hardware acceleration toolkit.
 
-Use 'smith' to create hardware designs and components."""
-    
-    # Register commands based on CLI type
+\b
+Use 'smith' subcommand or standalone 'smith' CLI for hardware design creation."""
+
     _register_commands(cli, name, include_admin)
-    
+
     return cli
 
 
-def brainsmith_main() -> None:
-    """Main entry point for the brainsmith CLI."""
+def _run_cli(name: str, include_admin: bool) -> None:
+    """Run CLI with consistent error handling."""
     try:
-        cli = create_cli('brainsmith', include_admin=True)
+        cli = create_cli(name, include_admin=include_admin)
         cli()
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
-        sys.exit(130)
+        sys.exit(EXIT_INTERRUPTED)
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {e}")
-        logging.exception("Unexpected error in brainsmith CLI")
+        logging.exception(f"Unexpected error in {name} CLI")
         sys.exit(1)
+
+
+def brainsmith_main() -> None:
+    _run_cli(CLI_NAME_BRAINSMITH, include_admin=True)
 
 
 def smith_main() -> None:
-    """Main entry point for the smith CLI."""
-    try:
-        # Handle the case where positional args are passed for default DFC
-        # Click doesn't handle default commands with positional args well,
-        # so we need to preprocess sys.argv
-        if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
-            # Check if first arg is a subcommand
-            subcommands = ['dfc', 'kernel']
-            if sys.argv[1] not in subcommands:
-                # Assume it's a model path for DFC, inject 'dfc' command
-                sys.argv.insert(1, 'dfc')
-        
-        cli = create_cli('smith', include_admin=False)
-        cli()
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user[/yellow]")
-        sys.exit(130)
-    except Exception as e:
-        console.print(f"[red]Unexpected error:[/red] {e}")
-        logging.exception("Unexpected error in smith CLI")
-        sys.exit(1)
-
-
+    _run_cli(CLI_NAME_SMITH, include_admin=False)
 
 
 if __name__ == "__main__":
-    # Determine which CLI to run based on invocation
-    import os
     prog_name = os.path.basename(sys.argv[0])
 
-    if 'brainsmith' in prog_name:
+    if CLI_NAME_BRAINSMITH in prog_name:
         brainsmith_main()
     else:
         smith_main()

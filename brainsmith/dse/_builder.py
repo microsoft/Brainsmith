@@ -16,7 +16,6 @@ from brainsmith.dse.design_space import DesignSpace
 from brainsmith.dse.config import DSEConfig
 from brainsmith.dse._constants import SKIP_INDICATOR
 from brainsmith.dse.types import OutputType
-from brainsmith.registry import has_step, list_all_steps
 
 
 class DSETreeBuilder:
@@ -67,29 +66,14 @@ class DSETreeBuilder:
     
     def _create_step_dict(self, step_spec: str, space: DesignSpace) -> Dict[str, Any]:
         """Create a standardized step dictionary.
-        
+
         Args:
             step_spec: Step specification string
             space: DesignSpace containing configuration
-            
+
         Returns:
             Dictionary with step configuration
-            
-        Raises:
-            ValueError: If step is not found in registry
         """
-        # Validate step exists (defensive check - should already be validated in DesignSpace)
-        if not has_step(step_spec):
-            available_steps = list_all_steps()
-            # Find similar steps for helpful error message
-            similar = [s for s in available_steps if step_spec.lower() in s.lower() or s.lower() in step_spec.lower()]
-            
-            error_msg = f"Step '{step_spec}' not found in registry."
-            if similar:
-                error_msg += f" Did you mean one of: {', '.join(similar[:3])}?"
-            error_msg += f"\n\nAvailable steps: {', '.join(available_steps)}"
-            raise ValueError(error_msg)
-        
         if step_spec == "infer_kernels" and space.kernel_backends:
             return {
                 "name": step_spec,
@@ -171,15 +155,21 @@ class DSETreeBuilder:
     
     def _validate_tree_size(self, tree: DSETree, max_combinations: int) -> None:
         """Validate tree doesn't exceed maximum combinations.
-        
+
         Args:
             tree: DSE tree to validate
             max_combinations: Maximum allowed leaf nodes
-            
+
         Raises:
             ValueError: If tree has too many paths
         """
-        leaf_count = tree.count_leaves()
+        # Count leaves inline (single traversal)
+        def count_leaves(node: DSESegment) -> int:
+            if not node.children:
+                return 1
+            return sum(count_leaves(child) for child in node.children.values())
+
+        leaf_count = count_leaves(tree.root)
         if leaf_count > max_combinations:
             raise ValueError(
                 f"Execution tree has {leaf_count} paths, exceeds limit of "

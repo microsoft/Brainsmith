@@ -217,7 +217,7 @@ class SystemConfig(BaseSettings):
     # Core paths
     # NOTE: bsmith_dir is now a cached property, not a configurable field
     build_dir: Path = Field(
-        default=Path("/tmp/brainsmith_build"),
+        default=Path("build"),
         description="Build directory for artifacts"
     )
     deps_dir: Path = Field(
@@ -226,9 +226,9 @@ class SystemConfig(BaseSettings):
     )
     
     # Xilinx configuration (flattened)
-    xilinx_path: Optional[Path] = Field(
-        default=None,
-        description="Xilinx root installation path (e.g., /tools/Xilinx)"
+    xilinx_path: Path = Field(
+        default=Path("/tools/Xilinx"),
+        description="Xilinx root installation path"
     )
     xilinx_version: str = Field(
         default="2024.2",
@@ -253,12 +253,6 @@ class SystemConfig(BaseSettings):
         default="/opt/xilinx/platforms",
         description="Platform repository paths"
     )
-    
-    # Debug and output settings
-    debug: bool = Field(
-        default=False,
-        description="Enable DEBUG-level logging and error traces"
-    )
 
     # Plugin settings
     plugins_strict: bool = Field(
@@ -279,8 +273,8 @@ class SystemConfig(BaseSettings):
     )
 
     # Worker configuration
-    default_workers: Optional[int] = Field(
-        default=None,
+    default_workers: int = Field(
+        default=4,
         description="Default number of workers for parallel operations (exports to NUM_DEFAULT_WORKERS for FINN)"
     )
 
@@ -356,10 +350,18 @@ class SystemConfig(BaseSettings):
             v = Path(v)
         return v
     
-    @field_validator('xilinx_path', 'vivado_path', 'vitis_path', 'vitis_hls_path', 'vivado_ip_cache', mode='before')
+    @field_validator('xilinx_path', mode='before')
     @classmethod
-    def validate_tool_path(cls, v: Optional[Any]) -> Optional[Path]:
-        """Convert tool paths to Path objects."""
+    def validate_xilinx_path(cls, v: Any) -> Path:
+        """Convert xilinx_path to Path object."""
+        if not isinstance(v, Path):
+            return Path(v)
+        return v
+
+    @field_validator('vivado_path', 'vitis_path', 'vitis_hls_path', 'vivado_ip_cache', mode='before')
+    @classmethod
+    def validate_optional_tool_path(cls, v: Optional[Any]) -> Optional[Path]:
+        """Convert optional tool paths to Path objects."""
         if v is None:
             return None
         if not isinstance(v, Path):

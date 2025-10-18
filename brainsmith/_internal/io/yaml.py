@@ -1,11 +1,21 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unified YAML parsing utility with environment variable resolution."""
+"""Unified YAML parsing utility with environment variable resolution.
+
+This module provides thread-safe YAML loading with support for:
+- Environment variable expansion using ${VAR} syntax
+- YAML inheritance via 'extends' field
+- Automatic path resolution for Path-typed fields
+- Context variable injection
+
+Note: Only ${VAR} syntax is supported for variable expansion (not $VAR).
+"""
 
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
 import yaml
 
 
@@ -17,9 +27,11 @@ def load_yaml(
     path_fields: Optional[List[str]] = None,
     schema_class: Optional[type] = None,
 ) -> Dict[str, Any]:
-    """
-    Load a YAML file with optional environment variable expansion and inheritance.
-    
+    """Load a YAML file with optional environment variable expansion and inheritance.
+
+    Environment variables are expanded using ${VAR} syntax (not $VAR).
+    This implementation is thread-safe and does not mutate os.environ.
+
     Args:
         file_path: Path to the YAML file
         expand_env_vars: Whether to expand environment variables (default: True)
@@ -27,10 +39,10 @@ def load_yaml(
         support_inheritance: Whether to support YAML inheritance via 'extends' field
         path_fields: Explicit list of field names that contain paths (dot notation for nested)
         schema_class: Optional Pydantic model class to extract path fields from
-        
+
     Returns:
         Parsed YAML data with environment variables expanded and paths resolved
-        
+
     Raises:
         FileNotFoundError: If the YAML file doesn't exist
         yaml.YAMLError: If the YAML is invalid
@@ -167,35 +179,43 @@ def expand_env_vars_with_context(
     data: Any,
     context_vars: Dict[str, str]
 ) -> Any:
-    """
-    Expand environment variables with additional context variables.
-    
+    """Expand environment variables with additional context variables.
+
+    This implementation is thread-safe and does not mutate os.environ.
+    Uses string.Template for variable expansion with ${VAR} syntax.
+
     Args:
         data: Data structure to process
         context_vars: Additional variables to make available during expansion
-        
+
     Returns:
         Data with environment variables expanded
+
+    Note:
+        Only ${VAR} syntax is supported (not $VAR without braces).
+        Context variables take precedence over environment variables.
     """
-    # Save original values if they exist
-    old_vars = {}
-    for key, value in context_vars.items():
-        if key in os.environ:
-            old_vars[key] = os.environ[key]
-        os.environ[key] = value
-    
-    try:
-        # Expand variables with context
-        result = expand_env_vars(data)
-    finally:
-        # Restore original environment
-        for key in context_vars:
-            if key in old_vars:
-                os.environ[key] = old_vars[key]
-            else:
-                os.environ.pop(key, None)
-    
-    return result
+    from string import Template
+
+    if isinstance(data, str):
+        # Combine environment with context (context takes precedence)
+        combined = {**os.environ, **context_vars}
+
+        # Use Template.safe_substitute for ${VAR} syntax
+        template = Template(data)
+        return template.safe_substitute(combined)
+
+    elif isinstance(data, dict):
+        return {k: expand_env_vars_with_context(v, context_vars)
+                for k, v in data.items()}
+
+    elif isinstance(data, list):
+        return [expand_env_vars_with_context(item, context_vars)
+                for item in data]
+
+    else:
+        # Numbers, booleans, None, etc. - return as-is
+        return data
 
 
 def find_yaml_file(

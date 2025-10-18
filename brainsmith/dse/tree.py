@@ -15,70 +15,55 @@ class DSETree:
     
     def __init__(self, root: DSESegment):
         self.root = root
-    
-    def get_leaf_segments(self) -> List[DSESegment]:
-        """Get all complete exploration paths (leaf segments)."""
-        leaves = []
-        
-        def collect_leaves(node: DSESegment):
-            if node.is_leaf:
-                leaves.append(node)
-            else:
-                for child in node.children.values():
-                    collect_leaves(child)
-        
-        collect_leaves(self.root)
-        return leaves
-    
-    def count_leaves(self) -> int:
-        """Count leaf nodes in tree."""
-        return self._count_leaves(self.root)
-    
-    def _count_leaves(self, node: DSESegment) -> int:
-        """Count leaf nodes from given node."""
-        if not node.children:
-            return 1
-        return sum(self._count_leaves(child) for child in node.children.values())
-    
-    def count_nodes(self) -> int:
-        """Count all nodes in tree."""
-        return self._count_nodes(self.root)
-    
-    def _count_nodes(self, node: DSESegment) -> int:
-        """Count all nodes from given node."""
-        count = 1  # All nodes should be counted, including root
-        for child in node.children.values():
-            count += self._count_nodes(child)
-        return count
-    
-    def print_tree(self) -> None:
-        """Pretty print the DSE tree."""
-        self._print_node(self.root, "", True)
 
-    def _print_node(self, node: DSESegment, indent: str, last: bool) -> None:
-        """Pretty print a node and its children."""
+    def format_tree(self) -> str:
+        """Format tree as a string representation.
+
+        Returns:
+            Multi-line string with ASCII tree visualization
+
+        Example:
+            >>> tree = build_tree(design_space, config)
+            >>> print(tree.format_tree())
+            └── transform_step_1 (3 steps)
+                ├── kernel_backend_A (2 steps)
+                └── kernel_backend_B (2 steps)
+        """
+        lines = []
+        self._format_node(self.root, "", True, lines)
+        return "\n".join(lines)
+
+    def print_tree(self) -> None:
+        """Print tree to console (convenience wrapper).
+
+        Recommended: Use format_tree() for more flexibility.
+        """
+        print(self.format_tree())
+
+    def _format_node(self, node: DSESegment, indent: str, last: bool, lines: List[str]) -> None:
+        """Format a node and its children into line list."""
         if node.segment_id != "root":
             prefix = "└── " if last else "├── "
-            
+
             # Format segment info
             segment_info = f"{node.branch_choice or 'root'}"
             if node.steps:
                 step_count = len(node.steps)
                 segment_info += f" ({step_count} steps)"
-            
+
             # Add status if not pending
             if node.status != SegmentStatus.PENDING:
                 segment_info += f" [{node.status.value}]"
-            
-            print(f"{indent}{prefix}{segment_info}")
-        
+
+            lines.append(f"{indent}{prefix}{segment_info}")
+
         extension = "    " if last else "│   "
         child_items = list(node.children.items())
-        
+
         for i, (branch_id, child) in enumerate(child_items):
             is_last = i == len(child_items) - 1
             new_indent = indent + extension if node.segment_id != "root" else indent
-            self._print_node(child, new_indent, is_last)
+            self._format_node(child, new_indent, is_last, lines)
     
     def get_all_segments(self) -> List[DSESegment]:
         """Get all segments in the tree."""
@@ -123,46 +108,49 @@ class DSETree:
         return order
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get statistics about the DSE tree."""
-        leaf_count = self.count_leaves()
-        node_count = self.count_nodes()
-        
-        # Calculate depth
-        max_depth = 0
-        
-        def calculate_depth(node: DSESegment, depth: int = 0):
-            nonlocal max_depth
-            max_depth = max(max_depth, depth)  # Count depth from root
-            for child in node.children.values():
-                calculate_depth(child, depth + 1)
-        
-        calculate_depth(self.root)
-        
-        # Count total steps
-        total_steps = 0
+        """Get statistics about the DSE tree.
 
-        def count_steps(node: DSESegment):
-            nonlocal total_steps
-            total_steps += len(node.steps)
-            for child in node.children.values():
-                count_steps(child)
+        Single-pass traversal collecting all metrics efficiently.
+        """
+        stats = {
+            'nodes': 0,
+            'leaves': 0,
+            'max_depth': 0,
+            'total_steps': 0,
+            'leaf_steps': []
+        }
 
-        count_steps(self.root)
+        def traverse(node: DSESegment, depth: int = 0):
+            stats['nodes'] += 1
+            stats['total_steps'] += len(node.steps)
+            stats['max_depth'] = max(stats['max_depth'], depth)
 
-        # Calculate segment efficiency
-        # Without segments, we'd execute all steps for each path
-        steps_without_segments = 0
-        for leaf in self.get_leaf_segments():
-            steps_without_segments += len(leaf.get_all_steps())
+            if not node.children:
+                # Leaf node
+                stats['leaves'] += 1
+                stats['leaf_steps'].append(len(node.get_all_steps()))
+            else:
+                for child in node.children.values():
+                    traverse(child, depth + 1)
 
-        segment_efficiency = 1 - (total_steps / steps_without_segments) if steps_without_segments > 0 else 0
-        
+        traverse(self.root)
+
+        # Calculate efficiency
+        steps_without_segments = sum(stats['leaf_steps'])
+        segment_efficiency = (
+            1 - (stats['total_steps'] / steps_without_segments)
+            if steps_without_segments > 0 else 0
+        )
+
         return {
-            'total_paths': leaf_count,
-            'total_segments': node_count,
-            'max_depth': max_depth,
-            'total_steps': total_steps,
+            'total_paths': stats['leaves'],
+            'total_segments': stats['nodes'],
+            'max_depth': stats['max_depth'],
+            'total_steps': stats['total_steps'],
             'steps_without_segments': steps_without_segments,
-            'segment_efficiency': round(segment_efficiency * 100, 1),  # As percentage
-            'avg_steps_per_segment': round(total_steps / node_count, 1) if node_count > 0 else 0
+            'segment_efficiency': round(segment_efficiency * 100, 1),
+            'avg_steps_per_segment': (
+                round(stats['total_steps'] / stats['nodes'], 1)
+                if stats['nodes'] > 0 else 0
+            )
         }

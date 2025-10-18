@@ -67,7 +67,6 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
         kernel_backends=kernel_backends,
         max_combinations=max_combinations
     )
-    design_space.validate_size()
     return design_space, blueprint_config
 
 

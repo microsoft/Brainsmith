@@ -7,11 +7,18 @@
 # @author       Shane T. Fleming <shane.fleming@amd.com>
 ############################################################################
 
-"""Temporary shuffle sizing fix for BERT builds."""
+"""
+Temporary shuffle sizing fix for BERT builds.
 
+#TAFK TODO: Remove this temporary fix once proper shuffle sizing is implemented.
+"""
+
+import logging
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
 from brainsmith.registry import transform
+
+logger = logging.getLogger(__name__)
 
 @transform(
     name="TempShuffleFixer",
@@ -28,6 +35,7 @@ class TempShuffleFixer(Transformation):
 
     def apply(self, model):
         graph = model.graph
+        graph_modified = False
 
         for node in graph.node:
             if node.op_type == "Shuffle_hls":
@@ -35,6 +43,10 @@ class TempShuffleFixer(Transformation):
                 inner_moves = inst.get_nodeattr("inner_moves")
                 simd = inst.get_nodeattr("SIMD")
                 if (inner_moves == 1) and (simd > 1):
-                    print(f"WARNING: as a safety precaution changing the shuffle where the inner dimension moves to SIMD=1 \n{node=}")
+                    logger.warning(
+                        "Safety precaution: changing shuffle SIMD to 1 where inner_moves=1 (node: %s)",
+                        node.name
+                    )
                     inst.set_nodeattr("SIMD", 1)
-        return (model, False)
+                    graph_modified = True
+        return (model, graph_modified)

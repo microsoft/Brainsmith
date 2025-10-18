@@ -48,11 +48,12 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     category="hardware",
     description="Specialize layers with optional config override"
 )
-def specialize_layers_step(model, cfg):
+def specialize_layers_step(model: Any, cfg: Any) -> Any:
     """
     Custom specialize layers step that ensures opset imports are handled correctly.
     """
-    # Get transforms when needed
+    # Load transforms individually when parameters are needed
+    # (use apply_transforms for parameter-free bulk transforms)
     GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
     ApplyConfig = get_transform('ApplyConfig')
     SpecializeLayers = get_transform('SpecializeLayers')
@@ -60,11 +61,9 @@ def specialize_layers_step(model, cfg):
     if cfg.specialize_layers_config_file is not None:
         model = model.transform(GiveUniqueNodeNames())
         model = model.transform(ApplyConfig(cfg.specialize_layers_config_file))
-    
-    # Run the specialization
+
     model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
-    
-    # Ensure custom opset imports before shape inference and apply final transforms
+
     model = apply_transforms(model, [
         'GiveUniqueNodeNames',
         'InferShapes',
@@ -84,7 +83,6 @@ def specialize_layers_step(model, cfg):
 )
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
-    # Brainsmith native transforms
     model = apply_transforms(model, [
         'TempShuffleFixer',
         'SetPumpedCompute'

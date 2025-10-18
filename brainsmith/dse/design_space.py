@@ -11,6 +11,7 @@ from the blueprint, ready for tree construction.
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
 from brainsmith.registry import has_step, list_all_steps
+from brainsmith.dse._constants import is_skip
 
 
 @dataclass
@@ -28,8 +29,9 @@ class DesignSpace:
     max_combinations: int = 100000  # Maximum allowed design space combinations
     
     def __post_init__(self):
-        """Validate steps after initialization."""
+        """Validate design space after initialization."""
         self.validate_steps()
+        self.validate_size()
     
     def validate_steps(self) -> None:
         """Validate that all referenced steps exist in the registry."""
@@ -37,7 +39,7 @@ class DesignSpace:
         
         def check_step(step: Optional[str]) -> None:
             """Check if a single step is valid."""
-            if step and step not in ["~", ""] and not has_step(step):
+            if step and not is_skip(step) and not has_step(step):
                 invalid_steps.append(step)
         
         # Check all steps, including those in branch points
@@ -52,17 +54,10 @@ class DesignSpace:
         
         if invalid_steps:
             available_steps = list_all_steps()
-            # Find similar steps for suggestions
-            suggestions = []
-            for invalid in invalid_steps[:3]:  # Limit suggestions
-                similar = [s for s in available_steps if invalid.lower() in s.lower() or s.lower() in invalid.lower()]
-                if similar:
-                    suggestions.extend(similar[:2])
-            
-            error_msg = f"Invalid steps found: {', '.join(invalid_steps)}"
-            if suggestions:
-                error_msg += f"\n\nDid you mean one of these? {', '.join(set(suggestions))}"
-            error_msg += f"\n\nAvailable steps: {', '.join(available_steps)}"
+            error_msg = (
+                f"Invalid steps found: {', '.join(invalid_steps)}\n\n"
+                f"Available steps: {', '.join(available_steps)}"
+            )
             raise ValueError(error_msg)
     
     def validate_size(self) -> None:
@@ -81,11 +76,10 @@ class DesignSpace:
         # Step variations
         for step in self.steps:
             if isinstance(step, list):
-                # Branch point - multiply by number of options
-                # Account for skip options (~, None, or empty string)
-                valid_options = sum(1 for opt in step if opt and opt != "~")
-                if any(opt in [None, "~", ""] for opt in step):
-                    valid_options += 1  # Add one for skip branch
+                # Branch point - count non-skip options and skip option (if present)
+                non_skip_count = sum(1 for opt in step if not is_skip(opt))
+                has_skip_option = any(is_skip(opt) for opt in step)
+                valid_options = non_skip_count + (1 if has_skip_option else 0)
                 total *= max(1, valid_options)
         
         # Kernel backends (no branching in current design)

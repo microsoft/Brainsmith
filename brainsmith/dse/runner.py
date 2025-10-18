@@ -3,6 +3,7 @@
 
 """DSE segment runner for executing segment builds."""
 
+import logging
 import shutil
 import time
 from pathlib import Path
@@ -12,6 +13,8 @@ from brainsmith.dse.tree import DSETree
 from brainsmith.registry import get_step
 from brainsmith.dse.types import SegmentResult, TreeExecutionResult, ExecutionError
 from brainsmith._internal.finn.adapter import FINNAdapter
+
+logger = logging.getLogger(__name__)
 
 
 def _share_artifacts_at_branch(
@@ -31,7 +34,7 @@ def _share_artifacts_at_branch(
     if not parent_result.success:
         return
 
-    print(f"\n  Sharing artifacts to {len(child_segments)} children...")
+    logger.debug(f"Sharing artifacts to {len(child_segments)} children")
 
     for child in child_segments:
         child_dir = base_output_dir / child.segment_id
@@ -70,12 +73,8 @@ class SegmentRunner:
         output_products = base_config.get("output_products", ["estimates"])
         # Take first output product as primary target
         self.output_product = output_products[0] if output_products else "estimates"
-        
-        # Validate required FINN config fields
-        if "synth_clk_period_ns" not in base_config:
-            raise ValueError("finn_config must specify synth_clk_period_ns")
-        if "board" not in base_config:
-            raise ValueError("finn_config must specify board")
+
+        # Note: synth_clk_period_ns and board already validated by DSEConfig
         
         # Map output products to FINN types
         self.output_map = {
@@ -109,9 +108,9 @@ class SegmentRunner:
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
-        print(f"Executing tree with fail_fast={self.fail_fast}")
-        print(f"Output: {output_dir}")
+
+        logger.info(f"Executing tree with fail_fast={self.fail_fast}")
+        logger.info(f"Output directory: {output_dir}")
         
         results = {}
         skipped = set()
@@ -126,20 +125,20 @@ class SegmentRunner:
             
             # Skip if parent failed
             if segment.segment_id in skipped:
-                print(f"{indent}⊘ Skipped: {segment.segment_id}")
+                logger.warning(f"{indent}Skipped: {segment.segment_id}")
                 results[segment.segment_id] = SegmentResult(
                     success=False,
                     segment_id=segment.segment_id,
                     error="Skipped"
                 )
                 continue
-            
+
             # Execute segment
-            print(f"{indent}→ {segment.segment_id}")
-            
+            logger.info(f"{indent}Executing: {segment.segment_id}")
+
             # Skip empty segments (e.g., root with immediate branches)
             if not segment.steps:
-                print(f"{indent}  (empty segment, passing through)")
+                logger.debug(f"{indent}  (empty segment, passing through)")
                 # Create a pass-through result
                 results[segment.segment_id] = SegmentResult(
                     success=True,
@@ -156,13 +155,17 @@ class SegmentRunner:
             try:
                 result = self.run_segment(segment, input_model, output_dir)
                 results[segment.segment_id] = result
+            except KeyboardInterrupt:
+                # User cancellation - propagate immediately
+                logger.warning("Build cancelled by user")
+                raise
             except ExecutionError as e:
                 # Handle execution errors properly
-                print(f"✗ Failed: {segment.segment_id}")
-                print(f"  Error: {str(e)}")
+                logger.error(f"Segment failed: {segment.segment_id}")
+                logger.error(f"  Error: {str(e)}")
                 if self.fail_fast:
                     raise
-                
+
                 # Create failure result with actual exception
                 results[segment.segment_id] = SegmentResult(
                     success=False,
@@ -170,7 +173,7 @@ class SegmentRunner:
                     error=str(e),
                     execution_time=0
                 )
-                
+
                 # Mark descendants for skipping
                 self._mark_descendants_skipped(segment, skipped)
                 # Still need to add children to stack so they get marked as skipped
@@ -178,12 +181,15 @@ class SegmentRunner:
                     stack.append((child, None, depth + 1))
                 continue
             except Exception as e:
-                # Catch any unexpected errors
-                print(f"✗ Failed: {segment.segment_id}")
-                print(f"  Unexpected error: {type(e).__name__}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                
+                # Unexpected errors - log with traceback and wrap as ExecutionError
+                logger.exception(f"Unexpected error in segment {segment.segment_id}")
+
+                if self.fail_fast:
+                    # Wrap and re-raise with context
+                    raise ExecutionError(
+                        f"Segment '{segment.segment_id}' failed unexpectedly: {e}"
+                    ) from e
+
                 # Create failure result
                 results[segment.segment_id] = SegmentResult(
                     success=False,
@@ -191,7 +197,7 @@ class SegmentRunner:
                     error=f"{type(e).__name__}: {str(e)}",
                     execution_time=0
                 )
-                
+
                 # Mark descendants for skipping
                 self._mark_descendants_skipped(segment, skipped)
                 for child in reversed(list(segment.children.values())):
@@ -230,17 +236,17 @@ class SegmentRunner:
             SegmentResult with execution details
         """
         segment_dir = base_output_dir / segment.segment_id
-        # Use safe filename (segment_id may contain slashes)
+        # Segment IDs use slashes as path separators, invalid in filenames
         safe_name = segment.segment_id.replace("/", "_")
         output_model = segment_dir / f"{safe_name}_output.onnx"
         
+        # Check cache validity
         if output_model.exists():
-            # Verify it's a valid ONNX file before using cache
             try:
                 import onnx
                 onnx.load(str(output_model))
-                
-                print(f"✓ Using cached: {segment.segment_id}")
+                # Valid cache - return immediately
+                logger.debug(f"Cache hit: {segment.segment_id}")
                 return SegmentResult(
                     success=True,
                     segment_id=segment.segment_id,
@@ -248,11 +254,18 @@ class SegmentRunner:
                     output_dir=segment_dir,
                     cached=True
                 )
-            except Exception:
-                # Invalid cache, remove it and rebuild
+            except (onnx.onnx_cpp2py_export.checker.ValidationError,
+                    onnx.onnx_cpp2py_export.shape_inference.InferenceError) as e:
+                # Invalid ONNX model - rebuild
+                logger.warning(f"Invalid cache for {segment.segment_id}, rebuilding: {e}")
                 output_model.unlink()
-        
-        print(f"\n→ Executing: {segment.segment_id}")
+            except Exception as e:
+                # Unexpected error - don't silently swallow it
+                logger.error(f"Unexpected error validating cache for {segment.segment_id}: {e}")
+                raise
+
+        # Cache miss or invalid - execute build
+        logger.info(f"Building segment: {segment.segment_id}")
         
         # Create FINN config
         finn_config = self._make_finn_config(segment, segment_dir)
@@ -272,7 +285,7 @@ class SegmentRunner:
             if final_model:
                 # Copy to expected location
                 self.finn_adapter.prepare_model(final_model, output_model)
-                print(f"✓ Completed: {segment.segment_id}")
+                logger.info(f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)")
                 return SegmentResult(
                     success=True,
                     segment_id=segment.segment_id,
@@ -288,56 +301,88 @@ class SegmentRunner:
             raise
         except Exception as e:
             # Wrap external errors with context but preserve stack trace
-            print(f"✗ Failed: {segment.segment_id}")
+            logger.error(f"Segment build failed: {segment.segment_id}")
             raise ExecutionError(
                 f"Segment '{segment.segment_id}' build failed: {str(e)}"
             ) from e
     
+    def _extract_kernel_selections(self, segment: DSESegment) -> List[tuple]:
+        """Extract kernel selections from segment steps.
+
+        Searches for 'infer_kernels' steps that contain kernel_backends
+        and converts them to FINN's expected format.
+
+        Args:
+            segment: Segment to extract kernel selections from
+
+        Returns:
+            List of (kernel_name, backend_name) tuples
+        """
+        kernel_selections = []
+        for step in segment.steps:
+            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
+                for kernel_name, backend_classes in step["kernel_backends"]:
+                    if backend_classes:
+                        # Convert backend class name to FINN format
+                        # e.g., ConvolutionInputGenerator_hls -> ConvolutionInputGenerator
+                        backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
+                        kernel_selections.append((kernel_name, backend_name))
+        return kernel_selections
+
+    def _resolve_steps(self, segment: DSESegment) -> List:
+        """Resolve step names to callable functions.
+
+        Attempts to resolve step names from the plugin registry.
+        Falls back to passing strings for FINN's internal lookup.
+
+        Args:
+            segment: Segment containing steps to resolve
+
+        Returns:
+            List of step callables or strings
+
+        Raises:
+            ValueError: If step is missing name field
+        """
+        steps = []
+        for step in segment.steps:
+            if "name" not in step:
+                raise ValueError(f"Step missing name: {step}")
+
+            step_name = step["name"]
+            try:
+                # Try to get callable from plugin registry
+                step_fn = get_step(step_name)
+                steps.append(step_fn)
+            except KeyError:
+                # Not in registry, pass as string for FINN's internal lookup
+                steps.append(step_name)
+        return steps
+
     def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> Dict[str, Any]:
         """Create FINN configuration for segment.
-        
+
         Args:
             segment: Segment to configure
             output_dir: Output directory for this segment
-            
+
         Returns:
             FINN configuration dictionary
         """
         config = self.base_config.copy()
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_map[self.output_product]
-        
-        # Extract kernel_selections from segment steps if present
-        kernel_selections = []
-        for step in segment.steps:
-            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
-                for kernel_name, backend_classes in step["kernel_backends"]:
-                    if backend_classes:
-                        backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
-                        kernel_selections.append((kernel_name, backend_name))
-        
-        # Add kernel_selections if found in segment or base config
+
+        # Extract and set kernel selections
+        kernel_selections = self._extract_kernel_selections(segment)
         if kernel_selections:
             config["kernel_selections"] = kernel_selections
         elif "kernel_selections" in self.base_config:
             config["kernel_selections"] = self.base_config["kernel_selections"]
-        
-        # Process steps - resolve to callable functions
-        steps = []
-        for step in segment.steps:
-            if "name" in step:
-                step_name = step["name"]
-                try:
-                    # Try to get callable from plugin registry
-                    step_fn = get_step(step_name)
-                    steps.append(step_fn)
-                except KeyError:
-                    # Not in registry, pass as string for FINN's internal lookup
-                    steps.append(step_name)
-            else:
-                raise ValueError(f"Step missing name: {step}")
-        
-        config["steps"] = steps
+
+        # Resolve steps to callables
+        config["steps"] = self._resolve_steps(segment)
+
         return config
     
     def _mark_descendants_skipped(self, segment: DSESegment, skipped: Set[str]) -> None:
@@ -349,11 +394,11 @@ class SegmentRunner:
     def _print_summary(self, result: TreeExecutionResult) -> None:
         """Print execution summary."""
         stats = result.stats
-        print(f"\n{'='*50}")
-        print(f"Execution Complete in {result.total_time:.1f}s")
-        print(f"  Total:      {stats['total']}")
-        print(f"  Successful: {stats['successful']}")
-        print(f"  Failed:     {stats['failed']}")
-        print(f"  Skipped:    {stats['skipped']}")
-        print(f"  Cached:     {stats['cached']}")
-        print(f"{'='*50}")
+        logger.info(f"{'='*50}")
+        logger.info(f"Execution Complete in {result.total_time:.1f}s")
+        logger.info(f"  Total:      {stats['total']}")
+        logger.info(f"  Successful: {stats['successful']}")
+        logger.info(f"  Failed:     {stats['failed']}")
+        logger.info(f"  Skipped:    {stats['skipped']}")
+        logger.info(f"  Cached:     {stats['cached']}")
+        logger.info(f"{'='*50}")
