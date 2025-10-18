@@ -34,19 +34,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class InternalDatatypeModel:
-    """Minimal interface model for internal datatypes.
-
-    Internal datatypes (e.g., accumulator) represent intermediate computation
-    datatypes that don't correspond to ONNX tensors, so they have no associated
-    tensor shape.
-
-    This provides the minimal interface (.datatype) needed for DatatypeSource
-    derivation patterns to reference internal datatypes during model building.
-
-    Unlike InputModel/OutputModel which have full shape hierarchies, internal
-    datatypes are datatype-only since they represent scalar computation values
-    (e.g., accumulator precision) rather than tensors.
-    """
+    """Minimal interface model for deriving from internal datatypes."""
     datatype: BaseDataType
 
 

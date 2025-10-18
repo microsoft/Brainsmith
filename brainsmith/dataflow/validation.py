@@ -129,7 +129,7 @@ class ValidationContext(Protocol):
         """
         ...
 
-    def get_layout(self, name: str) -> Optional[DataLayout.DataLayout]:
+    def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout (NCHW/NHWC).
 
         Args:
@@ -179,21 +179,46 @@ class OnnxValidationContext:
     Used during kernel inference pattern matching to validate constraints
     on ONNX nodes before creating hardware kernels.
 
+    Maps schema interface names (e.g., "input", "input0", "output") to actual
+    ONNX tensor names using the node's input/output lists.
+
     Example:
+        # With schema mapping
+        ctx = OnnxValidationContext(add_node, model, schema)
+        dt = ctx.get_datatype("input0")  # Maps to node.input[0]
+
+        # Without schema (direct ONNX names)
         ctx = OnnxValidationContext(add_node, model)
-        dt = ctx.get_datatype("input0")
-        shape = ctx.get_shape("input0")
-        is_dyn = ctx.is_dynamic("input0")  # Checks for initializer
+        dt = ctx.get_datatype(node.input[0])  # Uses ONNX tensor name directly
     """
 
     node: NodeProto
     model: ModelWrapper
+    schema: Any = None  # Optional KernelSchema for interface name mapping
+
+    def __post_init__(self):
+        """Build mapping from schema interface names to ONNX tensor names."""
+        self._name_map = {}
+        if self.schema is not None:
+            # Map input interfaces to ONNX tensors
+            for i, inp_schema in enumerate(self.schema.inputs):
+                if i < len(self.node.input):
+                    self._name_map[inp_schema.name] = self.node.input[i]
+            # Map output interfaces to ONNX tensors
+            for i, out_schema in enumerate(self.schema.outputs):
+                if i < len(self.node.output):
+                    self._name_map[out_schema.name] = self.node.output[i]
+
+    def _resolve_name(self, name: str) -> str:
+        """Resolve schema interface name to ONNX tensor name."""
+        return self._name_map.get(name, name)
 
     def get_datatype(self, name: str) -> DataType:
         """Get datatype from ONNX tensor."""
-        dt = self.model.get_tensor_datatype(name)
+        tensor_name = self._resolve_name(name)
+        dt = self.model.get_tensor_datatype(tensor_name)
         if dt is None:
-            raise KeyError(f"Tensor '{name}' not found in ONNX model")
+            raise KeyError(f"Tensor '{name}' (mapped to '{tensor_name}') not found in ONNX model")
         return dt
 
     def get_shape(
@@ -207,9 +232,10 @@ class OnnxValidationContext:
             ONNX only has tensor shapes. Block/stream hierarchies not applicable.
             If non-TENSOR hierarchy requested, returns tensor shape (graceful degradation).
         """
-        shape = self.model.get_tensor_shape(name)
+        tensor_name = self._resolve_name(name)
+        shape = self.model.get_tensor_shape(tensor_name)
         if shape is None:
-            raise KeyError(f"Tensor '{name}' not found in ONNX model")
+            raise KeyError(f"Tensor '{name}' (mapped to '{tensor_name}') not found in ONNX model")
 
         if hierarchy != ShapeHierarchy.TENSOR:
             logger.debug(
@@ -221,12 +247,14 @@ class OnnxValidationContext:
 
     def is_dynamic(self, name: str) -> bool:
         """Check if tensor is dynamic (no initializer)."""
-        return self.model.get_initializer(name) is None
+        tensor_name = self._resolve_name(name)
+        return self.model.get_initializer(tensor_name) is None
 
-    def get_layout(self, name: str) -> Optional[DataLayout.DataLayout]:
+    def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout from ONNX tensor."""
+        tensor_name = self._resolve_name(name)
         try:
-            return self.model.get_tensor_layout(name)
+            return self.model.get_tensor_layout(tensor_name)
         except (AttributeError, KeyError):
             return None
 
@@ -310,7 +338,7 @@ class KernelValidationContext:
             # Interface not found - assume dynamic
             return True
 
-    def get_layout(self, name: str) -> Optional[DataLayout.DataLayout]:
+    def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout - NOT TRACKED in kernel context.
 
         Note:

@@ -95,22 +95,29 @@ class InferKernels(Transformation):
         graph_modified = False
         node_ind = 0
 
-        # Discover all kernels that support inference
+        # Discover all kernels (KernelOp subclasses MUST define inference patterns)
+        from brainsmith.dataflow import KernelOp
+
         all_kernel_names = list_kernels()
         inference_kernels = {}
         for name in all_kernel_names:
             cls = get_kernel(name)
-            # Check if kernel has inference support (safely handle old kernels)
-            if (hasattr(cls, 'supports_inference') and
-                cls.supports_inference() and
-                self.kernel_filter(name, cls)):
-                inference_kernels[name] = cls
+            # Only KernelOp subclasses have inference patterns
+            if not issubclass(cls, KernelOp):
+                continue
+
+            # Filter kernels and check for non-empty source_ops
+            if self.kernel_filter(name, cls):
+                pattern = cls.get_inference_pattern()
+                # Only include kernels with actual ONNX sources
+                if pattern.source_ops:
+                    inference_kernels[name] = cls
 
         if not inference_kernels:
-            logger.warning("No kernels with inference support found")
+            logger.warning("No kernels with ONNX inference patterns found")
             return (model, False)
 
-        logger.info(f"Found {len(inference_kernels)} kernels with inference support: "
+        logger.info(f"Found {len(inference_kernels)} kernels with ONNX inference: "
                    f"{', '.join(inference_kernels.keys())}")
 
         # Iterate through nodes (copy list since we'll modify it)

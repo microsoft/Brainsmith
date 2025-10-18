@@ -34,7 +34,6 @@ from .types import FULL_DIM
 
 if TYPE_CHECKING:
     from .models import KernelModel
-    from .inference import InferencePattern
     from .constraints import Constraint
 
 logger = logging.getLogger(__name__)
@@ -71,12 +70,7 @@ class InterfaceSchema:
 
 @dataclass
 class InputSchema(InterfaceSchema):
-    """Schema for an input interface.
-
-    Note: Whether an input is a weight (static tensor with initializer) is
-    inferred automatically from the ONNX graph during model building, not
-    declared in the schema. Use IsStatic/IsDynamic constraints to validate.
-    """
+    """Schema for an input interface."""
     pass  # No additional fields beyond InterfaceSchema
 
 
@@ -96,17 +90,21 @@ class OutputSchema(InterfaceSchema):
 class KernelSchema:
     """Schema for a complete kernel definition.
 
-    Defines kernel STRUCTURE:
+    Defines kernel STRUCTURE (framework-agnostic):
     - Input/output interfaces with tiling templates
     - Unified validation constraints (datatype, shape, cross-interface)
     - Internal datatype derivation patterns
     - Kernel-specific parameters (algorithm, hardware, features)
-    - Inference pattern (optional, for automatic HW layer inference)
 
     Does NOT define STORAGE:
     - Shapes are extracted from ModelWrapper or computed from templates
     - Only datatypes and user parameters persist in nodeattrs
     - KernelOp handles storage implementation
+
+    Does NOT define BEHAVIOR:
+    - ONNX inference discovery is handled by KernelOp.get_inference_pattern()
+    - Execution logic is in KernelOp.execute_node()
+    - Resource estimation is in KernelOp methods
 
     The constraints field uses the unified Constraint system for all validation:
     - Single-interface constraints (datatype, dimension ranges)
@@ -121,9 +119,6 @@ class KernelSchema:
     The kernel_params field specifies kernel-specific parameters not derived
     from the interface structure (e.g., epsilon for LayerNorm, algorithm
     selection for Pool). Format: {"paramName": ("i"|"s"|"f", required, default)}
-
-    The inference field (optional) enables automatic inference from ONNX nodes.
-    See InferencePattern for details.
     """
 
     name: str
@@ -131,9 +126,7 @@ class KernelSchema:
     outputs: List[OutputSchema] = field(default_factory=list)
     internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
     constraints: List['Constraint'] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
     kernel_params: Dict[str, tuple] = field(default_factory=dict)
-    inference: Optional['InferencePattern'] = None
 
     def __post_init__(self):
         """Validate schema structure."""

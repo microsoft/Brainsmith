@@ -17,6 +17,7 @@ Hardware mapping:
 
 import numpy as np
 from onnx import NodeProto
+from typing import Optional
 
 from brainsmith.dataflow import KernelOp, InferenceHelper, InferenceResult
 import brainsmith.dataflow as df
@@ -49,26 +50,26 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
     ],
     constraints=[
         # Both inputs must be dynamic (not initializers/weights)
-        df.IsDynamic("input0"),
-        df.IsDynamic("input1"),
+        df.IsDynamic(("input0", "input1")),
         # Both inputs must be integers
-        df.DatatypeInteger("input0"),
-        df.DatatypeInteger("input1"),
+        df.DatatypeInteger(("input0", "input1")),
         # Inputs must have same shape
-        df.ShapesEqual("input0", "input1"),
+        df.ShapesEqual(("input0", "input1")),
     ],
     kernel_params={
         "PE": ("i", True, 1),
         "NumChannels": ("i", True, 1),
-    },
-    inference=df.InferencePattern(
-        source_ops=["Add"],
-        layout_conversions={
-            "input0": "NHWC",
-            "input1": "NHWC",
-            "output": "NHWC",
-        }
-    )
+    }
+)
+
+# Module-level InferencePattern (ONNX discovery)
+ADDSTREAMS_INFERENCE = df.InferencePattern(
+    source_ops=["Add"],
+    layout_conversions={
+        "input0": "NHWC",
+        "input1": "NHWC",
+        "output": "NHWC",
+    }
 )
 
 
@@ -90,7 +91,7 @@ class AddStreams(KernelOp):
 
     Validation (unified constraints):
     - IsDynamic("input0"), IsDynamic("input1"): Both inputs must be dynamic tensors
-    - DatatypeInteger("input0"), DatatypeInteger("input1"): Integer datatypes required
+    - DatatypeInteger(("input0", "input1")): Integer datatypes required
     - ShapesEqual("input0", "input1"): Inputs must have identical shapes
 
     Inference pattern:
@@ -106,17 +107,17 @@ class AddStreams(KernelOp):
     # ====================================================================
 
     @classmethod
-    def get_class_schema(cls) -> df.KernelSchema:
-        """Return schema for inference (class method, no instantiation needed)."""
+    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+        """Build AddStreams schema (constant for all instances)."""
         return ADDSTREAMS_SCHEMA
 
-    @property
-    def kernel_schema(self) -> df.KernelSchema:
-        """Return AddStreams schema (instance property)."""
-        return ADDSTREAMS_SCHEMA
+    @classmethod
+    def get_inference_pattern(cls) -> df.InferencePattern:
+        """Return AddStreams inference pattern (ONNX discovery)."""
+        return ADDSTREAMS_INFERENCE
 
     # ====================================================================
-    # Inference (Opt-in)
+    # Inference Implementation
     # ====================================================================
 
     @classmethod

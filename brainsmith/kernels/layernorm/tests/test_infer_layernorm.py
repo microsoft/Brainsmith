@@ -6,10 +6,11 @@
 # SPDX-License-Identifier: MIT
 ############################################################################
 """
-Tests for InferLayerNorm transformation.
+Tests for LayerNorm kernel inference via unified InferKernels transform.
 
-This test suite validates that the InferLayerNorm transform correctly
-converts FuncLayerNorm nodes to LayerNorm nodes with proper attributes.
+This test suite validates that the InferKernels transform correctly
+converts FuncLayerNorm nodes to LayerNorm nodes with proper attributes
+using the unified constraint-based inference system.
 
 Key validation points:
 1. Transformation occurs (FuncLayerNorm → LayerNorm)
@@ -28,7 +29,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.kernels.layernorm.infer_layernorm import InferLayerNorm
+from brainsmith.transforms.infer_kernels import InferKernels
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
 
 
@@ -79,7 +80,7 @@ def create_funclayernorm_model(shape, datatype="FLOAT32", epsilon=1e-5, axis=-1)
 # ============================================================================
 
 def test_infer_auto_layernorm_basic():
-    """Test that InferLayerNorm converts FuncLayerNorm to LayerNorm."""
+    """Test that InferKernels converts FuncLayerNorm to LayerNorm."""
     print("\n=== Test 1: Basic Transformation ===")
 
     # Create model with FuncLayerNorm
@@ -91,8 +92,8 @@ def test_infer_auto_layernorm_basic():
     assert len(func_nodes) == 1
     print(f"  ✓ Created model with FuncLayerNorm")
 
-    # Apply transform
-    model_transformed = model.transform(InferLayerNorm())
+    # Apply unified kernel inference transform
+    model_transformed = model.transform(InferKernels())
     print(f"  ✓ Transform applied")
 
     # Verify LayerNorm exists
@@ -116,7 +117,7 @@ def test_auto_layernorm_node_attributes():
 
     # Create and transform model
     model = create_funclayernorm_model(shape, datatype=datatype, epsilon=epsilon)
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -160,7 +161,7 @@ def test_no_redundant_attributes():
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -190,7 +191,7 @@ def test_different_shapes(shape):
     print(f"\n=== Test 4: Shape {shape} ===")
 
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
     assert len(auto_nodes) == 1
@@ -205,7 +206,7 @@ def test_different_datatypes(datatype):
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype=datatype)
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -234,7 +235,7 @@ def test_auto_layernorm_instantiation():
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype="INT8")
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -264,7 +265,7 @@ def test_auto_layernorm_execution():
 
     shape = [2, 64, 256]
     model = create_funclayernorm_model(shape, datatype="FLOAT32")
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -324,7 +325,7 @@ def test_multiple_funclayernorm_nodes():
     model = model.transform(InferDataTypes())
 
     # Apply transform
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
     assert len(auto_nodes) == 2, f"Expected 2 LayerNorm nodes, got {len(auto_nodes)}"
@@ -345,7 +346,7 @@ def test_non_channel_axis_ignored():
     model = create_funclayernorm_model(shape, axis=1)
 
     # Apply transform
-    model_transformed = model.transform(InferLayerNorm())
+    model_transformed = model.transform(InferKernels())
 
     # Should NOT transform (normalization not on last axis)
     func_nodes = [n for n in model_transformed.graph.node if n.op_type == "FuncLayerNorm"]
@@ -362,9 +363,9 @@ def test_non_channel_axis_ignored():
 # ============================================================================
 
 def main():
-    """Run all InferLayerNorm tests."""
+    """Run all LayerNorm kernel inference tests."""
     print("=" * 60)
-    print("InferLayerNorm Transformation Tests")
+    print("LayerNorm Kernel Inference Tests (Unified System)")
     print("=" * 60)
 
     try:
@@ -391,13 +392,14 @@ def main():
         print("\n" + "=" * 60)
         print("✓ ALL TESTS PASSED")
         print("=" * 60)
-        print("\nInferLayerNorm transform validated:")
-        print("  ✓ Correctly transforms FuncLayerNorm to LayerNorm")
+        print("\nLayerNorm kernel inference validated:")
+        print("  ✓ Correctly transforms FuncLayerNorm to LayerNorm via InferKernels")
         print("  ✓ Sets proper attributes (SIMD, epsilon, datatypes)")
         print("  ✓ Does NOT set ifm_dim or NumChannels (inferred)")
         print("  ✓ Works with multiple shapes and datatypes")
         print("  ✓ LayerNorm instances work correctly")
         print("  ✓ Handles edge cases properly")
+        print("  ✓ Uses unified constraint-based inference system")
 
         return 0
 

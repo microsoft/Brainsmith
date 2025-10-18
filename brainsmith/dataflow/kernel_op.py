@@ -37,134 +37,154 @@ class KernelOpError(Exception):
 class KernelOp(HWCustomOp, ABC):
     """Kernel operator base class (shapes extracted from ModelWrapper, never stored).
 
-    Subclasses must implement kernel_schema as a property that returns a KernelSchema.
+    Subclasses must implement build_schema() to construct their KernelSchema.
 
-    Three common usage patterns:
+    Two common usage patterns:
 
-    1. Static schema (most common):
+    1. Static schema (most common - LayerNorm, Softmax, AddStreams):
         ```python
         SCHEMA = df.KernelSchema(name="LayerNorm", ...)
 
-        @property
-        def kernel_schema(self) -> KernelSchema:
-            return SCHEMA
+        @classmethod
+        def build_schema(cls, node, model):
+            return SCHEMA  # Constant, ignores parameters
         ```
 
-    2. Variable-input schema (e.g., Concat with N inputs):
+    2. Dynamic schema (variable I/O - Concat, MVAU):
         ```python
-        @property
-        def kernel_schema(self) -> KernelSchema:
-            num_inputs = len(self.onnx_node.input)
-            return make_concat_schema(num_inputs)
+        @classmethod
+        def build_schema(cls, node, model):
+            # Inspect node structure to determine schema
+            num_inputs = len(node.input)
+            inputs = [InputSchema(name=f"input{i}", ...) for i in range(num_inputs)]
+            return KernelSchema(name="Concat", inputs=inputs, outputs=[...])
         ```
 
-    3. Mode-dependent schema (e.g., MVAU with different memory modes):
-        IMPORTANT: If schema construction needs to call get_nodeattr(), you MUST
-        override get_nodeattr_types() explicitly to avoid circular dependency.
-
-        ```python
-        def get_nodeattr_types(self):
-            # Define all nodeattrs BEFORE schema construction
-            my_attrs = super().get_nodeattr_types()
-            my_attrs.update({"mem_mode": ("s", True, "internal")})
-            return my_attrs
-
-        @property
-        def kernel_schema(self) -> KernelSchema:
-            mem_mode = self.get_nodeattr("mem_mode")
-            return make_mvau_schema(mem_mode)
-        ```
+    The schema is built once during __init__ and frozen as an attribute.
+    During inference validation, build_schema() is called with full ModelWrapper context.
     """
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
+        # Build and freeze schema from node structure
+        self.kernel_schema = self.build_schema(onnx_node, model=None)
         self._kernel_model: Optional[KernelModel] = None
         self._builder = KernelModelBuilder()
 
-    @property
+    @classmethod
     @abstractmethod
-    def kernel_schema(self) -> KernelSchema:
-        """Return kernel schema (enforced by abstract method).
+    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> KernelSchema:
+        """Build kernel schema from ONNX node.
 
-        Must be implemented by all subclasses. See class docstring for usage patterns.
+        Polymorphic method that handles both static and dynamic schemas:
+        - Static schemas: return constant, ignore parameters
+        - Dynamic schemas: inspect node structure to build schema
+
+        Called in two contexts:
+        1. During __init__: model=None (schema built for instance)
+        2. During can_infer_from(): model provided (schema built for validation)
+
+        Args:
+            node: ONNX node (provides inputs, outputs, attributes)
+            model: Optional ModelWrapper (provides shapes, datatypes for validation context)
+
+        Returns:
+            KernelSchema defining kernel structure
+
+        Example (static schema):
+            @classmethod
+            def build_schema(cls, node, model):
+                return LAYERNORM_SCHEMA
+
+        Example (dynamic schema):
+            @classmethod
+            def build_schema(cls, node, model):
+                num_inputs = len(node.input)
+                inputs = [InputSchema(name=f"input{i}", ...) for i in range(num_inputs)]
+                return KernelSchema(name="Concat", inputs=inputs, outputs=[...])
         """
-        pass
+        raise NotImplementedError(
+            f"{cls.__name__} must implement build_schema() as a classmethod "
+            f"returning a KernelSchema. See KernelOp docstring for examples."
+        )
 
     # ====================================================================
-    # Inference Support (Optional - Kernels Can Opt-In)
+    # Inference Support (Required - All Kernels Must Define)
     # ====================================================================
 
     @classmethod
-    def get_class_schema(cls) -> Optional[KernelSchema]:
-        """Get schema without instantiation (required for inference).
+    @abstractmethod
+    def get_inference_pattern(cls) -> 'InferencePattern':
+        """Get ONNX inference pattern (required).
 
-        Override to return the kernel's schema. If not overridden,
-        kernel does not support automatic inference.
+        This is separate from schema to maintain framework-agnostic structure.
+        Schema defines WHAT the kernel IS (structure, constraints).
+        InferencePattern defines WHERE to find it in ONNX (discovery).
 
         Returns:
-            KernelSchema if inference is supported, None otherwise
+            InferencePattern defining ONNX discovery
 
         Example:
             @classmethod
-            def get_class_schema(cls):
-                return ADDSTREAMS_SCHEMA
+            def get_inference_pattern(cls):
+                return LAYERNORM_INFERENCE
         """
-        return None
-
-    @classmethod
-    def supports_inference(cls) -> bool:
-        """Check if this kernel supports automatic inference.
-
-        Returns True if the kernel has a class schema and either:
-        - Has an inference pattern in the schema, OR
-        - Overrides can_infer_from() method
-
-        Returns:
-            True if kernel supports inference, False otherwise
-        """
-        schema = cls.get_class_schema()
-        if schema is None:
-            return False
-
-        return (
-            schema.inference is not None or
-            hasattr(cls, 'can_infer_from') and
-            cls.can_infer_from.__func__ is not KernelOp.can_infer_from.__func__
+        raise NotImplementedError(
+            f"{cls.__name__} must implement get_inference_pattern() as a classmethod "
+            f"returning an InferencePattern. See KernelOp docstring for examples."
         )
+
 
     @classmethod
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
-        """Check if this kernel can be inferred from the given ONNX node.
+        """Check if this ONNX node can be converted to this hardware kernel.
 
-        Default implementation uses unified constraint system with OnnxValidationContext.
-        Override for custom matching logic beyond declarative constraints.
+        This is a validation gate called by InferKernels to determine which kernel
+        (if any) should handle a given ONNX node. It performs three checks:
+
+        1. Op type matching: node.op_type in InferencePattern.source_ops
+        2. Schema constraints: All KernelSchema.constraints pass (using OnnxValidationContext)
+        3. Custom matcher: Optional InferencePattern.matcher(node, model) returns True
+
+        This method should NOT have side effects or raise exceptions - it's a pure
+        boolean check. If this returns True, infer_from() will be called to perform
+        the actual conversion.
+
+        Override only for validation logic that cannot be expressed declaratively
+        in schema constraints or the InferencePattern matcher.
 
         Args:
-            node: ONNX node to check
-            model: ModelWrapper for graph access
+            node: ONNX node to validate
+            model: ModelWrapper for graph context (shapes, datatypes, layouts)
 
         Returns:
-            True if this kernel can be inferred from the node
+            True if this kernel can convert the node, False otherwise
 
         Example:
-            # Custom validation beyond schema constraints
+            # Custom validation beyond declarative constraints
             @classmethod
             def can_infer_from(cls, node, model):
+                # First run default validation
                 if not super().can_infer_from(node, model):
                     return False
-                # Additional custom logic...
+
+                # Additional imperative checks
+                kernel_shape = get_attr(node, "kernel_shape")
+                if kernel_shape[0] != kernel_shape[1]:
+                    return False  # Only square kernels
+
                 return True
         """
-        schema = cls.get_class_schema()
-        if schema is None or schema.inference is None:
-            return False
+        schema = cls.build_schema(node, model)
+        pattern = cls.get_inference_pattern()
 
-        # Check op type matching
-        if node.op_type not in schema.inference.source_ops:
+        # Check op type matching (empty source_ops means no inference)
+        if not pattern.source_ops or node.op_type not in pattern.source_ops:
             return False
 
         # Run unified constraints through ONNX validation context
-        ctx = OnnxValidationContext(node=node, model=model)
+        # Pass schema to enable mapping of interface names to ONNX tensor names
+        ctx = OnnxValidationContext(node=node, model=model, schema=schema)
         for constraint in schema.constraints:
             error = constraint.check(ctx)
             if error is not None:
@@ -175,8 +195,8 @@ class KernelOp(HWCustomOp, ABC):
                 return False
 
         # Run custom matcher if provided
-        if schema.inference.matcher is not None:
-            if not schema.inference.matcher(node, model):
+        if pattern.matcher is not None:
+            if not pattern.matcher(node, model):
                 logger.debug(
                     f"{cls.__name__} custom matcher rejected {node.name}"
                 )
@@ -238,8 +258,8 @@ class KernelOp(HWCustomOp, ABC):
         - Template parameters (SIMD, PE, etc.)
         - Kernel-specific parameters (epsilon, algorithm, etc.)
 
-        Only override if your schema property calls get_nodeattr() (circular dependency).
-        See class docstring for the mode-dependent schema pattern.
+        Only override if build_schema() needs to read nodeattrs (circular dependency).
+        In that case, define nodeattrs explicitly before calling build_schema().
         """
         my_attrs = super().get_nodeattr_types()
 
@@ -420,12 +440,5 @@ class KernelOp(HWCustomOp, ABC):
 
         if old_value != value:
             super().set_nodeattr(name, value)
-            self._invalidate_cache()
-
-    # ====================================================================
-    # Internal Implementation
-    # ====================================================================
-
-    def _invalidate_cache(self) -> None:
-        """Invalidate cached KernelModel."""
-        self._kernel_model = None
+            # Invalidate cached model
+            self._kernel_model = None
