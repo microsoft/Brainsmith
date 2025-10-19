@@ -40,6 +40,8 @@ SOFTMAX_SCHEMA = df.KernelSchema(
         df.DatatypeFloat(("input",)),
         # Input must be dynamic (no initializers)
         df.IsDynamic("input"),
+        # Must operate on last axis (channel dimension), or None (defaults to -1)
+        df.NodeAttributeEquals("axis", [None, -1]),
     ]
 )
 
@@ -47,6 +49,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
 SOFTMAX_INFERENCE = df.InferencePattern(
     source_ops=["Softmax"],  # ONNX Softmax nodes
     matcher=lambda node, model: node.domain != "brainsmith.kernels"  # Skip already-converted hardware nodes
+    # Axis validation handled by NodeAttributeEquals constraint in schema
 )
 
 
@@ -80,7 +83,7 @@ class Softmax(KernelOp):
     def infer_from(cls, node, model, insert_index):
         """Infer Softmax kernel from ONNX Softmax node.
 
-        Validates that axis is -1 or None (last dimension normalization).
+        Axis validation is handled by the matcher (_check_softmax_axis).
         Initializes kernel with SIMD=1 (default parallelization).
 
         Args:
@@ -91,56 +94,35 @@ class Softmax(KernelOp):
         Returns:
             InferenceResult with nodes to insert/remove
         """
-        from onnx import helper
-        from brainsmith.dataflow.inference import InferenceResult
+        from brainsmith.dataflow.inference import InferenceHelper
 
-        # Get input/output tensor names
+        # Use InferenceHelper for cleaner node creation
+        # Use Brainsmith domain since Softmax is a Brainsmith kernel
+        helper = InferenceHelper(model, domain="brainsmith.kernels")
+
+        # Get input/output tensor names (no layout conversion needed for Softmax)
         input_tensor = node.input[0]
         output_tensor = node.output[0]
 
-        # Get input shape
-        input_shape = model.get_tensor_shape(input_tensor)
-        if input_shape is None or len(input_shape) == 0:
-            raise ValueError(f"Cannot infer Softmax from {node.name}: input shape not available")
-
-        # Validate axis=-1 or None (last dimension normalization)
-        axis = None
-        for attr in node.attribute:
-            if attr.name == "axis":
-                axis = helper.get_node_attr_value(node, "axis")
-                break
-
-        if axis is not None and axis != -1:
-            raise ValueError(
-                f"Cannot infer Softmax from {node.name}: "
-                f"axis={axis} not supported (only axis=-1 or None)"
-            )
-
-        # Get channel count
-        channels = input_shape[-1]
+        # Get channel count from input shape
+        channels = helper.get_num_channels(input_tensor)
 
         # Create Softmax node with default SIMD=1
-        simd = 1
-        if channels % simd != 0:
-            raise ValueError(
-                f"Cannot infer Softmax from {node.name}: "
-                f"channels={channels} not divisible by SIMD={simd}"
-            )
-
+        # (Axis validation already done by matcher)
         new_node = helper.make_node(
             "Softmax",
             [input_tensor],
             [output_tensor],
-            domain="brainsmith.kernels",
-            backend="fpgadataflow",
-            SIMD=simd,
-            name="Softmax_" + node.name,
+            {
+                "SIMD": 1,  # Default parallelization
+            },
+            name_prefix=f"Softmax_{node.name}"
         )
 
-        return InferenceResult(
-            nodes_to_insert=[new_node],
-            nodes_to_remove=[node],
-            metadata={"axis": axis, "channels": channels}
+        return helper.make_inference_result(
+            new_node,
+            node,
+            channels=channels
         )
 
     def execute_node(self, context, graph):

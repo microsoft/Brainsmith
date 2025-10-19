@@ -15,28 +15,6 @@ from brainsmith.dataflow import DerivedDatatype, DerivedDim, FULL_DIM
 from brainsmith.core.plugins import kernel
 
 
-# Helper function for axis validation in inference
-def _check_channel_norm_axis(node, model):
-    """Validate that FuncLayerNorm normalizes over channel dimension (last axis).
-
-    Args:
-        node: ONNX NodeProto for FuncLayerNorm
-        model: ModelWrapper
-
-    Returns:
-        True if axis == -1 or axis == len(shape) - 1, False otherwise
-    """
-    from onnx import helper
-
-    shape_in = model.get_tensor_shape(node.input[0])
-    if shape_in is None or len(shape_in) == 0:
-        return False
-
-    norm_axis = helper.get_node_attr_value(node, "axis")
-    # Accept -1 or last dimension index
-    return norm_axis == -1 or norm_axis == len(shape_in) - 1
-
-
 # Module-level KernelSchema definition (structure only)
 LAYERNORM_SCHEMA = df.KernelSchema(
     name="LayerNorm",
@@ -62,8 +40,8 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     constraints=[
         # Input must be dynamic (no initializers)
         df.IsDynamic("input"),
-        # Channel dimension must be divisible by SIMD
-        df.DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.TENSOR),
+        # Must normalize over last axis (channel dimension)
+        df.NodeAttributeEquals("axis", -1),
     ]
 )
 
@@ -71,7 +49,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
 LAYERNORM_INFERENCE = df.InferencePattern(
     source_ops=["FuncLayerNorm"],
     layout_conversions={"input": "NHWC"},  # Convert NCHW → NHWC if needed
-    matcher=_check_channel_norm_axis  # Validate axis == -1 (channel norm)
+    # Axis validation handled by NodeAttributeEquals constraint in schema
 )
 
 
@@ -119,47 +97,36 @@ class LayerNorm(KernelOp):
             InferenceResult with nodes to insert/remove
         """
         from onnx import helper
-        import qonnx.core.data_layout as DataLayout
-        from qonnx.util.onnx import nchw_to_nhwc
-        from brainsmith.dataflow.inference import InferenceResult
+        from brainsmith.dataflow.inference import InferenceHelper, InferenceResult
 
-        act_in = node.input[0]
-        act_out = node.output[0]
+        # Use InferenceHelper for cleaner layout conversion
+        # Use Brainsmith domain since LayerNorm is a Brainsmith kernel
+        inference_helper = InferenceHelper(model, domain="brainsmith.kernels")
 
-        # Get input shape
-        shape_in = model.get_tensor_shape(act_in)
-        if shape_in is None or len(shape_in) == 0:
-            raise ValueError(f"Cannot infer LayerNorm from {node.name}: input shape not available")
+        # Ensure NHWC layout (handles conversion automatically)
+        act_in = inference_helper.ensure_layout(node.input[0], "NHWC", insert_index)
+        act_out = inference_helper.ensure_layout(node.output[0], "NHWC", insert_index)
 
-        # Handle NCHW layout conversion on input (modifies graph in-place)
-        norm_axis = helper.get_node_attr_value(node, "axis")
-        if model.get_tensor_layout(act_in) == DataLayout.NCHW:
-            act_in = nchw_to_nhwc(act_in, model, insert_index)
-            shape_in = model.get_tensor_shape(act_in)
-
-        # Handle NCHW layout conversion on output (modifies graph in-place)
-        if model.get_tensor_layout(act_out) == DataLayout.NCHW:
-            act_out = nchw_to_nhwc(act_out, model, insert_index, reverse=True)
-
-        # Create LayerNorm node with default SIMD=1
-        simd = 1
+        # Extract epsilon from source node
         epsilon = helper.get_node_attr_value(node, "epsilon")
 
-        new_node = helper.make_node(
+        # Create LayerNorm node using InferenceHelper
+        # (domain is already set to "brainsmith.kernels" in helper initialization)
+        new_node = inference_helper.make_node(
             "LayerNorm",
             [act_in],
             [act_out],
-            domain="brainsmith.kernels",
-            backend="fpgadataflow",
-            SIMD=simd,
-            epsilon=epsilon,
-            name="LayerNorm_" + node.name,
+            {
+                "SIMD": 1,
+                "epsilon": epsilon,
+            },
+            name_prefix=f"LayerNorm_{node.name}"
         )
 
-        return InferenceResult(
-            nodes_to_insert=[new_node],
-            nodes_to_remove=[node],
-            metadata={"layout_conversion": model.get_tensor_layout(node.input[0]) == DataLayout.NCHW}
+        return inference_helper.make_inference_result(
+            new_node,
+            node,
+            layout_conversion=act_in != node.input[0] or act_out != node.output[0]
         )
 
     def execute_node(self, context, graph):

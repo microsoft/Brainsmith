@@ -265,7 +265,21 @@ FINN_KERNELS = [
 FINN_KERNEL_INFERENCES = [
     # These are transforms that infer/convert ONNX ops to FINN HW layers
     # Format: (transform_name, class_path, kernel_name)
-    
+    #
+    # IMPORTANT: These are registered with metadata:
+    #   - kernel_inference=True (marks as inference transform)
+    #   - kernel="<kernel_name>" (links transform to target kernel)
+    #
+    # This metadata enables the new InferKernelList meta-transform to automatically
+    # lookup the correct transform for legacy FINN kernels (HWCustomOp classes).
+    #
+    # Example usage:
+    #   from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU
+    #   from brainsmith.transforms.infer_kernel_list import InferKernelList
+    #
+    #   model = model.transform(InferKernelList([MVAU]))
+    #   # Automatically uses InferQuantizedMatrixVectorActivation via metadata lookup
+
     # From convert_to_hw_layers.py
     ('InferQuantizedMatrixVectorActivation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferQuantizedMatrixVectorActivation', 'MVAU'),
     ('InferConvInpGen', f'{FT}.fpgadataflow.convert_to_hw_layers.InferConvInpGen', 'ConvolutionInputGenerator'),

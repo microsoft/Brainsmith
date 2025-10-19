@@ -71,6 +71,7 @@ from .constraints import (
     IsDynamic,
     IsStatic,
     HasLayout,
+    NodeAttributeEquals,
     # Custom constraint
     Custom,
 )
@@ -133,7 +134,7 @@ __all__ = [
     # Shape constraints
     'ShapesEqual', 'DimensionDivisible', 'DimensionInRange', 'DimensionEquals',
     # ONNX-specific constraints
-    'IsDynamic', 'IsStatic', 'HasLayout',
+    'IsDynamic', 'IsStatic', 'HasLayout', 'NodeAttributeEquals',
     # Custom constraint
     'Custom',
 

@@ -6,9 +6,9 @@
 # SPDX-License-Identifier: MIT
 ############################################################################
 """
-Tests for LayerNorm kernel inference via unified InferKernels transform.
+Tests for LayerNorm kernel inference via unified InferKernelList transform.
 
-This test suite validates that the InferKernels transform correctly
+This test suite validates that the InferKernelList transform correctly
 converts FuncLayerNorm nodes to LayerNorm nodes with proper attributes
 using the unified constraint-based inference system.
 
@@ -29,7 +29,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.transforms.infer_kernels import InferKernels
+from brainsmith.transforms.infer_kernel_list import InferKernelList
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
 
 
@@ -80,7 +80,7 @@ def create_funclayernorm_model(shape, datatype="FLOAT32", epsilon=1e-5, axis=-1)
 # ============================================================================
 
 def test_infer_auto_layernorm_basic():
-    """Test that InferKernels converts FuncLayerNorm to LayerNorm."""
+    """Test that InferKernelList converts FuncLayerNorm to LayerNorm."""
     print("\n=== Test 1: Basic Transformation ===")
 
     # Create model with FuncLayerNorm
@@ -93,7 +93,7 @@ def test_infer_auto_layernorm_basic():
     print(f"  ✓ Created model with FuncLayerNorm")
 
     # Apply unified kernel inference transform
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
     print(f"  ✓ Transform applied")
 
     # Verify LayerNorm exists
@@ -117,7 +117,7 @@ def test_auto_layernorm_node_attributes():
 
     # Create and transform model
     model = create_funclayernorm_model(shape, datatype=datatype, epsilon=epsilon)
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -161,7 +161,7 @@ def test_no_redundant_attributes():
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -191,7 +191,7 @@ def test_different_shapes(shape):
     print(f"\n=== Test 4: Shape {shape} ===")
 
     model = create_funclayernorm_model(shape)
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
     assert len(auto_nodes) == 1
@@ -206,7 +206,7 @@ def test_different_datatypes(datatype):
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype=datatype)
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -235,7 +235,7 @@ def test_auto_layernorm_instantiation():
 
     shape = [1, 128, 768]
     model = create_funclayernorm_model(shape, datatype="INT8")
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -249,7 +249,7 @@ def test_auto_layernorm_instantiation():
     print(f"  ✓ Kernel model built successfully")
 
     # Verify shape inference works
-    normal_input_shape = op_inst.get_normal_input_shape(ctx=model_transformed)
+    normal_input_shape = op_inst.get_normal_input_shape(model_w=model_transformed)
     assert normal_input_shape == list(shape)
     print(f"  ✓ Shape inference working: {normal_input_shape}")
 
@@ -265,7 +265,7 @@ def test_auto_layernorm_execution():
 
     shape = [2, 64, 256]
     model = create_funclayernorm_model(shape, datatype="FLOAT32")
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Get LayerNorm node
     node = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"][0]
@@ -325,7 +325,7 @@ def test_multiple_funclayernorm_nodes():
     model = model.transform(InferDataTypes())
 
     # Apply transform
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     auto_nodes = [n for n in model_transformed.graph.node if n.op_type == "LayerNorm"]
     assert len(auto_nodes) == 2, f"Expected 2 LayerNorm nodes, got {len(auto_nodes)}"
@@ -346,7 +346,7 @@ def test_non_channel_axis_ignored():
     model = create_funclayernorm_model(shape, axis=1)
 
     # Apply transform
-    model_transformed = model.transform(InferKernels())
+    model_transformed = model.transform(InferKernelList())
 
     # Should NOT transform (normalization not on last axis)
     func_nodes = [n for n in model_transformed.graph.node if n.op_type == "FuncLayerNorm"]
@@ -393,7 +393,7 @@ def main():
         print("✓ ALL TESTS PASSED")
         print("=" * 60)
         print("\nLayerNorm kernel inference validated:")
-        print("  ✓ Correctly transforms FuncLayerNorm to LayerNorm via InferKernels")
+        print("  ✓ Correctly transforms FuncLayerNorm to LayerNorm via InferKernelList")
         print("  ✓ Sets proper attributes (SIMD, epsilon, datatypes)")
         print("  ✓ Does NOT set ifm_dim or NumChannels (inferred)")
         print("  ✓ Works with multiple shapes and datatypes")

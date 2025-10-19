@@ -130,7 +130,6 @@ class KernelSchema:
 
     def __post_init__(self):
         """Validate schema structure."""
-        # Validate constraint targets match interface names
         self.validate()
 
     def validate(self) -> None:

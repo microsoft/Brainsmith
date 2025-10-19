@@ -13,7 +13,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
 from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA, ADDSTREAMS_INFERENCE
-from brainsmith.transforms.infer_kernels import InferKernels
+from brainsmith.transforms.infer_kernel_list import InferKernelList
 from brainsmith.dataflow import InferenceHelper
 
 
@@ -176,7 +176,7 @@ def test_addstreams_infer_from():
 
 
 def test_addstreams_transform_integration():
-    """Test InferKernels transform with AddStreams."""
+    """Test InferKernelList transform with AddStreams."""
     # Create ONNX model with Add node
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 28, 28, 16])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 28, 28, 16])
@@ -193,8 +193,8 @@ def test_addstreams_transform_integration():
     model.set_tensor_datatype("in1", DataType["INT8"])
     model.set_tensor_datatype("out", DataType["INT8"])
 
-    # Apply InferKernels transform
-    model_transformed = model.transform(InferKernels())
+    # Apply InferKernelList transform
+    model_transformed = model.transform(InferKernelList())
 
     # Check that Add node was replaced with AddStreams
     node_types = [n.op_type for n in model_transformed.graph.node]

@@ -546,6 +546,77 @@ class HasLayout(Constraint):
 
 
 # =============================================================================
+# Node Attribute Constraint
+# =============================================================================
+
+@dataclass(frozen=True)
+class NodeAttributeEquals(Constraint):
+    """Validate ONNX node attribute equals expected value(s).
+
+    Only applicable during ONNX inference validation (gracefully skips in kernel context).
+    Useful for validating ONNX node configuration before hardware conversion.
+
+    Args:
+        attribute_name: ONNX node attribute to check
+        expected_values: Single value or list of acceptable values
+
+    Example:
+        # Single value
+        NodeAttributeEquals("axis", -1)
+
+        # Multiple acceptable values
+        NodeAttributeEquals("axis", [-1, 3])
+
+        # None is a valid expected value (attribute not set)
+        NodeAttributeEquals("axis", [None, -1])
+    """
+
+    attribute_name: str
+    expected_values: Any
+
+    def __post_init__(self):
+        """Normalize expected_values to list for consistent checking."""
+        # Convert single value to list for uniform checking
+        if not isinstance(self.expected_values, (list, tuple)):
+            object.__setattr__(self, 'expected_values', [self.expected_values])
+
+    def check(self, ctx: ValidationContext) -> Optional[str]:
+        """Check if node attribute matches expected value(s).
+
+        Gracefully skips in kernel context (returns None).
+        """
+        # Use sentinel to distinguish "attribute not found" from "attribute is None"
+        _SENTINEL = object()
+
+        try:
+            actual_value = ctx.get_node_attribute(self.attribute_name, default=_SENTINEL)
+        except RuntimeError:
+            # Kernel context - node attributes not available
+            # This constraint only applies during ONNX inference, so skip gracefully
+            return None
+
+        # If we got the sentinel, attribute doesn't exist
+        if actual_value is _SENTINEL:
+            # Check if None is an acceptable value
+            if None in self.expected_values:
+                return None
+            return (f"Node attribute '{self.attribute_name}' not found, "
+                   f"expected one of {self.expected_values}")
+
+        # Check if actual value matches any expected value
+        if actual_value not in self.expected_values:
+            return (f"Node attribute '{self.attribute_name}' is {actual_value}, "
+                   f"expected one of {self.expected_values}")
+
+        return None
+
+    def describe(self) -> str:
+        if len(self.expected_values) == 1:
+            return f"Node attribute '{self.attribute_name}' must equal {self.expected_values[0]}"
+        return f"Node attribute '{self.attribute_name}' must be one of {self.expected_values}"
+
+
+# =============================================================================
 # Custom Constraint
 # =============================================================================
 
@@ -597,6 +668,7 @@ __all__ = [
     'IsDynamic',
     'IsStatic',
     'HasLayout',
+    'NodeAttributeEquals',
     # Custom constraint
     'Custom',
 ]

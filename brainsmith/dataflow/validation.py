@@ -102,6 +102,22 @@ class ValidationContext(Protocol):
         """Get all interface/tensor names in scope."""
         ...
 
+    def get_node_attribute(self, name: str, default: Any = None) -> Any:
+        """Get ONNX node attribute (only available in ONNX context).
+
+        Args:
+            name: Attribute name
+            default: Default value if attribute not found
+
+        Returns:
+            Attribute value or default
+
+        Raises:
+            RuntimeError: In kernel context (not applicable)
+            KeyError: If attribute not found and no default provided
+        """
+        ...
+
 
 # =============================================================================
 # ONNX Validation Context
@@ -115,17 +131,21 @@ class OnnxValidationContext:
     Used during kernel inference pattern matching to validate constraints
     on ONNX nodes before creating hardware kernels.
 
-    Maps schema interface names (e.g., "input", "input0", "output") to actual
-    ONNX tensor names using the node's input/output lists.
+    Provides a read-only mapping from schema interface names (e.g., "input0")
+    to actual ONNX tensor names (e.g., "act_in") based on position. This allows
+    constraints to use self-documenting schema names while validating actual
+    ONNX tensor properties. The ONNX graph is never modified by this context.
 
     Example:
-        # With schema mapping
+        # With schema mapping (read-only lookup by position)
         ctx = OnnxValidationContext(add_node, model, schema)
-        dt = ctx.get_datatype("input0")  # Maps to node.input[0]
+        dt = ctx.get_datatype("input0")  # Looks up node.input[0], gets "act_in"
+                                         # Returns datatype of "act_in" tensor
+                                         # Graph tensor names unchanged!
 
         # Without schema (direct ONNX names)
         ctx = OnnxValidationContext(add_node, model)
-        dt = ctx.get_datatype(node.input[0])  # Uses ONNX tensor name directly
+        dt = ctx.get_datatype("act_in")  # Uses ONNX tensor name directly
     """
 
     node: NodeProto
@@ -133,14 +153,19 @@ class OnnxValidationContext:
     schema: Any = None  # Optional KernelSchema for interface name mapping
 
     def __post_init__(self):
-        """Build mapping from schema interface names to ONNX tensor names."""
+        """Build read-only mapping from schema interface names to ONNX tensor names.
+
+        This mapping is used purely for validation lookups - the ONNX graph
+        tensor names are never modified. Schema names (e.g., "input0") are
+        mapped by position to actual ONNX tensor names (e.g., "act_in").
+        """
         self._name_map = {}
         if self.schema is not None:
-            # Map input interfaces to ONNX tensors
+            # Map input interfaces to ONNX tensors by position
             for i, inp_schema in enumerate(self.schema.inputs):
                 if i < len(self.node.input):
                     self._name_map[inp_schema.name] = self.node.input[i]
-            # Map output interfaces to ONNX tensors
+            # Map output interfaces to ONNX tensors by position
             for i, out_schema in enumerate(self.schema.outputs):
                 if i < len(self.node.output):
                     self._name_map[out_schema.name] = self.node.output[i]
@@ -209,6 +234,28 @@ class OnnxValidationContext:
     def get_interfaces(self) -> List[str]:
         """Get all tensor names (inputs + outputs)."""
         return list(self.node.input) + list(self.node.output)
+
+    def get_node_attribute(self, name: str, default: Any = None) -> Any:
+        """Get attribute from ONNX node.
+
+        Args:
+            name: Attribute name
+            default: Default value if attribute not found
+
+        Returns:
+            Attribute value or default
+
+        Raises:
+            KeyError: If attribute not found and no default provided
+        """
+        from onnx import helper
+
+        try:
+            return helper.get_node_attr_value(self.node, name)
+        except AttributeError:
+            if default is not None:
+                return default
+            raise KeyError(f"Attribute '{name}' not found on node '{self.node.name}'")
 
 
 # =============================================================================
@@ -297,6 +344,25 @@ class KernelValidationContext:
         input_names = [inp.name for inp in self.kernel_model.inputs]
         output_names = [out.name for out in self.kernel_model.outputs]
         return input_names + output_names
+
+    def get_node_attribute(self, name: str, default: Any = None) -> Any:
+        """Get ONNX node attribute - NOT AVAILABLE in kernel context.
+
+        Node attributes are only available during ONNX inference validation.
+        In kernel build context, the node is already converted to a hardware kernel.
+
+        Args:
+            name: Attribute name
+            default: Default value (ignored - always raises RuntimeError)
+
+        Raises:
+            RuntimeError: Always (node attributes don't exist in kernel context)
+        """
+        raise RuntimeError(
+            f"Node attributes not available in kernel build context. "
+            f"Cannot get attribute '{name}'. "
+            f"Node attribute constraints are only checked during ONNX inference."
+        )
 
 
 __all__ = [

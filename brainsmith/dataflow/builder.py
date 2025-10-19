@@ -50,7 +50,7 @@ class BuildContext:
 
     Attributes:
         schema: KernelSchema defining structure
-        ctx: ModelWrapper for ONNX graph access
+        model_w: ModelWrapper for ONNX graph access
         node_inputs: ONNX node input tensor names
         node_outputs: ONNX node output tensor names
         param_getter: Function to retrieve nodeattr values (e.g., get_nodeattr)
@@ -58,7 +58,7 @@ class BuildContext:
         node_name: Node name for error messages (optional)
     """
     schema: KernelSchema
-    ctx: ModelWrapper
+    model_w: ModelWrapper
     node_inputs: List[str]
     node_outputs: List[str]
     param_getter: Callable[[str], Any]
@@ -83,7 +83,7 @@ class KernelModelBuilder:
         >>> builder = KernelModelBuilder()
         >>> context = BuildContext(
         ...     schema=kernel_schema,
-        ...     ctx=model_wrapper,
+        ...     model_w=model_wrapper,
         ...     node_inputs=list(node.input),
         ...     node_outputs=list(node.output),
         ...     param_getter=self.get_nodeattr,
@@ -112,7 +112,6 @@ class KernelModelBuilder:
         Raises:
             ValueError: If model cannot be built or validation fails
         """
-        # Store context as instance state for duration of build
         self._ctx = ctx
         self._interfaces: Dict[str, Any] = {}
 
@@ -163,8 +162,8 @@ class KernelModelBuilder:
 
             try:
                 # Get datatype and tensor shape from graph
-                datatype = self._ctx.ctx.get_tensor_datatype(inp_name)
-                tensor_shape = tuple(self._ctx.ctx.get_tensor_shape(inp_name))
+                datatype = self._ctx.model_w.get_tensor_datatype(inp_name)
+                tensor_shape = tuple(self._ctx.model_w.get_tensor_shape(inp_name))
 
                 # Store datatype to nodeattrs for FINN
                 self._ctx.param_setter(f"input{i}Datatype", datatype.name)
@@ -175,7 +174,7 @@ class KernelModelBuilder:
                 )
 
                 # Infer is_weight from ONNX initializer presence
-                is_weight = self._ctx.ctx.get_initializer(inp_name) is not None
+                is_weight = self._ctx.model_w.get_initializer(inp_name) is not None
 
                 # Build full InputModel
                 input_model = InputModel(
@@ -248,7 +247,7 @@ class KernelModelBuilder:
                 self._ctx.param_setter(f"output{i}Datatype", datatype.name)
 
                 # Get tensor shape from graph
-                tensor_shape = tuple(self._ctx.ctx.get_tensor_shape(out_name))
+                tensor_shape = tuple(self._ctx.model_w.get_tensor_shape(out_name))
 
                 # Resolve block and stream shapes
                 block_shape, stream_shape = self._resolve_interface_shapes(
@@ -340,12 +339,12 @@ class KernelModelBuilder:
         """
         if schema.datatype is None:
             # No schema derivation - use graph datatype (pass-through)
-            return self._ctx.ctx.get_tensor_datatype(out_name)
+            return self._ctx.model_w.get_tensor_datatype(out_name)
 
         if isinstance(schema.datatype, DatatypeSource):
             # Derive from inputs or internal datatypes
             derived_dt = schema.datatype.resolve(self._interfaces, self._ctx.param_getter)
-            graph_dt = self._ctx.ctx.get_tensor_datatype(out_name)
+            graph_dt = self._ctx.model_w.get_tensor_datatype(out_name)
 
             if derived_dt != graph_dt:
                 logger.info(

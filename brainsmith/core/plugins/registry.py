@@ -237,6 +237,56 @@ def get_steps_by_metadata(**criteria) -> List[str]:
     _registry._load_plugins()
     return _get_names_for_classes('step', _registry.find('step', **criteria))
 
+def get_transform_for_kernel(kernel_name: str) -> Optional[Type]:
+    """Get the registered inference transform for a kernel.
+
+    Looks up transforms with kernel_inference=True metadata matching
+    the given kernel name. This is used to find legacy FINN transforms
+    for HWCustomOp kernels.
+
+    Args:
+        kernel_name: Name of the kernel (e.g., 'AddStreams', 'MVAU')
+
+    Returns:
+        Transform class or None if not found
+
+    Example:
+        # Find inference transform for FINN MVAU kernel
+        transform = get_transform_for_kernel('MVAU')
+        # Returns: InferQuantizedMatrixVectorActivation
+
+        if transform:
+            model = model.transform(transform())
+    """
+    _registry._load_plugins()
+
+    # Query for transforms with kernel_inference=True and matching kernel
+    for name, (cls, metadata) in _registry._plugins['transform'].items():
+        if metadata.get('kernel_inference') and metadata.get('kernel') == kernel_name:
+            return cls
+
+    return None
+
+def get_transform_for_kernel_class(kernel_cls: Type) -> Optional[Type]:
+    """Get the registered inference transform for a kernel class.
+
+    Convenience wrapper that extracts the kernel name from the class
+    and delegates to get_transform_for_kernel().
+
+    Args:
+        kernel_cls: Kernel class (HWCustomOp subclass)
+
+    Returns:
+        Transform class or None if not found
+
+    Example:
+        from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU
+        transform = get_transform_for_kernel_class(MVAU)
+        # Returns: InferQuantizedMatrixVectorActivation
+    """
+    kernel_name = kernel_cls.__name__
+    return get_transform_for_kernel(kernel_name)
+
 # Blueprint compatibility functions (used by explorer)
 def list_backends_by_kernel(kernel: str) -> List[str]:
     """List all backends for a given kernel."""

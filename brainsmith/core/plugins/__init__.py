@@ -11,6 +11,7 @@ from .registry import (
     has_transform, has_kernel, has_backend, has_step,
     get_transforms_by_metadata, get_kernels_by_metadata,
     get_backends_by_metadata, get_steps_by_metadata,
+    get_transform_for_kernel, get_transform_for_kernel_class,
     list_all_steps, list_all_kernels
 )
 
@@ -50,7 +51,9 @@ __all__ = [
     "get_kernels_by_metadata",
     "get_backends_by_metadata",
     "get_steps_by_metadata",
-    
+    "get_transform_for_kernel",
+    "get_transform_for_kernel_class",
+
     # CLI helpers
     "list_all_steps",
     "list_all_kernels"

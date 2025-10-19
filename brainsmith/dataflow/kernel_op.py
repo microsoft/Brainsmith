@@ -139,7 +139,7 @@ class KernelOp(HWCustomOp, ABC):
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
         """Check if this ONNX node can be converted to this hardware kernel.
 
-        Validation gate for InferKernels. Performs: (1) op type matching,
+        Validation gate for InferKernel. Performs: (1) op type matching,
         (2) schema constraints validation, (3) optional custom matcher.
 
         Pure boolean check - no side effects. Override for custom validation beyond
@@ -252,13 +252,13 @@ class KernelOp(HWCustomOp, ABC):
 
         return my_attrs
 
-    def get_kernel_model(self, ctx: ModelWrapper) -> KernelModel:
-        """Get KernelModel (cached or rebuilt from ctx + schema).
+    def get_kernel_model(self, model_w: ModelWrapper) -> KernelModel:
+        """Get KernelModel (cached or rebuilt from model_w + schema).
 
         Delegates to KernelModelBuilder for construction with caching and error context.
 
         Args:
-            ctx: ModelWrapper for ONNX graph access
+            model_w: ModelWrapper for ONNX graph access
 
         Returns:
             Cached or newly built KernelModel
@@ -270,9 +270,9 @@ class KernelOp(HWCustomOp, ABC):
         if self._kernel_model is not None:
             return self._kernel_model
 
-        if ctx is None:
+        if model_w is None:
             raise self._error(
-                "ModelWrapper (ctx) required to build KernelModel. "
+                "ModelWrapper (model_w) required to build KernelModel. "
                 "KernelOp needs ModelWrapper to extract tensor shapes from the ONNX graph "
                 "and validate hardware configurations."
             )
@@ -280,7 +280,7 @@ class KernelOp(HWCustomOp, ABC):
         # Build context for builder
         build_ctx = BuildContext(
             schema=self.kernel_schema,
-            ctx=ctx,
+            model_w=model_w,
             node_inputs=list(self.onnx_node.input),
             node_outputs=list(self.onnx_node.output),
             param_getter=self.get_nodeattr,
@@ -296,9 +296,9 @@ class KernelOp(HWCustomOp, ABC):
 
         return self._kernel_model
 
-    def infer_node_datatype(self, ctx):
+    def infer_node_datatype(self, model_w):
         """FINN compatibility wrapper."""
-        self.get_kernel_model(ctx)
+        self.get_kernel_model(model_w)
 
     @property
     def kernel_model(self) -> KernelModel:
@@ -306,7 +306,7 @@ class KernelOp(HWCustomOp, ABC):
         if self._kernel_model is None:
             raise RuntimeError(
                 f"Cannot access kernel_model for {self.onnx_node.name}. "
-                f"Call get_kernel_model(ctx) first to build the model."
+                f"Call get_kernel_model(model_w) first to build the model."
             )
         return self._kernel_model
 
@@ -322,50 +322,50 @@ class KernelOp(HWCustomOp, ABC):
         """Get output datatype."""
         return DataType[self.get_nodeattr(f"output{ind}Datatype")]
 
-    def get_normal_input_shape(self, ind=0, ctx: Optional[ModelWrapper] = None) -> List[int]:
+    def get_normal_input_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> List[int]:
         """Get input tensor shape."""
-        return list(self.get_kernel_model(ctx).inputs[ind].tensor_shape)
+        return list(self.get_kernel_model(model_w).inputs[ind].tensor_shape)
 
-    def get_normal_output_shape(self, ind=0, ctx: Optional[ModelWrapper] = None) -> List[int]:
+    def get_normal_output_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> List[int]:
         """Get output tensor shape."""
-        return list(self.get_kernel_model(ctx).outputs[ind].tensor_shape)
+        return list(self.get_kernel_model(model_w).outputs[ind].tensor_shape)
 
-    def get_folded_input_shape(self, ind=0, ctx: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
+    def get_folded_input_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
         """Get FINN folded input shape (fold_factors + flattened_stream)."""
-        km = self.get_kernel_model(ctx)
+        km = self.get_kernel_model(model_w)
         tensor_shape = km.inputs[ind].tensor_shape
         stream_shape = km.inputs[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
         flattened_stream = math.prod(stream_shape)
         return tuple(fold_factors + [flattened_stream])
 
-    def get_folded_output_shape(self, ind=0, ctx: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
+    def get_folded_output_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
         """Get FINN folded output shape (fold_factors + flattened_stream)."""
-        km = self.get_kernel_model(ctx)
+        km = self.get_kernel_model(model_w)
         tensor_shape = km.outputs[ind].tensor_shape
         stream_shape = km.outputs[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
         flattened_stream = math.prod(stream_shape)
         return tuple(fold_factors + [flattened_stream])
 
-    def get_instream_width(self, ind=0, ctx: Optional[ModelWrapper] = None) -> int:
+    def get_instream_width(self, ind=0, model_w: Optional[ModelWrapper] = None) -> int:
         """Get input stream width in bits."""
-        return self.get_kernel_model(ctx).inputs[ind].stream_width_bits
+        return self.get_kernel_model(model_w).inputs[ind].stream_width_bits
 
-    def get_outstream_width(self, ind=0, ctx: Optional[ModelWrapper] = None) -> int:
+    def get_outstream_width(self, ind=0, model_w: Optional[ModelWrapper] = None) -> int:
         """Get output stream width in bits."""
-        return self.get_kernel_model(ctx).outputs[ind].stream_width_bits
+        return self.get_kernel_model(model_w).outputs[ind].stream_width_bits
 
-    def get_number_output_values(self, ctx: Optional[ModelWrapper] = None):
+    def get_number_output_values(self, model_w: Optional[ModelWrapper] = None):
         """Get number of time-multiplexed output values."""
-        folded_shape = self.get_folded_output_shape(ind=0, ctx=ctx)
+        folded_shape = self.get_folded_output_shape(ind=0, model_w=model_w)
         return math.prod(folded_shape[:-1])
 
-    def get_exp_cycles(self, ctx: Optional[ModelWrapper] = None):
+    def get_exp_cycles(self, model_w: Optional[ModelWrapper] = None):
         """Get expected cycles (initiation interval)."""
-        return self.get_kernel_model(ctx).initiation_interval
+        return self.get_kernel_model(model_w).initiation_interval
 
-    def make_shape_compatible_op(self, ctx):
+    def make_shape_compatible_op(self, model_w):
         """Create standard ONNX op for shape inference (auto-detects pattern)."""
         from onnx import helper
 
@@ -381,7 +381,7 @@ class KernelOp(HWCustomOp, ABC):
             )
 
         if num_out == 1:
-            input_shapes = [tuple(ctx.get_tensor_shape(inp))
+            input_shapes = [tuple(model_w.get_tensor_shape(inp))
                            for inp in self.onnx_node.input]
 
             if len(set(input_shapes)) == 1:
