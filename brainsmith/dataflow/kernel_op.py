@@ -19,10 +19,8 @@ from onnx import NodeProto
 from .schemas import KernelSchema
 from .models import KernelDesignSpace, KernelConfiguration
 from .builder import BuildContext, KernelModelBuilder
-from .validation import OnnxValidationContext, KernelValidationContext
-
-if TYPE_CHECKING:
-    from .inference import InferenceResult, InferencePattern
+from .validation import KernelValidationContext
+from .transformation import TransformationResult, transform_onnx_to_kernel
 
 logger = logging.getLogger(__name__)
 
@@ -114,41 +112,18 @@ class KernelOp(HWCustomOp, ABC):
         )
 
     # ====================================================================
-    # Inference Support (Required - All Kernels Must Define)
+    # Inference Support (Unified System)
     # ====================================================================
-
-    @classmethod
-    @abstractmethod
-    def get_inference_pattern(cls) -> 'InferencePattern':
-        """Get ONNX inference pattern (required).
-
-        This is separate from schema to maintain framework-agnostic structure.
-        Schema defines WHAT the kernel IS (structure, constraints).
-        InferencePattern defines WHERE to find it in ONNX (discovery).
-
-        Returns:
-            InferencePattern defining ONNX discovery
-
-        Example:
-            @classmethod
-            def get_inference_pattern(cls):
-                return LAYERNORM_INFERENCE
-        """
-        raise NotImplementedError(
-            f"{cls.__name__} must implement get_inference_pattern() as a classmethod "
-            f"returning an InferencePattern. See KernelOp docstring for examples."
-        )
-
 
     @classmethod
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
         """Check if this ONNX node can be converted to this hardware kernel.
 
-        Validation gate for InferKernel. Performs: (1) op type matching,
-        (2) schema constraints validation, (3) optional custom matcher.
+        Uses schema.can_transform() for unified validation:
+        1. Op type matching (from schema.source_ops)
+        2. Schema constraints validation (declarative)
 
-        Pure boolean check - no side effects. Override for custom validation beyond
-        declarative constraints.
+        Pure boolean check - no side effects.
 
         Args:
             node: ONNX node to validate
@@ -158,33 +133,7 @@ class KernelOp(HWCustomOp, ABC):
             True if this kernel can convert the node
         """
         schema = cls.build_schema(node, model)
-        pattern = cls.get_inference_pattern()
-
-        # Check op type matching (empty source_ops means no inference)
-        if not pattern.source_ops or node.op_type not in pattern.source_ops:
-            return False
-
-        # Run unified constraints through ONNX validation context
-        # Pass schema to enable mapping of interface names to ONNX tensor names
-        ctx = OnnxValidationContext(node=node, model=model, schema=schema)
-        for constraint in schema.constraints:
-            error = constraint.check(ctx)
-            if error is not None:
-                # Constraint failed - this node doesn't match
-                logger.debug(
-                    f"{cls.__name__} cannot infer from {node.name}: {error}"
-                )
-                return False
-
-        # Run custom matcher if provided
-        if pattern.matcher is not None:
-            if not pattern.matcher(node, model):
-                logger.debug(
-                    f"{cls.__name__} custom matcher rejected {node.name}"
-                )
-                return False
-
-        return True
+        return schema.can_transform(node, model)
 
     @classmethod
     def infer_from(
@@ -192,10 +141,11 @@ class KernelOp(HWCustomOp, ABC):
         node: NodeProto,
         model: ModelWrapper,
         insert_index: int
-    ) -> 'InferenceResult':
-        """Create HW nodes from the given ONNX node.
+    ) -> TransformationResult:
+        """Create HW node(s) from ONNX node using unified schema.
 
-        Must be implemented by subclasses that support inference.
+        Default implementation uses pure transform_onnx_to_kernel() function.
+        Override for complex transformations (fusion, multi-node, etc.).
 
         Args:
             node: ONNX node to convert
@@ -203,24 +153,38 @@ class KernelOp(HWCustomOp, ABC):
             insert_index: Where to insert new nodes
 
         Returns:
-            InferenceResult with nodes to insert/remove
+            TransformationResult with created nodes
 
         Raises:
-            NotImplementedError: If kernel doesn't implement inference
+            ValueError: If transformation fails
 
-        Example:
+        Example (default - most kernels):
+            # Don't override - default handles it!
+
+        Example (complex transformation):
             @classmethod
             def infer_from(cls, node, model, insert_index):
-                helper = InferenceHelper(model)
-                hw_node = helper.make_node("AddStreams", ...)
-                return InferenceResult(
+                from brainsmith.dataflow.inference import InferenceHelper
+
+                schema = cls.build_schema(node, model)
+                helper = InferenceHelper(model, domain=schema.domain)
+
+                # Custom transformation logic
+                hw_node = helper.make_node(...)
+
+                return TransformationResult(
                     nodes_to_insert=[hw_node],
-                    nodes_to_remove=[node]
+                    nodes_to_remove=[node],
+                    actual_layouts={...},
                 )
         """
-        raise NotImplementedError(
-            f"{cls.__name__} does not implement infer_from(). "
-            f"Override this method to support automatic inference."
+        schema = cls.build_schema(node, model)
+        return transform_onnx_to_kernel(
+            schema=schema,
+            node=node,
+            model=model,
+            insert_index=insert_index,
+            kernel_class_name=cls.__name__
         )
 
     def _error(self, message: str) -> KernelOpError:

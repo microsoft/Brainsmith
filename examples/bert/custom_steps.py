@@ -31,8 +31,7 @@ import numpy as np
 import finn.core.onnx_exec as oxe
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
-from brainsmith.core.plugins import step
-from brainsmith.utils import apply_transforms
+from brainsmith.core.plugins import step, get_transform
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +78,11 @@ def remove_head_step(model, cfg):
                 con.input[i] = model.graph.input[0].name
 
     # Clean up after head removal
-    model = apply_transforms(model, [
-        'RemoveUnusedTensors',
-        'GiveReadableTensorNames'
-    ])
+    RemoveUnusedTensors = get_transform('RemoveUnusedTensors')
+    model = model.transform(RemoveUnusedTensors())
+
+    GiveReadableTensorNames = get_transform('GiveReadableTensorNames')
+    model = model.transform(GiveReadableTensorNames())
     
     return model
 

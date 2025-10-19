@@ -42,21 +42,97 @@ logger = logging.getLogger(__name__)
 TilingSpec = Sequence[Union[int, str, type(FULL_DIM), DimensionSource]]
 
 
-@dataclass
-class InterfaceSchema:
-    """Base class for input/output interface schemas.
+# ============================================================================
+# SCHEMA TYPES (Unified System)
+# ============================================================================
 
-    Provides common fields and validation for all interface types.
-    Inputs always get their datatypes from the ONNX graph.
-    Outputs can derive datatypes from inputs or internal datatypes.
 
-    Note: Validation constraints are now defined at KernelSchema level
-    using unified Constraint system.
+@dataclass(frozen=True)
+class InputSchema:
+    """Self-contained input specification with embedded requirements.
+
+    Complete schema for an input interface including both structure (tiling)
+    and transformation requirements (layout, constraints).
+
+    Attributes:
+        name: Interface name (e.g., "input", "input0")
+        block_tiling: Block tiling specification (e.g., [FULL_DIM, FULL_DIM])
+        stream_tiling: Stream tiling specification (e.g., ["SIMD"], [1, 1, 1, "PE"])
+        required_layout: Required data layout for transformation (e.g., "NHWC", "NCHW")
+                        This is part of what the interface IS, not how we create it.
+                        None means no layout requirement.
+        constraints: Interface-level validation constraints (e.g., IsDynamic(), DatatypeInteger())
+                    These are scoped to this specific interface.
     """
 
+    # Identity
     name: str
+
+    # Structure
     block_tiling: Optional[TilingSpec] = None
     stream_tiling: Optional[TilingSpec] = None
+
+    # Transformation requirements (NEW - embedded in interface)
+    required_layout: Optional[str] = None
+
+    # Interface-level constraints (NEW - scoped to this interface)
+    constraints: List['Constraint'] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Validate interface requirements."""
+        # Validate layout if specified
+        if self.required_layout and self.required_layout not in {"NCHW", "NHWC"}:
+            raise ValueError(
+                f"Invalid required_layout '{self.required_layout}' for input '{self.name}'. "
+                f"Must be 'NCHW' or 'NHWC'."
+            )
+
+    @property
+    def tiling_attrs(self) -> List[str]:
+        """Extract unique template parameter names from tiling specs."""
+        params = set()
+        for spec in (self.block_tiling, self.stream_tiling):
+            if spec:
+                params.update(dim for dim in spec if isinstance(dim, str))
+        return list(params)
+
+
+@dataclass(frozen=True)
+class OutputSchema:
+    """Self-contained output specification with embedded requirements.
+
+    Complete schema for an output interface including both structure (tiling),
+    datatype derivation, and transformation requirements (layout).
+
+    Attributes:
+        name: Interface name (e.g., "output", "output0")
+        block_tiling: Block tiling specification
+        stream_tiling: Stream tiling specification
+        datatype: Datatype source (None to use from ONNX, or DatatypeSource to derive)
+        required_layout: Required output layout (e.g., "NHWC")
+        preserves_input_layout: Whether this output preserves the layout of the first input
+                               (default True, common for element-wise operations)
+    """
+
+    # Identity
+    name: str
+
+    # Structure
+    block_tiling: Optional[TilingSpec] = None
+    stream_tiling: Optional[TilingSpec] = None
+    datatype: Optional[DatatypeSource] = None
+
+    # Transformation requirements (NEW)
+    required_layout: Optional[str] = None
+    preserves_input_layout: bool = True  # Most kernels preserve layout
+
+    def __post_init__(self):
+        """Validate interface requirements."""
+        if self.required_layout and self.required_layout not in {"NCHW", "NHWC"}:
+            raise ValueError(
+                f"Invalid required_layout '{self.required_layout}' for output '{self.name}'. "
+                f"Must be 'NCHW' or 'NHWC'."
+            )
 
     @property
     def tiling_attrs(self) -> List[str]:
@@ -69,32 +145,22 @@ class InterfaceSchema:
 
 
 @dataclass
-class InputSchema(InterfaceSchema):
-    """Schema for an input interface."""
-    pass  # No additional fields beyond InterfaceSchema
-
-
-@dataclass
-class OutputSchema(InterfaceSchema):
-    """Schema for an output interface.
-
-    The datatype field specifies how the output datatype is determined:
-    - None: Use datatype from ONNX graph (pass-through/validation only)
-    - DatatypeSource: Derive datatype from inputs or internal datatypes
-    """
-
-    datatype: Optional[DatatypeSource] = None
-
-
-@dataclass
 class KernelSchema:
-    """Schema for a complete kernel definition.
+    """Complete kernel specification - structure, validation, and transformation.
 
-    Defines kernel STRUCTURE (framework-agnostic):
-    - Input/output interfaces with tiling templates
+    Unified schema that combines interface definitions, validation constraints,
+    and transformation requirements in one place.
+
+    Defines kernel STRUCTURE:
+    - Input/output interfaces with tiling templates and layout requirements
     - Unified validation constraints (datatype, shape, cross-interface)
     - Internal datatype derivation patterns
     - Kernel-specific parameters (algorithm, hardware, features)
+
+    Defines kernel TRANSFORMATION:
+    - source_ops: Which ONNX ops can be transformed to this kernel
+    - attribute_mapping: Map ONNX attributes to kernel parameters
+    - initial_parallelization: Initial DSE entry point
 
     Does NOT define STORAGE:
     - Shapes are extracted from ModelWrapper or computed from templates
@@ -102,7 +168,6 @@ class KernelSchema:
     - KernelOp handles storage implementation
 
     Does NOT define BEHAVIOR:
-    - ONNX inference discovery is handled by KernelOp.get_inference_pattern()
     - Execution logic is in KernelOp.execute_node()
     - Resource estimation is in KernelOp methods
 
@@ -111,26 +176,48 @@ class KernelSchema:
     - Cross-interface constraints (shape equality, datatype equality)
     - ONNX-specific constraints (dynamic/static inputs, layouts)
     - Custom validation logic
-
-    Internal datatypes represent intermediate computation datatypes not attached
-    to ONNX tensors (e.g., accumulators, bias values). They are derived from
-    inputs or other internals using DatatypeSource patterns.
-
-    The kernel_params field specifies kernel-specific parameters not derived
-    from the interface structure (e.g., epsilon for LayerNorm, algorithm
-    selection for Pool). Format: {"paramName": ("i"|"s"|"f", required, default)}
     """
 
+    # ============= IDENTITY =============
     name: str
+    domain: str = "brainsmith.kernels"
+
+    # ============= STRUCTURE =============
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
     internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
-    constraints: List['Constraint'] = field(default_factory=list)
     kernel_params: Dict[str, tuple] = field(default_factory=dict)
 
+    # ============= VALIDATION =============
+    constraints: List['Constraint'] = field(default_factory=list)
+
+    # ============= TRANSFORMATION (NEW - optional) =============
+    source_ops: List[str] = field(default_factory=list)
+    """ONNX op types that can be transformed to this kernel.
+
+    Empty list means no ONNX transformation support.
+    Example: ["FuncLayerNorm", "LayerNormalization"]
+    """
+
+    attribute_mapping: Dict[str, str] = field(default_factory=dict)
+    """Map ONNX attributes to kernel parameters.
+
+    Example: {"epsilon": "epsilon", "axis": "normalized_axis"}
+    """
+
+    initial_parallelization: Dict[str, int] = field(default_factory=lambda: {"SIMD": 1})
+    """Initial parallelization parameters for DSE entry point.
+
+    Example: {"SIMD": 1, "PE": 1}
+    """
+
     def __post_init__(self):
-        """Validate schema structure."""
+        """Validate schema structure and transformation consistency."""
         self.validate()
+
+        # Validate transformation fields if present
+        if self.source_ops:
+            self._validate_transformation_fields()
 
     def validate(self) -> None:
         """Validate the schema structure."""
@@ -152,6 +239,69 @@ class KernelSchema:
                 raise ValueError(
                     f"Internal datatype '{internal_name}' conflicts with interface name in kernel '{self.name}'"
                 )
+
+    def _validate_transformation_fields(self) -> None:
+        """Validate transformation-related fields are consistent."""
+        # Validate attribute_mapping references kernel_params
+        for hw_param in self.attribute_mapping.values():
+            if hw_param not in self.kernel_params:
+                raise ValueError(
+                    f"attribute_mapping maps to '{hw_param}' but it's not in kernel_params. "
+                    f"Available params: {list(self.kernel_params.keys())}"
+                )
+
+        # Validate initial_parallelization values
+        for param, value in self.initial_parallelization.items():
+            if not isinstance(value, int) or value < 1:
+                raise ValueError(
+                    f"initial_parallelization['{param}'] must be positive integer, got {value}"
+                )
+
+    def can_transform(self, node, model) -> bool:
+        """Check if this schema can transform the given ONNX node.
+
+        Pure validation - no side effects.
+
+        Args:
+            node: ONNX NodeProto to validate
+            model: ModelWrapper for graph context
+
+        Returns:
+            True if transformation possible, False otherwise
+        """
+        # Import here to avoid circular dependency
+        from onnx import NodeProto
+        from qonnx.core.modelwrapper import ModelWrapper
+
+        # Check op type
+        if not self.source_ops or node.op_type not in self.source_ops:
+            return False
+
+        # Check interface counts match
+        if len(node.input) != len(self.inputs):
+            logger.debug(
+                f"{self.name}: Input count mismatch. "
+                f"Schema expects {len(self.inputs)}, node has {len(node.input)}"
+            )
+            return False
+
+        if len(node.output) != len(self.outputs):
+            logger.debug(
+                f"{self.name}: Output count mismatch. "
+                f"Schema expects {len(self.outputs)}, node has {len(node.output)}"
+            )
+            return False
+
+        # Check global constraints
+        from .validation import OnnxValidationContext
+        ctx = OnnxValidationContext(node=node, model=model, schema=self)
+        for constraint in self.constraints:
+            error = constraint.check(ctx)
+            if error:
+                logger.debug(f"{self.name}: {error}")
+                return False
+
+        return True
 
     def get_nodeattr_types(self) -> Dict[str, tuple]:
         """Generate nodeattr registry from schema.

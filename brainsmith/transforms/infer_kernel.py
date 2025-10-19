@@ -90,17 +90,17 @@ class InferKernel(Transformation):
         self.kernel_cls = kernel_cls
         self.kernel_name = kernel_cls.__name__
 
-        # Validate that kernel implements inference interface
+        # Validate that kernel supports inference via schema.source_ops
         try:
-            pattern = kernel_cls.get_inference_pattern()
-            if not pattern.source_ops:
+            # Build schema with minimal context to check source_ops
+            schema = kernel_cls.build_schema(node=None, model=None)
+            if not schema.source_ops:
                 logger.warning(
                     f"{self.kernel_name} has empty source_ops - no ONNX inference will occur"
                 )
-        except NotImplementedError:
+        except Exception as e:
             raise NotImplementedError(
-                f"{self.kernel_name} does not implement get_inference_pattern(). "
-                f"Cannot use InferKernel with this kernel class."
+                f"{self.kernel_name} failed to build schema or doesn't support inference: {e}"
             )
 
     def apply(self, model: ModelWrapper):

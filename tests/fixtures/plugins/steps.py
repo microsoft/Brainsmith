@@ -3,7 +3,6 @@
 import logging
 from typing import Any, Dict
 from brainsmith.core.plugins import step, get_transform
-from brainsmith.utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +36,17 @@ def test_identity_step(model: Any, cfg: Any) -> Any:
 def test_transform_sequence_step(model: Any, cfg: Any) -> Any:
     """Test step that applies multiple transforms in sequence."""
     logger.info("Executing test_transform_sequence")
-    
+
     # Apply some basic transforms
-    model = apply_transforms(model, [
-        'GiveUniqueNodeNames',
-        'InferShapes',
-        'InferDataTypes'
-    ])
-    
+    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
+    model = model.transform(GiveUniqueNodeNames())
+
+    InferShapes = get_transform('InferShapes')
+    model = model.transform(InferShapes())
+
+    InferDataTypes = get_transform('InferDataTypes')
+    model = model.transform(InferDataTypes())
+
     return model
 
 
@@ -96,10 +98,11 @@ def test_conditional_step(model: Any, cfg: Any) -> Any:
     
     if should_apply_transforms:
         logger.info("Applying transforms based on config flag")
-        model = apply_transforms(model, [
-            'FoldConstants',
-            'RemoveUnusedTensors'
-        ])
+        FoldConstants = get_transform('FoldConstants')
+        model = model.transform(FoldConstants())
+
+        RemoveUnusedTensors = get_transform('RemoveUnusedTensors')
+        model = model.transform(RemoveUnusedTensors())
     else:
         logger.info("Skipping transforms based on config flag")
     
@@ -145,16 +148,20 @@ def test_debug_output_step(model: Any, cfg: Any) -> Any:
     
     if debug_mode:
         import os
+        from brainsmith.core.explorer.utils import save_debug_model
         debug_path = os.path.join(output_dir, "test_debug")
         logger.info(f"Debug mode enabled, saving to {debug_path}")
-        
+
         # Apply transforms with debug output
-        from brainsmith.utils import apply_transforms
-        model = apply_transforms(
-            model, 
-            ['GiveReadableTensorNames', 'SortGraph'],
-            debug_path=debug_path
-        )
+        GiveReadableTensorNames = get_transform('GiveReadableTensorNames')
+        model = model.transform(GiveReadableTensorNames())
+        debug_file = f"{debug_path}_step00_GiveReadableTensorNames.onnx"
+        save_debug_model(model, debug_file)
+
+        SortGraph = get_transform('SortGraph')
+        model = model.transform(SortGraph())
+        debug_file = f"{debug_path}_step01_SortGraph.onnx"
+        save_debug_model(model, debug_file)
     
     return model
 

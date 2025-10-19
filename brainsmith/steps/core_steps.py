@@ -14,7 +14,6 @@ import logging
 from typing import Any
 
 from brainsmith.core.plugins import step, get_transform
-from brainsmith.utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +29,19 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     """
     Convert QONNX to FINN opset.
     """
-    
-    model = apply_transforms(model, [
-        'ExpandNorms',
-        'FoldConstants',
-        'ConvertDivToMul',
-        'ConvertQONNXtoFINN'
-    ])
-    
+
+    ExpandNorms = get_transform('ExpandNorms')
+    model = model.transform(ExpandNorms())
+
+    FoldConstants = get_transform('FoldConstants')
+    model = model.transform(FoldConstants())
+
+    ConvertDivToMul = get_transform('ConvertDivToMul')
+    model = model.transform(ConvertDivToMul())
+
+    ConvertQONNXtoFINN = get_transform('ConvertQONNXtoFINN')
+    model = model.transform(ConvertQONNXtoFINN())
+
     return model
 
 
@@ -63,14 +67,17 @@ def specialize_layers_step(model, cfg):
     
     # Run the specialization
     model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
-    
+
     # Ensure custom opset imports before shape inference and apply final transforms
-    model = apply_transforms(model, [
-        'GiveUniqueNodeNames',
-        'InferShapes',
-        'InferDataTypes'
-    ])
-    
+    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
+    model = model.transform(GiveUniqueNodeNames())
+
+    InferShapes = get_transform('InferShapes')
+    model = model.transform(InferShapes())
+
+    InferDataTypes = get_transform('InferDataTypes')
+    model = model.transform(InferDataTypes())
+
     return model
 
 
@@ -85,8 +92,10 @@ def specialize_layers_step(model, cfg):
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
     # Brainsmith native transforms
-    model = apply_transforms(model, [
-        'TempShuffleFixer',
-        'SetPumpedCompute'
-    ])
+    TempShuffleFixer = get_transform('TempShuffleFixer')
+    model = model.transform(TempShuffleFixer())
+
+    SetPumpedCompute = get_transform('SetPumpedCompute')
+    model = model.transform(SetPumpedCompute())
+
     return model

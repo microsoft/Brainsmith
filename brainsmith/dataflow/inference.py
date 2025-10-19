@@ -7,30 +7,23 @@
 
 """Kernel inference infrastructure for HW layer inference.
 
-This module provides the core infrastructure for kernel inference:
-- InferencePattern: Defines ONNX → HW kernel pattern matching
-- InferenceResult: Structured result from inference operations
+This module provides helper utilities for kernel inference:
 - InferenceHelper: Utility methods for common inference operations
 
+Discovery is handled by KernelOp.get_source_ops().
 Validation is handled by unified Constraint system (see constraints.py).
+Transformation is handled by TransformationSpec/TransformationResult (see transformation.py).
 
 Example usage:
-    # Define inference pattern
-    pattern = InferencePattern(
-        source_ops=["Add"],
-        layout_conversions={"input0": "NHWC", "input1": "NHWC"},
-    )
-
     # Using helper for graph manipulation
-    helper = InferenceHelper(model)
+    helper = InferenceHelper(model, domain="brainsmith.kernels")
     in0 = helper.ensure_layout(node.input[0], "NHWC", insert_index)
     new_node = helper.make_node("MyKernel", [in0], [out], {"PE": 1})
 """
 
 import logging
 import warnings
-from dataclasses import dataclass, field
-from typing import List, Optional, Callable, Dict, Any, Tuple
+from typing import Optional, Dict, Any, List
 
 from onnx import NodeProto, TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
@@ -39,75 +32,6 @@ import qonnx.core.data_layout as DataLayout
 from qonnx.util.onnx import nchw_to_nhwc
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class InferencePattern:
-    """Defines ONNX → HW kernel pattern matching.
-
-    Specifies which ONNX operations can be converted to this kernel and
-    provides hints for layout conversion. Validation is handled by the
-    unified Constraint system (see KernelSchema.constraints).
-
-    This is NOT about validation - that's in schema.constraints.
-    This is about:
-    - Which ONNX ops to match
-    - Layout conversion hints
-    - Custom matching logic beyond constraints
-
-    Attributes:
-        source_ops: ONNX op types that can be converted to this kernel
-        layout_conversions: Optional dict mapping tensor names to target layouts
-            Example: {"input0": "NHWC", "input1": "NHWC", "output": "NHWC"}
-        matcher: Optional custom matching function beyond constraints
-            Signature: (node: NodeProto, model: ModelWrapper) -> bool
-
-    Example:
-        # AddStreams: Convert ONNX Add to AddStreams HW kernel
-        InferencePattern(
-            source_ops=["Add"],
-            layout_conversions={
-                "input0": "NHWC",
-                "input1": "NHWC",
-                "output": "NHWC",
-            }
-        )
-
-        # MVAU: MatMul with custom matching
-        InferencePattern(
-            source_ops=["MatMul"],
-            matcher=lambda node, model: check_weight_is_static(node, model)
-        )
-    """
-
-    source_ops: List[str]
-    layout_conversions: Optional[Dict[str, str]] = None
-    matcher: Optional[Callable[[NodeProto, ModelWrapper], bool]] = None
-
-
-@dataclass
-class InferenceResult:
-    """Result of kernel inference operation.
-
-    Contains the graph modifications needed to replace an ONNX node
-    with hardware-specific custom ops.
-
-    Attributes:
-        nodes_to_insert: New nodes to insert into the graph
-        nodes_to_remove: Existing nodes to remove from the graph
-        metadata: Optional metadata about the inference (for debugging/logging)
-
-    Example:
-        InferenceResult(
-            nodes_to_insert=[addstreams_node],
-            nodes_to_remove=[original_add_node],
-            metadata={"num_channels": 128, "layout_converted": True}
-        )
-    """
-
-    nodes_to_insert: List[NodeProto]
-    nodes_to_remove: List[NodeProto]
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class InferenceHelper:
@@ -141,13 +65,13 @@ class InferenceHelper:
         )
     """
 
-    def __init__(self, model: ModelWrapper, domain: str = "finn.custom_op.fpgadataflow"):
+    def __init__(self, model: ModelWrapper, domain: str = "brainsmith.kernels"):
         """Initialize helper with model context.
 
         Args:
             model: QONNX ModelWrapper for graph access
-            domain: ONNX domain for created nodes (default: "finn.custom_op.fpgadataflow")
-                   Use "brainsmith.kernels" for Brainsmith kernels
+            domain: ONNX domain for created nodes (default: "brainsmith.kernels")
+                   Use "finn.custom_op.fpgadataflow" for FINN kernels
         """
         self.model = model
         self.domain = domain
@@ -588,44 +512,48 @@ class InferenceHelper:
         return self.model.get_tensor_fanout(tensor_name) > 1
 
     # ===================================================================
-    # Inference Result Builder
+    # Transformation Support (for TransformationSpec system)
     # ===================================================================
 
-    def make_inference_result(
-        self,
-        new_node: NodeProto,
-        old_node: NodeProto,
-        **metadata
-    ) -> InferenceResult:
-        """Create standard InferenceResult for single-node replacement.
-
-        Convenience method for common single-node replacement pattern.
-        Reduces: 5 lines → 1 line
+    def get_layout(self, tensor_name: str) -> Optional[str]:
+        """Get current layout of tensor as string.
 
         Args:
-            new_node: Newly created HW node
-            old_node: Original ONNX node to remove
-            **metadata: Additional metadata fields
+            tensor_name: Name of tensor to query
 
         Returns:
-            InferenceResult with standard structure
+            Layout as string ("NCHW", "NHWC", etc.) or None if not set
 
         Example:
-            # Before
-            return InferenceResult(
-                nodes_to_insert=[new_node],
-                nodes_to_remove=[old_node],
-                metadata={"layout_conversion": True}
-            )
-
-            # After
-            return helper.make_inference_result(
-                new_node, old_node,
-                layout_conversion=True
-            )
+            layout = helper.get_layout(node.input[0])  # Returns "NHWC"
         """
-        return InferenceResult(
-            nodes_to_insert=[new_node],
-            nodes_to_remove=[old_node],
-            metadata=metadata
+        layout_enum = self.model.get_tensor_layout(tensor_name)
+        if layout_enum is None:
+            return None
+        # Convert DataLayout enum to string
+        return layout_enum.name
+
+    def get_node_attr_value(self, node: NodeProto, attr_name: str) -> Any:
+        """Get ONNX node attribute value.
+
+        Convenience wrapper around onnx.helper.get_attribute_value().
+
+        Args:
+            node: ONNX node to query
+            attr_name: Attribute name to retrieve
+
+        Returns:
+            Attribute value
+
+        Raises:
+            AttributeError: If attribute not found
+
+        Example:
+            epsilon = helper.get_node_attr_value(node, "epsilon")
+            axis = helper.get_node_attr_value(node, "axis")
+        """
+        from onnx import helper as onnx_helper
+        return onnx_helper.get_attribute_value(
+            next((attr for attr in node.attribute if attr.name == attr_name), None)
         )
+

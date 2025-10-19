@@ -17,14 +17,16 @@ from brainsmith.dataflow import (
 from brainsmith.core.plugins import kernel
 
 
-# Module-level KernelSchema definition (structure only)
+# Module-level unified KernelSchema (structure + transformation)
 SOFTMAX_SCHEMA = df.KernelSchema(
     name="Softmax",
+    domain="brainsmith.kernels",
     inputs=[
         df.InputSchema(
             name="input",
             block_tiling=[FULL_DIM],       # One Softmax op: (1, 1, channels)
             stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
+            # No required_layout - Softmax works with any layout
         )
     ],
     outputs=[
@@ -33,6 +35,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
             block_tiling=[FULL_DIM],                   # Same as input: (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
             datatype=DerivedDatatype("input"),         # Derive FLOAT32 from input
+            # No required_layout - preserves input layout
         )
     ],
     constraints=[
@@ -42,14 +45,17 @@ SOFTMAX_SCHEMA = df.KernelSchema(
         df.IsDynamic("input"),
         # Must operate on last axis (channel dimension), or None (defaults to -1)
         df.NodeAttributeEquals("axis", [None, -1]),
-    ]
-)
-
-# Module-level InferencePattern (ONNX discovery)
-SOFTMAX_INFERENCE = df.InferencePattern(
-    source_ops=["Softmax"],  # ONNX Softmax nodes
-    matcher=lambda node, model: node.domain != "brainsmith.kernels"  # Skip already-converted hardware nodes
-    # Axis validation handled by NodeAttributeEquals constraint in schema
+        # Don't re-convert already-converted hardware nodes
+        # (ONNX Softmax has domain="", hardware Softmax has domain="brainsmith.kernels")
+        df.Custom(
+            lambda ctx: None if getattr(ctx.node, 'domain', '') != 'brainsmith.kernels'
+                       else "Already a hardware Softmax node",
+            "Node must be ONNX Softmax, not hardware Softmax"
+        ),
+    ],
+    # Transformation specification (unified)
+    source_ops=["Softmax"],
+    initial_parallelization={"SIMD": 1},
 )
 
 
@@ -74,56 +80,12 @@ class Softmax(KernelOp):
         """Build Softmax schema (constant for all instances)."""
         return SOFTMAX_SCHEMA
 
-    @classmethod
-    def get_inference_pattern(cls) -> df.InferencePattern:
-        """Return Softmax inference pattern (ONNX discovery)."""
-        return SOFTMAX_INFERENCE
-
-    @classmethod
-    def infer_from(cls, node, model, insert_index):
-        """Infer Softmax kernel from ONNX Softmax node.
-
-        Axis validation is handled by the matcher (_check_softmax_axis).
-        Initializes kernel with SIMD=1 (default parallelization).
-
-        Args:
-            node: ONNX NodeProto for Softmax
-            model: ModelWrapper
-            insert_index: Index where to insert new nodes
-
-        Returns:
-            InferenceResult with nodes to insert/remove
-        """
-        from brainsmith.dataflow.inference import InferenceHelper
-
-        # Use InferenceHelper for cleaner node creation
-        # Use Brainsmith domain since Softmax is a Brainsmith kernel
-        helper = InferenceHelper(model, domain="brainsmith.kernels")
-
-        # Get input/output tensor names (no layout conversion needed for Softmax)
-        input_tensor = node.input[0]
-        output_tensor = node.output[0]
-
-        # Get channel count from input shape
-        channels = helper.get_num_channels(input_tensor)
-
-        # Create Softmax node with default SIMD=1
-        # (Axis validation already done by matcher)
-        new_node = helper.make_node(
-            "Softmax",
-            [input_tensor],
-            [output_tensor],
-            {
-                "SIMD": 1,  # Default parallelization
-            },
-            name_prefix=f"Softmax_{node.name}"
-        )
-
-        return helper.make_inference_result(
-            new_node,
-            node,
-            channels=channels
-        )
+    # No infer_from() override - default handles it!
+    # Default implementation:
+    # - Discovers Softmax nodes (from spec.source_ops)
+    # - Creates node with SIMD=1 (from spec.initial_parallelization)
+    # - No layout conversions needed (no layout requirements in spec)
+    # - Verifies automatically
 
     def execute_node(self, context, graph):
         node = self.onnx_node

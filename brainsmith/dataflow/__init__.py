@@ -76,8 +76,12 @@ from .constraints import (
     Custom,
 )
 
-# Core architecture - schemas consolidated in schemas.py
-from .schemas import InputSchema, OutputSchema, KernelSchema
+# Core architecture - unified schemas
+from .schemas import (
+    InputSchema,
+    OutputSchema,
+    KernelSchema,
+)
 
 # Immutable models (design space exploration)
 from .models import (
@@ -109,8 +113,14 @@ from .validation import (
 # Kernel operator base class
 from .kernel_op import KernelOp, KernelOpError
 
+# Transformation system (unified)
+from .transformation import (
+    TransformationResult,
+    transform_onnx_to_kernel,
+)
+
 # Inference infrastructure
-from .inference import InferencePattern, InferenceResult, InferenceHelper
+from .inference import InferenceHelper
 
 
 __all__ = [
@@ -140,7 +150,7 @@ __all__ = [
     # Custom constraint
     'Custom',
 
-    # Core architecture
+    # Core architecture (unified schemas)
     'InputSchema', 'OutputSchema', 'KernelSchema',
 
     # Immutable models (design space exploration)
@@ -164,6 +174,10 @@ __all__ = [
     # Kernel operator base class
     'KernelOp', 'KernelOpError',
 
+    # Transformation system (unified)
+    'TransformationResult',
+    'transform_onnx_to_kernel',
+
     # Inference infrastructure
-    'InferencePattern', 'InferenceResult', 'InferenceHelper',
+    'InferenceHelper',
 ]

@@ -172,11 +172,11 @@ def test_transform_chain(model: Any, cfg: Any) -> Any:
     ))
     
     # 3. Apply standard transforms
-    from brainsmith.utils import apply_transforms
-    model = apply_transforms(model, [
-        'InferShapes',
-        'FoldConstants'
-    ])
+    InferShapes = get_transform('InferShapes')
+    model = model.transform(InferShapes())
+
+    FoldConstants = get_transform('FoldConstants')
+    model = model.transform(FoldConstants())
     
     return model
 
@@ -288,19 +288,23 @@ def test_apply_custom_transforms_step(model: Any, cfg: Any) -> Any:
 )  
 def test_transform_chain_step(model: Any, cfg: Any) -> Any:
     """Step demonstrating transform chaining."""
-    from brainsmith.utils import apply_transforms_with_params
-    
+    from brainsmith.core.plugins import get_transform
+
     # Chain transforms with parameters
-    transforms = [
-        ('TestAddMetadata', {'metadata_key': 'chain_start', 'metadata_value': 'true'}),
-        ('TestNodeCounter', {}),
-        ('TestAddMetadata', {'metadata_key': 'chain_end', 'metadata_value': 'true'}),
-    ]
-    
-    model = apply_transforms_with_params(model, transforms)
-    
+    TestAddMetadata = get_transform('TestAddMetadata')
+    model = model.transform(TestAddMetadata(metadata_key='chain_start', metadata_value='true'))
+
+    TestNodeCounter = get_transform('TestNodeCounter')
+    model = model.transform(TestNodeCounter())
+
+    TestAddMetadata = get_transform('TestAddMetadata')
+    model = model.transform(TestAddMetadata(metadata_key='chain_end', metadata_value='true'))
+
     # Also apply standard transforms
-    from brainsmith.utils import apply_transforms
-    model = apply_transforms(model, ['GiveUniqueNodeNames', 'InferShapes'])
+    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
+    model = model.transform(GiveUniqueNodeNames())
+
+    InferShapes = get_transform('InferShapes')
+    model = model.transform(InferShapes())
     
     return model

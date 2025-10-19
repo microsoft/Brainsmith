@@ -15,15 +15,16 @@ from brainsmith.dataflow import DerivedDatatype, DerivedDim, FULL_DIM
 from brainsmith.core.plugins import kernel
 
 
-# Module-level KernelSchema definition (structure only)
+# Module-level unified KernelSchema (structure + transformation)
 LAYERNORM_SCHEMA = df.KernelSchema(
     name="LayerNorm",
+    domain="brainsmith.kernels",
     inputs=[
         df.InputSchema(
             name="input",
             block_tiling=[FULL_DIM],         # (1, 1, channels)
             stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
-            # Datatype always from ONNX: input0Datatype
+            required_layout="NHWC",          # Required layout (embedded)
         )
     ],
     outputs=[
@@ -31,7 +32,8 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[FULL_DIM],                  # (1, 1, channels)
             stream_tiling=[DerivedDim("input", -1)],  # Output streams at same rate as input
-            datatype=DerivedDatatype("input")         # Output datatype same as input
+            datatype=DerivedDatatype("input"),        # Output datatype same as input
+            required_layout="NHWC",                   # Required layout (embedded)
         )
     ],
     kernel_params={
@@ -42,19 +44,16 @@ LAYERNORM_SCHEMA = df.KernelSchema(
         df.IsDynamic("input"),
         # Must normalize over last axis (channel dimension)
         df.NodeAttributeEquals("axis", -1),
-    ]
-)
-
-# Module-level InferencePattern (ONNX discovery)
-LAYERNORM_INFERENCE = df.InferencePattern(
+    ],
+    # Transformation specification (unified)
     source_ops=["FuncLayerNorm"],
-    layout_conversions={"input": "NHWC"},  # Convert NCHW → NHWC if needed
-    # Axis validation handled by NodeAttributeEquals constraint in schema
+    attribute_mapping={"epsilon": "epsilon"},
+    initial_parallelization={"SIMD": 1},
 )
 
 
 @kernel(
-    description="Hardware LayerNorm using Dataflow Modeling",
+    description="Hardware LayerNorm w/out Bias/Scale",
     author="Shane Fleming"
 )
 class LayerNorm(KernelOp):
@@ -74,60 +73,6 @@ class LayerNorm(KernelOp):
     def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
         """Build LayerNorm schema (constant for all instances)."""
         return LAYERNORM_SCHEMA
-
-    @classmethod
-    def get_inference_pattern(cls) -> df.InferencePattern:
-        """Return LayerNorm inference pattern (ONNX discovery)."""
-        return LAYERNORM_INFERENCE
-
-    @classmethod
-    def infer_from(cls, node, model, insert_index):
-        """Infer LayerNorm kernel from FuncLayerNorm ONNX node.
-
-        Handles layout conversion (NCHW → NHWC) and initializes kernel with:
-        - SIMD=1 (default parallelization)
-        - epsilon from FuncLayerNorm node
-
-        Args:
-            node: ONNX NodeProto for FuncLayerNorm
-            model: ModelWrapper
-            insert_index: Index where to insert new nodes
-
-        Returns:
-            InferenceResult with nodes to insert/remove
-        """
-        from onnx import helper
-        from brainsmith.dataflow.inference import InferenceHelper, InferenceResult
-
-        # Use InferenceHelper for cleaner layout conversion
-        # Use Brainsmith domain since LayerNorm is a Brainsmith kernel
-        inference_helper = InferenceHelper(model, domain="brainsmith.kernels")
-
-        # Ensure NHWC layout (handles conversion automatically)
-        act_in = inference_helper.ensure_layout(node.input[0], "NHWC", insert_index)
-        act_out = inference_helper.ensure_layout(node.output[0], "NHWC", insert_index)
-
-        # Extract epsilon from source node
-        epsilon = helper.get_node_attr_value(node, "epsilon")
-
-        # Create LayerNorm node using InferenceHelper
-        # (domain is already set to "brainsmith.kernels" in helper initialization)
-        new_node = inference_helper.make_node(
-            "LayerNorm",
-            [act_in],
-            [act_out],
-            {
-                "SIMD": 1,
-                "epsilon": epsilon,
-            },
-            name_prefix=f"LayerNorm_{node.name}"
-        )
-
-        return inference_helper.make_inference_result(
-            new_node,
-            node,
-            layout_conversion=act_in != node.input[0] or act_out != node.output[0]
-        )
 
     def execute_node(self, context, graph):
         node = self.onnx_node

@@ -19,33 +19,37 @@ import numpy as np
 from onnx import NodeProto
 from typing import Optional
 
-from brainsmith.dataflow import KernelOp, InferenceHelper, InferenceResult
+from brainsmith.dataflow import KernelOp, FULL_DIM
 import brainsmith.dataflow as df
 from brainsmith.core.plugins import kernel
 from qonnx.core.modelwrapper import ModelWrapper
 
 
-# Module-level KernelSchema definition with unified constraints
+# Module-level unified KernelSchema (structure + transformation)
 ADDSTREAMS_SCHEMA = df.KernelSchema(
     name="AddStreams",
+    domain="brainsmith.kernels",
     inputs=[
         df.InputSchema(
             name="input0",
-            block_tiling=[df.FULL_DIM, df.FULL_DIM, df.FULL_DIM, df.FULL_DIM],
+            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
             stream_tiling=[1, 1, 1, "PE"],
+            required_layout="NHWC",  # Embedded layout requirement
         ),
         df.InputSchema(
             name="input1",
-            block_tiling=[df.FULL_DIM, df.FULL_DIM, df.FULL_DIM, df.FULL_DIM],
+            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
             stream_tiling=[1, 1, 1, "PE"],
+            required_layout="NHWC",  # Embedded layout requirement
         ),
     ],
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[df.FULL_DIM, df.FULL_DIM, df.FULL_DIM, df.FULL_DIM],
+            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
             stream_tiling=[1, 1, 1, df.DerivedDim("input0", -1)],
             datatype=df.DerivedDatatype("input0"),  # Output datatype same as input0
+            required_layout="NHWC",  # Embedded layout requirement
         )
     ],
     constraints=[
@@ -59,17 +63,10 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
     kernel_params={
         "PE": ("i", True, 1),
         "NumChannels": ("i", True, 1),
-    }
-)
-
-# Module-level InferencePattern (ONNX discovery)
-ADDSTREAMS_INFERENCE = df.InferencePattern(
+    },
+    # Transformation specification (unified)
     source_ops=["Add"],
-    layout_conversions={
-        "input0": "NHWC",
-        "input1": "NHWC",
-        "output": "NHWC",
-    }
+    initial_parallelization={"PE": 1},
 )
 
 
@@ -111,13 +108,8 @@ class AddStreams(KernelOp):
         """Build AddStreams schema (constant for all instances)."""
         return ADDSTREAMS_SCHEMA
 
-    @classmethod
-    def get_inference_pattern(cls) -> df.InferencePattern:
-        """Return AddStreams inference pattern (ONNX discovery)."""
-        return ADDSTREAMS_INFERENCE
-
     # ====================================================================
-    # Inference Implementation
+    # Inference Implementation (Custom - needs NumChannels, etc.)
     # ====================================================================
 
     @classmethod
@@ -126,8 +118,11 @@ class AddStreams(KernelOp):
         node: NodeProto,
         model: ModelWrapper,
         insert_index: int
-    ) -> InferenceResult:
+    ) -> df.TransformationResult:
         """Create AddStreams HW node from ONNX Add node.
+
+        Custom implementation needed for additional attributes
+        (NumChannels, inputDataTypes, numInputVectors).
 
         Args:
             node: ONNX Add node to convert
@@ -135,17 +130,18 @@ class AddStreams(KernelOp):
             insert_index: Where to insert new nodes
 
         Returns:
-            InferenceResult with AddStreams node and removed Add node
+            TransformationResult with AddStreams node and removed Add node
         """
-        helper = InferenceHelper(model)
+        from brainsmith.dataflow.inference import InferenceHelper
 
-        # Handle layout conversion (guided by InferencePattern)
-        in0 = helper.ensure_layout(node.input[0], "NHWC", insert_index)
-        in1 = helper.ensure_layout(node.input[1], "NHWC", insert_index)
-        result = helper.ensure_layout(node.output[0], "NHWC", insert_index)
+        schema = cls.build_schema(node, model)
+        helper = InferenceHelper(model, domain=schema.domain)
+
+        # Handle layout conversion (from schema.inputs embedded requirements)
+        in0 = helper.ensure_layout(node.input[0], schema.inputs[0].required_layout, insert_index)
+        in1 = helper.ensure_layout(node.input[1], schema.inputs[1].required_layout, insert_index)
 
         # Extract parameters from ONNX graph
-        in0_shape = model.get_tensor_shape(in0)
         num_channels = helper.get_num_channels(in0)
         num_input_vectors = helper.get_num_input_vectors(in0)
 
@@ -157,25 +153,32 @@ class AddStreams(KernelOp):
         hw_node = helper.make_node(
             "AddStreams",
             inputs=[in0, in1],
-            outputs=[result],
+            outputs=list(node.output),
             attributes={
+                **schema.initial_parallelization,
                 "NumChannels": num_channels,
-                "PE": 1,  # Default PE=1 (no parallelization initially)
                 "inputDataTypes": [idt0.name, idt1.name],
                 "numInputVectors": num_input_vectors,
             },
             name_prefix=f"AddStreams_{node.name}"
         )
 
-        return InferenceResult(
+        result = df.TransformationResult(
             nodes_to_insert=[hw_node],
             nodes_to_remove=[node],
+            actual_layouts={
+                "input0": schema.inputs[0].required_layout,
+                "input1": schema.inputs[1].required_layout,
+                "output": schema.outputs[0].required_layout,
+            },
             metadata={
                 "num_channels": num_channels,
                 "input_vectors": num_input_vectors,
-                "layout_converted": in0 != node.input[0]
+                "layout_converted": in0 != node.input[0] or in1 != node.input[1]
             }
         )
+
+        return result
 
     # ====================================================================
     # Execution (CPU implementation for testing/validation)

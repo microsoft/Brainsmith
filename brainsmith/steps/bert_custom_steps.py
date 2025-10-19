@@ -20,7 +20,6 @@ from typing import Any
 import numpy as np
 
 from brainsmith.core.plugins import step, get_transform
-from brainsmith.utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +90,12 @@ def shell_metadata_handover_step(model, cfg):
 )
 def bert_cleanup_step(model: Any, cfg: Any) -> Any:
     """Basic cleanup with identity removal and input sorting."""
-    
-    model = apply_transforms(model, [
-        'SortCommutativeInputsInitializerLast',
-        'RemoveIdentityOps'
-    ])
+
+    SortCommutativeInputsInitializerLast = get_transform('SortCommutativeInputsInitializerLast')
+    model = model.transform(SortCommutativeInputsInitializerLast())
+
+    RemoveIdentityOps = get_transform('RemoveIdentityOps')
+    model = model.transform(RemoveIdentityOps())
 
     return model
 
@@ -126,25 +126,35 @@ def bert_streamlining_step(model, cfg):
           reshape and transpose
         * AbsorbMulIntoMultiThreshold : absorbs the Mul into the MT
     """
-    
-    model = apply_transforms(model, [
-        'AbsorbSignBiasIntoMultiThreshold',
-        'AbsorbAddIntoMultiThreshold',
-        'AbsorbMulIntoMultiThreshold',
-        'RoundAndClipThresholds'
-    ])
-    
+
+    AbsorbSignBiasIntoMultiThreshold = get_transform('AbsorbSignBiasIntoMultiThreshold')
+    model = model.transform(AbsorbSignBiasIntoMultiThreshold())
+
+    AbsorbAddIntoMultiThreshold = get_transform('AbsorbAddIntoMultiThreshold')
+    model = model.transform(AbsorbAddIntoMultiThreshold())
+
+    AbsorbMulIntoMultiThreshold = get_transform('AbsorbMulIntoMultiThreshold')
+    model = model.transform(AbsorbMulIntoMultiThreshold())
+
+    RoundAndClipThresholds = get_transform('RoundAndClipThresholds')
+    model = model.transform(RoundAndClipThresholds())
+
     # Apply transform with parameter
     MoveOpPastFork = get_transform('MoveOpPastFork')
     model = model.transform(MoveOpPastFork(["Mul"]))
-    
-    model = apply_transforms(model, [
-        'MoveScalarMulPastMatMul',
-        'MoveScalarLinearPastInvariants',
-        'AbsorbMulIntoMultiThreshold',
-        'AbsorbAddIntoMultiThreshold'
-    ])
-    
+
+    MoveScalarMulPastMatMul = get_transform('MoveScalarMulPastMatMul')
+    model = model.transform(MoveScalarMulPastMatMul())
+
+    MoveScalarLinearPastInvariants = get_transform('MoveScalarLinearPastInvariants')
+    model = model.transform(MoveScalarLinearPastInvariants())
+
+    AbsorbMulIntoMultiThreshold = get_transform('AbsorbMulIntoMultiThreshold')
+    model = model.transform(AbsorbMulIntoMultiThreshold())
+
+    AbsorbAddIntoMultiThreshold = get_transform('AbsorbAddIntoMultiThreshold')
+    model = model.transform(AbsorbAddIntoMultiThreshold())
+
     # Final cleanup
     InferDataTypes = get_transform('InferDataTypes')
     GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')

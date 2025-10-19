@@ -12,7 +12,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA, ADDSTREAMS_INFERENCE
+from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA
 from brainsmith.transforms.infer_kernel_list import InferKernelList
 from brainsmith.dataflow import InferenceHelper
 
@@ -35,14 +35,16 @@ def test_addstreams_schema():
     assert "NumChannels" in ADDSTREAMS_SCHEMA.kernel_params
 
 
-def test_addstreams_inference_pattern():
-    """Test AddStreams inference pattern."""
-    assert ADDSTREAMS_INFERENCE.source_ops == ["Add"]
-    assert ADDSTREAMS_INFERENCE.layout_conversions == {
-        "input0": "NHWC",
-        "input1": "NHWC",
-        "output": "NHWC",
-    }
+def test_addstreams_schema_transformation():
+    """Test AddStreams unified schema with transformation fields."""
+    # Schema includes transformation requirements
+    assert ADDSTREAMS_SCHEMA.source_ops == ["Add"]
+    assert ADDSTREAMS_SCHEMA.initial_parallelization == {"PE": 1}
+
+    # Layout requirements embedded in interfaces
+    assert ADDSTREAMS_SCHEMA.inputs[0].required_layout == "NHWC"
+    assert ADDSTREAMS_SCHEMA.inputs[1].required_layout == "NHWC"
+    assert ADDSTREAMS_SCHEMA.outputs[0].required_layout == "NHWC"
 
 
 def test_addstreams_class_methods():
@@ -50,8 +52,8 @@ def test_addstreams_class_methods():
     # Create simple Add node for build_schema test
     add_node = helper.make_node("Add", ["in0", "in1"], ["out"], name="test_add")
 
+    # build_schema returns the unified schema
     assert AddStreams.build_schema(add_node, None) == ADDSTREAMS_SCHEMA
-    assert AddStreams.get_inference_pattern() == ADDSTREAMS_INFERENCE
 
 
 def test_addstreams_can_infer_from_valid_add():
