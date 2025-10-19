@@ -112,13 +112,13 @@ def test_end_to_end_layernorm_dse():
     print(f"  Theoretical speedup vs full rebuild: {speedup:.1f}x")
 
 
-def test_layernorm_invariant_model_stability():
-    """Test that LayerNorm invariant model remains stable across reconfigurations."""
+def test_layernorm_design_space_stability():
+    """Test that LayerNorm design space remains stable across reconfigurations."""
     model_w, node = create_layernorm_model()
     kernel_op = LayerNorm(node)
 
-    # Get initial invariant model
-    invariant = kernel_op.get_invariant_model(model_w)
+    # Get initial design space
+    invariant = kernel_op.get_design_space(model_w)
 
     # Get valid SIMD values
     valid_simd = sorted(kernel_op.get_valid_ranges(model_w)["SIMD"])
@@ -129,7 +129,7 @@ def test_layernorm_invariant_model_stability():
         kernel_op.get_kernel_model(model_w)
 
         # Invariant model should NEVER change
-        assert kernel_op._invariant_model is invariant, \
+        assert kernel_op._design_space is invariant, \
             f"Invariant model invalidated at SIMD={simd}"
 
 
@@ -211,12 +211,12 @@ def test_layernorm_memory_efficiency():
         configured = kernel_op.get_kernel_model(model_w)
         configurations.append(configured)
 
-    # All configurations should share same invariant model
-    invariants = [cfg.invariant for cfg in configurations]
+    # All configurations should share same design space
+    invariants = [cfg.design_space for cfg in configurations]
     assert all(inv is invariants[0] for inv in invariants), \
-        "All configurations should share same invariant model (flyweight)"
+        "All configurations should share same design space (flyweight)"
 
-    print(f"\n  {len(configurations)} configurations share 1 invariant model")
+    print(f"\n  {len(configurations)} configurations share 1 design space")
 
 
 # ====================================================================

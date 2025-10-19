@@ -79,17 +79,12 @@ from .constraints import (
 # Core architecture - schemas consolidated in schemas.py
 from .schemas import InputSchema, OutputSchema, KernelSchema
 
-# Immutable models
+# Immutable models (design space exploration)
 from .models import (
-    InterfaceModel,
-    InputModel,
-    OutputModel,
-    KernelModel,
-    # Two-phase model types
-    InvariantInterfaceModel,
-    InvariantKernelModel,
-    ConfiguredInterfaceModel,
-    ConfiguredKernelModel,
+    InterfaceDesignSpace,
+    KernelDesignSpace,
+    InterfaceConfiguration,
+    KernelConfiguration,
 )
 
 # Builder (constructs models from schemas + context)
@@ -107,7 +102,8 @@ from .validation import (
     ValidationContext,
     OnnxValidationContext,
     KernelValidationContext,
-    ConfiguredValidationContext,
+    DesignSpaceValidationContext,
+    ConfigurationValidationContext,
 )
 
 # Kernel operator base class
@@ -147,11 +143,9 @@ __all__ = [
     # Core architecture
     'InputSchema', 'OutputSchema', 'KernelSchema',
 
-    # Immutable models
-    'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
-    # Two-phase model types
-    'InvariantInterfaceModel', 'InvariantKernelModel',
-    'ConfiguredInterfaceModel', 'ConfiguredKernelModel',
+    # Immutable models (design space exploration)
+    'InterfaceDesignSpace', 'KernelDesignSpace',
+    'InterfaceConfiguration', 'KernelConfiguration',
 
     # Builder
     'BuildContext', 'KernelModelBuilder',
@@ -164,7 +158,8 @@ __all__ = [
     'ValidationContext',
     'OnnxValidationContext',
     'KernelValidationContext',
-    'ConfiguredValidationContext',
+    'DesignSpaceValidationContext',
+    'ConfigurationValidationContext',
 
     # Kernel operator base class
     'KernelOp', 'KernelOpError',

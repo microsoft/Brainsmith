@@ -5,15 +5,15 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Unit tests for two-phase builder (build_invariant() method)."""
+"""Unit tests for two-phase builder (build() method)."""
 
 import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.builder import KernelModelBuilder, BuildContext
 from brainsmith.dataflow.schemas import KernelSchema, InputSchema, OutputSchema
-from brainsmith.dataflow.models import InvariantKernelModel
-from brainsmith.dataflow.validation import InvariantValidationContext
+from brainsmith.dataflow.models import KernelDesignSpace
+from brainsmith.dataflow.validation import DesignSpaceValidationContext
 from brainsmith.dataflow.constraints import DatatypeInteger, ShapesEqual
 from brainsmith.dataflow.types import ShapeHierarchy, FULL_DIM
 
@@ -39,11 +39,11 @@ class MockModelWrapper:
 
 
 # =============================================================================
-# Test build_invariant() Method
+# Test build() Method
 # =============================================================================
 
-def test_build_invariant_basic():
-    """Test build_invariant() creates InvariantKernelModel."""
+def test_build_basic():
+    """Test build() creates KernelDesignSpace."""
     schema = KernelSchema(
         name="TestKernel",
         inputs=[InputSchema(
@@ -71,10 +71,10 @@ def test_build_invariant_basic():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build_invariant(ctx)
+    invariant = builder.build(ctx)
 
     # Verify type
-    assert isinstance(invariant, InvariantKernelModel)
+    assert isinstance(invariant, KernelDesignSpace)
 
     # Verify structure
     assert invariant.name == "TestKernel"
@@ -98,8 +98,8 @@ def test_build_invariant_basic():
     assert len(invariant.parallelization_params["SIMD"]) == 18  # divisors of 768
 
 
-def test_build_invariant_multi_parameter():
-    """Test build_invariant() with multiple parallelization parameters."""
+def test_build_multi_parameter():
+    """Test build() with multiple parallelization parameters."""
     mock_model = MockModelWrapper()
     mock_model.tensors["input0"] = {"shape": (768, 64), "datatype": DataType["INT8"]}
     mock_model.tensors["output0"] = {"shape": (768, 64), "datatype": DataType["INT8"]}
@@ -131,7 +131,7 @@ def test_build_invariant_multi_parameter():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build_invariant(ctx)
+    invariant = builder.build(ctx)
 
     # Verify both parameters have valid ranges
     assert "MW" in invariant.parallelization_params
@@ -140,8 +140,8 @@ def test_build_invariant_multi_parameter():
     assert len(invariant.parallelization_params["MH"]) == 7   # divisors of 64
 
 
-def test_build_invariant_no_stream_tiling():
-    """Test build_invariant() with no stream tiling."""
+def test_build_no_stream_tiling():
+    """Test build() with no stream tiling."""
     schema = KernelSchema(
         name="TestKernel",
         inputs=[InputSchema(
@@ -165,7 +165,7 @@ def test_build_invariant_no_stream_tiling():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build_invariant(ctx)
+    invariant = builder.build(ctx)
 
     # No parallelization params
     assert invariant.parallelization_params == {}
@@ -215,46 +215,47 @@ def test_constraint_splitting():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build_invariant(ctx)
+    invariant = builder.build(ctx)
 
     # Verify constraint splitting
-    assert len(invariant.invariant_constraints) == 3  # DatatypeInteger + 2 ShapesEqual
+    # Note: Design space constraints (3 total: DatatypeInteger + 2 ShapesEqual)
+    # are validated during build() but not stored in the model
     assert len(invariant.variant_constraints) == 1    # ShapesEqual(STREAM)
 
     # Verify variant constraint is the STREAM one
     assert invariant.variant_constraints[0].hierarchy == ShapeHierarchy.STREAM
 
 
-def test_is_invariant_constraint():
-    """Test _is_invariant_constraint() classification logic."""
+def test_is_design_space_constraint():
+    """Test _is_design_space_constraint() classification logic."""
     builder = KernelModelBuilder()
 
     # Constraint without hierarchy: invariant
     c1 = DatatypeInteger(("input0",))
-    assert builder._is_invariant_constraint(c1) is True
+    assert builder._is_design_space_constraint(c1) is True
 
     # Constraint with TENSOR hierarchy: invariant
     c2 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.TENSOR)
-    assert builder._is_invariant_constraint(c2) is True
+    assert builder._is_design_space_constraint(c2) is True
 
     # Constraint with BLOCK hierarchy: invariant
     c3 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.BLOCK)
-    assert builder._is_invariant_constraint(c3) is True
+    assert builder._is_design_space_constraint(c3) is True
 
     # Constraint with STREAM hierarchy: variant
     c4 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM)
-    assert builder._is_invariant_constraint(c4) is False
+    assert builder._is_design_space_constraint(c4) is False
 
 
 # =============================================================================
-# Test InvariantValidationContext
+# Test DesignSpaceValidationContext
 # =============================================================================
 
-def test_invariant_validation_context_datatype():
-    """Test InvariantValidationContext get_datatype()."""
-    from brainsmith.dataflow.models import InvariantInterfaceModel
+def test_design_space_validation_context_datatype():
+    """Test DesignSpaceValidationContext get_datatype()."""
+    from brainsmith.dataflow.models import InterfaceDesignSpace
 
-    inv_input = InvariantInterfaceModel(
+    inv_input = InterfaceDesignSpace(
         name="input0",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -263,7 +264,7 @@ def test_invariant_validation_context_datatype():
         is_weight=False,
     )
 
-    ctx = InvariantValidationContext(
+    ctx = DesignSpaceValidationContext(
         inputs=[inv_input],
         outputs=[],
         internal_datatypes={},
@@ -279,11 +280,11 @@ def test_invariant_validation_context_datatype():
         ctx.get_datatype("unknown")
 
 
-def test_invariant_validation_context_shapes():
-    """Test InvariantValidationContext get_shape() for TENSOR and BLOCK."""
-    from brainsmith.dataflow.models import InvariantInterfaceModel
+def test_design_space_validation_context_shapes():
+    """Test DesignSpaceValidationContext get_shape() for TENSOR and BLOCK."""
+    from brainsmith.dataflow.models import InterfaceDesignSpace
 
-    inv_input = InvariantInterfaceModel(
+    inv_input = InterfaceDesignSpace(
         name="input0",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -292,7 +293,7 @@ def test_invariant_validation_context_shapes():
         is_weight=False,
     )
 
-    ctx = InvariantValidationContext(
+    ctx = DesignSpaceValidationContext(
         inputs=[inv_input],
         outputs=[],
         internal_datatypes={},
@@ -312,11 +313,11 @@ def test_invariant_validation_context_shapes():
         ctx.get_shape("input0", ShapeHierarchy.STREAM)
 
 
-def test_invariant_validation_context_is_dynamic():
-    """Test InvariantValidationContext is_dynamic()."""
-    from brainsmith.dataflow.models import InvariantInterfaceModel
+def test_design_space_validation_context_is_dynamic():
+    """Test DesignSpaceValidationContext is_dynamic()."""
+    from brainsmith.dataflow.models import InterfaceDesignSpace
 
-    inv_input_dynamic = InvariantInterfaceModel(
+    inv_input_dynamic = InterfaceDesignSpace(
         name="input0",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -325,7 +326,7 @@ def test_invariant_validation_context_is_dynamic():
         is_weight=False,  # Dynamic
     )
 
-    inv_input_weight = InvariantInterfaceModel(
+    inv_input_weight = InterfaceDesignSpace(
         name="input1",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -334,7 +335,7 @@ def test_invariant_validation_context_is_dynamic():
         is_weight=True,  # Weight
     )
 
-    ctx = InvariantValidationContext(
+    ctx = DesignSpaceValidationContext(
         inputs=[inv_input_dynamic, inv_input_weight],
         outputs=[],
         internal_datatypes={},
@@ -348,11 +349,11 @@ def test_invariant_validation_context_is_dynamic():
     assert ctx.is_dynamic("input1") is False
 
 
-def test_invariant_validation_context_get_interfaces():
-    """Test InvariantValidationContext get_interfaces()."""
-    from brainsmith.dataflow.models import InvariantInterfaceModel
+def test_design_space_validation_context_get_interfaces():
+    """Test DesignSpaceValidationContext get_interfaces()."""
+    from brainsmith.dataflow.models import InterfaceDesignSpace
 
-    inv_input = InvariantInterfaceModel(
+    inv_input = InterfaceDesignSpace(
         name="input0",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -361,7 +362,7 @@ def test_invariant_validation_context_get_interfaces():
         is_weight=False,
     )
 
-    inv_output = InvariantInterfaceModel(
+    inv_output = InterfaceDesignSpace(
         name="output0",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -370,7 +371,7 @@ def test_invariant_validation_context_get_interfaces():
         is_weight=False,
     )
 
-    ctx = InvariantValidationContext(
+    ctx = DesignSpaceValidationContext(
         inputs=[inv_input],
         outputs=[inv_output],
         internal_datatypes={},
@@ -381,112 +382,6 @@ def test_invariant_validation_context_get_interfaces():
     assert "input0" in interfaces
     assert "output0" in interfaces
     assert len(interfaces) == 2
-
-
-# =============================================================================
-# Test Backward Compatibility
-# =============================================================================
-
-def test_build_backward_compatible():
-    """Test build() still works via two-phase construction."""
-    schema = KernelSchema(
-        name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-        outputs=[OutputSchema(
-            name="output0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-    )
-
-    nodeattrs = {"SIMD": 64}
-
-    ctx = BuildContext(
-        schema=schema,
-        model_w=MockModelWrapper(),
-        node_inputs=["input0"],
-        node_outputs=["output0"],
-        param_getter=lambda name: nodeattrs.get(name, 1),
-        param_setter=lambda name, value: nodeattrs.update({name: value}),
-        node_name="test_node",
-    )
-
-    builder = KernelModelBuilder()
-    kernel_model = builder.build(ctx)
-
-    # Verify type (legacy KernelModel)
-    from brainsmith.dataflow.models import KernelModel
-    assert isinstance(kernel_model, KernelModel)
-
-    # Verify structure
-    assert kernel_model.name == "TestKernel"
-    assert len(kernel_model.inputs) == 1
-    assert len(kernel_model.outputs) == 1
-
-    # Verify stream shapes are resolved
-    assert kernel_model.inputs[0].stream_shape == (64,)
-    assert kernel_model.outputs[0].stream_shape == (64,)
-
-
-def test_build_produces_same_result():
-    """Test build() produces same result as build_invariant() + configure()."""
-    schema = KernelSchema(
-        name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-        outputs=[OutputSchema(
-            name="output0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-    )
-
-    nodeattrs = {"SIMD": 64}
-
-    ctx = BuildContext(
-        schema=schema,
-        model_w=MockModelWrapper(),
-        node_inputs=["input0"],
-        node_outputs=["output0"],
-        param_getter=lambda name: nodeattrs.get(name, 1),
-        param_setter=lambda name, value: nodeattrs.update({name: value}),
-        node_name="test_node",
-    )
-
-    builder = KernelModelBuilder()
-
-    # Method 1: build() (legacy)
-    kernel_model = builder.build(ctx)
-
-    # Method 2: build_invariant() + configure() (new)
-    invariant = builder.build_invariant(ctx)
-    configured = invariant.configure({"SIMD": 64})
-
-    # Compare results
-    assert kernel_model.name == configured.name
-    assert len(kernel_model.inputs) == len(configured.inputs)
-    assert len(kernel_model.outputs) == len(configured.outputs)
-
-    # Input comparison
-    assert kernel_model.inputs[0].name == configured.inputs[0].name
-    assert kernel_model.inputs[0].tensor_shape == configured.inputs[0].tensor_shape
-    assert kernel_model.inputs[0].block_shape == configured.inputs[0].block_shape
-    assert kernel_model.inputs[0].stream_shape == configured.inputs[0].stream_shape
-    assert kernel_model.inputs[0].datatype == configured.inputs[0].datatype
-
-    # Output comparison
-    assert kernel_model.outputs[0].name == configured.outputs[0].name
-    assert kernel_model.outputs[0].tensor_shape == configured.outputs[0].tensor_shape
-    assert kernel_model.outputs[0].block_shape == configured.outputs[0].block_shape
-    assert kernel_model.outputs[0].stream_shape == configured.outputs[0].stream_shape
-    assert kernel_model.outputs[0].datatype == configured.outputs[0].datatype
 
 
 if __name__ == "__main__":

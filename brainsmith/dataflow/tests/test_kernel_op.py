@@ -105,16 +105,16 @@ def create_test_model_and_node():
 # Test 1: Two-Phase Caching Tests
 # ====================================================================
 
-def test_invariant_model_cached_across_reconfigurations():
-    """Test that invariant model is built once and reused across reconfigurations."""
+def test_design_space_cached_across_reconfigurations():
+    """Test that design space is built once and reused across reconfigurations."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    # First call builds invariant model
-    invariant1 = kernel_op.get_invariant_model(model_w)
+    # First call builds design space
+    invariant1 = kernel_op.get_design_space(model_w)
 
     # Second call returns same instance (cached)
-    invariant2 = kernel_op.get_invariant_model(model_w)
+    invariant2 = kernel_op.get_design_space(model_w)
 
     assert invariant1 is invariant2, "Invariant model should be cached"
 
@@ -122,12 +122,12 @@ def test_invariant_model_cached_across_reconfigurations():
     kernel_op.set_nodeattr("SIMD", 2)
 
     # Invariant model should still be cached (not invalidated)
-    invariant3 = kernel_op.get_invariant_model(model_w)
+    invariant3 = kernel_op.get_design_space(model_w)
 
     assert invariant1 is invariant3, "Invariant model should NOT be invalidated by param change"
 
 
-def test_configured_model_rebuilt_on_param_change():
+def test_configuration_rebuilt_on_param_change():
     """Test that configured model is rebuilt when parallelization params change."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
@@ -143,11 +143,11 @@ def test_configured_model_rebuilt_on_param_change():
     # Should be different instances (reconfigured)
     assert configured1 is not configured2, "Configured model should be rebuilt on param change"
 
-    # But should share same invariant model
-    assert configured1.invariant is configured2.invariant, "Should share invariant model"
+    # But should share same design space
+    assert configured1.design_space is configured2.design_space, "Should share design space"
 
 
-def test_configured_model_cached_when_params_unchanged():
+def test_configuration_cached_when_params_unchanged():
     """Test that configured model is cached when params don't change."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
@@ -162,35 +162,35 @@ def test_configured_model_cached_when_params_unchanged():
 
 
 # ====================================================================
-# Test 2: get_invariant_model() Tests
+# Test 2: get_design_space() Tests
 # ====================================================================
 
-def test_get_invariant_model_builds_once():
-    """Test that get_invariant_model() builds only on first call."""
+def test_get_design_space_builds_once():
+    """Test that get_design_space() builds only on first call."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Patch builder to track calls
-    with patch.object(kernel_op._builder, 'build_invariant') as mock_build:
+    with patch.object(kernel_op._builder, 'build') as mock_build:
         mock_build.return_value = MagicMock()
 
         # First call should build
-        kernel_op.get_invariant_model(model_w)
+        kernel_op.get_design_space(model_w)
         assert mock_build.call_count == 1
 
         # Second call should use cache
-        kernel_op.get_invariant_model(model_w)
+        kernel_op.get_design_space(model_w)
         assert mock_build.call_count == 1, "Should not rebuild (cache hit)"
 
 
-def test_get_invariant_model_returns_same_instance():
-    """Test that get_invariant_model() always returns same instance."""
+def test_get_design_space_returns_same_instance():
+    """Test that get_design_space() always returns same instance."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    instance1 = kernel_op.get_invariant_model(model_w)
-    instance2 = kernel_op.get_invariant_model(model_w)
-    instance3 = kernel_op.get_invariant_model(model_w)
+    instance1 = kernel_op.get_design_space(model_w)
+    instance2 = kernel_op.get_design_space(model_w)
+    instance3 = kernel_op.get_design_space(model_w)
 
     assert instance1 is instance2 is instance3, "Should return same instance"
 
@@ -204,15 +204,15 @@ def test_get_kernel_model_first_call_builds_both_models():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    assert kernel_op._invariant_model is None
-    assert kernel_op._configured_model is None
+    assert kernel_op._design_space is None
+    assert kernel_op._configuration is None
 
     # First call builds both
     configured = kernel_op.get_kernel_model(model_w)
 
-    assert kernel_op._invariant_model is not None
-    assert kernel_op._configured_model is not None
-    assert configured is kernel_op._configured_model
+    assert kernel_op._design_space is not None
+    assert kernel_op._configuration is not None
+    assert configured is kernel_op._configuration
 
 
 def test_get_kernel_model_cache_hit_with_same_params():
@@ -267,7 +267,7 @@ def test_valid_ranges_match_block_shapes():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    invariant = kernel_op.get_invariant_model(model_w)
+    invariant = kernel_op.get_design_space(model_w)
     valid_ranges = kernel_op.get_valid_ranges(model_w)
 
     # Get block shape for input
@@ -289,33 +289,33 @@ def test_set_nodeattr_invalidates_configured_only():
 
     # Build both models
     kernel_op.get_kernel_model(model_w)
-    invariant_before = kernel_op._invariant_model
-    configured_before = kernel_op._configured_model
+    invariant_before = kernel_op._design_space
+    configured_before = kernel_op._configuration
 
     # Change param
     kernel_op.set_nodeattr("SIMD", 2)
 
     # Invariant should be unchanged
-    assert kernel_op._invariant_model is invariant_before, "Invariant should NOT be invalidated"
+    assert kernel_op._design_space is invariant_before, "Invariant should NOT be invalidated"
 
     # Configured should be invalidated
-    assert kernel_op._configured_model is None, "Configured should be invalidated"
+    assert kernel_op._configuration is None, "Configured should be invalidated"
     assert kernel_op._current_params is None, "Current params should be cleared"
 
 
-def test_set_nodeattr_preserves_invariant_model():
-    """Test that invariant model is never invalidated by set_nodeattr()."""
+def test_set_nodeattr_preserves_design_space():
+    """Test that design space is never invalidated by set_nodeattr()."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Build models
     kernel_op.get_kernel_model(model_w)
-    invariant_original = kernel_op._invariant_model
+    invariant_original = kernel_op._design_space
 
     # Change params multiple times
     for simd in [2, 4, 8, 16, 32]:
         kernel_op.set_nodeattr("SIMD", simd)
-        assert kernel_op._invariant_model is invariant_original, f"Invariant should persist (SIMD={simd})"
+        assert kernel_op._design_space is invariant_original, f"Invariant should persist (SIMD={simd})"
 
 
 def test_set_nodeattr_no_op_when_value_unchanged():
@@ -330,7 +330,7 @@ def test_set_nodeattr_no_op_when_value_unchanged():
     kernel_op.set_nodeattr("SIMD", 1)
 
     # Configured should still be cached (no change)
-    assert kernel_op._configured_model is configured, "Should not invalidate when value unchanged"
+    assert kernel_op._configuration is configured, "Should not invalidate when value unchanged"
 
 
 # ====================================================================
@@ -342,8 +342,8 @@ def test_reconfiguration_performance_target_1ms():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    # Build invariant model first
-    kernel_op.get_invariant_model(model_w)
+    # Build design space first
+    kernel_op.get_design_space(model_w)
 
     # Measure reconfiguration time
     kernel_op.set_nodeattr("SIMD", 2)
@@ -417,7 +417,7 @@ def test_legacy_kernel_model_property_still_works():
 
 
 def test_shape_queries_delegate_correctly():
-    """Test that shape queries work correctly with ConfiguredKernelModel."""
+    """Test that shape queries work correctly with KernelConfiguration."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
@@ -433,7 +433,7 @@ def test_shape_queries_delegate_correctly():
 
 
 def test_datatype_queries_delegate_correctly():
-    """Test that datatype queries work correctly with ConfiguredKernelModel."""
+    """Test that datatype queries work correctly with KernelConfiguration."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
@@ -452,13 +452,13 @@ def test_datatype_queries_delegate_correctly():
 # Test 8: Error Handling Tests
 # ====================================================================
 
-def test_get_invariant_model_requires_model_wrapper():
-    """Test that get_invariant_model() raises error without ModelWrapper."""
+def test_get_design_space_requires_model_wrapper():
+    """Test that get_design_space() raises error without ModelWrapper."""
     _, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     with pytest.raises(Exception) as exc_info:
-        kernel_op.get_invariant_model(None)
+        kernel_op.get_design_space(None)
 
     assert "ModelWrapper" in str(exc_info.value)
 

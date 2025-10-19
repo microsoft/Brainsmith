@@ -11,19 +11,19 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.models import (
-    InvariantInterfaceModel,
-    InvariantKernelModel,
+    InterfaceDesignSpace,
+    KernelDesignSpace,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 
 
 # =============================================================================
-# Test InvariantInterfaceModel
+# Test InterfaceDesignSpace
 # =============================================================================
 
 def test_invariant_interface_model_creation():
-    """Test InvariantInterfaceModel can be created with required fields."""
-    model = InvariantInterfaceModel(
+    """Test InterfaceDesignSpace can be created with required fields."""
+    model = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 224, 224, 768),
         block_shape=(1, 1, 768),
@@ -41,8 +41,8 @@ def test_invariant_interface_model_creation():
 
 
 def test_invariant_interface_model_default_is_weight():
-    """Test InvariantInterfaceModel is_weight defaults to False."""
-    model = InvariantInterfaceModel(
+    """Test InterfaceDesignSpace is_weight defaults to False."""
+    model = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -54,8 +54,8 @@ def test_invariant_interface_model_default_is_weight():
 
 
 def test_invariant_interface_model_immutable():
-    """Test InvariantInterfaceModel is immutable (frozen dataclass)."""
-    model = InvariantInterfaceModel(
+    """Test InterfaceDesignSpace is immutable (frozen dataclass)."""
+    model = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -69,8 +69,8 @@ def test_invariant_interface_model_immutable():
 
 
 def test_invariant_interface_model_weight_flag():
-    """Test InvariantInterfaceModel can be created as weight."""
-    model = InvariantInterfaceModel(
+    """Test InterfaceDesignSpace can be created as weight."""
+    model = InterfaceDesignSpace(
         name="weight",
         tensor_shape=(768, 768),
         block_shape=(768, 768),
@@ -83,12 +83,12 @@ def test_invariant_interface_model_weight_flag():
 
 
 # =============================================================================
-# Test InvariantKernelModel
+# Test KernelDesignSpace
 # =============================================================================
 
 def test_invariant_kernel_model_creation():
-    """Test InvariantKernelModel can be created with all required fields."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelDesignSpace can be created with all required fields."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -96,7 +96,7 @@ def test_invariant_kernel_model_creation():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -104,12 +104,11 @@ def test_invariant_kernel_model_creation():
         datatype=DataType["INT8"],
     )
 
-    model = InvariantKernelModel(
+    model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
     )
@@ -124,8 +123,8 @@ def test_invariant_kernel_model_creation():
 
 
 def test_invariant_kernel_model_get_input():
-    """Test InvariantKernelModel.get_input() lookup."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelDesignSpace.get_input() lookup."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -133,12 +132,11 @@ def test_invariant_kernel_model_get_input():
         datatype=DataType["INT8"],
     )
 
-    model = InvariantKernelModel(
+    model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8}},
     )
@@ -151,8 +149,8 @@ def test_invariant_kernel_model_get_input():
 
 
 def test_invariant_kernel_model_get_output():
-    """Test InvariantKernelModel.get_output() lookup."""
-    output_inv = InvariantInterfaceModel(
+    """Test KernelDesignSpace.get_output() lookup."""
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -160,12 +158,11 @@ def test_invariant_kernel_model_get_output():
         datatype=DataType["INT8"],
     )
 
-    model = InvariantKernelModel(
+    model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8}},
     )
@@ -178,8 +175,8 @@ def test_invariant_kernel_model_get_output():
 
 
 def test_invariant_kernel_model_get_interface():
-    """Test InvariantKernelModel.get_interface() searches both inputs and outputs."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelDesignSpace.get_interface() searches both inputs and outputs."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -187,7 +184,7 @@ def test_invariant_kernel_model_get_interface():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -195,12 +192,11 @@ def test_invariant_kernel_model_get_interface():
         datatype=DataType["INT8"],
     )
 
-    model = InvariantKernelModel(
+    model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2}, "PE": {1, 2}},
     )
@@ -219,13 +215,12 @@ def test_invariant_kernel_model_get_interface():
 
 
 def test_invariant_kernel_model_immutable():
-    """Test InvariantKernelModel is immutable."""
-    model = InvariantKernelModel(
+    """Test KernelDesignSpace is immutable."""
+    model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={},
     )
@@ -235,11 +230,11 @@ def test_invariant_kernel_model_immutable():
 
 
 def test_invariant_kernel_model_valid_ranges():
-    """Test InvariantKernelModel stores valid parallelization ranges."""
+    """Test KernelDesignSpace stores valid parallelization ranges."""
     # Simulate divisors of 768
     valid_simd = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768}
 
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -247,12 +242,11 @@ def test_invariant_kernel_model_valid_ranges():
         datatype=DataType["INT8"],
     )
 
-    model = InvariantKernelModel(
+    model = KernelDesignSpace(
         name="LayerNorm",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": valid_simd},
     )

@@ -85,6 +85,10 @@ class DerivedDatatype(DatatypeSource):
         """Copy datatype from source interface or internal datatype."""
         source = get_interface(interfaces, self.source_interface, "DerivedDatatype")
 
+        # Handle both DataType (internal datatypes stored directly) and models (interfaces)
+        if isinstance(source, DataType):
+            return source  # Internal datatype stored directly
+
         try:
             return source.datatype
         except AttributeError:
@@ -117,7 +121,13 @@ class WidenedDatatype(DatatypeSource):
             raise ValueError(f"extra_bits must be non-negative, got {self.extra_bits}")
 
         source = get_interface(interfaces, self.source_interface, "WidenedDatatype")
-        base_dt = source.datatype
+
+        # Handle both DataType (internal datatypes) and models (interfaces)
+        if isinstance(source, DataType):
+            base_dt = source
+        else:
+            base_dt = source.datatype
+
         new_width = base_dt.bitwidth() + self.extra_bits
 
         # Preserve signedness
@@ -156,7 +166,12 @@ class UnionDatatype(DatatypeSource):
 
         for name in self.source_interfaces:
             interface = get_interface(interfaces, name, "UnionDatatype")
-            dt = interface.datatype
+
+            # Handle both DataType (internal datatypes) and models (interfaces)
+            if isinstance(interface, DataType):
+                dt = interface
+            else:
+                dt = interface.datatype
 
             min_val = min(min_val, dt.min())
             max_val = max(max_val, dt.max())

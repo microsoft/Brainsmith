@@ -11,7 +11,7 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.builder import KernelModelBuilder
-from brainsmith.dataflow.models import InvariantInterfaceModel
+from brainsmith.dataflow.models import InterfaceDesignSpace
 
 
 # =============================================================================
@@ -103,14 +103,14 @@ def test_divisors_negative_raises_error():
 
 
 # =============================================================================
-# Test _compute_valid_ranges() Helper
+# Test _compute_parameter_ranges() Helper
 # =============================================================================
 
-def test_compute_valid_ranges_single_parameter():
-    """Test _compute_valid_ranges() with single parallelization parameter."""
+def test_compute_parameter_ranges_single_parameter():
+    """Test _compute_parameter_ranges() with single parallelization parameter."""
     builder = KernelModelBuilder()
 
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -118,7 +118,7 @@ def test_compute_valid_ranges_single_parameter():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [])
 
     assert "SIMD" in valid_ranges
     # Should be divisors of 768 (second dimension)
@@ -126,11 +126,11 @@ def test_compute_valid_ranges_single_parameter():
     assert len(valid_ranges["SIMD"]) == 18
 
 
-def test_compute_valid_ranges_multi_parameter():
-    """Test _compute_valid_ranges() with multiple parameters."""
+def test_compute_parameter_ranges_multi_parameter():
+    """Test _compute_parameter_ranges() with multiple parameters."""
     builder = KernelModelBuilder()
 
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 64),
         block_shape=(768, 64),
@@ -138,7 +138,7 @@ def test_compute_valid_ranges_multi_parameter():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [])
 
     assert "MW" in valid_ranges
     assert "MH" in valid_ranges
@@ -152,14 +152,14 @@ def test_compute_valid_ranges_multi_parameter():
     assert len(valid_ranges["MH"]) == 7
 
 
-def test_compute_valid_ranges_cross_interface():
-    """Test _compute_valid_ranges() with same param in multiple interfaces."""
+def test_compute_parameter_ranges_cross_interface():
+    """Test _compute_parameter_ranges() with same param in multiple interfaces."""
     builder = KernelModelBuilder()
 
     # Input and output both use SIMD
     # Input block: 768, Output block: 384
     # Valid SIMD must divide both → gcd(768, 384) = 384
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -167,7 +167,7 @@ def test_compute_valid_ranges_cross_interface():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 384),
         block_shape=(1, 384),
@@ -175,7 +175,7 @@ def test_compute_valid_ranges_cross_interface():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [output_inv])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [output_inv])
 
     assert "SIMD" in valid_ranges
     # Should be divisors of gcd(768, 384) = 384
@@ -183,11 +183,11 @@ def test_compute_valid_ranges_cross_interface():
     assert valid_ranges["SIMD"] == expected_divisors
 
 
-def test_compute_valid_ranges_no_stream_tiling():
-    """Test _compute_valid_ranges() with None stream_tiling."""
+def test_compute_parameter_ranges_no_stream_tiling():
+    """Test _compute_parameter_ranges() with None stream_tiling."""
     builder = KernelModelBuilder()
 
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -195,18 +195,18 @@ def test_compute_valid_ranges_no_stream_tiling():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [])
 
     # No parallelization parameters
     assert valid_ranges == {}
 
 
-def test_compute_valid_ranges_literal_values():
-    """Test _compute_valid_ranges() ignores literal values in stream_tiling."""
+def test_compute_parameter_ranges_literal_values():
+    """Test _compute_parameter_ranges() ignores literal values in stream_tiling."""
     builder = KernelModelBuilder()
 
     # stream_tiling with literal int (not a parameter)
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 64),
         block_shape=(768, 64),
@@ -214,7 +214,7 @@ def test_compute_valid_ranges_literal_values():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [])
 
     # Should only have PE (not 1)
     assert "PE" in valid_ranges
@@ -222,22 +222,22 @@ def test_compute_valid_ranges_literal_values():
     assert valid_ranges["PE"] == {1, 2, 4, 8, 16, 32, 64}
 
 
-def test_compute_valid_ranges_empty_inputs_outputs():
-    """Test _compute_valid_ranges() with no interfaces."""
+def test_compute_parameter_ranges_empty_inputs_outputs():
+    """Test _compute_parameter_ranges() with no interfaces."""
     builder = KernelModelBuilder()
 
-    valid_ranges = builder._compute_valid_ranges([], [])
+    valid_ranges = builder._compute_parameter_ranges([], [])
 
     assert valid_ranges == {}
 
 
-def test_compute_valid_ranges_gcd_different_dimensions():
-    """Test _compute_valid_ranges() GCD logic with different dimensions."""
+def test_compute_parameter_ranges_gcd_different_dimensions():
+    """Test _compute_parameter_ranges() GCD logic with different dimensions."""
     builder = KernelModelBuilder()
 
     # SIMD appears in two different dimensions: 768 and 96
     # Valid SIMD = divisors(gcd(768, 96)) = divisors(96)
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 96),
         block_shape=(768, 96),
@@ -245,7 +245,7 @@ def test_compute_valid_ranges_gcd_different_dimensions():
         datatype=DataType["INT8"],
     )
 
-    valid_ranges = builder._compute_valid_ranges([input_inv], [])
+    valid_ranges = builder._compute_parameter_ranges([input_inv], [])
 
     assert "SIMD" in valid_ranges
     # gcd(768, 96) = 96

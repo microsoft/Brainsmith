@@ -370,11 +370,11 @@ class KernelValidationContext:
 # =============================================================================
 
 @dataclass
-class InvariantValidationContext:
-    """Validation context for InvariantKernelModel (no stream shapes yet).
+class DesignSpaceValidationContext:
+    """Validation context for KernelDesignSpace (no stream shapes yet).
 
     Used to validate invariant constraints before stream shape resolution.
-    Adapts lists of InvariantInterfaceModel to ValidationContext protocol.
+    Adapts lists of InterfaceDesignSpace to ValidationContext protocol.
 
     This context is used during build_invariant() to validate constraints
     that don't depend on stream shapes (e.g., datatype constraints, tensor/block
@@ -382,7 +382,7 @@ class InvariantValidationContext:
     are not resolved yet.
 
     Example:
-        ctx = InvariantValidationContext(
+        ctx = DesignSpaceValidationContext(
             inputs=[inv_input1, inv_input2],
             outputs=[inv_output],
             internal_datatypes={"accumulator": DataType["INT32"]},
@@ -393,8 +393,8 @@ class InvariantValidationContext:
         block_shape = ctx.get_shape("input0", ShapeHierarchy.BLOCK)  # Works
         stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)  # RuntimeError
     """
-    inputs: List[Any]  # List[InvariantInterfaceModel]
-    outputs: List[Any]  # List[InvariantInterfaceModel]
+    inputs: List[Any]  # List[InterfaceDesignSpace]
+    outputs: List[Any]  # List[InterfaceDesignSpace]
     internal_datatypes: Dict[str, DataType]
     param_getter: Callable[[str], Any]
 
@@ -462,7 +462,7 @@ class InvariantValidationContext:
             # Interface not found - assume dynamic
             return True
         interface = self._interfaces[name]
-        # InvariantInterfaceModel has is_weight flag
+        # InterfaceDesignSpace has is_weight flag
         return not interface.is_weight
 
     def get_layout(self, name: str) -> Optional[Any]:
@@ -521,23 +521,23 @@ class InvariantValidationContext:
 # =============================================================================
 
 @dataclass
-class ConfiguredValidationContext:
-    """Validation context for ConfiguredKernelModel (two-phase construction).
+class ConfigurationValidationContext:
+    """Validation context for KernelConfiguration (two-phase construction).
 
-    Adapts ConfiguredKernelModel to ValidationContext protocol.
-    Similar to KernelValidationContext but works with ConfiguredInterfaceModel
+    Adapts KernelConfiguration to ValidationContext protocol.
+    Similar to KernelValidationContext but works with InterfaceConfiguration
     which uses a flyweight pattern (references invariant + resolved stream_shape).
 
-    Used during InvariantKernelModel.configure() to validate variant constraints
+    Used during KernelDesignSpace.configure() to validate variant constraints
     after stream shapes are resolved.
 
     Example:
-        ctx = ConfiguredValidationContext(configured_model, {"SIMD": 64})
+        ctx = ConfigurationValidationContext(configured_model, {"SIMD": 64})
         dt = ctx.get_datatype("input0")
         stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)
         simd = ctx.get_param("SIMD")
     """
-    configured_model: Any  # ConfiguredKernelModel (avoid circular import)
+    configured_model: Any  # KernelConfiguration (avoid circular import)
     param_getter_dict: Dict[str, Any]  # Parallelization params
 
     def get_datatype(self, name: str) -> DataType:
@@ -557,7 +557,7 @@ class ConfiguredValidationContext:
     ) -> tuple[int, ...]:
         """Get shape from configured interface at hierarchy.
 
-        ConfiguredInterfaceModel supports all hierarchies:
+        InterfaceConfiguration supports all hierarchies:
         - TENSOR: from invariant.tensor_shape
         - BLOCK: from invariant.block_shape
         - STREAM: from stream_shape (resolved)
@@ -584,7 +584,7 @@ class ConfiguredValidationContext:
             if interface is None:
                 # Interface not found - assume dynamic
                 return True
-            # ConfiguredInterfaceModel delegates is_weight to invariant
+            # InterfaceConfiguration delegates is_weight to invariant
             return not interface.is_weight
         except (AttributeError, KeyError):
             # Interface not found - assume dynamic
@@ -647,6 +647,6 @@ __all__ = [
     'ValidationContext',
     'OnnxValidationContext',
     'KernelValidationContext',
-    'InvariantValidationContext',
-    'ConfiguredValidationContext',
+    'DesignSpaceValidationContext',
+    'ConfigurationValidationContext',
 ]

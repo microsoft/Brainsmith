@@ -11,21 +11,21 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.models import (
-    InvariantInterfaceModel,
-    InvariantKernelModel,
-    ConfiguredKernelModel,
+    InterfaceDesignSpace,
+    KernelDesignSpace,
+    KernelConfiguration,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.dataflow.validation import ValidationError
 
 
 # =============================================================================
-# Test InvariantKernelModel.configure()
+# Test KernelDesignSpace.configure()
 # =============================================================================
 
 def test_configure_valid_params():
     """Test configure() with valid parallelization parameters."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -33,7 +33,7 @@ def test_configure_valid_params():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -41,12 +41,11 @@ def test_configure_valid_params():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8, 16, 32, 64}},
     )
@@ -54,7 +53,7 @@ def test_configure_valid_params():
     # Configure with valid SIMD value
     configured = invariant_model.configure({"SIMD": 64})
 
-    assert isinstance(configured, ConfiguredKernelModel)
+    assert isinstance(configured, KernelConfiguration)
     assert configured.params == {"SIMD": 64}
     assert len(configured.inputs) == 1
     assert len(configured.outputs) == 1
@@ -64,7 +63,7 @@ def test_configure_valid_params():
 
 def test_configure_invalid_param_value():
     """Test configure() with invalid parameter value (not in valid set)."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -72,12 +71,11 @@ def test_configure_invalid_param_value():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8}},  # 5 is NOT valid
     )
@@ -89,7 +87,7 @@ def test_configure_invalid_param_value():
 
 def test_configure_unknown_param():
     """Test configure() with unknown parameter name."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -97,12 +95,11 @@ def test_configure_unknown_param():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2}},
     )
@@ -114,7 +111,7 @@ def test_configure_unknown_param():
 
 def test_configure_missing_required_param():
     """Test configure() with missing required parameter."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 64),
         block_shape=(768, 64),
@@ -122,12 +119,11 @@ def test_configure_missing_required_param():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"MW": {1, 2}, "MH": {1, 2}},
     )
@@ -139,7 +135,7 @@ def test_configure_missing_required_param():
 
 def test_configure_multi_parameter():
     """Test configure() with multiple parallelization parameters."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 64),
         block_shape=(768, 64),
@@ -147,12 +143,11 @@ def test_configure_multi_parameter():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"MW": {1, 2, 4, 8}, "MH": {1, 2, 4}},
     )
@@ -166,7 +161,7 @@ def test_configure_multi_parameter():
 
 def test_configure_none_stream_tiling():
     """Test configure() with interface that has no stream_tiling."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -174,12 +169,11 @@ def test_configure_none_stream_tiling():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={},  # No params
     )
@@ -193,7 +187,7 @@ def test_configure_none_stream_tiling():
 
 def test_configure_literal_stream_tiling():
     """Test configure() with literal values in stream_tiling."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768, 64),
         block_shape=(768, 64),
@@ -201,12 +195,11 @@ def test_configure_literal_stream_tiling():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"PE": {1, 2, 4, 8}},
     )
@@ -218,9 +211,9 @@ def test_configure_literal_stream_tiling():
     assert configured.inputs[0].stream_shape == (1, 4)
 
 
-def test_configure_preserves_invariant():
-    """Test configure() preserves reference to invariant model."""
-    input_inv = InvariantInterfaceModel(
+def test_configure_preserves_design_space():
+    """Test configure() preserves reference to design space."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -228,12 +221,11 @@ def test_configure_preserves_invariant():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4}},
     )
@@ -242,15 +234,15 @@ def test_configure_preserves_invariant():
     configured1 = invariant_model.configure({"SIMD": 1})
     configured2 = invariant_model.configure({"SIMD": 4})
 
-    # Both should reference same invariant model (flyweight pattern)
-    assert configured1.invariant is invariant_model
-    assert configured2.invariant is invariant_model
-    assert configured1.invariant is configured2.invariant
+    # Both should reference same design space (flyweight pattern)
+    assert configured1.design_space is invariant_model
+    assert configured2.design_space is invariant_model
+    assert configured1.design_space is configured2.design_space
 
 
 def test_configure_different_stream_shapes():
     """Test configure() creates different stream shapes for different params."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -258,12 +250,11 @@ def test_configure_different_stream_shapes():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 64, 128}},
     )
@@ -280,7 +271,7 @@ def test_configure_different_stream_shapes():
 
 def test_configure_interface_delegation():
     """Test configured interfaces properly delegate to invariant."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -289,19 +280,18 @@ def test_configure_interface_delegation():
         is_weight=True,
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 64}},
     )
 
     configured = invariant_model.configure({"SIMD": 64})
 
-    # Configured interface should delegate invariant properties
+    # Configured interface should delegate design space properties
     cfg_input = configured.inputs[0]
     assert cfg_input.name == "input"
     assert cfg_input.tensor_shape == (768,)
@@ -314,7 +304,7 @@ def test_configure_interface_delegation():
 
 def test_configure_error_message_shows_valid_values():
     """Test configure() error message includes valid values."""
-    input_inv = InvariantInterfaceModel(
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(12,),
         block_shape=(12,),
@@ -322,12 +312,11 @@ def test_configure_error_message_shows_valid_values():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 3, 4, 6, 12}},
     )
@@ -344,8 +333,8 @@ def test_configure_error_message_shows_valid_values():
 
 
 def test_configure_multiple_configurations():
-    """Test creating multiple configurations from same invariant model."""
-    input_inv = InvariantInterfaceModel(
+    """Test creating multiple configurations from same design space."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
         block_shape=(768,),
@@ -353,12 +342,11 @@ def test_configure_multiple_configurations():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8, 16, 32, 64}},
     )
@@ -377,7 +365,7 @@ def test_configure_multiple_configurations():
 
     # All should reference same invariant
     for cfg in configurations:
-        assert cfg.invariant is invariant_model
+        assert cfg.design_space is invariant_model
 
 
 if __name__ == "__main__":

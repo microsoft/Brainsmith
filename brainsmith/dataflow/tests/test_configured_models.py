@@ -11,21 +11,21 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.models import (
-    InvariantInterfaceModel,
-    InvariantKernelModel,
-    ConfiguredInterfaceModel,
-    ConfiguredKernelModel,
+    InterfaceDesignSpace,
+    KernelDesignSpace,
+    InterfaceConfiguration,
+    KernelConfiguration,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 
 
 # =============================================================================
-# Test ConfiguredInterfaceModel
+# Test InterfaceConfiguration
 # =============================================================================
 
 def test_configured_interface_model_creation():
-    """Test ConfiguredInterfaceModel can be created."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration can be created."""
+    invariant = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 224, 224, 768),
         block_shape=(1, 1, 768),
@@ -34,18 +34,18 @@ def test_configured_interface_model_creation():
         is_weight=False,
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(64,),
     )
 
     assert configured.stream_shape == (64,)
-    assert configured.invariant is invariant
+    assert configured.design_space is invariant
 
 
 def test_configured_interface_model_property_delegation():
-    """Test ConfiguredInterfaceModel properties delegate to invariant."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration properties delegate to invariant."""
+    invariant = InterfaceDesignSpace(
         name="test_interface",
         tensor_shape=(1, 224, 224, 768),
         block_shape=(1, 1, 768),
@@ -54,8 +54,8 @@ def test_configured_interface_model_property_delegation():
         is_weight=True,
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(32,),
     )
 
@@ -68,8 +68,8 @@ def test_configured_interface_model_property_delegation():
 
 
 def test_configured_interface_model_get_shape():
-    """Test ConfiguredInterfaceModel.get_shape() for all hierarchies."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration.get_shape() for all hierarchies."""
+    invariant = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 224, 224, 768),
         block_shape=(1, 1, 768),
@@ -77,8 +77,8 @@ def test_configured_interface_model_get_shape():
         datatype=DataType["INT8"],
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(64,),
     )
 
@@ -94,8 +94,8 @@ def test_configured_interface_model_get_shape():
 
 
 def test_configured_interface_model_get_shape_invalid_hierarchy():
-    """Test ConfiguredInterfaceModel.get_shape() with invalid hierarchy raises error."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration.get_shape() with invalid hierarchy raises error."""
+    invariant = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -103,8 +103,8 @@ def test_configured_interface_model_get_shape_invalid_hierarchy():
         datatype=DataType["INT8"],
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(64,),
     )
 
@@ -114,8 +114,8 @@ def test_configured_interface_model_get_shape_invalid_hierarchy():
 
 
 def test_configured_interface_model_folding_factors():
-    """Test ConfiguredInterfaceModel computed properties."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration computed properties."""
+    invariant = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -123,8 +123,8 @@ def test_configured_interface_model_folding_factors():
         datatype=DataType["INT8"],
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(1, 64),  # Match dimensions with block_shape
     )
 
@@ -136,8 +136,8 @@ def test_configured_interface_model_folding_factors():
 
 
 def test_configured_interface_model_immutable():
-    """Test ConfiguredInterfaceModel is immutable."""
-    invariant = InvariantInterfaceModel(
+    """Test InterfaceConfiguration is immutable."""
+    invariant = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -145,8 +145,8 @@ def test_configured_interface_model_immutable():
         datatype=DataType["INT8"],
     )
 
-    configured = ConfiguredInterfaceModel(
-        invariant=invariant,
+    configured = InterfaceConfiguration(
+        design_space=invariant,
         stream_shape=(64,),
     )
 
@@ -155,12 +155,12 @@ def test_configured_interface_model_immutable():
 
 
 # =============================================================================
-# Test ConfiguredKernelModel
+# Test KernelConfiguration
 # =============================================================================
 
 def test_configured_kernel_model_creation():
-    """Test ConfiguredKernelModel can be created."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelConfiguration can be created."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -168,7 +168,7 @@ def test_configured_kernel_model_creation():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -176,21 +176,20 @@ def test_configured_kernel_model_creation():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2, 4, 8, 16}},
     )
 
-    input_cfg = ConfiguredInterfaceModel(invariant=input_inv, stream_shape=(64,))
-    output_cfg = ConfiguredInterfaceModel(invariant=output_inv, stream_shape=(64,))
+    input_cfg = InterfaceConfiguration(design_space=input_inv, stream_shape=(64,))
+    output_cfg = InterfaceConfiguration(design_space=output_inv, stream_shape=(64,))
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(input_cfg,),
         outputs=(output_cfg,),
         params={"SIMD": 64},
@@ -203,19 +202,18 @@ def test_configured_kernel_model_creation():
 
 
 def test_configured_kernel_model_property_delegation():
-    """Test ConfiguredKernelModel properties delegate to invariant."""
-    invariant_model = InvariantKernelModel(
+    """Test KernelConfiguration properties delegate to invariant."""
+    invariant_model = KernelDesignSpace(
         name="LayerNorm",
         inputs=(),
         outputs=(),
         internal_datatypes={"accumulator": DataType["INT32"]},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={},
     )
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(),
         outputs=(),
         params={},
@@ -227,8 +225,8 @@ def test_configured_kernel_model_property_delegation():
 
 
 def test_configured_kernel_model_get_input():
-    """Test ConfiguredKernelModel.get_input() lookup."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelConfiguration.get_input() lookup."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -236,20 +234,19 @@ def test_configured_kernel_model_get_input():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2}},
     )
 
-    input_cfg = ConfiguredInterfaceModel(invariant=input_inv, stream_shape=(64,))
+    input_cfg = InterfaceConfiguration(design_space=input_inv, stream_shape=(64,))
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(input_cfg,),
         outputs=(),
         params={"SIMD": 64},
@@ -263,8 +260,8 @@ def test_configured_kernel_model_get_input():
 
 
 def test_configured_kernel_model_get_output():
-    """Test ConfiguredKernelModel.get_output() lookup."""
-    output_inv = InvariantInterfaceModel(
+    """Test KernelConfiguration.get_output() lookup."""
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -272,20 +269,19 @@ def test_configured_kernel_model_get_output():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1, 2}},
     )
 
-    output_cfg = ConfiguredInterfaceModel(invariant=output_inv, stream_shape=(64,))
+    output_cfg = InterfaceConfiguration(design_space=output_inv, stream_shape=(64,))
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(),
         outputs=(output_cfg,),
         params={"SIMD": 64},
@@ -299,8 +295,8 @@ def test_configured_kernel_model_get_output():
 
 
 def test_configured_kernel_model_get_interface():
-    """Test ConfiguredKernelModel.get_interface() searches both inputs and outputs."""
-    input_inv = InvariantInterfaceModel(
+    """Test KernelConfiguration.get_interface() searches both inputs and outputs."""
+    input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -308,7 +304,7 @@ def test_configured_kernel_model_get_interface():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InvariantInterfaceModel(
+    output_inv = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -316,21 +312,20 @@ def test_configured_kernel_model_get_interface():
         datatype=DataType["INT8"],
     )
 
-    invariant_model = InvariantKernelModel(
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={"SIMD": {1}},
     )
 
-    input_cfg = ConfiguredInterfaceModel(invariant=input_inv, stream_shape=(64,))
-    output_cfg = ConfiguredInterfaceModel(invariant=output_inv, stream_shape=(64,))
+    input_cfg = InterfaceConfiguration(design_space=input_inv, stream_shape=(64,))
+    output_cfg = InterfaceConfiguration(design_space=output_inv, stream_shape=(64,))
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(input_cfg,),
         outputs=(output_cfg,),
         params={"SIMD": 64},
@@ -350,19 +345,18 @@ def test_configured_kernel_model_get_interface():
 
 
 def test_configured_kernel_model_immutable():
-    """Test ConfiguredKernelModel is immutable."""
-    invariant_model = InvariantKernelModel(
+    """Test KernelConfiguration is immutable."""
+    invariant_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
         outputs=(),
         internal_datatypes={},
-        invariant_constraints=[],
         variant_constraints=[],
         parallelization_params={},
     )
 
-    configured_model = ConfiguredKernelModel(
-        invariant=invariant_model,
+    configured_model = KernelConfiguration(
+        design_space=invariant_model,
         inputs=(),
         outputs=(),
         params={},

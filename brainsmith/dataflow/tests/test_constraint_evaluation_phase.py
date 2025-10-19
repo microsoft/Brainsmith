@@ -175,15 +175,15 @@ def test_builder_uses_evaluation_phase():
 
     # Test invariant constraint
     c1 = DatatypeInteger(("input0",))
-    assert builder._is_invariant_constraint(c1) is True
+    assert builder._is_design_space_constraint(c1) is True
 
     # Test variant constraint
     c2 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM)
-    assert builder._is_invariant_constraint(c2) is False
+    assert builder._is_design_space_constraint(c2) is False
 
     # Test TENSOR hierarchy (invariant)
     c3 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.TENSOR)
-    assert builder._is_invariant_constraint(c3) is True
+    assert builder._is_design_space_constraint(c3) is True
 
 
 # ====================================================================
