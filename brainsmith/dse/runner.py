@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Set, List
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
-from brainsmith.registry import get_step
+from brainsmith.loader import get_step
 from brainsmith.dse.types import SegmentResult, TreeExecutionResult, ExecutionError
 from brainsmith._internal.finn.adapter import FINNAdapter
 

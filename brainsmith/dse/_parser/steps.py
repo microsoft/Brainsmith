@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union, Literal
 
 from brainsmith.dse._constants import SKIP_VALUES, SKIP_INDICATOR
-from brainsmith.registry import get_registry, has_step
+from brainsmith.loader import has_step
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]
@@ -59,8 +59,6 @@ def parse_steps(
     Returns:
         List of validated step specifications (strings and/or lists)
     """
-    registry = get_registry()
-
     # Separate operations from direct steps
     operations = []
     direct_steps = []
@@ -75,7 +73,7 @@ def parse_steps(
     # Determine base steps
     if direct_steps:
         # Direct steps specified: use them (child replaces parent)
-        result = [_validate_spec(spec, registry) for spec in direct_steps]
+        result = [_validate_spec(spec) for spec in direct_steps]
     elif parent_steps:
         # No direct steps but have parent: start with parent
         result = parent_steps.copy()
@@ -88,23 +86,20 @@ def parse_steps(
         result = _apply_step_operation(result, op)
 
     # Validate result (operations might have added unvalidated steps)
-    return [_validate_spec(spec, registry) for spec in result]
+    return [_validate_spec(spec) for spec in result]
 
 
 def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[StepSpec]:
     """Apply a single operation to the step list"""
 
-    # Get registry for normalization
-    registry = get_registry()
-
     # Normalize the operation target to match already-normalized steps
     normalized_target = None
     if op.target is not None:
-        normalized_target = _validate_spec(op.target, registry)
+        normalized_target = _validate_spec(op.target)
 
     # Validate nested lists in operation specs
-    _validate_nested_lists(op.insert, registry)
-    _validate_nested_lists(op.with_step, registry)
+    _validate_nested_lists(op.insert)
+    _validate_nested_lists(op.with_step)
 
     # Dispatch to specific handler
     handlers = {
@@ -122,12 +117,12 @@ def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[Step
     return steps
 
 
-def _validate_nested_lists(spec: Optional[StepSpec], registry) -> None:
+def _validate_nested_lists(spec: Optional[StepSpec]) -> None:
     """Validate nested lists in step specifications"""
     if spec is not None and isinstance(spec, list):
         for item in spec:
             if isinstance(item, list):
-                _validate_spec(item, registry)
+                _validate_spec(item)
 
 
 def _apply_remove(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
@@ -213,7 +208,7 @@ def _step_matches(step: StepSpec, target: Optional[StepSpec]) -> bool:
     return False
 
 
-def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -> Union[str, List[str]]:
+def _validate_spec(spec: Union[str, List[Optional[str]], None]) -> Union[str, List[str]]:
     """Validate a step specification (string or list).
 
     Rules:
@@ -266,7 +261,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
 
 
 def _validate_step(step: Optional[str]) -> str:
-    """Validate a step name against the registry.
+    """Validate a step name.
 
     Normalizes skip indicators (None, "", ~) to canonical form (~).
 
@@ -277,11 +272,11 @@ def _validate_step(step: Optional[str]) -> str:
         Validated step name or SKIP_INDICATOR
 
     Raises:
-        ValueError: If step not found in registry
+        ValueError: If step not found
     """
     if step in SKIP_VALUES:
         return SKIP_INDICATOR
     if not has_step(step):
-        raise ValueError(f"Step '{step}' not found in registry")
+        raise ValueError(f"Step '{step}' not found. Use 'brainsmith list steps' to see available steps.")
     return step
 

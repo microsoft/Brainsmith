@@ -13,16 +13,14 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.onnx import nchw_to_nhwc
-from brainsmith.registry import transform
 
 
-@transform(
-    kernel="LayerNorm",
-    description="Convert FuncLayerNorm to LayerNorm hardware operations",
-    author="Shane Fleming"
-)
 class InferLayerNorm(Transformation):
-    """Convert LayerNorm into HW, only norming over channel dim"""
+    """Convert LayerNorm into HW, only norming over channel dim.
+
+    This is the shape inference transformation for the LayerNorm kernel.
+    Converts FuncLayerNorm ONNX ops to hardware-specific LayerNorm ops.
+    """
 
     def apply(self, model):
         graph = model.graph

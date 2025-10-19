@@ -1,295 +1,407 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+"""Component registration system.
+
+This module provides the central registry for all Brainsmith components:
+steps, kernels, and backends. Components self-register using the global
+registry instance.
+
+The registry supports:
+- Explicit registration with source/name
+- Auto-detection of source from context
+- Type-safe metadata extraction from base classes
+- Decorator-based registration
 """
-Plugin System
-"""
-from typing import Dict, Any, Type, List, Optional, Tuple
+
+import inspect
 import logging
-import sys
+from typing import Any, Callable, Dict, Optional, Type, Union
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-def kernel_inference(**metadata):
-    """Decorator for kernel inference transforms (FINN compatibility)."""
-    return plugin('transform', **metadata)
+# Current source context (set during plugin discovery)
+_current_source: Optional[str] = None
+
 
 class Registry:
+    """Central registry for Brainsmith components.
+
+    Stores steps, kernels, and backends with source-prefixed names.
+    Provides registration methods that auto-detect source and extract
+    metadata from component classes.
+
+    Examples:
+        >>> from brainsmith import registry
+        >>> registry.step(my_step_function)
+        >>> registry.kernel(MyKernelClass)
+        >>> registry.backend(MyBackendClass)
+    """
+
     def __init__(self):
-        self._plugins: Dict[str, Dict[str, Tuple[Type, Dict[str, Any]]]] = {
-            'transform': {}, 'kernel': {}, 'backend': {}, 'step': {}
-        }
-    
-    def register(self, plugin_type: str, name: str, cls: Type, 
-                 framework: str = 'brainsmith', **metadata) -> None:
-        """Register a plugin with optional framework namespace."""
-        key = f"{framework}:{name}" if framework != 'brainsmith' else name
-        self._plugins[plugin_type][key] = (cls, {**metadata, 'framework': framework})
-    
-    def _load_plugins(self):
-        """Ensure all plugins are discovered (both external and internal)."""
-        if not hasattr(self, '_discovered'):
-            self._discovered = True
-            
-            # 1. External framework plugins (FINN, QONNX)
-            try:
-                from . import registry_adapters as adapters
-                adapters.ensure_initialized()
-            except ImportError as e:
-                logger.debug(f"Could not import adapters: {e}")
+        """Initialize empty registries."""
+        self._steps: Dict[str, Any] = {}
+        self._kernels: Dict[str, Dict[str, Any]] = {}
+        self._backends: Dict[str, Dict[str, Any]] = {}
 
-            # 2. Brainsmith plugins
-            modules = ['primitives.transforms', 'kernels', 'steps']
+    def step(
+        self,
+        func_or_class: Union[Callable, Type],
+        *,
+        source: Optional[str] = None,
+        name: Optional[str] = None
+    ) -> Union[Callable, Type]:
+        """Register a step.
 
-            for module in modules:
-                full_name = f'brainsmith.{module}'
-                if full_name not in sys.modules:
-                    try:
-                        __import__(full_name)
-                        logger.debug(f"Imported {full_name}")
-                    except ImportError as e:
-                        logger.debug(f"Could not import {full_name}: {e}")
+        Args:
+            func_or_class: Step function or Step class
+            source: Source name (auto-detected if None)
+            name: Step name (uses func/class name if None)
 
-    def get(self, plugin_type: str, name: str) -> Type:
-        """Get plugin by name (with or without framework prefix).
+        Returns:
+            The original func_or_class (for use as decorator)
+
+        Examples:
+            >>> @registry.step
+            ... def my_step(model, **kwargs):
+            ...     return model
+
+            >>> registry.step(my_step, source='user', name='custom_name')
         """
-        self._load_plugins()
-        
-        # Direct lookup first
-        plugins = self._plugins[plugin_type]
-        if name in plugins:
-            return plugins[name][0]
-        
-        # If no colon, try with framework prefixes
-        if ':' not in name:
-            # Try common prefixes
-            for prefix in ['brainsmith:', 'finn:', 'qonnx:']:
-                full_name = f'{prefix}{name}'
-                if full_name in plugins:
-                    return plugins[full_name][0]
-        
-        # Plugin not found - fail fast
-        available = list(self._plugins[plugin_type].keys())
-        raise KeyError(
-            f"Plugin {plugin_type}:{name} not found. "
-            f"Available ({len(available)}): {available[:10] if available else 'none'}"
-        )
-    
-    
-    def find(self, plugin_type: str, **criteria) -> List[Type]:
-        """Find plugins matching criteria."""
-        self._load_plugins()
-        results = []
-        for name, (cls, metadata) in self._plugins[plugin_type].items():
-            if all(metadata.get(k) == v for k, v in criteria.items()):
-                results.append(cls)
-        return results
-    
-    def all(self, plugin_type: str) -> Dict[str, Type]:
-        """Get all plugins of a type."""
-        self._load_plugins()
-        return {name: cls for name, (cls, _) in self._plugins[plugin_type].items()}
-    
-    def reset(self) -> None:
-        """Reset registry and reload all plugins.
-        
-        This is primarily for testing to ensure a clean state.
+        source = source or self._detect_source(func_or_class)
+        name = name or self._extract_step_name(func_or_class)
+
+        full_name = f"{source}:{name}"
+
+        if full_name in self._steps:
+            logger.warning(f"Overriding existing step: {full_name}")
+
+        self._steps[full_name] = func_or_class
+        logger.debug(f"Registered step: {full_name}")
+
+        return func_or_class
+
+    def kernel(
+        self,
+        cls: Type,
+        *,
+        source: Optional[str] = None,
+        name: Optional[str] = None,
+        op_type: Optional[str] = None,
+        infer_transform: Optional[Type] = None,
+        domain: Optional[str] = None
+    ) -> Type:
+        """Register a kernel (custom operation).
+
+        Metadata can come from class attributes or parameters.
+        Parameters take precedence over class attributes.
+
+        Args:
+            cls: CustomOp subclass (or any class with kernel metadata)
+            source: Source name (auto-detected if None)
+            name: Kernel name (uses cls.op_type or cls.__name__ if None)
+            op_type: ONNX op type (overrides cls.op_type)
+            infer_transform: InferTransform class (overrides cls.infer_transform)
+            domain: ONNX domain (overrides cls.domain, defaults to 'finn.custom')
+
+        Returns:
+            The original class (for use as decorator)
+
+        Examples:
+            >>> # Approach 1: Class has metadata attributes
+            >>> @registry.kernel
+            ... class LayerNorm(CustomOp):
+            ...     op_type = "LayerNorm"
+            ...     infer_transform = InferLayerNorm
+
+            >>> # Approach 2: Pass metadata as parameters
+            >>> registry.kernel(
+            ...     OldKernel,
+            ...     source='brainsmith',
+            ...     op_type='Softmax',
+            ...     infer_transform=InferSoftmax
+            ... )
         """
-        # Clear all plugins
-        self._plugins = {
-            'transform': {}, 'kernel': {}, 'backend': {}, 'step': {}
+        source = source or self._detect_source(cls)
+        name = name or self._extract_kernel_name(cls)
+
+        full_name = f"{source}:{name}"
+
+        if full_name in self._kernels:
+            logger.warning(f"Overriding existing kernel: {full_name}")
+
+        # Extract metadata - parameters override class attributes
+        metadata = {
+            'class': cls,
+            'infer': infer_transform or getattr(cls, 'infer_transform', None),
+            'op_type': op_type or getattr(cls, 'op_type', None),
+            'domain': domain or getattr(cls, 'domain', 'finn.custom')
         }
-        
-        # Reset the discovery flag to force reloading
-        if hasattr(self, '_discovered'):
-            delattr(self, '_discovered')
-        
-        # Reset framework adapter initialization state
-        try:
-            from . import registry_adapters as adapters
-            adapters._initialized = False
-        except ImportError:
-            pass
-        
-        self._load_plugins()
-                
-        logger.debug("Registry reset and plugins reloaded")
-    
 
-# Singleton
-_registry = Registry()
+        self._kernels[full_name] = metadata
+        logger.debug(f"Registered kernel: {full_name} (op_type={metadata['op_type']})")
 
-# Public API
-def get_registry() -> Registry:
-    return _registry
-
-# Convenience functions
-def get_transform(name: str) -> Type:
-    return _registry.get('transform', name)
-
-def get_kernel(name: str) -> Type:
-    return _registry.get('kernel', name)
-
-def get_backend(name: str) -> Type:
-    return _registry.get('backend', name)
-
-def get_step(name: str) -> Type:
-    return _registry.get('step', name)
-
-
-# Registration decorators
-def plugin(plugin_type: str, **metadata):
-    def decorator(cls: Type) -> Type:
-        framework = metadata.pop('framework', 'brainsmith')
-        name = metadata.pop('name', cls.__name__)
-        _registry.register(plugin_type, name, cls, framework, **metadata)
         return cls
+
+    def backend(
+        self,
+        cls: Type,
+        *,
+        source: Optional[str] = None,
+        name: Optional[str] = None,
+        target_kernel: Optional[str] = None,
+        language: Optional[str] = None,
+        variant: Optional[str] = None
+    ) -> Type:
+        """Register a backend.
+
+        Metadata can come from class attributes or parameters.
+        Parameters take precedence over class attributes.
+
+        Args:
+            cls: Backend subclass (or any class with backend metadata)
+            source: Source name (auto-detected if None)
+            name: Backend name (uses cls.__name__ if None)
+            target_kernel: Full kernel name this backend targets (overrides cls.target_kernel)
+            language: Backend language 'hls' or 'rtl' (overrides cls.language)
+            variant: Optional variant name (overrides cls.variant)
+
+        Returns:
+            The original class (for use as decorator)
+
+        Examples:
+            >>> # Approach 1: Class has metadata attributes
+            >>> @registry.backend
+            ... class LayerNormHLS(Backend):
+            ...     target_kernel = 'brainsmith:LayerNorm'
+            ...     language = 'hls'
+
+            >>> # Approach 2: Pass metadata as parameters
+            >>> registry.backend(
+            ...     OldBackend,
+            ...     source='brainsmith',
+            ...     target_kernel='brainsmith:Softmax',
+            ...     language='hls'
+            ... )
+        """
+        source = source or self._detect_source(cls)
+        name = name or cls.__name__
+
+        full_name = f"{source}:{name}"
+
+        if full_name in self._backends:
+            logger.warning(f"Overriding existing backend: {full_name}")
+
+        # Extract metadata - parameters override class attributes
+        metadata = {
+            'class': cls,
+            'target_kernel': target_kernel or getattr(cls, 'target_kernel', None),
+            'language': language or getattr(cls, 'language', None),
+            'variant': variant or getattr(cls, 'variant', None)
+        }
+
+        # Validate required fields
+        if not metadata['target_kernel']:
+            raise ValueError(f"Backend {full_name} missing 'target_kernel' attribute")
+        if not metadata['language']:
+            raise ValueError(f"Backend {full_name} missing 'language' attribute")
+
+        self._backends[full_name] = metadata
+        logger.debug(
+            f"Registered backend: {full_name} "
+            f"(target={metadata['target_kernel']}, lang={metadata['language']})"
+        )
+
+        return cls
+
+    def _detect_source(self, obj: Any) -> str:
+        """Auto-detect source from context or module.
+
+        Args:
+            obj: Component to detect source for
+
+        Returns:
+            Source name
+
+        Detection order:
+        1. Current source context (_current_source) set during discovery
+        2. Module path analysis (brainsmith.* → 'brainsmith')
+        3. Default source from config
+        """
+        # Priority 1: Explicit context
+        if _current_source:
+            return _current_source
+
+        # Priority 2: Module path analysis
+        module = inspect.getmodule(obj)
+        if module:
+            module_name = module.__name__
+
+            # Check for brainsmith core
+            if module_name.startswith('brainsmith.'):
+                return 'brainsmith'
+
+            # Check for FINN
+            if module_name.startswith('finn.'):
+                return 'finn'
+
+            # Check for QONNX
+            if module_name.startswith('qonnx.'):
+                return 'qonnx'
+
+        # Priority 3: Config default
+        try:
+            from brainsmith.settings import get_config
+            return get_config().default_source
+        except Exception:
+            return 'brainsmith'  # Ultimate fallback
+
+    def _extract_step_name(self, func_or_class: Any) -> str:
+        """Extract step name from function or class.
+
+        Args:
+            func_or_class: Step function or class
+
+        Returns:
+            Step name
+        """
+        # Check for explicit name attribute
+        if hasattr(func_or_class, 'name') and func_or_class.name:
+            return func_or_class.name
+
+        # Use __name__
+        return func_or_class.__name__
+
+    def _extract_kernel_name(self, cls: Type) -> str:
+        """Extract kernel name from class.
+
+        Args:
+            cls: Kernel class
+
+        Returns:
+            Kernel name (prefers op_type over __name__)
+        """
+        # Prefer op_type (e.g., "LayerNorm" for ONNX compatibility)
+        if hasattr(cls, 'op_type') and cls.op_type:
+            return cls.op_type
+
+        # Fallback to class name
+        return cls.__name__
+
+    def clear(self):
+        """Clear all registrations (for testing)."""
+        self._steps.clear()
+        self._kernels.clear()
+        self._backends.clear()
+        logger.debug("Registry cleared")
+
+    def __repr__(self) -> str:
+        """String representation showing registry stats."""
+        return (
+            f"<Registry: "
+            f"{len(self._steps)} steps, "
+            f"{len(self._kernels)} kernels, "
+            f"{len(self._backends)} backends>"
+        )
+
+
+# Global singleton registry
+registry = Registry()
+
+
+# Context manager for source detection
+class source_context:
+    """Context manager for setting current source during discovery.
+
+    Examples:
+        >>> with source_context('user'):
+        ...     import user_plugin  # Auto-detects source='user'
+    """
+
+    def __init__(self, source_name: str):
+        """Initialize context with source name.
+
+        Args:
+            source_name: Source to set as current
+        """
+        self.source_name = source_name
+        self.old_source = None
+
+    def __enter__(self):
+        """Enter context, set current source."""
+        global _current_source
+        self.old_source = _current_source
+        _current_source = self.source_name
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context, restore previous source."""
+        global _current_source
+        _current_source = self.old_source
+        return False
+
+
+# === Legacy Decorator Stubs ===
+# These are no-op decorators that allow old kernel/backend files to import
+# without error. Registration for legacy components happens via the legacy
+# bridge in plugins.py instead.
+
+def kernel(*args, **kwargs):
+    """Legacy decorator stub - does nothing.
+
+    Old kernel files still import this, but registration happens via
+    the legacy bridge in plugins.py. This stub prevents ImportError.
+    """
+    def decorator(cls):
+        return cls  # Just return the class unchanged
+
+    # Support both @kernel and @kernel(...) syntax
+    if args and callable(args[0]):
+        return args[0]
     return decorator
 
-transform = lambda **kw: plugin('transform', **kw)
-kernel = lambda **kw: plugin('kernel', **kw)
-backend = lambda **kw: plugin('backend', **kw)
-step = lambda **kw: plugin('step', **kw)
-kernel_inference = lambda **kw: plugin('transform', kernel_inference=True, **kw)
 
-# List functions
-def list_transforms() -> List[str]:
-    """List all transform names."""
-    _registry._load_plugins()
-    return list(_registry._plugins['transform'].keys())
+def backend(*args, **kwargs):
+    """Legacy decorator stub - does nothing.
 
-def list_kernels() -> List[str]:
-    """List all kernel names."""
-    _registry._load_plugins()
-    return list(_registry._plugins['kernel'].keys())
+    Old backend files still import this, but registration happens via
+    the legacy bridge in plugins.py. This stub prevents ImportError.
+    """
+    def decorator(cls):
+        return cls  # Just return the class unchanged
 
-def list_backends() -> List[str]:
-    """List all backend names."""
-    _registry._load_plugins()
-    return list(_registry._plugins['backend'].keys())
-
-def list_steps() -> List[str]:
-    """List all step names."""
-    _registry._load_plugins()
-    return list(_registry._plugins['step'].keys())
-
-# "Has" functions
-def has_transform(name: str) -> bool:
-    """Check if transform exists."""
-    try:
-        _registry.get('transform', name)
-        return True
-    except KeyError:
-        return False
-
-def has_kernel(name: str) -> bool:
-    """Check if kernel exists."""
-    try:
-        _registry.get('kernel', name)
-        return True
-    except KeyError:
-        return False
-
-def has_backend(name: str) -> bool:
-    """Check if backend exists."""
-    try:
-        _registry.get('backend', name)
-        return True
-    except KeyError:
-        return False
-
-def has_step(name: str) -> bool:
-    """Check if step exists."""
-    try:
-        _registry.get('step', name)
-        return True
-    except KeyError:
-        return False
-
-# Metadata query functions
-def _get_names_for_classes(plugin_type: str, classes: List[Type]) -> List[str]:
-    """Convert plugin classes back to their registered names."""
-    names = []
-    for cls in classes:
-        for key, (plugin_cls, metadata) in _registry._plugins[plugin_type].items():
-            if plugin_cls == cls:
-                names.append(key)
-                break
-    return names
-
-def get_transforms_by_metadata(**criteria) -> List[str]:
-    """Get transforms matching metadata criteria."""
-    _registry._load_plugins()
-    return _get_names_for_classes('transform', _registry.find('transform', **criteria))
-
-def get_kernels_by_metadata(**criteria) -> List[str]:
-    """Get kernels matching metadata criteria."""
-    _registry._load_plugins()
-    return _get_names_for_classes('kernel', _registry.find('kernel', **criteria))
-
-def get_backends_by_metadata(**criteria) -> List[str]:
-    """Get backends matching metadata criteria."""
-    _registry._load_plugins()
-    return _get_names_for_classes('backend', _registry.find('backend', **criteria))
-
-def get_steps_by_metadata(**criteria) -> List[str]:
-    """Get steps matching metadata criteria."""
-    _registry._load_plugins()
-    return _get_names_for_classes('step', _registry.find('step', **criteria))
-
-# Blueprint compatibility functions (used by explorer)
-def list_backends_by_kernel(kernel: str) -> List[str]:
-    """List all backends for a given kernel."""
-    backends = []
-    for name, (cls, metadata) in _registry._plugins['backend'].items():
-        if metadata.get('kernel') == kernel:
-            backends.append(name.split(':')[-1])
-    return backends
-
-def get_default_backend(kernel: str) -> Optional[str]:
-    """Get the default backend for a kernel."""
-    for name, (cls, metadata) in _registry._plugins['backend'].items():
-        if metadata.get('kernel') == kernel and metadata.get('default'):
-            return name.split(':')[-1]
-    backends = list_backends_by_kernel(kernel)
-    return backends[0] if backends else None
+    # Support both @backend and @backend(...) syntax
+    if args and callable(args[0]):
+        return args[0]
+    return decorator
 
 
-def list_all_steps() -> List[str]:
-    """List all registered steps."""
-    _registry._load_plugins()
-    # Extract just the step names, removing framework prefixes
-    steps = []
-    for key in _registry._plugins['step'].keys():
-        if ':' in key:
-            _, name = key.split(':', 1)
-        else:
-            name = key
-        steps.append(name)
-    return sorted(list(set(steps)))
+def step(*args, **kwargs):
+    """Legacy decorator stub - does nothing.
+
+    Old step files still import this, but registration happens via
+    the legacy bridge in plugins.py. This stub prevents ImportError.
+    """
+    def decorator(func):
+        return func  # Just return the function unchanged
+
+    # Support both @step and @step(...) syntax
+    if args and callable(args[0]):
+        return args[0]
+    return decorator
 
 
-def list_all_kernels() -> Dict[str, List[str]]:
-    """List all kernels and their backends."""
-    _registry._load_plugins()
-    result = {}
-    # Get unique kernel names from backends
-    for backend_key, (cls, metadata) in _registry._plugins['backend'].items():
-        kernel_name = metadata.get('kernel')
-        if kernel_name:
-            if kernel_name not in result:
-                result[kernel_name] = []
-            # Extract backend name from key
-            if ':' in backend_key:
-                _, backend_name = backend_key.split(':', 1)
-            else:
-                backend_name = backend_key
-            # Keep the full backend name with _hls/_rtl suffix
-            if backend_name not in result[kernel_name]:
-                result[kernel_name].append(backend_name)
-    
-    # Sort backends for each kernel
-    for kernel in result:
-        result[kernel] = sorted(result[kernel])
-    
-    return dict(sorted(result.items()))
+def transform(*args, **kwargs):
+    """Legacy decorator stub - does nothing.
+
+    Old transform files still import this, but registration happens via
+    the legacy bridge in plugins.py. This stub prevents ImportError.
+    """
+    def decorator(cls):
+        return cls  # Just return the class unchanged
+
+    # Support both @transform and @transform(...) syntax
+    if args and callable(args[0]):
+        return args[0]
+    return decorator

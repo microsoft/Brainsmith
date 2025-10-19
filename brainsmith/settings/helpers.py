@@ -55,12 +55,25 @@ def get_bsmith_dir() -> Path:
 
 def is_plugins_strict() -> bool:
     """Check if plugins should be loaded in strict mode.
-    
+
     This is a convenience function to quickly check the plugins_strict setting
     without needing to import and call get_config().
-    
+
     Returns:
         True if plugins should be loaded in strict mode, False otherwise
     """
     from .loader import get_config
     return get_config().plugins_strict
+
+
+def get_plugin_sources() -> dict[str, Path]:
+    """Get the configured plugin sources.
+
+    This is a convenience function to quickly access the plugin sources
+    without needing to import and call get_config().
+
+    Returns:
+        Dict mapping source names to paths
+    """
+    from .loader import get_config
+    return get_config().effective_plugin_sources

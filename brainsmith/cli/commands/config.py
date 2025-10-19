@@ -27,6 +27,23 @@ def _generate_config_template(defaults: SystemConfig) -> str:
         # Build directory (relative paths resolve from project root)
         build_dir: {defaults.build_dir}
 
+        # Dependencies directory
+        deps_dir: {defaults.deps_dir}
+
+        # Plugin source mapping (source_name -> path)
+        # Default: brainsmith: <builtin>, user: ~/.brainsmith/plugins
+        # plugin_sources:
+        #   brainsmith: <builtin>        # Core brainsmith components
+        #   user: ~/.brainsmith/plugins  # User plugins
+        #   team: /shared/team-plugins   # Team shared plugins
+        #   mycompany: ./plugins         # Project-local plugins
+
+        # Default source when component has no prefix (e.g., 'LayerNorm' -> 'brainsmith:LayerNorm')
+        default_source: {defaults.default_source}
+
+        # Plugin loading mode (strict=error on load failure, false=warn)
+        plugins_strict: {str(defaults.plugins_strict).lower()}
+
         # Parallel workers for builds
         default_workers: {defaults.default_workers}
 

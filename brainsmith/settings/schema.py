@@ -224,7 +224,18 @@ class SystemConfig(BaseSettings):
         default=Path("deps"),
         description="Dependencies directory"
     )
-    
+    plugin_sources: Dict[str, Path] = Field(
+        default_factory=lambda: {
+            'brainsmith': Path('<builtin>'),
+            'user': Path.home() / '.brainsmith' / 'plugins'
+        },
+        description="Plugin source name to path mapping. Use '<builtin>' for core components."
+    )
+    default_source: str = Field(
+        default='brainsmith',
+        description="Default source when component reference has no prefix"
+    )
+
     # Xilinx configuration (flattened)
     xilinx_path: Path = Field(
         default=Path("/tools/Xilinx"),
@@ -349,6 +360,27 @@ class SystemConfig(BaseSettings):
         if not isinstance(v, Path):
             v = Path(v)
         return v
+
+    @field_validator('plugin_sources', mode='before')
+    @classmethod
+    def validate_plugin_sources(cls, v: Any) -> Dict[str, Path]:
+        """Convert plugin_sources to dict of str -> Path."""
+        if v is None:
+            return {'brainsmith': Path('<builtin>'), 'user': Path.home() / '.brainsmith' / 'plugins'}
+        if not isinstance(v, dict):
+            raise ValueError("plugin_sources must be a dictionary mapping source names to paths")
+
+        # Convert all values to Path objects
+        result = {}
+        for key, value in v.items():
+            if isinstance(value, str):
+                result[key] = Path(value)
+            elif isinstance(value, Path):
+                result[key] = value
+            else:
+                raise ValueError(f"plugin_sources['{key}'] must be a string or Path, got {type(value)}")
+
+        return result
     
     @field_validator('xilinx_path', mode='before')
     @classmethod
@@ -474,7 +506,39 @@ class SystemConfig(BaseSettings):
         if not deps.is_absolute():
             deps = self.bsmith_dir / deps
         return deps
-    
+
+    @property
+    def effective_plugin_sources(self) -> Dict[str, Path]:
+        """Get effective plugin sources with <builtin> markers expanded.
+
+        Expands special markers:
+        - <builtin> for brainsmith → bsmith_dir / 'brainsmith'
+        - <builtin> for finn → deps_dir / 'finn'
+        - <builtin> for qonnx → deps_dir / 'qonnx'
+
+        Returns:
+            Dict mapping source names to resolved paths
+        """
+        sources = dict(self.plugin_sources)
+
+        # Expand <builtin> markers
+        for source_name, source_path in list(sources.items()):
+            if str(source_path) == '<builtin>':
+                if source_name == 'brainsmith':
+                    sources[source_name] = self.bsmith_dir / 'brainsmith'
+                elif source_name == 'finn':
+                    deps = self.deps_dir if self.deps_dir.is_absolute() else self.bsmith_dir / self.deps_dir
+                    sources[source_name] = deps / 'finn'
+                elif source_name == 'qonnx':
+                    deps = self.deps_dir if self.deps_dir.is_absolute() else self.bsmith_dir / self.deps_dir
+                    sources[source_name] = deps / 'qonnx'
+                else:
+                    # Unknown builtin - leave as is or raise error?
+                    # For now, remove it (can't resolve)
+                    del sources[source_name]
+
+        return sources
+
     def export_to_environment(self, include_internal: bool = False, verbose: bool = False, export: bool = True) -> Dict[str, str]:
         """Export configuration to environment variables.
         

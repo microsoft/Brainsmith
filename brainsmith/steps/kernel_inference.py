@@ -6,20 +6,16 @@ import logging
 import os
 from typing import Any
 
-from brainsmith.registry import step, get_transforms_by_metadata, get_transform
+from brainsmith.loader import get_kernel_infer
 
 logger = logging.getLogger(__name__)
 
-@step(
-    name="infer_kernels",
-    category="hardware",
-    description="Infer hardware kernels based on blueprint selections"
-)
-def infer_kernels_step(model: Any, cfg: Any) -> Any:
-    """Infer kernels using transforms with matching kernel metadata.
 
-    Finds inference transforms by their 'kernel' metadata attribute,
-    avoiding any name-based guessing.
+def infer_kernels_step(model: Any, cfg: Any) -> Any:
+    """Infer kernels using transforms stored in kernel metadata.
+
+    In the new system, InferTransforms are stored as metadata on kernels,
+    retrieved via get_kernel_infer(kernel_name).
     """
     kernel_selections = getattr(cfg, 'kernel_selections', None)
     if not kernel_selections:
@@ -30,16 +26,13 @@ def infer_kernels_step(model: Any, cfg: Any) -> Any:
 
     # Apply inference for each selected kernel
     for kernel_name, backend in kernel_selections:
-        # Find transforms that infer this kernel
-        inference_transforms = get_transforms_by_metadata(kernel=kernel_name)
-        
-        if inference_transforms:
-            # Use the first matching transform name
-            transform_name = inference_transforms[0]
-            Transform = get_transform(transform_name)
+        try:
+            # Get InferTransform from kernel metadata
+            InferTransform = get_kernel_infer(kernel_name)
+            transform_name = InferTransform.__name__
             logger.info(f"  {kernel_name} ({backend}) using {transform_name}")
-            model = model.transform(Transform())
-        else:
+            model = model.transform(InferTransform())
+        except KeyError:
             logger.warning(f"  No inference transform found for kernel: {kernel_name}")
 
     return model

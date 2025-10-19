@@ -23,10 +23,11 @@ Advanced DSE (Power Users):
     >>> tree = build_tree(design_space, config)
     >>> results = execute_tree(tree, model, config, output_dir, runner=custom_runner)
 
-For component development:
-    >>> from brainsmith import kernel, step
-    >>> @kernel(name='MyKernel')
-    >>> class MyKernel: ...
+For component lookup:
+    >>> from brainsmith import get_kernel, get_step, import_transform
+    >>> LayerNorm = get_kernel('LayerNorm')
+    >>> step_fn = get_step('streamline')
+    >>> FoldConstants = import_transform('FoldConstants')
 """
 
 # Export configuration to environment for FINN and other tools
@@ -60,17 +61,26 @@ from .dse import (
     ExecutionError,
 )
 
-# Component System
-from .registry import (
-    # Decorators
-    kernel,
-    step,
+# Component System - Namespace-based registry
+from .loader import (
     # Lookup
     get_kernel,
     get_step,
+    get_kernel_infer,
+    get_backend,
+    get_backend_metadata,
     # Listing
     list_kernels,
     list_steps,
+    list_backends_for_kernel,
+    list_all_backends,
+    has_step,
+)
+
+# Transform imports
+from .transforms import (
+    import_transform,
+    apply_transforms,
 )
 
 # Dataflow SDK
@@ -107,13 +117,18 @@ __all__ = [
     'OutputType',
     'ExecutionError',
 
-    # Component System
-    'kernel',
-    'step',
+    # Component System - Lazy Loader
     'get_kernel',
     'get_step',
+    'get_kernel_infer',
+    'get_backend',
     'list_kernels',
     'list_steps',
+    'list_backends',
+    'has_step',
+    # Transforms
+    'import_transform',
+    'apply_transforms',
 
     # Dataflow
     'KernelDefinition',

@@ -13,23 +13,16 @@ import os
 import logging
 from typing import Any
 
-from brainsmith.registry import step, get_transform
+from brainsmith.transforms import import_transform
 from brainsmith._internal.io.transform_utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 
 # === Conversion Steps ===
+# Note: Steps are now registered in brainsmith/plugins.py using the registry system
 
-@step(
-    name="qonnx_to_finn",
-    category="cleanup",
-    dependencies=["quantization_preprocessing"],
-    description="Convert from QONNX to FINN opset"
-)
 def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
-    """
-    Convert QONNX to FINN opset.
-    """
+    """Convert QONNX to FINN opset."""
     
     model = apply_transforms(model, [
         'ExpandNorms',
@@ -43,20 +36,13 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
 
 # === Hardware Steps ===
 
-@step(
-    name="specialize_layers",
-    category="hardware",
-    description="Specialize layers with optional config override"
-)
 def specialize_layers_step(model: Any, cfg: Any) -> Any:
-    """
-    Custom specialize layers step that ensures opset imports are handled correctly.
-    """
+    """Custom specialize layers step that ensures opset imports are handled correctly."""
     # Load transforms individually when parameters are needed
     # (use apply_transforms for parameter-free bulk transforms)
-    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
-    ApplyConfig = get_transform('ApplyConfig')
-    SpecializeLayers = get_transform('SpecializeLayers')
+    GiveUniqueNodeNames = import_transform('GiveUniqueNodeNames')
+    ApplyConfig = import_transform('ApplyConfig')
+    SpecializeLayers = import_transform('SpecializeLayers')
     
     if cfg.specialize_layers_config_file is not None:
         model = model.transform(GiveUniqueNodeNames())
@@ -75,12 +61,6 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
 
 # === Optimization Steps ===
 
-@step(
-    name="constrain_folding_and_set_pumped_compute",
-    category="optimization", 
-    dependencies=["streamlining"],
-    description="Apply optimizations including folding constraints and pumped compute (MUST run before infer_hardware)"
-)
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
     model = apply_transforms(model, [

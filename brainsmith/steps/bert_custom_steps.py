@@ -18,7 +18,7 @@ import shutil
 import logging
 from typing import Any
 
-from brainsmith.registry import step, get_transform
+from brainsmith.transforms import import_transform
 from brainsmith._internal.io.transform_utils import apply_transforms
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,6 @@ logger = logging.getLogger(__name__)
 
 # === Metadata Steps ===
 
-@step(
-    name="shell_metadata_handover",
-    category="metadata",
-    dependencies=[],
-    description="Extract metadata for shell integration process"
-)
 def shell_metadata_handover_step(model, cfg):
     """
     Extract metadata for shell integration process.
@@ -43,7 +37,7 @@ def shell_metadata_handover_step(model, cfg):
     
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
-            ExtractShellIntegrationMetadata = get_transform('ExtractShellIntegrationMetadata')
+            ExtractShellIntegrationMetadata = import_transform('ExtractShellIntegrationMetadata')
             model = model.transform(ExtractShellIntegrationMetadata(
                 cfg.output_dir + "/stitched_ip/shell_handover.json"
             ))
@@ -61,12 +55,6 @@ def shell_metadata_handover_step(model, cfg):
 
 # === Pre-Processing ===
 
-@step(
-    name="bert_cleanup",
-    category="cleanup",
-    dependencies=[],
-    description="Graph cleanup/preparation step for BERT models",
-)
 def bert_cleanup_step(model: Any, cfg: Any) -> Any:
     """Basic cleanup with identity removal and input sorting."""
     
@@ -80,12 +68,6 @@ def bert_cleanup_step(model: Any, cfg: Any) -> Any:
 
 # === Streamlining Steps ===
 
-@step(
-    name="bert_streamlining",
-    category="topology_opt",
-    dependencies=["qonnx_to_finn"],
-    description="Comprehensive streamlining with QONNX preprocessing and FINN absorption"
-)
 def bert_streamlining_step(model: Any, cfg: Any) -> Any:
     """BERT-specific streamlining with SoftMax Mul node handling.
 
@@ -110,7 +92,7 @@ def bert_streamlining_step(model: Any, cfg: Any) -> Any:
     ])
 
     # Load transform individually to pass parameters
-    MoveOpPastFork = get_transform('MoveOpPastFork')
+    MoveOpPastFork = import_transform('MoveOpPastFork')
     model = model.transform(MoveOpPastFork(["Mul"]))
     
     model = apply_transforms(model, [
@@ -121,8 +103,8 @@ def bert_streamlining_step(model: Any, cfg: Any) -> Any:
     ])
 
     # Final cleanup with parameterized transforms
-    InferDataTypes = get_transform('InferDataTypes')
-    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
+    InferDataTypes = import_transform('InferDataTypes')
+    GiveUniqueNodeNames = import_transform('GiveUniqueNodeNames')
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(GiveUniqueNodeNames())
     

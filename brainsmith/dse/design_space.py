@@ -10,7 +10,7 @@ from the blueprint, ready for tree construction.
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
-from brainsmith.registry import has_step, list_all_steps
+from brainsmith.loader import has_step, list_steps
 from brainsmith.dse._constants import is_skip
 
 
@@ -53,7 +53,7 @@ class DesignSpace:
                 check_step(step_spec)
         
         if invalid_steps:
-            available_steps = list_all_steps()
+            available_steps = list_steps()
             error_msg = (
                 f"Invalid steps found: {', '.join(invalid_steps)}\n\n"
                 f"Available steps: {', '.join(available_steps)}"

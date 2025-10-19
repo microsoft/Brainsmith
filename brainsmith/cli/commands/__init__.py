@@ -10,6 +10,7 @@ availability in different entry points.
 from .config import config
 from .dfc import dfc
 from .kernel import kernel
+from .plugins import plugins
 from .setup import setup
 
 # Commands available in both brainsmith and smith CLIs
@@ -21,6 +22,7 @@ OPERATIONAL_COMMANDS = {
 # Administrative commands only available in brainsmith CLI
 ADMIN_COMMANDS = {
     'config': config,
+    'plugins': plugins,
     'setup': setup
 }
 
@@ -34,5 +36,6 @@ __all__ = [
     'config',
     'dfc',
     'kernel',
+    'plugins',
     'setup'
 ]

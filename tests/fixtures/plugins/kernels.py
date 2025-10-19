@@ -3,13 +3,12 @@
 import onnx
 from typing import Dict, Any
 
-# Import decorators from brainsmith
-from brainsmith.registry import kernel, backend, kernel_inference
+# Note: Decorators removed - new plugin system doesn't use decorators
+# These are plain classes for testing
 
 
 # Test Kernel Plugins
 
-@kernel(name="TestKernel")
 class TestKernelPlugin:
     """A simple test kernel."""
     
@@ -22,7 +21,6 @@ class TestKernelPlugin:
         return True
 
 
-@kernel(name="TestKernelWithBackends")
 class TestKernelWithBackendsPlugin:
     """Kernel with multiple backend implementations."""
     
@@ -32,7 +30,6 @@ class TestKernelWithBackendsPlugin:
 
 # Test Backend Plugins
 
-@backend(name="TestKernel_hls", kernel="TestKernel", language="hls")
 class TestKernelHLS:
     """HLS backend for TestKernel."""
     
@@ -41,7 +38,6 @@ class TestKernelHLS:
         return "// HLS implementation"
 
 
-@backend(name="TestKernel_rtl", kernel="TestKernel", language="rtl") 
 class TestKernelRTL:
     """RTL backend for TestKernel."""
     
@@ -50,7 +46,6 @@ class TestKernelRTL:
         return "// RTL implementation"
 
 
-@backend(name="TestKernelWithBackends_hls", kernel="TestKernelWithBackends", language="hls")
 class TestKernelWithBackendsHLS:
     """HLS backend for TestKernelWithBackends."""
     
@@ -61,7 +56,6 @@ class TestKernelWithBackendsHLS:
 
 # Test Kernel Inference
 
-@kernel_inference(kernel="TestKernel")
 class InferTestKernel:
     """Inference transform for TestKernel."""
     

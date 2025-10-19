@@ -50,9 +50,25 @@ class ConfigFormatter:
                       self._get_source("deps_dir", "BSMITH_DEPS_DIR"))
 
         table.add_row("", "", "")
-        table.add_row("Toolchain Settings", "", "")
+        table.add_row("Plugin Settings", "", "")
+
+        # Plugin sources - show each source with its path
+        plugin_sources = config.effective_plugin_sources
+        source = self._get_source("plugin_sources", "BSMITH_PLUGIN_SOURCES")
+        for i, (source_name, source_path) in enumerate(sorted(plugin_sources.items())):
+            label = "  Plugin Sources" if i == 0 else ""
+            formatted_path = self._format_path(source_path, config.bsmith_dir)
+            display_value = f"{source_name}: {formatted_path}"
+            row_source = source if i == 0 else ""
+            table.add_row(label, display_value, row_source)
+
+        table.add_row("  Default Source", config.default_source,
+                      self._get_source("default_source", "BSMITH_DEFAULT_SOURCE"))
         table.add_row("  Plugins Strict", str(config.plugins_strict),
                       self._get_source("plugins_strict", "BSMITH_PLUGINS_STRICT"))
+
+        table.add_row("", "", "")
+        table.add_row("Toolchain Settings", "", "")
         table.add_row("  Netron Port", str(config.netron_port),
                       self._get_source("netron_port", "BSMITH_NETRON_PORT"))
         if config.default_workers:

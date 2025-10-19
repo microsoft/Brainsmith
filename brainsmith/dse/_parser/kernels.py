@@ -9,7 +9,7 @@ Handles parsing of kernel specifications and backend resolution.
 
 from typing import Any, List, Optional, Tuple, Type
 
-from brainsmith.registry import list_backends_by_kernel, get_backend
+from brainsmith.loader import list_backends_for_kernel, get_backend
 
 
 def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:
@@ -53,7 +53,7 @@ def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
 
         # If no backends specified, get all available
         if not backend_names:
-            backend_names = list_backends_by_kernel(kernel_name)
+            backend_names = list_backends_for_kernel(kernel_name)
 
         # Skip if no backends available
         if not backend_names:
@@ -61,11 +61,24 @@ def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
 
         # Resolve backend classes
         backend_classes = []
-        for name in backend_names:
-            backend_class = get_backend(name)
-            if not backend_class:
-                raise ValueError(f"Backend '{name}' not found in registry")
-            backend_classes.append(backend_class)
+        for backend_spec in backend_names:
+            # Backend spec could be just language ('hls') or full name ('LayerNormHLS')
+            # Try to extract language from the name
+            language = backend_spec.lower()
+            if language not in ['hls', 'rtl']:
+                # Full backend name like 'LayerNormHLS' - extract language
+                if backend_spec.endswith('HLS') or backend_spec.endswith('_hls'):
+                    language = 'hls'
+                elif backend_spec.endswith('RTL') or backend_spec.endswith('_rtl'):
+                    language = 'rtl'
+                else:
+                    raise ValueError(f"Cannot determine language from backend name '{backend_spec}'")
+
+            try:
+                backend_class = get_backend(kernel_name, language)
+                backend_classes.append(backend_class)
+            except KeyError as e:
+                raise ValueError(f"Backend not found for kernel '{kernel_name}', language '{language}': {e}") from e
 
         kernel_backends.append((kernel_name, backend_classes))
 
