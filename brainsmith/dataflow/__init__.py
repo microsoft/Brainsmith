@@ -85,6 +85,11 @@ from .models import (
     InputModel,
     OutputModel,
     KernelModel,
+    # Two-phase model types
+    InvariantInterfaceModel,
+    InvariantKernelModel,
+    ConfiguredInterfaceModel,
+    ConfiguredKernelModel,
 )
 
 # Builder (constructs models from schemas + context)
@@ -94,7 +99,7 @@ from .builder import (
 )
 
 # Template resolution
-from .template_resolution import resolve_template
+from .template_resolution import resolve_template, normalize_template
 
 # Validation
 from .validation import (
@@ -102,6 +107,7 @@ from .validation import (
     ValidationContext,
     OnnxValidationContext,
     KernelValidationContext,
+    ConfiguredValidationContext,
 )
 
 # Kernel operator base class
@@ -143,18 +149,22 @@ __all__ = [
 
     # Immutable models
     'InterfaceModel', 'InputModel', 'OutputModel', 'KernelModel',
+    # Two-phase model types
+    'InvariantInterfaceModel', 'InvariantKernelModel',
+    'ConfiguredInterfaceModel', 'ConfiguredKernelModel',
 
     # Builder
     'BuildContext', 'KernelModelBuilder',
 
     # Template resolution
-    'resolve_template',
+    'resolve_template', 'normalize_template',
 
     # Validation
     'ValidationError',
     'ValidationContext',
     'OnnxValidationContext',
     'KernelValidationContext',
+    'ConfiguredValidationContext',
 
     # Kernel operator base class
     'KernelOp', 'KernelOpError',

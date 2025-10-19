@@ -27,6 +27,53 @@ from .types import FULL_DIM
 logger = logging.getLogger(__name__)
 
 
+def normalize_template(
+    template: List[Union[int, str, DimensionSource]],
+    reference_shape: Tuple[int, ...]
+) -> List[Union[int, str, DimensionSource]]:
+    """Normalize template structure to match reference rank (no value resolution).
+
+    Pads template with singleton (1) dimensions on the left to match the length
+    of the reference shape. This is a pure structural transformation that does
+    not resolve parameter values or DimensionSource objects.
+
+    This function separates structural normalization from value resolution,
+    enabling storage of normalized templates before parameter values are known.
+
+    Args:
+        template: Template specification (e.g., ["SIMD"], [1, "PE"], [DerivedDim(...)])
+        reference_shape: Reference shape to match rank against
+
+    Returns:
+        Normalized template (same element types, left-padded with 1s)
+
+    Raises:
+        ValueError: If template length exceeds reference rank
+
+    Examples:
+        >>> normalize_template(["SIMD"], (1, 1, 64))
+        [1, 1, "SIMD"]
+        >>> normalize_template([1, "PE"], (128, 768))
+        [1, "PE"]
+        >>> normalize_template([FULL_DIM, "PE", 1], (128, 768, 64))
+        [FULL_DIM, "PE", 1]
+    """
+    # Convert to list to allow modification
+    template = list(template)
+
+    # Pad template to match reference rank (prepend singletons)
+    if len(template) < len(reference_shape):
+        padding = len(reference_shape) - len(template)
+        template = [1] * padding + template
+        logger.debug(f"Auto-padded template with {padding} singletons → {template}")
+    elif len(template) > len(reference_shape):
+        raise ValueError(
+            f"template length {len(template)} exceeds reference rank {len(reference_shape)}"
+        )
+
+    return template
+
+
 def resolve_template(
     template: List[Union[int, str, DimensionSource]],
     reference_shape: Tuple[int, ...],
@@ -61,16 +108,10 @@ def resolve_template(
     """
     logger.debug(f"Resolving template {template} against reference {reference_shape}")
 
-    # Pad template to match reference rank (prepend singletons)
-    if len(template) < len(reference_shape):
-        padding = len(reference_shape) - len(template)
-        template = [1] * padding + template
-        logger.debug(f"Auto-padded template with {padding} singletons → {template}")
-    elif len(template) > len(reference_shape):
-        raise ValueError(
-            f"template length {len(template)} exceeds reference rank {len(reference_shape)}"
-        )
+    # Step 1: Normalize structure (pad to match reference rank)
+    template = normalize_template(template, reference_shape)
 
+    # Step 2: Resolve values
     resolved = []
     for i, (dim, ref) in enumerate(zip(template, reference_shape)):
         if isinstance(dim, type(FULL_DIM)) or dim is FULL_DIM:

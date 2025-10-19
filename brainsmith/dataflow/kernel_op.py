@@ -9,7 +9,7 @@
 import logging
 import math
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
@@ -17,7 +17,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from onnx import NodeProto
 
 from .schemas import KernelSchema
-from .models import KernelModel
+from .models import KernelModel, InvariantKernelModel, ConfiguredKernelModel
 from .builder import BuildContext, KernelModelBuilder
 from .validation import OnnxValidationContext, KernelValidationContext
 
@@ -68,7 +68,12 @@ class KernelOp(HWCustomOp, ABC):
         super().__init__(onnx_node, **kwargs)
         # Build and freeze schema from node structure
         self.kernel_schema = self.build_schema(onnx_node, model=None)
-        self._kernel_model: Optional[KernelModel] = None
+
+        # Two-phase caching system for DSE performance
+        self._invariant_model: Optional['InvariantKernelModel'] = None  # Built once, never invalidated
+        self._configured_model: Optional['ConfiguredKernelModel'] = None  # Rebuilt on param change
+        self._current_params: Optional[dict] = None  # Tracks current parallelization params
+
         self._builder = KernelModelBuilder()
 
     @classmethod
@@ -252,29 +257,33 @@ class KernelOp(HWCustomOp, ABC):
 
         return my_attrs
 
-    def get_kernel_model(self, model_w: ModelWrapper) -> KernelModel:
-        """Get KernelModel (cached or rebuilt from model_w + schema).
+    def get_invariant_model(self, model_w: ModelWrapper) -> InvariantKernelModel:
+        """Get or build invariant kernel model (Phase 1 of two-phase construction).
 
-        Delegates to KernelModelBuilder for construction with caching and error context.
+        Built once per kernel instance, cached for lifetime. Contains all properties
+        that don't vary during DSE: tensor shapes, block shapes, datatypes, and valid
+        parallelization ranges.
+
+        This method enables efficient DSE by separating expensive invariant model
+        construction (done once) from cheap configuration switching (done many times).
 
         Args:
             model_w: ModelWrapper for ONNX graph access
 
         Returns:
-            Cached or newly built KernelModel
+            InvariantKernelModel ready for configuration
 
         Raises:
-            KernelOpError: If model cannot be built or validation fails
+            KernelOpError: If invariant model cannot be built or validation fails
         """
-        # Return cached model if available
-        if self._kernel_model is not None:
-            return self._kernel_model
+        # Return cached invariant model if available
+        if self._invariant_model is not None:
+            return self._invariant_model
 
         if model_w is None:
             raise self._error(
-                "ModelWrapper (model_w) required to build KernelModel. "
-                "KernelOp needs ModelWrapper to extract tensor shapes from the ONNX graph "
-                "and validate hardware configurations."
+                "ModelWrapper (model_w) required to build InvariantKernelModel. "
+                "KernelOp needs ModelWrapper to extract tensor shapes from the ONNX graph."
             )
 
         # Build context for builder
@@ -288,27 +297,100 @@ class KernelOp(HWCustomOp, ABC):
             node_name=self.onnx_node.name
         )
 
-        # Delegate to builder
+        # Build invariant model (Phase 1)
         try:
-            self._kernel_model = self._builder.build(build_ctx)
+            self._invariant_model = self._builder.build_invariant(build_ctx)
         except ValueError as e:
             raise self._error(str(e))
 
-        return self._kernel_model
+        return self._invariant_model
+
+    def get_kernel_model(self, model_w: ModelWrapper) -> ConfiguredKernelModel:
+        """Get current configured kernel model (Phase 2 of two-phase construction).
+
+        Reconfigures if parallelization parameters changed. Fast path (<0.1ms) if
+        params unchanged, slow path (<1ms) if reconfiguration needed.
+
+        For backward compatibility, this method now returns ConfiguredKernelModel
+        instead of KernelModel, but ConfiguredKernelModel provides the same interface.
+
+        Args:
+            model_w: ModelWrapper for ONNX graph access
+
+        Returns:
+            ConfiguredKernelModel with current stream shapes
+
+        Raises:
+            KernelOpError: If model cannot be built or validation fails
+        """
+        # Get invariant model (cached after first call)
+        invariant = self.get_invariant_model(model_w)
+
+        # Extract current parallelization params from nodeattrs
+        current_params = {}
+        for param_name in invariant.parallelization_params.keys():
+            current_params[param_name] = self.get_nodeattr(param_name)
+
+        # Check if reconfiguration needed
+        if self._configured_model is None or self._current_params != current_params:
+            # Configure with current params (fast: <1ms)
+            try:
+                self._configured_model = invariant.configure(current_params)
+                self._current_params = current_params.copy()
+            except ValueError as e:
+                raise self._error(str(e))
+
+        return self._configured_model
+
+    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, set]:
+        """Get valid parallelization parameter ranges for DSE.
+
+        New API for DSE system to query valid configurations. Returns pre-computed
+        divisor sets for each parallelization parameter (e.g., SIMD, PE, MW, MH).
+
+        This enables discrete, exhaustive design space exploration without trial-and-error
+        attempts at invalid configurations.
+
+        Args:
+            model_w: ModelWrapper for ONNX graph access
+
+        Returns:
+            Dict mapping parameter names to valid divisor sets
+            Example: {"SIMD": {1, 2, 3, 4, 6, 8, ..., 768}, "PE": {1, 2, 4, 8}}
+
+        Example Usage:
+            >>> valid_simd = kernel_op.get_valid_ranges(model_w)["SIMD"]
+            >>> for simd in valid_simd:
+            ...     kernel_op.set_nodeattr("SIMD", simd)
+            ...     kernel_model = kernel_op.get_kernel_model(model_w)  # Fast reconfiguration
+        """
+        invariant = self.get_invariant_model(model_w)
+        return invariant.parallelization_params
 
     def infer_node_datatype(self, model_w):
         """FINN compatibility wrapper."""
         self.get_kernel_model(model_w)
 
     @property
-    def kernel_model(self) -> KernelModel:
-        """Access cached KernelModel (requires prior get_kernel_model call)."""
-        if self._kernel_model is None:
+    def kernel_model(self) -> ConfiguredKernelModel:
+        """Access cached ConfiguredKernelModel (requires prior get_kernel_model call).
+
+        Returns the currently configured model. For backward compatibility, this
+        now returns ConfiguredKernelModel instead of KernelModel, but the interface
+        is identical.
+
+        Returns:
+            Cached ConfiguredKernelModel
+
+        Raises:
+            RuntimeError: If get_kernel_model() hasn't been called yet
+        """
+        if self._configured_model is None:
             raise RuntimeError(
                 f"Cannot access kernel_model for {self.onnx_node.name}. "
                 f"Call get_kernel_model(model_w) first to build the model."
             )
-        return self._kernel_model
+        return self._configured_model
 
     # ====================================================================
     # Public API: Shape/Datatype Queries
@@ -398,8 +480,16 @@ class KernelOp(HWCustomOp, ABC):
         )
 
     def set_nodeattr(self, name: str, value: Any) -> None:
-        """Set nodeattr and invalidate cache."""
+        """Set nodeattr and invalidate configured model cache.
 
+        Modified behavior for two-phase caching: Only invalidates configured model,
+        NOT invariant model. The invariant model is built once and never invalidated,
+        as it contains only properties that don't depend on parallelization parameters.
+
+        Args:
+            name: Attribute name
+            value: New value
+        """
         old_value = None
         try:
             old_value = self.get_nodeattr(name)
@@ -408,5 +498,7 @@ class KernelOp(HWCustomOp, ABC):
 
         if old_value != value:
             super().set_nodeattr(name, value)
-            # Invalidate cached model
-            self._kernel_model = None
+            # Only invalidate configured model, NOT invariant model
+            # Invariant model remains cached for lifetime of KernelOp instance
+            self._configured_model = None
+            self._current_params = None

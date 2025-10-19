@@ -83,6 +83,41 @@ class Constraint(ABC):
         """Human-readable description of constraint."""
         pass
 
+    @property
+    def evaluation_phase(self) -> str:
+        """When to evaluate this constraint during kernel construction.
+
+        Returns:
+            'invariant' - Evaluated once during build_invariant() (Phase 1)
+                         Properties that don't depend on parallelization params
+                         (tensor shapes, block shapes, datatypes, etc.)
+
+            'variant' - Evaluated per-configuration during configure() (Phase 2)
+                       Properties that depend on parallelization params
+                       (stream shapes, stream widths, etc.)
+
+        Default implementation uses heuristic for backward compatibility:
+        - Constraints with hierarchy == STREAM are variant
+        - All other constraints are invariant
+
+        Subclasses can override this property for explicit classification.
+
+        Examples:
+            DatatypeInteger: 'invariant' (no hierarchy, datatype is fixed)
+            ShapesEqual(hierarchy=TENSOR): 'invariant' (tensor shape is fixed)
+            ShapesEqual(hierarchy=BLOCK): 'invariant' (block shape is fixed)
+            ShapesEqual(hierarchy=STREAM): 'variant' (stream shape varies with params)
+            DimensionDivisible(hierarchy=STREAM): 'variant' (stream dim varies)
+        """
+        # Heuristic: stream-level shape constraints are variant
+        if hasattr(self, 'hierarchy'):
+            if self.hierarchy == ShapeHierarchy.STREAM:
+                return 'variant'
+
+        # All other constraints are invariant by default
+        # (datatype, layout, node attribute, custom, etc.)
+        return 'invariant'
+
 
 # =============================================================================
 # Datatype Constraints

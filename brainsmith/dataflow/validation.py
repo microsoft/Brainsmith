@@ -27,7 +27,7 @@ Example usage:
 """
 
 import logging
-from typing import Any, List, Optional, Callable, Protocol
+from typing import Any, List, Optional, Callable, Protocol, Dict
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -365,9 +365,288 @@ class KernelValidationContext:
         )
 
 
+# =============================================================================
+# Invariant Validation Context (Two-Phase Construction)
+# =============================================================================
+
+@dataclass
+class InvariantValidationContext:
+    """Validation context for InvariantKernelModel (no stream shapes yet).
+
+    Used to validate invariant constraints before stream shape resolution.
+    Adapts lists of InvariantInterfaceModel to ValidationContext protocol.
+
+    This context is used during build_invariant() to validate constraints
+    that don't depend on stream shapes (e.g., datatype constraints, tensor/block
+    shape constraints). STREAM hierarchy queries will fail since stream shapes
+    are not resolved yet.
+
+    Example:
+        ctx = InvariantValidationContext(
+            inputs=[inv_input1, inv_input2],
+            outputs=[inv_output],
+            internal_datatypes={"accumulator": DataType["INT32"]},
+            param_getter=get_nodeattr,
+        )
+        dt = ctx.get_datatype("input0")  # Works
+        tensor_shape = ctx.get_shape("input0", ShapeHierarchy.TENSOR)  # Works
+        block_shape = ctx.get_shape("input0", ShapeHierarchy.BLOCK)  # Works
+        stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)  # RuntimeError
+    """
+    inputs: List[Any]  # List[InvariantInterfaceModel]
+    outputs: List[Any]  # List[InvariantInterfaceModel]
+    internal_datatypes: Dict[str, DataType]
+    param_getter: Callable[[str], Any]
+
+    def __post_init__(self):
+        """Build interface lookup map."""
+        self._interfaces = {}
+        for inp in self.inputs:
+            self._interfaces[inp.name] = inp
+        for out in self.outputs:
+            self._interfaces[out.name] = out
+
+    def get_datatype(self, name: str) -> DataType:
+        """Get datatype from invariant interface."""
+        if name not in self._interfaces:
+            raise KeyError(f"Interface '{name}' not found in invariant model")
+        return self._interfaces[name].datatype
+
+    def get_shape(
+        self,
+        name: str,
+        hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
+    ) -> tuple[int, ...]:
+        """Get shape at hierarchy level (STREAM not available).
+
+        Args:
+            name: Interface name
+            hierarchy: Shape hierarchy level
+
+        Returns:
+            Shape tuple for requested hierarchy
+
+        Raises:
+            KeyError: If interface not found
+            RuntimeError: If STREAM hierarchy requested (not available yet)
+            ValueError: If unknown hierarchy
+        """
+        if name not in self._interfaces:
+            raise KeyError(f"Interface '{name}' not found in invariant model")
+
+        interface = self._interfaces[name]
+
+        if hierarchy == ShapeHierarchy.STREAM:
+            raise RuntimeError(
+                f"Stream shapes not available in invariant validation context. "
+                f"Stream-level constraints are variant constraints and should be "
+                f"validated during configure(), not during build_invariant()."
+            )
+        elif hierarchy == ShapeHierarchy.BLOCK:
+            return interface.block_shape
+        elif hierarchy == ShapeHierarchy.TENSOR:
+            return interface.tensor_shape
+        else:
+            raise ValueError(f"Unknown hierarchy: {hierarchy}")
+
+    def is_dynamic(self, name: str) -> bool:
+        """Check if interface is dynamic (not a weight).
+
+        For inputs, returns NOT is_weight (inferred from ONNX initializers).
+        For outputs, always returns True (no weights).
+
+        Returns:
+            True if dynamic (activations), False if static (weights)
+        """
+        if name not in self._interfaces:
+            # Interface not found - assume dynamic
+            return True
+        interface = self._interfaces[name]
+        # InvariantInterfaceModel has is_weight flag
+        return not interface.is_weight
+
+    def get_layout(self, name: str) -> Optional[Any]:
+        """Get data layout - NOT TRACKED in kernel context.
+
+        Note:
+            Kernel models don't track layout (layout handled during inference).
+            Always returns None. This allows layout-specific constraints like
+            HasLayout to gracefully pass in kernel contexts.
+        """
+        return None
+
+    def get_param(self, name: str) -> Any:
+        """Get kernel parameter via param_getter.
+
+        Args:
+            name: Parameter name
+
+        Returns:
+            Parameter value
+
+        Raises:
+            KeyError: If parameter not found
+        """
+        try:
+            return self.param_getter(name)
+        except (AttributeError, KeyError) as e:
+            raise KeyError(f"Parameter '{name}' not found in nodeattrs") from e
+
+    def get_interfaces(self) -> List[str]:
+        """Get all interface names."""
+        return list(self._interfaces.keys())
+
+    def get_node_attribute(self, name: str, default: Any = None) -> Any:
+        """Get ONNX node attribute - NOT AVAILABLE in invariant context.
+
+        Node attributes are only available during ONNX inference validation.
+        In invariant build context, the node is already being converted.
+
+        Args:
+            name: Attribute name
+            default: Default value (ignored - always raises RuntimeError)
+
+        Raises:
+            RuntimeError: Always (node attributes don't exist in invariant context)
+        """
+        raise RuntimeError(
+            f"Node attributes not available in invariant kernel build context. "
+            f"Cannot get attribute '{name}'. "
+            f"Node attribute constraints are only checked during ONNX inference."
+        )
+
+
+# =============================================================================
+# Configured Validation Context (Two-Phase Construction)
+# =============================================================================
+
+@dataclass
+class ConfiguredValidationContext:
+    """Validation context for ConfiguredKernelModel (two-phase construction).
+
+    Adapts ConfiguredKernelModel to ValidationContext protocol.
+    Similar to KernelValidationContext but works with ConfiguredInterfaceModel
+    which uses a flyweight pattern (references invariant + resolved stream_shape).
+
+    Used during InvariantKernelModel.configure() to validate variant constraints
+    after stream shapes are resolved.
+
+    Example:
+        ctx = ConfiguredValidationContext(configured_model, {"SIMD": 64})
+        dt = ctx.get_datatype("input0")
+        stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)
+        simd = ctx.get_param("SIMD")
+    """
+    configured_model: Any  # ConfiguredKernelModel (avoid circular import)
+    param_getter_dict: Dict[str, Any]  # Parallelization params
+
+    def get_datatype(self, name: str) -> DataType:
+        """Get datatype from configured interface."""
+        try:
+            interface = self.configured_model.get_interface(name)
+            if interface is None:
+                raise KeyError(f"Interface '{name}' not found in configured model")
+            return interface.datatype
+        except (AttributeError, KeyError) as e:
+            raise KeyError(f"Interface '{name}' not found in configured model") from e
+
+    def get_shape(
+        self,
+        name: str,
+        hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
+    ) -> tuple[int, ...]:
+        """Get shape from configured interface at hierarchy.
+
+        ConfiguredInterfaceModel supports all hierarchies:
+        - TENSOR: from invariant.tensor_shape
+        - BLOCK: from invariant.block_shape
+        - STREAM: from stream_shape (resolved)
+        """
+        try:
+            interface = self.configured_model.get_interface(name)
+            if interface is None:
+                raise KeyError(f"Interface '{name}' not found in configured model")
+            return interface.get_shape(hierarchy)
+        except (AttributeError, KeyError) as e:
+            raise KeyError(f"Interface '{name}' not found in configured model") from e
+
+    def is_dynamic(self, name: str) -> bool:
+        """Check if interface is dynamic (not a weight).
+
+        For inputs, returns NOT is_weight (inferred from ONNX initializers).
+        For outputs, always returns True (no weights).
+
+        Returns:
+            True if dynamic (activations), False if static (weights)
+        """
+        try:
+            interface = self.configured_model.get_interface(name)
+            if interface is None:
+                # Interface not found - assume dynamic
+                return True
+            # ConfiguredInterfaceModel delegates is_weight to invariant
+            return not interface.is_weight
+        except (AttributeError, KeyError):
+            # Interface not found - assume dynamic
+            return True
+
+    def get_layout(self, name: str) -> Optional[Any]:
+        """Get data layout - NOT TRACKED in kernel context.
+
+        Note:
+            Kernel models don't track layout (layout handled during inference).
+            Always returns None. This allows layout-specific constraints like
+            HasLayout to gracefully pass in kernel contexts.
+        """
+        return None
+
+    def get_param(self, name: str) -> Any:
+        """Get parallelization parameter from configuration.
+
+        Args:
+            name: Parameter name (e.g., "SIMD", "PE")
+
+        Returns:
+            Parameter value
+
+        Raises:
+            KeyError: If parameter not found in configuration
+        """
+        if name not in self.param_getter_dict:
+            raise KeyError(f"Parameter '{name}' not found in configuration")
+        return self.param_getter_dict[name]
+
+    def get_interfaces(self) -> List[str]:
+        """Get all interface names (inputs + outputs)."""
+        input_names = [inp.name for inp in self.configured_model.inputs]
+        output_names = [out.name for out in self.configured_model.outputs]
+        return input_names + output_names
+
+    def get_node_attribute(self, name: str, default: Any = None) -> Any:
+        """Get ONNX node attribute - NOT AVAILABLE in configured context.
+
+        Node attributes are only available during ONNX inference validation.
+        In configured kernel context, the node is already converted and configured.
+
+        Args:
+            name: Attribute name
+            default: Default value (ignored - always raises RuntimeError)
+
+        Raises:
+            RuntimeError: Always (node attributes don't exist in configured context)
+        """
+        raise RuntimeError(
+            f"Node attributes not available in configured kernel context. "
+            f"Cannot get attribute '{name}'. "
+            f"Node attribute constraints are only checked during ONNX inference."
+        )
+
+
 __all__ = [
     'ValidationError',
     'ValidationContext',
     'OnnxValidationContext',
     'KernelValidationContext',
+    'InvariantValidationContext',
+    'ConfiguredValidationContext',
 ]
