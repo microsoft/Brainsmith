@@ -88,35 +88,35 @@ class Constraint(ABC):
         """When to evaluate this constraint during kernel construction.
 
         Returns:
-            'invariant' - Evaluated once during build_invariant() (Phase 1)
-                         Properties that don't depend on parallelization params
-                         (tensor shapes, block shapes, datatypes, etc.)
+            'structural' - Evaluated once during design space construction (Phase 1)
+                          Constraints that determine backend compatibility
+                          (tensor shapes, block shapes, datatypes, etc.)
 
-            'variant' - Evaluated per-configuration during configure() (Phase 2)
-                       Properties that depend on parallelization params
-                       (stream shapes, stream widths, etc.)
+            'parametric' - Evaluated per-configuration during configure() (Phase 2)
+                          Constraints that bound optimization space
+                          (stream shapes, parallelization parameters, etc.)
 
         Default implementation uses heuristic for backward compatibility:
-        - Constraints with hierarchy == STREAM are variant
-        - All other constraints are invariant
+        - Constraints with hierarchy == STREAM are parametric
+        - All other constraints are structural
 
         Subclasses can override this property for explicit classification.
 
         Examples:
-            DatatypeInteger: 'invariant' (no hierarchy, datatype is fixed)
-            ShapesEqual(hierarchy=TENSOR): 'invariant' (tensor shape is fixed)
-            ShapesEqual(hierarchy=BLOCK): 'invariant' (block shape is fixed)
-            ShapesEqual(hierarchy=STREAM): 'variant' (stream shape varies with params)
-            DimensionDivisible(hierarchy=STREAM): 'variant' (stream dim varies)
+            DatatypeInteger: 'structural' (no hierarchy, datatype determines compatibility)
+            ShapesEqual(hierarchy=TENSOR): 'structural' (tensor shape determines compatibility)
+            ShapesEqual(hierarchy=BLOCK): 'structural' (block shape determines compatibility)
+            ShapesEqual(hierarchy=STREAM): 'parametric' (stream shape bounds optimization)
+            DimensionDivisible(hierarchy=STREAM): 'parametric' (stream dim bounds optimization)
         """
-        # Heuristic: stream-level shape constraints are variant
+        # Heuristic: stream-level shape constraints are parametric
         if hasattr(self, 'hierarchy'):
             if self.hierarchy == ShapeHierarchy.STREAM:
-                return 'variant'
+                return 'parametric'
 
-        # All other constraints are invariant by default
+        # All other constraints are structural by default
         # (datatype, layout, node attribute, custom, etc.)
-        return 'invariant'
+        return 'structural'
 
 
 # =============================================================================

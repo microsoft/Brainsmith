@@ -170,8 +170,8 @@ def test_get_design_space_builds_once():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    # Patch builder to track calls
-    with patch.object(kernel_op._builder, 'build') as mock_build:
+    # Patch module-level builder function to track calls
+    with patch('brainsmith.dataflow.kernel_op.build_kernel_design_space') as mock_build:
         mock_build.return_value = MagicMock()
 
         # First call should build
@@ -200,7 +200,7 @@ def test_get_design_space_returns_same_instance():
 # ====================================================================
 
 def test_get_kernel_model_first_call_builds_both_models():
-    """Test that first get_kernel_model() call builds both invariant and configured."""
+    """Test that first get_kernel_model() call builds both design_space and configured."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
@@ -267,11 +267,11 @@ def test_valid_ranges_match_block_shapes():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    invariant = kernel_op.get_design_space(model_w)
+    design_space = kernel_op.get_design_space(model_w)
     valid_ranges = kernel_op.get_valid_ranges(model_w)
 
     # Get block shape for input
-    block_shape = invariant.inputs[0].block_shape
+    block_shape = design_space.inputs[0].block_shape
 
     # All valid SIMD values should divide the last dimension
     for simd in valid_ranges["SIMD"]:
@@ -283,7 +283,7 @@ def test_valid_ranges_match_block_shapes():
 # ====================================================================
 
 def test_set_nodeattr_invalidates_configured_only():
-    """Test that set_nodeattr() invalidates only configured model, not invariant."""
+    """Test that set_nodeattr() invalidates only configured model, not design_space."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 

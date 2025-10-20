@@ -5,18 +5,18 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Kernel inference infrastructure for HW layer inference.
+"""Kernel transformation infrastructure for HW layer inference.
 
-This module provides helper utilities for kernel inference:
-- InferenceHelper: Utility methods for common inference operations
+This module provides transformation utilities for converting ONNX nodes to HW kernels:
+- TransformationHelper: Graph manipulation utilities for ONNX → HW transformation
 
 Discovery is handled by KernelOp.get_source_ops().
 Validation is handled by unified Constraint system (see constraints.py).
 Transformation is handled by TransformationSpec/TransformationResult (see transformation.py).
 
 Example usage:
-    # Using helper for graph manipulation
-    helper = InferenceHelper(model, domain="brainsmith.kernels")
+    # Using helper for graph transformation
+    helper = TransformationHelper(model, domain="brainsmith.kernels")
     in0 = helper.ensure_layout(node.input[0], "NHWC", insert_index)
     new_node = helper.make_node("MyKernel", [in0], [out], {"PE": 1})
 """
@@ -34,17 +34,21 @@ from qonnx.util.onnx import nchw_to_nhwc
 logger = logging.getLogger(__name__)
 
 
-class InferenceHelper:
-    """Helper utilities for kernel inference operations.
+class TransformationHelper:
+    """Transformation utilities for ONNX → HW kernel conversion.
 
-    Encapsulates common operations needed during kernel inference:
+    Provides graph manipulation operations needed during kernel transformation:
     - Layout conversion with automatic Transpose insertion
     - Intermediate tensor creation
     - HW node creation with standard attributes
-    - Shape/datatype extraction
+    - Property extraction (channels, spatial dims, etc.)
+    - Graph topology queries (consumers, fanout)
+
+    Validation is handled by the unified Constraint system (see constraints.py).
+    This class focuses purely on transformation, not validation.
 
     Example:
-        helper = InferenceHelper(model)
+        helper = TransformationHelper(model, domain="brainsmith.kernels")
 
         # Ensure input is NHWC (inserts Transpose if needed)
         nhwc_input = helper.ensure_layout(node.input[0], "NHWC", insert_index)
@@ -237,206 +241,8 @@ class InferenceHelper:
         return list(shape[:-1])
 
     # ===================================================================
-    # Type Checking Utilities (multi-tensor operations)
+    # Property Extraction (computed properties, not validation)
     # ===================================================================
-
-    def is_integer_tensor(self, tensor_name: str) -> bool:
-        """Check if tensor has integer datatype.
-
-        Args:
-            tensor_name: Name of tensor to check
-
-        Returns:
-            True if tensor has integer datatype
-
-        Example:
-            if not helper.is_integer_tensor(node.input[0]):
-                return None  # Skip inference
-        """
-        dt = self.model.get_tensor_datatype(tensor_name)
-        return dt is not None and dt.is_integer()
-
-    def all_integer_tensors(self, tensor_names: List[str]) -> bool:
-        """Check if all tensors have integer datatypes.
-
-        Multi-tensor convenience method.
-        Reduces: 4 lines → 1 line
-
-        Args:
-            tensor_names: List of tensor names to check
-
-        Returns:
-            True if all tensors are integers, False otherwise
-
-        Example:
-            # Before
-            dt0 = model.get_tensor_datatype(in0)
-            dt1 = model.get_tensor_datatype(in1)
-            if not dt0.is_integer() or not dt1.is_integer():
-                return None
-
-            # After
-            if not helper.all_integer_tensors([in0, in1]):
-                return None
-        """
-        return all(
-            self.model.get_tensor_datatype(t) is not None and
-            self.model.get_tensor_datatype(t).is_integer()
-            for t in tensor_names
-        )
-
-    def datatypes_match(self, *tensor_names: str) -> bool:
-        """Check if all tensors have identical datatypes.
-
-        Multi-tensor comparison utility.
-        Reduces: 3 lines → 1 line
-
-        Args:
-            *tensor_names: Variable number of tensor names
-
-        Returns:
-            True if all tensors have same datatype, False otherwise
-
-        Example:
-            # Before
-            dt0 = model.get_tensor_datatype(in0)
-            dt1 = model.get_tensor_datatype(in1)
-            if dt0 != dt1:
-                return None
-
-            # After
-            if not helper.datatypes_match(in0, in1):
-                return None
-        """
-        if not tensor_names:
-            return True
-        datatypes = [self.model.get_tensor_datatype(t) for t in tensor_names]
-        if any(dt is None for dt in datatypes):
-            return False
-        return len(set(datatypes)) == 1
-
-    # ===================================================================
-    # Static/Dynamic Detection (readability predicates)
-    # ===================================================================
-
-    def is_static(self, tensor_name: str) -> bool:
-        """Check if tensor has initializer (is static/constant).
-
-        Eliminates double-negative pattern.
-        Reduces: 1 line → 1 line (but more readable)
-
-        Args:
-            tensor_name: Name of tensor to check
-
-        Returns:
-            True if tensor has initializer
-
-        Example:
-            # Before
-            in0_static = not (model.get_initializer(in0) is None)
-
-            # After
-            in0_static = helper.is_static(in0)
-        """
-        return self.model.get_initializer(tensor_name) is not None
-
-    def is_dynamic(self, tensor_name: str) -> bool:
-        """Check if tensor is dynamic (no initializer).
-
-        Args:
-            tensor_name: Name of tensor to check
-
-        Returns:
-            True if tensor is dynamic (no initializer)
-        """
-        return self.model.get_initializer(tensor_name) is None
-
-    def any_static(self, tensor_names: List[str]) -> bool:
-        """Check if any tensors are static.
-
-        Multi-tensor convenience method.
-        Reduces: 3-4 lines → 1 line
-
-        Args:
-            tensor_names: List of tensor names to check
-
-        Returns:
-            True if at least one tensor is static
-
-        Example:
-            # Before
-            in0_static = not (model.get_initializer(in0) is None)
-            in1_static = not (model.get_initializer(in1) is None)
-            if in0_static or in1_static:
-                return None  # Skip - need all dynamic
-
-            # After
-            if helper.any_static([in0, in1]):
-                return None  # Skip - need all dynamic
-        """
-        return any(self.model.get_initializer(t) is not None for t in tensor_names)
-
-    def all_dynamic(self, tensor_names: List[str]) -> bool:
-        """Check if all tensors are dynamic.
-
-        Multi-tensor convenience method.
-
-        Args:
-            tensor_names: List of tensor names
-
-        Returns:
-            True if all tensors are dynamic (no initializers)
-        """
-        return all(self.model.get_initializer(t) is None for t in tensor_names)
-
-    # ===================================================================
-    # Shape Validation (comparison & computed properties)
-    # ===================================================================
-
-    def shapes_match(self, *tensor_names: str) -> bool:
-        """Check if all tensors have identical shapes.
-
-        Multi-tensor comparison utility.
-        Reduces: 3 lines → 1 line
-
-        Args:
-            *tensor_names: Variable number of tensor names
-
-        Returns:
-            True if all tensors have same shape, False otherwise
-
-        Example:
-            # Before
-            shape0 = model.get_tensor_shape(in0)
-            shape1 = model.get_tensor_shape(in1)
-            if shape0 != shape1:
-                return None
-
-            # After
-            if not helper.shapes_match(in0, in1):
-                return None
-        """
-        if not tensor_names:
-            return True
-        shapes = [self.model.get_tensor_shape(t) for t in tensor_names]
-        if any(s is None for s in shapes):
-            return False
-        # Convert to tuples for set comparison
-        return len(set(tuple(s) for s in shapes)) == 1
-
-    def is_4d_tensor(self, tensor_name: str) -> bool:
-        """Check if tensor is 4D (common for conv/pool operations).
-
-        Computed predicate (more readable than len(shape) == 4).
-
-        Args:
-            tensor_name: Name of tensor to check
-
-        Returns:
-            True if tensor has 4 dimensions
-        """
-        shape = self.model.get_tensor_shape(tensor_name)
-        return shape is not None and len(shape) == 4
 
     def get_spatial_dims(self, tensor_name: str):
         """Get spatial dimensions (H, W) for 4D NHWC tensor.

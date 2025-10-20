@@ -89,10 +89,10 @@ def transform_onnx_to_kernel(
     Raises:
         ValueError: If transformation cannot be performed
     """
-    from .inference import InferenceHelper
+    from .inference import TransformationHelper
     from .schemas import InputSchema, OutputSchema
 
-    helper = InferenceHelper(model, domain=schema.domain)
+    helper = TransformationHelper(model, domain=schema.domain)
 
     # ============= PHASE 1: TRANSFORM INPUTS =============
     converted_inputs = []

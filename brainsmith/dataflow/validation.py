@@ -131,17 +131,16 @@ class OnnxValidationContext:
     Used during kernel inference pattern matching to validate constraints
     on ONNX nodes before creating hardware kernels.
 
-    Provides a read-only mapping from schema interface names (e.g., "input0")
-    to actual ONNX tensor names (e.g., "act_in") based on position. This allows
-    constraints to use self-documenting schema names while validating actual
-    ONNX tensor properties. The ONNX graph is never modified by this context.
+    Resolves schema interface names (e.g., "input0") to ONNX tensor names
+    (e.g., "act_in") by searching the schema and using positional correspondence.
+    This allows constraints to use self-documenting schema names while validating
+    actual ONNX tensor properties.
 
     Example:
-        # With schema mapping (read-only lookup by position)
+        # With schema (interface name resolution)
         ctx = OnnxValidationContext(add_node, model, schema)
-        dt = ctx.get_datatype("input0")  # Looks up node.input[0], gets "act_in"
-                                         # Returns datatype of "act_in" tensor
-                                         # Graph tensor names unchanged!
+        dt = ctx.get_datatype("input0")  # Finds schema.inputs[0].name == "input0"
+                                         # Returns datatype of node.input[0]
 
         # Without schema (direct ONNX names)
         ctx = OnnxValidationContext(add_node, model)
@@ -150,29 +149,39 @@ class OnnxValidationContext:
 
     node: NodeProto
     model: ModelWrapper
-    schema: Any = None  # Optional KernelSchema for interface name mapping
-
-    def __post_init__(self):
-        """Build read-only mapping from schema interface names to ONNX tensor names.
-
-        This mapping is used purely for validation lookups - the ONNX graph
-        tensor names are never modified. Schema names (e.g., "input0") are
-        mapped by position to actual ONNX tensor names (e.g., "act_in").
-        """
-        self._name_map = {}
-        if self.schema is not None:
-            # Map input interfaces to ONNX tensors by position
-            for i, inp_schema in enumerate(self.schema.inputs):
-                if i < len(self.node.input):
-                    self._name_map[inp_schema.name] = self.node.input[i]
-            # Map output interfaces to ONNX tensors by position
-            for i, out_schema in enumerate(self.schema.outputs):
-                if i < len(self.node.output):
-                    self._name_map[out_schema.name] = self.node.output[i]
+    schema: Any = None  # Optional KernelSchema for interface name resolution
 
     def _resolve_name(self, name: str) -> str:
-        """Resolve schema interface name to ONNX tensor name."""
-        return self._name_map.get(name, name)
+        """Resolve schema interface name to ONNX tensor name by position.
+
+        Searches schema.inputs and schema.outputs to find interface with matching
+        name, then returns the corresponding node.input[i] or node.output[i].
+
+        If no schema provided or name not found, returns name unchanged.
+
+        Performance: O(n) where n = # interfaces, typically 3-4, so ~50ns.
+
+        Args:
+            name: Schema interface name (e.g., "input0") or direct ONNX tensor name
+
+        Returns:
+            ONNX tensor name (e.g., "act_in")
+        """
+        if self.schema is None:
+            return name
+
+        # Search inputs: schema.inputs[i].name → node.input[i]
+        for i, inp_schema in enumerate(self.schema.inputs):
+            if inp_schema.name == name and i < len(self.node.input):
+                return self.node.input[i]
+
+        # Search outputs: schema.outputs[i].name → node.output[i]
+        for i, out_schema in enumerate(self.schema.outputs):
+            if out_schema.name == name and i < len(self.node.output):
+                return self.node.output[i]
+
+        # Not found in schema, assume direct ONNX tensor name
+        return name
 
     def get_datatype(self, name: str) -> DataType:
         """Get datatype from ONNX tensor."""
@@ -266,7 +275,7 @@ class OnnxValidationContext:
 class KernelValidationContext:
     """Validation context for kernel models (build-time).
 
-    Adapts KernelModel + nodeattr getter to ValidationContext protocol.
+    Adapts KernelConfiguration + nodeattr getter to ValidationContext protocol.
     Used during kernel model building to validate constraints on
     kernel interfaces and parameters.
 
@@ -277,16 +286,26 @@ class KernelValidationContext:
         pe = ctx.get_param("PE")
     """
 
-    kernel_model: Any  # KernelModel (avoid circular import)
+    kernel_model: Any  # KernelConfiguration (avoid circular import)
     param_getter: Callable[[str], Any]
 
     def get_datatype(self, name: str) -> DataType:
         """Get datatype from kernel interface."""
-        try:
-            interface = self.kernel_model.get_interface(name)
-            return interface.datatype
-        except (AttributeError, KeyError) as e:
-            raise KeyError(f"Interface '{name}' not found in kernel model") from e
+        # Try inputs first
+        if name in self.kernel_model.inputs:
+            return self.kernel_model.inputs[name].datatype
+        # Try outputs
+        if name in self.kernel_model.outputs:
+            return self.kernel_model.outputs[name].datatype
+        # Not found - helpful error
+        available = (
+            list(self.kernel_model.inputs.keys()) +
+            list(self.kernel_model.outputs.keys())
+        )
+        raise KeyError(
+            f"Interface '{name}' not found in kernel model. "
+            f"Available: {', '.join(available)}"
+        )
 
     def get_shape(
         self,
@@ -294,12 +313,21 @@ class KernelValidationContext:
         hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
     ) -> tuple[int, ...]:
         """Get shape from kernel interface at specified hierarchy."""
-        try:
-            interface = self.kernel_model.get_interface(name)
-            shape = interface.get_shape(hierarchy)
-            return tuple(shape)
-        except (AttributeError, KeyError) as e:
-            raise KeyError(f"Interface '{name}' not found in kernel model") from e
+        # Try inputs first
+        if name in self.kernel_model.inputs:
+            return tuple(self.kernel_model.inputs[name].get_shape(hierarchy))
+        # Try outputs
+        if name in self.kernel_model.outputs:
+            return tuple(self.kernel_model.outputs[name].get_shape(hierarchy))
+        # Not found - helpful error
+        available = (
+            list(self.kernel_model.inputs.keys()) +
+            list(self.kernel_model.outputs.keys())
+        )
+        raise KeyError(
+            f"Interface '{name}' not found in kernel model. "
+            f"Available: {', '.join(available)}"
+        )
 
     def is_dynamic(self, name: str) -> bool:
         """Check if interface is dynamic (not a weight).
@@ -310,16 +338,14 @@ class KernelValidationContext:
         Returns:
             True if dynamic (activations), False if static (weights)
         """
-        try:
-            interface = self.kernel_model.get_interface(name)
-            # Inputs have is_weight flag (inferred from ONNX)
-            if hasattr(interface, 'is_weight'):
-                return not interface.is_weight
-            # Outputs and internals are always dynamic
+        # Try inputs first
+        if name in self.kernel_model.inputs:
+            return not self.kernel_model.inputs[name].is_weight
+        # Try outputs (always dynamic)
+        if name in self.kernel_model.outputs:
             return True
-        except (AttributeError, KeyError):
-            # Interface not found - assume dynamic
-            return True
+        # Not found - assume dynamic
+        return True
 
     def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout - NOT TRACKED in kernel context.
@@ -341,9 +367,7 @@ class KernelValidationContext:
 
     def get_interfaces(self) -> List[str]:
         """Get all interface names (inputs + outputs)."""
-        input_names = [inp.name for inp in self.kernel_model.inputs]
-        output_names = [out.name for out in self.kernel_model.outputs]
-        return input_names + output_names
+        return list(self.kernel_model.inputs.keys()) + list(self.kernel_model.outputs.keys())
 
     def get_node_attribute(self, name: str, default: Any = None) -> Any:
         """Get ONNX node attribute - NOT AVAILABLE in kernel context.
@@ -366,20 +390,21 @@ class KernelValidationContext:
 
 
 # =============================================================================
-# Invariant Validation Context (Two-Phase Construction)
+# Design Space Validation Context (Two-Phase Construction)
 # =============================================================================
 
 @dataclass
 class DesignSpaceValidationContext:
     """Validation context for KernelDesignSpace (no stream shapes yet).
 
-    Used to validate invariant constraints before stream shape resolution.
+    Used to validate structural constraints before stream shape resolution.
     Adapts lists of InterfaceDesignSpace to ValidationContext protocol.
 
-    This context is used during build_invariant() to validate constraints
-    that don't depend on stream shapes (e.g., datatype constraints, tensor/block
-    shape constraints). STREAM hierarchy queries will fail since stream shapes
-    are not resolved yet.
+    Builds dict cache from lists for O(1) lookup. This context is used during
+    design space construction (build()) to validate constraints that don't
+    depend on stream shapes (e.g., datatype constraints, tensor/block shape
+    constraints). STREAM hierarchy queries will fail since stream shapes are
+    not resolved yet.
 
     Example:
         ctx = DesignSpaceValidationContext(
@@ -393,24 +418,22 @@ class DesignSpaceValidationContext:
         block_shape = ctx.get_shape("input0", ShapeHierarchy.BLOCK)  # Works
         stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)  # RuntimeError
     """
-    inputs: List[Any]  # List[InterfaceDesignSpace]
-    outputs: List[Any]  # List[InterfaceDesignSpace]
+    inputs: Dict[str, Any]  # Dict[str, InterfaceDesignSpace]
+    outputs: Dict[str, Any]  # Dict[str, InterfaceDesignSpace]
     internal_datatypes: Dict[str, DataType]
     param_getter: Callable[[str], Any]
 
-    def __post_init__(self):
-        """Build interface lookup map."""
-        self._interfaces = {}
-        for inp in self.inputs:
-            self._interfaces[inp.name] = inp
-        for out in self.outputs:
-            self._interfaces[out.name] = out
-
     def get_datatype(self, name: str) -> DataType:
-        """Get datatype from invariant interface."""
-        if name not in self._interfaces:
-            raise KeyError(f"Interface '{name}' not found in invariant model")
-        return self._interfaces[name].datatype
+        """Get datatype from design space interface."""
+        if name in self.inputs:
+            return self.inputs[name].datatype
+        if name in self.outputs:
+            return self.outputs[name].datatype
+        available = list(self.inputs.keys()) + list(self.outputs.keys())
+        raise KeyError(
+            f"Interface '{name}' not found in design space. "
+            f"Available: {', '.join(available)}"
+        )
 
     def get_shape(
         self,
@@ -431,16 +454,24 @@ class DesignSpaceValidationContext:
             RuntimeError: If STREAM hierarchy requested (not available yet)
             ValueError: If unknown hierarchy
         """
-        if name not in self._interfaces:
-            raise KeyError(f"Interface '{name}' not found in invariant model")
+        # Find interface
+        if name in self.inputs:
+            interface = self.inputs[name]
+        elif name in self.outputs:
+            interface = self.outputs[name]
+        else:
+            available = list(self.inputs.keys()) + list(self.outputs.keys())
+            raise KeyError(
+                f"Interface '{name}' not found in design space. "
+                f"Available: {', '.join(available)}"
+            )
 
-        interface = self._interfaces[name]
-
+        # Return requested hierarchy
         if hierarchy == ShapeHierarchy.STREAM:
             raise RuntimeError(
-                f"Stream shapes not available in invariant validation context. "
-                f"Stream-level constraints are variant constraints and should be "
-                f"validated during configure(), not during build_invariant()."
+                "Stream shapes not available in design space validation context. "
+                "Stream-level constraints are parametric constraints and should be "
+                "validated during configure(), not during build()."
             )
         elif hierarchy == ShapeHierarchy.BLOCK:
             return interface.block_shape
@@ -458,12 +489,12 @@ class DesignSpaceValidationContext:
         Returns:
             True if dynamic (activations), False if static (weights)
         """
-        if name not in self._interfaces:
-            # Interface not found - assume dynamic
-            return True
-        interface = self._interfaces[name]
-        # InterfaceDesignSpace has is_weight flag
-        return not interface.is_weight
+        if name in self.inputs:
+            return not self.inputs[name].is_weight
+        if name in self.outputs:
+            return True  # Outputs always dynamic
+        # Not found - assume dynamic
+        return True
 
     def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout - NOT TRACKED in kernel context.
@@ -494,23 +525,23 @@ class DesignSpaceValidationContext:
 
     def get_interfaces(self) -> List[str]:
         """Get all interface names."""
-        return list(self._interfaces.keys())
+        return list(self.inputs.keys()) + list(self.outputs.keys())
 
     def get_node_attribute(self, name: str, default: Any = None) -> Any:
-        """Get ONNX node attribute - NOT AVAILABLE in invariant context.
+        """Get ONNX node attribute - NOT AVAILABLE in design space context.
 
         Node attributes are only available during ONNX inference validation.
-        In invariant build context, the node is already being converted.
+        In design space build context, the node is already being converted.
 
         Args:
             name: Attribute name
             default: Default value (ignored - always raises RuntimeError)
 
         Raises:
-            RuntimeError: Always (node attributes don't exist in invariant context)
+            RuntimeError: Always (node attributes don't exist in design space context)
         """
         raise RuntimeError(
-            f"Node attributes not available in invariant kernel build context. "
+            f"Node attributes not available in design space validation context. "
             f"Cannot get attribute '{name}'. "
             f"Node attribute constraints are only checked during ONNX inference."
         )
@@ -526,9 +557,9 @@ class ConfigurationValidationContext:
 
     Adapts KernelConfiguration to ValidationContext protocol.
     Similar to KernelValidationContext but works with InterfaceConfiguration
-    which uses a flyweight pattern (references invariant + resolved stream_shape).
+    which uses a flyweight pattern (references design space + resolved stream_shape).
 
-    Used during KernelDesignSpace.configure() to validate variant constraints
+    Used during KernelDesignSpace.configure() to validate parametric constraints
     after stream shapes are resolved.
 
     Example:
@@ -542,13 +573,21 @@ class ConfigurationValidationContext:
 
     def get_datatype(self, name: str) -> DataType:
         """Get datatype from configured interface."""
-        try:
-            interface = self.configured_model.get_interface(name)
-            if interface is None:
-                raise KeyError(f"Interface '{name}' not found in configured model")
-            return interface.datatype
-        except (AttributeError, KeyError) as e:
-            raise KeyError(f"Interface '{name}' not found in configured model") from e
+        # Try inputs first
+        if name in self.configured_model.inputs:
+            return self.configured_model.inputs[name].datatype
+        # Try outputs
+        if name in self.configured_model.outputs:
+            return self.configured_model.outputs[name].datatype
+        # Not found - helpful error
+        available = (
+            list(self.configured_model.inputs.keys()) +
+            list(self.configured_model.outputs.keys())
+        )
+        raise KeyError(
+            f"Interface '{name}' not found in configured model. "
+            f"Available: {', '.join(available)}"
+        )
 
     def get_shape(
         self,
@@ -558,17 +597,25 @@ class ConfigurationValidationContext:
         """Get shape from configured interface at hierarchy.
 
         InterfaceConfiguration supports all hierarchies:
-        - TENSOR: from invariant.tensor_shape
-        - BLOCK: from invariant.block_shape
+        - TENSOR: from design_space.tensor_shape
+        - BLOCK: from design_space.block_shape
         - STREAM: from stream_shape (resolved)
         """
-        try:
-            interface = self.configured_model.get_interface(name)
-            if interface is None:
-                raise KeyError(f"Interface '{name}' not found in configured model")
-            return interface.get_shape(hierarchy)
-        except (AttributeError, KeyError) as e:
-            raise KeyError(f"Interface '{name}' not found in configured model") from e
+        # Try inputs first
+        if name in self.configured_model.inputs:
+            return self.configured_model.inputs[name].get_shape(hierarchy)
+        # Try outputs
+        if name in self.configured_model.outputs:
+            return self.configured_model.outputs[name].get_shape(hierarchy)
+        # Not found - helpful error
+        available = (
+            list(self.configured_model.inputs.keys()) +
+            list(self.configured_model.outputs.keys())
+        )
+        raise KeyError(
+            f"Interface '{name}' not found in configured model. "
+            f"Available: {', '.join(available)}"
+        )
 
     def is_dynamic(self, name: str) -> bool:
         """Check if interface is dynamic (not a weight).
@@ -579,16 +626,14 @@ class ConfigurationValidationContext:
         Returns:
             True if dynamic (activations), False if static (weights)
         """
-        try:
-            interface = self.configured_model.get_interface(name)
-            if interface is None:
-                # Interface not found - assume dynamic
-                return True
-            # InterfaceConfiguration delegates is_weight to invariant
-            return not interface.is_weight
-        except (AttributeError, KeyError):
-            # Interface not found - assume dynamic
+        # Try inputs first
+        if name in self.configured_model.inputs:
+            return not self.configured_model.inputs[name].is_weight
+        # Try outputs (always dynamic)
+        if name in self.configured_model.outputs:
             return True
+        # Not found - assume dynamic
+        return True
 
     def get_layout(self, name: str) -> Optional[Any]:
         """Get data layout - NOT TRACKED in kernel context.
@@ -618,9 +663,10 @@ class ConfigurationValidationContext:
 
     def get_interfaces(self) -> List[str]:
         """Get all interface names (inputs + outputs)."""
-        input_names = [inp.name for inp in self.configured_model.inputs]
-        output_names = [out.name for out in self.configured_model.outputs]
-        return input_names + output_names
+        return (
+            list(self.configured_model.inputs.keys()) +
+            list(self.configured_model.outputs.keys())
+        )
 
     def get_node_attribute(self, name: str, default: Any = None) -> Any:
         """Get ONNX node attribute - NOT AVAILABLE in configured context.

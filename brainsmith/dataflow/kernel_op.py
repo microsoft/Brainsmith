@@ -18,7 +18,7 @@ from onnx import NodeProto
 
 from .schemas import KernelSchema
 from .models import KernelDesignSpace, KernelConfiguration
-from .builder import BuildContext, KernelModelBuilder
+from .builder import BuildContext, build_kernel_design_space
 from .validation import KernelValidationContext
 from .transformation import TransformationResult, transform_onnx_to_kernel
 
@@ -71,8 +71,6 @@ class KernelOp(HWCustomOp, ABC):
         self._design_space: Optional['KernelDesignSpace'] = None  # Built once, never invalidated
         self._configuration: Optional['KernelConfiguration'] = None  # Rebuilt on param change
         self._current_params: Optional[dict] = None  # Tracks current parallelization params
-
-        self._builder = KernelModelBuilder()
 
     @classmethod
     @abstractmethod
@@ -164,10 +162,10 @@ class KernelOp(HWCustomOp, ABC):
         Example (complex transformation):
             @classmethod
             def infer_from(cls, node, model, insert_index):
-                from brainsmith.dataflow.inference import InferenceHelper
+                from brainsmith.dataflow.inference import TransformationHelper
 
                 schema = cls.build_schema(node, model)
-                helper = InferenceHelper(model, domain=schema.domain)
+                helper = TransformationHelper(model, domain=schema.domain)
 
                 # Custom transformation logic
                 hw_node = helper.make_node(...)
@@ -261,9 +259,10 @@ class KernelOp(HWCustomOp, ABC):
             node_name=self.onnx_node.name
         )
 
-        # Build design space
+        # Build design space using module-level function
+        # Creates temporary builder, uses it, discards it
         try:
-            self._design_space = self._builder.build(build_ctx)
+            self._design_space = build_kernel_design_space(build_ctx)
         except ValueError as e:
             raise self._error(str(e))
 
@@ -275,8 +274,8 @@ class KernelOp(HWCustomOp, ABC):
         Reconfigures if parallelization parameters changed. Fast path (<0.1ms) if
         params unchanged, slow path (<1ms) if reconfiguration needed.
 
-        For backward compatibility, this method now returns ConfiguredKernelModel
-        instead of KernelModel, but ConfiguredKernelModel provides the same interface.
+        This method returns KernelConfiguration (the configured model from two-phase
+        construction). Formerly called KernelModel before the two-phase refactor.
 
         Args:
             model_w: ModelWrapper for ONNX graph access
@@ -337,14 +336,13 @@ class KernelOp(HWCustomOp, ABC):
 
     @property
     def kernel_model(self) -> KernelConfiguration:
-        """Access cached ConfiguredKernelModel (requires prior get_kernel_model call).
+        """Access cached KernelConfiguration (requires prior get_kernel_model call).
 
-        Returns the currently configured model. For backward compatibility, this
-        now returns ConfiguredKernelModel instead of KernelModel, but the interface
-        is identical.
+        Returns the currently configured model from two-phase construction.
+        Formerly called KernelModel before the two-phase refactor.
 
         Returns:
-            Cached ConfiguredKernelModel
+            Cached KernelConfiguration
 
         Raises:
             RuntimeError: If get_kernel_model() hasn't been called yet
@@ -447,7 +445,7 @@ class KernelOp(HWCustomOp, ABC):
         """Set nodeattr and invalidate configured model cache.
 
         Modified behavior for two-phase caching: Only invalidates configured model,
-        NOT invariant model. The invariant model is built once and never invalidated,
+        NOT design space. The design space is built once and never invalidated,
         as it contains only properties that don't depend on parallelization parameters.
 
         Args:

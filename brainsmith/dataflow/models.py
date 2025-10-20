@@ -184,24 +184,44 @@ class KernelDesignSpace:
 
     Attributes:
         name: Kernel name (e.g., "LayerNorm", "Softmax")
-        inputs: Design space interfaces for inputs (stream shapes unresolved)
-        outputs: Design space interfaces for outputs (stream shapes unresolved)
+        inputs: Design space interfaces for inputs (dict: name → interface)
+            Stream shapes unresolved. Ordered by declaration (Python 3.7+).
+        outputs: Design space interfaces for outputs (dict: name → interface)
+            Stream shapes unresolved. Ordered by declaration (Python 3.7+).
         internal_datatypes: Resolved internal datatypes (accumulator, etc.)
-        variant_constraints: Constraints validated per configuration
+        parametric_constraints: Constraints validated per configuration
             Examples: stream-level DimensionDivisible, ShapesEqual(STREAM)
         parallelization_params: Valid divisor sets for each parameter
             Example: {"SIMD": {1, 2, 3, 4, 6, 8, ..., 768}, "PE": {1, 2, 4, 8}}
 
-        Note: Design space constraints (e.g., DatatypeInteger, tensor/block shapes)
+        Note: Structural constraints (e.g., DatatypeInteger, tensor/block shapes)
         are validated during build() but not stored - they're checked once and then
         discarded since they never need re-validation.
     """
     name: str
-    inputs: Tuple[InterfaceDesignSpace, ...]
-    outputs: Tuple[InterfaceDesignSpace, ...]
+    inputs: Dict[str, InterfaceDesignSpace]
+    outputs: Dict[str, InterfaceDesignSpace]
     internal_datatypes: Dict[str, BaseDataType]
-    variant_constraints: List['Constraint']
+    parametric_constraints: List['Constraint']
     parallelization_params: Dict[str, Set[int]]
+
+    @property
+    def input_list(self) -> List[InterfaceDesignSpace]:
+        """Inputs in declaration order (for ONNX positional mapping).
+
+        Returns inputs as list preserving dict insertion order (Python 3.7+).
+        Useful when mapping to ONNX node.input[i] positions.
+        """
+        return list(self.inputs.values())
+
+    @property
+    def output_list(self) -> List[InterfaceDesignSpace]:
+        """Outputs in declaration order (for ONNX positional mapping).
+
+        Returns outputs as list preserving dict insertion order (Python 3.7+).
+        Useful when mapping to ONNX node.output[i] positions.
+        """
+        return list(self.outputs.values())
 
     def configure(self, params: Dict[str, int]) -> 'KernelConfiguration':
         """Select specific configuration from design space.
@@ -212,7 +232,7 @@ class KernelDesignSpace:
         3. Resolve stream shapes for outputs (using params + inputs via DerivedDim)
         4. Build InterfaceConfiguration instances
         5. Create KernelConfiguration
-        6. Validate variant constraints
+        6. Validate parametric constraints
         7. Return KernelConfiguration
 
         Args:
@@ -223,7 +243,7 @@ class KernelDesignSpace:
 
         Raises:
             ValueError: If params invalid or missing required parameters
-            ValidationError: If variant constraints fail
+            ValidationError: If parametric constraints fail
 
         Performance: Target <1ms for typical kernel
         """
@@ -251,10 +271,10 @@ class KernelDesignSpace:
                 raise ValueError(f"Missing required parameter: '{param_name}'")
 
         # 2. Resolve stream shapes for inputs
-        configured_inputs = []
+        configured_inputs = {}  # Dict[str, InterfaceConfiguration]
         interface_lookup = {}  # For DerivedDim resolution
 
-        for ds_inp in self.inputs:
+        for ds_inp in self.inputs.values():
             if ds_inp.stream_tiling is None:
                 # No stream tiling specified - use block shape
                 stream_shape = ds_inp.block_shape
@@ -270,13 +290,13 @@ class KernelDesignSpace:
                 design_space=ds_inp,
                 stream_shape=stream_shape,
             )
-            configured_inputs.append(cfg_inp)
+            configured_inputs[ds_inp.name] = cfg_inp  # Store in dict by name
             interface_lookup[ds_inp.name] = cfg_inp
 
         # 3. Resolve stream shapes for outputs (can reference inputs via DerivedDim)
-        configured_outputs = []
+        configured_outputs = {}  # Dict[str, InterfaceConfiguration]
 
-        for ds_out in self.outputs:
+        for ds_out in self.outputs.values():
             if ds_out.stream_tiling is None:
                 # No stream tiling specified - use block shape
                 stream_shape = ds_out.block_shape
@@ -292,52 +312,31 @@ class KernelDesignSpace:
                 design_space=ds_out,
                 stream_shape=stream_shape,
             )
-            configured_outputs.append(cfg_out)
+            configured_outputs[ds_out.name] = cfg_out  # Store in dict by name
             interface_lookup[ds_out.name] = cfg_out
 
         # 4. Create configuration
         configuration = KernelConfiguration(
             design_space=self,
-            inputs=tuple(configured_inputs),
-            outputs=tuple(configured_outputs),
+            inputs=configured_inputs,
+            outputs=configured_outputs,
             params=params,
         )
 
-        # 5. Validate variant constraints
+        # 5. Validate parametric constraints
         # Import ConfigurationValidationContext here to avoid circular dependency
         from .validation import ConfigurationValidationContext
 
         ctx = ConfigurationValidationContext(configuration, params)
 
-        for constraint in self.variant_constraints:
+        for constraint in self.parametric_constraints:
             error = constraint.validate(ctx)
             if error:
                 raise ValidationError(
-                    f"Variant constraint failed for configuration {params}: {error}"
+                    f"Parametric constraint failed for configuration {params}: {error}"
                 )
 
         return configuration
-
-    def get_input(self, name: str) -> Optional[InterfaceDesignSpace]:
-        """Get design space interface for input by name."""
-        for inp in self.inputs:
-            if inp.name == name:
-                return inp
-        return None
-
-    def get_output(self, name: str) -> Optional[InterfaceDesignSpace]:
-        """Get design space interface for output by name."""
-        for out in self.outputs:
-            if out.name == name:
-                return out
-        return None
-
-    def get_interface(self, name: str) -> Optional[InterfaceDesignSpace]:
-        """Get design space interface by name (searches inputs then outputs)."""
-        interface = self.get_input(name)
-        if interface is not None:
-            return interface
-        return self.get_output(name)
 
 
 @dataclass(frozen=True)
@@ -353,15 +352,27 @@ class KernelConfiguration:
 
     Attributes:
         design_space: Reference to parent design space (shared)
-        inputs: Configuration interfaces with resolved stream shapes
-        outputs: Configuration interfaces with resolved stream shapes
+        inputs: Configuration interfaces with resolved stream shapes (dict: name → interface)
+            Ordered by declaration (Python 3.7+).
+        outputs: Configuration interfaces with resolved stream shapes (dict: name → interface)
+            Ordered by declaration (Python 3.7+).
         params: Current parallelization parameters
             Example: {"SIMD": 64, "PE": 1}
     """
     design_space: KernelDesignSpace
-    inputs: Tuple[InterfaceConfiguration, ...]
-    outputs: Tuple[InterfaceConfiguration, ...]
+    inputs: Dict[str, InterfaceConfiguration]
+    outputs: Dict[str, InterfaceConfiguration]
     params: Dict[str, int]
+
+    @property
+    def input_list(self) -> List[InterfaceConfiguration]:
+        """Inputs in declaration order (for ONNX positional mapping)."""
+        return list(self.inputs.values())
+
+    @property
+    def output_list(self) -> List[InterfaceConfiguration]:
+        """Outputs in declaration order (for ONNX positional mapping)."""
+        return list(self.outputs.values())
 
     # Convenience properties that delegate to design space
     @property
@@ -374,37 +385,6 @@ class KernelConfiguration:
         """Internal datatypes from design space."""
         return self.design_space.internal_datatypes
 
-    def get_input(self, name: str) -> Optional[InterfaceConfiguration]:
-        """Get configuration interface for input by name."""
-        for inp in self.inputs:
-            if inp.name == name:
-                return inp
-        return None
-
-    def get_output(self, name: str) -> Optional[InterfaceConfiguration]:
-        """Get configuration interface for output by name."""
-        for out in self.outputs:
-            if out.name == name:
-                return out
-        return None
-
-    def get_interface(self, name: str) -> Optional[InterfaceConfiguration]:
-        """Get configuration interface by name (inputs or outputs).
-
-        Args:
-            name: Interface name to look up
-
-        Returns:
-            InterfaceConfiguration if found, None otherwise
-        """
-        for interface in self.inputs:
-            if interface.name == name:
-                return interface
-        for interface in self.outputs:
-            if interface.name == name:
-                return interface
-        return None
-
     # Computed properties for compatibility with existing code
     @property
     def initiation_interval(self) -> int:
@@ -413,33 +393,33 @@ class KernelConfiguration:
             return 1
         # InterfaceConfiguration has tensor_folding_factor and block_folding_factor
         return max(inp.tensor_folding_factor * inp.block_folding_factor
-                   for inp in self.inputs)
+                   for inp in self.inputs.values())
 
     @property
     def max_block_folding_factor(self) -> int:
         """Maximum block folding factor across all inputs."""
         if not self.inputs:
             return 1
-        return max(inp.block_folding_factor for inp in self.inputs)
+        return max(inp.block_folding_factor for inp in self.inputs.values())
 
     @property
     def max_tensor_folding_factor(self) -> int:
         """Maximum tensor folding factor across all inputs."""
         if not self.inputs:
             return 1
-        return max(inp.tensor_folding_factor for inp in self.inputs)
+        return max(inp.tensor_folding_factor for inp in self.inputs.values())
 
     @property
     def total_output_values(self) -> int:
         """Total output values across all outputs."""
-        return sum(prod(out.tensor_shape) for out in self.outputs)
+        return sum(prod(out.tensor_shape) for out in self.outputs.values())
 
     def output_stream_width_bits(self, output_idx: int = 0) -> int:
         """Stream width in bits for output.
 
         Returns the actual stream width based on the output's stream_shape.
         """
-        output = self.outputs[output_idx]
+        output = self.output_list[output_idx]
         return output.stream_width_bits
 
     def output_stream_shape(self, output_idx: int = 0) -> Shape:
@@ -447,4 +427,4 @@ class KernelConfiguration:
 
         Returns the output's stream_shape attribute (resolved during configure).
         """
-        return self.outputs[output_idx].stream_shape
+        return self.output_list[output_idx].stream_shape

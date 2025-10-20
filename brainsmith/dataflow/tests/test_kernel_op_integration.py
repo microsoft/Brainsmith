@@ -118,7 +118,7 @@ def test_layernorm_design_space_stability():
     kernel_op = LayerNorm(node)
 
     # Get initial design space
-    invariant = kernel_op.get_design_space(model_w)
+    design_space = kernel_op.get_design_space(model_w)
 
     # Get valid SIMD values
     valid_simd = sorted(kernel_op.get_valid_ranges(model_w)["SIMD"])
@@ -129,7 +129,7 @@ def test_layernorm_design_space_stability():
         kernel_op.get_kernel_model(model_w)
 
         # Invariant model should NEVER change
-        assert kernel_op._design_space is invariant, \
+        assert kernel_op._design_space is design_space, \
             f"Invariant model invalidated at SIMD={simd}"
 
 

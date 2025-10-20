@@ -19,13 +19,15 @@ Key Components:
 - KernelSchema: Kernel definition with unified constraints
 - KernelModelBuilder: Constructs immutable models from schemas + context
 - KernelOp: Base class for all kernels (FINN adapter, delegates to builder)
-- Immutable models: InputModel, OutputModel, KernelModel
+- Immutable models (two-phase construction):
+  - Design Space: InterfaceDesignSpace, KernelDesignSpace
+  - Configuration: InterfaceConfiguration, KernelConfiguration
 - Unified Constraint system: Single abstraction for all validation (ONNX + kernel)
 - Derivation system: DimensionSource/DatatypeSource for cross-interface derivation
 - Inference system: InferencePattern for ONNX → HW layer inference
 
 Architecture:
-    KernelSchema (defines + validates) → KernelModelBuilder (constructs) → KernelModel
+    KernelSchema (defines + validates) → KernelModelBuilder (constructs) → KernelDesignSpace → KernelConfiguration
 """
 
 # Core types
@@ -119,8 +121,8 @@ from .transformation import (
     transform_onnx_to_kernel,
 )
 
-# Inference infrastructure
-from .inference import InferenceHelper
+# Transformation infrastructure
+from .inference import TransformationHelper
 
 
 __all__ = [
@@ -178,6 +180,6 @@ __all__ = [
     'TransformationResult',
     'transform_onnx_to_kernel',
 
-    # Inference infrastructure
-    'InferenceHelper',
+    # Transformation infrastructure
+    'TransformationHelper',
 ]

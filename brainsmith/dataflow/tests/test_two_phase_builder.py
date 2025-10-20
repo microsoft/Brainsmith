@@ -71,31 +71,35 @@ def test_build_basic():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build(ctx)
+    design_space = builder.build(ctx)
 
     # Verify type
-    assert isinstance(invariant, KernelDesignSpace)
+    assert isinstance(design_space, KernelDesignSpace)
 
     # Verify structure
-    assert invariant.name == "TestKernel"
-    assert len(invariant.inputs) == 1
-    assert len(invariant.outputs) == 1
+    assert design_space.name == "TestKernel"
+    assert len(design_space.inputs) == 1
+    assert len(design_space.outputs) == 1
 
-    # Verify input
-    assert invariant.inputs[0].name == "input0"
-    assert invariant.inputs[0].tensor_shape == (768,)
-    assert invariant.inputs[0].block_shape == (768,)
-    assert invariant.inputs[0].stream_tiling == ["SIMD"]  # Preserved, not resolved
-    assert invariant.inputs[0].datatype == DataType["INT8"]
+    # Verify input (dict-based access)
+    assert "input0" in design_space.inputs
+    input0 = design_space.inputs["input0"]
+    assert input0.name == "input0"
+    assert input0.tensor_shape == (768,)
+    assert input0.block_shape == (768,)
+    assert input0.stream_tiling == ["SIMD"]  # Preserved, not resolved
+    assert input0.datatype == DataType["INT8"]
 
-    # Verify output
-    assert invariant.outputs[0].name == "output0"
-    assert invariant.outputs[0].stream_tiling == ["SIMD"]  # Preserved, not resolved
+    # Verify output (dict-based access)
+    assert "output0" in design_space.outputs
+    output0 = design_space.outputs["output0"]
+    assert output0.name == "output0"
+    assert output0.stream_tiling == ["SIMD"]  # Preserved, not resolved
 
     # Verify valid ranges computed
-    assert "SIMD" in invariant.parallelization_params
-    assert 64 in invariant.parallelization_params["SIMD"]
-    assert len(invariant.parallelization_params["SIMD"]) == 18  # divisors of 768
+    assert "SIMD" in design_space.parallelization_params
+    assert 64 in design_space.parallelization_params["SIMD"]
+    assert len(design_space.parallelization_params["SIMD"]) == 18  # divisors of 768
 
 
 def test_build_multi_parameter():
@@ -131,13 +135,13 @@ def test_build_multi_parameter():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build(ctx)
+    design_space = builder.build(ctx)
 
     # Verify both parameters have valid ranges
-    assert "MW" in invariant.parallelization_params
-    assert "MH" in invariant.parallelization_params
-    assert len(invariant.parallelization_params["MW"]) == 18  # divisors of 768
-    assert len(invariant.parallelization_params["MH"]) == 7   # divisors of 64
+    assert "MW" in design_space.parallelization_params
+    assert "MH" in design_space.parallelization_params
+    assert len(design_space.parallelization_params["MW"]) == 18  # divisors of 768
+    assert len(design_space.parallelization_params["MH"]) == 7   # divisors of 64
 
 
 def test_build_no_stream_tiling():
@@ -165,11 +169,11 @@ def test_build_no_stream_tiling():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build(ctx)
+    design_space = builder.build(ctx)
 
     # No parallelization params
-    assert invariant.parallelization_params == {}
-    assert invariant.inputs[0].stream_tiling is None
+    assert design_space.parallelization_params == {}
+    assert design_space.inputs["input0"].stream_tiling is None
 
 
 # =============================================================================
@@ -177,7 +181,7 @@ def test_build_no_stream_tiling():
 # =============================================================================
 
 def test_constraint_splitting():
-    """Test constraints are correctly split into invariant vs variant."""
+    """Test constraints are correctly split into structural vs parametric."""
     schema = KernelSchema(
         name="TestKernel",
         inputs=[InputSchema(
@@ -191,13 +195,13 @@ def test_constraint_splitting():
             stream_tiling=["SIMD"],
         )],
         constraints=[
-            # Invariant: no hierarchy
+            # Structural: no hierarchy
             DatatypeInteger(("input0", "output0")),
-            # Invariant: TENSOR hierarchy
+            # Structural: TENSOR hierarchy
             ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.TENSOR),
-            # Invariant: BLOCK hierarchy
+            # Structural: BLOCK hierarchy
             ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.BLOCK),
-            # Variant: STREAM hierarchy
+            # Parametric: STREAM hierarchy
             ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM),
         ],
     )
@@ -215,36 +219,34 @@ def test_constraint_splitting():
     )
 
     builder = KernelModelBuilder()
-    invariant = builder.build(ctx)
+    design_space = builder.build(ctx)
 
     # Verify constraint splitting
-    # Note: Design space constraints (3 total: DatatypeInteger + 2 ShapesEqual)
+    # Note: Structural constraints (3 total: DatatypeInteger + 2 ShapesEqual)
     # are validated during build() but not stored in the model
-    assert len(invariant.variant_constraints) == 1    # ShapesEqual(STREAM)
+    assert len(design_space.parametric_constraints) == 1    # ShapesEqual(STREAM)
 
-    # Verify variant constraint is the STREAM one
-    assert invariant.variant_constraints[0].hierarchy == ShapeHierarchy.STREAM
+    # Verify parametric constraint is the STREAM one
+    assert design_space.parametric_constraints[0].hierarchy == ShapeHierarchy.STREAM
 
 
-def test_is_design_space_constraint():
-    """Test _is_design_space_constraint() classification logic."""
-    builder = KernelModelBuilder()
-
-    # Constraint without hierarchy: invariant
+def test_evaluation_phase_classification():
+    """Test constraint evaluation_phase property classification logic."""
+    # Constraint without hierarchy: structural
     c1 = DatatypeInteger(("input0",))
-    assert builder._is_design_space_constraint(c1) is True
+    assert c1.evaluation_phase == 'structural'
 
-    # Constraint with TENSOR hierarchy: invariant
+    # Constraint with TENSOR hierarchy: structural
     c2 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.TENSOR)
-    assert builder._is_design_space_constraint(c2) is True
+    assert c2.evaluation_phase == 'structural'
 
-    # Constraint with BLOCK hierarchy: invariant
+    # Constraint with BLOCK hierarchy: structural
     c3 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.BLOCK)
-    assert builder._is_design_space_constraint(c3) is True
+    assert c3.evaluation_phase == 'structural'
 
-    # Constraint with STREAM hierarchy: variant
+    # Constraint with STREAM hierarchy: parametric
     c4 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM)
-    assert builder._is_design_space_constraint(c4) is False
+    assert c4.evaluation_phase == 'parametric'
 
 
 # =============================================================================
@@ -265,8 +267,8 @@ def test_design_space_validation_context_datatype():
     )
 
     ctx = DesignSpaceValidationContext(
-        inputs=[inv_input],
-        outputs=[],
+        inputs={"input0": inv_input},
+        outputs={},
         internal_datatypes={},
         param_getter=lambda name: 1,
     )
@@ -294,8 +296,8 @@ def test_design_space_validation_context_shapes():
     )
 
     ctx = DesignSpaceValidationContext(
-        inputs=[inv_input],
-        outputs=[],
+        inputs={"input0": inv_input},
+        outputs={},
         internal_datatypes={},
         param_getter=lambda name: 1,
     )
@@ -336,8 +338,8 @@ def test_design_space_validation_context_is_dynamic():
     )
 
     ctx = DesignSpaceValidationContext(
-        inputs=[inv_input_dynamic, inv_input_weight],
-        outputs=[],
+        inputs={"input0": inv_input_dynamic, "input1": inv_input_weight},
+        outputs={},
         internal_datatypes={},
         param_getter=lambda name: 1,
     )
@@ -372,8 +374,8 @@ def test_design_space_validation_context_get_interfaces():
     )
 
     ctx = DesignSpaceValidationContext(
-        inputs=[inv_input],
-        outputs=[inv_output],
+        inputs={"input0": inv_input},
+        outputs={"output0": inv_output},
         internal_datatypes={},
         param_getter=lambda name: 1,
     )

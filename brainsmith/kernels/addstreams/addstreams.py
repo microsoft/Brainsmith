@@ -124,6 +124,9 @@ class AddStreams(KernelOp):
         Custom implementation needed for additional attributes
         (NumChannels, inputDataTypes, numInputVectors).
 
+        Schema constraints already validated this node is compatible.
+        This method focuses purely on transformation.
+
         Args:
             node: ONNX Add node to convert
             model: ModelWrapper for graph access
@@ -132,10 +135,10 @@ class AddStreams(KernelOp):
         Returns:
             TransformationResult with AddStreams node and removed Add node
         """
-        from brainsmith.dataflow.inference import InferenceHelper
+        from brainsmith.dataflow.inference import TransformationHelper
 
         schema = cls.build_schema(node, model)
-        helper = InferenceHelper(model, domain=schema.domain)
+        helper = TransformationHelper(model, domain=schema.domain)
 
         # Handle layout conversion (from schema.inputs embedded requirements)
         in0 = helper.ensure_layout(node.input[0], schema.inputs[0].required_layout, insert_index)

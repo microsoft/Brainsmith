@@ -270,7 +270,7 @@ def test_configure_different_stream_shapes():
 
 
 def test_configure_interface_delegation():
-    """Test configured interfaces properly delegate to invariant."""
+    """Test configured interfaces properly delegate to design_space."""
     input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(768,),
@@ -363,7 +363,7 @@ def test_configure_multiple_configurations():
         assert configurations[i].params == {"SIMD": simd}
         assert configurations[i].inputs[0].stream_shape == (simd,)
 
-    # All should reference same invariant
+    # All should reference same design_space
     for cfg in configurations:
         assert cfg.design_space is invariant_model
 

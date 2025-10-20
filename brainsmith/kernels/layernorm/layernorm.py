@@ -40,10 +40,8 @@ LAYERNORM_SCHEMA = df.KernelSchema(
         "epsilon": ("f", True, 1e-5),  # Normalization epsilon for numerical stability
     },
     constraints=[
-        # Input must be dynamic (no initializers)
-        df.IsDynamic("input"),
-        # Must normalize over last axis (channel dimension)
-        df.NodeAttributeEquals("axis", -1),
+        df.IsDynamic("input"),  # Input must be dynamic (no initializers)
+        df.NodeAttributeEquals("axis", -1),  # Must normalize over last axis
     ],
     # Transformation specification (unified)
     source_ops=["FuncLayerNorm"],
@@ -57,14 +55,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     author="Shane Fleming"
 )
 class LayerNorm(KernelOp):
-    """Abstraction layer for HW implementation of the LayerNorm layer.
-
-    Schema auto-generates:
-    - "SIMD" from stream_tiling=["SIMD"]
-    - "input0Datatype" from input interface
-    - "output0Datatype" from output interface
-    - "epsilon" from kernel_params
-    """
+    """Abstraction layer for HW implementation of the LayerNorm layer."""
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

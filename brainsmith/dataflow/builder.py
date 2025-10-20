@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""KernelModel builder - constructs immutable models from schemas and context.
+"""Kernel design space builder - constructs immutable models from schemas and context (two-phase).
 
 This module separates model construction logic from KernelOp (FINN integration).
 The builder can be used independently for testing, tooling, or non-FINN contexts.
@@ -24,11 +24,12 @@ The builder follows a two-phase flow:
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
+from brainsmith.utils import divisors
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .datatype_sources import DatatypeSource
@@ -38,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BuildContext:
-    """Context for building a KernelModel.
+    """Context for building a KernelDesignSpace.
 
-    Encapsulates all data needed to build a KernelModel from a schema.
+    Encapsulates all data needed to build a KernelDesignSpace from a schema.
     Makes dependencies explicit and enables testing without FINN infrastructure.
 
     Attributes:
@@ -75,7 +76,7 @@ class KernelModelBuilder:
        - Valid parallelization parameter ranges
     2. design_space.configure() creates KernelConfiguration many times (fast)
        - Stream shapes from stream_tiling templates + parallelization params
-       - Variant constraint validation
+       - Parametric constraint validation
 
     Example:
         >>> builder = KernelModelBuilder()
@@ -100,7 +101,7 @@ class KernelModelBuilder:
         - Block shapes (from block_tiling templates)
         - Datatypes (from ONNX graph + DatatypeSource derivation)
         - Internal datatypes (from DatatypeSource)
-        - Invariant constraints (validated once)
+        - Structural constraints (validated once)
         - Valid parallelization parameter ranges (divisor sets)
 
         Stream shapes are left as templates for later resolution via configure().
@@ -112,7 +113,7 @@ class KernelModelBuilder:
             KernelDesignSpace ready for configuration exploration
 
         Raises:
-            ValueError: If invariant constraints fail
+            ValueError: If structural constraints fail
         """
         from .models import InterfaceDesignSpace, KernelDesignSpace
         from .validation import DesignSpaceValidationContext
@@ -122,8 +123,8 @@ class KernelModelBuilder:
 
         logger.debug(f"Building KernelDesignSpace for {ctx.node_name}")
 
-        # Phase 1: Build invariant input models
-        invariant_inputs = []
+        # Phase 1: Build design space input models
+        design_space_inputs = {}  # Dict[str, InterfaceDesignSpace]
 
         for i, inp_name in enumerate(ctx.node_inputs):
             if not inp_name:
@@ -167,7 +168,7 @@ class KernelModelBuilder:
                     is_weight=is_weight
                 )
 
-                invariant_inputs.append(ds_input)
+                design_space_inputs[schema.name] = ds_input  # Store in dict by name
                 self._interfaces[schema.name] = ds_input  # Store for derivations
 
                 logger.debug(
@@ -194,8 +195,8 @@ class KernelModelBuilder:
                 except ValueError as e:
                     raise ValueError(f"Internal datatype '{internal_name}': {e}") from e
 
-        # Phase 3: Build invariant output models
-        invariant_outputs = []
+        # Phase 3: Build design space output models
+        design_space_outputs = {}  # Dict[str, InterfaceDesignSpace]
 
         for i, out_name in enumerate(ctx.node_outputs):
             schema = ctx.schema.outputs[i]
@@ -235,7 +236,7 @@ class KernelModelBuilder:
                     is_weight=False  # Outputs never have initializers
                 )
 
-                invariant_outputs.append(ds_output)
+                design_space_outputs[schema.name] = ds_output  # Store in dict by name
                 self._interfaces[schema.name] = ds_output  # Store for derivations
 
                 logger.debug(
@@ -245,32 +246,32 @@ class KernelModelBuilder:
             except ValueError as e:
                 raise ValueError(f"Output '{schema.name}': {e}") from e
 
-        # Phase 4: Split constraints into invariant vs variant
-        invariant_constraints = []
-        variant_constraints = []
-
-        for constraint in ctx.schema.constraints:
-            if self._is_design_space_constraint(constraint):
-                invariant_constraints.append(constraint)
-            else:
-                variant_constraints.append(constraint)
+        # Phase 4: Split constraints into structural vs parametric
+        structural_constraints = [
+            c for c in ctx.schema.constraints
+            if c.evaluation_phase == 'structural'
+        ]
+        parametric_constraints = [
+            c for c in ctx.schema.constraints
+            if c.evaluation_phase != 'structural'
+        ]
 
         logger.debug(
             f"  Split {len(ctx.schema.constraints)} constraints: "
-            f"{len(invariant_constraints)} invariant, {len(variant_constraints)} variant"
+            f"{len(structural_constraints)} structural, {len(parametric_constraints)} parametric"
         )
 
-        # Phase 5: Validate invariant constraints
-        if invariant_constraints:
+        # Phase 5: Validate structural constraints
+        if structural_constraints:
             ds_ctx = DesignSpaceValidationContext(
-                inputs=invariant_inputs,
-                outputs=invariant_outputs,
+                inputs=design_space_inputs,
+                outputs=design_space_outputs,
                 internal_datatypes=internal_datatypes,
                 param_getter=ctx.param_getter
             )
 
             errors = []
-            for constraint in invariant_constraints:
+            for constraint in structural_constraints:
                 error = constraint.check(ds_ctx)
                 if error is not None:
                     errors.append(f"  - {constraint.describe()}: {error}")
@@ -279,19 +280,19 @@ class KernelModelBuilder:
                 error_msg = f"Design space validation failed for {ctx.node_name}:\n" + "\n".join(errors)
                 raise ValueError(error_msg)
 
-            logger.debug(f"  All {len(invariant_constraints)} design space constraints passed")
+            logger.debug(f"  All {len(structural_constraints)} structural constraints passed")
 
         # Phase 6: Compute valid parallelization ranges
-        valid_ranges = self._compute_parameter_ranges(invariant_inputs, invariant_outputs)
+        valid_ranges = self._compute_parameter_ranges(design_space_inputs, design_space_outputs)
 
         # Phase 7: Create and return design space
-        # Note: invariant_constraints validated above but not stored (never re-validated)
+        # Note: structural_constraints validated above but not stored (never re-validated)
         design_space = KernelDesignSpace(
             name=ctx.schema.name,
-            inputs=tuple(invariant_inputs),
-            outputs=tuple(invariant_outputs),
+            inputs=design_space_inputs,
+            outputs=design_space_outputs,
             internal_datatypes=internal_datatypes,
-            variant_constraints=variant_constraints,
+            parametric_constraints=parametric_constraints,
             parallelization_params=valid_ranges,
         )
 
@@ -340,38 +341,11 @@ class KernelModelBuilder:
     # Helper Methods for Two-Phase Construction
     # =========================================================================
 
-    def _divisors(self, n: int) -> set:
-        """Compute all divisors of n efficiently.
-
-        Uses sqrt optimization: only check up to sqrt(n), add both i and n/i.
-
-        Args:
-            n: Positive integer
-
-        Returns:
-            Set of all divisors of n
-            Example: _divisors(12) -> {1, 2, 3, 4, 6, 12}
-
-        Raises:
-            ValueError: If n is not a positive integer
-
-        Performance: O(√n) instead of O(n)
-        """
-        if n <= 0:
-            raise ValueError(f"Cannot compute divisors of non-positive integer: {n}")
-
-        divisors = set()
-        for i in range(1, int(n**0.5) + 1):
-            if n % i == 0:
-                divisors.add(i)
-                divisors.add(n // i)  # Add the paired divisor
-        return divisors
-
     def _compute_parameter_ranges(
         self,
-        invariant_inputs: List[Any],  # List[InterfaceDesignSpace]
-        invariant_outputs: List[Any],  # List[InterfaceDesignSpace]
-    ) -> Dict[str, set]:
+        design_space_inputs: Dict[str, 'InterfaceDesignSpace'],
+        design_space_outputs: Dict[str, 'InterfaceDesignSpace'],
+    ) -> Dict[str, Set[int]]:
         """Compute valid divisor sets for each parallelization parameter.
 
         A parallelization parameter is any string appearing in stream_tiling.
@@ -381,9 +355,21 @@ class KernelModelBuilder:
         dimensions or interfaces, valid values are divisors of GCD of all
         block dimensions where the parameter appears.
 
+        Example (single appearance):
+            stream_tiling=["SIMD"], block_shape=(768,)
+            → SIMD must divide 768
+            → valid SIMD = {1, 2, 3, 4, 6, 8, 12, 16, ..., 768}
+
+        Example (multiple appearances):
+            input: stream_tiling=["PE"], block_shape=(256,)
+            output: stream_tiling=["PE"], block_shape=(512,)
+            → PE must divide both 256 and 512
+            → PE must divide gcd(256, 512) = 256
+            → valid PE = {1, 2, 4, 8, 16, 32, 64, 128, 256}
+
         Args:
-            invariant_inputs: Input interfaces with resolved block shapes
-            invariant_outputs: Output interfaces with resolved block shapes
+            design_space_inputs: Input interfaces with resolved block shapes (dict: name → interface)
+            design_space_outputs: Output interfaces with resolved block shapes (dict: name → interface)
 
         Returns:
             Dict mapping parameter name to set of valid divisors
@@ -391,8 +377,6 @@ class KernelModelBuilder:
 
         Raises:
             ValueError: If parameter appears in block_tiling (violates R1 from spec)
-
-        Performance: Target <10ms for typical kernel
         """
         from math import gcd
         from functools import reduce
@@ -400,7 +384,7 @@ class KernelModelBuilder:
         # Collect all block dimensions that each parameter must divide
         param_constraints = {}  # param_name -> list of block dimensions
 
-        all_interfaces = list(invariant_inputs) + list(invariant_outputs)
+        all_interfaces = (*design_space_inputs.values(), *design_space_outputs.values())
 
         for interface in all_interfaces:
             if interface.stream_tiling is None:
@@ -425,7 +409,7 @@ class KernelModelBuilder:
             # Must divide all block dimensions where param appears
             # Valid values = divisors(gcd(block_dims))
             combined = reduce(gcd, block_dims)
-            valid_ranges[param_name] = self._divisors(combined)
+            valid_ranges[param_name] = divisors(combined)
 
         logger.debug(
             f"Computed valid ranges for {len(valid_ranges)} parameters: "
@@ -434,35 +418,48 @@ class KernelModelBuilder:
 
         return valid_ranges
 
-    def _is_design_space_constraint(self, constraint: Any) -> bool:
-        """Determine if constraint is invariant or variant.
 
-        Invariant constraints are validated once during build_invariant().
-        Variant constraints are validated per-configuration during configure().
+# =============================================================================
+# Module-Level Build Function (Recommended Entry Point)
+# =============================================================================
 
-        Uses the constraint's evaluation_phase property for classification.
-        This property defaults to a heuristic (backward compatible), but can
-        be explicitly overridden by constraint subclasses.
+def build_kernel_design_space(ctx: BuildContext) -> 'KernelDesignSpace':
+    """Build kernel design space from ONNX context.
 
-        Args:
-            constraint: Constraint to classify
+    This is the recommended way to build a design space. Creates a temporary
+    KernelModelBuilder instance for this one build operation, then discards it.
 
-        Returns:
-            True if invariant (validated once), False if variant (per-config)
+    The builder is stateless - it only uses temporary state (_ctx, _interfaces)
+    during the build process. There's no benefit to caching builder instances.
 
-        Examples:
-            - DatatypeInteger: invariant (no hierarchy)
-            - ShapesEqual(hierarchy=TENSOR): invariant
-            - ShapesEqual(hierarchy=BLOCK): invariant
-            - ShapesEqual(hierarchy=STREAM): variant
-            - DimensionDivisible(hierarchy=STREAM): variant
-        """
-        # Use evaluation_phase property (Phase 4 enhancement)
-        # Falls back to heuristic for backward compatibility
-        return constraint.evaluation_phase == 'invariant'
+    Args:
+        ctx: Build context with schema, ONNX graph data, and accessors
+
+    Returns:
+        Immutable KernelDesignSpace ready for configuration exploration
+
+    Raises:
+        ValueError: If structural constraints fail or build cannot complete
+
+    Example:
+        >>> ctx = BuildContext(
+        ...     schema=kernel_schema,
+        ...     model_w=model_wrapper,
+        ...     node_inputs=list(node.input),
+        ...     node_outputs=list(node.output),
+        ...     param_getter=get_nodeattr,
+        ...     param_setter=set_nodeattr,
+        ...     node_name=node.name
+        ... )
+        >>> design_space = build_kernel_design_space(ctx)
+        >>> config = design_space.configure({"SIMD": 64, "PE": 1})
+    """
+    from .models import KernelDesignSpace
+    return KernelModelBuilder().build(ctx)
 
 
 __all__ = [
     'BuildContext',
     'KernelModelBuilder',
+    'build_kernel_design_space',
 ]

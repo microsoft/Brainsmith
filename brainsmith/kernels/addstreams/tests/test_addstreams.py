@@ -14,7 +14,7 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 
 from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA
 from brainsmith.transforms.infer_kernel_list import InferKernelList
-from brainsmith.dataflow import InferenceHelper
+from brainsmith.dataflow import TransformationHelper
 
 
 def test_addstreams_schema():

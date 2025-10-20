@@ -33,7 +33,6 @@ from .datatype_sources import DatatypeSource
 from .types import FULL_DIM
 
 if TYPE_CHECKING:
-    from .models import KernelModel
     from .constraints import Constraint
 
 logger = logging.getLogger(__name__)
@@ -191,7 +190,7 @@ class KernelSchema:
     # ============= VALIDATION =============
     constraints: List['Constraint'] = field(default_factory=list)
 
-    # ============= TRANSFORMATION (NEW - optional) =============
+    # ============= TRANSFORMATION =============
     source_ops: List[str] = field(default_factory=list)
     """ONNX op types that can be transformed to this kernel.
 
@@ -232,8 +231,18 @@ class KernelSchema:
         if len(output_names) != len(set(output_names)):
             raise ValueError(f"Duplicate output names in kernel '{self.name}'")
 
+        # Check input/output names don't conflict (globally unique)
+        input_name_set = set(input_names)
+        output_name_set = set(output_names)
+        conflicts = input_name_set & output_name_set
+        if conflicts:
+            raise ValueError(
+                f"Interface names must be unique across inputs and outputs in kernel '{self.name}'. "
+                f"Duplicate names: {', '.join(sorted(conflicts))}"
+            )
+
         # Check internal datatype names don't conflict with interfaces
-        all_interface_names = set(input_names + output_names)
+        all_interface_names = input_name_set | output_name_set
         for internal_name in self.internal_datatypes.keys():
             if internal_name in all_interface_names:
                 raise ValueError(

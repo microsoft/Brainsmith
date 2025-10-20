@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Unit tests for invariant model types (two-phase construction)."""
+"""Unit tests for design space model types (two-phase construction)."""
 
 import pytest
 from qonnx.core.datatype import DataType
@@ -86,9 +86,9 @@ def test_invariant_interface_model_weight_flag():
 # Test KernelDesignSpace
 # =============================================================================
 
-def test_invariant_kernel_model_creation():
+def test_design_space_kernel_model_creation():
     """Test KernelDesignSpace can be created with all required fields."""
-    input_inv = InterfaceDesignSpace(
+    input_ds = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -96,7 +96,7 @@ def test_invariant_kernel_model_creation():
         datatype=DataType["INT8"],
     )
 
-    output_inv = InterfaceDesignSpace(
+    output_ds = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -106,25 +106,27 @@ def test_invariant_kernel_model_creation():
 
     model = KernelDesignSpace(
         name="TestKernel",
-        inputs=(input_inv,),
-        outputs=(output_inv,),
+        inputs={"input": input_ds},
+        outputs={"output": output_ds},
         internal_datatypes={},
-        variant_constraints=[],
+        parametric_constraints=[],
         parallelization_params={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
     )
 
     assert model.name == "TestKernel"
     assert len(model.inputs) == 1
     assert len(model.outputs) == 1
-    assert model.inputs[0] == input_inv
-    assert model.outputs[0] == output_inv
+    assert "input" in model.inputs
+    assert "output" in model.outputs
+    assert model.inputs["input"] == input_ds
+    assert model.outputs["output"] == output_ds
     assert "SIMD" in model.parallelization_params
     assert 8 in model.parallelization_params["SIMD"]
 
 
-def test_invariant_kernel_model_get_input():
-    """Test KernelDesignSpace.get_input() lookup."""
-    input_inv = InterfaceDesignSpace(
+def test_design_space_kernel_model_dict_access():
+    """Test KernelDesignSpace dict-based interface access."""
+    input_ds = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -132,59 +134,7 @@ def test_invariant_kernel_model_get_input():
         datatype=DataType["INT8"],
     )
 
-    model = KernelDesignSpace(
-        name="TestKernel",
-        inputs=(input_inv,),
-        outputs=(),
-        internal_datatypes={},
-        variant_constraints=[],
-        parallelization_params={"SIMD": {1, 2, 4, 8}},
-    )
-
-    found = model.get_input("input")
-    assert found is input_inv
-
-    not_found = model.get_input("nonexistent")
-    assert not_found is None
-
-
-def test_invariant_kernel_model_get_output():
-    """Test KernelDesignSpace.get_output() lookup."""
-    output_inv = InterfaceDesignSpace(
-        name="output",
-        tensor_shape=(1, 768),
-        block_shape=(1, 768),
-        stream_tiling=["SIMD"],
-        datatype=DataType["INT8"],
-    )
-
-    model = KernelDesignSpace(
-        name="TestKernel",
-        inputs=(),
-        outputs=(output_inv,),
-        internal_datatypes={},
-        variant_constraints=[],
-        parallelization_params={"SIMD": {1, 2, 4, 8}},
-    )
-
-    found = model.get_output("output")
-    assert found is output_inv
-
-    not_found = model.get_output("nonexistent")
-    assert not_found is None
-
-
-def test_invariant_kernel_model_get_interface():
-    """Test KernelDesignSpace.get_interface() searches both inputs and outputs."""
-    input_inv = InterfaceDesignSpace(
-        name="input",
-        tensor_shape=(1, 768),
-        block_shape=(1, 768),
-        stream_tiling=["SIMD"],
-        datatype=DataType["INT8"],
-    )
-
-    output_inv = InterfaceDesignSpace(
+    output_ds = InterfaceDesignSpace(
         name="output",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -194,34 +144,31 @@ def test_invariant_kernel_model_get_interface():
 
     model = KernelDesignSpace(
         name="TestKernel",
-        inputs=(input_inv,),
-        outputs=(output_inv,),
+        inputs={"input": input_ds},
+        outputs={"output": output_ds},
         internal_datatypes={},
-        variant_constraints=[],
+        parametric_constraints=[],
         parallelization_params={"SIMD": {1, 2}, "PE": {1, 2}},
     )
 
-    # Find input
-    found_input = model.get_interface("input")
-    assert found_input is input_inv
+    # Dict access works
+    assert model.inputs["input"] is input_ds
+    assert model.outputs["output"] is output_ds
 
-    # Find output
-    found_output = model.get_interface("output")
-    assert found_output is output_inv
-
-    # Not found
-    not_found = model.get_interface("nonexistent")
-    assert not_found is None
+    # Check membership
+    assert "input" in model.inputs
+    assert "output" in model.outputs
+    assert "nonexistent" not in model.inputs
 
 
-def test_invariant_kernel_model_immutable():
+def test_design_space_kernel_model_immutable():
     """Test KernelDesignSpace is immutable."""
     model = KernelDesignSpace(
         name="TestKernel",
-        inputs=(),
-        outputs=(),
+        inputs={},
+        outputs={},
         internal_datatypes={},
-        variant_constraints=[],
+        parametric_constraints=[],
         parallelization_params={},
     )
 
@@ -229,12 +176,12 @@ def test_invariant_kernel_model_immutable():
         model.name = "modified"
 
 
-def test_invariant_kernel_model_valid_ranges():
+def test_design_space_kernel_model_valid_ranges():
     """Test KernelDesignSpace stores valid parallelization ranges."""
     # Simulate divisors of 768
     valid_simd = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768}
 
-    input_inv = InterfaceDesignSpace(
+    input_ds = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
         block_shape=(1, 768),
@@ -244,10 +191,10 @@ def test_invariant_kernel_model_valid_ranges():
 
     model = KernelDesignSpace(
         name="LayerNorm",
-        inputs=(input_inv,),
-        outputs=(),
+        inputs={"input": input_ds},
+        outputs={},
         internal_datatypes={},
-        variant_constraints=[],
+        parametric_constraints=[],
         parallelization_params={"SIMD": valid_simd},
     )
 
