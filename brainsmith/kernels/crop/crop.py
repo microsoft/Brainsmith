@@ -12,12 +12,15 @@ from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.registry import kernel
 
-@kernel(
-    description="Hardware cropping operation",
-    author="Josh Monson",
-)
+
+@kernel(name='Crop', op_type='Crop')
 class Crop(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
+
+    @property
+    def infer_transform(self):
+        from brainsmith.kernels.crop.infer_crop_from_gather import InferCropFromGather
+        return InferCropFromGather
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

@@ -77,5 +77,5 @@ def setup_logging(level: str = "warning") -> None:
     if log_level > logging.DEBUG:
         logging.getLogger('finn').setLevel(logging.ERROR)
         logging.getLogger('qonnx').setLevel(logging.ERROR)
-        warnings.filterwarnings('ignore', module='finn.*')
-        warnings.filterwarnings('ignore', module='qonnx.*')
+        warnings.filterwarnings('ignore', module=r'^finn\..*')
+        warnings.filterwarnings('ignore', module=r'^qonnx\..*')

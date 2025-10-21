@@ -70,7 +70,7 @@ brainsmith config init [OPTIONS]
 
 **Options:**
 - `--user` - Create user-level config (~/.brainsmith/config.yaml)
-- `--project` - Create project-level config (./brainsmith_settings.yaml)
+- `--project` - Create project-level config (./brainsmith_config.yaml)
 - `--force, -f` - Overwrite existing file
 - `--full` - Include all possible configuration fields
 
@@ -250,7 +250,7 @@ Configuration is resolved in the following priority order (highest to lowest):
 
 1. **Command-line arguments** - Direct CLI options
 2. **Environment variables** - `BSMITH_*` prefixed variables
-3. **Project configuration** - `./brainsmith_settings.yaml`
+3. **Project configuration** - `./brainsmith_config.yaml`
 4. **User configuration** - `~/.brainsmith/config.yaml`
 5. **Built-in defaults** - Hardcoded in the application
 
@@ -374,7 +374,7 @@ brainsmith --debug smith model.onnx blueprint.yaml
 rm ~/.brainsmith/config.yaml
 
 # Remove project configuration
-rm brainsmith_settings.yaml
+rm brainsmith_config.yaml
 
 # Reinitialize
 brainsmith config init --user

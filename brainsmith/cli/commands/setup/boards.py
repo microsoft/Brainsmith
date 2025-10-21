@@ -9,9 +9,8 @@ from brainsmith.settings import get_config
 from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
 from ...utils import (
     console, error_exit, success, warning,
-    progress_spinner
+    progress_spinner, confirm_or_abort
 )
-from .helpers import confirm_removal
 
 
 def _show_board_summary(boards_by_repo: dict[str, list[str]], title: str) -> None:
@@ -117,9 +116,11 @@ def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> 
                 warning("No board repositories are installed")
                 return
 
-        if not confirm_removal(repos_to_remove, "board repositories", skip_confirm=yes):
-            console.print("Removal cancelled")
-            return
+        warning("The following board repositories will be removed:")
+        for repo in sorted(repos_to_remove):
+            console.print(f"      • {repo}")
+
+        confirm_or_abort("\nAre you sure you want to remove these repositories?", skip=yes)
 
         with progress_spinner("Removing board repositories...") as task:
             # remove() raises exception on failure, returns None on success

@@ -8,7 +8,7 @@ from rich.table import Table
 from collections import defaultdict
 
 from brainsmith.loader import list_steps, list_kernels, list_all_backends
-from brainsmith.core import registry
+from brainsmith.registry import registry
 from ..context import ApplicationContext
 from ..utils import console
 
@@ -53,7 +53,7 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
     ))
 
     # Show plugin sources from config
-    plugin_sources = config.effective_plugin_sources
+    plugin_sources = config.plugin_sources
     if plugin_sources:
         sources_table = Table(title="Configured Plugin Sources")
         sources_table.add_column("Source", style="cyan")

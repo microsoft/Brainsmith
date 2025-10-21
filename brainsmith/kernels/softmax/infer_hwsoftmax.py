@@ -11,14 +11,8 @@ from onnx import helper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
-from brainsmith.registry import transform
 
 
-@transform(name="InferHWSoftmax", kernel="HWSoftmax",
-    description="Convert Softmax nodes to HWSoftmax hardware operations",
-    author="shane.fleming",
-    version="1.0.0",
-)
 class InferHWSoftmax(Transformation):
     """
     Infers a regular softmax node without merging the multithreshold

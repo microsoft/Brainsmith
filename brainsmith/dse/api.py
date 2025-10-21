@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from brainsmith.settings import get_build_dir
 from brainsmith.dse._parser import parse_blueprint
 from brainsmith.dse._builder import DSETreeBuilder
 from brainsmith.dse.design_space import slice_steps
@@ -69,7 +68,8 @@ def explore_design_space(
 
     # Determine output directory
     if output_dir is None:
-        build_dir = get_build_dir()
+        from brainsmith.settings import get_config  # Lazy import
+        build_dir = get_config().build_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = str(build_dir / f"dfc_{timestamp}")
 

@@ -11,14 +11,8 @@
 
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.registry import transform
 
-@transform(
-    name="SetPumpedCompute",
-    stage="kernel_opt",
-    description="Set pumped compute attribute for MVAUs and DynMatMuls",
-    author="Shane Fleming"
-)
+
 class SetPumpedCompute(Transformation):
     """For all MVAUs and DynMatMuls set the pumped compute attribute"""
     def __init__(self):

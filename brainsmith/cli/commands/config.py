@@ -1,10 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations  # PEP 563: Postponed evaluation of annotations
+
 import logging
 import os
 from pathlib import Path
 from textwrap import dedent
+from typing import TYPE_CHECKING
 
 import click
 import yaml
@@ -14,42 +17,87 @@ from rich.console import Console as RichConsole
 
 logger = logging.getLogger(__name__)
 
-from brainsmith.settings import SystemConfig
 from ..context import ApplicationContext
-from ..utils import console, error_exit, success
+from ..utils import console, success
 from ..formatters import ConfigFormatter
+from ..exceptions import ConfigurationError, ValidationError
+
+# Lazy import settings - deferred until command actually runs
+if TYPE_CHECKING:
+    from brainsmith.settings import SystemConfig
 
 
-def _generate_config_template(defaults: SystemConfig) -> str:
+def _generate_config_template(defaults) -> str:
     return dedent(f"""\
         # Brainsmith Configuration
 
-        # Build directory (relative paths resolve from project root)
-        build_dir: {defaults.build_dir}
+        # ============================================================================
+        # Core Paths
+        # ============================================================================
 
-        # Dependencies directory
+        # Project working directory (defaults to brainsmith root if not set)
+        project_dir: {defaults.project_dir}
+        build_dir: {defaults.build_dir}
         deps_dir: {defaults.deps_dir}
 
-        # Plugin source mapping (source_name -> path)
-        # Default: brainsmith: <builtin>, user: ~/.brainsmith/plugins
-        # plugin_sources:
-        #   brainsmith: <builtin>        # Core brainsmith components
-        #   user: ~/.brainsmith/plugins  # User plugins
-        #   team: /shared/team-plugins   # Team shared plugins
-        #   mycompany: ./plugins         # Project-local plugins
+        # ============================================================================
+        # Plugin System
+        # ============================================================================
 
         # Default source when component has no prefix (e.g., 'LayerNorm' -> 'brainsmith:LayerNorm')
         default_source: {defaults.default_source}
 
+        # Uncomment to add custom plugin sources
+        # plugin_sources:
+        #   custom: ~/my-custom-plugins     # Example: additional personal plugins
+
         # Plugin loading mode (strict=error on load failure, false=warn)
         plugins_strict: {str(defaults.plugins_strict).lower()}
 
-        # Parallel workers for builds
-        default_workers: {defaults.default_workers}
+        # Regenerate plugin manifests on first registry access (enable for development)
+        eager_plugin_discovery: {str(defaults.eager_plugin_discovery).lower()}
 
-        # Xilinx tools
+        # ============================================================================
+        # Xilinx Tools
+        # ============================================================================
+
+        # Xilinx root installation path
         xilinx_path: {defaults.xilinx_path}
         xilinx_version: "{defaults.xilinx_version}"
+
+        # Vendor platform repository paths (colon-separated paths to Xilinx/Intel FPGA platform files)
+        vendor_platform_paths: {defaults.vendor_platform_paths}
+
+        # Auto-detected tool paths (uncomment to override):
+        # vivado_path: /tools/Xilinx/Vivado/{defaults.xilinx_version}
+        # vitis_path: /tools/Xilinx/Vitis/{defaults.xilinx_version}
+        # vitis_hls_path: /tools/Xilinx/Vitis_HLS/{defaults.xilinx_version}
+
+        # Vivado IP cache (auto-computed from build_dir if not set)
+        # vivado_ip_cache: {{build_dir}}/vivado_ip_cache
+
+        # ============================================================================
+        # Build Settings
+        # ============================================================================
+
+        # Default number of workers for parallel operations
+        default_workers: {defaults.default_workers}
+
+        # ============================================================================
+        # Development Tools
+        # ============================================================================
+
+        # Port for Netron neural network visualization
+        netron_port: {defaults.netron_port}
+
+        # ============================================================================
+        # FINN Configuration (Advanced)
+        # ============================================================================
+        # FINN paths auto-detect from deps_dir, build_dir. Uncomment to override:
+        # finn:
+        #   finn_root: {{deps_dir}}/finn
+        #   finn_build_dir: {{build_dir}}
+        #   finn_deps_dir: {{deps_dir}}
     """)
 
 
@@ -59,8 +107,8 @@ def config():
 
     \b
     Configuration can be managed by editing YAML files directly:
-      Project: ./brainsmith_settings.yaml
-      User:    ~/.brainsmith/settings.yaml
+      Project: ./brainsmith_config.yaml
+      User:    ~/.brainsmith/config.yaml
     """
     pass
 
@@ -76,61 +124,32 @@ def show(app_ctx: ApplicationContext, finn: bool) -> None:
         formatter = ConfigFormatter(console)
 
         # Always show detailed view with sources
-        table = formatter.format_table(config, finn=finn)
+        table = formatter.format_table(config, include_finn=finn)
         console.print(table)
         formatter.show_validation_warnings(config)
 
     except Exception as e:
-        error_exit(f"Failed to load configuration: {e}")
-
-
-@config.command(context_settings={'help_option_names': ['-h', '--help']})
-@click.option('--shell', type=click.Choice(['bash', 'zsh', 'fish', 'powershell']),
-              default='bash', help='Shell format for output')
-@click.pass_obj
-def export(app_ctx: ApplicationContext, shell: str) -> None:
-    """Export configuration as shell environment script.
-
-    \b
-    Usage:
-      eval $(brainsmith config export)
-      eval $(brainsmith config export --shell fish)
-    """
-    try:
-        activation_script = app_ctx.export_environment(shell)
-        
-        # Print to stdout for eval
-        click.echo(activation_script)
-        
-        # Add helpful comment based on shell
-        if shell in ['bash', 'zsh', 'sh']:
-            click.echo("# Run: eval $(brainsmith config export)")
-        elif shell == 'fish':
-            click.echo("# Run: eval (brainsmith config export --shell fish)")
-        elif shell == 'powershell':
-            click.echo("# Run: brainsmith config export --shell powershell | Invoke-Expression")
-            
-    except ValueError as e:
-        error_exit(f"Unsupported shell: {e}")
-    except Exception as e:
-        error_exit(f"Failed to export configuration: {e}")
+        raise ConfigurationError(f"Failed to load configuration: {e}") from e
 
 
 @config.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
-@click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/settings.yaml)')
+@click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
 @click.pass_obj
 def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
     """Initialize a new configuration file with sensible defaults.
 
-    By default creates project-level config (./brainsmith_settings.yaml).
-    Use --user to create user-level config (~/.brainsmith/settings.yaml).
+    By default creates project-level config (./brainsmith_config.yaml).
+    Use --user to create user-level config (~/.brainsmith/config.yaml).
     """
     # Determine output path
-    output = app_ctx.user_config_path if user else Path("brainsmith_settings.yaml")
+    output = app_ctx.user_config_path if user else Path("brainsmith_config.yaml")
 
     if output.exists() and not force:
-        error_exit(f"{output} already exists. Use --force to overwrite.")
+        raise ValidationError(
+            f"{output} already exists. Use --force to overwrite.",
+            details=["Run with --force flag to overwrite existing configuration"]
+        )
 
     try:
         # Create parent directory if needed (especially for user config)
@@ -145,6 +164,7 @@ def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
             # Set dummy values to prevent YamlSettingsSource from loading real files
             os.environ['_BRAINSMITH_USER_FILE'] = '/dev/null'
             os.environ['_BRAINSMITH_PROJECT_FILE'] = '/dev/null'
+            from brainsmith.settings import SystemConfig  # Lazy import
             defaults = SystemConfig()
         finally:
             # Restore original env vars
@@ -169,4 +189,4 @@ def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
             console.print("These settings apply to this project only.")
 
     except Exception as e:
-        error_exit(f"Failed to create configuration: {e}")
+        raise ConfigurationError(f"Failed to create configuration: {e}") from e

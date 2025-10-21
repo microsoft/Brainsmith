@@ -317,8 +317,8 @@ class TestBackwardCompatibility:
         assert callable(apply_transforms)
 
     def test_transform_utils_still_works(self):
-        """Test that old transform_utils still works as wrapper."""
-        from brainsmith._internal.io.transform_utils import apply_transforms as legacy_apply
+        """Test that transform_utils works."""
+        from brainsmith.primitives.utils import apply_transforms as legacy_apply
 
         # Mock model
         mock_model = MagicMock()

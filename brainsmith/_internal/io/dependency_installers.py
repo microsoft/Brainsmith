@@ -337,7 +337,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
         # Get Vivado settings path from config
         from brainsmith.settings import get_config
         config = get_config()
-        vivado_path = config.effective_vivado_path
+        vivado_path = config.vivado_path
 
         if not vivado_path:
             error_msg = "Vivado path not configured. Set xilinx_path in config or BSMITH_XILINX_PATH env var."

@@ -1,46 +1,55 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations  # PEP 563: Postponed evaluation of annotations
+
 import logging
-import shlex
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any
-from functools import reduce
+from typing import Any, TYPE_CHECKING
 
 import click
 
-from brainsmith.settings import SystemConfig, load_config
-from .constants import USER_CONFIG_DIR, USER_CONFIG_FILE
+from brainsmith.settings.constants import USER_CONFIG_DIR, USER_CONFIG_FILE
+
+# Lazy imports for settings module (PEP 562)
+# This defers the expensive Pydantic import (~685ms) until actually needed.
+# For `--help` commands, settings are never imported, making CLI 76% faster.
+if TYPE_CHECKING:
+    # Type hints only - not evaluated at runtime
+    from brainsmith.settings import SystemConfig, load_config
 
 logger = logging.getLogger(__name__)
 
+# Use shared lazy loader for consistency
+from brainsmith._internal.lazy_imports import LazyModuleLoader
 
-def _set_nested(dictionary: dict[str, Any], key_path: str, value: Any) -> None:
-    """Example:
-        >>> d = {}
-        >>> _set_nested(d, "finn.build_dir", "/tmp")
-        >>> d
-        {'finn': {'build_dir': '/tmp'}}
+_lazy_loader = LazyModuleLoader({
+    'SystemConfig': 'brainsmith.settings',
+    'load_config': 'brainsmith.settings',
+})
+
+
+def __getattr__(name):
+    """Lazy import settings module on first access.
+
+    The settings module (Pydantic) takes ~685ms to import, but is only needed
+    when configuration is actually loaded. This defers the import until first use.
+
+    For `--help` commands, settings are never imported, resulting in 76% faster
+    startup time (~927ms → ~220ms).
     """
-    keys = key_path.split('.')
-    parent = reduce(lambda d, k: d.setdefault(k, {}), keys[:-1], dictionary)
-    parent[keys[-1]] = value
+    return _lazy_loader.get_attribute(name)
+
+
+def __dir__():
+    """Support dir() and IDE autocomplete."""
+    return list(globals().keys()) + _lazy_loader.dir()
 
 
 @dataclass
 class ApplicationContext:
-    """Manages CLI execution context and configuration loading.
-
-    Loads configuration via SystemConfig with the following precedence:
-    1. CLI arguments (--config, --build-dir) - highest priority
-    2. Environment variables (BSMITH_*)
-    3. Project config (./brainsmith_settings.yaml)
-    4. User config (~/.brainsmith/settings.yaml)
-    5. Built-in defaults - lowest priority
-
-    Stores loaded configuration and provides access to Click context.
-    """
+    """CLI execution context with SystemConfig loading and CLI argument handling."""
 
     # Core settings
     no_progress: bool = False
@@ -52,50 +61,20 @@ class ApplicationContext:
 
     # User config path
     user_config_path: Path = field(default_factory=lambda: USER_CONFIG_DIR / USER_CONFIG_FILE)
-    
+
     def load_configuration(self) -> None:
-        logger.debug(f"Loading configuration from project_file={self.config_file}")
-        
-        # Load with user config support
+        # Lazy import settings at runtime
+        from brainsmith.settings import load_config
+
+        # Load with user config support and CLI overrides
+        # Pydantic handles validation and priority (CLI overrides > env > file > defaults)
         self.config = load_config(
             project_file=self.config_file,
-            user_file=self.user_config_path if self.user_config_path.exists() else None
+            user_file=self.user_config_path if self.user_config_path.exists() else None,
+            **self.overrides  # Pass overrides directly to Pydantic
         )
 
-        if self.overrides:
-            config_dict = self.config.model_dump()
-
-            for key, value in self.overrides.items():
-                _set_nested(config_dict, key, value)
-
-            # Recreate config instance with overrides applied
-            self.config = SystemConfig(**config_dict)
-    
     def get_effective_config(self) -> SystemConfig:
         if not self.config:
             self.load_configuration()
         return self.config
-    
-    
-    def export_environment(self, shell: str = "bash") -> str:
-        if not self.config:
-            return ""
-
-        env_vars = self.config.export_to_environment(verbose=False, export=False)
-
-        lines = []
-        if shell in ["bash", "zsh", "sh"]:
-            for key, value in env_vars.items():
-                escaped_value = shlex.quote(str(value))
-                lines.append(f"export {key}={escaped_value}")
-        elif shell == "fish":
-            for key, value in env_vars.items():
-                escaped_value = shlex.quote(str(value))
-                lines.append(f"set -x {key} {escaped_value}")
-        elif shell == "powershell":
-            for key, value in env_vars.items():
-                lines.append(f"$env:{key} = '{value}'")
-        else:
-            raise ValueError(f"Unsupported shell: {shell}")
-
-        return "\n".join(lines)

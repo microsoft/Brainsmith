@@ -18,26 +18,43 @@ import shutil
 import logging
 from typing import Any
 
-from brainsmith.transforms import import_transform
-from brainsmith._internal.io.transform_utils import apply_transforms
+from brainsmith.primitives.utils import apply_transforms
+from brainsmith.primitives.transforms.post_proc.extract_shell_integration_metadata import ExtractShellIntegrationMetadata
+from qonnx.transformation.general import SortCommutativeInputsInitializerLast, GiveUniqueNodeNames
+from qonnx.transformation.remove import RemoveIdentityOps
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from finn.transformation.streamline.absorb import (
+    AbsorbSignBiasIntoMultiThreshold,
+    AbsorbAddIntoMultiThreshold,
+    AbsorbMulIntoMultiThreshold
+)
+from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from finn.transformation.streamline.reorder import (
+    MoveOpPastFork,
+    MoveScalarMulPastMatMul,
+    MoveScalarLinearPastInvariants
+)
 
 logger = logging.getLogger(__name__)
+
+# Import decorator for registration
+from brainsmith.registry import step
 
 
 # === Metadata Steps ===
 
+@step(name='shell_metadata_handover')
 def shell_metadata_handover_step(model, cfg):
     """
     Extract metadata for shell integration process.
-    
+
     This information is stored in a json file that is passed to the build process.
     It adds this to the stitched_ip output directory and checks it exists ahead of time.
     """
     from finn.builder.build_dataflow_config import DataflowOutputType
-    
+
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
-            ExtractShellIntegrationMetadata = import_transform('ExtractShellIntegrationMetadata')
             model = model.transform(ExtractShellIntegrationMetadata(
                 cfg.output_dir + "/stitched_ip/shell_handover.json"
             ))
@@ -55,12 +72,13 @@ def shell_metadata_handover_step(model, cfg):
 
 # === Pre-Processing ===
 
+@step(name='bert_cleanup')
 def bert_cleanup_step(model: Any, cfg: Any) -> Any:
     """Basic cleanup with identity removal and input sorting."""
-    
+
     model = apply_transforms(model, [
-        'SortCommutativeInputsInitializerLast',
-        'RemoveIdentityOps'
+        SortCommutativeInputsInitializerLast(),
+        RemoveIdentityOps()
     ])
 
     return model
@@ -68,6 +86,7 @@ def bert_cleanup_step(model: Any, cfg: Any) -> Any:
 
 # === Streamlining Steps ===
 
+@step(name='bert_streamlining')
 def bert_streamlining_step(model: Any, cfg: Any) -> Any:
     """BERT-specific streamlining with SoftMax Mul node handling.
 
@@ -85,27 +104,24 @@ def bert_streamlining_step(model: Any, cfg: Any) -> Any:
     """
     # Apply bulk transforms without parameters
     model = apply_transforms(model, [
-        'AbsorbSignBiasIntoMultiThreshold',
-        'AbsorbAddIntoMultiThreshold',
-        'AbsorbMulIntoMultiThreshold',
-        'RoundAndClipThresholds'
+        AbsorbSignBiasIntoMultiThreshold(),
+        AbsorbAddIntoMultiThreshold(),
+        AbsorbMulIntoMultiThreshold(),
+        RoundAndClipThresholds()
     ])
 
-    # Load transform individually to pass parameters
-    MoveOpPastFork = import_transform('MoveOpPastFork')
+    # Transform with parameters
     model = model.transform(MoveOpPastFork(["Mul"]))
-    
+
     model = apply_transforms(model, [
-        'MoveScalarMulPastMatMul',
-        'MoveScalarLinearPastInvariants',
-        'AbsorbMulIntoMultiThreshold',
-        'AbsorbAddIntoMultiThreshold'
+        MoveScalarMulPastMatMul(),
+        MoveScalarLinearPastInvariants(),
+        AbsorbMulIntoMultiThreshold(),
+        AbsorbAddIntoMultiThreshold()
     ])
 
     # Final cleanup with parameterized transforms
-    InferDataTypes = import_transform('InferDataTypes')
-    GiveUniqueNodeNames = import_transform('GiveUniqueNodeNames')
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
     model = model.transform(GiveUniqueNodeNames())
-    
+
     return model

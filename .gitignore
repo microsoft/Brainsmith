@@ -2,7 +2,8 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-brainsmith_settings.yaml
+brainsmith_config.yaml
+plugins/
 examples/*/output/
 examples/*/results/
 examples/*/checkpoints/

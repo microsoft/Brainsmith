@@ -25,7 +25,7 @@ import torch
 
 # Import brainsmith early to set up paths
 import brainsmith
-from brainsmith.settings import get_build_dir, get_config
+from brainsmith.settings import get_config
 # Export configuration to environment for FINN
 get_config().export_to_environment()
 
@@ -43,7 +43,9 @@ from transformers.utils.fx import symbolic_trace
 import brevitas.nn as qnn
 import brevitas.onnx as bo
 
-import custom_steps  # Import custom steps to trigger registration
+# Import local custom steps to register them for use in blueprint YAML.
+# These steps are referenced in bert_demo.yaml: remove_head, remove_tail, generate_reference_io
+import custom_steps
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -182,42 +184,6 @@ def generate_bert_model(args):
     return model
 
 
-def generate_reference_io(model, output_dir):
-    """Generate reference input/output for verification.
-    
-    This matches custom_step_generate_reference_io from old bert.py
-    """
-    import finn.core.onnx_exec as oxe
-    from qonnx.core.modelwrapper import ModelWrapper
-    from qonnx.transformation.infer_shapes import InferShapes
-    
-    # Wrap model
-    model_wrapper = ModelWrapper(model)
-    
-    # Infer shapes first
-    model_wrapper = model_wrapper.transform(InferShapes())
-    
-    # Generate input
-    input_m = model_wrapper.graph.input[0]
-    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-    
-    # Save input
-    np.save(os.path.join(output_dir, "input.npy"), in_tensor)
-    
-    # Execute model to get expected output
-    input_t = {input_m.name: in_tensor}
-    out_name = model_wrapper.graph.output[0].name
-    
-    y_ref = oxe.execute_onnx(model_wrapper, input_t, True)
-    
-    # Save outputs
-    np.save(os.path.join(output_dir, "expected_output.npy"), y_ref[out_name])
-    np.savez(os.path.join(output_dir, "expected_context.npz"), **y_ref)
-    
-    return in_tensor, y_ref[out_name]
-
-
 def run_brainsmith_dse(model, args):
     """Run Brainsmith with new execution tree architecture."""
     # Create output directory
@@ -321,7 +287,7 @@ def main():
     args = parser.parse_args()
     
     # Determine output directory
-    build_dir = get_build_dir()
+    build_dir = get_config().build_dir
     print(build_dir)
     args.output_dir = os.path.join(str(build_dir), args.output)
     

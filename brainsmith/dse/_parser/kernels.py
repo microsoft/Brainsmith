@@ -75,7 +75,13 @@ def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
                     raise ValueError(f"Cannot determine language from backend name '{backend_spec}'")
 
             try:
-                backend_class = get_backend(kernel_name, language)
+                # Get all backends matching this kernel + language
+                matching_backends = list_backends_for_kernel(kernel_name, language=language)
+                if not matching_backends:
+                    raise ValueError(f"No {language} backends found for kernel '{kernel_name}'")
+
+                # Get the backend class (take first match if multiple)
+                backend_class = get_backend(matching_backends[0])
                 backend_classes.append(backend_class)
             except KeyError as e:
                 raise ValueError(f"Backend not found for kernel '{kernel_name}', language '{language}': {e}") from e

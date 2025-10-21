@@ -11,15 +11,24 @@
 ############################################################################
 
 """
-BERT-Specific Custom Build Steps
+BERT-Specific Custom Build Steps (Local Example Plugin)
 
-Custom steps specifically for BERT model processing, including:
-- Head and tail removal for model decomposition
-- Metadata extraction for shell integration
-- Reference I/O generation for validation
+These steps are specific to this BERT example and register when custom_steps.py
+is imported by bert_demo.py. They are referenced in bert_demo.yaml and executed
+via the blueprint.
 
-These steps are highly specific to BERT model architecture and
-are not general-purpose FINN dataflow compilation steps.
+Custom steps defined here:
+- remove_head: Remove model head up to first LayerNorm
+- remove_tail: Remove model tail after second output
+- generate_reference_io: Generate reference inputs/outputs for validation
+
+Core brainsmith steps also used in bert_demo.yaml:
+- bert_cleanup, bert_streamlining: from brainsmith.steps.bert_custom_steps
+- shell_metadata_handover: from brainsmith.steps.bert_custom_steps
+
+These steps are highly specific to BERT model architecture and demonstrate
+how to create example-specific steps using the @step decorator without
+needing a full plugin package structure.
 """
 
 import os
@@ -32,7 +41,8 @@ import finn.core.onnx_exec as oxe
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
 from brainsmith.registry import step
-from brainsmith._internal.io.transform_utils import apply_transforms
+from brainsmith.primitives.utils import apply_transforms
+from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensorNames
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +90,10 @@ def remove_head_step(model, cfg):
 
     # Clean up after head removal
     model = apply_transforms(model, [
-        'RemoveUnusedTensors',
-        'GiveReadableTensorNames'
+        RemoveUnusedTensors(),
+        GiveReadableTensorNames()
     ])
-    
+
     return model
 
 

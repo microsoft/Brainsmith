@@ -15,12 +15,8 @@ from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
-@backend(
-    name="CropHLS",
-    kernel="Crop",
-    language="hls",
-    author="Josh Monson"
-)
+
+@backend(name='Crop_HLS', target_kernel='brainsmith:Crop', language='hls')
 class Crop_hls(Crop, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

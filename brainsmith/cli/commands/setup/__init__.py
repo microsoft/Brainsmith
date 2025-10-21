@@ -17,12 +17,13 @@ import os
 import click
 from rich.table import Table
 
-from brainsmith.settings import get_config
 from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
 from ...utils import (
     console, error_exit, success, tip, show_panel,
     format_status, format_warning_status
 )
+
+# Lazy import settings - only imported when check() command is run
 from .cppsim import cppsim
 from .xsim import xsim
 from .boards import boards
@@ -75,6 +76,7 @@ def check() -> None:
     Displays a table showing the installation status of all
     Brainsmith dependencies and tools.
     """
+    from brainsmith.settings import get_config  # Lazy import
     config = get_config()
     deps_mgr = DependencyManager()
 
@@ -95,7 +97,7 @@ def check() -> None:
     finnxsim_status = format_status("Built" if finnxsim_built else "Not built", finnxsim_built)
     table.add_row("finn-xsim", finnxsim_status, "deps/finn/finn_xsi")
 
-    if config.effective_vivado_path:
+    if config.vivado_path:
         vivado_details = []
 
         # Check if settings64.sh has been sourced
@@ -109,7 +111,7 @@ def check() -> None:
         if config.xilinx_version:
             vivado_details.append(f"v{config.xilinx_version}")
 
-        vivado_path = str(config.effective_vivado_path)
+        vivado_path = str(config.vivado_path)
         status_text = f"Found ({', '.join(vivado_details)})" if vivado_details else "Found"
         vivado_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
@@ -119,7 +121,7 @@ def check() -> None:
     table.add_row("Vivado", vivado_status, vivado_path)
 
     # Check Vitis HLS
-    if config.effective_vitis_hls_path:
+    if config.vitis_hls_path:
         hls_details = []
 
         # Check if sourced
@@ -133,7 +135,7 @@ def check() -> None:
         if config.xilinx_version:
             hls_details.append(f"v{config.xilinx_version}")
 
-        hls_path = str(config.effective_vitis_hls_path)
+        hls_path = str(config.vitis_hls_path)
         status_text = f"Found ({', '.join(hls_details)})" if hls_details else "Found"
         hls_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
     else:
@@ -153,7 +155,7 @@ def check() -> None:
     if not cnpy_installed or not hlslib_installed:
         tip("Run 'brainsmith setup cppsim' to install C++ simulation dependencies")
 
-    if not finnxsim_built and config.effective_vivado_path:
+    if not finnxsim_built and config.vivado_path:
         tip("Run 'brainsmith setup xsim' to build Xilinx simulation support")
 
     if board_count == 0:

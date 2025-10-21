@@ -8,7 +8,7 @@ A framework for automating FPGA accelerator design and optimization.
 
 Main Features:
     - Design Space Exploration (DSE)
-    - Component-based architecture (Kernels, Steps)
+    - Component-based architecture (Kernels via HWCustomOp, Steps)
     - Dataflow modeling and tiling
     - Kernel integration tools
 
@@ -28,116 +28,90 @@ For component lookup:
     >>> LayerNorm = get_kernel('LayerNorm')
     >>> step_fn = get_step('streamline')
     >>> FoldConstants = import_transform('FoldConstants')
+
+NOTE: Uses PEP 562 lazy imports to improve CLI startup performance.
+Modules are loaded on-demand when attributes are accessed.
 """
-
-# Export configuration to environment for FINN and other tools
-# This needs to happen early before any FINN imports
-try:
-    from .settings import get_config
-    config = get_config()
-    config.export_to_environment()
-except Exception:
-    # Config might not be available during initial setup
-    pass
-
-# DSE - Main API
-from .dse import (
-    # High-level API
-    explore_design_space,
-    # Advanced API
-    build_tree,
-    execute_tree,
-    # Configuration and structures
-    DesignSpace,
-    DSEConfig,
-    DSETree,
-    DSESegment,
-    SegmentRunner,
-    # Result types
-    TreeExecutionResult,
-    SegmentResult,
-    SegmentStatus,
-    OutputType,
-    ExecutionError,
-)
-
-# Component System - Namespace-based registry
-from .loader import (
-    # Lookup
-    get_kernel,
-    get_step,
-    get_kernel_infer,
-    get_backend,
-    get_backend_metadata,
-    # Listing
-    list_kernels,
-    list_steps,
-    list_backends_for_kernel,
-    list_all_backends,
-    has_step,
-)
-
-# Transform imports
-from .transforms import (
-    import_transform,
-    apply_transforms,
-)
-
-# Dataflow SDK
-from .dataflow import (
-    KernelDefinition,
-    KernelModel,
-    InputInterface,
-    OutputInterface,
-    TilingStrategy,
-    TilingSpec,
-)
-
-# Configuration
-from .settings import SystemConfig
 
 __version__ = "0.1.0"
 
-__all__ = [
-    # DSE - High-level API
-    'explore_design_space',
-    # DSE - Advanced API
-    'build_tree',
-    'execute_tree',
-    # DSE - Configuration and structures
-    'DesignSpace',
-    'DSEConfig',
-    'DSETree',
-    'DSESegment',
-    'SegmentRunner',
-    # DSE - Result types
-    'TreeExecutionResult',
-    'SegmentResult',
-    'SegmentStatus',
-    'OutputType',
-    'ExecutionError',
+# Eager imports for decorators (needed at import time for deferred registration)
+from .registry import step, kernel, backend, registry
 
-    # Component System - Lazy Loader
-    'get_kernel',
-    'get_step',
-    'get_kernel_infer',
-    'get_backend',
-    'list_kernels',
-    'list_steps',
-    'list_backends',
-    'has_step',
-    # Transforms
-    'import_transform',
-    'apply_transforms',
+# Lazy import mappings - using shared LazyModuleLoader for performance
+from ._internal.lazy_imports import LazyModuleLoader
 
-    # Dataflow
-    'KernelDefinition',
-    'KernelModel',
-    'InputInterface',
-    'OutputInterface',
-    'TilingStrategy',
-    'TilingSpec',
+_LAZY_MODULES = {
+    # DSE module
+    'explore_design_space': 'dse',
+    'build_tree': 'dse',
+    'execute_tree': 'dse',
+    'DesignSpace': 'dse',
+    'DSEConfig': 'dse',
+    'DSETree': 'dse',
+    'DSESegment': 'dse',
+    'SegmentRunner': 'dse',
+    'TreeExecutionResult': 'dse',
+    'SegmentResult': 'dse',
+    'SegmentStatus': 'dse',
+    'OutputType': 'dse',
+    'ExecutionError': 'dse',
 
-    # Configuration
-    'SystemConfig',
-]
+    # Loader module
+    'get_kernel': 'loader',
+    'get_step': 'loader',
+    'get_kernel_infer': 'loader',
+    'get_backend': 'loader',
+    'get_backend_metadata': 'loader',
+    'list_kernels': 'loader',
+    'list_steps': 'loader',
+    'list_backends_for_kernel': 'loader',
+    'list_all_backends': 'loader',
+    'has_step': 'loader',
+
+    # Transforms module
+    'import_transform': 'transforms',
+
+    # Dataflow module
+    'KernelDefinition': 'dataflow',
+    'KernelModel': 'dataflow',
+    'InputInterface': 'dataflow',
+    'OutputInterface': 'dataflow',
+    'TilingStrategy': 'dataflow',
+    'TilingSpec': 'dataflow',
+
+    # Settings module
+    'SystemConfig': 'settings',
+    'get_config': 'settings',
+}
+
+_lazy_loader = LazyModuleLoader(_LAZY_MODULES, package=__name__)
+_config_exported = False
+
+
+def __getattr__(name):
+    """Lazy import attributes on first access (PEP 562)."""
+    global _config_exported
+
+    # Get the attribute using the shared lazy loader
+    attr = _lazy_loader.get_attribute(name)
+
+    # Export config to environment on first settings access
+    # This is a special case for brainsmith's configuration system
+    if name == 'get_config' and not _config_exported:
+        try:
+            config = attr()
+            config.export_to_environment()
+            _config_exported = True
+        except Exception:
+            pass  # Config might not be available during initial setup
+
+    return attr
+
+
+def __dir__():
+    """Support for dir() and tab completion."""
+    return _lazy_loader.dir() + ['__version__']
+
+# __all__ is generated from lazy modules to avoid duplication
+__all__ = list(_LAZY_MODULES.keys()) + ['__version__', 'step', 'kernel', 'backend', 'registry']

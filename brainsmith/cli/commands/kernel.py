@@ -111,8 +111,8 @@ def kernel(
         error_exit(
             "Kernel integrator tool not found",
             details=[
-                "The brainsmith.tools.kernel_integrator module is installed",
-                "Python can find the module in the Python path"
+                "Ensure brainsmith is fully installed: pip install -e .",
+                "Verify the kernel_integrator module exists in brainsmith/tools/"
             ]
         )
     except Exception as e:

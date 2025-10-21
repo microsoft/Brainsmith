@@ -4,6 +4,7 @@
 """Configuration loading and management for Brainsmith."""
 
 import os
+import threading
 from pathlib import Path
 from typing import Optional, List
 from rich.console import Console
@@ -24,13 +25,13 @@ def load_config(
     Priority order (highest to lowest):
     1. CLI arguments (passed as kwargs)
     2. Environment variables (BSMITH_* prefix)
-    3. Project settings file (brainsmith_settings.yaml)
-    4. User settings file (~/.brainsmith/config.yaml)
+    3. Project config file (brainsmith_config.yaml)
+    4. User config file (~/.brainsmith/config.yaml)
     5. Built-in defaults (from schema Field defaults)
 
     Args:
-        project_file: Path to project settings file (for non-standard locations)
-        user_file: Path to user settings file (defaults to ~/.brainsmith/config.yaml)
+        project_file: Path to project config file (for non-standard locations)
+        user_file: Path to user config file (defaults to ~/.brainsmith/config.yaml)
         **cli_overrides: CLI argument overrides
 
     Returns:
@@ -68,16 +69,20 @@ def load_config(
 
 # Singleton instance
 _config: Optional[SystemConfig] = None
+_config_lock = threading.Lock()
 
 
 def get_config() -> SystemConfig:
-    """Get singleton configuration instance.
-    
+    """Get singleton configuration instance (thread-safe).
+
     This loads the configuration once and caches it for the session.
     """
     global _config
     if _config is None:
-        _config = load_config()
+        with _config_lock:
+            # Double-check pattern
+            if _config is None:
+                _config = load_config()
     return _config
 
 

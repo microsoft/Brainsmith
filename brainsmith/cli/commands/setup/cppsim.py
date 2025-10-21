@@ -10,9 +10,9 @@ import click
 from brainsmith._internal.io.dependencies import DependencyManager, DEPENDENCIES
 from ...utils import (
     console, error_exit, success, warning,
-    progress_spinner
+    progress_spinner, confirm_or_abort
 )
-from .helpers import confirm_removal, _is_cnpy_installed, _are_hlslib_headers_installed
+from .helpers import _is_cnpy_installed, _are_hlslib_headers_installed
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -34,9 +34,11 @@ def cppsim(force: bool, remove: bool, yes: bool) -> None:
             warning("No C++ simulation dependencies are installed")
             return
 
-        if not confirm_removal(cppsim_deps, "C++ simulation dependencies", skip_confirm=yes):
-            console.print("Removal cancelled")
-            return
+        warning("The following C++ simulation dependencies will be removed:")
+        for dep in sorted(cppsim_deps):
+            console.print(f"      • {dep}")
+
+        confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
         with progress_spinner("Removing C++ simulation dependencies...") as task:
             results = deps_mgr.remove_group('cppsim')

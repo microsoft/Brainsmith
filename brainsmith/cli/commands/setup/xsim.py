@@ -5,13 +5,12 @@
 
 import click
 
-from brainsmith.settings import get_config
 from brainsmith._internal.io.dependencies import DependencyManager
 from ...utils import (
     console, error_exit, success, warning,
-    progress_spinner
+    progress_spinner, confirm_or_abort
 )
-from .helpers import confirm_removal, _is_finnxsim_built
+from .helpers import _is_finnxsim_built
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -20,6 +19,8 @@ from .helpers import confirm_removal, _is_finnxsim_built
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
 def xsim(force: bool, remove: bool, yes: bool) -> None:
     """Setup Xilinx simulation (build finn-xsim with Vivado)."""
+    from brainsmith.settings import get_config  # Lazy import
+
     if force and remove:
         error_exit("Cannot use --force and --remove together")
 
@@ -37,9 +38,11 @@ def xsim(force: bool, remove: bool, yes: bool) -> None:
             warning("No Xilinx simulation dependencies are installed")
             return
 
-        if not confirm_removal(xsim_deps, "Xilinx simulation dependencies", skip_confirm=yes):
-            console.print("Removal cancelled")
-            return
+        warning("The following Xilinx simulation dependencies will be removed:")
+        for dep in sorted(xsim_deps):
+            console.print(f"      • {dep}")
+
+        confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
         with progress_spinner("Removing Xilinx simulation dependencies...") as task:
             results = deps_mgr.remove_group('xsim')
@@ -51,14 +54,14 @@ def xsim(force: bool, remove: bool, yes: bool) -> None:
                 success("Xilinx simulation dependencies removed successfully")
         return
 
-    if not config.effective_vivado_path:
+    if not config.vivado_path:
         error_exit(
             "Vivado not found in configuration.",
             details=[
                 "Please set up Vivado and update your configuration.",
                 "Set Vivado path using:",
                 "  - Environment variable: export BSMITH_XILINX__VIVADO_PATH=/path/to/vivado",
-                "  - Config file: Add xilinx.vivado_path to brainsmith_settings.yaml"
+                "  - Config file: Add xilinx.vivado_path to brainsmith_config.yaml"
             ]
         )
 
@@ -77,9 +80,9 @@ def xsim(force: bool, remove: bool, yes: bool) -> None:
             error_exit(
                 f"Failed to setup Xilinx simulation: {e}",
                 details=[
-                    "Vivado is properly installed",
-                    "You have the required Vivado license",
-                    "The Vivado path in configuration is correct"
+                    "Verify Vivado is properly installed",
+                    "Ensure you have the required Vivado license",
+                    "Check that the Vivado path in your configuration is correct"
                 ]
             )
 

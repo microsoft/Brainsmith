@@ -12,6 +12,7 @@ from qonnx.core.datatype import DataType
 import warnings
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from brainsmith.registry import kernel
 
 # Import InferLayerNorm for metadata (avoids circular imports at class definition time)
 # Will be set after class definition
@@ -27,6 +28,7 @@ def _get_infer_transform():
 
 # TODO: Explain any shape assumptions -- TAFK
 
+@kernel
 class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer.
 

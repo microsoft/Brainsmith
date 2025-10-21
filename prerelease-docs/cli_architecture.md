@@ -47,14 +47,14 @@ Brainsmith follows a clear precedence order for configuration:
 
 1. **Command-line arguments** (highest priority)
 2. **Environment variables** (`BSMITH_*` prefix)
-3. **Project configuration** (`./brainsmith_settings.yaml`)
+3. **Project configuration** (`./brainsmith_config.yaml`)
 4. **User configuration** (`~/.brainsmith/config.yaml`)
 5. **Built-in defaults** (lowest priority)
 
 ### Configuration Example
 
 ```yaml
-# brainsmith_settings.yaml
+# brainsmith_config.yaml
 build_dir: ${HOME}/.brainsmith/builds
 xilinx_path: /tools/Xilinx
 xilinx_version: "2024.2"

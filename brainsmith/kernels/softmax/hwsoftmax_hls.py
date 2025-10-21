@@ -17,13 +17,8 @@ from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
-@backend(
-    name="HWSoftmaxHLS",
-    kernel="HWSoftmax",
-    language="hls",
-    description="HLS implementation of HWSoftmax",
-    author="Shane Fleming"
-)
+
+@backend(name='Softmax_HLS', target_kernel='brainsmith:Softmax', language='hls')
 class HWSoftmax_hls(HWSoftmax, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

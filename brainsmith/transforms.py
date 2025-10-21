@@ -14,7 +14,7 @@ they're just imports we can find by convention.
 import re
 import importlib
 import logging
-from typing import Type, List, Any, Optional
+from typing import Type, List
 
 logger = logging.getLogger(__name__)
 
@@ -71,74 +71,6 @@ def import_transform(name: str) -> Type:
         "\n".join(f"  - {p}.{name}" for p in search_patterns) +
         "\n\nIf this is a custom transform, ensure it's in one of the standard locations."
     )
-
-
-def apply_transforms(model: Any, transform_names: List[str], debug_path: Optional[str] = None) -> Any:
-    """Apply a sequence of transforms to a model.
-
-    This is the primary way to apply transforms - no registry needed!
-
-    Args:
-        model: QONNX ModelWrapper to transform
-        transform_names: List of transform class names to apply sequentially
-        debug_path: Optional path prefix for saving debug models between transforms
-
-    Returns:
-        Transformed model
-
-    Examples:
-        >>> model = apply_transforms(model, [
-        ...     'FoldConstants',
-        ...     'InferShapes',
-        ...     'ConvertQONNXtoFINN'
-        ... ])
-
-        >>> # With debug output
-        >>> model = apply_transforms(model, ['Streamline'], debug_path='/tmp/debug')
-    """
-    for i, transform_name in enumerate(transform_names):
-        logger.debug(f"Applying transform: {transform_name}")
-
-        # Import and apply transform
-        Transform = import_transform(transform_name)
-        model = model.transform(Transform())
-
-        # Save debug model if requested
-        if debug_path:
-            debug_file = f"{debug_path}_step{i:02d}_{transform_name}.onnx"
-            try:
-                model.save(debug_file)
-                logger.debug(f"Saved debug model: {debug_file}")
-            except Exception as e:
-                logger.warning(f"Failed to save debug model: {e}")
-
-    return model
-
-
-def apply_transforms_with_params(model: Any, transforms: List[tuple]) -> Any:
-    """Apply transforms with constructor parameters.
-
-    Args:
-        model: QONNX ModelWrapper to transform
-        transforms: List of (transform_name, kwargs_dict) tuples
-
-    Returns:
-        Transformed model
-
-    Examples:
-        >>> model = apply_transforms_with_params(model, [
-        ...     ('FoldConstants', {}),
-        ...     ('ConvertQONNXtoFINN', {'preserve_qnt_ops': True}),
-        ...     ('InferDataLayouts', {'topological': True})
-        ... ])
-    """
-    for transform_name, kwargs in transforms:
-        logger.debug(f"Applying transform: {transform_name} with {kwargs}")
-
-        Transform = import_transform(transform_name)
-        model = model.transform(Transform(**kwargs))
-
-    return model
 
 
 def _get_search_patterns(name: str) -> List[str]:

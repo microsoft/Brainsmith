@@ -7,10 +7,12 @@ import os
 from typing import Any
 
 from brainsmith.loader import get_kernel_infer
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
 
+@step(name='infer_kernels')
 def infer_kernels_step(model: Any, cfg: Any) -> Any:
     """Infer kernels using transforms stored in kernel metadata.
 

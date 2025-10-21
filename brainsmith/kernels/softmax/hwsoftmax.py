@@ -17,12 +17,15 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.registry import kernel
 
 
-@kernel(
-    description="Hardware implementation of Softmax",
-    author="Shane Fleming"
-)
+@kernel(name='Softmax', op_type='Softmax')
 class HWSoftmax(HWCustomOp):
     """Abstraction layer for HW implementation of VectorVectorActivation layers."""
+
+    # Metadata for registry
+    @property
+    def infer_transform(self):
+        from brainsmith.kernels.softmax.infer_hwsoftmax import InferHWSoftmax
+        return InferHWSoftmax
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

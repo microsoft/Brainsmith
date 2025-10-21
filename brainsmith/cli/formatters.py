@@ -1,15 +1,21 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations  # PEP 563: Postponed evaluation of annotations
+
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from rich.table import Table
 from rich.console import Console as RichConsole
 
-from brainsmith.settings import SystemConfig
-from .constants import PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT
+from brainsmith.settings.constants import PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT
+
+# Lazy import settings
+if TYPE_CHECKING:
+    from brainsmith.settings import SystemConfig
 
 # Source constants for configuration display
 _SOURCE_DERIVED = "derived"
@@ -21,21 +27,18 @@ class ConfigFormatter:
 
     def __init__(self, console: RichConsole | None = None):
         self.console = console or RichConsole()
+        self._yaml_cache: dict[str, dict] = {}  # Cache parsed YAML files
     
-    def format_table(self, config: SystemConfig, finn: bool = False) -> Table:
+    def format_table(self, config: SystemConfig, include_finn: bool = False) -> Table:
         """Format configuration as Rich table with source information.
 
         Args:
             config: System configuration
-            finn: Include FINN-specific settings
+            include_finn: Include FINN-specific settings
 
         Returns:
-            Rich table with configuration details (always detailed view with sources)
+            Rich table with configuration details
         """
-        return self._create_detailed_table(config, include_finn=finn)
-    
-    def _create_detailed_table(self, config: SystemConfig, include_finn: bool = False) -> Table:
-        """Create detailed configuration table with sources."""
         table = Table(title="Brainsmith Configuration")
         table.add_column("Setting", style="cyan")
         table.add_column("Value")
@@ -46,14 +49,14 @@ class ConfigFormatter:
                       self._format_path(config.build_dir, config.bsmith_dir),
                       self._get_source("build_dir", "BSMITH_BUILD_DIR"))
         table.add_row("  Dependencies Directory",
-                      self._format_path(config.deps_dir, config.bsmith_dir, config.deps_dir),
+                      self._format_path(config.deps_dir, config.bsmith_dir),
                       self._get_source("deps_dir", "BSMITH_DEPS_DIR"))
 
         table.add_row("", "", "")
         table.add_row("Plugin Settings", "", "")
 
         # Plugin sources - show each source with its path
-        plugin_sources = config.effective_plugin_sources
+        plugin_sources = config.plugin_sources
         source = self._get_source("plugin_sources", "BSMITH_PLUGIN_SOURCES")
         for i, (source_name, source_path) in enumerate(sorted(plugin_sources.items())):
             label = "  Plugin Sources" if i == 0 else ""
@@ -93,9 +96,9 @@ class ConfigFormatter:
         
         # Add individual tools with sources
         for tool_name, path_attr, env_var in [
-            ("Vivado", "effective_vivado_path", "BSMITH_VIVADO_PATH"),
-            ("Vitis", "effective_vitis_path", "BSMITH_VITIS_PATH"),
-            ("Vitis HLS", "effective_vitis_hls_path", "BSMITH_VITIS_HLS_PATH")
+            ("Vivado", "vivado_path", "BSMITH_VIVADO_PATH"),
+            ("Vitis", "vitis_path", "BSMITH_VITIS_PATH"),
+            ("Vitis HLS", "vitis_hls_path", "BSMITH_VITIS_HLS_PATH")
         ]:
             path = getattr(config, path_attr)
             if path:
@@ -103,7 +106,7 @@ class ConfigFormatter:
                     path, config.xilinx_path, config.xilinx_version,
                     tool_name.replace(" ", "_")
                 )
-                source = _SOURCE_DERIVED if not getattr(config, path_attr.replace("effective_", "")) else self._get_source(path_attr.replace("effective_", ""), env_var)
+                source = self._get_source(path_attr, env_var)
             else:
                 display = "[yellow]Not found[/yellow]"
                 source = "—"
@@ -113,61 +116,37 @@ class ConfigFormatter:
         table.add_row("", "", "")
         table.add_row("FINN Configuration", "", "")
 
-        finn_root = config.effective_finn_root
-        finn_root_is_derived = config.finn.finn_root is None
-        finn_root_original = Path("deps/finn") if finn_root_is_derived else config.finn.finn_root
-
+        finn_root = config.finn.finn_root
         table.add_row("  FINN_ROOT",
-                      self._format_path(finn_root, config.bsmith_dir, finn_root_original),
-                      _SOURCE_DERIVED if finn_root_is_derived else self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
+                      self._format_path(finn_root, config.bsmith_dir),
+                      self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
 
-        finn_build = config.effective_finn_build_dir
-        finn_build_is_derived = config.finn.finn_build_dir is None
+        finn_build = config.finn.finn_build_dir
         table.add_row("  FINN_BUILD_DIR",
                       self._format_path(finn_build, config.bsmith_dir),
-                      _SOURCE_DERIVED if finn_build_is_derived else self._get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
+                      self._get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
 
-        finn_deps = config.effective_finn_deps_dir
-        finn_deps_is_derived = config.finn.finn_deps_dir is None
-        finn_deps_original = config.deps_dir if finn_deps_is_derived and finn_deps == config.deps_dir else config.finn.finn_deps_dir
-
+        finn_deps = config.finn.finn_deps_dir
         table.add_row("  FINN_DEPS_DIR",
-                      self._format_path(finn_deps, config.bsmith_dir, finn_deps_original),
-                      _SOURCE_DERIVED if finn_deps_is_derived else self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
+                      self._format_path(finn_deps, config.bsmith_dir),
+                      self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
 
-    def _format_path(
-        self,
-        path: Path | None,
-        base_path: Path | None = None,
-        original_value: Path | None = None
-    ) -> str:
-        if path is None:
-            return "None"
+    def _format_path(self, path: Path | None, base_path: Path | None = None) -> str:
+        """Format path with color based on existence."""
+        if not path:
+            return "[dim]not set[/dim]"
 
-        path_obj = Path(path)
+        color = "green" if path.exists() else "yellow"
 
-        if not path_obj.is_absolute() and base_path:
-            check_path = base_path / path_obj
-        else:
-            check_path = path_obj
-
-        color = "green" if check_path.exists() else "yellow"
-
-        if not path_obj.is_absolute() and base_path:
-            return f"[dim]{base_path}/[/dim][{color}]{path_obj}[/{color}]"
-
-        if original_value is not None and not Path(original_value).is_absolute():
-            base_str = str(base_path) if base_path else str(path_obj.parent)
-            return f"[dim]{base_str}/[/dim][{color}]{original_value}[/{color}]"
-
-        if base_path and path_obj.is_absolute():
+        # Show relative to base if possible
+        display = path
+        if base_path and path.is_absolute():
             try:
-                rel_path = path_obj.relative_to(base_path)
-                return f"[dim]{base_path}/[/dim][{color}]{rel_path}[/{color}]"
+                display = path.relative_to(base_path)
             except ValueError:
                 pass
 
-        return f"[{color}]{path_obj}[/{color}]"
+        return f"[{color}]{display}[/{color}]"
 
     def _format_xilinx_tool_path(
         self,
@@ -176,11 +155,25 @@ class ConfigFormatter:
         version: str,
         tool: str
     ) -> str:
-        if path and path.exists():
-            color = "green"
-            return f"[{color}]{base}[/{color}][dim]/{tool}/[/dim][{color}]{version}[/{color}]"
-        else:
+        """Format Xilinx tool path with existence-based coloring.
+
+        Args:
+            path: Resolved tool path
+            base: Xilinx base path (for display)
+            version: Tool version (for display)
+            tool: Tool name (for display)
+
+        Returns:
+            Rich-formatted path string
+        """
+        if not path:
+            return "[yellow]Not configured[/yellow]"
+
+        if not path.exists():
             return "[yellow]Not found[/yellow]"
+
+        # Show as: base/tool/version
+        return f"[green]{base}[/green][dim]/{tool}/[/dim][green]{version}[/green]"
     
     def _get_source(self, setting_name: str, env_var: str) -> str:
         if os.environ.get(env_var):
@@ -193,17 +186,33 @@ class ConfigFormatter:
         return _SOURCE_DEFAULT
     
     def _check_yaml_files(self, setting_name: str) -> str | None:
+        """Check if setting exists in project YAML files. Supports nested paths."""
         for filename in [PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT]:
-            yaml_path = Path(filename)
-            if yaml_path.exists():
+            # Cache parsed YAML
+            if filename not in self._yaml_cache:
+                yaml_path = Path(filename)
+                if not yaml_path.exists():
+                    continue
                 try:
                     with open(yaml_path) as f:
-                        data = yaml.safe_load(f)
-                        if data and setting_name in data:
-                            return filename
+                        self._yaml_cache[filename] = yaml.safe_load(f) or {}
                 except (OSError, yaml.YAMLError):
-                    pass
+                    self._yaml_cache[filename] = {}
+
+            data = self._yaml_cache[filename]
+            if self._nested_key_exists(data, setting_name):
+                return filename
         return None
+
+    def _nested_key_exists(self, data: dict, key: str) -> bool:
+        """Check if nested key exists (supports 'finn.finn_root' notation)."""
+        parts = key.split('.')
+        current = data
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return False
+            current = current[part]
+        return True
     
     def show_validation_warnings(self, config: SystemConfig) -> None:
         warnings = []

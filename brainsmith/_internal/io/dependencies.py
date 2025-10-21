@@ -235,7 +235,7 @@ class DependencyManager:
                     try:
                         from brainsmith.settings import get_config
                         config = get_config()
-                        if not config.effective_vivado_path:
+                        if not config.vivado_path:
                             missing.append((tool, message))
                     except ImportError:
                         # Fallback to simple PATH check if config not available

@@ -10,17 +10,11 @@ Port of the ExpandNorms transform to the plugin system.
 import numpy as np
 from onnx import helper as oh
 from onnx import TensorProto
-from brainsmith.registry import transform
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
 
-@transform(
-    name="ExpandNorms",
-    stage="topology_opt",
-    description="Expand LayerNorms/RMSNorms into functional components",
-    author="Thomas Keller"
-)
+
 class ExpandNorms(Transformation):
     """Expand any standard LayerNorms/RMSNorms into the functional 
     norm and Mul/Add nodes for affine scale and bias."""

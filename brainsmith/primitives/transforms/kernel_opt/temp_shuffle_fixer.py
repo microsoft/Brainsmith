@@ -16,16 +16,10 @@ Temporary shuffle sizing fix for BERT builds.
 import logging
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.registry import transform
 
 logger = logging.getLogger(__name__)
 
-@transform(
-    name="TempShuffleFixer",
-    stage="kernel_opt",
-    description="Temporary fix for shuffle sizing in BERT builds",
-    author="Shane Fleming"
-)
+
 class TempShuffleFixer(Transformation):
     """A temporary transformation that ensures that shuffles are sized correctly for the
     initial BERT builds"""

@@ -71,7 +71,7 @@ def dfc(
     except FileNotFoundError as e:
         error_exit(f"File not found: {e}")
     except Exception as e:
-        if logging.getLogger().level == logging.DEBUG:
+        if logger.isEnabledFor(logging.DEBUG):
             console.print_exception()
         else:
             error_exit(

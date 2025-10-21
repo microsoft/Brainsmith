@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Dict
 # Note: Old registry decorators removed - new plugin system doesn't use decorators
-from brainsmith._internal.io.transform_utils import apply_transforms
+from brainsmith.primitives.utils import apply_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def test_debug_output_step(model: Any, cfg: Any) -> Any:
         logger.info(f"Debug mode enabled, saving to {debug_path}")
         
         # Apply transforms with debug output
-        from brainsmith._internal.io.transform_utils import apply_transforms
+        from brainsmith.primitives.utils import apply_transforms
         model = apply_transforms(
             model, 
             ['GiveReadableTensorNames', 'SortGraph'],

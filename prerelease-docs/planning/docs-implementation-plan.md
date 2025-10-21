@@ -605,8 +605,8 @@ graph LR
 
 1. CLI arguments / environment vars (highest)
 2. Explicit `--config` file
-3. `~/.brainsmith/config.yaml` (user)
-4. `.brainsmith/config.yaml` (project)
+3. Project config (`./brainsmith_config.yaml` or `./.brainsmith/config.yaml`)
+4. User config (`~/.brainsmith/config.yaml`)
 5. Built-in defaults (lowest)
 
 **Location:** `brainsmith/config/`

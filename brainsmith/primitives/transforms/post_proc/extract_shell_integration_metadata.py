@@ -6,15 +6,8 @@
 import json
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from brainsmith.registry import transform
 
 
-@transform(
-    name="ExtractShellIntegrationMetadata",
-    stage="post_proc",
-    description="Extract metadata for shell integration handover",
-    author="Shane Fleming",
-)
 class ExtractShellIntegrationMetadata(Transformation):
     """Walks the ONNX graph and extracts all relevant metadata for shell integration
     handover."""

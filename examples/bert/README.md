@@ -75,13 +75,26 @@ The example includes two blueprint configurations:
 - Lower performance target (1 FPS)
 - Skips time-intensive optimizations
 
-## Custom Transformations
+## Custom Steps (Local Plugin Pattern)
 
-The example includes three BERT-specific steps in `custom_steps.py`:
+This example demonstrates how to create custom steps using the `@step` decorator
+without needing a full plugin package structure. The steps in `custom_steps.py`
+are registered when imported by `bert_demo.py` and referenced by name in the
+blueprint YAML.
 
+**Local steps defined in custom_steps.py:**
 - **remove_head**: Extracts transformer encoder by removing embedding layers
 - **remove_tail**: Removes classification head to focus on encoder
 - **generate_reference_io**: Creates test vectors for RTL verification
+
+**Core brainsmith steps used from brainsmith.steps.bert_custom_steps:**
+- **bert_cleanup**: BERT-specific model cleanup and normalization
+- **bert_streamlining**: Streamline BERT model structure
+- **shell_metadata_handover**: Extract metadata for shell integration
+
+All steps are referenced in `bert_demo.yaml` and executed as part of the
+dataflow compilation pipeline. This pattern is ideal for example-specific
+transformations that don't need to be shared across projects.
 
 ## Folding Configuration
 

@@ -16,12 +16,14 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.registry import kernel
 
 
-@kernel(
-    description="Hardware shuffle (rearrange and transpose) operation",
-    author="Shane Fleming"
-)
+@kernel(name='Shuffle', op_type='Shuffle')
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
+
+    @property
+    def infer_transform(self):
+        from brainsmith.kernels.shuffle.infer_shuffle import InferShuffle
+        return InferShuffle
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

@@ -8,6 +8,7 @@
 ############################################################################
 
 # Import the main HWSoftmax operator
+# Components auto-register via decorators
 from .hwsoftmax import HWSoftmax
 
 # Import HLS backend if needed
