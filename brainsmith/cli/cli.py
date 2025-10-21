@@ -14,8 +14,8 @@ from .utils import console
 from .constants import (
     CLI_NAME_BRAINSMITH,
     CLI_NAME_SMITH,
-    ENV_QUIET,
     EX_INTERRUPTED,
+    EX_SOFTWARE,
     EX_USAGE,
 )
 
@@ -119,14 +119,6 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         setup_logging(level=logs)
         logger.debug(f"{name} CLI initialized with logs={logs}, no_progress={no_progress}")
 
-        if no_progress:
-            os.environ[ENV_QUIET] = '1'
-
-        # Show help if no subcommand provided
-        if ctx.invoked_subcommand is None:
-            click.echo(ctx.get_help())
-            return
-
         # Load and export configuration for subcommand execution
         context.load_configuration()
         # Export to env vars for FINN transforms that read FINN_BUILD_DIR etc.
@@ -201,7 +193,7 @@ def _run_cli(name: str, include_admin: bool) -> None:
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {e}")
         logging.exception(f"Unexpected error in {name} CLI")
-        sys.exit(EX_USAGE)
+        sys.exit(EX_SOFTWARE)
 
 
 def brainsmith_main() -> None:

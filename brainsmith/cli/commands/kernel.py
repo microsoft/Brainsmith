@@ -29,7 +29,9 @@ from ..utils import console, error_exit, success, progress_spinner
               help='Validate RTL only without generating files')
 @click.option('--verbose', '-v', is_flag=True,
               help='Show detailed output from kernel integrator tool')
+@click.pass_obj
 def kernel(
+    ctx,
     rtl_file: Path,
     artifacts: tuple[str, ...],
     include_rtl: tuple[Path, ...],
@@ -84,7 +86,7 @@ def kernel(
             else:
                 error_exit(f"Failed to parse RTL: {result.stderr}")
         else:
-            with progress_spinner(action) as task:
+            with progress_spinner(action, no_progress=ctx.no_progress) as task:
                 result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode == 0:

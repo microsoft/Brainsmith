@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
-from brainsmith._internal.io.yaml import load_yaml, expand_env_vars_with_context
+from brainsmith._internal.io.yaml import load_yaml, load_blueprint_yaml, expand_env_vars_with_context
 
 
 def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
@@ -35,13 +35,8 @@ def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any]
         )
     }
 
-    # Load raw data to check inheritance chain
-    raw_data = load_yaml(
-        blueprint_path,
-        expand_env_vars=True,
-        support_inheritance=False,
-        context_vars=context_vars
-    )
+    # Load raw data without inheritance to check extends field
+    raw_data = load_yaml(blueprint_path)
 
     parent_path = None
 
@@ -55,13 +50,8 @@ def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any]
         if not Path(parent_path).is_absolute():
             parent_path = str(Path(blueprint_path).parent / parent_path)
 
-    # Load the full merged data for config extraction
-    merged_data = load_yaml(
-        blueprint_path,
-        expand_env_vars=True,
-        support_inheritance=True,
-        context_vars=context_vars
-    )
+    # Load the full merged data with inheritance support
+    merged_data = load_blueprint_yaml(blueprint_path, context_vars=context_vars)
 
     return raw_data, merged_data, parent_path
 

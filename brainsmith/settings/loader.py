@@ -4,9 +4,10 @@
 """Configuration loading and management for Brainsmith."""
 
 import os
-import threading
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, List
+from unittest.mock import patch
 from rich.console import Console
 from pydantic import ValidationError
 
@@ -38,27 +39,16 @@ def load_config(
         Validated SystemConfig object
     """
     try:
-        # Set environment variables for config file paths
-        env_vars_to_clean = []
-        
+        # Temporarily set config file paths via environment variables
+        env_overrides = {}
         if project_file:
-            os.environ['_BRAINSMITH_PROJECT_FILE'] = str(project_file)
-            env_vars_to_clean.append('_BRAINSMITH_PROJECT_FILE')
-            
+            env_overrides['_BRAINSMITH_PROJECT_FILE'] = str(project_file)
         if user_file:
-            os.environ['_BRAINSMITH_USER_FILE'] = str(user_file)
-            env_vars_to_clean.append('_BRAINSMITH_USER_FILE')
-        
-        # Create config with CLI overrides
-        # Pydantic-settings handles the rest automatically
-        config = SystemConfig(**cli_overrides)
-        
-        # Clean up temp env vars
-        for var in env_vars_to_clean:
-            os.environ.pop(var, None)
-        
-        return config
-        
+            env_overrides['_BRAINSMITH_USER_FILE'] = str(user_file)
+
+        with patch.dict(os.environ, env_overrides):
+            return SystemConfig(**cli_overrides)
+
     except ValidationError as e:
         console.print("[bold red]Configuration validation failed:[/bold red]")
         for error in e.errors():
@@ -67,43 +57,32 @@ def load_config(
         raise
 
 
-# Singleton instance
-_config: Optional[SystemConfig] = None
-_config_lock = threading.Lock()
-
-
+@lru_cache(maxsize=1)
 def get_config() -> SystemConfig:
-    """Get singleton configuration instance (thread-safe).
+    """Get singleton configuration instance (cached).
 
     This loads the configuration once and caches it for the session.
+    Call reset_config() to clear the cache.
     """
-    global _config
-    if _config is None:
-        with _config_lock:
-            # Double-check pattern
-            if _config is None:
-                _config = load_config()
-    return _config
+    return load_config()
 
 
 def reset_config() -> None:
-    """Reset the singleton configuration (mainly for testing)."""
-    global _config
-    _config = None
+    """Reset the cached configuration (mainly for testing)."""
+    get_config.cache_clear()
 
 
 def get_default_config() -> SystemConfig:
     """Get a configuration instance with only default values (no files or env vars)."""
-    # Temporarily clear env vars that would affect config
-    env_backup = {}
-    for key in list(os.environ.keys()):
-        if key.startswith('BSMITH_') or key.startswith('_BRAINSMITH_'):
-            env_backup[key] = os.environ.pop(key)
+    # Back up all Brainsmith env vars
+    env_backup = {
+        key: os.environ.pop(key)
+        for key in list(os.environ.keys())
+        if key.startswith('BSMITH_') or key.startswith('_BRAINSMITH_')
+    }
 
     try:
-        # Create config with defaults only
-        config = SystemConfig()
-        return config
+        return SystemConfig()
     finally:
-        # Restore env vars
+        # Restore backed up env vars
         os.environ.update(env_backup)

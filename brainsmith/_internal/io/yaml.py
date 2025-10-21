@@ -1,15 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unified YAML parsing utility with environment variable resolution.
+"""YAML loading utilities with focused functions for different use cases.
 
-This module provides thread-safe YAML loading with support for:
-- Environment variable expansion using ${VAR} syntax
-- YAML inheritance via 'extends' field
-- Automatic path resolution for Path-typed fields
-- Context variable injection
+This module provides three YAML loading functions:
+- load_yaml(): Simple YAML loading with no extra processing
+- load_config_yaml(): For config files (env expansion + path resolution)
+- load_blueprint_yaml(): For blueprints (inheritance + context variables)
 
-Note: Only ${VAR} syntax is supported for variable expansion (not $VAR).
+Environment variable expansion uses ${VAR} syntax (not $VAR).
+All implementations are thread-safe and do not mutate os.environ.
 """
 
 import os
@@ -19,69 +19,113 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 
 
-def load_yaml(
-    file_path: Union[str, Path],
-    expand_env_vars: bool = True,
-    context_vars: Optional[Dict[str, str]] = None,
-    support_inheritance: bool = False,
-    path_fields: Optional[List[str]] = None,
-    schema_class: Optional[type] = None,
-) -> Dict[str, Any]:
-    """Load a YAML file with optional environment variable expansion and inheritance.
+def load_yaml(file_path: str | Path) -> dict[str, Any]:
+    """Load a YAML file with no additional processing.
 
-    Environment variables are expanded using ${VAR} syntax (not $VAR).
-    This implementation is thread-safe and does not mutate os.environ.
+    Basic YAML loading - returns parsed data as-is. Use this when you just
+    need to read YAML without env expansion, inheritance, or path resolution.
 
     Args:
         file_path: Path to the YAML file
-        expand_env_vars: Whether to expand environment variables (default: True)
-        context_vars: Additional context variables for expansion
-        support_inheritance: Whether to support YAML inheritance via 'extends' field
-        path_fields: Explicit list of field names that contain paths (dot notation for nested)
-        schema_class: Optional Pydantic model class to extract path fields from
 
     Returns:
-        Parsed YAML data with environment variables expanded and paths resolved
+        Parsed YAML data (empty dict if file is empty)
 
     Raises:
         FileNotFoundError: If the YAML file doesn't exist
         yaml.YAMLError: If the YAML is invalid
     """
     file_path = Path(file_path)
-    
+
     if not file_path.exists():
         raise FileNotFoundError(f"YAML file not found: {file_path}")
-    
-    # Prepare context variables for inheritance
-    default_context = {
+
+    with open(file_path) as f:
+        return yaml.safe_load(f) or {}
+
+
+def load_config_yaml(
+    file_path: str | Path,
+    schema_class: type | None = None
+) -> dict[str, Any]:
+    """Load a configuration YAML with env expansion and path resolution.
+
+    Used for configuration files like brainsmith_config.yaml or ~/.brainsmith/config.yaml.
+    Expands environment variables and resolves relative paths to absolute.
+
+    Args:
+        file_path: Path to the config YAML file
+        schema_class: Optional Pydantic model to extract path field names from
+
+    Returns:
+        Parsed YAML with env vars expanded and paths resolved
+
+    Raises:
+        FileNotFoundError: If the YAML file doesn't exist
+        yaml.YAMLError: If the YAML is invalid
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"YAML file not found: {file_path}")
+
+    # Load YAML
+    with open(file_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    # Expand environment variables
+    data = expand_env_vars(data)
+
+    # Resolve relative paths if schema provided
+    if schema_class:
+        path_fields = extract_path_fields_from_schema(schema_class)
+        if path_fields:
+            data = resolve_relative_paths(data, file_path.parent, path_fields)
+
+    return data
+
+
+def load_blueprint_yaml(
+    file_path: str | Path,
+    context_vars: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Load a blueprint YAML with inheritance support and context variables.
+
+    Used for DFC blueprints that may use 'extends' field for inheritance.
+    Provides context variables like YAML_DIR and BSMITH_DIR for path resolution.
+
+    Args:
+        file_path: Path to the blueprint YAML file
+        context_vars: Additional context variables for ${VAR} expansion
+
+    Returns:
+        Parsed YAML with inheritance resolved and env vars expanded
+
+    Raises:
+        FileNotFoundError: If the YAML file doesn't exist
+        yaml.YAMLError: If the YAML is invalid
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"YAML file not found: {file_path}")
+
+    # Prepare context variables
+    context = {
         'YAML_DIR': str(file_path.parent.absolute()),
         'BSMITH_DIR': os.environ.get('BSMITH_DIR', str(Path(__file__).parent.parent.parent.absolute()))
     }
-    
+
     # Merge with user-provided context
     if context_vars:
-        default_context.update(context_vars)
-    
-    # Load the YAML file
-    if support_inheritance:
-        data = _load_with_inheritance(file_path, default_context)
-    else:
-        with open(file_path, 'r') as f:
-            data = yaml.safe_load(f) or {}
-    
-    # Expand environment variables if requested
-    if expand_env_vars:
-        data = expand_env_vars_with_context(data, default_context)
-    
-    # Resolve relative paths if path_fields are specified or schema is provided
-    if path_fields is not None or schema_class is not None:
-        # Extract path fields from schema if provided
-        if schema_class is not None and path_fields is None:
-            path_fields = extract_path_fields_from_schema(schema_class)
-        
-        if path_fields:
-            data = resolve_relative_paths(data, file_path.parent, path_fields)
-    
+        context.update(context_vars)
+
+    # Load with inheritance support
+    data = _load_with_inheritance(file_path, context)
+
+    # Expand environment variables with context
+    data = expand_env_vars_with_context(data, context)
+
     return data
 
 

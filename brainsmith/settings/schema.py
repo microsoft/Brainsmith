@@ -15,7 +15,7 @@ from functools import cached_property
 from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable
 from pydantic import BaseModel, Field, field_validator, ConfigDict, BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
-from brainsmith._internal.io.yaml import load_yaml, _deep_merge
+from brainsmith._internal.io.yaml import load_config_yaml, _deep_merge
 
 from .constants import (
     get_user_config_path,
@@ -25,19 +25,11 @@ from .constants import (
 )
 
 
-# Pydantic validators for Path conversion
-def _validate_path(v: Any) -> Optional[Path]:
-    """Convert string/Path-like to Path object, handling None for optional fields."""
-    if v is None:
-        return None
-    if not isinstance(v, Path):
-        return Path(v)
-    return v
+# Pydantic automatically handles string → Path conversion, no custom validator needed
 
 
-# Type aliases for path fields with automatic validation
-PathField = Annotated[Path, BeforeValidator(_validate_path)]
-OptionalPathField = Annotated[Optional[Path], BeforeValidator(_validate_path)]
+# Protected plugin sources that cannot be overridden by users
+PROTECTED_SOURCES = frozenset(['brainsmith', 'finn', 'project', 'user'])
 
 
 # FinnConfig nested model
@@ -49,9 +41,9 @@ class FinnConfig(BaseModel):
     - finn_build_dir: defaults to build_dir
     - finn_deps_dir: defaults to deps_dir
     """
-    finn_root: OptionalPathField = Field(default=None, description="FINN root directory (defaults to deps_dir/finn)")
-    finn_build_dir: OptionalPathField = Field(default=None, description="FINN build directory (defaults to build_dir)")
-    finn_deps_dir: OptionalPathField = Field(default=None, description="FINN dependencies directory (defaults to deps_dir)")
+    finn_root: Path | None = Field(default=None, description="FINN root directory (defaults to deps_dir/finn)")
+    finn_build_dir: Path | None = Field(default=None, description="FINN build directory (defaults to build_dir)")
+    finn_deps_dir: Path | None = Field(default=None, description="FINN dependencies directory (defaults to deps_dir)")
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -123,12 +115,10 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         for yaml_file in self.yaml_files:
             if yaml_file and yaml_file.exists():
                 try:
-                    # Use unified YAML parser with env var expansion and schema-based path resolution
-                    data = load_yaml(
+                    # Load config YAML with env expansion and path resolution
+                    data = load_config_yaml(
                         yaml_file,
-                        expand_env_vars=True,
-                        support_inheritance=False,  # Config files don't use inheritance
-                        schema_class=self.settings_cls  # Pass the SystemConfig class to extract path fields
+                        schema_class=self.settings_cls  # Extract path fields from SystemConfig
                     )
                     # Deep merge the data
                     merged_data = _deep_merge(merged_data, data)
@@ -196,21 +186,21 @@ class SystemConfig(BaseSettings):
 
     # Core paths
     # NOTE: bsmith_dir is now a cached property, not a configurable field
-    build_dir: PathField = Field(
+    build_dir: Path = Field(
         default=Path("build"),
         description="Build directory for artifacts"
     )
-    deps_dir: PathField = Field(
+    deps_dir: Path = Field(
         default=Path("deps"),
         description="Dependencies directory"
     )
     # project_dir is computed (not user-configurable) - always set to brainsmith root
     # It's set in model_post_init as a regular attribute
-    plugin_sources: Dict[str, Path] = Field(
+    plugin_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
-            'brainsmith': Path('<builtin>'),
-            'finn': Path('<builtin>'),
-            'project': Path('<project>'),
+            'brainsmith': None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
+            'finn': None,         # Resolved in model_post_init to deps_dir / 'finn'
+            'project': None,      # Resolved in model_post_init to project_dir / 'plugins'
             'user': Path.home() / '.brainsmith' / 'plugins'
         },
         description="Plugin source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
@@ -221,7 +211,7 @@ class SystemConfig(BaseSettings):
     )
 
     # Xilinx configuration (flattened)
-    xilinx_path: PathField = Field(
+    xilinx_path: Path = Field(
         default=Path("/tools/Xilinx"),
         description="Xilinx root installation path"
     )
@@ -230,15 +220,15 @@ class SystemConfig(BaseSettings):
         description="Xilinx tool version"
     )
     # These are auto-derived from xilinx_path but can be overridden
-    vivado_path: OptionalPathField = Field(
+    vivado_path: Path | None = Field(
         default=None,
         description="Path to Vivado (auto-detected from xilinx_path)"
     )
-    vitis_path: OptionalPathField = Field(
+    vitis_path: Path | None = Field(
         default=None,
         description="Path to Vitis (auto-detected from xilinx_path)"
     )
-    vitis_hls_path: OptionalPathField = Field(
+    vitis_hls_path: Path | None = Field(
         default=None,
         description="Path to Vitis HLS (auto-detected from xilinx_path)"
     )
@@ -260,7 +250,7 @@ class SystemConfig(BaseSettings):
     )
 
     # Vivado-specific settings
-    vivado_ip_cache: OptionalPathField = Field(
+    vivado_ip_cache: Path | None = Field(
         default=None,
         description="Vivado IP cache directory (auto-computed from build_dir if not set)"
     )
@@ -320,21 +310,10 @@ class SystemConfig(BaseSettings):
         self.build_dir = self._resolve(self.build_dir, base=self.project_dir)
         self.deps_dir = self._resolve(self.deps_dir, base=self.bsmith_dir)
 
-        # 3. Auto-detect and resolve Xilinx tools (eager)
-        if not self.vivado_path:
-            self.vivado_path = self._detect_xilinx_tool("Vivado")
-        elif self.vivado_path:
-            self.vivado_path = self._resolve(self.vivado_path, base=self.project_dir)
-
-        if not self.vitis_path:
-            self.vitis_path = self._detect_xilinx_tool("Vitis")
-        elif self.vitis_path:
-            self.vitis_path = self._resolve(self.vitis_path, base=self.project_dir)
-
-        if not self.vitis_hls_path:
-            self.vitis_hls_path = self._detect_xilinx_tool("Vitis_HLS")
-        elif self.vitis_hls_path:
-            self.vitis_hls_path = self._resolve(self.vitis_hls_path, base=self.project_dir)
+        # 3. Auto-detect and resolve Xilinx tools
+        self.vivado_path = self._resolve_xilinx_tool("Vivado", self.vivado_path)
+        self.vitis_path = self._resolve_xilinx_tool("Vitis", self.vitis_path)
+        self.vitis_hls_path = self._resolve_xilinx_tool("Vitis_HLS", self.vitis_hls_path)
 
         # 4. Resolve derived path: vivado_ip_cache
         if self.vivado_ip_cache:
@@ -358,11 +337,34 @@ class SystemConfig(BaseSettings):
         else:
             self.finn.finn_deps_dir = self.deps_dir
 
-        # 6. Resolve plugin sources (expand markers)
-        resolved_sources = {}
-        for name, path in self.plugin_sources.items():
-            resolved_sources[name] = self._resolve_plugin_source(name, path)
-        self.plugin_sources = resolved_sources
+        # 6. Resolve plugin sources
+        # Protected sources are resolved from None to actual paths
+        if self.plugin_sources.get('brainsmith') is None:
+            self.plugin_sources['brainsmith'] = self.bsmith_dir / 'brainsmith'
+        if self.plugin_sources.get('finn') is None:
+            self.plugin_sources['finn'] = self.deps_dir / 'finn'
+        if self.plugin_sources.get('project') is None:
+            self.plugin_sources['project'] = self.project_dir / 'plugins'
+
+        # Resolve custom (non-protected) sources relative to project_dir
+        for name, path in list(self.plugin_sources.items()):
+            if name not in PROTECTED_SOURCES and path is not None:
+                self.plugin_sources[name] = self._resolve(path, self.project_dir)
+
+        # Validate protected sources are resolved correctly
+        for source_name in PROTECTED_SOURCES:
+            if source_name in self.plugin_sources:
+                path = self.plugin_sources[source_name]
+                if path is None:
+                    raise ValueError(
+                        f"Protected plugin source '{source_name}' was not resolved. "
+                        f"This is likely a bug in Brainsmith's configuration initialization."
+                    )
+                if not path.is_absolute():
+                    raise ValueError(
+                        f"Plugin source '{source_name}' must be an absolute path, got: {path}. "
+                        f"Check your configuration for relative paths in protected sources."
+                    )
     
     @cached_property
     def bsmith_dir(self) -> Path:
@@ -385,64 +387,31 @@ class SystemConfig(BaseSettings):
 
     @field_validator('plugin_sources', mode='before')
     @classmethod
-    def validate_plugin_sources(cls, v: Any) -> Dict[str, Path]:
-        """Convert plugin_sources to dict of str -> Path and protect built-in sources."""
-        # Protected sources that cannot be overridden
-        PROTECTED_SOURCES = {'brainsmith', 'finn', 'project', 'user'}
+    def validate_plugin_sources(cls, v: Any) -> Dict[str, Path | None]:
+        """Validate plugin sources structure and prevent protected source overrides.
 
-        # Default protected values
-        protected_defaults = {
-            'brainsmith': Path('<builtin>'),
-            'finn': Path('<builtin>'),
-            'project': Path('<project>'),
-            'user': Path.home() / '.brainsmith' / 'plugins'
-        }
+        Protected sources (brainsmith, finn, project, user) are resolved in model_post_init.
+        Users can add custom sources but cannot override protected ones.
+        """
+        # Get default plugin sources
+        default_sources = cls.model_fields['plugin_sources'].default_factory()
 
-        if v is None:
-            return protected_defaults
+        if v is None or not isinstance(v, dict):
+            return default_sources
 
-        if not isinstance(v, dict):
-            raise ValueError("plugin_sources must be a dictionary mapping source names to paths")
+        # Start with defaults
+        result = default_sources.copy()
 
-        # Start with protected defaults
-        result = protected_defaults.copy()
-
-        # Add user-provided sources, but reject attempts to override protected ones
+        # Add user-provided sources, rejecting protected overrides
         for key, value in v.items():
-            # Convert value to Path if needed
-            if isinstance(value, str):
-                value = Path(value)
-            elif not isinstance(value, Path):
-                raise ValueError(f"plugin_sources['{key}'] must be a string or Path, got {type(value)}")
-
             if key in PROTECTED_SOURCES:
-                # Check if they're trying to override with a different value
-                # We need to accept both sentinel paths AND their resolved forms
-                # (model_post_init resolves '<builtin>' -> actual paths)
-                value_str = str(value)
-                default_str = str(protected_defaults[key])
-
-                # Allow if it matches the sentinel value
-                if value_str == default_str:
-                    result[key] = value  # Use the provided value (might be Path vs PosixPath)
-                    continue
-
-                # Also allow if it's a resolved builtin/project path
-                # (happens during model_post_init path resolution)
-                if default_str == '<builtin>' or default_str == '<project>':
-                    # Accept any path - these are being resolved by model_post_init
-                    # We trust the resolution logic, not re-validating here
-                    result[key] = value
-                    continue
-
-                # Otherwise reject the override
                 raise ValueError(
                     f"Cannot override protected plugin source '{key}'. "
-                    f"Protected sources are: {', '.join(sorted(PROTECTED_SOURCES))}"
+                    f"Protected sources: {', '.join(sorted(PROTECTED_SOURCES))}"
                 )
-            else:
-                # Add custom (non-protected) source
-                result[key] = value
+
+            # Convert string to Path
+            result[key] = Path(value) if isinstance(value, str) else value
 
         return result
 
@@ -463,28 +432,21 @@ class SystemConfig(BaseSettings):
         tool_path = self.xilinx_path / tool_name / self.xilinx_version
         return tool_path if tool_path.exists() else None
 
-    def _resolve_plugin_source(self, name: str, path: Path) -> Path:
-        """Resolve plugin source path, expanding <builtin> and <project> markers."""
-        path_str = str(path)
+    def _resolve_xilinx_tool(self, tool_name: str, current_path: Path | None) -> Path | None:
+        """Auto-detect Xilinx tool if not specified, or resolve provided path.
 
-        # Expand <builtin> marker
-        if path_str == '<builtin>':
-            if name == 'brainsmith':
-                return self.bsmith_dir / 'brainsmith'
-            elif name in ('finn', 'qonnx'):
-                return self.deps_dir / name
-            else:
-                raise ValueError(
-                    f"Unknown builtin source '{name}'. "
-                    f"Builtin sources: brainsmith, finn, qonnx"
-                )
+        Combines detection and resolution logic for Xilinx tools to avoid repetition.
 
-        # Expand <project> marker
-        if path_str == '<project>':
-            return self.project_dir / 'plugins'
+        Args:
+            tool_name: Name of the Xilinx tool (e.g., "Vivado", "Vitis", "Vitis_HLS")
+            current_path: User-provided path, or None to auto-detect
 
-        # Regular path resolution
-        return self._resolve(path, base=self.project_dir)
+        Returns:
+            Resolved absolute path, or None if tool not found
+        """
+        if current_path is None:
+            return self._detect_xilinx_tool(tool_name)
+        return self._resolve(current_path, self.project_dir)
 
     # Environment Export (delegated to EnvironmentExporter for separation of concerns)
 

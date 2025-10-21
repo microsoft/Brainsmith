@@ -37,5 +37,6 @@ CLI_NAME_SMITH = "smith"
 EX_OK = 0               # Successful termination
 EX_USAGE = 64           # Command line usage error
 EX_DATAERR = 65         # Data format error (validation)
+EX_SOFTWARE = 70        # Internal software error
 EX_CONFIG = 78          # Configuration error
 EX_INTERRUPTED = 130    # SIGINT (128 + 2)

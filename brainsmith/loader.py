@@ -336,9 +336,9 @@ def _load_entry_point_plugins():
     """Load plugins from pip package entry points.
 
     Scans entry points in group 'brainsmith.plugins'. Each entry point
-    should point to a module that registers components when imported.
+    should return a dict of component metadata that we register.
 
-    Entry points are registered with their distribution name as source.
+    Entry points are registered with their entry point name as source.
     """
     logger.debug("Scanning entry points")
 
@@ -346,14 +346,65 @@ def _load_entry_point_plugins():
         eps = entry_points(group='brainsmith.plugins')
 
         for ep in eps:
-            source_name = ep.dist.name if hasattr(ep, 'dist') else 'pkg'
+            source_name = ep.name  # Use entry point name (e.g., 'finn') as source
 
-            with source_context(source_name):
+            try:
+                # Load the entry point function
+                register_func = ep.load()
+
+                # Call it to get component metadata
+                # Plugin returns: {'kernels': [...], 'backends': [...], 'steps': [...]}
+                components = register_func()
+
+                if not isinstance(components, dict):
+                    logger.error(f"Entry point '{ep.name}' returned {type(components)}, expected dict")
+                    continue
+
+                logger.info(f"Loading plugin source: {source_name}")
+
+                # Register all components under this source
+                with source_context(source_name):
+                    # Register kernels
+                    for kernel_meta in components.get('kernels', []):
+                        registry.kernel(
+                            kernel_meta['class'],
+                            name=kernel_meta['name'],
+                            op_type=kernel_meta.get('op_type')
+                        )
+
+                    # Register backends
+                    for backend_meta in components.get('backends', []):
+                        registry.backend(
+                            backend_meta['class'],
+                            name=backend_meta['name'],
+                            target_kernel=backend_meta['target_kernel'],
+                            language=backend_meta['language']
+                        )
+
+                    # Register steps
+                    for step_meta in components.get('steps', []):
+                        registry.step(
+                            step_meta['func'],
+                            name=step_meta['name']
+                        )
+
+                logger.info(
+                    f"✓ Loaded {source_name}: "
+                    f"{len(components.get('kernels', []))} kernels, "
+                    f"{len(components.get('backends', []))} backends, "
+                    f"{len(components.get('steps', []))} steps"
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to load entry point '{ep.name}': {e}")
+
+                # Check if strict mode
                 try:
-                    ep.load()  # Import module, which self-registers
-                    logger.info(f"Loaded entry point plugin '{source_name}' from {ep.value}")
-                except Exception as e:
-                    logger.error(f"Failed to load entry point '{ep.name}': {e}")
+                    from brainsmith.settings import get_config
+                    if get_config().plugins_strict:
+                        raise
+                except ImportError:
+                    pass  # Config not available, don't fail
 
     except Exception as e:
         logger.warning(f"Entry point discovery failed: {e}")

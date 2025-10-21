@@ -86,7 +86,8 @@ def _handle_existing_boards(board_mgr: BoardManager, requested_repos: list[str],
 @click.option('--repo', '-r', multiple=True, help='Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed list of all board definitions by repository')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> None:
+@click.pass_obj
+def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> None:
     """Download FPGA board definition files."""
     if force and remove:
         error_exit("Cannot use --force and --remove together")
@@ -122,7 +123,7 @@ def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> 
 
         confirm_or_abort("\nAre you sure you want to remove these repositories?", skip=yes)
 
-        with progress_spinner("Removing board repositories...") as task:
+        with progress_spinner("Removing board repositories...", no_progress=ctx.no_progress) as task:
             # remove() raises exception on failure, returns None on success
             failed = []
             for repo_name in repos_to_remove:
@@ -156,7 +157,7 @@ def boards(force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> 
                   if repos_to_download
                   else "Downloading board definition files...")
 
-    with progress_spinner(description) as task:
+    with progress_spinner(description, no_progress=ctx.no_progress) as task:
         try:
             if repos_to_download:
                 # Download specific boards (install() raises exception on failure)

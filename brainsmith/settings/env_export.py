@@ -9,6 +9,7 @@ This improves testability and separates infrastructure concerns from configurati
 """
 
 import os
+import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Callable, Optional
 
@@ -18,14 +19,20 @@ if TYPE_CHECKING:
 
 # Declarative environment variable export mappings
 # Maps environment variable names to functions that extract values from config
+#
+# Xilinx Tool Path Variables:
+# Both XILINX_* and *_PATH variants are exported for maximum FINN compatibility.
+# - XILINX_* variants: Used by FINN's Python runtime and internal scripts
+# - *_PATH variants: Used by FINN's TCL scripts during Vivado/Vitis integration
+# Both naming conventions must be set for full compatibility with FINN's toolchain.
 EXTERNAL_ENV_MAPPINGS: Dict[str, Callable[['SystemConfig'], Optional[str]]] = {
-    # Xilinx tool paths
+    # Xilinx tool paths (both naming conventions required for FINN compatibility)
     'XILINX_VIVADO': lambda c: str(c.vivado_path) if c.vivado_path else None,
-    'VIVADO_PATH': lambda c: str(c.vivado_path) if c.vivado_path else None,
+    'VIVADO_PATH': lambda c: str(c.vivado_path) if c.vivado_path else None,  # FINN TCL scripts
     'XILINX_VITIS': lambda c: str(c.vitis_path) if c.vitis_path else None,
-    'VITIS_PATH': lambda c: str(c.vitis_path) if c.vitis_path else None,
+    'VITIS_PATH': lambda c: str(c.vitis_path) if c.vitis_path else None,      # FINN TCL scripts
     'XILINX_HLS': lambda c: str(c.vitis_hls_path) if c.vitis_hls_path else None,
-    'HLS_PATH': lambda c: str(c.vitis_hls_path) if c.vitis_hls_path else None,
+    'HLS_PATH': lambda c: str(c.vitis_hls_path) if c.vitis_hls_path else None, # FINN TCL scripts
 
     # Platform and tool paths
     'PLATFORM_REPO_PATHS': lambda c: c.vendor_platform_paths,
@@ -187,7 +194,13 @@ class EnvironmentExporter:
 
         # Add Vivado libraries
         if self.config.vivado_path:
-            ld_lib_components.append("/lib/x86_64-linux-gnu/")
+            # Add architecture-specific system library path
+            arch = platform.machine()
+            if arch == 'x86_64':
+                ld_lib_components.append("/lib/x86_64-linux-gnu/")
+            elif arch in ('aarch64', 'arm64'):
+                ld_lib_components.append("/lib/aarch64-linux-gnu/")
+
             vivado_lib = str(self.config.vivado_path / "lib" / "lnx64.o")
             ld_lib_components.append(vivado_lib)
 

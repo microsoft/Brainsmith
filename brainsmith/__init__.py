@@ -24,10 +24,9 @@ Advanced DSE (Power Users):
     >>> results = execute_tree(tree, model, config, output_dir, runner=custom_runner)
 
 For component lookup:
-    >>> from brainsmith import get_kernel, get_step, import_transform
+    >>> from brainsmith import get_kernel, get_step
     >>> LayerNorm = get_kernel('LayerNorm')
     >>> step_fn = get_step('streamline')
-    >>> FoldConstants = import_transform('FoldConstants')
 
 NOTE: Uses PEP 562 lazy imports to improve CLI startup performance.
 Modules are loaded on-demand when attributes are accessed.

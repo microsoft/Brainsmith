@@ -17,7 +17,8 @@ from .helpers import _is_finnxsim_built
 @click.option('--force', '-f', is_flag=True, help='Force rebuild even if already built')
 @click.option('--remove', '-r', is_flag=True, help='Remove Xilinx simulation dependencies')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def xsim(force: bool, remove: bool, yes: bool) -> None:
+@click.pass_obj
+def xsim(ctx, force: bool, remove: bool, yes: bool) -> None:
     """Setup Xilinx simulation (build finn-xsim with Vivado)."""
     from brainsmith.settings import get_config  # Lazy import
 
@@ -44,7 +45,7 @@ def xsim(force: bool, remove: bool, yes: bool) -> None:
 
         confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
-        with progress_spinner("Removing Xilinx simulation dependencies...") as task:
+        with progress_spinner("Removing Xilinx simulation dependencies...", no_progress=ctx.no_progress) as task:
             results = deps_mgr.remove_group('xsim')
             # remove_group returns Dict[str, Optional[Exception]] where None = success
             failed = [k for k, v in results.items() if v is not None]
@@ -69,7 +70,7 @@ def xsim(force: bool, remove: bool, yes: bool) -> None:
         warning("finn-xsim already built (use --force to rebuild)")
         return
 
-    with progress_spinner("Setting up Xilinx simulation dependencies...") as task:
+    with progress_spinner("Setting up Xilinx simulation dependencies...", no_progress=ctx.no_progress) as task:
         try:
             # First install oh-my-xilinx (raises exception on failure)
             deps_mgr.install('oh-my-xilinx', force=force)
