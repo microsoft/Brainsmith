@@ -86,7 +86,7 @@ def test_invariant_interface_model_weight_flag():
 # Test KernelDesignSpace
 # =============================================================================
 
-def test_design_space_kernel_model_creation():
+def test_kernel_design_space_creation():
     """Test KernelDesignSpace can be created with all required fields."""
     input_ds = InterfaceDesignSpace(
         name="input",
@@ -124,7 +124,7 @@ def test_design_space_kernel_model_creation():
     assert 8 in model.parallelization_params["SIMD"]
 
 
-def test_design_space_kernel_model_dict_access():
+def test_kernel_design_space_dict_access():
     """Test KernelDesignSpace dict-based interface access."""
     input_ds = InterfaceDesignSpace(
         name="input",
@@ -161,7 +161,7 @@ def test_design_space_kernel_model_dict_access():
     assert "nonexistent" not in model.inputs
 
 
-def test_design_space_kernel_model_immutable():
+def test_kernel_design_space_immutable():
     """Test KernelDesignSpace is immutable."""
     model = KernelDesignSpace(
         name="TestKernel",
@@ -176,7 +176,7 @@ def test_design_space_kernel_model_immutable():
         model.name = "modified"
 
 
-def test_design_space_kernel_model_valid_ranges():
+def test_kernel_design_space_valid_ranges():
     """Test KernelDesignSpace stores valid parallelization ranges."""
     # Simulate divisors of 768
     valid_simd = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768}

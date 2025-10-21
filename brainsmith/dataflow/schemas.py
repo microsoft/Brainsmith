@@ -375,3 +375,66 @@ class KernelSchema:
         for interface in self.inputs + self.outputs:
             params.update(interface.tiling_attrs)
         return params
+
+    def get_structural_nodeattrs(self) -> set:
+        """Get nodeattrs that affect design space (rebuild if changed).
+
+        Structural nodeattrs are those whose changes require rebuilding
+        the entire KernelDesignSpace (not just reconfiguration).
+
+        These include:
+        - All datatypes (input, output, internal): Affect internal datatype
+          derivation (e.g., accumulator width depends on input datatype)
+        - Parameters in block_tiling (rare): Affect block shape computation
+
+        Returns:
+            Set of structural nodeattr names
+
+        Example:
+            >>> schema.get_structural_nodeattrs()
+            {'input0Datatype', 'output0Datatype', 'accumulatorDatatype'}
+        """
+        structural = set()
+
+        # All datatypes are structural
+        for i in range(len(self.inputs)):
+            structural.add(f"input{i}Datatype")
+        for i in range(len(self.outputs)):
+            structural.add(f"output{i}Datatype")
+        for internal_name in self.internal_datatypes.keys():
+            structural.add(f"{internal_name}Datatype")
+
+        # Parameters in block_tiling are structural (rare)
+        for inp in self.inputs:
+            if inp.block_tiling:
+                for elem in inp.block_tiling:
+                    if isinstance(elem, str):
+                        structural.add(elem)
+        for out in self.outputs:
+            if out.block_tiling:
+                for elem in out.block_tiling:
+                    if isinstance(elem, str):
+                        structural.add(elem)
+
+        return structural
+
+    def get_parametric_nodeattrs(self) -> set:
+        """Get nodeattrs that affect configuration (reconfigure if changed).
+
+        Parametric nodeattrs are those whose changes only require
+        reconfiguration (selecting a different stream shape), not
+        rebuilding the entire design space.
+
+        These include:
+        - Parallelization parameters (SIMD, PE, MW, MH, etc.): Appear in
+          stream_tiling templates and determine stream shapes
+
+        Returns:
+            Set of parametric nodeattr names
+
+        Example:
+            >>> schema.get_parametric_nodeattrs()
+            {'SIMD', 'PE'}
+        """
+        # Parameters in stream_tiling are parametric
+        return self._extract_template_params()

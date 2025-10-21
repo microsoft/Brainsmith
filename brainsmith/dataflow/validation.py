@@ -20,7 +20,7 @@ Example usage:
     datatype = onnx_ctx.get_datatype("input0")
 
     # Kernel context (build-time)
-    kernel_ctx = KernelValidationContext(kernel_model, get_nodeattr)
+    kernel_ctx = KernelValidationContext(kernel_instance, get_nodeattr)
     datatype = kernel_ctx.get_datatype("input0")
 
     # Same interface, different contexts!
@@ -280,27 +280,27 @@ class KernelValidationContext:
     kernel interfaces and parameters.
 
     Example:
-        ctx = KernelValidationContext(kernel_model, op.get_nodeattr)
+        ctx = KernelValidationContext(kernel_instance, op.get_nodeattr)
         dt = ctx.get_datatype("input0")
         stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)
         pe = ctx.get_param("PE")
     """
 
-    kernel_model: Any  # KernelConfiguration (avoid circular import)
+    kernel_instance: Any  # KernelInstance (avoid circular import)
     param_getter: Callable[[str], Any]
 
     def get_datatype(self, name: str) -> DataType:
         """Get datatype from kernel interface."""
         # Try inputs first
-        if name in self.kernel_model.inputs:
-            return self.kernel_model.inputs[name].datatype
+        if name in self.kernel_instance.inputs:
+            return self.kernel_instance.inputs[name].datatype
         # Try outputs
-        if name in self.kernel_model.outputs:
-            return self.kernel_model.outputs[name].datatype
+        if name in self.kernel_instance.outputs:
+            return self.kernel_instance.outputs[name].datatype
         # Not found - helpful error
         available = (
-            list(self.kernel_model.inputs.keys()) +
-            list(self.kernel_model.outputs.keys())
+            list(self.kernel_instance.inputs.keys()) +
+            list(self.kernel_instance.outputs.keys())
         )
         raise KeyError(
             f"Interface '{name}' not found in kernel model. "
@@ -314,15 +314,15 @@ class KernelValidationContext:
     ) -> tuple[int, ...]:
         """Get shape from kernel interface at specified hierarchy."""
         # Try inputs first
-        if name in self.kernel_model.inputs:
-            return tuple(self.kernel_model.inputs[name].get_shape(hierarchy))
+        if name in self.kernel_instance.inputs:
+            return tuple(self.kernel_instance.inputs[name].get_shape(hierarchy))
         # Try outputs
-        if name in self.kernel_model.outputs:
-            return tuple(self.kernel_model.outputs[name].get_shape(hierarchy))
+        if name in self.kernel_instance.outputs:
+            return tuple(self.kernel_instance.outputs[name].get_shape(hierarchy))
         # Not found - helpful error
         available = (
-            list(self.kernel_model.inputs.keys()) +
-            list(self.kernel_model.outputs.keys())
+            list(self.kernel_instance.inputs.keys()) +
+            list(self.kernel_instance.outputs.keys())
         )
         raise KeyError(
             f"Interface '{name}' not found in kernel model. "
@@ -339,10 +339,10 @@ class KernelValidationContext:
             True if dynamic (activations), False if static (weights)
         """
         # Try inputs first
-        if name in self.kernel_model.inputs:
-            return not self.kernel_model.inputs[name].is_weight
+        if name in self.kernel_instance.inputs:
+            return not self.kernel_instance.inputs[name].is_weight
         # Try outputs (always dynamic)
-        if name in self.kernel_model.outputs:
+        if name in self.kernel_instance.outputs:
             return True
         # Not found - assume dynamic
         return True
@@ -367,7 +367,7 @@ class KernelValidationContext:
 
     def get_interfaces(self) -> List[str]:
         """Get all interface names (inputs + outputs)."""
-        return list(self.kernel_model.inputs.keys()) + list(self.kernel_model.outputs.keys())
+        return list(self.kernel_instance.inputs.keys()) + list(self.kernel_instance.outputs.keys())
 
     def get_node_attribute(self, name: str, default: Any = None) -> Any:
         """Get ONNX node attribute - NOT AVAILABLE in kernel context.
@@ -553,9 +553,9 @@ class DesignSpaceValidationContext:
 
 @dataclass
 class ConfigurationValidationContext:
-    """Validation context for KernelConfiguration (two-phase construction).
+    """Validation context for KernelInstance (two-phase construction).
 
-    Adapts KernelConfiguration to ValidationContext protocol.
+    Adapts KernelInstance to ValidationContext protocol.
     Similar to KernelValidationContext but works with InterfaceConfiguration
     which uses a flyweight pattern (references design space + resolved stream_shape).
 
@@ -568,7 +568,7 @@ class ConfigurationValidationContext:
         stream_shape = ctx.get_shape("input0", ShapeHierarchy.STREAM)
         simd = ctx.get_param("SIMD")
     """
-    configured_model: Any  # KernelConfiguration (avoid circular import)
+    configured_model: Any  # KernelInstance (avoid circular import)
     param_getter_dict: Dict[str, Any]  # Parallelization params
 
     def get_datatype(self, name: str) -> DataType:

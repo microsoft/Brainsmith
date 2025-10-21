@@ -8,7 +8,7 @@
 """
 Immutable kernel models for the dataflow system.
 
-These models represent runtime instances built by KernelModelBuilder from:
+These models represent runtime instances built by DesignSpaceBuilder from:
 - ModelWrapper context (tensor shapes, datatypes from ONNX graph)
 - KernelSchema (structural definition, tiling templates)
 - Nodeattrs (user parameters like SIMD, PE)
@@ -172,7 +172,7 @@ class InterfaceConfiguration:
 class KernelDesignSpace:
     """Defines kernel design space for parallelization exploration.
 
-    Built once from ONNX context using KernelModelBuilder.build().
+    Built once from ONNX context using DesignSpaceBuilder.build().
     Acts as factory for KernelConfiguration instances via configure() method.
 
     This model contains all properties that remain constant during Design Space
@@ -223,7 +223,7 @@ class KernelDesignSpace:
         """
         return list(self.outputs.values())
 
-    def configure(self, params: Dict[str, int]) -> 'KernelConfiguration':
+    def configure(self, params: Dict[str, int]) -> 'KernelInstance':
         """Select specific configuration from design space.
 
         Process:
@@ -231,15 +231,15 @@ class KernelDesignSpace:
         2. Resolve stream shapes for inputs (using params)
         3. Resolve stream shapes for outputs (using params + inputs via DerivedDim)
         4. Build InterfaceConfiguration instances
-        5. Create KernelConfiguration
+        5. Create KernelInstance
         6. Validate parametric constraints
-        7. Return KernelConfiguration
+        7. Return KernelInstance
 
         Args:
             params: Parallelization parameters, e.g., {"SIMD": 64, "PE": 1}
 
         Returns:
-            KernelConfiguration with fully resolved stream shapes
+            KernelInstance with fully resolved stream shapes
 
         Raises:
             ValueError: If params invalid or missing required parameters
@@ -316,7 +316,7 @@ class KernelDesignSpace:
             interface_lookup[ds_out.name] = cfg_out
 
         # 4. Create configuration
-        configuration = KernelConfiguration(
+        configuration = KernelInstance(
             design_space=self,
             inputs=configured_inputs,
             outputs=configured_outputs,
@@ -330,7 +330,7 @@ class KernelDesignSpace:
         ctx = ConfigurationValidationContext(configuration, params)
 
         for constraint in self.parametric_constraints:
-            error = constraint.validate(ctx)
+            error = constraint.check(ctx)
             if error:
                 raise ValidationError(
                     f"Parametric constraint failed for configuration {params}: {error}"
@@ -340,14 +340,14 @@ class KernelDesignSpace:
 
 
 @dataclass(frozen=True)
-class KernelConfiguration:
-    """Specific kernel configuration with resolved parallelization.
+class KernelInstance:
+    """Specific kernel instance with resolved parallelization.
 
     Holds reference to parent KernelDesignSpace to avoid duplicating
     data that doesn't vary across configurations (flyweight pattern).
 
     Created by KernelDesignSpace.configure() with specific parallelization
-    parameters. Multiple KernelConfiguration instances can share the same
+    parameters. Multiple KernelInstance instances can share the same
     KernelDesignSpace during DSE.
 
     Attributes:

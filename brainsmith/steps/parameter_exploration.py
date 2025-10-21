@@ -33,7 +33,7 @@ def explore_kernel_params_step(model, cfg):
     1. Finds all KernelOp nodes (domain="finn.custom_op.fpgadataflow")
     2. For each KernelOp, gets valid parameter ranges via get_valid_ranges()
     3. Explores all configurations using iter_valid_configurations()
-    4. Validates each configuration with get_kernel_model()
+    4. Validates each configuration with get_kernel_instance() (returns KernelInstance)
     5. Logs results and optionally saves to JSON
 
     This is useful for:
@@ -187,11 +187,11 @@ def _explore_kernel_configs(
                 kernel_op.set_nodeattr(param_name, param_value)
 
             # Validate configuration
-            kernel_model = kernel_op.get_kernel_model(model)
+            kernel_instance = kernel_op.get_kernel_instance(model)
 
             # Verify parameters match
             for param_name, param_value in config.items():
-                actual_value = kernel_model.params.get(param_name)
+                actual_value = kernel_instance.params.get(param_name)
                 if actual_value != param_value:
                     raise ValueError(
                         f"Parameter mismatch: {param_name}={actual_value}, "

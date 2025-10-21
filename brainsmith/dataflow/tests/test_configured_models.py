@@ -14,7 +14,7 @@ from brainsmith.dataflow.models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
     InterfaceConfiguration,
-    KernelConfiguration,
+    KernelInstance,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 
@@ -155,11 +155,11 @@ def test_configured_interface_model_immutable():
 
 
 # =============================================================================
-# Test KernelConfiguration
+# Test KernelInstance
 # =============================================================================
 
-def test_configured_kernel_model_creation():
-    """Test KernelConfiguration can be created."""
+def test_kernel_instance_creation():
+    """Test KernelInstance can be created."""
     input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
@@ -188,7 +188,7 @@ def test_configured_kernel_model_creation():
     input_cfg = InterfaceConfiguration(design_space=input_inv, stream_shape=(64,))
     output_cfg = InterfaceConfiguration(design_space=output_inv, stream_shape=(64,))
 
-    configured_model = KernelConfiguration(
+    configured_model = KernelInstance(
         design_space=design_space_model,
         inputs=(input_cfg,),
         outputs=(output_cfg,),
@@ -201,8 +201,8 @@ def test_configured_kernel_model_creation():
     assert len(configured_model.outputs) == 1
 
 
-def test_configured_kernel_model_property_delegation():
-    """Test KernelConfiguration properties delegate to design space."""
+def test_kernel_instance_property_delegation():
+    """Test KernelInstance properties delegate to design space."""
     design_space_model = KernelDesignSpace(
         name="LayerNorm",
         inputs=(),
@@ -212,7 +212,7 @@ def test_configured_kernel_model_property_delegation():
         parallelization_params={},
     )
 
-    configured_model = KernelConfiguration(
+    configured_model = KernelInstance(
         design_space=design_space_model,
         inputs=(),
         outputs=(),
@@ -224,8 +224,8 @@ def test_configured_kernel_model_property_delegation():
     assert configured_model.internal_datatypes == {"accumulator": DataType["INT32"]}
 
 
-def test_configured_kernel_model_immutable():
-    """Test KernelConfiguration is immutable."""
+def test_kernel_instance_immutable():
+    """Test KernelInstance is immutable."""
     design_space_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
@@ -235,7 +235,7 @@ def test_configured_kernel_model_immutable():
         parallelization_params={},
     )
 
-    configured_model = KernelConfiguration(
+    configured_model = KernelInstance(
         design_space=design_space_model,
         inputs=(),
         outputs=(),

@@ -43,7 +43,7 @@ class MockInterface:
             raise ValueError(f"Unknown hierarchy: {hierarchy}")
 
 
-class MockKernelModel:
+class MockKernelInstance:
     """Mock kernel model for testing relationship validation."""
 
     def __init__(self, interfaces: dict):
@@ -114,21 +114,21 @@ class TestDatatypesEqual:
 
     def test_two_equal_datatypes(self, mock_interfaces, dummy_param_getter):
         """Test validation with two equal datatypes."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input0", "input1"))
         result = rel.check(model, dummy_param_getter)
         assert result is None  # No error
 
     def test_three_equal_datatypes(self, mock_interfaces, dummy_param_getter):
         """Test validation with three equal datatypes."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input", "input0", "input1", "output"))
         result = rel.check(model, dummy_param_getter)
         assert result is None
 
     def test_two_unequal_datatypes(self, mock_interfaces, dummy_param_getter):
         """Test error with two unequal datatypes."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input0", "input2"))
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -138,7 +138,7 @@ class TestDatatypesEqual:
 
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input0", "nonexistent"))
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -146,7 +146,7 @@ class TestDatatypesEqual:
 
     def test_less_than_two_interfaces(self, mock_interfaces, dummy_param_getter):
         """Test error with less than two interfaces."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input0",))
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -154,7 +154,7 @@ class TestDatatypesEqual:
 
     def test_input_output_match(self, mock_interfaces, dummy_param_getter):
         """Test validation between input and output."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(("input", "output"))
         result = rel.check(model, dummy_param_getter)
         assert result is None
@@ -171,14 +171,14 @@ class TestDimensionsEqual:
 
     def test_single_dim_equal(self, mock_interfaces, dummy_param_getter):
         """Test single dimension equality."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=0, hierarchy=ShapeHierarchy.STREAM)
         result = rel.check(model, dummy_param_getter)
         assert result is None
 
     def test_single_dim_unequal(self, mock_interfaces, dummy_param_getter):
         """Test single dimension inequality."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input2"), dim_index=0, hierarchy=ShapeHierarchy.STREAM)
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -186,7 +186,7 @@ class TestDimensionsEqual:
 
     def test_negative_indexing(self, mock_interfaces, dummy_param_getter):
         """Test negative dimension indexing."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=-1, hierarchy=ShapeHierarchy.STREAM)
         result = rel.check(model, dummy_param_getter)
         assert result is None
@@ -195,7 +195,7 @@ class TestDimensionsEqual:
 
     def test_per_interface_indices_match(self, mock_interfaces, dummy_param_getter):
         """Test per-interface dimension indices that match."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         # input.tensor[-1] = 256, input2.tensor[-1] = 256
         rel = DimensionsEqual(("input", "input2"), dim_index=(-1, -1), hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
@@ -203,7 +203,7 @@ class TestDimensionsEqual:
 
     def test_per_interface_indices_mismatch(self, mock_interfaces, dummy_param_getter):
         """Test per-interface dimension indices that don't match."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         # input0.tensor[-1] = 128, input2.tensor[-1] = 256
         rel = DimensionsEqual(("input0", "input2"), dim_index=(-1, -1), hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
@@ -220,7 +220,7 @@ class TestDimensionsEqual:
 
     def test_slice_all_match(self, mock_interfaces, dummy_param_getter):
         """Test slice where all dimensions match."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         # Both have block[0:2] = (16, 32)
         rel = DimensionsEqual(("input0", "input1", "input2"), dim_index=slice(0, 2), hierarchy=ShapeHierarchy.BLOCK)
         result = rel.check(model, dummy_param_getter)
@@ -228,7 +228,7 @@ class TestDimensionsEqual:
 
     def test_slice_mismatch(self, mock_interfaces, dummy_param_getter):
         """Test slice where dimensions don't match."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         # input0.tensor[0:-1] = (1, 64), input2.tensor[0:-1] = (1, 64) - should match
         rel = DimensionsEqual(("input0", "input2"), dim_index=slice(0, -1), hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
@@ -243,14 +243,14 @@ class TestDimensionsEqual:
 
     def test_full_shape_match(self, mock_interfaces, dummy_param_getter):
         """Test full shape equality."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=None, hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
         assert result is None
 
     def test_full_shape_mismatch(self, mock_interfaces, dummy_param_getter):
         """Test full shape inequality."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input", "input0"), dim_index=None, hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -260,7 +260,7 @@ class TestDimensionsEqual:
 
     def test_different_hierarchies(self, mock_interfaces, dummy_param_getter):
         """Test dimensions at different hierarchy levels."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
 
         # Stream level
         rel_stream = DimensionsEqual(("input0", "input1"), dim_index=0, hierarchy=ShapeHierarchy.STREAM)
@@ -276,7 +276,7 @@ class TestDimensionsEqual:
 
     def test_default_hierarchy(self, mock_interfaces, dummy_param_getter):
         """Test default hierarchy is TENSOR."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=0)
         assert rel.hierarchy == ShapeHierarchy.TENSOR
 
@@ -284,7 +284,7 @@ class TestDimensionsEqual:
 
     def test_interface_not_found(self, mock_interfaces, dummy_param_getter):
         """Test error when interface not found."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "nonexistent"), dim_index=0)
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -292,7 +292,7 @@ class TestDimensionsEqual:
 
     def test_less_than_two_interfaces(self, mock_interfaces, dummy_param_getter):
         """Test error with less than two interfaces."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0",), dim_index=0)
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -300,7 +300,7 @@ class TestDimensionsEqual:
 
     def test_index_out_of_range(self, mock_interfaces, dummy_param_getter):
         """Test error when dimension index out of range."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=10, hierarchy=ShapeHierarchy.STREAM)
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -320,7 +320,7 @@ class TestCustomRelationship:
             # Always pass
             return None
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check, "Always pass")
         result = rel.check(model, dummy_param_getter)
         assert result is None
@@ -330,7 +330,7 @@ class TestCustomRelationship:
         def check(model, pg):
             return "Validation failed"
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check, "Always fail")
         result = rel.check(model, dummy_param_getter)
         assert result == "Validation failed"
@@ -344,7 +344,7 @@ class TestCustomRelationship:
                 return f"Shape mismatch: {input_shape} != {output_shape}"
             return None
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check_matmul_dims, "MatMul dims")
         result = rel.check(model, dummy_param_getter)
         assert result is None
@@ -362,7 +362,7 @@ class TestCustomRelationship:
                     return f"Datatype mismatch: {input_dt} != {output_dt}"
             return None
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check, "Parameterized check")
         result = rel.check(model, param_getter)
         assert result is None
@@ -372,7 +372,7 @@ class TestCustomRelationship:
         def check(model, pg):
             raise RuntimeError("Something went wrong")
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check, "Raises exception")
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -383,7 +383,7 @@ class TestCustomRelationship:
         def check(model, pg):
             return 42  # Invalid return type
 
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = CustomRelationship(check, "Invalid return")
         result = rel.check(model, dummy_param_getter)
         assert result is not None
@@ -409,7 +409,7 @@ class TestIntegration:
 
     def test_multiple_relationships(self, mock_interfaces, dummy_param_getter):
         """Test multiple relationships on same model."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
 
         # Check all pass
         rel1 = DatatypesEqual(("input0", "input1"))
@@ -422,7 +422,7 @@ class TestIntegration:
 
     def test_realistic_elementwise_add(self, mock_interfaces, dummy_param_getter):
         """Test realistic ElementwiseAdd validation."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
 
         # ElementwiseAdd: both inputs must have same datatype and shape
         rel_dt = DatatypesEqual(("input0", "input1"))
@@ -433,7 +433,7 @@ class TestIntegration:
 
     def test_realistic_concat(self, mock_interfaces, dummy_param_getter):
         """Test realistic Concat validation."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
 
         # Concat: all inputs must have same spatial dimensions (all but last)
         rel = DimensionsEqual(
@@ -479,14 +479,14 @@ class TestEdgeCases:
 
     def test_empty_tuple_interfaces(self, mock_interfaces, dummy_param_getter):
         """Test with empty interface tuple."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         rel = DatatypesEqual(())
         result = rel.check(model, dummy_param_getter)
         assert result is not None
 
     def test_slice_empty_result(self, mock_interfaces, dummy_param_getter):
         """Test slice that results in empty tuple."""
-        model = MockKernelModel(mock_interfaces)
+        model = MockKernelInstance(mock_interfaces)
         # Slice that could result in empty (e.g., slice(10, 20) on 3D tensor)
         rel = DimensionsEqual(("input0", "input1"), dim_index=slice(10, 20), hierarchy=ShapeHierarchy.TENSOR)
         result = rel.check(model, dummy_param_getter)
@@ -506,7 +506,7 @@ class TestEdgeCases:
             )
             for i in range(10)
         }
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
 
         interface_names = tuple(f"input{i}" for i in range(10))
         rel = DatatypesEqual(interface_names)

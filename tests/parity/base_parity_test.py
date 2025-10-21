@@ -1,4 +1,4 @@
-"""Base class for parity testing between manual and auto HWCustomOp implementations.
+"""Base class for parity testing between manual and KernelOp implementations.
 
 This module provides ParityTestBase, an abstract base class that automates
 testing equivalence between FINN's manual HWCustomOp implementations and
@@ -7,7 +7,7 @@ Brainsmith's KernelOp implementations.
 Key features:
 - **Transform-based testing (default)**: Tests production Infer transform workflow
 - **15 generic test methods**: Shape, datatype, stream width, padding, inference, cycles, execution
-- Handles initialization differences between manual and auto ops
+- Handles initialization differences between manual and KernelOp implementations
 - Supports multi-input/output operations
 - Random input generation based on datatypes
 - Comprehensive assertion messages
@@ -29,12 +29,12 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 
 class ParityTestBase(ABC):
-    """Base class for parity testing between manual and auto HWCustomOp.
+    """Base class for parity testing between manual and KernelOp implementations.
 
     **Default Pattern (Transform-Based):**
     Subclasses implement:
     - manual_op_class: Class reference to manual implementation
-    - auto_op_class: Class reference to auto implementation
+    - auto_op_class: Class reference to KernelOp implementation
     - make_test_model(): Create standard ONNX model (e.g., Softmax, not HWSoftmax)
     - get_manual_transform(): Return manual Infer transform class
     - get_auto_transform(): Return auto Infer transform class
@@ -84,12 +84,12 @@ class ParityTestBase(ABC):
     @property
     @abstractmethod
     def auto_op_class(self) -> Type[HWCustomOp]:
-        """Auto HWCustomOp implementation class.
+        """KernelOp implementation class.
 
         Example:
             @property
             def auto_op_class(self):
-                return AutoSoftmax
+                return AutoSoftmax  # KernelOp-based implementation
         """
         pass
 
@@ -156,7 +156,7 @@ class ParityTestBase(ABC):
             def configure_test_op(self, op, model, is_auto):
                 op.set_nodeattr("SIMD", 16)  # Override default
                 if is_auto:
-                    op.refresh_df_model(model)  # Refresh with new SIMD
+                    op.get_kernel_model(model)  # Refresh configuration with new SIMD
         """
         pass
 
@@ -586,9 +586,277 @@ class ParityTestBase(ABC):
                 f"  Auto model:   {auto_dt.name if auto_dt else 'None'}"
             )
 
+    @pytest.mark.parity
+    @pytest.mark.cppsim
+    @pytest.mark.slow
+    def test_cppsim_execution_parity(self):
+        """Test HLS backend code generation via cppsim compilation and execution.
+
+        This is the gold standard for validating HLS code generation correctness.
+        It validates the entire code generation pipeline end-to-end:
+
+        **Pipeline Steps**:
+        1. **Code Generation**: Both backends generate C++ (via PrepareCppSim)
+        2. **Compilation**: C++ compiles successfully (via CompileCppSim)
+        3. **Execution**: Compiled binary executes (via SetExecMode("cppsim"))
+        4. **Validation**: Both produce identical numerical results
+
+        **Confidence Level**: If this test passes, we have high confidence that:
+        - Generated C++ is syntactically correct (it compiles)
+        - Generated C++ is semantically correct (it executes correctly)
+        - Manual and auto backends are functionally equivalent
+        - All code generation methods (defines, docompute, pragmas, etc.) are correct
+
+        **Execution Examples**:
+            # Run just the cppsim test
+            pytest tests/parity/test_crop_parity.py::TestCropHLSParity::test_cppsim_execution_parity -v
+
+            # Skip slow cppsim test (fast iteration)
+            pytest tests/parity/test_crop_parity.py::TestCropHLSParity -v -m "not cppsim"
+
+            # Only cppsim tests across all backends
+            pytest tests/parity/ -v -m cppsim
+
+        **Requirements**:
+            - VITIS_PATH environment variable set
+            - Both backends inherit from HLSBackend
+            - Valid setup_manual_op() and setup_auto_op() implementations
+
+        Raises:
+            pytest.skip: If backend not HLS or Vitis unavailable
+            AssertionError: If compilation fails or outputs differ
+        """
+        # Check for Vitis availability
+        import os
+        if not os.environ.get("VITIS_PATH"):
+            pytest.skip("Vitis required for C++ compilation (set VITIS_PATH)")
+
+        # Import FINN transformations
+        try:
+            from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
+            from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
+            from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
+            from qonnx.transformation.infer_shapes import InferShapes
+            from qonnx.transformation.infer_datatypes import InferDataTypes
+            import finn.core.onnx_exec as oxe
+        except ImportError as e:
+            pytest.skip(f"FINN transformations not available: {e}")
+
+        # Setup both backends with fresh models
+        manual_op, manual_model = self.setup_manual_op()
+        auto_op, auto_model = self.setup_auto_op()
+
+        # Verify both are HLS backends
+        if not self._is_hls_backend(manual_op):
+            pytest.skip(
+                f"{manual_op.__class__.__name__} is not an HLS backend. "
+                f"cppsim execution requires HLSBackend inheritance."
+            )
+        if not self._is_hls_backend(auto_op):
+            pytest.skip(
+                f"{auto_op.__class__.__name__} is not an HLS backend. "
+                f"cppsim execution requires HLSBackend inheritance."
+            )
+
+        # Generate identical test inputs for both executions
+        np.random.seed(42)  # Deterministic for reproducibility
+        test_context = self._make_execution_context(manual_model, manual_op)
+
+        # Extract input tensors (exclude initializers/weights)
+        input_dict = {}
+        for inp_name in manual_op.onnx_node.input:
+            if inp_name and inp_name in test_context:
+                # Only include if not an initializer
+                if manual_model.get_initializer(inp_name) is None:
+                    input_dict[inp_name] = test_context[inp_name]
+
+        # Ensure we have at least one input
+        if not input_dict:
+            pytest.skip(
+                f"No streaming inputs found for {manual_op.__class__.__name__}. "
+                f"All inputs are initializers (weights/parameters)."
+            )
+
+        # Compile and execute manual backend directly (no transforms)
+        import tempfile
+        import os
+
+        # Set BSMITH_DIR for compilation (needed by Brainsmith kernels)
+        # TAFK TODO: Change to use pydantic config after branch merge
+        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
+
+        try:
+            # Create temp directory for code generation
+            manual_tmpdir = tempfile.mkdtemp(prefix="crop_hls_manual_")
+            manual_op.set_nodeattr("code_gen_dir_cppsim", manual_tmpdir)
+
+            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
+            manual_model.save(os.path.join(manual_tmpdir, "node_model.onnx"))
+
+            # Generate C++ code
+            manual_op.code_generation_cppsim(manual_model)
+
+            # Compile C++ code
+            manual_op.compile_singlenode_code()
+
+            # Set execution mode
+            manual_op.set_nodeattr("exec_mode", "cppsim")
+
+        except Exception as e:
+            pytest.fail(
+                f"Manual backend cppsim pipeline failed for {manual_op.__class__.__name__}:\n"
+                f"\n"
+                f"Error: {type(e).__name__}: {e}\n"
+                f"\n"
+                f"This indicates a code generation or compilation bug in the manual backend.\n"
+                f"\n"
+                f"Debug steps:\n"
+                f"1. Check {getattr(manual_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_cppsim') if hasattr(manual_op, 'get_nodeattr') else manual_tmpdir} for generated C++ files\n"
+                f"2. Look for compilation errors in build logs\n"
+                f"3. Compare with working backend implementation"
+            )
+
+        # Compile and execute auto backend directly (no transforms)
+        try:
+            # Create temp directory for code generation
+            auto_tmpdir = tempfile.mkdtemp(prefix="autocrop_hls_auto_")
+            auto_op.set_nodeattr("code_gen_dir_cppsim", auto_tmpdir)
+
+            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
+            auto_model.save(os.path.join(auto_tmpdir, "node_model.onnx"))
+
+            # Ensure kernel model is available for KernelOp-based backends
+            if hasattr(auto_op, 'get_kernel_model'):
+                auto_op.get_kernel_model(auto_model)
+
+            # Generate C++ code
+            auto_op.code_generation_cppsim(auto_model)
+
+            # Compile C++ code
+            auto_op.compile_singlenode_code()
+
+            # Set execution mode
+            auto_op.set_nodeattr("exec_mode", "cppsim")
+
+        except Exception as e:
+            pytest.fail(
+                f"Auto backend cppsim pipeline failed for {auto_op.__class__.__name__}:\n"
+                f"\n"
+                f"Error: {type(e).__name__}: {e}\n"
+                f"\n"
+                f"This indicates a code generation or compilation bug in the auto backend.\n"
+                f"\n"
+                f"Debug steps:\n"
+                f"1. Check {getattr(auto_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_cppsim') if hasattr(auto_op, 'get_nodeattr') else auto_tmpdir} for generated C++ files\n"
+                f"2. Verify test_hls_defines_generation passes (constants match)\n"
+                f"3. Compare with manual backend implementation"
+            )
+
+        # Execute manual backend via cppsim
+        try:
+            manual_op.execute_node(test_context, manual_model.graph)
+            manual_result = {manual_op.onnx_node.output[0]: test_context[manual_op.onnx_node.output[0]]}
+        except Exception as e:
+            pytest.fail(
+                f"Manual backend execution failed for {manual_op.__class__.__name__}:\n"
+                f"\n"
+                f"Error: {type(e).__name__}: {e}\n"
+                f"\n"
+                f"Code compiled successfully but execution failed.\n"
+                f"Check execute_node() implementation."
+            )
+
+        # Execute auto backend via cppsim
+        # Recreate context with same seed for auto
+        np.random.seed(42)
+
+        # Ensure kernel model is available for KernelOp-based backends
+        if hasattr(auto_op, 'get_kernel_model'):
+            auto_op.get_kernel_model(auto_model)
+
+        auto_context = self._make_execution_context(auto_model, auto_op)
+
+        try:
+            auto_op.execute_node(auto_context, auto_model.graph)
+            auto_result = {auto_op.onnx_node.output[0]: auto_context[auto_op.onnx_node.output[0]]}
+        except Exception as e:
+            pytest.fail(
+                f"Auto backend execution failed for {auto_op.__class__.__name__}:\n"
+                f"\n"
+                f"Error: {type(e).__name__}: {e}\n"
+                f"\n"
+                f"Code compiled successfully but execution failed.\n"
+                f"Check execute_node() implementation."
+            )
+
+        # Compare all outputs
+        for ind in range(self.get_num_outputs()):
+            output_name = manual_op.onnx_node.output[ind]
+
+            assert output_name in manual_result, \
+                f"Manual backend didn't produce output: {output_name}"
+            assert output_name in auto_result, \
+                f"Auto backend didn't produce output: {output_name}"
+
+            manual_output = manual_result[output_name]
+            auto_output = auto_result[output_name]
+
+            # Verify shapes match
+            assert manual_output.shape == auto_output.shape, (
+                f"Output {ind} ({output_name}) shape mismatch:\n"
+                f"  Manual: {manual_output.shape}\n"
+                f"  Auto:   {auto_output.shape}"
+            )
+
+            # Verify numerical equivalence
+            np.testing.assert_allclose(
+                manual_output,
+                auto_output,
+                rtol=1e-5,
+                atol=1e-6,
+                err_msg=(
+                    f"\n"
+                    f"{'='*70}\n"
+                    f"cppsim output {ind} ({output_name}) differs between backends\n"
+                    f"{'='*70}\n"
+                    f"\n"
+                    f"Both backends compiled and executed successfully, but produced\n"
+                    f"different numerical results. This indicates a CODE GENERATION BUG.\n"
+                    f"\n"
+                    f"Backends:\n"
+                    f"  Manual: {manual_op.__class__.__name__}\n"
+                    f"  Auto:   {auto_op.__class__.__name__}\n"
+                    f"\n"
+                    f"Debug checklist:\n"
+                    f"  1. Run test_hls_defines_generation to check constants\n"
+                    f"  2. Check docompute() - verify template parameters match\n"
+                    f"  3. Check stream widths - verify packing calculations\n"
+                    f"  4. Compare generated C++ files in code_gen_dir_cppsim\n"
+                    f"{'='*70}\n"
+                )
+            )
+
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    def _is_hls_backend(self, op: HWCustomOp) -> bool:
+        """Check if op is an HLS backend (has cppsim capability).
+
+        HLS backends inherit from HLSBackend and have code generation methods.
+        Only HLS backends can use cppsim execution mode.
+
+        Args:
+            op: HWCustomOp instance to check
+
+        Returns:
+            True if HLS backend, False otherwise
+        """
+        try:
+            from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+            return isinstance(op, HLSBackend)
+        except ImportError:
+            return False
 
     def _make_execution_context(
         self,

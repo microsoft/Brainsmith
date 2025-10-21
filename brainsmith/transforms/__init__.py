@@ -11,3 +11,8 @@ Plugin-based transforms organized by compilation stage.
 from . import cleanup
 from . import kernel_opt
 from . import post_proc
+
+# Pattern-based transforms (Week 11)
+from .apply_patterns import ApplyPatterns
+
+__all__ = ["ApplyPatterns"]

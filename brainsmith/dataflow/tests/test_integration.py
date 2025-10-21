@@ -63,7 +63,7 @@ class MockInterface:
 
 
 @dataclass
-class MockKernelModel:
+class MockKernelInstance:
     """Mock kernel model for testing relationships."""
     interfaces: dict
 
@@ -327,7 +327,7 @@ class TestRelationshipValidationIntegration:
             ),
         }
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         rel = DatatypesEqual(("input0", "input1"))
 
         error = rel.check(model, param_getter)
@@ -352,7 +352,7 @@ class TestRelationshipValidationIntegration:
             ),
         }
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         rel = DatatypesEqual(("input0", "input1"))
 
         error = rel.check(model, param_getter)
@@ -378,7 +378,7 @@ class TestRelationshipValidationIntegration:
             ),
         }
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         rel = DimensionsEqual(("input0", "input1"), dim_index=None, hierarchy=ShapeHierarchy.TENSOR)
 
         error = rel.check(model, param_getter)
@@ -410,7 +410,7 @@ class TestRelationshipValidationIntegration:
                 return f"Shape mismatch: {input_shape} != {output_shape}"
             return None
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         rel = CustomRelationship(check_shapes_match, "Shapes must match")
 
         error = rel.check(model, param_getter)
@@ -488,7 +488,7 @@ class TestEndToEndScenarios:
             datatype=output_datatype
         )
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         for rel in schema.relationships:
             error = rel.check(model, param_getter)
             assert error is None
@@ -570,7 +570,7 @@ class TestEndToEndScenarios:
             datatype=output_datatype
         )
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         rel = schema.relationships[0]
         error = rel.check(model, param_getter)
         # Should fail: input0 has (1,64) but others have (1,64)
@@ -637,7 +637,7 @@ class TestEndToEndScenarios:
             datatype=output_datatype
         )
 
-        model = MockKernelModel(interfaces)
+        model = MockKernelInstance(interfaces)
         for rel in schema.relationships:
             error = rel.check(model, param_getter)
             assert error is None

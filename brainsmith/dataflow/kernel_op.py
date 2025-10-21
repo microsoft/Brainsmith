@@ -17,7 +17,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from onnx import NodeProto
 
 from .schemas import KernelSchema
-from .models import KernelDesignSpace, KernelConfiguration
+from .models import KernelDesignSpace, KernelInstance
 from .builder import BuildContext, build_kernel_design_space
 from .validation import KernelValidationContext
 from .transformation import TransformationResult, transform_onnx_to_kernel
@@ -69,7 +69,7 @@ class KernelOp(HWCustomOp, ABC):
 
         # Two-phase caching system for DSE performance
         self._design_space: Optional['KernelDesignSpace'] = None  # Built once, never invalidated
-        self._configuration: Optional['KernelConfiguration'] = None  # Rebuilt on param change
+        self._configuration: Optional['KernelInstance'] = None  # Rebuilt on param change
         self._current_params: Optional[dict] = None  # Tracks current parallelization params
 
     @classmethod
@@ -219,6 +219,67 @@ class KernelOp(HWCustomOp, ABC):
 
         return my_attrs
 
+    # ====================================================================
+    # Public API: Cached State Access (Properties)
+    # ====================================================================
+
+    @property
+    def design_space(self) -> KernelDesignSpace:
+        """Access cached design space.
+
+        Returns the cached KernelDesignSpace instance. This is a read-only
+        property that accesses the cached state built by build_design_space().
+
+        Returns:
+            Cached KernelDesignSpace instance
+
+        Raises:
+            RuntimeError: If design space not built yet.
+                         Call build_design_space(model_w) first.
+
+        Example:
+            >>> kernel_op.build_design_space(model_w)
+            >>> valid_ranges = kernel_op.design_space.parallelization_params
+            >>> print(f"SIMD range: {valid_ranges['SIMD']}")
+        """
+        if self._design_space is None:
+            raise RuntimeError(
+                f"Design space not built for {self.onnx_node.name}. "
+                f"Call build_design_space(model_w) first to build the design space."
+            )
+        return self._design_space
+
+    @property
+    def kernel_instance(self) -> KernelInstance:
+        """Access cached kernel instance.
+
+        Returns the cached KernelInstance with current parallelization
+        parameters. This is a read-only property that accesses the cached
+        state built by build_design_space().
+
+        Returns:
+            Cached KernelInstance
+
+        Raises:
+            RuntimeError: If instance not built yet.
+                         Call build_design_space(model_w) first.
+
+        Example:
+            >>> kernel_op.build_design_space(model_w)
+            >>> cycles = kernel_op.kernel_instance.initiation_interval
+            >>> stream_width = kernel_op.kernel_instance.output_stream_width_bits()
+        """
+        if self._configuration is None:
+            raise RuntimeError(
+                f"Kernel instance not built for {self.onnx_node.name}. "
+                f"Call build_design_space(model_w) first to build the kernel instance."
+            )
+        return self._configuration
+
+    # ====================================================================
+    # Public API: Design Space Construction
+    # ====================================================================
+
     def get_design_space(self, model_w: ModelWrapper) -> KernelDesignSpace:
         """Get or build kernel design space for DSE.
 
@@ -268,23 +329,23 @@ class KernelOp(HWCustomOp, ABC):
 
         return self._design_space
 
-    def get_kernel_model(self, model_w: ModelWrapper) -> KernelConfiguration:
-        """Get current configured kernel model (Phase 2 of two-phase construction).
+    def get_kernel_instance(self, model_w: ModelWrapper) -> KernelInstance:
+        """Get current kernel instance (Phase 2 of two-phase construction).
 
         Reconfigures if parallelization parameters changed. Fast path (<0.1ms) if
         params unchanged, slow path (<1ms) if reconfiguration needed.
 
-        This method returns KernelConfiguration (the configured model from two-phase
-        construction). Formerly called KernelModel before the two-phase refactor.
+        This method returns KernelInstance (the configured instance from two-phase
+        construction).
 
         Args:
             model_w: ModelWrapper for ONNX graph access
 
         Returns:
-            KernelConfiguration with current stream shapes
+            KernelInstance with current stream shapes
 
         Raises:
-            KernelOpError: If model cannot be built or validation fails
+            KernelOpError: If instance cannot be built or validation fails
         """
         # Get design space (cached after first call)
         design_space = self.get_design_space(model_w)
@@ -304,6 +365,115 @@ class KernelOp(HWCustomOp, ABC):
                 raise self._error(str(e))
 
         return self._configuration
+
+    def build_design_space(self, model_w: ModelWrapper) -> None:
+        """Build or rebuild design space and configuration from graph.
+
+        This method is idempotent and efficient:
+        - If design space invalidated: Rebuilds it (~10ms)
+        - If design space valid: Skips rebuild
+        - If params changed: Reconfigures (~1ms)
+        - If params unchanged: Skips reconfigure
+
+        Call this method:
+        - Before first access to design_space/kernel_instance properties
+        - After graph structure changes (shapes, datatypes, rewiring)
+        - After changing parallelization parameters
+        - In transforms that need up-to-date models
+
+        Args:
+            model_w: ModelWrapper for ONNX graph access
+
+        Raises:
+            KernelOpError: If design space cannot be built or validation fails
+
+        Example:
+            >>> # Initial build
+            >>> kernel_op.build_design_space(model_w)
+            >>> print(kernel_op.design_space.name)
+
+            >>> # After param change
+            >>> kernel_op.set_nodeattr("SIMD", 64)
+            >>> kernel_op.build_design_space(model_w)  # Reconfigures
+            >>> print(kernel_op.kernel_instance.params["SIMD"])  # 64
+
+            >>> # After graph change
+            >>> model_w.set_tensor_shape(node.input[0], (1, 1, 1024))
+            >>> kernel_op.invalidate_design_space()
+            >>> kernel_op.build_design_space(model_w)  # Rebuilds
+        """
+        if model_w is None:
+            raise self._error(
+                "ModelWrapper (model_w) required to build design space. "
+                "KernelOp needs ModelWrapper to extract tensor shapes from the ONNX graph."
+            )
+
+        # Phase 1: Build design space if needed
+        if self._design_space is None:
+            build_ctx = BuildContext(
+                schema=self.kernel_schema,
+                model_w=model_w,
+                node_inputs=list(self.onnx_node.input),
+                node_outputs=list(self.onnx_node.output),
+                param_getter=self.get_nodeattr,
+                param_setter=self.set_nodeattr,
+                node_name=self.onnx_node.name
+            )
+
+            try:
+                self._design_space = build_kernel_design_space(build_ctx)
+                logger.debug(f"{self.onnx_node.name}: Built design space")
+            except ValueError as e:
+                raise self._error(str(e))
+
+        # Phase 2: Configure if needed
+        current_params = {
+            param_name: self.get_nodeattr(param_name)
+            for param_name in self._design_space.parallelization_params.keys()
+        }
+
+        if self._configuration is None or self._current_params != current_params:
+            try:
+                self._configuration = self._design_space.configure(current_params)
+                self._current_params = current_params.copy()
+                logger.debug(
+                    f"{self.onnx_node.name}: Configured with {current_params}"
+                )
+            except ValueError as e:
+                raise self._error(str(e))
+
+    def invalidate_design_space(self) -> None:
+        """Explicitly invalidate design space cache.
+
+        Call this after external graph changes that aren't captured by
+        set_nodeattr():
+        - Tensor shapes changed (padding, reshape, etc.)
+        - Datatypes changed in graph metadata
+        - Node rewiring (FIFO insertion, etc.)
+
+        After invalidation, call build_design_space(model_w) to rebuild.
+
+        Example:
+            >>> # After transform changes graph
+            >>> model = ApplyPadding().apply(model)
+            >>> for node in model.graph.node:
+            ...     op = getCustomOp(node)
+            ...     if isinstance(op, KernelOp):
+            ...         op.invalidate_design_space()
+            ...         op.build_design_space(model)
+        """
+        self._invalidate_design_space()
+
+    def _invalidate_design_space(self) -> None:
+        """Internal: Invalidate design space and all dependent caches."""
+        self._design_space = None
+        self._configuration = None
+        self._current_params = None
+
+    def _invalidate_configuration(self) -> None:
+        """Internal: Invalidate configuration cache only."""
+        self._configuration = None
+        self._current_params = None
 
     def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, set]:
         """Get valid parallelization parameter ranges for DSE.
@@ -325,34 +495,17 @@ class KernelOp(HWCustomOp, ABC):
             >>> valid_simd = kernel_op.get_valid_ranges(model_w)["SIMD"]
             >>> for simd in valid_simd:
             ...     kernel_op.set_nodeattr("SIMD", simd)
-            ...     kernel_model = kernel_op.get_kernel_model(model_w)  # Fast reconfiguration
+            ...     kernel_op.build_design_space(model_w)  # Fast reconfiguration
         """
-        design_space = self.get_design_space(model_w)
-        return design_space.parallelization_params
+        self.build_design_space(model_w)
+        return self.design_space.parallelization_params
 
     def infer_node_datatype(self, model_w):
-        """FINN compatibility wrapper."""
-        self.get_kernel_model(model_w)
+        """FINN compatibility wrapper.
 
-    @property
-    def kernel_model(self) -> KernelConfiguration:
-        """Access cached KernelConfiguration (requires prior get_kernel_model call).
-
-        Returns the currently configured model from two-phase construction.
-        Formerly called KernelModel before the two-phase refactor.
-
-        Returns:
-            Cached KernelConfiguration
-
-        Raises:
-            RuntimeError: If get_kernel_model() hasn't been called yet
+        Builds design space if needed to ensure datatypes are set correctly.
         """
-        if self._configuration is None:
-            raise RuntimeError(
-                f"Cannot access kernel_model for {self.onnx_node.name}. "
-                f"Call get_kernel_model(model_w) first to build the model."
-            )
-        return self._configuration
+        self.build_design_space(model_w)
 
     # ====================================================================
     # Public API: Shape/Datatype Queries
@@ -367,47 +520,123 @@ class KernelOp(HWCustomOp, ABC):
         return DataType[self.get_nodeattr(f"output{ind}Datatype")]
 
     def get_normal_input_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> List[int]:
-        """Get input tensor shape."""
-        return list(self.get_kernel_model(model_w).inputs[ind].tensor_shape)
+        """Get input tensor shape.
+
+        Args:
+            ind: Input index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Tensor shape as list
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        return list(self.kernel_instance.input_list[ind].tensor_shape)
 
     def get_normal_output_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> List[int]:
-        """Get output tensor shape."""
-        return list(self.get_kernel_model(model_w).outputs[ind].tensor_shape)
+        """Get output tensor shape.
+
+        Args:
+            ind: Output index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Tensor shape as list
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        return list(self.kernel_instance.output_list[ind].tensor_shape)
 
     def get_folded_input_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
-        """Get FINN folded input shape (fold_factors + flattened_stream)."""
-        km = self.get_kernel_model(model_w)
-        tensor_shape = km.inputs[ind].tensor_shape
-        stream_shape = km.inputs[ind].stream_shape
+        """Get FINN folded input shape (fold_factors + flattened_stream).
+
+        Args:
+            ind: Input index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Folded shape tuple
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        tensor_shape = self.kernel_instance.input_list[ind].tensor_shape
+        stream_shape = self.kernel_instance.input_list[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
         flattened_stream = math.prod(stream_shape)
         return tuple(fold_factors + [flattened_stream])
 
     def get_folded_output_shape(self, ind=0, model_w: Optional[ModelWrapper] = None) -> Tuple[int, ...]:
-        """Get FINN folded output shape (fold_factors + flattened_stream)."""
-        km = self.get_kernel_model(model_w)
-        tensor_shape = km.outputs[ind].tensor_shape
-        stream_shape = km.outputs[ind].stream_shape
+        """Get FINN folded output shape (fold_factors + flattened_stream).
+
+        Args:
+            ind: Output index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Folded shape tuple
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        tensor_shape = self.kernel_instance.output_list[ind].tensor_shape
+        stream_shape = self.kernel_instance.output_list[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
         flattened_stream = math.prod(stream_shape)
         return tuple(fold_factors + [flattened_stream])
 
     def get_instream_width(self, ind=0, model_w: Optional[ModelWrapper] = None) -> int:
-        """Get input stream width in bits."""
-        return self.get_kernel_model(model_w).inputs[ind].stream_width_bits
+        """Get input stream width in bits.
+
+        Args:
+            ind: Input index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Stream width in bits
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        return self.kernel_instance.input_list[ind].stream_width_bits
 
     def get_outstream_width(self, ind=0, model_w: Optional[ModelWrapper] = None) -> int:
-        """Get output stream width in bits."""
-        return self.get_kernel_model(model_w).outputs[ind].stream_width_bits
+        """Get output stream width in bits.
+
+        Args:
+            ind: Output index
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Stream width in bits
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        return self.kernel_instance.output_list[ind].stream_width_bits
 
     def get_number_output_values(self, model_w: Optional[ModelWrapper] = None):
-        """Get number of time-multiplexed output values."""
-        folded_shape = self.get_folded_output_shape(ind=0, model_w=model_w)
+        """Get number of time-multiplexed output values.
+
+        Args:
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Number of output values
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        folded_shape = self.get_folded_output_shape(ind=0)
         return math.prod(folded_shape[:-1])
 
     def get_exp_cycles(self, model_w: Optional[ModelWrapper] = None):
-        """Get expected cycles (initiation interval)."""
-        return self.get_kernel_model(model_w).initiation_interval
+        """Get expected cycles (initiation interval).
+
+        Args:
+            model_w: Optional ModelWrapper. If provided, builds design space first.
+
+        Returns:
+            Expected cycles
+        """
+        if model_w:
+            self.build_design_space(model_w)
+        return self.kernel_instance.initiation_interval
 
     def make_shape_compatible_op(self, model_w):
         """Create standard ONNX op for shape inference (auto-detects pattern)."""
@@ -442,11 +671,12 @@ class KernelOp(HWCustomOp, ABC):
         )
 
     def set_nodeattr(self, name: str, value: Any) -> None:
-        """Set nodeattr and invalidate configured model cache.
+        """Set nodeattr with schema-based eager cache invalidation.
 
-        Modified behavior for two-phase caching: Only invalidates configured model,
-        NOT design space. The design space is built once and never invalidated,
-        as it contains only properties that don't depend on parallelization parameters.
+        Invalidation strategy based on nodeattr classification:
+        - Structural attrs (datatypes): Invalidate design space + config
+        - Parametric attrs (SIMD, PE): Invalidate config only
+        - Execution attrs (epsilon): Invalidate config (conservative)
 
         Args:
             name: Attribute name
@@ -460,7 +690,30 @@ class KernelOp(HWCustomOp, ABC):
 
         if old_value != value:
             super().set_nodeattr(name, value)
-            # Only invalidate configuration, NOT design space
-            # Design space remains cached for lifetime of KernelOp instance
-            self._configuration = None
-            self._current_params = None
+
+            # Schema-based classification for smart invalidation
+            if hasattr(self, 'kernel_schema') and self.kernel_schema:
+                if name in self.kernel_schema.get_structural_nodeattrs():
+                    # Structural change: invalidate everything
+                    logger.debug(
+                        f"{self.onnx_node.name}: Structural nodeattr change ({name}), "
+                        f"invalidating design space"
+                    )
+                    self._invalidate_design_space()
+                elif name in self.kernel_schema.get_parametric_nodeattrs():
+                    # Parametric change: invalidate config only
+                    logger.debug(
+                        f"{self.onnx_node.name}: Parametric nodeattr change ({name}), "
+                        f"invalidating configuration"
+                    )
+                    self._invalidate_configuration()
+                else:
+                    # Execution parameter: conservative, invalidate config
+                    logger.debug(
+                        f"{self.onnx_node.name}: Execution nodeattr change ({name}), "
+                        f"invalidating configuration"
+                    )
+                    self._invalidate_configuration()
+            else:
+                # Schema not ready: conservative, invalidate config only
+                self._invalidate_configuration()

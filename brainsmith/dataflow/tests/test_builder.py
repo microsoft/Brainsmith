@@ -5,12 +5,12 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Unit tests for KernelModelBuilder helper methods (two-phase construction)."""
+"""Unit tests for DesignSpaceBuilder helper methods (two-phase construction)."""
 
 import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.builder import KernelModelBuilder
+from brainsmith.dataflow.builder import DesignSpaceBuilder
 from brainsmith.dataflow.models import InterfaceDesignSpace
 
 
@@ -20,7 +20,7 @@ from brainsmith.dataflow.models import InterfaceDesignSpace
 
 def test_divisors_small_numbers():
     """Test _divisors() with small known values."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # Test 12: divisors are 1, 2, 3, 4, 6, 12
     divisors_12 = builder._divisors(12)
@@ -37,7 +37,7 @@ def test_divisors_small_numbers():
 
 def test_divisors_prime_numbers():
     """Test _divisors() with prime numbers."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # Prime numbers have exactly 2 divisors: 1 and themselves
     divisors_7 = builder._divisors(7)
@@ -49,7 +49,7 @@ def test_divisors_prime_numbers():
 
 def test_divisors_perfect_square():
     """Test _divisors() with perfect squares."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # 16 = 4^2: divisors are 1, 2, 4, 8, 16
     divisors_16 = builder._divisors(16)
@@ -62,7 +62,7 @@ def test_divisors_perfect_square():
 
 def test_divisors_768():
     """Test _divisors(768) returns correct 18 divisors."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     divisors_768 = builder._divisors(768)
 
@@ -74,7 +74,7 @@ def test_divisors_768():
 
 def test_divisors_powers_of_two():
     """Test _divisors() with powers of 2."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # 2^n has n+1 divisors: 1, 2, 4, 8, ..., 2^n
     divisors_8 = builder._divisors(8)
@@ -88,7 +88,7 @@ def test_divisors_powers_of_two():
 
 def test_divisors_zero_raises_error():
     """Test _divisors(0) raises ValueError."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     with pytest.raises(ValueError, match="non-positive"):
         builder._divisors(0)
@@ -96,7 +96,7 @@ def test_divisors_zero_raises_error():
 
 def test_divisors_negative_raises_error():
     """Test _divisors() with negative number raises ValueError."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     with pytest.raises(ValueError, match="non-positive"):
         builder._divisors(-10)
@@ -108,7 +108,7 @@ def test_divisors_negative_raises_error():
 
 def test_compute_parameter_ranges_single_parameter():
     """Test _compute_parameter_ranges() with single parallelization parameter."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     input_inv = InterfaceDesignSpace(
         name="input",
@@ -128,7 +128,7 @@ def test_compute_parameter_ranges_single_parameter():
 
 def test_compute_parameter_ranges_multi_parameter():
     """Test _compute_parameter_ranges() with multiple parameters."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     input_inv = InterfaceDesignSpace(
         name="input",
@@ -154,7 +154,7 @@ def test_compute_parameter_ranges_multi_parameter():
 
 def test_compute_parameter_ranges_cross_interface():
     """Test _compute_parameter_ranges() with same param in multiple interfaces."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # Input and output both use SIMD
     # Input block: 768, Output block: 384
@@ -185,7 +185,7 @@ def test_compute_parameter_ranges_cross_interface():
 
 def test_compute_parameter_ranges_no_stream_tiling():
     """Test _compute_parameter_ranges() with None stream_tiling."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     input_inv = InterfaceDesignSpace(
         name="input",
@@ -203,7 +203,7 @@ def test_compute_parameter_ranges_no_stream_tiling():
 
 def test_compute_parameter_ranges_literal_values():
     """Test _compute_parameter_ranges() ignores literal values in stream_tiling."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # stream_tiling with literal int (not a parameter)
     input_inv = InterfaceDesignSpace(
@@ -224,7 +224,7 @@ def test_compute_parameter_ranges_literal_values():
 
 def test_compute_parameter_ranges_empty_inputs_outputs():
     """Test _compute_parameter_ranges() with no interfaces."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     valid_ranges = builder._compute_parameter_ranges([], [])
 
@@ -233,7 +233,7 @@ def test_compute_parameter_ranges_empty_inputs_outputs():
 
 def test_compute_parameter_ranges_gcd_different_dimensions():
     """Test _compute_parameter_ranges() GCD logic with different dimensions."""
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
 
     # SIMD appears in two different dimensions: 768 and 96
     # Valid SIMD = divisors(gcd(768, 96)) = divisors(96)

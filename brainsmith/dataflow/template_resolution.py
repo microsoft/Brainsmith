@@ -58,8 +58,7 @@ def normalize_template(
         >>> normalize_template([FULL_DIM, "PE", 1], (128, 768, 64))
         [FULL_DIM, "PE", 1]
     """
-    # Convert to list to allow modification
-    template = list(template)
+    template = list(template)  # Allow modification (input may be tuple)
 
     # Pad template to match reference rank (prepend singletons)
     if len(template) < len(reference_shape):
@@ -114,8 +113,8 @@ def resolve_template(
     # Step 2: Resolve values
     resolved = []
     for i, (dim, ref) in enumerate(zip(template, reference_shape)):
-        if isinstance(dim, type(FULL_DIM)) or dim is FULL_DIM:
-            # Copy from reference (full dimension)
+        if dim is FULL_DIM:
+            # FULL_DIM: copy entire dimension from reference
             value = ref
         elif isinstance(dim, str):
             # Parameter lookup
@@ -155,4 +154,4 @@ def resolve_template(
     return result
 
 
-__all__ = ['resolve_template']
+__all__ = ['resolve_template', 'normalize_template']

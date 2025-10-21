@@ -13,7 +13,7 @@ from qonnx.core.datatype import DataType
 from brainsmith.dataflow.models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
-    KernelConfiguration,
+    KernelInstance,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.dataflow.validation import ValidationError
@@ -53,7 +53,7 @@ def test_configure_valid_params():
     # Configure with valid SIMD value
     configured = invariant_model.configure({"SIMD": 64})
 
-    assert isinstance(configured, KernelConfiguration)
+    assert isinstance(configured, KernelInstance)
     assert configured.params == {"SIMD": 64}
     assert len(configured.inputs) == 1
     assert len(configured.outputs) == 1

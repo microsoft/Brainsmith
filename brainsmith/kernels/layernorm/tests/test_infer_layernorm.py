@@ -15,7 +15,7 @@ using the unified constraint-based inference system.
 Key validation points:
 1. Transformation occurs (FuncLayerNorm → LayerNorm)
 2. Node attributes are correct (SIMD, epsilon, datatypes)
-3. ifm_dim and NumChannels are NOT present (inferred from kernel_model)
+3. ifm_dim and NumChannels are NOT present (inferred from kernel_instance)
 4. Shape and datatype inference works
 5. Multiple scenarios (different shapes, datatypes, layouts)
 """
@@ -173,7 +173,7 @@ def test_no_redundant_attributes():
 
     print(f"  ✓ ifm_dim not present (inferred from tensor context)")
     print(f"  ✓ NumChannels not present (inferred from tensor context)")
-    print(f"  → Shape information automatically inferred via kernel_model")
+    print(f"  → Shape information automatically inferred via kernel_instance")
 
 
 # ============================================================================
@@ -244,9 +244,9 @@ def test_auto_layernorm_instantiation():
     op_inst = LayerNorm(node)
     print(f"  ✓ LayerNorm instantiated successfully")
 
-    # Build kernel model from context (required for kernel_model)
-    kernel_model = op_inst.get_kernel_model(model_transformed)
-    print(f"  ✓ Kernel model built successfully")
+    # Build kernel instance from context (required for kernel_instance)
+    kernel_instance = op_inst.get_kernel_instance(model_transformed)
+    print(f"  ✓ Kernel instance built successfully")
 
     # Verify shape inference works
     normal_input_shape = op_inst.get_normal_input_shape(model_w=model_transformed)
@@ -272,7 +272,7 @@ def test_auto_layernorm_execution():
 
     # Instantiate and setup
     op_inst = LayerNorm(node)
-    op_inst.get_kernel_model(model_transformed)
+    op_inst.get_kernel_instance(model_transformed)
 
     # Create input data
     np.random.seed(42)

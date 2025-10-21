@@ -192,6 +192,109 @@ def create_softmax_model(
     return model_proto
 
 
+def create_gather_crop_model(
+    input_shape: List[int] = [1, 224, 224, 64],
+    crop_start: int = 12,
+    crop_end: int = 212,
+    axis: int = 1,
+    input_dtype: str = "INT8",
+    model_name: str = "gather_crop_test_model"
+) -> onnx.ModelProto:
+    """Create ONNX model with Gather node that represents a crop operation.
+
+    Creates a pattern that can be transformed to Crop hardware operation:
+    - Gather with consecutive indices on spatial axis (height or width)
+    - Represents cropping pixels from image edges
+
+    Args:
+        input_shape: Input tensor shape in NHWC format [N, H, W, C]
+        crop_start: Starting index for crop (crop_north or crop_west)
+        crop_end: Ending index for crop (exclusive)
+        axis: Axis to crop (1=height, 2=width in NHWC)
+        input_dtype: Input datatype as string (e.g., "INT8")
+        model_name: Name of the model
+
+    Returns:
+        ONNX ModelProto with Gather node representing crop
+
+    Example:
+        # Crop height dimension: [1, 224, 224, 64] -> [1, 200, 224, 64]
+        # crop_north=12, crop_south=12 -> indices [12:212]
+        model = create_gather_crop_model(
+            input_shape=[1, 224, 224, 64],
+            crop_start=12,
+            crop_end=212,
+            axis=1
+        )
+    """
+    # Map QONNX DataType names to ONNX TensorProto types
+    dtype_map = {
+        "INT8": TensorProto.INT8,
+        "UINT8": TensorProto.UINT8,
+        "INT16": TensorProto.INT16,
+        "UINT16": TensorProto.UINT16,
+        "INT32": TensorProto.INT32,
+        "FLOAT32": TensorProto.FLOAT,
+        "FLOAT16": TensorProto.FLOAT16,
+    }
+
+    # Compute output shape after crop
+    output_shape = list(input_shape)
+    output_shape[axis] = crop_end - crop_start
+
+    # Create input tensor
+    input_tensor = helper.make_tensor_value_info(
+        "input",
+        dtype_map.get(input_dtype, TensorProto.INT8),
+        input_shape
+    )
+
+    # Create output tensor
+    output_tensor = helper.make_tensor_value_info(
+        "output",
+        dtype_map.get(input_dtype, TensorProto.INT8),
+        output_shape
+    )
+
+    # Create indices for Gather (consecutive sequence for crop)
+    indices = np.arange(crop_start, crop_end, dtype=np.int64)
+    indices_tensor = helper.make_tensor(
+        "indices",
+        TensorProto.INT64,
+        [len(indices)],
+        indices.tolist()
+    )
+
+    # Create Gather node
+    gather_node = helper.make_node(
+        "Gather",
+        inputs=["input", "indices"],
+        outputs=["output"],
+        axis=axis,
+        name="Gather_0"
+    )
+
+    # Create graph
+    graph_proto = helper.make_graph(
+        [gather_node],
+        model_name,
+        [input_tensor],
+        [output_tensor],
+        initializer=[indices_tensor]
+    )
+
+    # Create model
+    model_proto = helper.make_model(
+        graph_proto,
+        producer_name="brainsmith_test"
+    )
+
+    # Set opset version
+    model_proto.opset_import[0].version = 11
+
+    return model_proto
+
+
 @pytest.fixture
 def simple_onnx_model(tmp_path):
     """Create a simple ONNX model for testing."""

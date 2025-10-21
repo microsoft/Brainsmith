@@ -18,7 +18,8 @@ deps/finn/src/finn/custom_op/fpgadataflow/hls/__init__.py
 # Note: Using absolute imports to ensure proper registration
 
 # Import Brainsmith HLS kernels
-from brainsmith.kernels.crop.crop_hls import Crop_hls
+from brainsmith.kernels.crop.crop_hls import LegacyCrop_hls
+from brainsmith.kernels.crop.auto_crop_hls import Crop_hls
 from brainsmith.kernels.layernorm.layernorm_hls import LayerNorm_hls
 from brainsmith.kernels.shuffle.shuffle_hls import Shuffle_hls
 from brainsmith.kernels.softmax.softmax_hls import Softmax_hls

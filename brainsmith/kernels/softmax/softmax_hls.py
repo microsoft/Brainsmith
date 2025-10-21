@@ -10,13 +10,13 @@
 Softmax HLS Backend - HLS implementation using KernelOp and Dataflow Modeling.
 
 This backend provides cppsim and rtlsim execution modes for Softmax,
-generating optimized HLS code using the kernel_model for automatic shape inference.
+generating optimized HLS code using the kernel instance for automatic shape inference.
 
 Key differences from legacy implementation:
-- Uses kernel_model.inputs[0].stream_shape[-1] instead of get_nodeattr("SIMD")
-- Uses kernel_model.inputs[0].tensor_shape[-1] instead of get_nodeattr("ifm_dim")[-1]
+- Uses kernel instance inputs[0].stream_shape[-1] instead of get_nodeattr("SIMD")
+- Uses kernel instance inputs[0].tensor_shape[-1] instead of get_nodeattr("ifm_dim")[-1]
 - Automatic shape validation via declarative constraints
-- Intelligent two-level caching (tensor context + kernel model)
+- Intelligent two-level caching (design space + kernel instance)
 """
 
 import numpy as np
@@ -39,16 +39,16 @@ from brainsmith.core.plugins import backend
     author="Thomas Keller",
 )
 class Softmax_hls(Softmax, HLSBackend):
-    """HLS backend for Softmax using kernel_model for shape information.
+    """HLS backend for Softmax using kernel instance for shape information.
 
     This class inherits from both Softmax (provides kernel_schema and Python execution)
     and HLSBackend (provides HLS code generation infrastructure).
 
-    The key innovation is using kernel_model properties instead of nodeattrs for shape info:
-    - self.kernel_model.inputs[0].stream_shape[-1] for SIMD
-    - self.kernel_model.inputs[0].tensor_shape[-1] for width
-    - self.kernel_model.inputs[0].datatype for input type
-    - self.kernel_model.outputs[0].datatype for output type
+    The key innovation is using kernel instance properties instead of nodeattrs for shape info:
+    - self.kernel_instance.inputs[0].stream_shape[-1] for SIMD (kernel_instance property returns KernelInstance)
+    - self.kernel_instance.inputs[0].tensor_shape[-1] for width
+    - self.kernel_instance.inputs[0].datatype for input type
+    - self.kernel_instance.outputs[0].datatype for output type
 
     This ensures consistency with the declarative KernelSchema and automatic validation.
     """
@@ -82,26 +82,26 @@ class Softmax_hls(Softmax, HLSBackend):
         ]
 
     def defines(self, var):
-        """Define C++ constants using kernel_model for shape information.
+        """Define C++ constants using kernel instance for shape information.
 
         Args:
             var: Variable name (cppsim/ipgen) - unused but required by interface
 
         Sets code_gen_dict["$DEFINES$"] with:
-        - SIMD: Stream parallelism from kernel_model.inputs[0].stream_shape[-1]
-        - W: Total channels from kernel_model.inputs[0].tensor_shape[-1]
-        - TI: Input type from kernel_model.inputs[0].datatype
-        - TO: Output type from kernel_model.outputs[0].datatype
+        - SIMD: Stream parallelism from kernel instance inputs[0].stream_shape[-1]
+        - W: Total channels from kernel instance inputs[0].tensor_shape[-1]
+        - TI: Input type from kernel instance inputs[0].datatype
+        - TO: Output type from kernel instance outputs[0].datatype
         """
-        # Use kernel_model for shape information (not nodeattrs)
-        input_model = self.kernel_model.inputs[0]
-        output_model = self.kernel_model.outputs[0]
+        # Use kernel instance for shape information (not nodeattrs)
+        input_cfg = self.kernel_instance.inputs[0]
+        output_cfg = self.kernel_instance.outputs[0]
 
-        simd = input_model.stream_shape[-1]
-        width = input_model.tensor_shape[-1]
+        simd = input_cfg.stream_shape[-1]
+        width = input_cfg.tensor_shape[-1]
 
-        idtype = input_model.datatype
-        odtype = output_model.datatype
+        idtype = input_cfg.datatype
+        odtype = output_cfg.datatype
 
         self.code_gen_dict["$DEFINES$"] = [
             f"constexpr unsigned SIMD = {simd};",

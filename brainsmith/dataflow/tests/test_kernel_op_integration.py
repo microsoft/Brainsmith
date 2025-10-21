@@ -81,11 +81,11 @@ def test_end_to_end_layernorm_dse():
     for simd in valid_simd:
         try:
             kernel_op.set_nodeattr("SIMD", simd)
-            configured = kernel_op.get_kernel_model(model_w)
+            configured = kernel_op.get_kernel_instance(model_w)
 
             # Verify configuration is correct
             assert configured.params["SIMD"] == simd
-            assert configured.inputs[0].stream_shape[-1] == simd
+            assert configured.input_list[0].stream_shape[-1] == simd
 
             successful_configs += 1
 
@@ -126,7 +126,7 @@ def test_layernorm_design_space_stability():
     # Explore all configurations
     for simd in valid_simd:
         kernel_op.set_nodeattr("SIMD", simd)
-        kernel_op.get_kernel_model(model_w)
+        kernel_op.get_kernel_instance(model_w)
 
         # Invariant model should NEVER change
         assert kernel_op._design_space is design_space, \
@@ -142,11 +142,11 @@ def test_layernorm_derived_dimension_across_configs():
 
     for simd in valid_simd:
         kernel_op.set_nodeattr("SIMD", simd)
-        configured = kernel_op.get_kernel_model(model_w)
+        configured = kernel_op.get_kernel_instance(model_w)
 
         # Output stream shape should match input (DerivedDim("input", -1))
-        input_stream_shape = configured.inputs[0].stream_shape
-        output_stream_shape = configured.outputs[0].stream_shape
+        input_stream_shape = configured.input_list[0].stream_shape
+        output_stream_shape = configured.output_list[0].stream_shape
 
         assert output_stream_shape == input_stream_shape, \
             f"DerivedDim failed at SIMD={simd}: {output_stream_shape} != {input_stream_shape}"
@@ -161,9 +161,9 @@ def test_layernorm_performance_meets_targets():
     model_w, node = create_layernorm_model()
     kernel_op = LayerNorm(node)
 
-    # Target 1: First get_kernel_model() call ~10ms
+    # Target 1: First get_kernel_instance() call ~10ms
     start = time.time()
-    kernel_op.get_kernel_model(model_w)
+    kernel_op.get_kernel_instance(model_w)
     first_call_time = time.time() - start
 
     # Use generous 50ms for CI variability
@@ -175,7 +175,7 @@ def test_layernorm_performance_meets_targets():
     # Target 2: Cache hit <0.1ms (average over 100 calls)
     start = time.time()
     for _ in range(100):
-        kernel_op.get_kernel_model(model_w)
+        kernel_op.get_kernel_instance(model_w)
     cache_hit_time = (time.time() - start) / 100
 
     # Use generous 1ms for CI variability
@@ -187,7 +187,7 @@ def test_layernorm_performance_meets_targets():
     # Target 3: Reconfiguration <1ms
     kernel_op.set_nodeattr("SIMD", 2)
     start = time.time()
-    kernel_op.get_kernel_model(model_w)
+    kernel_op.get_kernel_instance(model_w)
     reconfig_time = time.time() - start
 
     # Use generous 5ms for CI variability
@@ -208,7 +208,7 @@ def test_layernorm_memory_efficiency():
     configurations = []
     for simd in valid_simd:
         kernel_op.set_nodeattr("SIMD", simd)
-        configured = kernel_op.get_kernel_model(model_w)
+        configured = kernel_op.get_kernel_instance(model_w)
         configurations.append(configured)
 
     # All configurations should share same design space
@@ -241,11 +241,11 @@ def test_layernorm_backward_compatibility():
     stream_width = kernel_op.get_instream_width(ind=0, model_w=model_w)
     assert stream_width > 0
 
-    # kernel_model property should work
-    km = kernel_op.kernel_model
-    assert km is not None
-    assert hasattr(km, 'inputs')
-    assert hasattr(km, 'outputs')
+    # kernel_instance property should work
+    ki = kernel_op.kernel_instance
+    assert ki is not None
+    assert hasattr(ki, 'inputs')
+    assert hasattr(ki, 'outputs')
 
 
 # ====================================================================
@@ -271,12 +271,12 @@ def test_realistic_dse_workflow():
     results = []
     for simd in filtered_simd:
         kernel_op.set_nodeattr("SIMD", simd)
-        configured = kernel_op.get_kernel_model(model_w)
+        configured = kernel_op.get_kernel_instance(model_w)
 
         # Simulate profiling (just capture configuration)
         results.append({
             'simd': simd,
-            'stream_width': configured.inputs[0].stream_width_bits,
+            'stream_width': configured.input_list[0].stream_width_bits,
             'cycles': configured.initiation_interval
         })
 
@@ -288,9 +288,9 @@ def test_realistic_dse_workflow():
 
     # Step 5: Apply best configuration
     kernel_op.set_nodeattr("SIMD", best['simd'])
-    final_model = kernel_op.get_kernel_model(model_w)
+    final_instance = kernel_op.get_kernel_instance(model_w)
 
-    assert final_model.params["SIMD"] == best['simd']
+    assert final_instance.params["SIMD"] == best['simd']
 
 
 def test_multi_kernel_dse_simulation():
@@ -311,7 +311,7 @@ def test_multi_kernel_dse_simulation():
     for simd in test_simd_values:
         for kernel_op, model_w in kernel_ops:
             kernel_op.set_nodeattr("SIMD", simd)
-            configured = kernel_op.get_kernel_model(model_w)
+            configured = kernel_op.get_kernel_instance(model_w)
             assert configured.params["SIMD"] == simd
 
     print(f"\n  Successfully configured {num_layers} kernels × {len(test_simd_values)} configs")

@@ -13,11 +13,11 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.core.plugins import kernel
 
 @kernel(
-    description="Hardware cropping operation",
+    description="Legacy hardware cropping operation",
     author="Josh Monson",
 )
-class Crop(HWCustomOp):
-    """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
+class LegacyCrop(HWCustomOp):
+    """Legacy abstraction layer for HW Crop layers. Use Crop instead."""
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
@@ -61,7 +61,7 @@ class Crop(HWCustomOp):
         in_shape = self.get_normal_input_shape()
         out_shape = self.get_normal_output_shape()
         return make_node(
-            "Crop",
+            "LegacyCrop",
             inputs=[self.onnx_node.input[0]],
             outputs=[self.onnx_node.output[0]],
             in_shape=list(in_shape),

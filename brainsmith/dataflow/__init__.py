@@ -17,17 +17,17 @@ This module provides the core classes for modeling dataflow kernels.
 Key Components:
 - InputSchema/OutputSchema: Schema definitions for kernel interfaces
 - KernelSchema: Kernel definition with unified constraints
-- KernelModelBuilder: Constructs immutable models from schemas + context
+- DesignSpaceBuilder: Constructs immutable models from schemas + context
 - KernelOp: Base class for all kernels (FINN adapter, delegates to builder)
 - Immutable models (two-phase construction):
   - Design Space: InterfaceDesignSpace, KernelDesignSpace
-  - Configuration: InterfaceConfiguration, KernelConfiguration
+  - Configuration: InterfaceConfiguration, KernelInstance
 - Unified Constraint system: Single abstraction for all validation (ONNX + kernel)
 - Derivation system: DimensionSource/DatatypeSource for cross-interface derivation
 - Inference system: InferencePattern for ONNX → HW layer inference
 
 Architecture:
-    KernelSchema (defines + validates) → KernelModelBuilder (constructs) → KernelDesignSpace → KernelConfiguration
+    KernelSchema (defines + validates) → DesignSpaceBuilder (constructs) → KernelDesignSpace → KernelInstance
 """
 
 # Core types
@@ -90,13 +90,13 @@ from .models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
     InterfaceConfiguration,
-    KernelConfiguration,
+    KernelInstance,
 )
 
 # Builder (constructs models from schemas + context)
 from .builder import (
     BuildContext,
-    KernelModelBuilder,
+    DesignSpaceBuilder,
 )
 
 # Template resolution
@@ -157,10 +157,10 @@ __all__ = [
 
     # Immutable models (design space exploration)
     'InterfaceDesignSpace', 'KernelDesignSpace',
-    'InterfaceConfiguration', 'KernelConfiguration',
+    'InterfaceConfiguration', 'KernelInstance',
 
     # Builder
-    'BuildContext', 'KernelModelBuilder',
+    'BuildContext', 'DesignSpaceBuilder',
 
     # Template resolution
     'resolve_template', 'normalize_template',

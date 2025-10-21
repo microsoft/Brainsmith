@@ -4,6 +4,7 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
+from __future__ import annotations
 
 """Kernel design space builder - constructs immutable models from schemas and context (two-phase).
 
@@ -12,19 +13,21 @@ The builder can be used independently for testing, tooling, or non-FINN contexts
 
 Key Components:
 - BuildContext: Context data for building (schema, graph, accessors)
-- KernelModelBuilder: Orchestrates two-phase model construction
+- DesignSpaceBuilder: Orchestrates two-phase model construction
 
 Architecture:
-    KernelOp (FINN adapter) → KernelModelBuilder → KernelDesignSpace → KernelConfiguration
+    KernelOp (FINN adapter) → DesignSpaceBuilder → KernelDesignSpace → KernelInstance
 
 The builder follows a two-phase flow:
 1. build(): Build KernelDesignSpace (tensor shapes, block shapes, datatypes, valid ranges)
-2. design_space.configure(params): Build KernelConfiguration (stream shapes for specific params)
+2. design_space.configure(params): Build KernelInstance (stream shapes for specific params)
 """
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from functools import reduce
+from math import gcd
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
 from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
@@ -33,6 +36,9 @@ from brainsmith.utils import divisors
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .datatype_sources import DatatypeSource
+
+if TYPE_CHECKING:
+    from .models import InterfaceDesignSpace, KernelDesignSpace
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +68,7 @@ class BuildContext:
     node_name: str = "<unknown>"
 
 
-class KernelModelBuilder:
+class DesignSpaceBuilder:
     """Builds kernel design space from schema + ONNX context.
 
     Separates model construction logic from KernelOp (FINN integration).
@@ -74,12 +80,12 @@ class KernelModelBuilder:
        - Block shapes from block_tiling templates
        - Datatypes from ONNX graph or derivation
        - Valid parallelization parameter ranges
-    2. design_space.configure() creates KernelConfiguration many times (fast)
+    2. design_space.configure() creates KernelInstance many times (fast)
        - Stream shapes from stream_tiling templates + parallelization params
        - Parametric constraint validation
 
     Example:
-        >>> builder = KernelModelBuilder()
+        >>> builder = DesignSpaceBuilder()
         >>> context = BuildContext(
         ...     schema=kernel_schema,
         ...     model_w=model_wrapper,
@@ -93,7 +99,7 @@ class KernelModelBuilder:
         >>> config = design_space.configure({"SIMD": 64, "PE": 1})
     """
 
-    def build(self, ctx: BuildContext) -> 'KernelDesignSpace':
+    def build(self, ctx: BuildContext) -> KernelDesignSpace:
         """Build kernel design space from ONNX context.
 
         Resolves all properties constant across parallelization configs:
@@ -123,62 +129,34 @@ class KernelModelBuilder:
 
         logger.debug(f"Building KernelDesignSpace for {ctx.node_name}")
 
-        # Phase 1: Build design space input models
-        design_space_inputs = {}  # Dict[str, InterfaceDesignSpace]
+        # Build input interfaces from ONNX graph
+        interfaces_input: Dict[str, InterfaceDesignSpace] = {}
 
         for i, inp_name in enumerate(ctx.node_inputs):
             if not inp_name:
                 continue
 
+            if i >= len(ctx.schema.inputs):
+                logger.warning(
+                    f"Node has input {i} but schema only defines {len(ctx.schema.inputs)} inputs"
+                )
+                continue
+
             schema = ctx.schema.inputs[i]
 
             try:
-                # Get datatype and tensor shape from graph
-                datatype = ctx.model_w.get_tensor_datatype(inp_name)
-                tensor_shape = tuple(ctx.model_w.get_tensor_shape(inp_name))
-
-                # Store datatype to nodeattrs for FINN
-                ctx.param_setter(f"input{i}Datatype", datatype.name)
-
-                # Resolve block shape from template
-                block_shape = resolve_template(
-                    schema.block_tiling,
-                    tensor_shape,
-                    ctx.param_getter,
-                    self._interfaces
+                interface = self._build_interface(
+                    direction='input',
+                    index=i,
+                    tensor_name=inp_name,
+                    schema=schema
                 )
-
-                # Infer is_weight from ONNX initializer presence
-                is_weight = ctx.model_w.get_initializer(inp_name) is not None
-
-                # Normalize stream_tiling to match block_shape rank
-                normalized_stream_tiling = None
-                if schema.stream_tiling is not None:
-                    normalized_stream_tiling = normalize_template(
-                        schema.stream_tiling, block_shape
-                    )
-
-                # Build InterfaceDesignSpace (stream_tiling normalized but not resolved)
-                ds_input = InterfaceDesignSpace(
-                    name=schema.name,
-                    tensor_shape=tensor_shape,
-                    block_shape=block_shape,
-                    stream_tiling=normalized_stream_tiling,  # Normalized template, values not resolved
-                    datatype=datatype,
-                    is_weight=is_weight
-                )
-
-                design_space_inputs[schema.name] = ds_input  # Store in dict by name
-                self._interfaces[schema.name] = ds_input  # Store for derivations
-
-                logger.debug(
-                    f"  Input '{schema.name}': tensor={tensor_shape}, "
-                    f"block={block_shape}, stream_tiling={schema.stream_tiling}, dtype={datatype.name}"
-                )
+                interfaces_input[schema.name] = interface
+                self._interfaces[schema.name] = interface
             except ValueError as e:
-                raise ValueError(f"Input '{schema.name}': {e}") from e
+                raise ValueError(f"Failed to build input '{schema.name}': {e}") from e
 
-        # Phase 2: Resolve internal datatypes
+        # Derive internal datatypes from inputs and parameters
         internal_datatypes = {}
 
         if ctx.schema.internal_datatypes:
@@ -193,60 +171,33 @@ class KernelModelBuilder:
 
                     logger.debug(f"  Internal '{internal_name}': dtype={datatype.name}")
                 except ValueError as e:
-                    raise ValueError(f"Internal datatype '{internal_name}': {e}") from e
+                    raise ValueError(f"Failed to resolve internal datatype '{internal_name}': {e}") from e
 
-        # Phase 3: Build design space output models
-        design_space_outputs = {}  # Dict[str, InterfaceDesignSpace]
+        # Build output interfaces (may derive datatypes from inputs)
+        interfaces_output: Dict[str, InterfaceDesignSpace] = {}
 
         for i, out_name in enumerate(ctx.node_outputs):
+            if i >= len(ctx.schema.outputs):
+                logger.warning(
+                    f"Node has output {i} but schema only defines {len(ctx.schema.outputs)} outputs"
+                )
+                continue
+
             schema = ctx.schema.outputs[i]
 
             try:
-                # Resolve or extract datatype
-                datatype = self._resolve_output_datatype(schema, out_name)
-
-                # Store datatype to nodeattrs for FINN
-                ctx.param_setter(f"output{i}Datatype", datatype.name)
-
-                # Get tensor shape from graph
-                tensor_shape = tuple(ctx.model_w.get_tensor_shape(out_name))
-
-                # Resolve block shape from template
-                block_shape = resolve_template(
-                    schema.block_tiling,
-                    tensor_shape,
-                    ctx.param_getter,
-                    self._interfaces
+                interface = self._build_interface(
+                    direction='output',
+                    index=i,
+                    tensor_name=out_name,
+                    schema=schema
                 )
-
-                # Normalize stream_tiling to match block_shape rank
-                normalized_stream_tiling = None
-                if schema.stream_tiling is not None:
-                    normalized_stream_tiling = normalize_template(
-                        schema.stream_tiling, block_shape
-                    )
-
-                # Build InterfaceDesignSpace (stream_tiling normalized but not resolved)
-                ds_output = InterfaceDesignSpace(
-                    name=schema.name,
-                    tensor_shape=tensor_shape,
-                    block_shape=block_shape,
-                    stream_tiling=normalized_stream_tiling,  # Normalized template, values not resolved
-                    datatype=datatype,
-                    is_weight=False  # Outputs never have initializers
-                )
-
-                design_space_outputs[schema.name] = ds_output  # Store in dict by name
-                self._interfaces[schema.name] = ds_output  # Store for derivations
-
-                logger.debug(
-                    f"  Output '{schema.name}': tensor={tensor_shape}, "
-                    f"block={block_shape}, stream_tiling={schema.stream_tiling}, dtype={datatype.name}"
-                )
+                interfaces_output[schema.name] = interface
+                self._interfaces[schema.name] = interface
             except ValueError as e:
-                raise ValueError(f"Output '{schema.name}': {e}") from e
+                raise ValueError(f"Failed to build output '{schema.name}': {e}") from e
 
-        # Phase 4: Split constraints into structural vs parametric
+        # Separate constraints by evaluation phase (structural vs parametric)
         structural_constraints = [
             c for c in ctx.schema.constraints
             if c.evaluation_phase == 'structural'
@@ -261,18 +212,18 @@ class KernelModelBuilder:
             f"{len(structural_constraints)} structural, {len(parametric_constraints)} parametric"
         )
 
-        # Phase 5: Validate structural constraints
+        # Validate structural constraints against design space
         if structural_constraints:
-            ds_ctx = DesignSpaceValidationContext(
-                inputs=design_space_inputs,
-                outputs=design_space_outputs,
+            validation_ctx = DesignSpaceValidationContext(
+                inputs=interfaces_input,
+                outputs=interfaces_output,
                 internal_datatypes=internal_datatypes,
                 param_getter=ctx.param_getter
             )
 
             errors = []
             for constraint in structural_constraints:
-                error = constraint.check(ds_ctx)
+                error = constraint.check(validation_ctx)
                 if error is not None:
                     errors.append(f"  - {constraint.describe()}: {error}")
 
@@ -282,15 +233,15 @@ class KernelModelBuilder:
 
             logger.debug(f"  All {len(structural_constraints)} structural constraints passed")
 
-        # Phase 6: Compute valid parallelization ranges
-        valid_ranges = self._compute_parameter_ranges(design_space_inputs, design_space_outputs)
+        # Compute valid parameter values as divisors of block dimensions
+        valid_ranges = self._compute_parameter_ranges(interfaces_input, interfaces_output)
 
-        # Phase 7: Create and return design space
+        # Assemble immutable design space model
         # Note: structural_constraints validated above but not stored (never re-validated)
         design_space = KernelDesignSpace(
             name=ctx.schema.name,
-            inputs=design_space_inputs,
-            outputs=design_space_outputs,
+            inputs=interfaces_input,
+            outputs=interfaces_output,
             internal_datatypes=internal_datatypes,
             parametric_constraints=parametric_constraints,
             parallelization_params=valid_ranges,
@@ -337,14 +288,113 @@ class KernelModelBuilder:
         # Fixed datatype specified in schema (rare case)
         return schema.datatype
 
+    def _build_interface(
+        self,
+        direction: str,
+        index: int,
+        tensor_name: str,
+        schema: Any,
+    ) -> InterfaceDesignSpace:
+        """Build single interface design space from ONNX tensor and schema.
+
+        Args:
+            direction: 'input' or 'output' (for error messages and nodeattr naming)
+            index: Tensor index in node's input/output list
+            tensor_name: ONNX tensor name
+            schema: Input/OutputSchema defining structure
+
+        Returns:
+            InterfaceDesignSpace with resolved shapes and normalized stream_tiling
+
+        Raises:
+            ValueError: If building fails
+        """
+        from .models import InterfaceDesignSpace
+
+        ctx = self._ctx
+
+        # Resolve datatype (differs for inputs vs outputs)
+        if direction == 'input':
+            datatype = ctx.model_w.get_tensor_datatype(tensor_name)
+        else:  # output
+            datatype = self._resolve_output_datatype(schema, tensor_name)
+
+        # Store datatype to nodeattrs for FINN
+        ctx.param_setter(f"{direction}{index}Datatype", datatype.name)
+
+        # Get tensor shape from graph
+        tensor_shape = tuple(ctx.model_w.get_tensor_shape(tensor_name))
+
+        # Resolve block shape from template
+        try:
+            block_shape = resolve_template(
+                schema.block_tiling,
+                tensor_shape,
+                ctx.param_getter,
+                self._interfaces
+            )
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to resolve block_tiling for {direction} '{schema.name}': {e}"
+            ) from e
+
+        # Normalize stream_tiling to match block_shape rank
+        normalized_stream_tiling = None
+        if schema.stream_tiling is not None:
+            try:
+                normalized_stream_tiling = normalize_template(
+                    schema.stream_tiling, block_shape
+                )
+            except ValueError as e:
+                raise ValueError(
+                    f"Failed to normalize stream_tiling for {direction} '{schema.name}': {e}"
+                ) from e
+
+        # Infer is_weight from ONNX initializer (only for inputs)
+        is_weight = (
+            direction == 'input' and
+            ctx.model_w.get_initializer(tensor_name) is not None
+        )
+
+        # Build and return interface
+        interface = InterfaceDesignSpace(
+            name=schema.name,
+            tensor_shape=tensor_shape,
+            block_shape=block_shape,
+            stream_tiling=normalized_stream_tiling,
+            datatype=datatype,
+            is_weight=is_weight
+        )
+
+        logger.debug(
+            f"  {direction.capitalize()} '{schema.name}': tensor={tensor_shape}, "
+            f"block={block_shape}, stream={schema.stream_tiling}, dtype={datatype.name}"
+        )
+
+        return interface
+
     # =========================================================================
     # Helper Methods for Two-Phase Construction
     # =========================================================================
 
+    def _divisors(self, n: int) -> Set[int]:
+        """Compute all divisors of a positive integer (wrapper for testing).
+
+        Args:
+            n: Positive integer
+
+        Returns:
+            Set of all divisors of n
+
+        Raises:
+            ValueError: If n is non-positive
+        """
+        return divisors(n)
+
     def _compute_parameter_ranges(
         self,
-        design_space_inputs: Dict[str, 'InterfaceDesignSpace'],
-        design_space_outputs: Dict[str, 'InterfaceDesignSpace'],
+        interfaces_input: Dict[str, InterfaceDesignSpace],
+        interfaces_output: Dict[str, InterfaceDesignSpace],
     ) -> Dict[str, Set[int]]:
         """Compute valid divisor sets for each parallelization parameter.
 
@@ -368,8 +418,8 @@ class KernelModelBuilder:
             → valid PE = {1, 2, 4, 8, 16, 32, 64, 128, 256}
 
         Args:
-            design_space_inputs: Input interfaces with resolved block shapes (dict: name → interface)
-            design_space_outputs: Output interfaces with resolved block shapes (dict: name → interface)
+            interfaces_input: Input interfaces with resolved block shapes (dict or list)
+            interfaces_output: Output interfaces with resolved block shapes (dict or list)
 
         Returns:
             Dict mapping parameter name to set of valid divisors
@@ -378,13 +428,13 @@ class KernelModelBuilder:
         Raises:
             ValueError: If parameter appears in block_tiling (violates R1 from spec)
         """
-        from math import gcd
-        from functools import reduce
-
         # Collect all block dimensions that each parameter must divide
         param_constraints = {}  # param_name -> list of block dimensions
 
-        all_interfaces = (*design_space_inputs.values(), *design_space_outputs.values())
+        # Handle both dict and list inputs (for tests)
+        inputs_iter = interfaces_input.values() if isinstance(interfaces_input, dict) else interfaces_input
+        outputs_iter = interfaces_output.values() if isinstance(interfaces_output, dict) else interfaces_output
+        all_interfaces = (*inputs_iter, *outputs_iter)
 
         for interface in all_interfaces:
             if interface.stream_tiling is None:
@@ -403,13 +453,11 @@ class KernelModelBuilder:
                 # DerivedDim doesn't introduce new parameters
                 # Literals (1, FULL_DIM) don't create parameters
 
-        # Compute valid ranges as divisors of GCD
+        # Each param must divide GCD of all block dims where it appears
         valid_ranges = {}
         for param_name, block_dims in param_constraints.items():
-            # Must divide all block dimensions where param appears
-            # Valid values = divisors(gcd(block_dims))
-            combined = reduce(gcd, block_dims)
-            valid_ranges[param_name] = divisors(combined)
+            gcd_value = reduce(gcd, block_dims)
+            valid_ranges[param_name] = divisors(gcd_value)
 
         logger.debug(
             f"Computed valid ranges for {len(valid_ranges)} parameters: "
@@ -423,11 +471,11 @@ class KernelModelBuilder:
 # Module-Level Build Function (Recommended Entry Point)
 # =============================================================================
 
-def build_kernel_design_space(ctx: BuildContext) -> 'KernelDesignSpace':
+def build_kernel_design_space(ctx: BuildContext) -> KernelDesignSpace:
     """Build kernel design space from ONNX context.
 
     This is the recommended way to build a design space. Creates a temporary
-    KernelModelBuilder instance for this one build operation, then discards it.
+    DesignSpaceBuilder instance for this one build operation, then discards it.
 
     The builder is stateless - it only uses temporary state (_ctx, _interfaces)
     during the build process. There's no benefit to caching builder instances.
@@ -455,11 +503,11 @@ def build_kernel_design_space(ctx: BuildContext) -> 'KernelDesignSpace':
         >>> config = design_space.configure({"SIMD": 64, "PE": 1})
     """
     from .models import KernelDesignSpace
-    return KernelModelBuilder().build(ctx)
+    return DesignSpaceBuilder().build(ctx)
 
 
 __all__ = [
     'BuildContext',
-    'KernelModelBuilder',
+    'DesignSpaceBuilder',
     'build_kernel_design_space',
 ]

@@ -76,8 +76,8 @@ def iter_valid_configurations(
         >>> kernel_op = LayerNorm(node)
         >>> for config in iter_valid_configurations(kernel_op, model_w):
         ...     kernel_op.set_nodeattr("SIMD", config["SIMD"])
-        ...     kernel_model = kernel_op.get_kernel_model(model_w)
-        ...     # Profile or analyze kernel_model
+        ...     kernel_instance = kernel_op.get_kernel_instance(model_w)
+        ...     # Profile or analyze kernel_instance
 
     Example with filtering:
         >>> # Only explore SIMD values >= 4

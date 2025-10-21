@@ -31,7 +31,7 @@ Example usage:
             return False  # Constraint violated
 
     # Apply on kernel (build-time)
-    kernel_ctx = KernelValidationContext(kernel_model, get_nodeattr)
+    kernel_ctx = KernelValidationContext(kernel_instance, get_nodeattr)
     for c in constraints:
         error = c.check(kernel_ctx)
         if error:

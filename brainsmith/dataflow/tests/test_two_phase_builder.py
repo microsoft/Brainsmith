@@ -10,7 +10,7 @@
 import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.builder import KernelModelBuilder, BuildContext
+from brainsmith.dataflow.builder import DesignSpaceBuilder, BuildContext
 from brainsmith.dataflow.schemas import KernelSchema, InputSchema, OutputSchema
 from brainsmith.dataflow.models import KernelDesignSpace
 from brainsmith.dataflow.validation import DesignSpaceValidationContext
@@ -70,7 +70,7 @@ def test_build_basic():
         node_name="test_node",
     )
 
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
     design_space = builder.build(ctx)
 
     # Verify type
@@ -134,7 +134,7 @@ def test_build_multi_parameter():
         node_name="test_node",
     )
 
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
     design_space = builder.build(ctx)
 
     # Verify both parameters have valid ranges
@@ -168,7 +168,7 @@ def test_build_no_stream_tiling():
         node_name="test_node",
     )
 
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
     design_space = builder.build(ctx)
 
     # No parallelization params
@@ -218,7 +218,7 @@ def test_constraint_splitting():
         node_name="test_node",
     )
 
-    builder = KernelModelBuilder()
+    builder = DesignSpaceBuilder()
     design_space = builder.build(ctx)
 
     # Verify constraint splitting
