@@ -21,5 +21,8 @@ deps/finn/src/finn/custom_op/fpgadataflow/hls/__init__.py
 from brainsmith.kernels.crop.crop_hls import LegacyCrop_hls
 from brainsmith.kernels.crop.auto_crop_hls import Crop_hls
 from brainsmith.kernels.layernorm.layernorm_hls import LayerNorm_hls
+from brainsmith.kernels.shuffle.legacy_shuffle_hls import LegacyShuffle_hls
 from brainsmith.kernels.shuffle.shuffle_hls import Shuffle_hls
 from brainsmith.kernels.softmax.softmax_hls import Softmax_hls
+from brainsmith.kernels.thresholding.thresholding_hls import Thresholding_hls
+from brainsmith.kernels.vvau.vvau_hls import VectorVectorActivation_hls

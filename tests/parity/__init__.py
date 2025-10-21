@@ -4,28 +4,26 @@ This package provides infrastructure for testing equivalence between:
 - Manual FINN HWCustomOp implementations
 - Brainsmith KernelOp implementations
 
-The ParityTestBase class provides generic test methods for validating:
-- Shape methods (normal, folded)
-- Stream widths
-- Datatypes
-- Expected cycles
-- Python execution parity
+Classes:
+- ParityTestBase: 25 generic tests for all kernels
+- ComputationalParityMixin: 7 additional tests for computational kernels (MVAU, VVAU)
 
-Usage:
+Usage (Data Movement Kernel):
     from tests.parity import ParityTestBase
 
-    class TestMyKernelParity(ParityTestBase):
-        manual_op_class = ManualKernel
-        auto_op_class = AutoKernel
+    class TestShuffleParity(ParityTestBase):
+        # Gets 25 base tests
+        pass
 
-        def make_test_model(self):
-            # Create ONNX model...
-            return model, node_name
+Usage (Computational Kernel):
+    from tests.parity import ParityTestBase, ComputationalParityMixin
 
-        def get_shared_nodeattrs(self):
-            return {"PE": 8, "SIMD": 16}
+    class TestVVAUParity(ParityTestBase, ComputationalParityMixin):
+        # Gets 25 base + 7 computational = 32 tests
+        pass
 """
 
 from .base_parity_test import ParityTestBase
+from .computational_parity_test import ComputationalParityMixin
 
-__all__ = ["ParityTestBase"]
+__all__ = ["ParityTestBase", "ComputationalParityMixin"]

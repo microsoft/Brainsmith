@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: MIT
 #
 # @author       Shane T. Fleming <shane.fleming@amd.com>
+# @author       Thomas Keller <thomaskeller@microsoft.com> (AutoShuffle adaptation)
 ############################################################################
 
 import numpy as np
@@ -12,7 +13,7 @@ import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.kernels.shuffle.shuffle import Shuffle 
+from brainsmith.kernels.shuffle.shuffle import Shuffle
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.core.plugins import backend
@@ -25,11 +26,40 @@ from brainsmith.core.plugins import backend
     author="Shane Fleming"
 )
 class Shuffle_hls(Shuffle, HLSBackend):
+    """HLS backend for Shuffle kernel (KernelOp-based).
+
+    This backend adapts the schema-driven Shuffle implementation
+    to work with FINN's HLS code generation system.
+
+    Key features:
+    - Uses uppercase "SIMD" (KernelOp convention)
+    - Extracts shapes from kernel_instance (not nodeattrs)
+    - Follows Arete principle: no shape storage
+    """
+
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        return Shuffle.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
+        """Define nodeattrs for Shuffle_hls backend.
+
+        Combines:
+        - Shuffle's schema-derived nodeattrs (interface datatypes, kernel params)
+        - HLSBackend's execution nodeattrs
+        - Manual overrides for HLS-specific parameters
+
+        We override SIMD here to ensure it's uppercase (KernelOp convention).
+        """
+        # Get Shuffle's schema-derived nodeattrs (includes dynamic interface datatypes)
+        my_attrs = Shuffle.get_nodeattr_types(self)
+
+        # Add HLSBackend nodeattrs
+        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+
+        # Override SIMD to ensure uppercase (KernelOp convention vs legacy lowercase)
+        my_attrs["SIMD"] = ("i", False, 1)
+
+        return my_attrs
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
@@ -40,38 +70,68 @@ class Shuffle_hls(Shuffle, HLSBackend):
         ]
 
     def defines(self, var):
-        simd = self.get_nodeattr("SIMD")
+        """Generate HLS constant definitions.
 
+        Extracts values from kernel_instance instead of nodeattrs (Arete principle).
+        Uses uppercase "SIMD" for KernelOp convention.
+        """
+        # Get parallelization parameter (uppercase for KernelOp)
+        simd = self.get_nodeattr("SIMD")
         dtype = self.get_input_datatype()
+
         self.code_gen_dict["$DEFINES$"] = [
             f"""
-            constexpr unsigned  SIMD = {simd}; 
+            constexpr unsigned  SIMD = {simd};
             using  TE = {dtype.get_hls_datatype_str()};
             using  TV = hls::vector<TE, SIMD>;
             """
         ]
 
     def get_exp_cycles(self):
-        out_shape = self.get_nodeattr("out_shape")
+        """Compute expected cycles for execution.
+
+        Extracts output shape from kernel_instance (Arete principle).
+        """
+        # Extract from cached kernel instance
+        ki = self.kernel_instance
+        out_shape = ki.outputs["output"].tensor_shape
         simd = self.get_nodeattr("SIMD")
-        return int(np.prod(out_shape)/simd) 
+
+        return int(np.prod(out_shape) / simd)
 
     def docompute(self):
+        """Generate HLS docompute code for hardware execution.
+
+        Uses input_gen template with loop coefficients computed during transformation.
+        """
         simd = self.get_nodeattr("SIMD")
-        out_shape = self.get_nodeattr("out_shape")
-        out_shape[-1] = int(out_shape[-1]/simd)
-        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
-        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
+
+        # Extract from kernel instance (Arete principle)
+        ki = self.kernel_instance
+        out_shape = list(ki.outputs["output"].tensor_shape)
+
+        # Adjust output shape for SIMD (last dimension divided)
+        out_shape[-1] = int(out_shape[-1] / simd)
+
+        # Get loop coefficients (computed during transformation)
+        loop_coeffs = self.get_nodeattr("loop_coeffs")
+
+        # Adjust loop coefficients for SIMD
+        loop_coeffs = [1 if x == 1 else int(x / simd) for x in loop_coeffs]
+
+        # Create interleaved array for input_gen template: [N0, C0, N1, C1, ...]
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair]
+
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
-	    hls::stream<TV>  dst0;
+            hls::stream<TV>  dst0;
             #pragma HLS stream variable=src0 depth=2
             #pragma HLS stream variable=dst0 depth=2
 
             move(in0_V, src0);
-	    input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(src0, dst0);
-	    move(dst0, out0_V);
+            input_gen<-1,{np.prod(out_shape)},{','.join(map(str,interleaved))}>(src0, dst0);
+            move(dst0, out0_V);
             """
         ]
 
@@ -80,7 +140,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
             f"""
             void {self.onnx_node.name} (
                 hls::stream<TV> &in0_V,
-	        hls::stream<TV> &out0_V
+                hls::stream<TV> &out0_V
             )
             """
         ]
@@ -90,14 +150,13 @@ class Shuffle_hls(Shuffle, HLSBackend):
             f"""
             #pragma HLS interface AXIS port=in0_V
             #pragma HLS interface AXIS port=out0_V
-	    #pragma HLS aggregate variable=in0_V compact=bit
-	    #pragma HLS aggregate variable=out0_V compact=bit
+            #pragma HLS aggregate variable=in0_V compact=bit
+            #pragma HLS aggregate variable=out0_V compact=bit
 
             #pragma HLS interface ap_ctrl_none port=return
             #pragma HLS dataflow disable_start_propagation
             """
         ]
-
 
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
@@ -109,11 +168,13 @@ class Shuffle_hls(Shuffle, HLSBackend):
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
         elif mode == "rtlsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
+        else:
+            raise Exception(f"Unsupported execution mode: {mode}")
 
         inp = context[node.input[0]]
         inp = inp.reshape(folded_ishape)
         np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
-        
+
 
         if mode == "cppsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
@@ -125,7 +186,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
             sim = self.get_rtlsim()
             nbits = self.get_instream_width()
             rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_dt, nbits 
+                f"{code_gen_dir}/input_0.npy", export_dt, nbits
             )
             super().reset_rtlsim(sim)
             super().toggle_clk(sim)
@@ -198,10 +259,20 @@ class Shuffle_hls(Shuffle, HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
         simd = self.get_nodeattr("SIMD")
-        out_shape = self.get_nodeattr("out_shape")
-        out_shape[-1] = int(out_shape[-1]/simd)
-        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
-        interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
+
+        # Extract from kernel instance (Arete principle)
+        ki = self.kernel_instance
+        out_shape = list(ki.outputs["output"].tensor_shape)
+
+        # Adjust for SIMD
+        out_shape[-1] = int(out_shape[-1] / simd)
+
+        # Get loop coefficients
+        loop_coeffs = self.get_nodeattr("loop_coeffs")
+        loop_coeffs = [1 if x == 1 else int(x / simd) for x in loop_coeffs]
+
+        # Create interleaved array
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""

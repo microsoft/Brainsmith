@@ -15,7 +15,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from brainsmith.core.plugins import transform
 
 
-@transform(name="InferShuffle", kernel="Shuffle",
+@transform(name="InferShuffle", kernel="LegacyShuffle",
     description="Convert Transpose+Reshape patterns to Shuffle hardware operations",
     author="Shane Fleming"
 )
@@ -115,7 +115,7 @@ class InferShuffle(Transformation):
 
                 simd = 1
                 new_node = helper.make_node(
-                            "Shuffle",
+                            "LegacyShuffle",
                             [new_in_tensor],
                             [new_out_tensor],
                             domain="brainsmith.kernels",
@@ -129,7 +129,7 @@ class InferShuffle(Transformation):
                             loop_coeffs=self.shuffle_perfect_loopnest_coeffs(shape=in_reshaped, perm=perm.ints),
                             inner_moves=self.innerloop_moves(shape=in_reshaped, perm=list(perm.ints)),
                             SIMD=simd,
-                            
+
                             NumChannels=in_reshaped[-1]
                         )
                 new_node.attribute.extend([perm])

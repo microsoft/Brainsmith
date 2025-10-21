@@ -12,3 +12,4 @@ from .crop import *
 from .layernorm import *
 from .shuffle import *
 from .softmax import *
+from .vvau import *

@@ -11,43 +11,10 @@ from typing import Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from brainsmith.dataflow import KernelOp
 import brainsmith.dataflow as df
-from brainsmith.dataflow import DerivedDatatype, DerivedDim, FULL_DIM
 from brainsmith.core.plugins import kernel
 
-
-# Module-level unified KernelSchema (structure + transformation)
-LAYERNORM_SCHEMA = df.KernelSchema(
-    name="LayerNorm",
-    domain="brainsmith.kernels",
-    inputs=[
-        df.InputSchema(
-            name="input",
-            block_tiling=[FULL_DIM],         # (1, 1, channels)
-            stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
-            required_layout="NHWC",          # Required layout (embedded)
-        )
-    ],
-    outputs=[
-        df.OutputSchema(
-            name="output",
-            block_tiling=[FULL_DIM],                  # (1, 1, channels)
-            stream_tiling=[DerivedDim("input", -1)],  # Output streams at same rate as input
-            datatype=DerivedDatatype("input"),        # Output datatype same as input
-            required_layout="NHWC",                   # Required layout (embedded)
-        )
-    ],
-    kernel_params={
-        "epsilon": ("f", True, 1e-5),  # Normalization epsilon for numerical stability
-    },
-    constraints=[
-        df.IsDynamic("input"),  # Input must be dynamic (no initializers)
-        df.NodeAttributeEquals("axis", -1),  # Must normalize over last axis
-    ],
-    # Transformation specification (unified)
-    source_ops=["FuncLayerNorm"],
-    attribute_mapping={"epsilon": "epsilon"},
-    initial_parallelization={"SIMD": 1},
-)
+# Import clean schema (no ONNX knowledge)
+from .layernorm_schema import LAYERNORM_SCHEMA
 
 
 @kernel(
