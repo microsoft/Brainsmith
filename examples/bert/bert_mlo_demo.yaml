@@ -11,7 +11,7 @@ board: "V80"                        # Target FPGA board
 save_intermediate_models: true      # Save intermediate ONNX models
 
 finn_config:
-  loop_body_hierarchy: ['encoder', 'encoder.layer.0']
+  loop_body_hierarchy: [['encoder', 'encoder.layer.0']]
   split_large_fifos: true
   fifosim_n_inferences: 2           # Speed up FIFO
   verify_steps: ['folded_hls_cppsim', 'stitched_ip_rtlsim']
