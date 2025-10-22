@@ -9,12 +9,12 @@ steps, kernels, and backends.
 Registration Pattern:
 - **Decorators**: @step, @kernel, @backend
   - User-facing, ergonomic API
-  - Deferred registration (processing on first lookup)
+  - Immediate registration during import
   - Example: @kernel(name='LayerNorm', op_type='LayerNorm')
 
 Internal Implementation:
 - Registry.step(), Registry.kernel(), Registry.backend() methods are internal
-- Called by deferred registration processor
+- Called by decorators during component import
 - Users should NOT call these methods directly
 """
 
@@ -22,22 +22,11 @@ import inspect
 import logging
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 from pathlib import Path
-from threading import Lock
 
 logger = logging.getLogger(__name__)
 
 # Current source context (set during plugin discovery)
 _current_source: Optional[str] = None
-
-# === Deferred Registration Infrastructure ===
-# Components marked with decorators but not yet registered
-
-# Deferred storage - components waiting for registration
-_deferred_steps: List[Callable] = []
-_deferred_kernels: List[Type] = []
-_deferred_backends: List[Type] = []
-_registration_processed = False
-_registration_lock = Lock()  # Thread safety for deferred processing
 
 
 # === Helper Functions ===
@@ -109,17 +98,17 @@ def step(
     """
 
     def register_step(func: Callable) -> Callable:
-        # Store metadata on function
+        # Store metadata on function for potential later access
         func.__brainsmith_step__ = {
             'name': name or func.__name__,
             'metadata': metadata
         }
 
-        # Add to deferred queue
-        _deferred_steps.append(func)
+        # Register immediately
+        registry.step(func, name=name or func.__name__)
 
         logger.debug(
-            f"Marked step for deferred registration: {func.__module__}.{func.__name__}"
+            f"Registered step: {func.__module__}.{func.__name__}"
         )
 
         return func
@@ -174,7 +163,7 @@ def kernel(
     """
 
     def register_kernel(cls: Type) -> Type:
-        # Store metadata on class
+        # Store metadata on class for potential later access
         # Parameters override class attributes
         # Use _get_class_attribute to properly handle properties
         cls.__brainsmith_kernel__ = {
@@ -184,11 +173,16 @@ def kernel(
             'metadata': metadata
         }
 
-        # Add to deferred queue
-        _deferred_kernels.append(cls)
+        # Register immediately
+        registry.kernel(
+            cls,
+            name=name or _get_class_attribute(cls, 'op_type', cls.__name__),
+            infer_transform=infer_transform or _get_class_attribute(cls, 'infer_transform', None),
+            domain=domain or _get_class_attribute(cls, 'domain', None)
+        )
 
         logger.debug(
-            f"Marked kernel for deferred registration: {cls.__module__}.{cls.__name__}"
+            f"Registered kernel: {cls.__module__}.{cls.__name__}"
         )
 
         return cls
@@ -246,7 +240,7 @@ def backend(
     """
 
     def register_backend(cls: Type) -> Type:
-        # Store metadata on class
+        # Store metadata on class for potential later access
         # Parameters override class attributes
         cls.__brainsmith_backend__ = {
             'name': name or cls.__name__,
@@ -256,11 +250,17 @@ def backend(
             'metadata': metadata
         }
 
-        # Add to deferred queue
-        _deferred_backends.append(cls)
+        # Register immediately
+        registry.backend(
+            cls,
+            name=name or cls.__name__,
+            target_kernel=target_kernel or getattr(cls, 'target_kernel', None),
+            language=language or getattr(cls, 'language', None),
+            variant=variant or getattr(cls, 'variant', None)
+        )
 
         logger.debug(
-            f"Marked backend for deferred registration: {cls.__module__}.{cls.__name__}"
+            f"Registered backend: {cls.__module__}.{cls.__name__}"
         )
 
         return cls
@@ -298,7 +298,7 @@ class Registry:
 
     Internal Methods:
         The registry.step(), registry.kernel(), registry.backend() methods
-        are called internally by the deferred registration processor.
+        are called internally by decorators during import.
         Users should NOT call these directly - use decorators instead.
     """
 
@@ -317,7 +317,7 @@ class Registry:
     ) -> Union[Callable, Type]:
         """Register a step (internal method).
 
-        INTERNAL: Called by deferred registration processor.
+        INTERNAL: Called by @step decorator during import.
         Users should use @step decorator instead.
 
         Args:
@@ -352,7 +352,7 @@ class Registry:
     ) -> Type:
         """Register a kernel (internal method).
 
-        INTERNAL: Called by deferred registration processor.
+        INTERNAL: Called by @kernel decorator during import.
         Users should use @kernel decorator instead.
 
         Metadata can come from class attributes or parameters.
@@ -401,7 +401,7 @@ class Registry:
     ) -> Type:
         """Register a backend (internal method).
 
-        INTERNAL: Called by deferred registration processor.
+        INTERNAL: Called by @backend decorator during import.
         Users should use @backend decorator instead.
 
         Metadata can come from class attributes or parameters.
