@@ -29,36 +29,6 @@ logger = logging.getLogger(__name__)
 _current_source: Optional[str] = None
 
 
-# === Helper Functions ===
-
-def _get_class_attribute(cls: Type, attr_name: str, default: Any = None) -> Any:
-    """Safely get class attribute, handling properties correctly.
-
-    When a class has a property, getattr() returns the property descriptor,
-    not the actual value. This function detects properties and evaluates them.
-
-    Args:
-        cls: Class to get attribute from
-        attr_name: Attribute name
-        default: Default value if attribute doesn't exist
-
-    Returns:
-        Attribute value (property values are evaluated)
-    """
-    try:
-        # Use getattr_static to check if it's a property
-        attr = inspect.getattr_static(cls, attr_name)
-
-        if isinstance(attr, property):
-            # It's a property - call the getter with the class
-            return attr.fget(cls)
-        else:
-            # Regular attribute
-            return attr
-    except AttributeError:
-        return default
-
-
 # === Decorator Functions (User API) ===
 
 def step(
@@ -165,20 +135,19 @@ def kernel(
     def register_kernel(cls: Type) -> Type:
         # Store metadata on class for potential later access
         # Parameters override class attributes
-        # Use _get_class_attribute to properly handle properties
         cls.__brainsmith_kernel__ = {
-            'name': name or _get_class_attribute(cls, 'op_type', cls.__name__),
-            'infer_transform': infer_transform or _get_class_attribute(cls, 'infer_transform', None),
-            'domain': domain or _get_class_attribute(cls, 'domain', None),
+            'name': name or getattr(cls, 'op_type', cls.__name__),
+            'infer_transform': infer_transform or getattr(cls, 'infer_transform', None),
+            'domain': domain or getattr(cls, 'domain', None),
             'metadata': metadata
         }
 
         # Register immediately
         registry.kernel(
             cls,
-            name=name or _get_class_attribute(cls, 'op_type', cls.__name__),
-            infer_transform=infer_transform or _get_class_attribute(cls, 'infer_transform', None),
-            domain=domain or _get_class_attribute(cls, 'domain', None)
+            name=name or getattr(cls, 'op_type', cls.__name__),
+            infer_transform=infer_transform or getattr(cls, 'infer_transform', None),
+            domain=domain or getattr(cls, 'domain', None)
         )
 
         logger.debug(
@@ -377,11 +346,10 @@ class Registry:
             logger.warning(f"Overriding existing kernel: {full_name}")
 
         # Extract metadata - parameters override class attributes
-        # Use _get_class_attribute to properly handle properties
         metadata = {
             'class': cls,
-            'infer': infer_transform or _get_class_attribute(cls, 'infer_transform', None),
-            'domain': domain or _get_class_attribute(cls, 'domain', 'finn.custom')
+            'infer': infer_transform or getattr(cls, 'infer_transform', None),
+            'domain': domain or getattr(cls, 'domain', 'finn.custom')
         }
 
         self._kernels[full_name] = metadata
