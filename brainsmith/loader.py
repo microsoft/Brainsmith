@@ -194,6 +194,12 @@ def discover_plugins():
     import brainsmith.kernels
     import brainsmith.steps
 
+    # Cache core module references for lazy loading
+    _plugin_modules['brainsmith'] = {
+        'kernels': brainsmith.kernels,
+        'steps': brainsmith.steps,
+    }
+
     # 2. Load user plugins from configured sources
     _load_user_plugins()
 
@@ -240,14 +246,28 @@ def _load_user_plugins():
         _load_plugin_package(source_name, source_path)
 
 
+# Global registry of loaded plugin modules
+# Maps source_name -> module reference or dict of module references
+# - Core brainsmith: {'kernels': module, 'steps': module}
+# - User plugins: module (single __init__.py with COMPONENTS)
+# - Entry points: Not tracked here (register components directly)
+_plugin_modules: Dict[str, Any] = {}
+
+
 def _load_plugin_package(source_name: str, source_path: Path):
     """Load a plugin package from filesystem path.
+
+    Supports two patterns:
+    1. Lazy: Plugin has COMPONENTS dict -> register with lazy loaders
+    2. Eager: Plugin uses decorators -> import triggers registration
 
     Args:
         source_name: Source name for registration (e.g., 'user', 'team')
         source_path: Path to plugin package directory
 
-    The package must have __init__.py which registers components.
+    The package must have __init__.py which either:
+    - Exports COMPONENTS dict (lazy loading, recommended)
+    - Imports modules with @kernel/@step decorators (eager, legacy)
     """
     init_file = source_path / '__init__.py'
     if not init_file.exists():
@@ -266,40 +286,46 @@ def _load_plugin_package(source_name: str, source_path: Path):
         sys.path.insert(0, parent)
         logger.debug(f"Added to sys.path: {parent}")
 
-    # Import package within source context
+    # Import package
     module_name = source_path.name
     init_path = source_path / '__init__.py'
 
-    with source_context(source_name):
+    try:
+        # Handle module name collisions using spec-based import
+        # Multiple plugin sources may have the same directory name (e.g., 'plugins')
+        # Use importlib.util to import from specific file path to avoid sys.path ambiguity
+
+        import importlib.util
+
+        # Create a unique module name to avoid cache collisions
+        unique_module_name = f"{source_name}__{module_name}"
+
+        spec = importlib.util.spec_from_file_location(unique_module_name, init_path)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[unique_module_name] = module
+            spec.loader.exec_module(module)
+            logger.info(f"Loaded plugin source '{source_name}' from {source_path}")
+
+            # Store module reference for lazy loading
+            _plugin_modules[source_name] = module
+        else:
+            raise ImportError(f"Could not create module spec for {init_path}")
+
+        # Both lazy and eager patterns work:
+        # - Lazy: Plugin has COMPONENTS dict, components loaded on first access
+        # - Eager: Decorators already fired during import, components in registry
+
+    except Exception as e:
+        logger.error(f"Failed to load plugin source '{source_name}': {e}")
+
+        # Check if strict mode
         try:
-            # Handle module name collisions using spec-based import
-            # Multiple plugin sources may have the same directory name (e.g., 'plugins')
-            # Use importlib.util to import from specific file path to avoid sys.path ambiguity
-
-            import importlib.util
-
-            # Create a unique module name to avoid cache collisions
-            unique_module_name = f"{source_name}__{module_name}"
-
-            spec = importlib.util.spec_from_file_location(unique_module_name, init_path)
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[unique_module_name] = module
-                spec.loader.exec_module(module)
-                logger.info(f"Loaded plugin source '{source_name}' from {source_path}")
-            else:
-                raise ImportError(f"Could not create module spec for {init_path}")
-
-        except Exception as e:
-            logger.error(f"Failed to load plugin source '{source_name}': {e}")
-
-            # Check if strict mode
-            try:
-                from brainsmith.settings import get_config
-                if get_config().plugins_strict:
-                    raise
-            except ImportError:
-                pass  # Config not available, don't fail
+            from brainsmith.settings import get_config
+            if get_config().plugins_strict:
+                raise
+        except ImportError:
+            pass  # Config not available, don't fail
 
 
 def _load_entry_point_plugins():
@@ -356,10 +382,37 @@ def _load_entry_point_plugins():
 
                     # Register steps
                     for step_meta in components.get('steps', []):
-                        registry.step(
-                            step_meta['func'],
-                            name=step_meta['name']
-                        )
+                        # Support both patterns:
+                        # 1. Immediate: {'name': 'x', 'func': <function>}
+                        # 2. Lazy: {'name': 'x', 'module': 'path.to.module', 'func_name': 'func_name'}
+                        if 'func' in step_meta:
+                            # Pattern 1: Function already loaded (eager)
+                            registry.step(
+                                step_meta['func'],
+                                name=step_meta['name']
+                            )
+                        elif 'module' in step_meta and 'func_name' in step_meta:
+                            # Pattern 2: Lazy loading - create a loader function
+                            def make_lazy_step_loader(module_path, func_name):
+                                def lazy_loader(*args, **kwargs):
+                                    # Import module only when step is actually called
+                                    import importlib
+                                    mod = importlib.import_module(module_path)
+                                    func = getattr(mod, func_name)
+                                    # Call the actual function
+                                    return func(*args, **kwargs)
+                                return lazy_loader
+
+                            lazy_func = make_lazy_step_loader(
+                                step_meta['module'],
+                                step_meta['func_name']
+                            )
+                            registry.step(
+                                lazy_func,
+                                name=step_meta['name']
+                            )
+                        else:
+                            logger.error(f"Invalid step metadata for {step_meta.get('name', 'unknown')}: missing 'func' or ('module' and 'func_name')")
 
                 logger.info(
                     f"✓ Loaded {source_name}: "
@@ -609,16 +662,44 @@ def get_step(name: str):
     full_name = _resolve_component_name(name, 'step')
     logger.debug(f"Looking up step: {name} → {full_name}")
 
-    if full_name not in registry._steps:
-        available = list_steps()
-        raise KeyError(
-            f"Step '{full_name}' not found.\n"
-            f"Available steps: {', '.join(available[:10])}" +
-            (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
-        )
+    # Check if already registered
+    if full_name in registry._steps:
+        return registry._steps[full_name]
 
-    step_callable = registry._steps[full_name]
-    return step_callable
+    # Try lazy loading from plugin module
+    source, component_name = full_name.split(':', 1)
+
+    if source in _plugin_modules:
+        logger.debug(f"Lazy loading step: {full_name}")
+
+        # Get the appropriate module
+        modules_or_module = _plugin_modules[source]
+
+        # Core brainsmith: dict with 'steps' key
+        if isinstance(modules_or_module, dict):
+            module = modules_or_module.get('steps')
+        # User plugins: single module
+        else:
+            module = modules_or_module
+
+        if module:
+            # Trigger import via plugin's __getattr__ - decorator fires and registers
+            with source_context(source):
+                getattr(module, component_name)
+            # Process deferred registrations from decorators
+            _process_deferred_registrations()
+
+            # Check if it's now registered
+            if full_name in registry._steps:
+                return registry._steps[full_name]
+
+    # Not found
+    available = list_steps()
+    raise KeyError(
+        f"Step '{full_name}' not found.\n"
+        f"Available steps: {', '.join(available[:10])}" +
+        (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
+    )
 
 
 def has_step(name: str) -> bool:
@@ -666,6 +747,25 @@ def list_steps(source: Optional[str] = None) -> List[str]:
         discover_plugins()
 
     all_steps = set(registry._steps.keys())
+
+    # Include lazy components not yet loaded from plugin modules
+    for source_name, modules_or_module in _plugin_modules.items():
+        if source and source != source_name:
+            continue
+
+        # Core brainsmith: dict with 'steps' key
+        if isinstance(modules_or_module, dict):
+            module = modules_or_module.get('steps')
+        # User plugins: single module with COMPONENTS
+        else:
+            module = modules_or_module
+
+        if module and hasattr(module, 'COMPONENTS'):
+            # Read from COMPONENTS dict
+            for step_name in module.COMPONENTS.get('steps', {}).keys():
+                full_name = f'{source_name}:{step_name}'
+                if full_name not in registry._steps:  # Not yet loaded
+                    all_steps.add(full_name)
 
     # Filter by source if requested
     if source:
@@ -765,6 +865,25 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
 
     all_kernels = set(registry._kernels.keys())
 
+    # Include lazy components not yet loaded from plugin modules
+    for source_name, modules_or_module in _plugin_modules.items():
+        if source and source != source_name:
+            continue
+
+        # Core brainsmith: dict with 'kernels' key
+        if isinstance(modules_or_module, dict):
+            module = modules_or_module.get('kernels')
+        # User plugins: single module with COMPONENTS
+        else:
+            module = modules_or_module
+
+        if module and hasattr(module, 'COMPONENTS'):
+            # Read from COMPONENTS dict
+            for kernel_name in module.COMPONENTS.get('kernels', {}).keys():
+                full_name = f'{source_name}:{kernel_name}'
+                if full_name not in registry._kernels:  # Not yet loaded
+                    all_kernels.add(full_name)
+
     # Filter by source if requested
     if source:
         all_kernels = {k for k in all_kernels if k.startswith(f"{source}:")}
@@ -793,15 +912,44 @@ def _get_kernel_metadata(name: str) -> Dict[str, Any]:
     full_name = _resolve_component_name(name, 'kernel')
     logger.debug(f"Looking up kernel metadata: {name} → {full_name}")
 
-    if full_name not in registry._kernels:
-        available = list_kernels()
-        raise KeyError(
-            f"Kernel '{full_name}' not found.\n"
-            f"Available kernels: {', '.join(available[:10])}" +
-            (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
-        )
+    # Check if already registered
+    if full_name in registry._kernels:
+        return registry._kernels[full_name]
 
-    return registry._kernels[full_name]
+    # Try lazy loading from plugin module
+    source, component_name = full_name.split(':', 1)
+
+    if source in _plugin_modules:
+        logger.debug(f"Lazy loading kernel: {full_name}")
+
+        # Get the appropriate module
+        modules_or_module = _plugin_modules[source]
+
+        # Core brainsmith: dict with 'kernels' key
+        if isinstance(modules_or_module, dict):
+            module = modules_or_module.get('kernels')
+        # User plugins: single module
+        else:
+            module = modules_or_module
+
+        if module:
+            # Trigger import via plugin's __getattr__ - decorator fires and registers
+            with source_context(source):
+                getattr(module, component_name)
+            # Process deferred registrations from decorators
+            _process_deferred_registrations()
+
+            # Check if it's now registered
+            if full_name in registry._kernels:
+                return registry._kernels[full_name]
+
+    # Not found
+    available = list_kernels()
+    raise KeyError(
+        f"Kernel '{full_name}' not found.\n"
+        f"Available kernels: {', '.join(available[:10])}" +
+        (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
+    )
 
 
 # === Backends ===
@@ -847,15 +995,40 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     full_name = _resolve_component_name(name, 'backend')
     logger.debug(f"Looking up backend metadata: {name} → {full_name}")
 
-    if full_name not in registry._backends:
-        available = list_all_backends()
-        raise KeyError(
-            f"Backend '{full_name}' not found.\n"
-            f"Available backends: {', '.join(available[:10])}" +
-            (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
-        )
+    # Check if already registered
+    if full_name in registry._backends:
+        return registry._backends[full_name]
 
-    return registry._backends[full_name]
+    # Try lazy loading from plugin module
+    source, component_name = full_name.split(':', 1)
+
+    if source in _plugin_modules:
+        logger.debug(f"Lazy loading backend: {full_name}")
+
+        # Get the appropriate module (core brainsmith doesn't have backends module)
+        modules_or_module = _plugin_modules[source]
+
+        # User plugins: single module
+        module = modules_or_module if not isinstance(modules_or_module, dict) else None
+
+        if module:
+            # Trigger import via plugin's __getattr__ - decorator fires and registers
+            with source_context(source):
+                getattr(module, component_name)
+            # Process deferred registrations from decorators
+            _process_deferred_registrations()
+
+            # Check if it's now registered
+            if full_name in registry._backends:
+                return registry._backends[full_name]
+
+    # Not found
+    available = list_all_backends()
+    raise KeyError(
+        f"Backend '{full_name}' not found.\n"
+        f"Available backends: {', '.join(available[:10])}" +
+        (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
+    )
 
 
 def list_backends_for_kernel(
@@ -929,6 +1102,21 @@ def list_all_backends(source: Optional[str] = None) -> List[str]:
         discover_plugins()
 
     all_backends = set(registry._backends.keys())
+
+    # Include lazy components not yet loaded from plugin modules
+    for source_name, modules_or_module in _plugin_modules.items():
+        if source and source != source_name:
+            continue
+
+        # Core brainsmith: dict, User plugins: single module
+        module = modules_or_module if not isinstance(modules_or_module, dict) else None
+
+        if module and hasattr(module, 'COMPONENTS'):
+            # Read from COMPONENTS dict
+            for backend_name in module.COMPONENTS.get('backends', {}).keys():
+                full_name = f'{source_name}:{backend_name}'
+                if full_name not in registry._backends:  # Not yet loaded
+                    all_backends.add(full_name)
 
     # Filter by source if requested
     if source:

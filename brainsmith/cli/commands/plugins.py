@@ -7,7 +7,10 @@ import click
 from rich.table import Table
 from collections import defaultdict
 
-from brainsmith.loader import list_steps, list_kernels, list_all_backends
+from brainsmith.loader import (
+    list_steps, list_kernels, list_all_backends,
+    _get_kernel_metadata, get_backend_metadata
+)
 from brainsmith.registry import registry
 from ..context import ApplicationContext
 from ..utils import console
@@ -122,9 +125,12 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(kernels_by_source[source]):
                     full_name = f"{source}:{name}"
-                    meta = registry._kernels[full_name]
-                    has_infer = '✓' if meta.get('infer') else '✗'
-                    console.print(f"    • {name:30} (infer={has_infer})")
+                    try:
+                        meta = _get_kernel_metadata(full_name)
+                        has_infer = '✓' if meta.get('infer') else '✗'
+                        console.print(f"    • {name:30} (infer={has_infer})")
+                    except Exception as e:
+                        console.print(f"    • {name:30} [red](error: {e})[/red]")
 
         # Backends by source
         if all_backends:
@@ -133,10 +139,13 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(backends_by_source[source]):
                     full_name = f"{source}:{name}"
-                    meta = registry._backends[full_name]
-                    target = meta.get('target_kernel', 'N/A')
-                    lang = meta.get('language', 'N/A')
-                    console.print(f"    • {name:25} → {target:25} ({lang})")
+                    try:
+                        meta = get_backend_metadata(full_name)
+                        target = meta.get('target_kernel', 'N/A')
+                        lang = meta.get('language', 'N/A')
+                        console.print(f"    • {name:25} → {target:25} ({lang})")
+                    except Exception as e:
+                        console.print(f"    • {name:25} [red](error: {e})[/red]")
 
     # Footer (only show verbose hint if not already verbose)
     if not verbose:

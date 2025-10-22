@@ -68,9 +68,6 @@ _LAZY_MODULES = {
     'list_all_backends': 'loader',
     'has_step': 'loader',
 
-    # Transforms module
-    'import_transform': 'transforms',
-
     # Dataflow module
     'KernelDefinition': 'dataflow',
     'KernelModel': 'dataflow',

@@ -5,9 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-import torch
 import numpy as np
-import torch.nn.functional as F
 from qonnx.core.datatype import DataType
 import warnings
 
@@ -75,6 +73,9 @@ class LayerNorm(HWCustomOp):
 
     # Executes elementwise operation in python
     def _execute_node_python(self, context, graph):
+        import torch  # Lazy import (torch is slow ~3s)
+        import torch.nn.functional as F
+
         node = self.onnx_node
         # Get tensor values
         in_values = context[node.input[0]]

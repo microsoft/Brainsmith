@@ -11,7 +11,6 @@ import numpy as np
 import warnings
 from onnx.helper import make_node
 from qonnx.core.datatype import DataType
-from scipy.special import softmax
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.registry import kernel
@@ -53,6 +52,8 @@ class HWSoftmax(HWCustomOp):
         return np.prod(folded_oshape[:-1])
 
     def execute_node(self, context, graph):
+        from scipy.special import softmax  # Lazy import (scipy is slow)
+
         node = self.onnx_node
         input_data = context[node.input[0]]
         output_data = softmax(input_data, axis=-1)
