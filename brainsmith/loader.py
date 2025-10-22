@@ -27,83 +27,69 @@ from brainsmith.registry import registry, source_context, kernel, backend, step
 
 logger = logging.getLogger(__name__)
 
-# Discovery state
-_plugins_discovered = False
+# === Plugin Discovery State Management ===
 
-# Discovery mode cache
-_discovery_mode = None  # 'editable', 'installed', or None
+class PluginDiscovery:
+    """Centralized plugin discovery state.
+
+    Manages discovery status, install mode, and loaded plugin modules.
+    Replaces scattered module-level globals with a cohesive state object.
+    """
+
+    def __init__(self):
+        self.discovered = False
+        self.install_mode = None  # 'editable', 'installed', or None
+        self.loaded_modules = {}  # source_name -> module or dict of modules
+
+    def is_editable_install(self) -> bool:
+        """Check if brainsmith is installed in editable mode.
+
+        Uses PEP 610 direct_url.json as the standard detection method.
+        Caches result for performance.
+
+        Returns:
+            True if running from editable install, False otherwise
+        """
+        # Use cached result if available
+        if self.install_mode is not None:
+            return self.install_mode == 'editable'
+
+        # Check PEP 610 direct_url.json
+        try:
+            from importlib.metadata import distribution
+            import json
+
+            dist = distribution('brainsmith')
+            direct_url_data = dist.read_text('direct_url.json')
+
+            if direct_url_data:
+                direct_url = json.loads(direct_url_data)
+                if direct_url.get('dir_info', {}).get('editable'):
+                    self.install_mode = 'editable'
+                    logger.debug("Detected editable install")
+                    return True
+
+        except Exception as e:
+            logger.debug(f"Could not detect editable install: {e}")
+
+        # Default to regular install
+        self.install_mode = 'installed'
+        return False
+
+
+# Global plugin discovery singleton
+_discovery = PluginDiscovery()
 
 
 def is_editable_install() -> bool:
     """Detect if brainsmith is installed in editable mode.
 
-    Editable mode (pip install -e .) is used during development, while
-    regular installs are used in production. This distinction allows us to
-    use different discovery strategies:
-
-    - Editable: Use runtime discovery (existing deferred registry)
-    - Installed: Use pre-generated entry points (fast)
+    Delegates to the global PluginDiscovery singleton.
 
     Returns:
         True if running from editable install, False otherwise
-
-    Detection strategy:
-        1. Check PEP 610 direct_url.json for editable marker
-        2. Fallback: Check if brainsmith.__file__ is in site-packages
-
-    Examples:
-        >>> # During development (pip install -e .)
-        >>> is_editable_install()
-        True
-
-        >>> # In production (pip install brainsmith)
-        >>> is_editable_install()
-        False
     """
-    global _discovery_mode
-
-    # Use cached result if available
-    if _discovery_mode is not None:
-        return _discovery_mode == 'editable'
-
-    # Strategy 1: Check PEP 610 direct_url.json (most reliable)
-    try:
-        from importlib.metadata import distribution
-        import json
-
-        dist = distribution('brainsmith')
-        direct_url_data = dist.read_text('direct_url.json')
-
-        if direct_url_data:
-            direct_url = json.loads(direct_url_data)
-            if direct_url.get('dir_info', {}).get('editable'):
-                _discovery_mode = 'editable'
-                logger.debug("Detected editable install (via direct_url.json)")
-                return True
-
-    except Exception as e:
-        logger.debug(f"Could not check direct_url.json: {e}")
-
-    # Strategy 2: Check if brainsmith.__file__ is in site-packages (fallback)
-    try:
-        import brainsmith
-        brainsmith_file = Path(brainsmith.__file__)
-
-        # In editable install, __file__ points to source tree
-        # In regular install, __file__ points to site-packages
-        if 'site-packages' in str(brainsmith_file):
-            _discovery_mode = 'installed'
-            logger.debug("Detected regular install (brainsmith in site-packages)")
-            return False
-        else:
-            _discovery_mode = 'editable'
-            logger.debug("Detected editable install (brainsmith not in site-packages)")
-            return True
-
-    except Exception as e:
-        logger.warning(f"Could not detect install mode: {e}, assuming installed")
-        _discovery_mode = 'installed'
-        return False
+    return _discovery.is_editable_install()
 
 
 def _resolve_component_name(name: str, component_type: str = 'step') -> str:
@@ -184,8 +170,7 @@ def discover_plugins():
 
     This is called automatically on first component lookup.
     """
-    global _plugins_discovered
-    if _plugins_discovered:
+    if _discovery.discovered:
         return
 
     logger.info("Discovering plugins...")
@@ -195,7 +180,7 @@ def discover_plugins():
     import brainsmith.steps
 
     # Cache core module references for lazy loading
-    _plugin_modules['brainsmith'] = {
+    _discovery.loaded_modules['brainsmith'] = {
         'kernels': brainsmith.kernels,
         'steps': brainsmith.steps,
     }
@@ -206,7 +191,7 @@ def discover_plugins():
     # 3. Load entry point plugins (FINN, etc.)
     _load_entry_point_plugins()
 
-    _plugins_discovered = True
+    _discovery.discovered = True
 
     logger.info(
         f"Plugin discovery complete: {registry}"
@@ -243,12 +228,11 @@ def _load_user_plugins():
         _load_plugin_package(source_name, source_path)
 
 
-# Global registry of loaded plugin modules
+# Note: Plugin modules are now tracked in _discovery.loaded_modules
 # Maps source_name -> module reference or dict of module references
 # - Core brainsmith: {'kernels': module, 'steps': module}
 # - User plugins: module (single __init__.py with COMPONENTS)
 # - Entry points: Not tracked here (register components directly)
-_plugin_modules: Dict[str, Any] = {}
 
 
 def _load_plugin_package(source_name: str, source_path: Path):
@@ -305,7 +289,7 @@ def _load_plugin_package(source_name: str, source_path: Path):
             logger.info(f"Loaded plugin source '{source_name}' from {source_path}")
 
             # Store module reference for lazy loading
-            _plugin_modules[source_name] = module
+            _discovery.loaded_modules[source_name] = module
         else:
             raise ImportError(f"Could not create module spec for {init_path}")
 
@@ -453,7 +437,7 @@ def get_step(name: str):
         >>> streamline = get_step('streamline')  # Uses default_source
         >>> custom = get_step('user:custom_step')  # Explicit source
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     full_name = _resolve_component_name(name, 'step')
@@ -466,11 +450,11 @@ def get_step(name: str):
     # Try lazy loading from plugin module
     source, component_name = full_name.split(':', 1)
 
-    if source in _plugin_modules:
+    if source in _discovery.loaded_modules:
         logger.debug(f"Lazy loading step: {full_name}")
 
         # Get the appropriate module
-        modules_or_module = _plugin_modules[source]
+        modules_or_module = _discovery.loaded_modules[source]
 
         # Core brainsmith: dict with 'steps' key
         if isinstance(modules_or_module, dict):
@@ -510,7 +494,7 @@ def has_step(name: str) -> bool:
         >>> if has_step('streamline'):
         ...     step = get_step('streamline')
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     full_name = _resolve_component_name(name, 'step')
@@ -532,13 +516,13 @@ def list_steps(source: Optional[str] = None) -> List[str]:
         >>> user_steps = list_steps(source='user')
         >>> print(user_steps)  # ['user:custom_step', ...]
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     all_steps = set(registry._steps.keys())
 
     # Include lazy components not yet loaded from plugin modules
-    for source_name, modules_or_module in _plugin_modules.items():
+    for source_name, modules_or_module in _discovery.loaded_modules.items():
         if source and source != source_name:
             continue
 
@@ -627,7 +611,7 @@ def has_kernel(name: str) -> bool:
         >>> if has_kernel('LayerNorm'):
         ...     kernel = get_kernel('LayerNorm')
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     full_name = _resolve_component_name(name, 'kernel')
@@ -649,13 +633,13 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
         >>> user_kernels = list_kernels(source='user')
         >>> print(user_kernels)  # ['user:CustomKernel', ...]
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     all_kernels = set(registry._kernels.keys())
 
     # Include lazy components not yet loaded from plugin modules
-    for source_name, modules_or_module in _plugin_modules.items():
+    for source_name, modules_or_module in _discovery.loaded_modules.items():
         if source and source != source_name:
             continue
 
@@ -692,7 +676,7 @@ def _get_kernel_metadata(name: str) -> Dict[str, Any]:
     Raises:
         KeyError: If kernel not found
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     full_name = _resolve_component_name(name, 'kernel')
@@ -705,11 +689,11 @@ def _get_kernel_metadata(name: str) -> Dict[str, Any]:
     # Try lazy loading from plugin module
     source, component_name = full_name.split(':', 1)
 
-    if source in _plugin_modules:
+    if source in _discovery.loaded_modules:
         logger.debug(f"Lazy loading kernel: {full_name}")
 
         # Get the appropriate module
-        modules_or_module = _plugin_modules[source]
+        modules_or_module = _discovery.loaded_modules[source]
 
         # Core brainsmith: dict with 'kernels' key
         if isinstance(modules_or_module, dict):
@@ -770,7 +754,7 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     Raises:
         KeyError: If backend not found
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     full_name = _resolve_component_name(name, 'backend')
@@ -783,11 +767,11 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     # Try lazy loading from plugin module
     source, component_name = full_name.split(':', 1)
 
-    if source in _plugin_modules:
+    if source in _discovery.loaded_modules:
         logger.debug(f"Lazy loading backend: {full_name}")
 
         # Get the appropriate module (core brainsmith doesn't have backends module)
-        modules_or_module = _plugin_modules[source]
+        modules_or_module = _discovery.loaded_modules[source]
 
         # User plugins: single module
         module = modules_or_module if not isinstance(modules_or_module, dict) else None
@@ -836,7 +820,7 @@ def list_backends_for_kernel(
         >>> # Only user-provided backends
         >>> user_backends = list_backends_for_kernel('LayerNorm', sources=['user'])
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     # Resolve kernel name to full source:name format
@@ -877,13 +861,13 @@ def list_all_backends(source: Optional[str] = None) -> List[str]:
         >>> print(backends[:3])  # ['brainsmith:LayerNorm_HLS', ...]
         >>> user_backends = list_all_backends(source='user')
     """
-    if not _plugins_discovered:
+    if not _discovery.discovered:
         discover_plugins()
 
     all_backends = set(registry._backends.keys())
 
     # Include lazy components not yet loaded from plugin modules
-    for source_name, modules_or_module in _plugin_modules.items():
+    for source_name, modules_or_module in _discovery.loaded_modules.items():
         if source and source != source_name:
             continue
 
