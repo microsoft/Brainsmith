@@ -20,7 +20,7 @@ finn_config:
   split_large_fifos: true
   auto_fifo_depths: true
   fifosim_n_inferences: 2         # Speed up FIFO sizing
-  stitched_ip_gen_dcp: True
+  stitched_ip_gen_dcp: true
   verify_steps:
     - "stitched_ip_rtlsim"
   #verify_save_rtlsim_waveforms: true #This is really big
@@ -35,7 +35,7 @@ design_space:
     - at_start:
         insert:
           - "bert_cleanup"
-            #- "remove_head"
+          - "remove_head"
             #- "remove_tail"
           - "generate_reference_io"
 
