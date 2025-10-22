@@ -133,7 +133,7 @@ def generate_reference_io_step(model, cfg):
     """
     input_m = model.graph.input[0]
     in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = np.random.randint(0, 1000, size=in_shape, dtype=np.int64)
+    in_tensor = np.random.uniform(0, 1000, size=in_shape).astype(np.float32)
     np.save(cfg.output_dir+"/input.npy", in_tensor)
 
     input_t = { input_m.name : in_tensor}
