@@ -50,11 +50,6 @@ def explore_design_space(
     Returns:
         TreeExecutionResult containing build artifacts and statistics
 
-    Example:
-        >>> result = explore_design_space("model.onnx", "blueprint.yaml")
-        >>> print(f"Successful builds: {result.stats['successful']}")
-        >>> print(f"Total time: {result.total_time:.2f}s")
-
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
@@ -67,7 +62,7 @@ def explore_design_space(
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
 
     # Determine output directory
-    if output_dir is None:
+    if not output_dir:
         from brainsmith.settings import get_config  # Lazy import
         build_dir = get_config().build_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -119,62 +114,32 @@ def explore_design_space(
         output_dir=Path(output_dir)
     )
     
-    # Check results
-    result_stats = results.stats
-    
-    # Consider both successful and cached builds as valid outcomes
-    valid_builds = result_stats['successful'] + result_stats['cached']
+    # Validate results
+    results.validate_success(Path(output_dir))
 
-    if valid_builds == 0:
-        raise RuntimeError(
-            f"DSE failed: No successful builds\n"
-            f"  Failed: {result_stats['failed']}\n"
-            f"  Skipped: {result_stats['skipped']}\n"
-            f"  Check segment logs in: {output_dir}/*/\n"
-            f"  Run with --log-level debug for detailed output"
-        )
-    
-    # Warn if only cached results were used
-    if result_stats['successful'] == 0 and result_stats['cached'] > 0:
-        logger.warning(f"All builds used cached results ({result_stats['cached']} cached). "
-                      f"No new builds were executed.")
-    
+    # Log success
+    result_stats = results.compute_stats()
     logger.info("Design space exploration completed successfully")
     logger.info(f"  Successful builds: {result_stats['successful']}/{result_stats['total']}")
     logger.info(f"  Total time: {results.total_time:.2f}s")
     logger.info(f"  Output directory: {output_dir}")
-    
-    # Attach design space and tree to results for inspection
-    results.design_space = design_space
-    results.dse_tree = tree
 
-    return results
+    # Return result with all fields
+    return TreeExecutionResult(
+        segment_results=results.segment_results,
+        total_time=results.total_time,
+        design_space=design_space,
+        dse_tree=tree
+    )
 
 
 def build_tree(
-    design_space: DesignSpace,
+    design_space: GlobalDesignSpace,
     config: DSEConfig
 ) -> DSETree:
     """Build execution tree from design space.
 
-    This separates tree construction from execution, enabling:
-    - Tree inspection/validation before execution
-    - Tree visualization and export
-    - Custom tree modifications
-
-    Args:
-        design_space: Design space to build tree from
-        config: DSE configuration
-
-    Returns:
-        Built DSE tree ready for execution
-
-    Example:
-        >>> design_space, config = parse_blueprint("blueprint.yaml", "model.onnx")
-        >>> tree = build_tree(design_space, config)
-        >>> stats = tree.get_statistics()
-        >>> print(f"Tree has {stats['total_paths']} paths")
-        >>> result = execute_tree(tree, "model.onnx", config, "output")
+    Separates tree construction from execution for inspection and validation.
 
     Raises:
         ValueError: If tree exceeds max_combinations limit
@@ -192,33 +157,10 @@ def execute_tree(
 ) -> TreeExecutionResult:
     """Execute a pre-built DSE tree.
 
-    This separates execution from tree construction, enabling:
-    - Custom execution strategies (parallel, distributed)
-    - Execution with modified tree
-    - Multiple executions of same tree
+    Separates execution from tree construction for custom execution strategies.
 
     Args:
-        tree: Pre-built DSE tree
-        model_path: Path to input ONNX model
-        config: DSE configuration
-        output_dir: Output directory for results
         runner: Custom segment runner (optional, uses default if None)
-
-    Returns:
-        Execution results with statistics and outputs
-
-    Example:
-        >>> # Standard execution
-        >>> tree = build_tree(design_space, config)
-        >>> result = execute_tree(tree, "model.onnx", config, "output")
-
-        >>> # Custom distributed execution
-        >>> from brainsmith.dse import SegmentRunner
-        >>> class DistributedRunner(SegmentRunner):
-        ...     def run_tree(self, tree, ...):
-        ...         # Custom parallel execution
-        >>> runner = DistributedRunner(finn_adapter, config.finn_config)
-        >>> result = execute_tree(tree, model, config, output_dir, runner=runner)
 
     Raises:
         RuntimeError: If no successful builds were produced
@@ -238,25 +180,15 @@ def execute_tree(
         output_dir=output_path
     )
 
-    # Check results
-    result_stats = results.stats
+    # Validate results
+    results.validate_success(output_path)
 
-    # Consider both successful and cached builds as valid outcomes
-    valid_builds = result_stats['successful'] + result_stats['cached']
-
-    if valid_builds == 0:
-        raise RuntimeError(
-            f"DSE failed: No successful builds\n"
-            f"  Failed: {result_stats['failed']}\n"
-            f"  Skipped: {result_stats['skipped']}\n"
-            f"  Check segment logs in: {output_dir}/*/\n"
-            f"  Run with --log-level debug for detailed output"
-        )
-
-    # Attach tree for inspection
-    results.dse_tree = tree
-    results.design_space = None  # Not available in this path
-
-    return results
+    # Return result with all fields
+    return TreeExecutionResult(
+        segment_results=results.segment_results,
+        total_time=results.total_time,
+        design_space=None,  # Not available in this path
+        dse_tree=tree
+    )
 
 

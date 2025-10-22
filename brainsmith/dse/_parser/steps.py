@@ -13,8 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union, Literal
 
-from brainsmith.dse._constants import SKIP_VALUES, SKIP_INDICATOR
+from brainsmith.dse._constants import SKIP_INDICATOR
 from brainsmith.loader import has_step
+
+# Skip values during parsing (normalized to SKIP_INDICATOR after parsing)
+SKIP_VALUES = frozenset([None, "~", ""])
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]

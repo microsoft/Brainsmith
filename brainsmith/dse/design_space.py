@@ -4,25 +4,19 @@
 """
 Clean Design Space Implementation
 
-This module defines the new DesignSpace that holds resolved plugin objects
+This module defines the new GlobalDesignSpace that holds resolved plugin objects
 from the blueprint, ready for tree construction.
 """
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
 from brainsmith.loader import has_step, list_steps
-from brainsmith.dse._constants import is_skip
+from brainsmith.dse._constants import SKIP_INDICATOR
 
 
 @dataclass
-class DesignSpace:
-    """
-    Design space with resolved plugin objects.
-    
-    This is a clean intermediate representation between blueprint YAML
-    and the execution tree. All plugin names have been resolved to
-    actual classes from the registry.
-    """
+class GlobalDesignSpace:
+    """Design space with resolved plugin objects."""
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
@@ -30,62 +24,55 @@ class DesignSpace:
     
     def __post_init__(self):
         """Validate design space after initialization."""
-        self.validate_steps()
-        self.validate_size()
-    
-    def validate_steps(self) -> None:
-        """Validate that all referenced steps exist in the registry."""
+        self._validate()
+
+    def _validate(self) -> None:
+        """Validate design space constraints."""
+        self._validate_step_names()
+        self._validate_size()
+
+    def _validate_step_names(self) -> None:
+        """Ensure all step names exist in registry."""
         invalid_steps = []
-        
-        def check_step(step: Optional[str]) -> None:
-            """Check if a single step is valid."""
-            if step and not is_skip(step) and not has_step(step):
-                invalid_steps.append(step)
-        
-        # Check all steps, including those in branch points
+
         for step_spec in self.steps:
             if isinstance(step_spec, list):
-                # Branch point - check each option
-                for option in step_spec:
-                    check_step(option)
+                # Branch point - validate each option
+                for step in step_spec:
+                    if step and step != SKIP_INDICATOR and not has_step(step):
+                        invalid_steps.append(step)
             else:
-                # Single step
-                check_step(step_spec)
-        
+                # Linear step - validate
+                if step_spec and step_spec != SKIP_INDICATOR and not has_step(step_spec):
+                    invalid_steps.append(step_spec)
+
         if invalid_steps:
-            available_steps = list_steps()
-            error_msg = (
-                f"Invalid steps found: {', '.join(invalid_steps)}\n\n"
-                f"Available steps: {', '.join(available_steps)}"
-            )
-            raise ValueError(error_msg)
-    
-    def validate_size(self) -> None:
-        """Validate that design space doesn't exceed max combinations."""
-        estimated_size = self._estimate_combinations()
-        if estimated_size > self.max_combinations:
+            available = ', '.join(list_steps())
             raise ValueError(
-                f"Design space too large: {estimated_size:,} combinations exceeds "
+                f"Invalid steps: {', '.join(invalid_steps)}\n\n"
+                f"Available: {available}"
+            )
+
+    def _count_combinations(self) -> int:
+        """Count total design space combinations."""
+        combination_count = 1
+
+        for step_spec in self.steps:
+            if isinstance(step_spec, list):
+                # Branch point - multiply by number of options
+                combination_count *= len(step_spec)
+
+        return combination_count
+
+    def _validate_size(self) -> None:
+        """Ensure design space doesn't exceed size limits."""
+        combination_count = self._count_combinations()
+
+        if combination_count > self.max_combinations:
+            raise ValueError(
+                f"Design space too large: {combination_count:,} combinations exceeds "
                 f"limit of {self.max_combinations:,}"
             )
-    
-    def _estimate_combinations(self) -> int:
-        """Estimate total number of combinations without building tree."""
-        total = 1
-        
-        # Step variations
-        for step in self.steps:
-            if isinstance(step, list):
-                # Branch point - count non-skip options and skip option (if present)
-                non_skip_count = sum(1 for opt in step if not is_skip(opt))
-                has_skip_option = any(is_skip(opt) for opt in step)
-                valid_options = non_skip_count + (1 if has_skip_option else 0)
-                total *= max(1, valid_options)
-        
-        # Kernel backends (no branching in current design)
-        # Each kernel has exactly one backend selected
-        
-        return total
     
     def get_kernel_summary(self) -> str:
         """Get human-readable summary of kernels and backends."""
@@ -98,7 +85,7 @@ class DesignSpace:
     def __str__(self) -> str:
         """Human-readable representation."""
         return (
-            f"DesignSpace(\n"
+            f"GlobalDesignSpace(\n"
             f"  model: {self.model_path}\n"
             f"  steps: {len(self.steps)}\n"
             f"  kernels: {len(self.kernel_backends)}\n"

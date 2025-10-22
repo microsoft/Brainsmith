@@ -2,16 +2,16 @@
 # Licensed under the MIT License.
 
 """
-Blueprint Parser - YAML to DesignSpace
+Blueprint Parser - YAML to GlobalDesignSpace
 
-This module parses blueprint YAML files and creates DesignSpace objects
+This module parses blueprint YAML files and creates GlobalDesignSpace objects
 with all plugins resolved from the registry.
 """
 
 import os
 from typing import Tuple
 
-from brainsmith.dse.design_space import DesignSpace
+from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig, extract_config
 
 from .loader import load_blueprint_with_inheritance
@@ -19,9 +19,9 @@ from .steps import parse_steps
 from .kernels import parse_kernels
 
 
-def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, DSEConfig]:
+def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignSpace, DSEConfig]:
     """
-    Parse blueprint YAML and return DesignSpace and DSEConfig.
+    Parse blueprint YAML and return GlobalDesignSpace and DSEConfig.
 
     Inheritance is resolved bottom-up:
     1. Start from the root parent (no extends)
@@ -34,7 +34,7 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
         model_path: Path to model file
 
     Returns:
-        Tuple of (DesignSpace, DSEConfig)
+        Tuple of (GlobalDesignSpace, DSEConfig)
     """
     # Load blueprint data and check for inheritance
     raw_data, merged_data, parent_path = load_blueprint_with_inheritance(blueprint_path)
@@ -61,7 +61,7 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, 
     # Get max_combinations from environment or use default
     max_combinations = int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000"))
 
-    design_space = DesignSpace(
+    design_space = GlobalDesignSpace(
         model_path=model_path,
         steps=steps,
         kernel_backends=kernel_backends,

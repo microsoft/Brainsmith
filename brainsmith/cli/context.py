@@ -31,14 +31,7 @@ _lazy_loader = LazyModuleLoader({
 
 
 def __getattr__(name):
-    """Lazy import settings module on first access.
-
-    The settings module (Pydantic) takes ~685ms to import, but is only needed
-    when configuration is actually loaded. This defers the import until first use.
-
-    For `--help` commands, settings are never imported, resulting in 76% faster
-    startup time (~927ms → ~220ms).
-    """
+    """Lazy import settings module on first access (defers expensive Pydantic ~685ms import)."""
     return _lazy_loader.get_attribute(name)
 
 

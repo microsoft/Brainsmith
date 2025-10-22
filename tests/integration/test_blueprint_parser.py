@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from brainsmith.dse import parse_blueprint, DesignSpace, DSEConfig
+from brainsmith.dse import parse_blueprint, GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
 from tests.utils.blueprint_helpers import (
     create_minimal_blueprint,
@@ -258,7 +258,7 @@ class TestStepOperations:
         # The parser will raise an error if it encounters nested lists
 
 
-class TestDesignSpaceValidation:
+class TestGlobalDesignSpaceValidation:
     """Test suite for design space validation."""
     
     def test_validate_step_plugins_exist(self, tmp_path):

@@ -25,9 +25,6 @@ from .constants import (
 )
 
 
-# Pydantic automatically handles string → Path conversion, no custom validator needed
-
-
 # Protected plugin sources that cannot be overridden by users
 PROTECTED_SOURCES = frozenset(['brainsmith', 'finn', 'project', 'user'])
 
@@ -201,7 +198,7 @@ class SystemConfig(BaseSettings):
             'brainsmith': None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
             'finn': None,         # Resolved in model_post_init to deps_dir / 'finn'
             'project': None,      # Resolved in model_post_init to project_dir / 'plugins'
-            'user': Path.home() / '.brainsmith' / 'plugins'
+            'user': None          # Resolved in model_post_init to ~/.brainsmith/plugins
         },
         description="Plugin source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
     )
@@ -243,10 +240,6 @@ class SystemConfig(BaseSettings):
     plugins_strict: bool = Field(
         default=True,
         description="Strict plugin loading"
-    )
-    eager_plugin_discovery: bool = Field(
-        default=False,
-        description="Regenerate all plugin manifests on startup. Enable for development to ensure fresh cache."
     )
 
     # Vivado-specific settings
@@ -345,6 +338,8 @@ class SystemConfig(BaseSettings):
             self.plugin_sources['finn'] = self.deps_dir / 'finn'
         if self.plugin_sources.get('project') is None:
             self.plugin_sources['project'] = self.project_dir / 'plugins'
+        if self.plugin_sources.get('user') is None:
+            self.plugin_sources['user'] = Path.home() / '.brainsmith' / 'plugins'
 
         # Resolve custom (non-protected) sources relative to project_dir
         for name, path in list(self.plugin_sources.items()):
@@ -404,7 +399,8 @@ class SystemConfig(BaseSettings):
 
         # Add user-provided sources, rejecting protected overrides
         for key, value in v.items():
-            if key in PROTECTED_SOURCES:
+            # Allow protected sources if value is None (default resolution in model_post_init)
+            if key in PROTECTED_SOURCES and value is not None:
                 raise ValueError(
                     f"Cannot override protected plugin source '{key}'. "
                     f"Protected sources: {', '.join(sorted(PROTECTED_SOURCES))}"

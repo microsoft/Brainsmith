@@ -17,11 +17,7 @@ from brainsmith.dse.types import OutputType
 
 @dataclass
 class DSEConfig:
-    """Configuration extracted from blueprint YAML files.
-
-    Renamed from BlueprintConfig for clarity - this config controls
-    Design Space Exploration behavior.
-    """
+    """Configuration for Design Space Exploration."""
     # Always required
     clock_ns: float  # Required field, mapped to synth_clk_period_ns in FINN config
 
@@ -51,25 +47,12 @@ class DSEConfig:
 
 
 def _parse_output_type(output_str: str) -> OutputType:
-    """Parse output type string to enum.
-
-    Args:
-        output_str: String representation of output type
-
-    Returns:
-        OutputType enum value
-
-    Raises:
-        ValueError: If output string is invalid
-    """
+    """Parse output type string to enum."""
     try:
         return OutputType(output_str)
     except ValueError:
-        valid_values = ', '.join(t.value for t in OutputType)
-        raise ValueError(
-            f"Invalid output type '{output_str}'. "
-            f"Must be one of: {valid_values}"
-        )
+        valid = ', '.join(t.value for t in OutputType)
+        raise ValueError(f"Invalid output '{output_str}'. Must be one of: {valid}")
 
 
 def extract_config(data: Dict[str, Any]) -> DSEConfig:

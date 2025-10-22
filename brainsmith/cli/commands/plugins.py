@@ -17,9 +17,8 @@ from ..utils import console
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed component information')
 @click.pass_obj
 def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
-    """List discovered plugins and their sources.
+    """Shows all available steps, kernels, and backends, organized by source:
 
-    Shows all available steps, kernels, and backends, organized by source:
     - brainsmith: Core Brainsmith components
     - finn: FINN framework components
     - qonnx: QONNX framework components
@@ -124,9 +123,8 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
                 for name in sorted(kernels_by_source[source]):
                     full_name = f"{source}:{name}"
                     meta = registry._kernels[full_name]
-                    op_type = meta.get('op_type', 'N/A')
                     has_infer = '✓' if meta.get('infer') else '✗'
-                    console.print(f"    • {name:20} (op_type={op_type:15} infer={has_infer})")
+                    console.print(f"    • {name:30} (infer={has_infer})")
 
         # Backends by source
         if all_backends:

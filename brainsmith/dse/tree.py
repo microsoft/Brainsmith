@@ -33,13 +33,6 @@ class DSETree:
         self._format_node(self.root, "", True, lines)
         return "\n".join(lines)
 
-    def print_tree(self) -> None:
-        """Print tree to console (convenience wrapper).
-
-        Recommended: Use format_tree() for more flexibility.
-        """
-        print(self.format_tree())
-
     def _format_node(self, node: DSESegment, indent: str, last: bool, lines: List[str]) -> None:
         """Format a node and its children into line list."""
         if node.segment_id != "root":
@@ -78,17 +71,8 @@ class DSETree:
         return all_segments
     
     def get_execution_order(self) -> List[DSESegment]:
-        """
-        Get breadth-first execution order for the tree.
-        
-        This ensures parent nodes are executed before children,
-        enabling proper result sharing.
-        
-        Returns:
-            List of nodes in execution order
-        """
+        """Get breadth-first execution order for the tree."""
         if self.root.segment_id == "root" and not self.root.steps:
-            # Skip empty root node in execution
             queue = list(self.root.children.values())
         else:
             queue = [self.root]
@@ -108,10 +92,7 @@ class DSETree:
         return order
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get statistics about the DSE tree.
-
-        Single-pass traversal collecting all metrics efficiently.
-        """
+        """Get statistics about the DSE tree."""
         stats = {
             'nodes': 0,
             'leaves': 0,
@@ -138,8 +119,9 @@ class DSETree:
         # Calculate efficiency
         steps_without_segments = sum(stats['leaf_steps'])
         segment_efficiency = (
-            1 - (stats['total_steps'] / steps_without_segments)
-            if steps_without_segments > 0 else 0
+            1 - stats['total_steps'] / steps_without_segments
+            if steps_without_segments
+            else 0
         )
 
         return {

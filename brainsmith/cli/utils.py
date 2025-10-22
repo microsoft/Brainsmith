@@ -27,10 +27,7 @@ console = Console()
 
 
 def error_exit(message: str, details: list[str] | None = None, code: int = EX_USAGE) -> NoReturn:
-    """Print error message and exit. Shows bullet list if details provided.
-
-    Defaults to EX_USAGE (64) per BSD sysexits.h standard.
-    """
+    """Print error message and exit (defaults to EX_USAGE per BSD sysexits.h)."""
     console.print(f"[red]Error:[/red] {message}")
 
     if details:
@@ -42,23 +39,14 @@ def error_exit(message: str, details: list[str] | None = None, code: int = EX_US
 
 
 class TaskProtocol(Protocol):
-    """Protocol defining the interface for progress task objects.
-
-    Both Rich's TaskID and NoOpTask implement this interface.
-    """
+    """Both Rich's TaskID and NoOpTask implement this interface."""
     def update(self, **kwargs) -> None:
-        """Update task properties (description, status, etc)."""
         ...
 
 
 class NoOpTask:
-    """No-op implementation of TaskProtocol for quiet mode.
-
-    Provides a null object pattern that accepts all task operations
-    but performs no actual UI updates.
-    """
+    """No-op implementation for quiet mode."""
     def update(self, **kwargs) -> None:
-        """Accept update calls but do nothing."""
         pass
 
 
@@ -99,13 +87,7 @@ def progress_spinner(description: str, transient: bool = True, no_progress: bool
 
 
 def show_panel(title: str, content: str, border_style: str = "blue") -> None:
-    """Display a bordered panel with title and content.
-
-    Args:
-        title: Panel title
-        content: Panel content
-        border_style: Rich color/style for border (default: "blue")
-    """
+    """Display a bordered panel with title and content."""
     console.print(Panel.fit(
         f"[bold]{title}[/bold]\n{content}",
         border_style=border_style
@@ -113,43 +95,22 @@ def show_panel(title: str, content: str, border_style: str = "blue") -> None:
 
 
 def format_status(status: str, is_success: bool) -> str:
-    """Format status text with color based on success/failure.
-
-    Args:
-        status: Status text to format
-        is_success: If True, use green; if False, use red
-
-    Returns:
-        Rich-formatted status string
-    """
+    """Format status with color (green=success, red=failure)."""
     color = "green" if is_success else "red"
     return f"[{color}]{status}[/{color}]"
 
 
 def format_warning_status(status: str) -> str:
-    """Format status text with warning color (yellow).
-
-    Args:
-        status: Status text to format
-
-    Returns:
-        Rich-formatted status string in yellow
-    """
+    """Format status in yellow."""
     return f"[yellow]{status}[/yellow]"
 
 
 def success(message: str) -> None:
-    """Print success message with green checkmark."""
     console.print(f"[green]✓[/green] {message}")
 
 
 def warning(message: str, details: list[str] | None = None) -> None:
-    """Print a warning message with optional detail bullets.
-
-    Args:
-        message: Main warning message
-        details: Optional list of additional detail lines
-    """
+    """Print a warning message with optional detail bullets."""
     console.print(f"[yellow]Warning:[/yellow] {message}")
     if details:
         for detail in details:
@@ -157,20 +118,11 @@ def warning(message: str, details: list[str] | None = None) -> None:
 
 
 def tip(message: str) -> None:
-    """Print a tip message for user guidance.
-
-    Args:
-        message: Tip message to display
-    """
     console.print(f"\n[yellow]Tip:[/yellow] {message}")
 
 
 def confirm_or_abort(message: str, skip: bool = False) -> None:
     """Ask for confirmation or abort operation.
-
-    Args:
-        message: Confirmation prompt
-        skip: If True, skip confirmation and proceed
 
     Raises:
         SystemExit: If user declines confirmation

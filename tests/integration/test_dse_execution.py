@@ -175,10 +175,10 @@ class TestDSETreeConstruction:
             
     def test_build_empty_design_space(self, blueprint_config):
         """Test building a tree from empty design space (edge case)."""
-        from brainsmith.dse import DesignSpace
-        
+        from brainsmith.dse import GlobalDesignSpace
+
         # Create empty design space
-        empty_design_space = DesignSpace(
+        empty_design_space = GlobalDesignSpace(
             model_path="test_model.onnx",
             steps=[],
             kernel_backends=[],
@@ -245,12 +245,12 @@ class TestStepRangeExecution:
 
     def test_apply_step_slicing_in_dse(self, simple_onnx_model, blueprint_config):
         """Test that step slicing is applied before tree building."""
-        from brainsmith.dse import DesignSpace
+        from brainsmith.dse import GlobalDesignSpace
         from brainsmith.dse.design_space import slice_steps
         from brainsmith.dse._builder import DSETreeBuilder
 
         # Create design space with 5 steps
-        design_space = DesignSpace(
+        design_space = GlobalDesignSpace(
             model_path=str(simple_onnx_model),
             steps=["test_step", "test_step1", "test_step2", "test_step3", "export_to_build"],
             kernel_backends=[],
@@ -273,12 +273,12 @@ class TestStepRangeExecution:
 
     def test_slice_preserves_branches_in_tree(self, simple_onnx_model, blueprint_config):
         """Test that slicing preserves branch structure."""
-        from brainsmith.dse import DesignSpace
+        from brainsmith.dse import GlobalDesignSpace
         from brainsmith.dse.design_space import slice_steps
         from brainsmith.dse._builder import DSETreeBuilder
 
         # Create design space with branches
-        design_space = DesignSpace(
+        design_space = GlobalDesignSpace(
             model_path=str(simple_onnx_model),
             steps=["test_step", ["test_step1", "test_step2"], "test_step3", "export_to_build"],
             kernel_backends=[],

@@ -19,7 +19,6 @@ from brainsmith.dse.types import SegmentStatus
 
 @dataclass
 class ArtifactState:
-    """Track artifact locations and sharing."""
     source_dir: Optional[Path] = None
     size_bytes: Optional[int] = None
     copied_to: List[Path] = field(default_factory=list)
@@ -36,44 +35,47 @@ class DSESegment:
     """
     # Core identity
     steps: List[Dict[str, Any]]  # Execution steps for this segment
-    branch_choice: Optional[str] = None  # was: branch_decision
-    
+    branch_choice: Optional[str] = None
+
     # Tree structure
     parent: Optional[DSESegment] = None
     children: Dict[str, DSESegment] = field(default_factory=dict)
-    
+
     # Execution state
     status: SegmentStatus = SegmentStatus.PENDING
     output_dir: Optional[Path] = None
     error: Optional[str] = None
     execution_time: Optional[float] = None
-    
+
     # Artifact management
     artifacts: ArtifactState = field(default_factory=ArtifactState)
-    
+
     # FINN configuration
     finn_config: Dict[str, Any] = field(default_factory=dict)
+
+    # Cached properties
+    _segment_id: Optional[str] = field(default=None, init=False, repr=False)
     
     @property
     def segment_id(self) -> str:
-        """Deterministic ID from content."""
-        # Build ID from branch decisions in path
-        path_parts = []
-        node = self
-        while node and node.branch_choice:
-            path_parts.append(node.branch_choice)
-            node = node.parent
-        path_parts.reverse()
-        return "/".join(path_parts) if path_parts else "root"
+        """Deterministic ID from branch path (cached for O(1) access)."""
+        if self._segment_id is None:
+            # Build ID from branch decisions in path
+            path_parts = []
+            node = self
+            while node and node.branch_choice:
+                path_parts.append(node.branch_choice)
+                node = node.parent
+            path_parts.reverse()
+            self._segment_id = "/".join(path_parts) if path_parts else "root"
+        return self._segment_id
     
     @property
     def is_branch_point(self) -> bool:
-        """Check if this segment branches."""
         return len(self.children) > 1
-    
+
     @property
     def is_leaf(self) -> bool:
-        """Check if this is a complete path endpoint."""
         return len(self.children) == 0
     
     def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> DSESegment:
@@ -103,11 +105,7 @@ class DSESegment:
         for segment in self.get_path():
             steps.extend(segment.steps)
         return steps
-    
-    def get_cache_key(self) -> str:
-        """Simple, deterministic cache key."""
-        return self.segment_id
-    
+
     def count_descendants(self) -> int:
         """Count total number of descendant nodes."""
         count = len(self.children)

@@ -1,7 +1,7 @@
 """Combined DSE fixtures for testing - design spaces and configurations."""
 
 import pytest
-from brainsmith.dse import DesignSpace, DSEConfig
+from brainsmith.dse import GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
 from tests.utils.test_constants import (
     DEFAULT_CLOCK_PERIOD_NS,
@@ -45,7 +45,7 @@ def base_finn_config():
 def simple_design_space(simple_onnx_model):
     """Create a simple linear design space."""
     model_path = simple_onnx_model
-    return DesignSpace(
+    return GlobalDesignSpace(
         model_path=str(model_path),
         kernel_backends=[],
         steps=[
@@ -61,7 +61,7 @@ def simple_design_space(simple_onnx_model):
 def branching_design_space(simple_onnx_model):
     """Create a design space with branch points."""
     model_path = simple_onnx_model
-    return DesignSpace(
+    return GlobalDesignSpace(
         model_path=str(model_path),
         kernel_backends=[("TestKernel", ["TestKernel_hls", "TestKernel_rtl"])],
         steps=[
@@ -77,7 +77,7 @@ def branching_design_space(simple_onnx_model):
 def multi_branch_design_space(simple_onnx_model):
     """Create a design space with multiple branch levels."""
     model_path = simple_onnx_model
-    return DesignSpace(
+    return GlobalDesignSpace(
         model_path=str(model_path),
         kernel_backends=[
             ("TestKernel", ["TestKernel_hls", "TestKernel_rtl"]),

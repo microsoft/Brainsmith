@@ -22,7 +22,6 @@ import logging
 from pathlib import Path
 from importlib.metadata import entry_points
 from typing import Type, Optional, Dict, List, Any, Union
-from threading import Lock
 
 from brainsmith.registry import registry, source_context, kernel, backend, step
 
@@ -30,27 +29,81 @@ logger = logging.getLogger(__name__)
 
 # Discovery state
 _plugins_discovered = False
-_lazy_import_lock = Lock()  # Thread safety for lazy imports
+
+# Discovery mode cache
+_discovery_mode = None  # 'editable', 'installed', or None
 
 
-def _lazy_import_class(class_path: str) -> Type:
-    """Lazily import a class from its module path.
+def is_editable_install() -> bool:
+    """Detect if brainsmith is installed in editable mode.
 
-    Thread-safe lazy import that loads classes on demand.
+    Editable mode (pip install -e .) is used during development, while
+    regular installs are used in production. This distinction allows us to
+    use different discovery strategies:
 
-    Args:
-        class_path: Full import path (e.g., 'finn_xsi.kernels.mvau.MVAU')
+    - Editable: Use runtime discovery (existing deferred registry)
+    - Installed: Use pre-generated entry points (fast)
 
     Returns:
-        The imported class
+        True if running from editable install, False otherwise
 
-    Raises:
-        ImportError: If module or class cannot be imported
+    Detection strategy:
+        1. Check PEP 610 direct_url.json for editable marker
+        2. Fallback: Check if brainsmith.__file__ is in site-packages
+
+    Examples:
+        >>> # During development (pip install -e .)
+        >>> is_editable_install()
+        True
+
+        >>> # In production (pip install brainsmith)
+        >>> is_editable_install()
+        False
     """
-    with _lazy_import_lock:
-        module_path, class_name = class_path.rsplit('.', 1)
-        module = importlib.import_module(module_path)
-        return getattr(module, class_name)
+    global _discovery_mode
+
+    # Use cached result if available
+    if _discovery_mode is not None:
+        return _discovery_mode == 'editable'
+
+    # Strategy 1: Check PEP 610 direct_url.json (most reliable)
+    try:
+        from importlib.metadata import distribution
+        import json
+
+        dist = distribution('brainsmith')
+        direct_url_data = dist.read_text('direct_url.json')
+
+        if direct_url_data:
+            direct_url = json.loads(direct_url_data)
+            if direct_url.get('dir_info', {}).get('editable'):
+                _discovery_mode = 'editable'
+                logger.debug("Detected editable install (via direct_url.json)")
+                return True
+
+    except Exception as e:
+        logger.debug(f"Could not check direct_url.json: {e}")
+
+    # Strategy 2: Check if brainsmith.__file__ is in site-packages (fallback)
+    try:
+        import brainsmith
+        brainsmith_file = Path(brainsmith.__file__)
+
+        # In editable install, __file__ points to source tree
+        # In regular install, __file__ points to site-packages
+        if 'site-packages' in str(brainsmith_file):
+            _discovery_mode = 'installed'
+            logger.debug("Detected regular install (brainsmith in site-packages)")
+            return False
+        else:
+            _discovery_mode = 'editable'
+            logger.debug("Detected editable install (brainsmith not in site-packages)")
+            return True
+
+    except Exception as e:
+        logger.warning(f"Could not detect install mode: {e}, assuming installed")
+        _discovery_mode = 'installed'
+        return False
 
 
 def _resolve_component_name(name: str, component_type: str = 'step') -> str:
@@ -123,9 +176,9 @@ def discover_plugins():
     """Discover and load all plugins from configured sources.
 
     This loads:
-    1. Core plugins (brainsmith, finn, qonnx) via manifests
+    1. Core brainsmith plugins (kernels, steps) via direct imports
     2. User plugins from plugin_sources (must have __init__.py)
-    3. Entry points from pip-installed packages
+    3. Entry points from pip-installed packages (e.g., FINN)
 
     Plugins self-register during import using the global registry.
 
@@ -137,111 +190,24 @@ def discover_plugins():
 
     logger.info("Discovering plugins...")
 
-    # Check if eager plugin discovery enabled
-    try:
-        from brainsmith.settings import get_config
-        config = get_config()
-        if config.eager_plugin_discovery:
-            logger.info("Eager plugin discovery enabled - regenerating manifests")
-            from brainsmith.manifest_generator import generate_all_manifests, save_manifest
-            results = generate_all_manifests(force=True)
-
-            # Log results
-            for package, success in results.items():
-                if success:
-                    logger.info(f"  ✓ Regenerated manifest for {package}")
-                else:
-                    logger.warning(f"  ✗ Failed to regenerate manifest for {package}")
-    except Exception as e:
-        logger.warning(f"Could not check eager_plugin_discovery setting: {e}")
-
-    # 1. Load core plugins (brainsmith, finn, qonnx)
-    _load_core_plugins()
+    # 1. Load core brainsmith plugins (triggers self-registration)
+    import brainsmith.kernels
+    import brainsmith.steps
 
     # 2. Load user plugins from configured sources
     _load_user_plugins()
 
-    # 3. Load entry point plugins
+    # 3. Load entry point plugins (FINN, etc.)
     _load_entry_point_plugins()
+
+    # 4. Process all deferred registrations (brainsmith components use decorators)
+    _process_deferred_registrations()
 
     _plugins_discovered = True
 
     logger.info(
         f"Plugin discovery complete: {registry}"
     )
-
-
-def _load_core_plugins():
-    """Load core brainsmith/finn plugins.
-
-    Brainsmith: Eager import triggers registration in kernel/step modules.
-    FINN: Lazy manifest-based loading.
-    """
-    # Import brainsmith modules (triggers distributed registration)
-    import brainsmith.kernels
-    import brainsmith.steps
-
-    # Load FINN from manifest (lazy)
-    _load_from_manifest('finn')
-
-
-def _load_from_manifest(package_name: str):
-    """Load plugin components from a manifest file.
-
-    Uses lazy loading - stores import paths as strings and imports on demand.
-
-    Args:
-        package_name: Name of the package (e.g., 'finn', 'qonnx')
-    """
-    from brainsmith.manifest_generator import load_manifest, is_manifest_valid
-
-    # Check if manifest exists and is valid
-    if not is_manifest_valid(package_name):
-        logger.debug(f"No valid manifest for {package_name}, skipping manifest load")
-        return
-
-    # Load manifest
-    manifest = load_manifest(package_name)
-    if manifest is None:
-        logger.debug(f"Failed to load manifest for {package_name}")
-        return
-
-    logger.info(
-        f"Loading {package_name} from manifest: "
-        f"{len(manifest.get('kernels', []))} kernels, "
-        f"{len(manifest.get('backends', []))} backends, "
-        f"{len(manifest.get('steps', []))} steps"
-    )
-
-    # Register kernels with lazy import paths
-    # Using unified decorator functions that detect string paths
-    with source_context(package_name):
-        for kernel_meta in manifest.get('kernels', []):
-            kernel(
-                kernel_meta['class_path'],
-                name=kernel_meta['name'],
-                infer_path=kernel_meta.get('infer_path'),
-                **kernel_meta.get('params', {})
-            )
-
-        # Register backends with lazy import paths
-        for backend_meta in manifest.get('backends', []):
-            params = backend_meta.get('params', {})
-            backend(
-                backend_meta['class_path'],
-                name=backend_meta['name'],
-                target_kernel=params.get('target_kernel'),
-                language=params.get('language'),
-                variant=params.get('variant')
-            )
-
-        # Register steps with lazy import paths
-        for step_meta in manifest.get('steps', []):
-            step(
-                step_meta['callable_path'],
-                name=step_meta['name'],
-                **step_meta.get('params', {})
-            )
 
 
 def _load_user_plugins():
@@ -259,8 +225,12 @@ def _load_user_plugins():
         return
 
     for source_name, source_path in plugin_sources.items():
-        # Skip core sources (already loaded)
-        if source_name in ('brainsmith', 'finn', 'qonnx'):
+        # Skip protected sources:
+        # - brainsmith: loaded via direct import
+        # - finn: loaded via entry points
+        # - project, user: optional __init__.py-based plugins
+        from brainsmith.settings.schema import PROTECTED_SOURCES
+        if source_name in ('brainsmith', 'finn'):
             continue
 
         if not source_path.exists():
@@ -366,10 +336,13 @@ def _load_entry_point_plugins():
                 with source_context(source_name):
                     # Register kernels
                     for kernel_meta in components.get('kernels', []):
+                        # Debug: check if infer_transform is present
+                        if kernel_meta.get('infer_transform'):
+                            logger.debug(f"  Kernel {kernel_meta['name']} has infer_transform: {kernel_meta['infer_transform']}")
                         registry.kernel(
                             kernel_meta['class'],
                             name=kernel_meta['name'],
-                            op_type=kernel_meta.get('op_type')
+                            infer_transform=kernel_meta.get('infer_transform')
                         )
 
                     # Register backends
@@ -550,7 +523,6 @@ def _process_deferred_registrations():
                 registry.kernel(
                     cls,
                     name=meta['name'],
-                    op_type=meta.get('op_type'),
                     infer_transform=meta.get('infer_transform'),
                     domain=meta.get('domain')
                 )
@@ -646,13 +618,6 @@ def get_step(name: str):
         )
 
     step_callable = registry._steps[full_name]
-
-    # Handle lazy loading - import on demand
-    if isinstance(step_callable, str):
-        step_callable = _lazy_import_class(step_callable)
-        # Cache the imported callable
-        registry._steps[full_name] = step_callable
-
     return step_callable
 
 
@@ -729,19 +694,6 @@ def get_kernel(name: str) -> Type:
     """
     meta = _get_kernel_metadata(name)
     kernel_class = meta['class']
-
-    # Handle lazy loading - import on demand
-    if isinstance(kernel_class, str):
-        # New format: string path
-        kernel_class = _lazy_import_class(kernel_class)
-        # Cache the imported class
-        meta['class'] = kernel_class
-    elif callable(kernel_class) and not isinstance(kernel_class, type):
-        # Old format: callable loader (backward compatibility)
-        kernel_class = kernel_class()
-        # Cache the imported class
-        meta['class'] = kernel_class
-
     return kernel_class
 
 
@@ -770,19 +722,6 @@ def get_kernel_infer(name: str) -> Type:
         raise KeyError(f"Kernel '{full_name}' has no InferTransform")
 
     infer_class = meta['infer']
-
-    # Handle lazy loading - import on demand
-    if isinstance(infer_class, str):
-        # New format: string path
-        infer_class = _lazy_import_class(infer_class)
-        # Cache the imported class
-        meta['infer'] = infer_class
-    elif callable(infer_class) and not isinstance(infer_class, type):
-        # Old format: callable loader (backward compatibility)
-        infer_class = infer_class()
-        # Cache the imported class
-        meta['infer'] = infer_class
-
     return infer_class
 
 
@@ -884,19 +823,6 @@ def get_backend(name: str) -> Type:
     """
     meta = get_backend_metadata(name)
     backend_class = meta['class']
-
-    # Handle lazy loading - import on demand
-    if isinstance(backend_class, str):
-        # New format: string path
-        backend_class = _lazy_import_class(backend_class)
-        # Cache the imported class
-        meta['class'] = backend_class
-    elif callable(backend_class) and not isinstance(backend_class, type):
-        # Old format: callable loader (backward compatibility)
-        backend_class = backend_class()
-        # Cache the imported class
-        meta['class'] = backend_class
-
     return backend_class
 
 

@@ -37,6 +37,11 @@ def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:
 def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
     """Parse kernels section.
 
+    Supports three specification formats:
+    - String: 'LayerNorm' → all backends for kernel
+    - Dict with language: {'LayerNorm': 'hls'} → HLS backends only
+    - Dict with backend name: {'LayerNorm': 'LayerNorm_HLS'} → specific backend
+
     Args:
         kernels_data: Raw kernels data from blueprint YAML
 
@@ -49,42 +54,34 @@ def parse_kernels(kernels_data: List[Any]) -> List[Tuple[str, List[Type]]]:
     kernel_backends = []
 
     for spec in kernels_data:
-        kernel_name, backend_names = _extract_kernel_spec(spec)
+        kernel_name, backend_specs = _extract_kernel_spec(spec)
 
-        # If no backends specified, get all available
-        if not backend_names:
+        if not backend_specs:
+            # No backends specified - get all for this kernel
             backend_names = list_backends_for_kernel(kernel_name)
+        else:
+            # Specific backends/languages specified
+            backend_names = []
+            for spec in backend_specs:
+                if spec in ('hls', 'rtl'):
+                    # Language filter - use loader API
+                    backend_names.extend(
+                        list_backends_for_kernel(kernel_name, language=spec)
+                    )
+                else:
+                    # Specific backend name - use directly
+                    backend_names.append(spec)
 
-        # Skip if no backends available
         if not backend_names:
             continue
 
-        # Resolve backend classes
-        backend_classes = []
-        for backend_spec in backend_names:
-            # Backend spec could be just language ('hls') or full name ('LayerNormHLS')
-            # Try to extract language from the name
-            language = backend_spec.lower()
-            if language not in ['hls', 'rtl']:
-                # Full backend name like 'LayerNormHLS' - extract language
-                if backend_spec.endswith('HLS') or backend_spec.endswith('_hls'):
-                    language = 'hls'
-                elif backend_spec.endswith('RTL') or backend_spec.endswith('_rtl'):
-                    language = 'rtl'
-                else:
-                    raise ValueError(f"Cannot determine language from backend name '{backend_spec}'")
-
-            try:
-                # Get all backends matching this kernel + language
-                matching_backends = list_backends_for_kernel(kernel_name, language=language)
-                if not matching_backends:
-                    raise ValueError(f"No {language} backends found for kernel '{kernel_name}'")
-
-                # Get the backend class (take first match if multiple)
-                backend_class = get_backend(matching_backends[0])
-                backend_classes.append(backend_class)
-            except KeyError as e:
-                raise ValueError(f"Backend not found for kernel '{kernel_name}', language '{language}': {e}") from e
+        # Get backend classes (loader handles name resolution)
+        try:
+            backend_classes = [get_backend(name) for name in backend_names]
+        except KeyError as e:
+            raise ValueError(
+                f"Backend not found for kernel '{kernel_name}': {e}"
+            ) from e
 
         kernel_backends.append((kernel_name, backend_classes))
 

@@ -51,6 +51,7 @@ import custom_steps
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from brainsmith import explore_design_space
+from brainsmith.dse.types import SegmentStatus
 
 warnings.simplefilter("ignore")
 
@@ -240,7 +241,7 @@ def run_brainsmith_dse(model, args):
     
     # Find the output from the successful execution
     for segment_id, result in results.segment_results.items():
-        if result.success and result.output_model:
+        if result.status == SegmentStatus.COMPLETED and result.output_model:
             shutil.copy2(result.output_model, final_model_dst)
             break
     

@@ -11,10 +11,18 @@ from typing import Dict, Any, Set, List
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
 from brainsmith.loader import get_step
-from brainsmith.dse.types import SegmentResult, TreeExecutionResult, ExecutionError
+from brainsmith.dse.types import SegmentResult, SegmentStatus, TreeExecutionResult, ExecutionError, OutputType
 from brainsmith._internal.finn.adapter import FINNAdapter
 
 logger = logging.getLogger(__name__)
+
+# Reverse mapping from FINN output_products to OutputType
+# Generated from OutputType.to_finn_products() to ensure single source of truth
+PRODUCTS_TO_OUTPUT_TYPE = {
+    product: output_type
+    for output_type in OutputType
+    for product in output_type.to_finn_products()
+}
 
 
 def _share_artifacts_at_branch(
@@ -31,7 +39,8 @@ def _share_artifacts_at_branch(
         child_segments: List of child segments to share artifacts with
         base_output_dir: Base directory for DSE outputs
     """
-    if not parent_result.success:
+    if parent_result.status != SegmentStatus.COMPLETED:
+        logger.debug("Skipping artifact sharing: parent segment not completed")
         return
 
     logger.debug(f"Sharing artifacts to {len(child_segments)} children")
@@ -67,29 +76,37 @@ class SegmentRunner:
         self.finn_adapter = finn_adapter
         self.base_config = base_config
         self.kernel_selections = kernel_selections or []
-        
+
         # Extract settings from FINN config
         self.fail_fast = False  # TODO: Add more robust tree exit options
         output_products = base_config.get("output_products", ["estimates"])
-        # Take first output product as primary target
-        self.output_product = output_products[0] if output_products else "estimates"
+        output_product = output_products[0] if output_products else "estimates"
+        self.output_type = PRODUCTS_TO_OUTPUT_TYPE[output_product]
 
         # Note: synth_clk_period_ns and board already validated by DSEConfig
-        
-        # Map output products to FINN types
-        self.output_map = {
-            "estimates": ["estimate_reports"],
-            "rtl_sim": ["estimate_reports", "rtlsim_performance"],
-            "ip_gen": ["estimate_reports", "rtlsim_performance", "stitched_ip"],
-            "bitfile": [
-                "estimate_reports",
-                "rtlsim_performance",
-                "stitched_ip",
-                "bitfile",
-                "deployment_package"
-            ]
-        }
     
+    def _wrap_segment_error(self, segment_id: str, error: Exception) -> ExecutionError:
+        """Wrap segment execution errors with context.
+
+        Re-raises ExecutionError as-is, wraps unexpected errors with segment context.
+
+        Args:
+            segment_id: ID of segment that failed
+            error: The exception that occurred
+
+        Returns:
+            ExecutionError with proper context
+        """
+        if isinstance(error, ExecutionError):
+            logger.error(f"Segment failed: {segment_id}: {error}")
+            return error
+
+        # Unexpected error - log with full traceback
+        logger.exception(f"Unexpected error in segment {segment_id}")
+        wrapped = ExecutionError(f"Segment '{segment_id}' failed: {error}")
+        wrapped.__cause__ = error
+        return wrapped
+
     def run_tree(
         self,
         tree: DSETree,
@@ -127,9 +144,9 @@ class SegmentRunner:
             if segment.segment_id in skipped:
                 logger.warning(f"{indent}Skipped: {segment.segment_id}")
                 results[segment.segment_id] = SegmentResult(
-                    success=False,
                     segment_id=segment.segment_id,
-                    error="Skipped"
+                    status=SegmentStatus.SKIPPED,
+                    error="Parent segment failed"
                 )
                 continue
 
@@ -141,8 +158,8 @@ class SegmentRunner:
                 logger.debug(f"{indent}  (empty segment, passing through)")
                 # Create a pass-through result
                 results[segment.segment_id] = SegmentResult(
-                    success=True,
                     segment_id=segment.segment_id,
+                    status=SegmentStatus.COMPLETED,
                     output_model=input_model,  # Pass input as output
                     output_dir=output_dir / segment.segment_id,
                     execution_time=0
@@ -156,45 +173,19 @@ class SegmentRunner:
                 result = self.run_segment(segment, input_model, output_dir)
                 results[segment.segment_id] = result
             except KeyboardInterrupt:
-                # User cancellation - propagate immediately
                 logger.warning("Build cancelled by user")
                 raise
-            except ExecutionError as e:
-                # Handle execution errors properly
-                logger.error(f"Segment failed: {segment.segment_id}")
-                logger.error(f"  Error: {str(e)}")
-                if self.fail_fast:
-                    raise
-
-                # Create failure result with actual exception
-                results[segment.segment_id] = SegmentResult(
-                    success=False,
-                    segment_id=segment.segment_id,
-                    error=str(e),
-                    execution_time=0
-                )
-
-                # Mark descendants for skipping
-                self._mark_descendants_skipped(segment, skipped)
-                # Still need to add children to stack so they get marked as skipped
-                for child in reversed(list(segment.children.values())):
-                    stack.append((child, None, depth + 1))
-                continue
             except Exception as e:
-                # Unexpected errors - log with traceback and wrap as ExecutionError
-                logger.exception(f"Unexpected error in segment {segment.segment_id}")
+                wrapped_error = self._wrap_segment_error(segment.segment_id, e)
 
                 if self.fail_fast:
-                    # Wrap and re-raise with context
-                    raise ExecutionError(
-                        f"Segment '{segment.segment_id}' failed unexpectedly: {e}"
-                    ) from e
+                    raise wrapped_error
 
                 # Create failure result
                 results[segment.segment_id] = SegmentResult(
-                    success=False,
                     segment_id=segment.segment_id,
-                    error=f"{type(e).__name__}: {str(e)}",
+                    status=SegmentStatus.FAILED,
+                    error=str(wrapped_error),
                     execution_time=0
                 )
 
@@ -236,9 +227,7 @@ class SegmentRunner:
             SegmentResult with execution details
         """
         segment_dir = base_output_dir / segment.segment_id
-        # Segment IDs use slashes as path separators, invalid in filenames
-        safe_name = segment.segment_id.replace("/", "_")
-        output_model = segment_dir / f"{safe_name}_output.onnx"
+        output_model = segment_dir / "output.onnx"
         
         # Check cache validity
         if output_model.exists():
@@ -248,8 +237,8 @@ class SegmentRunner:
                 # Valid cache - return immediately
                 logger.debug(f"Cache hit: {segment.segment_id}")
                 return SegmentResult(
-                    success=True,
                     segment_id=segment.segment_id,
+                    status=SegmentStatus.COMPLETED,
                     output_model=output_model,
                     output_dir=segment_dir,
                     cached=True
@@ -287,8 +276,8 @@ class SegmentRunner:
                 self.finn_adapter.prepare_model(final_model, output_model)
                 logger.info(f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)")
                 return SegmentResult(
-                    success=True,
                     segment_id=segment.segment_id,
+                    status=SegmentStatus.COMPLETED,
                     output_model=output_model,
                     output_dir=segment_dir,
                     execution_time=time.time() - start_time
@@ -296,15 +285,8 @@ class SegmentRunner:
             else:
                 raise RuntimeError("Build succeeded but no output model generated")
                 
-        except ExecutionError:
-            # Re-raise our own errors
-            raise
         except Exception as e:
-            # Wrap external errors with context but preserve stack trace
-            logger.error(f"Segment build failed: {segment.segment_id}")
-            raise ExecutionError(
-                f"Segment '{segment.segment_id}' build failed: {str(e)}"
-            ) from e
+            raise self._wrap_segment_error(segment.segment_id, e)
     
     def _extract_kernel_selections(self, segment: DSESegment) -> List[tuple]:
         """Extract kernel selections from segment steps.
@@ -371,7 +353,7 @@ class SegmentRunner:
         """
         config = self.base_config.copy()
         config["output_dir"] = str(output_dir)
-        config["generate_outputs"] = self.output_map[self.output_product]
+        config["generate_outputs"] = self.output_type.to_finn_outputs()
 
         # Extract and set kernel selections
         kernel_selections = self._extract_kernel_selections(segment)
@@ -393,7 +375,7 @@ class SegmentRunner:
     
     def _print_summary(self, result: TreeExecutionResult) -> None:
         """Print execution summary."""
-        stats = result.stats
+        stats = result.compute_stats()
         logger.info(f"{'='*50}")
         logger.info(f"Execution Complete in {result.total_time:.1f}s")
         logger.info(f"  Total:      {stats['total']}")

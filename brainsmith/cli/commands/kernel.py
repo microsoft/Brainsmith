@@ -42,10 +42,7 @@ def kernel(
     validate: bool,
     verbose: bool
 ) -> None:
-    """Generate hardware kernel from RTL for FINN integration.
-    
-    RTL_FILE: Path to SystemVerilog RTL source file (.sv) with embedded pragmas
-    """
+    """RTL_FILE: Path to SystemVerilog RTL source file (.sv) with embedded pragmas"""
     console.print(f"[bold blue]Brainsmith Kernel Integrator[/bold blue]")
     console.print(f"RTL File: {rtl_file}")
 

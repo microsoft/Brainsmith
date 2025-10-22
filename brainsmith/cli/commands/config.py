@@ -54,9 +54,6 @@ def _generate_config_template(defaults) -> str:
         # Plugin loading mode (strict=error on load failure, false=warn)
         plugins_strict: {str(defaults.plugins_strict).lower()}
 
-        # Regenerate plugin manifests on first registry access (enable for development)
-        eager_plugin_discovery: {str(defaults.eager_plugin_discovery).lower()}
-
         # ============================================================================
         # Xilinx Tools
         # ============================================================================
@@ -103,9 +100,7 @@ def _generate_config_template(defaults) -> str:
 
 @click.group(context_settings={'help_option_names': ['-h', '--help']})
 def config():
-    """Manage Brainsmith configuration.
-
-    \b
+    """\b
     Configuration can be managed by editing YAML files directly:
       Project: ./brainsmith_config.yaml
       User:    ~/.brainsmith/config.yaml
@@ -137,9 +132,7 @@ def show(app_ctx: ApplicationContext, finn: bool) -> None:
 @click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
 @click.pass_obj
 def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
-    """Initialize a new configuration file with sensible defaults.
-
-    By default creates project-level config (./brainsmith_config.yaml).
+    """By default creates project-level config (./brainsmith_config.yaml).
     Use --user to create user-level config (~/.brainsmith/config.yaml).
     """
     # Determine output path

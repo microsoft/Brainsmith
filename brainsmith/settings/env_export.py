@@ -76,7 +76,6 @@ class EnvironmentExporter:
         path: Path | str | None,
         check_exists: bool = False
     ) -> None:
-        """Add path to PATH components if not already present."""
         if not path:
             return
 

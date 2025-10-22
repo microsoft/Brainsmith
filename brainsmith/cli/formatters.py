@@ -55,8 +55,11 @@ class ConfigFormatter:
         table.add_row("", "", "")
         table.add_row("Plugin Settings", "", "")
 
-        # Plugin sources - show each source with its path
-        plugin_sources = config.plugin_sources
+        table.add_row("  Default Source", config.default_source,
+                      self._get_source("default_source", "BSMITH_DEFAULT_SOURCE"))
+
+        # Plugin sources - show each source with its path (exclude brainsmith)
+        plugin_sources = {k: v for k, v in config.plugin_sources.items() if k != 'brainsmith'}
         source = self._get_source("plugin_sources", "BSMITH_PLUGIN_SOURCES")
         for i, (source_name, source_path) in enumerate(sorted(plugin_sources.items())):
             label = "  Plugin Sources" if i == 0 else ""
@@ -65,18 +68,16 @@ class ConfigFormatter:
             row_source = source if i == 0 else ""
             table.add_row(label, display_value, row_source)
 
-        table.add_row("  Default Source", config.default_source,
-                      self._get_source("default_source", "BSMITH_DEFAULT_SOURCE"))
         table.add_row("  Plugins Strict", str(config.plugins_strict),
                       self._get_source("plugins_strict", "BSMITH_PLUGINS_STRICT"))
 
         table.add_row("", "", "")
         table.add_row("Toolchain Settings", "", "")
-        table.add_row("  Netron Port", str(config.netron_port),
-                      self._get_source("netron_port", "BSMITH_NETRON_PORT"))
         if config.default_workers:
             table.add_row("  Default Workers", str(config.default_workers),
                           self._get_source("default_workers", "BSMITH_DEFAULT_WORKERS"))
+        table.add_row("  Netron Port", str(config.netron_port),
+                      self._get_source("netron_port", "BSMITH_NETRON_PORT"))
 
         self._add_xilinx_tools_section(table, config)
 
@@ -116,11 +117,6 @@ class ConfigFormatter:
         table.add_row("", "", "")
         table.add_row("FINN Configuration", "", "")
 
-        finn_root = config.finn.finn_root
-        table.add_row("  FINN_ROOT",
-                      self._format_path(finn_root, config.bsmith_dir),
-                      self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
-
         finn_build = config.finn.finn_build_dir
         table.add_row("  FINN_BUILD_DIR",
                       self._format_path(finn_build, config.bsmith_dir),
@@ -131,20 +127,19 @@ class ConfigFormatter:
                       self._format_path(finn_deps, config.bsmith_dir),
                       self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
 
+        finn_root = config.finn.finn_root
+        table.add_row("  FINN_ROOT",
+                      self._format_path(finn_root, config.bsmith_dir),
+                      self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
+
     def _format_path(self, path: Path | None, base_path: Path | None = None) -> str:
-        """Format path with color based on existence."""
         if not path:
             return "[dim]not set[/dim]"
 
         color = "green" if path.exists() else "yellow"
 
-        # Show relative to base if possible
-        display = path
-        if base_path and path.is_absolute():
-            try:
-                display = path.relative_to(base_path)
-            except ValueError:
-                pass
+        # Always show full absolute path
+        display = path.absolute() if not path.is_absolute() else path
 
         return f"[{color}]{display}[/{color}]"
 
@@ -155,17 +150,7 @@ class ConfigFormatter:
         version: str,
         tool: str
     ) -> str:
-        """Format Xilinx tool path with existence-based coloring.
-
-        Args:
-            path: Resolved tool path
-            base: Xilinx base path (for display)
-            version: Tool version (for display)
-            tool: Tool name (for display)
-
-        Returns:
-            Rich-formatted path string
-        """
+        """Format Xilinx tool path with color based on existence."""
         if not path:
             return "[yellow]Not configured[/yellow]"
 
@@ -205,7 +190,7 @@ class ConfigFormatter:
         return None
 
     def _nested_key_exists(self, data: dict, key: str) -> bool:
-        """Check if nested key exists (supports 'finn.finn_root' notation)."""
+        """Supports nested notation (e.g., 'finn.finn_root')."""
         parts = key.split('.')
         current = data
         for part in parts:

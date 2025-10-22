@@ -10,10 +10,6 @@ to ensure consistent configuration discovery.
 
 from pathlib import Path
 
-# ============================================================================
-# User Configuration
-# ============================================================================
-
 USER_CONFIG_DIR = Path.home() / ".brainsmith"
 USER_CONFIG_FILE = "config.yaml"
 
@@ -25,10 +21,6 @@ def get_user_config_path() -> Path:
     """
     return USER_CONFIG_DIR / USER_CONFIG_FILE
 
-
-# ============================================================================
-# Project Configuration
-# ============================================================================
 
 PROJECT_CONFIG_FILE = "brainsmith_config.yaml"
 PROJECT_CONFIG_ALT_DIR = ".brainsmith"
@@ -49,10 +41,6 @@ def get_project_config_search_paths() -> list[Path]:
         Path.cwd() / PROJECT_CONFIG_ALT_DIR / PROJECT_CONFIG_ALT_FILE,
     ]
 
-
-# ============================================================================
-# Legacy Compatibility
-# ============================================================================
 
 # For backward compatibility with cli/constants.py usage
 PROJECT_CONFIG_FILE_ALT = f"{PROJECT_CONFIG_ALT_DIR}/{PROJECT_CONFIG_ALT_FILE}"

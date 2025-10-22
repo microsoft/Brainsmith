@@ -10,15 +10,15 @@ Combines blueprint parsing, tree building, and segment execution.
 Public API:
     - explore_design_space(): Main entry point for DSE
     - DSEConfig: Blueprint configuration class
-    - DesignSpace: Design space representation
-    - parse_blueprint(): Parse blueprint YAML to DesignSpace
+    - GlobalDesignSpace: Design space representation
+    - parse_blueprint(): Parse blueprint YAML to GlobalDesignSpace
 
 Internal modules (prefixed with _) are implementation details.
 """
 
 from .api import explore_design_space, build_tree, execute_tree
 from .config import DSEConfig
-from .design_space import DesignSpace
+from .design_space import GlobalDesignSpace
 from ._parser import parse_blueprint
 from .tree import DSETree
 from .segment import DSESegment
@@ -44,7 +44,7 @@ __all__ = [
     'SegmentRunner',
     # Configuration
     'DSEConfig',
-    'DesignSpace',
+    'GlobalDesignSpace',
     # Tree structures
     'DSETree',
     'DSESegment',

@@ -15,7 +15,7 @@ Main Features:
 Quick Start:
     >>> from brainsmith import explore_design_space, TreeExecutionResult
     >>> results: TreeExecutionResult = explore_design_space(model, blueprint)
-    >>> print(f"Successful builds: {results.stats['successful']}")
+    >>> print(f"Successful builds: {results.compute_stats()['successful']}")
 
 Advanced DSE (Power Users):
     >>> from brainsmith import build_tree, execute_tree, SegmentRunner
@@ -45,7 +45,7 @@ _LAZY_MODULES = {
     'explore_design_space': 'dse',
     'build_tree': 'dse',
     'execute_tree': 'dse',
-    'DesignSpace': 'dse',
+    'GlobalDesignSpace': 'dse',
     'DSEConfig': 'dse',
     'DSETree': 'dse',
     'DSESegment': 'dse',

@@ -23,13 +23,11 @@ logger = logging.getLogger(__name__)
 
 
 def _version_callback(ctx, param, value):
-    """Show version and exit."""
     if not value:
         return
     import importlib.metadata
     version = importlib.metadata.version('brainsmith')
-    cli_name = ctx.find_root().info_name or 'brainsmith'
-    click.echo(f'{cli_name}, version {version}')
+    click.echo(f'{CLI_NAME_BRAINSMITH}, version {version}')
     ctx.exit()
 
 
@@ -41,13 +39,11 @@ class LazyGroup(click.Group):
         self.lazy_commands = lazy_commands or {}
 
     def list_commands(self, ctx):
-        """Return all command names (lazy + manually registered)."""
         lazy_names = set(self.lazy_commands.keys())
         manual_names = set(super().list_commands(ctx))
         return sorted(lazy_names | manual_names)
 
     def get_command(self, ctx, name):
-        """Load and return a command only when invoked."""
         if name in self.lazy_commands:
             from importlib import import_module
             module_path, attr_name = self.lazy_commands[name]
@@ -62,7 +58,6 @@ OPERATIONAL_COMMAND_MAP = {
 }
 
 ADMIN_COMMAND_MAP = {
-    'cache': ('brainsmith.cli.commands.cache', 'cache'),
     'config': ('brainsmith.cli.commands.config', 'config'),
     'plugins': ('brainsmith.cli.commands.plugins', 'plugins'),
     'setup': ('brainsmith.cli.commands.setup', 'setup'),
@@ -119,9 +114,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         setup_logging(level=logs)
         logger.debug(f"{name} CLI initialized with logs={logs}, no_progress={no_progress}")
 
-        # Load and export configuration for subcommand execution
         context.load_configuration()
-        # Export to env vars for FINN transforms that read FINN_BUILD_DIR etc.
         effective_config = context.get_effective_config()
         effective_config.export_to_environment(verbose=False)
 
@@ -129,7 +122,6 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
     cli = LazyGroup(
         name=name,
         callback=callback,
-        invoke_without_command=True,
         context_settings={'help_option_names': ['-h', '--help']},
         lazy_commands=lazy_commands
     )
