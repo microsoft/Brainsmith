@@ -9,7 +9,6 @@ with all plugins resolved from the registry.
 """
 
 import os
-import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from dataclasses import dataclass
 from .space import DesignSpace
 from brainsmith.core.config import ForgeConfig
 from brainsmith.core.plugins.registry import get_registry, has_step, list_backends_by_kernel, get_backend
+from brainsmith.utils.yaml_parser import load_yaml, expand_env_vars_with_context
 
 # Type definitions
 StepSpec = Union[str, List[Optional[str]]]
@@ -45,7 +45,7 @@ class StepOperation:
             "at_start": lambda d: cls(op_type="at_start", insert=d["at_start"]["insert"]),
             "at_end": lambda d: cls(op_type="at_end", insert=d["at_end"]["insert"]),
         }
-        
+
         for key, factory in op_mappings.items():
             if key in data:
                 return factory(data)
@@ -55,41 +55,61 @@ class StepOperation:
 def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[DesignSpace, ForgeConfig]:
     """
     Parse blueprint YAML and return DesignSpace and ForgeConfig.
-    Steps:
-    1. Load blueprint YAML (with inheritance)
-    2. Extract global config and FINN mappings
-    3. Parse steps and kernels
-    4. Validate required fields
-    5. Build DesignSpace
+
+    Inheritance is resolved bottom-up:
+    1. Start from the root parent (no extends)
+    2. Fully resolve its steps (including operations)
+    3. Pass resolved steps to child for its operations
+    4. Repeat until we reach the target blueprint
     """
-    blueprint_data, parent_data = _load_with_inheritance(blueprint_path, return_parent=True)
-    forge_config = _extract_config_and_mappings(blueprint_data)
-    
-    # Parse steps with inheritance support
-    # Need to handle recursive inheritance properly - if parent has operations,
-    # we need to get its fully resolved steps, not just raw data
-    parent_steps = None
-    if parent_data and 'extends' in parent_data:
-        # Parent also has inheritance - need to recursively parse it
-        parent_blueprint_path = str(Path(blueprint_path).parent / parent_data['extends'])
-        parent_design_space, _ = parse_blueprint(parent_blueprint_path, model_path)
-        parent_steps = parent_design_space.steps
-    elif parent_data:
-        # Parent has no inheritance - can use raw steps
-        parent_steps_data = parent_data.get('design_space', {}).get('steps', [])
-        if parent_steps_data:
-            parent_steps = _parse_steps_raw(parent_steps_data)
-    
-    steps = _parse_steps(
-        blueprint_data.get('design_space', {}).get('steps', []),
-        parent_steps=parent_steps
+    # Load raw data to check inheritance chain
+    raw_data = load_yaml(
+        blueprint_path,
+        expand_env_vars=True,
+        support_inheritance=False,
+        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
     )
-    
+
+    parent_steps = None
+
+    # If this blueprint extends another, first parse the parent
+    if 'extends' in raw_data:
+        parent_path = raw_data['extends']
+        # Expand env vars in parent path
+        parent_path = expand_env_vars_with_context(
+            parent_path,
+            {'BSMITH_DIR': os.environ.get('BSMITH_DIR', str(Path(__file__).parent.parent.parent.parent.absolute()))}
+        )
+
+        # Resolve parent path relative to current file
+        if not Path(parent_path).is_absolute():
+            parent_path = str(Path(blueprint_path).parent / parent_path)
+
+        # Recursively parse parent to get its fully resolved steps
+        parent_design_space, _ = parse_blueprint(parent_path, model_path)
+        parent_steps = parent_design_space.steps
+
+    # Now load the full merged data for config extraction
+    blueprint_data = load_yaml(
+        blueprint_path,
+        expand_env_vars=True,
+        support_inheritance=True,
+        context_vars={'BLUEPRINT_DIR': str(Path(blueprint_path).parent.absolute())}
+    )
+
+    forge_config = _extract_config_and_mappings(blueprint_data)
+
+    # Parse steps from THIS blueprint only (not inherited steps)
+    # Use raw_data to get only the steps defined in this file
+    steps_data = raw_data.get('design_space', {}).get('steps', [])
+    steps = _parse_steps(steps_data, parent_steps=parent_steps)
+
+    # Parse kernels (use merged data to inherit kernels)
     kernel_backends = _parse_kernels(blueprint_data.get('design_space', {}).get('kernels', []))
 
     # Get max_combinations from environment or use default
     max_combinations = int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000"))
-    
+
     design_space = DesignSpace(
         model_path=model_path,
         steps=steps,
@@ -104,11 +124,11 @@ def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
     """Extract ForgeConfig from blueprint data."""
     # Extract config - check both flat and global_config
     config_data = {**data.get('global_config', {}), **data}
-    
+
     # Validate required field
     if 'clock_ns' not in config_data:
         raise ValueError("Missing required field 'clock_ns' in blueprint")
-    
+
     return ForgeConfig(
         clock_ns=float(config_data['clock_ns']),
         output=config_data.get('output', 'estimates'),
@@ -118,140 +138,14 @@ def _extract_config_and_mappings(data: Dict[str, Any]) -> ForgeConfig:
         parallel_builds=config_data.get('parallel_builds', 4),
         debug=config_data.get('debug', False),
         save_intermediate_models=config_data.get('save_intermediate_models', False),
+        start_step=config_data.get('start_step'),
+        stop_step=config_data.get('stop_step'),
         finn_overrides=data.get('finn_config', {})
     )
 
 
-def _load_with_inheritance(blueprint_path: str, return_parent: bool = False) -> Union[Dict[str, Any], Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
-    """
-    Load blueprint and merge with parent if extends is specified.
-    
-    Args:
-        blueprint_path: Path to blueprint YAML file
-        return_parent: If True, also return the parent data
-        
-    Returns:
-        If return_parent is False: Merged blueprint data
-        If return_parent is True: Tuple of (merged data, parent data)
-    """
-    with open(blueprint_path, 'r') as f:
-        data = yaml.safe_load(f)
-    
-    # Expand environment variables with context
-    data = _expand_env_vars_with_context(data, blueprint_path)
-    
-    parent_data = None
-    
-    # Handle inheritance
-    if 'extends' in data:
-        # Resolve parent path relative to child
-        parent_path = str(Path(blueprint_path).parent / data['extends'])
-        parent_data = _load_with_inheritance(parent_path, return_parent=False)
-        
-        # Deep merge parent and child
-        merged = _deep_merge(parent_data, data)
-        
-        if return_parent:
-            return merged, parent_data
-        return merged
-    
-    # No inheritance
-    if return_parent:
-        return data, None
-    return data
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Deep merge two dictionaries.
-    
-    Args:
-        base: Base dictionary (parent blueprint)
-        override: Override dictionary (child blueprint)
-        
-    Returns:
-        Merged dictionary
-    """
-    result = base.copy()
-    
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    
-    return result
-
-
-def _expand_env_vars(data: Any) -> Any:
-    """
-    Recursively expand environment variables in data structure.
-    
-    Supports ${VAR} and $VAR syntax. Handles nested dicts and lists.
-    
-    Args:
-        data: Data structure to process
-        
-    Returns:
-        Data with environment variables expanded
-    """
-    if isinstance(data, str):
-        # Use os.path.expandvars which handles both ${VAR} and $VAR
-        return os.path.expandvars(data)
-    elif isinstance(data, dict):
-        return {k: _expand_env_vars(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [_expand_env_vars(item) for item in data]
-    else:
-        # Numbers, booleans, None, etc. - return as-is
-        return data
-
-
-def _expand_env_vars_with_context(data: Any, blueprint_path: str) -> Any:
-    """
-    Expand environment variables with additional context variables.
-    
-    Provides:
-        - BLUEPRINT_DIR: Directory containing the blueprint file
-        - BSMITH_DIR: Brainsmith root directory (if not already set)
-        
-    Args:
-        data: Data structure to process
-        blueprint_path: Path to blueprint file (for context)
-        
-    Returns:
-        Data with environment variables expanded
-    """
-    # Calculate context variables
-    blueprint_dir = str(Path(blueprint_path).parent.absolute())
-    
-    # Save original values if they exist
-    old_vars = {}
-    context_vars = {
-        'BLUEPRINT_DIR': blueprint_dir,
-    }
-    
-    # Only set BSMITH_DIR if not already set (smithy sets it)
-    if 'BSMITH_DIR' not in os.environ:
-        context_vars['BSMITH_DIR'] = str(Path(__file__).parents[3])
-    
-    for var, value in context_vars.items():
-        if var in os.environ:
-            old_vars[var] = os.environ[var]
-        os.environ[var] = value
-    
-    try:
-        # Expand variables with context
-        result = _expand_env_vars(data)
-    finally:
-        # Restore original environment
-        for var in context_vars:
-            if var in old_vars:
-                os.environ[var] = old_vars[var]
-            else:
-                os.environ.pop(var, None)
-    
-    return result
 
 
 def _parse_steps_raw(steps_data: List[Any]) -> List[Union[str, List[Optional[str]]]]:
@@ -261,12 +155,12 @@ def _parse_steps_raw(steps_data: List[Any]) -> List[Union[str, List[Optional[str
 
 
 def _parse_steps(
-    steps_data: List[Any], 
+    steps_data: List[Any],
     parent_steps: Optional[List[Union[str, List[Optional[str]]]]] = None
 ) -> List[Union[str, List[Optional[str]]]]:
     """Parse steps from design_space, preserving variations and supporting operations."""
     registry = get_registry()
-    
+
     # Separate operations from direct steps
     operations = []
     direct_steps = []
@@ -277,7 +171,7 @@ def _parse_steps(
                 operations.append(op)
         else:
             direct_steps.append(item)
-    
+
     # Determine base steps
     if direct_steps:
         # Direct steps specified: use them (child replaces parent)
@@ -288,30 +182,30 @@ def _parse_steps(
     else:
         # No steps at all: empty
         result = []
-    
+
     # Apply operations
     for op in operations:
         result = _apply_step_operation(result, op)
-    
+
     # Validate result (operations might have added unvalidated steps)
     return [_validate_spec(spec, registry) for spec in result]
 
 
 def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[StepSpec]:
     """Apply a single operation to the step list"""
-    
+
     # Get registry for normalization
     registry = get_registry()
-    
+
     # Normalize the operation target to match already-normalized steps
     normalized_target = None
     if op.target is not None:
         normalized_target = _validate_spec(op.target, registry)
-    
+
     # Validate nested lists in operation specs
     _validate_nested_lists(op.insert, registry)
     _validate_nested_lists(op.with_step, registry)
-    
+
     # Dispatch to specific handler
     handlers = {
         "remove": _apply_remove,
@@ -321,7 +215,7 @@ def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[Step
         "at_start": _apply_at_start,
         "at_end": _apply_at_end,
     }
-    
+
     handler = handlers.get(op.op_type)
     if handler:
         return handler(steps, op, normalized_target)
@@ -389,7 +283,7 @@ def _apply_at_end(steps: List[StepSpec], op: StepOperation, target: Optional[Ste
 
 def _insert_steps(target_list: List[StepSpec], steps: StepSpec) -> None:
     """Insert steps as sequential or branch based on content.
-    
+
     Args:
         target_list: List to insert steps into
         steps: Steps to insert (string or list)
@@ -421,7 +315,7 @@ def _step_matches(step: StepSpec, target: Optional[StepSpec]) -> bool:
 
 def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -> Union[str, List[str]]:
     """Validate a step specification (string or list).
-    
+
     Rules:
     - Strings are regular steps
     - Lists are branch points (can only contain strings or None/~)
@@ -436,7 +330,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
         validated = []
         skip_count = 0
         non_skip_count = 0
-        
+
         for opt in spec:
             if isinstance(opt, str) or opt is None:
                 validated_opt = _validate_step(opt)
@@ -453,7 +347,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
                 )
             else:
                 raise ValueError(f"Invalid option in branch point: {opt}. Expected string or None, got {type(opt)}")
-        
+
         # Validate branch point constraints
         if skip_count > 1:
             raise ValueError(
@@ -465,7 +359,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None], registry=None) -
                 f"Invalid branch point {spec}: contains only skip options. "
                 "Branch points must have at least one non-skip step."
             )
-        
+
         return validated
     elif spec is None:
         # Handle bare None values
@@ -480,7 +374,7 @@ def _validate_step(step: Optional[str]) -> str:
         return SKIP_NORMALIZED
     if not has_step(step):
         raise ValueError(f"Step '{step}' not found in registry")
-    return step    
+    return step
 
 
 def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:
@@ -498,18 +392,18 @@ def _extract_kernel_spec(spec) -> Tuple[str, Optional[List[str]]]:
 def _parse_kernels(kernels_data: list) -> list:
     """Parse kernels section."""
     kernel_backends = []
-    
+
     for spec in kernels_data:
         kernel_name, backend_names = _extract_kernel_spec(spec)
-        
+
         # If no backends specified, get all available
         if not backend_names:
             backend_names = list_backends_by_kernel(kernel_name)
-        
+
         # Skip if no backends available
         if not backend_names:
             continue
-        
+
         # Resolve backend classes
         backend_classes = []
         for name in backend_names:
@@ -517,7 +411,7 @@ def _parse_kernels(kernels_data: list) -> list:
             if not backend_class:
                 raise ValueError(f"Backend '{name}' not found in registry")
             backend_classes.append(backend_class)
-        
+
         kernel_backends.append((kernel_name, backend_classes))
-    
+
     return kernel_backends

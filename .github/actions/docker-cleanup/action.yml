@@ -1,21 +1,34 @@
-name: 'Smithy Cleanup'
-description: 'Clean Smithy container and build artifacts safely (scoped to current job)'
+name: 'Docker Cleanup'
+description: 'Clean Docker container and build artifacts safely (scoped to current job)'
 
 runs:
   using: 'composite'
   steps:
-    - name: Clean Smithy container resources
+    - name: Clean Docker container resources
       shell: bash
       run: |
-        echo "=== Smithy scoped cleanup ==="
-        
+        echo "=== Docker container scoped cleanup ==="
+
         # Clean container and build artifacts
-        if [ -x ./smithy ]; then
-            # Use the new clean command which handles both container and artifacts
-            ./smithy clean
-            echo "✓ Smithy container and artifacts cleanup completed"
+        if [ -x ./ctl-docker.sh ]; then
+            # Use the clean command which handles both container and artifacts
+            ./ctl-docker.sh clean
+            echo "✓ Docker container and artifacts cleanup completed"
         else
-            echo "No smithy script found, skipping cleanup"
+            echo "No ctl-docker.sh script found, skipping cleanup"
         fi
-        
+
+        # Remove the tagged image for this specific commit
+        if [ -n "$BSMITH_DOCKER_TAG" ]; then
+            echo "Removing commit-specific image: $BSMITH_DOCKER_TAG"
+            docker rmi -f "$BSMITH_DOCKER_TAG" 2>/dev/null || echo "Image already removed or not found"
+        fi
+
+        # Prune dangling images (untagged intermediates)
+        echo "Removing dangling images..."
+        docker image prune -f || echo "No dangling images to remove"
+
+        # Note: BuildKit cache layers are preserved automatically
+        echo "✓ BuildKit cache layers preserved for future builds"
+
         echo "Available space: $(df -h / | tail -1 | awk '{print $4}')"

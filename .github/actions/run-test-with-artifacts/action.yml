@@ -38,7 +38,7 @@ runs:
   steps:
     - name: Execute test
       id: test-execution
-      uses: ./.github/actions/smithy-exec
+      uses: ./.github/actions/docker-exec
       with:
         command: ${{ inputs.command }}
         timeout-minutes: ${{ inputs.timeout-minutes }}
@@ -46,8 +46,8 @@ runs:
     - name: Collect artifacts
       id: collect-artifacts
       if: |
-        always() && 
-        (inputs.collect-on == 'always' || 
+        always() &&
+        (inputs.collect-on == 'always' ||
          (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
       uses: ./.github/actions/collect-artifacts
       with:
@@ -56,8 +56,8 @@ runs:
     - name: Upload artifacts
       id: upload-artifacts
       if: |
-        always() && 
-        (inputs.collect-on == 'always' || 
+        always() &&
+        (inputs.collect-on == 'always' ||
          (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
       uses: actions/upload-artifact@v4
       with:

@@ -112,6 +112,15 @@ design_space:
   steps: {steps}
 """
 
+STEP_RANGE_BLUEPRINT = """
+name: {name}
+clock_ns: {clock_ns}
+start_step: {start_step}
+stop_step: {stop_step}
+design_space:
+  steps: {steps}
+"""
+
 
 def create_blueprint_file(
     tmp_path: Path,
@@ -123,7 +132,7 @@ def create_blueprint_file(
 ) -> Path:
     """
     Create a blueprint YAML file from a template.
-    
+
     Args:
         tmp_path: pytest tmp_path fixture for temporary files
         template: YAML template string with format placeholders
@@ -131,32 +140,32 @@ def create_blueprint_file(
         clock_ns: Clock period in nanoseconds
         steps: List of step names (defaults to basic test steps)
         **kwargs: Additional template variables
-        
+
     Returns:
         Path to the created blueprint file
     """
     if steps is None:
         steps = ["test_step1", "test_step2", "test_step3"]
-    
+
     # Format lists as YAML arrays
     if isinstance(steps, list):
         steps_yaml = str(steps)
     else:
         steps_yaml = steps
-        
+
     # Handle kernel_backends formatting
     if 'kernel_backends' in kwargs and isinstance(kwargs['kernel_backends'], list):
         kwargs['kernel_backends'] = str(kwargs['kernel_backends'])
     # If kernel_backends is already a formatted YAML string, leave it as is
-        
+
     # Handle step_operations formatting
     if 'step_operations' in kwargs and isinstance(kwargs['step_operations'], list):
         kwargs['step_operations'] = str(kwargs['step_operations'])
-    
-    # Handle kernels formatting  
+
+    # Handle kernels formatting
     if 'kernels' in kwargs and isinstance(kwargs['kernels'], list):
         kwargs['kernels'] = str(kwargs['kernels'])
-    
+
     # Format the template
     content = template.format(
         name=name,
@@ -164,11 +173,11 @@ def create_blueprint_file(
         steps=steps_yaml,
         **kwargs
     )
-    
+
     # Create file
     file_path = tmp_path / f"{name}.yaml"
     file_path.write_text(content)
-    
+
     return file_path
 
 
@@ -178,7 +187,7 @@ def create_minimal_blueprint(tmp_path: Path, name: str = "test_minimal", **kwarg
 
 
 def create_full_blueprint(
-    tmp_path: Path, 
+    tmp_path: Path,
     name: str = "test_full",
     description: str = "Test blueprint",
     output: str = "bitfile",
@@ -188,8 +197,8 @@ def create_full_blueprint(
 ) -> Path:
     """Create a full blueprint with all common fields."""
     return create_blueprint_file(
-        tmp_path, 
-        FULL_BLUEPRINT, 
+        tmp_path,
+        FULL_BLUEPRINT,
         name,
         description=description,
         output=output,
@@ -224,7 +233,7 @@ def create_base_steps_blueprint(
     """Create a base blueprint for step operations testing."""
     if steps is None:
         steps = ["test_step", "test_step1", "test_step2"]
-        
+
     return create_blueprint_file(
         tmp_path,
         BASE_STEPS_BLUEPRINT,
@@ -352,15 +361,15 @@ def create_inheritance_parent(
     """Create a parent blueprint for inheritance testing."""
     if steps is None:
         steps = ["test_step1", "test_step2"]
-    
+
     if kernels is None:
         kernels = ["TestKernel", "TestKernelWithBackends"]
-    
+
     # Format kernels as YAML array
     kernels_yaml = ""
     for kernel in kernels:
         kernels_yaml += f"    - {kernel}\n"
-    
+
     return create_blueprint_file(
         tmp_path,
         INHERITANCE_PARENT_BLUEPRINT,
@@ -380,11 +389,40 @@ def create_inheritance_grandparent(
     """Create a grandparent blueprint for inheritance testing."""
     if steps is None:
         steps = ["test_step1"]
-    
     return create_blueprint_file(
         tmp_path,
         INHERITANCE_GRANDPARENT_BLUEPRINT,
         name,
+        steps=steps,
+        **kwargs
+    )
+
+
+def create_step_range_blueprint(
+    tmp_path: Path,
+    name: str = "test_step_range",
+    start_step: Optional[str] = None,
+    stop_step: Optional[str] = None,
+    steps: Optional[List[str]] = None,
+    **kwargs
+) -> Path:
+    """Create a blueprint with step range control."""
+    if steps is None:
+        steps = ["test_step", "test_step1", "test_step2", "test_step3"]
+
+    # Build template conditionally
+    template = STEP_RANGE_BLUEPRINT
+    if start_step is None:
+        template = template.replace("start_step: {start_step}\n", "")
+    if stop_step is None:
+        template = template.replace("stop_step: {stop_step}\n", "")
+
+    return create_blueprint_file(
+        tmp_path,
+        template,
+        name,
+        start_step=start_step or "",
+        stop_step=stop_step or "",
         steps=steps,
         **kwargs
     )

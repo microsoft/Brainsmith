@@ -10,7 +10,7 @@
 │   ├── collect-artifacts/   # Safe artifact collection
 │   ├── docker-cleanup/      # Container & build cleanup
 │   ├── run-test-with-artifacts/  # Complete test lifecycle
-│   ├── smithy-exec/         # Command execution with container lifecycle
+│   ├── docker-exec/         # Command execution with container lifecycle
 │   └── workflow-setup/      # Standard initialization
 └── workflows/        # 2 focused workflows
     ├── pr-validation.yml     # BERT Quicktest
@@ -22,8 +22,8 @@
 ### PR Validation (`pr-validation.yml`)
 Fast validation for pull requests and develop branch pushes.
 
-**Triggers**: Push to `develop`, Pull Requests  
-**Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)  
+**Triggers**: Push to `develop`, Pull Requests
+**Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)
 **Job**: `bert-quicktest` (BERT Quicktest)
 
 **Steps**:
@@ -34,14 +34,23 @@ Fast validation for pull requests and develop branch pushes.
 ### Biweekly Tests (`biweekly-tests.yml`)
 Comprehensive testing for large model validation.
 
-**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)  
-**Runtime**: ~24 hours  
+**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)
+**Runtime**: ~24 hours
 **Job**: `bert-large-comprehensive-test` (BERT Large Model Comprehensive Test)
 
 **Steps**:
 1. Checkout repository
 2. Setup workflow (disk check, cleanup, build)
 3. Run BERT Large test with artifact collection
+
+## Build Caching
+
+BuildKit layer caching enabled (`BSMITH_DOCKER_NO_CACHE: "0"`). Typical build times:
+- First build: ~12 min
+- Code changes: ~1-2 min
+- Dependency/Dockerfile changes: ~3-10 min
+
+Cache (~5GB) persists on runner. Cleanup removes commit-tagged images but preserves cache layers.
 
 ## Action Architecture
 
@@ -76,9 +85,9 @@ Complete test lifecycle with conditional artifact collection.
 - `docker-cleanup` - Cleans containers AND persistent build directories
 - `collect-artifacts` - Collects system info, container logs, and test artifacts
 
-#### Docker Actions  
+#### Docker Actions
 - `build-docker` - Builds image with verification and timing fixes
-- `smithy-exec` - Executes commands with container lifecycle management
+- `docker-exec` - Executes commands with container lifecycle management
 
 ## Adding New Workflows
 

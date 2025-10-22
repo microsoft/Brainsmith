@@ -17,7 +17,7 @@ from brainsmith.core.plugins.registry import has_step, list_all_steps
 class DesignSpace:
     """
     Design space with resolved plugin objects.
-    
+
     This is a clean intermediate representation between blueprint YAML
     and the execution tree. All plugin names have been resolved to
     actual classes from the registry.
@@ -26,20 +26,20 @@ class DesignSpace:
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
     kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
     max_combinations: int = 100000  # Maximum allowed design space combinations
-    
+
     def __post_init__(self):
         """Validate steps after initialization."""
         self.validate_steps()
-    
+
     def validate_steps(self) -> None:
         """Validate that all referenced steps exist in the registry."""
         invalid_steps = []
-        
+
         def check_step(step: Optional[str]) -> None:
             """Check if a single step is valid."""
             if step and step not in ["~", ""] and not has_step(step):
                 invalid_steps.append(step)
-        
+
         # Check all steps, including those in branch points
         for step_spec in self.steps:
             if isinstance(step_spec, list):
@@ -49,7 +49,7 @@ class DesignSpace:
             else:
                 # Single step
                 check_step(step_spec)
-        
+
         if invalid_steps:
             available_steps = list_all_steps()
             # Find similar steps for suggestions
@@ -58,13 +58,13 @@ class DesignSpace:
                 similar = [s for s in available_steps if invalid.lower() in s.lower() or s.lower() in invalid.lower()]
                 if similar:
                     suggestions.extend(similar[:2])
-            
+
             error_msg = f"Invalid steps found: {', '.join(invalid_steps)}"
             if suggestions:
                 error_msg += f"\n\nDid you mean one of these? {', '.join(set(suggestions))}"
             error_msg += f"\n\nAvailable steps: {', '.join(available_steps)}"
             raise ValueError(error_msg)
-    
+
     def validate_size(self) -> None:
         """Validate that design space doesn't exceed max combinations."""
         estimated_size = self._estimate_combinations()
@@ -73,11 +73,11 @@ class DesignSpace:
                 f"Design space too large: {estimated_size:,} combinations exceeds "
                 f"limit of {self.max_combinations:,}"
             )
-    
+
     def _estimate_combinations(self) -> int:
         """Estimate total number of combinations without building tree."""
         total = 1
-        
+
         # Step variations
         for step in self.steps:
             if isinstance(step, list):
@@ -87,12 +87,12 @@ class DesignSpace:
                 if any(opt in [None, "~", ""] for opt in step):
                     valid_options += 1  # Add one for skip branch
                 total *= max(1, valid_options)
-        
+
         # Kernel backends (no branching in current design)
         # Each kernel has exactly one backend selected
-        
+
         return total
-    
+
     def get_kernel_summary(self) -> str:
         """Get human-readable summary of kernels and backends."""
         lines = []
@@ -100,7 +100,7 @@ class DesignSpace:
             backend_names = [cls.__name__ for cls in backend_classes]
             lines.append(f"  {kernel_name}: {', '.join(backend_names)}")
         return "\n".join(lines)
-    
+
     def __str__(self) -> str:
         """Human-readable representation."""
         return (
@@ -110,3 +110,69 @@ class DesignSpace:
             f"  kernels: {len(self.kernel_backends)}\n"
             f")"
         )
+
+
+def find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str) -> int:
+    """Find index of step in steps list, checking inside branch points.
+
+    Args:
+        steps: List of step specifications
+        step_name: Name of step to find
+
+    Returns:
+        Index of the step
+
+    Raises:
+        ValueError: If step not found in steps list
+    """
+    for i, step in enumerate(steps):
+        if step == step_name:
+            return i
+        if isinstance(step, list) and step_name in step:
+            return i
+
+    # Step not found - create helpful error message
+    available = []
+    for s in steps:
+        if isinstance(s, str):
+            available.append(s)
+        elif isinstance(s, list):
+            available.append(f"[{', '.join(str(opt) for opt in s)}]")
+
+    raise ValueError(
+        f"Step '{step_name}' not found in steps list.\n"
+        f"Available steps: {', '.join(available)}"
+    )
+
+
+def slice_steps(
+    steps: List[Union[str, List[Optional[str]]]],
+    start_step: Optional[str] = None,
+    stop_step: Optional[str] = None
+) -> List[Union[str, List[Optional[str]]]]:
+    """Slice steps list by step names.
+
+    Handles both string steps and branch point lists.
+    Slicing is inclusive on both ends.
+
+    Args:
+        steps: List of step specifications
+        start_step: Name of step to start from (inclusive), None for beginning
+        stop_step: Name of step to stop at (inclusive), None for end
+
+    Returns:
+        Sliced steps list
+
+    Raises:
+        ValueError: If start_step or stop_step not found
+    """
+    start_idx = find_step_index(steps, start_step) if start_step else 0
+    stop_idx = find_step_index(steps, stop_step) if stop_step else len(steps) - 1
+
+    if start_idx > stop_idx:
+        raise ValueError(
+            f"Invalid step range: start_step '{start_step}' (index {start_idx}) "
+            f"comes after stop_step '{stop_step}' (index {stop_idx})"
+        )
+
+    return steps[start_idx:stop_idx + 1]

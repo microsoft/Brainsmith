@@ -13,8 +13,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from brainsmith.config import get_build_dir
 from .design.parser import parse_blueprint
 from .design.builder import DSETreeBuilder
+from .design.space import slice_steps
 from .dse.tree import DSETree
 from .dse.runner import SegmentRunner
 from .dse.finn_runner import FINNRunner
@@ -23,21 +25,29 @@ from .dse.types import TreeExecutionResult
 logger = logging.getLogger(__name__)
 
 
-def explore_design_space(model_path: str, blueprint_path: str, output_dir: str = None):
+def explore_design_space(
+    model_path: str,
+    blueprint_path: str,
+    output_dir: str = None,
+    start_step_override: str = None,
+    stop_step_override: str = None
+):
     """
     Explore the design space for an FPGA accelerator.
-    
+
     Transforms a neural network model into an FPGA accelerator through
     blueprint-driven design space exploration and synthesis.
-    
+
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
         output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/forge_YYYYMMDD_HHMMSS)
-        
+        start_step_override: Override blueprint start_step (CLI takes precedence)
+        stop_step_override: Override blueprint stop_step (CLI takes precedence)
+
     Returns:
         TreeExecutionResult containing build artifacts and statistics
-        
+
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
@@ -48,41 +58,50 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
         raise FileNotFoundError(f"Model file not found: {model_path}")
     if not Path(blueprint_path).exists():
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-    
+
     # Determine output directory
     if output_dir is None:
-        build_dir = Path(os.environ.get("BSMITH_BUILD_DIR", "./build"))
+        build_dir = get_build_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = str(build_dir / f"dse_{timestamp}")
-    
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     logger.info(f"Exploring design space for FPGA accelerator:")
     logger.info(f"  Model: {model_path}")
     logger.info(f"  Blueprint: {blueprint_path}")
     logger.info(f"  Output: {output_dir}")
-    
+
     # Parse blueprint
     design_space, forge_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
-    
+
+    # Apply CLI overrides (CLI > blueprint)
+    start_step = start_step_override or forge_config.start_step
+    stop_step = stop_step_override or forge_config.stop_step
+
+    # Slice steps if specified
+    if start_step or stop_step:
+        logger.info(f"Applying step range: start={start_step or 'beginning'}, stop={stop_step or 'end'}")
+        design_space.steps = slice_steps(design_space.steps, start_step, stop_step)
+
     # Build DSE tree
     tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, forge_config)
-    
+
     logger.info(f"Design space: {len(design_space.steps)} steps, "
                 f"{len(design_space.kernel_backends)} kernels")
-    
+
     # Log tree statistics
     stats = tree.get_statistics()
     logger.info(f"DSE tree:")
     logger.info(f"  - Total paths: {stats['total_paths']:,}")
     logger.info(f"  - Total segments: {stats['total_segments']:,}")
     logger.info(f"  - Segment efficiency: {stats['segment_efficiency']}%")
-    
+
     # Explore the DSE tree
     logger.info("Starting design space exploration...")
-    
+
     # Create runner and execute
     finn_runner = FINNRunner()
     runner = SegmentRunner(finn_runner, tree.root.finn_config)
@@ -91,30 +110,30 @@ def explore_design_space(model_path: str, blueprint_path: str, output_dir: str =
         initial_model=Path(model_path),
         output_dir=Path(output_dir)
     )
-    
+
     # Check results
     result_stats = results.stats
-    
+
     # Consider both successful and cached builds as valid outcomes
     valid_builds = result_stats['successful'] + result_stats['cached']
-    
+
     if valid_builds == 0:
         raise RuntimeError(f"DSE failed: No successful builds "
                          f"({result_stats['failed']} failed, {result_stats['skipped']} skipped)")
-    
+
     # Warn if only cached results were used
     if result_stats['successful'] == 0 and result_stats['cached'] > 0:
         logger.warning(f"⚠️  All builds used cached results ({result_stats['cached']} cached). "
                       f"No new builds were executed.")
-    
+
     logger.info(f"✅ Design space exploration completed successfully!")
     logger.info(f"   Successful builds: {result_stats['successful']}/{result_stats['total']}")
     logger.info(f"   Total time: {results.total_time:.2f}s")
     logger.info(f"   Output directory: {output_dir}")
-    
+
     # Attach design space and tree to results for inspection
     results.design_space = design_space
     results.dse_tree = tree
-    
+
     return results
 
