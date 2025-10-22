@@ -389,6 +389,7 @@ def create_inheritance_grandparent(
     """Create a grandparent blueprint for inheritance testing."""
     if steps is None:
         steps = ["test_step1"]
+
     return create_blueprint_file(
         tmp_path,
         INHERITANCE_GRANDPARENT_BLUEPRINT,

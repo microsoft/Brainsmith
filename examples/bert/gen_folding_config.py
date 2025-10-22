@@ -121,34 +121,42 @@ def generate_config(args) -> dict:
             else:
                 d = mvau(args.simd, args.pe, args.runtime_writeable_weights)
             config[f"MVAU_rtl_{m + (8 * n)}"] = d
+
         # DuplicateStreams - 3 per layer
         for m in range(3):
             d = dupstreams(args.other)
             config[f"DuplicateStreams_hls_{m + (3 * n)}"] = d
+
         # Shuffles - 4 per layer
         for m in range(4):
             d = shuffle(args.other)
             config[f"Shuffle_hls_{m + (4 * n)}"] = d
+
         # Thresholding - 9 per layer
         for m in range(9):
             d = thresholding(args.other, 0)
             config[f"Thresholding_rtl_{m + (9 * n)}"] = d
+
         # ElementwiseAdds - 2 per layer
         for m in range(2):
             d = eltwiseadd(args.other)
             config[f"ElementwiseAdd_hls_{m + (2 * n)}"] = d
+
         # ElementwiseMuls - 5 per layer
         for m in range(5):
             d = eltwisemul(args.other)
             config[f"ElementwiseMul_hls_{m + (5 * n)}"] = d
+
         # SoftMax - 1 per layer
         for m in range(1):
             d = softmax(args.other)
             config[f"HWSoftmax_hls_{m + (n * 1)}"] = d
+
         # LayerNorms - 2 per layer
         for m in range(2):
             d = layernorm(args.other)
             config[f"LayerNorm_hls_{m + (n * 2)}"] = d
+
     return config
 
 
