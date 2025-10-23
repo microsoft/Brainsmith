@@ -11,8 +11,6 @@ import yaml
 from rich.table import Table
 from rich.console import Console as RichConsole
 
-from brainsmith.settings.constants import PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT
-
 # Lazy import settings
 if TYPE_CHECKING:
     from brainsmith.settings import SystemConfig
@@ -20,6 +18,10 @@ if TYPE_CHECKING:
 # Source constants for configuration display
 _SOURCE_DERIVED = "derived"
 _SOURCE_DEFAULT = "default"
+
+# Config file names for source tracking (inlined from settings module)
+_PROJECT_CONFIG_FILE = "brainsmith_config.yaml"
+_PROJECT_CONFIG_FILE_ALT = ".brainsmith/config.yaml"
 
 
 class ConfigFormatter:
@@ -55,8 +57,8 @@ class ConfigFormatter:
         table.add_row("", "", "")
         table.add_row("Plugin Settings", "", "")
 
-        table.add_row("  Default Source", config.default_source,
-                      self._get_source("default_source", "BSMITH_DEFAULT_SOURCE"))
+        table.add_row("  Source Priority", ", ".join(config.source_priority),
+                      self._get_source("source_priority", "BSMITH_SOURCE_PRIORITY"))
 
         # Plugin sources - show each source with its path (exclude brainsmith)
         plugin_sources = {k: v for k, v in config.plugin_sources.items() if k != 'brainsmith'}
@@ -117,20 +119,20 @@ class ConfigFormatter:
         table.add_row("", "", "")
         table.add_row("FINN Configuration", "", "")
 
-        finn_build = config.finn.finn_build_dir
+        finn_build = config.finn_build_dir
         table.add_row("  FINN_BUILD_DIR",
                       self._format_path(finn_build, config.bsmith_dir),
-                      self._get_source("finn.finn_build_dir", "BSMITH_FINN__FINN_BUILD_DIR"))
+                      self._get_source("finn_build_dir", "BSMITH_FINN_BUILD_DIR"))
 
-        finn_deps = config.finn.finn_deps_dir
+        finn_deps = config.finn_deps_dir
         table.add_row("  FINN_DEPS_DIR",
                       self._format_path(finn_deps, config.bsmith_dir),
-                      self._get_source("finn.finn_deps_dir", "BSMITH_FINN__FINN_DEPS_DIR"))
+                      self._get_source("finn_deps_dir", "BSMITH_FINN_DEPS_DIR"))
 
-        finn_root = config.finn.finn_root
+        finn_root = config.finn_root
         table.add_row("  FINN_ROOT",
                       self._format_path(finn_root, config.bsmith_dir),
-                      self._get_source("finn.finn_root", "BSMITH_FINN__FINN_ROOT"))
+                      self._get_source("finn_root", "BSMITH_FINN_ROOT"))
 
     def _format_path(self, path: Path | None, base_path: Path | None = None) -> str:
         if not path:
@@ -172,7 +174,7 @@ class ConfigFormatter:
     
     def _check_yaml_files(self, setting_name: str) -> str | None:
         """Check if setting exists in project YAML files. Supports nested paths."""
-        for filename in [PROJECT_CONFIG_FILE, PROJECT_CONFIG_FILE_ALT]:
+        for filename in [_PROJECT_CONFIG_FILE, _PROJECT_CONFIG_FILE_ALT]:
             # Cache parsed YAML
             if filename not in self._yaml_cache:
                 yaml_path = Path(filename)

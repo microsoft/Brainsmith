@@ -13,13 +13,14 @@ from brainsmith.loader import (
 )
 from brainsmith.registry import registry
 from ..context import ApplicationContext
-from ..utils import console
+from ..utils import console, progress_spinner
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed component information')
+@click.option('--validate', is_flag=True, help='Validate all components by importing them (slower)')
 @click.pass_obj
-def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
+def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool) -> None:
     """Shows all available steps, kernels, and backends, organized by source:
 
     - brainsmith: Core Brainsmith components
@@ -27,6 +28,9 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
     - qonnx: QONNX framework components
     - user: Custom plugins from configured sources
     - <pkg>: Entry point plugins from installed packages
+
+    By default, shows fast metadata listing. Use --validate to import all
+    components and check for errors.
     """
     config = app_ctx.get_effective_config()
 
@@ -106,6 +110,43 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
 
     console.print(summary_table)
 
+    # Validate components if requested (after showing tables)
+    validation_errors = {}
+    if validate:
+        from brainsmith.loader import get_kernel, get_backend, get_step
+
+        with progress_spinner("Validating components...", transient=False, no_progress=app_ctx.no_progress) as task:
+            # Validate kernels
+            for kernel_name in all_kernels:
+                try:
+                    get_kernel(kernel_name)
+                except Exception as e:
+                    validation_errors[kernel_name] = str(e)
+
+            # Validate backends
+            for backend_name in all_backends:
+                try:
+                    get_backend(backend_name)
+                except Exception as e:
+                    validation_errors[backend_name] = str(e)
+
+            # Validate steps
+            for step_name in all_steps:
+                try:
+                    get_step(step_name)
+                except Exception as e:
+                    validation_errors[step_name] = str(e)
+
+        console.print()  # Blank line after spinner
+        if validation_errors:
+            console.print(f"[bold red]Found {len(validation_errors)} error(s):[/bold red]\n")
+            for component, error in sorted(validation_errors.items()):
+                console.print(f"  [red]✗[/red] {component}")
+                console.print(f"    [dim]{error}[/dim]")
+            console.print()
+        else:
+            console.print("[bold green]✓ All components validated successfully[/bold green]\n")
+
     # Show detailed listings if verbose
     if verbose:
         console.print()
@@ -125,10 +166,19 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(kernels_by_source[source]):
                     full_name = f"{source}:{name}"
+
+                    # Check validation status
+                    validation_marker = ""
+                    if validate:
+                        if full_name in validation_errors:
+                            validation_marker = " [red]✗ FAILED[/red]"
+                        else:
+                            validation_marker = " [green]✓[/green]"
+
                     try:
                         meta = _get_kernel_metadata(full_name)
                         has_infer = '✓' if meta.get('infer') else '✗'
-                        console.print(f"    • {name:30} (infer={has_infer})")
+                        console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")
 
@@ -139,14 +189,29 @@ def plugins(app_ctx: ApplicationContext, verbose: bool) -> None:
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(backends_by_source[source]):
                     full_name = f"{source}:{name}"
+
+                    # Check validation status
+                    validation_marker = ""
+                    if validate:
+                        if full_name in validation_errors:
+                            validation_marker = " [red]✗ FAILED[/red]"
+                        else:
+                            validation_marker = " [green]✓[/green]"
+
                     try:
                         meta = get_backend_metadata(full_name)
                         target = meta.get('target_kernel', 'N/A')
                         lang = meta.get('language', 'N/A')
-                        console.print(f"    • {name:25} → {target:25} ({lang})")
+                        console.print(f"    • {name:25} → {target:25} ({lang}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:25} [red](error: {e})[/red]")
 
-    # Footer (only show verbose hint if not already verbose)
+    # Footer hints
+    hints = []
     if not verbose:
-        console.print(f"\n[dim]Use --verbose to see detailed component listings[/dim]")
+        hints.append("--verbose to see detailed component listings")
+    if not validate:
+        hints.append("--validate to test import all components")
+
+    if hints:
+        console.print(f"\n[dim]Use {' or '.join(hints)}[/dim]")

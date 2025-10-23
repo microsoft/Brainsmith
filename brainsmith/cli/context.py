@@ -10,8 +10,6 @@ from typing import Any, TYPE_CHECKING
 
 import click
 
-from brainsmith.settings.constants import USER_CONFIG_DIR, USER_CONFIG_FILE
-
 # Lazy imports for settings module (PEP 562)
 # This defers the expensive Pydantic import (~685ms) until actually needed.
 # For `--help` commands, settings are never imported, making CLI 76% faster.
@@ -52,8 +50,8 @@ class ApplicationContext:
     # Loaded configuration
     config: SystemConfig | None = None
 
-    # User config path
-    user_config_path: Path = field(default_factory=lambda: USER_CONFIG_DIR / USER_CONFIG_FILE)
+    # User config path (~/.brainsmith/config.yaml)
+    user_config_path: Path = field(default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml")
 
     def load_configuration(self) -> None:
         # Lazy import settings at runtime

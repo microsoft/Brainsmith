@@ -191,7 +191,7 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
         total_boards += board_count
 
         if verbose:
-            boards = board_mgr.extract_board_names(board_files, repo_name)
+            boards = board_mgr.extract_board_names(board_files)
             if boards:
                 boards_by_repo[repo_name] = boards
 

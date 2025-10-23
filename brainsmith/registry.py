@@ -135,18 +135,20 @@ def kernel(
     def register_kernel(cls: Type) -> Type:
         # Store metadata on class for potential later access
         # Parameters override class attributes
+        # Note: Don't extract infer_transform here - let registry.kernel() handle it
         cls.__brainsmith_kernel__ = {
             'name': name or getattr(cls, 'op_type', cls.__name__),
-            'infer_transform': infer_transform or getattr(cls, 'infer_transform', None),
+            'infer_transform': infer_transform,  # Store decorator parameter only
             'domain': domain or getattr(cls, 'domain', None),
             'metadata': metadata
         }
 
         # Register immediately
+        # Pass decorator parameter (may be None), let registry extract from class if needed
         registry.kernel(
             cls,
             name=name or getattr(cls, 'op_type', cls.__name__),
-            infer_transform=infer_transform or getattr(cls, 'infer_transform', None),
+            infer_transform=infer_transform,  # Let registry.kernel() handle extraction
             domain=domain or getattr(cls, 'domain', None)
         )
 
@@ -345,10 +347,26 @@ class Registry:
         if full_name in self._kernels:
             logger.warning(f"Overriding existing kernel: {full_name}")
 
+        # Extract infer_transform, handling @property decorators
+        # Properties return descriptors when accessed on class, we need the actual value
+        if infer_transform is None:
+            infer_attr = getattr(cls, 'infer_transform', None)
+            if isinstance(infer_attr, property):
+                # Call property getter to get the actual class
+                # Properties on brainsmith kernels are used to avoid circular imports
+                try:
+                    infer_transform = infer_attr.fget(None)
+                except (TypeError, AttributeError):
+                    # Property requires instance, can't unwrap
+                    infer_transform = None
+            else:
+                # Class attribute or None, use directly
+                infer_transform = infer_attr
+
         # Extract metadata - parameters override class attributes
         metadata = {
             'class': cls,
-            'infer': infer_transform or getattr(cls, 'infer_transform', None),
+            'infer': infer_transform,
             'domain': domain or getattr(cls, 'domain', 'finn.custom')
         }
 
@@ -451,12 +469,12 @@ class Registry:
             if module_name.startswith('qonnx.'):
                 return 'qonnx'
 
-        # Priority 3: Config default
+        # Priority 3: First source in priority list
         try:
             from brainsmith.settings import get_config
-            return get_config().default_source
+            return get_config().source_priority[0]
         except Exception:
-            return 'brainsmith'  # Ultimate fallback
+            return 'project'  # Ultimate fallback (first in default priority)
 
     def _extract_step_name(self, func_or_class: Any) -> str:
         """Extract step name from function or class.

@@ -71,7 +71,8 @@ DEPENDENCIES = {
         'url': 'https://github.com/Avnet/bdf.git',
         'ref': '2d49cfc25766f07792c0b314489f21fe916b639b',
         'group': 'boards',
-        'description': 'Avnet board files'
+        'description': 'Avnet board files',
+        'aliases': ['avnet']
     },
     'xilinx-boards': {
         'type': 'git',
@@ -79,7 +80,8 @@ DEPENDENCIES = {
         'ref': '8cf4bb674a919ac34e3d99d8d71a9e60af93d14e',
         'sparse_dirs': ['boards/Xilinx/rfsoc2x2'],
         'group': 'boards',
-        'description': 'Xilinx board files (RFSoC2x2)'
+        'description': 'Xilinx board files (RFSoC2x2)',
+        'aliases': ['xilinx', 'xilinx-rfsoc2x2']
     },
     'rfsoc4x2-boards': {
         'type': 'git',
@@ -87,7 +89,8 @@ DEPENDENCIES = {
         'ref': '13fb6f6c02c7dfd7e4b336b18b959ad5115db696',
         'sparse_dirs': ['board_files/rfsoc4x2'],
         'group': 'boards',
-        'description': 'RFSoC 4x2 board files'
+        'description': 'RFSoC 4x2 board files',
+        'aliases': ['rfsoc4x2']
     },
     'kv260-som-boards': {
         'type': 'git',
@@ -95,7 +98,8 @@ DEPENDENCIES = {
         'ref': '98e0d3efc901f0b974006bc4370c2a7ad8856c79',
         'sparse_dirs': ['boards/Xilinx/kv260_som'],
         'group': 'boards',
-        'description': 'KV260 SOM board files'
+        'description': 'KV260 SOM board files',
+        'aliases': ['kv260', 'kv260-som']
     },
     'aupzu3-boards': {
         'type': 'git',
@@ -103,19 +107,22 @@ DEPENDENCIES = {
         'ref': 'b595ecdf37c7204129517de1773b0895bcdcc2ed',
         'sparse_dirs': ['board-files/aup-zu3-8gb'],
         'group': 'boards',
-        'description': 'AUP ZU3 8GB board files'
+        'description': 'AUP ZU3 8GB board files',
+        'aliases': ['aupzu3']
     },
     'pynq-z1': {
         'type': 'zip',
         'url': 'https://github.com/cathalmccabe/pynq-z1_board_files/raw/master/pynq-z1.zip',
         'group': 'boards',
-        'description': 'PYNQ-Z1 board files'
+        'description': 'PYNQ-Z1 board files',
+        'multi_alias': 'pynq'
     },
     'pynq-z2': {
         'type': 'zip',
         'url': 'https://dpoauwgwqsy2x.cloudfront.net/Download/pynq-z2.zip',
         'group': 'boards',
-        'description': 'PYNQ-Z2 board files'
+        'description': 'PYNQ-Z2 board files',
+        'multi_alias': 'pynq'
     }
 }
 
@@ -141,6 +148,12 @@ class DependencyManager:
             'zip': ZipDependencyInstaller(temp_dir=self.deps_dir),
             'build': BuildDependencyInstaller()
         }
+
+    def _get_dest_path(self, dep: dict, name: str) -> Path:
+        """Determine destination path for a dependency."""
+        if dep.get('group') == 'boards':
+            return self.deps_dir / 'board-files' / name
+        return self.deps_dir / name
         
     def install(self, name: str, force: bool = False, quiet: bool = False) -> None:
         """Install a single dependency.
@@ -166,32 +179,18 @@ class DependencyManager:
         # Check requirements first
         missing = self._check_requirements(dep)
         if missing:
-            error_msg = f"Error: {name} requires the following tools to be installed:"
-            logger.error("%s", error_msg)
-            for tool, message in missing:
-                logger.error("  ✗ %s - %s", tool, message)
-            # Build error message for exception
             requirements_list = '\n'.join([f"  ✗ {tool} - {msg}" for tool, msg in missing])
-            raise RequirementError(
-                f"{error_msg}\n{requirements_list}"
-            )
-
-        # Determine destination path
-        # Special handling for board files - they go in board-files subdirectory
-        if dep.get('group') == 'boards':
-            dest = self.deps_dir / 'board-files' / name
-        else:
-            dest = self.deps_dir / name
+            error_msg = f"Error: {name} requires the following tools to be installed:\n{requirements_list}"
+            logger.error("%s", error_msg)
+            raise RequirementError(error_msg)
 
         # Get appropriate installer and delegate
         dep_type = dep['type']
         if dep_type not in self.installers:
             raise ValueError(f"Unknown dependency type: {dep_type}")
 
-        installer = self.installers[dep_type]
-
-        # Install the dependency (installer handles exists checks and force)
-        installer.install(name, dep, dest, force, quiet)
+        dest = self._get_dest_path(dep, name)
+        self.installers[dep_type].install(name, dep, dest, force, quiet)
             
     def install_group(self, group: str, force: bool = False, quiet: bool = False) -> Dict[str, Optional[Exception]]:
         """Install all dependencies in a group.
@@ -262,20 +261,12 @@ class DependencyManager:
             raise UnknownDependencyError(f"Unknown dependency: {name}")
 
         dep = DEPENDENCIES[name]
-
-        # Determine destination path
-        if dep.get('group') == 'boards':
-            dest = self.deps_dir / 'board-files' / name
-        else:
-            dest = self.deps_dir / name
-
-        # Get appropriate installer and delegate removal
         dep_type = dep['type']
         if dep_type not in self.installers:
             raise ValueError(f"Unknown dependency type: {dep_type}")
 
-        installer = self.installers[dep_type]
-        installer.remove(name, dest, quiet)
+        dest = self._get_dest_path(dep, name)
+        self.installers[dep_type].remove(name, dest, quiet)
             
     def remove_group(self, group: str, quiet: bool = False) -> Dict[str, Optional[Exception]]:
         """Remove all dependencies in a group.
@@ -323,21 +314,20 @@ class BoardManager:
         
     def get_board_summary(self) -> Dict[str, List[str]]:
         """Get summary of all boards organized by repository.
-        
+
         Returns:
             Dict mapping repository name to list of board names
         """
         summary = {}
-        
+
         for repo in self.list_downloaded_repositories():
             repo_path = self.board_dir / repo
-            board_files = self.find_board_files(repo_path)
-            boards = self.extract_board_names(board_files, repo)
+            boards = self.extract_board_names(self.find_board_files(repo_path))
             if boards:
                 summary[repo] = boards
-                
+
         return summary
-        
+
     def find_board_files(self, repo_path: Path) -> List[Path]:
         """Find all board.xml files in a repository."""
         return list(repo_path.glob("**/board.xml"))
@@ -387,23 +377,19 @@ class BoardManager:
             return None
         return parent.name
 
-    def extract_board_names(self, board_files: List[Path], repo_name: str) -> List[str]:
+    def extract_board_names(self, board_files: List[Path]) -> List[str]:
         """Extract board names from board.xml files.
 
         Args:
             board_files: List of paths to board.xml files
-            repo_name: Repository name (unused, kept for compatibility)
 
         Returns:
             Sorted list of unique board names
         """
         boards = []
-
         for board_file in board_files:
-            board_name = self._parse_board_name(board_file)
-            if board_name:
+            if board_name := self._parse_board_name(board_file):
                 boards.append(board_name)
-
         return sorted(set(boards))
         
     def find_board_path(self, board_name: str) -> Optional[Path]:
@@ -424,40 +410,43 @@ class BoardManager:
         
     def validate_repository_names(self, names: List[str]) -> Tuple[List[str], List[str]]:
         """Validate repository names against known repositories.
-        
+
         Args:
             names: List of repository names to validate
-            
+
         Returns:
             Tuple of (valid_names, invalid_names)
         """
-        # Known board repositories from DEPENDENCIES
-        known_repos = {
-            'avnet': 'avnet-boards',
-            'xilinx': 'xilinx-boards',
-            'xilinx-rfsoc2x2': 'xilinx-boards',
-            'rfsoc4x2': 'rfsoc4x2-boards',
-            'kv260': 'kv260-som-boards',
-            'kv260-som': 'kv260-som-boards',
-            'aupzu3': 'aupzu3-boards',
-            'pynq-z1': 'pynq-z1',
-            'pynq-z2': 'pynq-z2',
-            'pynq': ['pynq-z1', 'pynq-z2'],  # Both PYNQ boards
-        }
-        
+        # Build alias mapping from DEPENDENCIES
+        alias_to_canonical = {}
+        multi_aliases = {}  # Maps multi_alias -> [dependency names]
+
+        board_deps = {k: v for k, v in DEPENDENCIES.items() if v.get('group') == 'boards'}
+
+        for dep_name, dep_info in board_deps.items():
+            # Add canonical name
+            alias_to_canonical[dep_name] = dep_name
+            # Add any aliases
+            for alias in dep_info.get('aliases', []):
+                alias_to_canonical[alias] = dep_name
+            # Track multi-aliases (e.g., 'pynq' -> ['pynq-z1', 'pynq-z2'])
+            if multi := dep_info.get('multi_alias'):
+                multi_aliases.setdefault(multi, []).append(dep_name)
+
+        # Add multi-aliases to mapping
+        alias_to_canonical.update(multi_aliases)
+
         valid = []
         invalid = []
-        
+
         for name in names:
-            if name in known_repos:
-                mapped = known_repos[name]
+            if name in alias_to_canonical:
+                mapped = alias_to_canonical[name]
                 if isinstance(mapped, list):
                     valid.extend(mapped)
                 else:
                     valid.append(mapped)
-            elif name in DEPENDENCIES and DEPENDENCIES[name].get('group') == 'boards':
-                valid.append(name)
             else:
                 invalid.append(name)
-                
-        return list(set(valid)), invalid  # Remove duplicates from valid
+
+        return list(set(valid)), invalid

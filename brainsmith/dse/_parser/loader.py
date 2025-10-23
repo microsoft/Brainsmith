@@ -8,10 +8,85 @@ Handles loading YAML blueprints and resolving inheritance chains.
 """
 
 import os
+import yaml
 from pathlib import Path
+from string import Template
 from typing import Dict, Any, Optional, Tuple
 
-from brainsmith._internal.io.yaml import load_yaml, load_blueprint_yaml, expand_env_vars_with_context
+from brainsmith._internal.io.yaml import load_yaml, deep_merge
+
+
+def _expand_env_vars_with_context(
+    data: Any,
+    context_vars: Dict[str, str]
+) -> Any:
+    """Expand environment variables with additional context variables.
+
+    This implementation is thread-safe and does not mutate os.environ.
+    Uses string.Template for variable expansion with ${VAR} syntax.
+
+    Args:
+        data: Data structure to process
+        context_vars: Additional variables to make available during expansion
+
+    Returns:
+        Data with environment variables expanded
+
+    Note:
+        Only ${VAR} syntax is supported (not $VAR without braces).
+        Context variables take precedence over environment variables.
+    """
+    if isinstance(data, str):
+        combined = {**os.environ, **context_vars}
+        template = Template(data)
+        return template.safe_substitute(combined)
+
+    elif isinstance(data, dict):
+        return {k: _expand_env_vars_with_context(v, context_vars)
+                for k, v in data.items()}
+
+    elif isinstance(data, list):
+        return [_expand_env_vars_with_context(item, context_vars)
+                for item in data]
+
+    else:
+        return data
+
+
+def _load_with_inheritance(file_path: Path, context_vars: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Load a YAML file with inheritance support via 'extends' field.
+
+    Args:
+        file_path: Path to the YAML file
+        context_vars: Context variables for environment expansion
+
+    Returns:
+        Merged YAML data
+    """
+    with open(file_path, 'r') as f:
+        data = yaml.safe_load(f) or {}
+
+    if 'extends' in data:
+        parent_path = data.pop('extends')
+
+        if context_vars:
+            parent_path = _expand_env_vars_with_context(parent_path, context_vars)
+        else:
+            parent_path = os.path.expandvars(parent_path)
+
+        if not Path(parent_path).is_absolute():
+            parent_path = file_path.parent / parent_path
+        else:
+            parent_path = Path(parent_path)
+
+        parent_context = context_vars.copy() if context_vars else {}
+        parent_context['YAML_DIR'] = str(parent_path.parent.absolute())
+
+        parent_data = _load_with_inheritance(parent_path, parent_context)
+
+        return deep_merge(parent_data, data)
+
+    return data
 
 
 def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
@@ -44,14 +119,14 @@ def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any]
     if 'extends' in raw_data:
         parent_path = raw_data['extends']
         # Expand env vars in parent path
-        parent_path = expand_env_vars_with_context(parent_path, context_vars)
+        parent_path = _expand_env_vars_with_context(parent_path, context_vars)
 
         # Resolve parent path relative to current file
         if not Path(parent_path).is_absolute():
             parent_path = str(Path(blueprint_path).parent / parent_path)
 
-    # Load the full merged data with inheritance support
-    merged_data = load_blueprint_yaml(blueprint_path, context_vars=context_vars)
+    # Load the full merged data with inheritance support (uses local _load_with_inheritance)
+    merged_data = _load_with_inheritance(Path(blueprint_path), context_vars)
 
     return raw_data, merged_data, parent_path
 

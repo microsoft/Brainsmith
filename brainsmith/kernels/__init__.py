@@ -19,8 +19,14 @@ COMPONENTS = {
     'kernels': {
         'LayerNorm': '.layernorm.layernorm',
         'Crop': '.crop.crop',
-        'Softmax': '.softmax',  # Package exports HWSoftmax (registered as Softmax)
+        'Softmax': '.softmax',
         'Shuffle': '.shuffle.shuffle',
+    },
+    'backends': {
+        'LayerNorm_hls': '.layernorm.layernorm_hls',
+        'Crop_HLS': '.crop.crop_hls',
+        'Softmax_HLS': '.softmax.hwsoftmax_hls',
+        'Shuffle_HLS': '.shuffle.shuffle_hls',
     }
 }
 

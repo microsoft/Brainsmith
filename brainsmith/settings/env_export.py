@@ -11,45 +11,10 @@ This improves testability and separates infrastructure concerns from configurati
 import os
 import platform
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Callable, Optional
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from .schema import SystemConfig
-
-
-# Declarative environment variable export mappings
-# Maps environment variable names to functions that extract values from config
-#
-# Xilinx Tool Path Variables:
-# Both XILINX_* and *_PATH variants are exported for maximum FINN compatibility.
-# - XILINX_* variants: Used by FINN's Python runtime and internal scripts
-# - *_PATH variants: Used by FINN's TCL scripts during Vivado/Vitis integration
-# Both naming conventions must be set for full compatibility with FINN's toolchain.
-EXTERNAL_ENV_MAPPINGS: Dict[str, Callable[['SystemConfig'], Optional[str]]] = {
-    # Xilinx tool paths (both naming conventions required for FINN compatibility)
-    'XILINX_VIVADO': lambda c: str(c.vivado_path) if c.vivado_path else None,
-    'VIVADO_PATH': lambda c: str(c.vivado_path) if c.vivado_path else None,  # FINN TCL scripts
-    'XILINX_VITIS': lambda c: str(c.vitis_path) if c.vitis_path else None,
-    'VITIS_PATH': lambda c: str(c.vitis_path) if c.vitis_path else None,      # FINN TCL scripts
-    'XILINX_HLS': lambda c: str(c.vitis_hls_path) if c.vitis_hls_path else None,
-    'HLS_PATH': lambda c: str(c.vitis_hls_path) if c.vitis_hls_path else None, # FINN TCL scripts
-
-    # Platform and tool paths
-    'PLATFORM_REPO_PATHS': lambda c: c.vendor_platform_paths,
-    'OHMYXILINX': lambda c: str(c.deps_dir / "oh-my-xilinx"),
-
-    # Vivado specific
-    'VIVADO_IP_CACHE': lambda c: str(c.vivado_ip_cache) if c.vivado_path else None,
-
-    # Visualization
-    'NETRON_PORT': lambda c: str(c.netron_port),
-
-    # FINN environment variables
-    'FINN_ROOT': lambda c: str(c.finn.finn_root),
-    'FINN_BUILD_DIR': lambda c: str(c.finn.finn_build_dir),
-    'FINN_DEPS_DIR': lambda c: str(c.finn.finn_deps_dir),
-    'NUM_DEFAULT_WORKERS': lambda c: str(c.default_workers) if c.default_workers else None,
-}
 
 
 class EnvironmentExporter:
@@ -70,23 +35,6 @@ class EnvironmentExporter:
         >>> print(env_dict['FINN_ROOT'])
     """
 
-    @staticmethod
-    def _add_to_path_if_needed(
-        path_components: list[str],
-        path: Path | str | None,
-        check_exists: bool = False
-    ) -> None:
-        if not path:
-            return
-
-        path_str = str(path)
-
-        if check_exists and isinstance(path, Path) and not path.exists():
-            return
-
-        if path_str not in path_components:
-            path_components.append(path_str)
-
     def __init__(self, config: 'SystemConfig'):
         """Initialize environment exporter with configuration.
 
@@ -104,15 +52,50 @@ class EnvironmentExporter:
         Returns:
             Dict of environment variable names to string values
         """
-        env_dict = {}
+        env = {}
+        c = self.config  # Short alias for readability
 
-        # Apply all mappings
-        for env_var, getter in EXTERNAL_ENV_MAPPINGS.items():
-            value = getter(self.config)
-            if value is not None:
-                env_dict[env_var] = value
+        # Xilinx tool paths (dual naming for FINN compatibility)
+        # Both XILINX_* and *_PATH variants are exported for maximum FINN compatibility.
+        # - XILINX_* variants: Used by FINN's Python runtime and internal scripts
+        # - *_PATH variants: Used by FINN's TCL scripts during Vivado/Vitis integration
+        if c.vivado_path:
+            vivado_str = str(c.vivado_path)
+            env['XILINX_VIVADO'] = vivado_str
+            env['VIVADO_PATH'] = vivado_str
 
-        return env_dict
+            if c.vivado_ip_cache:
+                env['VIVADO_IP_CACHE'] = str(c.vivado_ip_cache)
+
+        if c.vitis_path:
+            vitis_str = str(c.vitis_path)
+            env['XILINX_VITIS'] = vitis_str
+            env['VITIS_PATH'] = vitis_str
+
+        if c.vitis_hls_path:
+            hls_str = str(c.vitis_hls_path)
+            env['XILINX_HLS'] = hls_str
+            env['HLS_PATH'] = hls_str
+
+        # Platform and tool paths
+        env['PLATFORM_REPO_PATHS'] = c.vendor_platform_paths
+        env['OHMYXILINX'] = str(c.deps_dir / "oh-my-xilinx")
+
+        # Visualization
+        env['NETRON_PORT'] = str(c.netron_port)
+
+        # FINN configuration
+        if c.finn_root:
+            env['FINN_ROOT'] = str(c.finn_root)
+        if c.finn_build_dir:
+            env['FINN_BUILD_DIR'] = str(c.finn_build_dir)
+        if c.finn_deps_dir:
+            env['FINN_DEPS_DIR'] = str(c.finn_deps_dir)
+
+        if c.default_workers:
+            env['NUM_DEFAULT_WORKERS'] = str(c.default_workers)
+
+        return env
 
     def to_all_dict(self) -> Dict[str, str]:
         """Generate dict of ALL environment variables including internal ones.
@@ -162,23 +145,13 @@ class EnvironmentExporter:
         # Handle PATH updates
         path_components = os.environ.get("PATH", "").split(":")
 
-        # Add oh-my-xilinx to PATH if it exists
-        self._add_to_path_if_needed(path_components, self.config.deps_dir / "oh-my-xilinx", check_exists=True)
+        # Collect new paths and filter out duplicates
+        new_paths = [
+            str(p) for p in self._collect_path_additions()
+            if str(p) not in path_components
+        ]
 
-        # Add ~/.local/bin to PATH
-        self._add_to_path_if_needed(path_components, Path.home() / ".local" / "bin")
-
-        # Add Xilinx tool bin directories to PATH
-        if self.config.vivado_path:
-            self._add_to_path_if_needed(path_components, self.config.vivado_path / "bin")
-
-        if self.config.vitis_path:
-            self._add_to_path_if_needed(path_components, self.config.vitis_path / "bin")
-
-        if self.config.vitis_hls_path:
-            self._add_to_path_if_needed(path_components, self.config.vitis_hls_path / "bin")
-
-        env_dict["PATH"] = ":".join(path_components)
+        env_dict["PATH"] = ":".join(path_components + new_paths)
 
         # FINN XSI no longer requires PYTHONPATH manipulation
         # The new finn.xsi module handles path management internally
@@ -191,14 +164,19 @@ class EnvironmentExporter:
         if self.config.vivado_path and Path(libudev_path).exists():
             env_dict["LD_PRELOAD"] = libudev_path
 
-        # Add Vivado libraries
+        # Add Vivado libraries (Brainsmith currently supports x86_64 only)
         if self.config.vivado_path:
-            # Add architecture-specific system library path
             arch = platform.machine()
-            if arch == 'x86_64':
-                ld_lib_components.append("/lib/x86_64-linux-gnu/")
-            elif arch in ('aarch64', 'arm64'):
-                ld_lib_components.append("/lib/aarch64-linux-gnu/")
+            if arch != 'x86_64':
+                raise RuntimeError(
+                    f"Brainsmith currently only supports x86_64 architecture.\n"
+                    f"Detected architecture: {arch}\n"
+                    f"Vivado integration has not been tested on this platform.\n"
+                    f"If you need ARM support, please open an issue."
+                )
+
+            # Add x86_64 system library path for Vivado compatibility
+            ld_lib_components.append("/lib/x86_64-linux-gnu/")
 
             vivado_lib = str(self.config.vivado_path / "lib" / "lnx64.o")
             ld_lib_components.append(vivado_lib)
@@ -219,17 +197,45 @@ class EnvironmentExporter:
 
         # Apply all environment variables only if export=True
         if export:
-            for key, value in env_dict.items():
-                if value is not None:
-                    os.environ[key] = str(value)
-                    if verbose and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
-                        from rich.console import Console
-                        console = Console()
-                        console.print(f"[dim]Export {key}={value}[/dim]")
-
+            # Create console once if needed
+            console = None
             if verbose:
                 from rich.console import Console
                 console = Console()
+
+            for key, value in env_dict.items():
+                if value is not None:
+                    os.environ[key] = str(value)
+                    if console and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
+                        console.print(f"[dim]Export {key}={value}[/dim]")
+
+            if console:
                 console.print("[green]✓ Configuration exported to environment[/green]")
 
         return env_dict
+
+    def _collect_path_additions(self) -> list[Path]:
+        """Collect paths to prepend to PATH in priority order.
+
+        Returns:
+            List of paths to add (in order)
+        """
+        paths = []
+
+        # oh-my-xilinx (if exists)
+        oh_my_xilinx = self.config.deps_dir / "oh-my-xilinx"
+        if oh_my_xilinx.exists():
+            paths.append(oh_my_xilinx)
+
+        # User local bin
+        paths.append(Path.home() / ".local" / "bin")
+
+        # Xilinx tool binaries
+        if self.config.vivado_path:
+            paths.append(self.config.vivado_path / "bin")
+        if self.config.vitis_path:
+            paths.append(self.config.vitis_path / "bin")
+        if self.config.vitis_hls_path:
+            paths.append(self.config.vitis_hls_path / "bin")
+
+        return paths

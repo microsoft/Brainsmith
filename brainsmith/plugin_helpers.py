@@ -65,93 +65,9 @@ class ComponentsDict(TypedDict, total=False):
 # ============================================================================
 # Validation
 # ============================================================================
-
-
-def validate_components(components: Dict[str, Dict[str, str]],
-                       package_name: str = "",
-                       strict: bool = False) -> List[str]:
-    """Validate COMPONENTS dictionary structure and module paths.
-
-    Checks for common issues:
-    - Module paths that don't start with '.' (should be relative)
-    - Duplicate component names across types
-    - Invalid module paths (strict mode only - attempts import)
-
-    Args:
-        components: COMPONENTS dict to validate
-        package_name: Package name for resolving relative imports (strict mode only)
-        strict: If True, attempt to import modules to verify they exist
-
-    Returns:
-        List of validation error messages (empty if valid)
-
-    Example:
-        >>> COMPONENTS = {'kernels': {'K1': 'absolute.path'}}  # Bad: absolute path
-        >>> errors = validate_components(COMPONENTS)
-        >>> print(errors)
-        ["Module path 'absolute.path' should start with '.' (relative import)"]
-    """
-    errors: List[str] = []
-    seen_names: Dict[str, str] = {}  # component_name -> component_type
-
-    valid_types = {'kernels', 'backends', 'steps', 'modules'}
-
-    for component_type, items in components.items():
-        # Validate component type
-        if component_type not in valid_types:
-            errors.append(
-                f"Unknown component type '{component_type}'. "
-                f"Valid types: {', '.join(sorted(valid_types))}"
-            )
-            continue
-
-        if not isinstance(items, dict):
-            errors.append(
-                f"Component type '{component_type}' must be a dict, got {type(items).__name__}"
-            )
-            continue
-
-        for name, module_path in items.items():
-            # Check for string paths
-            if not isinstance(module_path, str):
-                errors.append(
-                    f"COMPONENTS['{component_type}']['{name}']: "
-                    f"module path must be string, got {type(module_path).__name__}"
-                )
-                continue
-
-            # Check for relative imports
-            if not module_path.startswith('.'):
-                errors.append(
-                    f"COMPONENTS['{component_type}']['{name}']: "
-                    f"module path '{module_path}' should start with '.' (relative import)"
-                )
-
-            # Check for duplicates across component types
-            if name in seen_names:
-                errors.append(
-                    f"Duplicate component name '{name}' in '{component_type}' "
-                    f"(already defined in '{seen_names[name]}')"
-                )
-            else:
-                seen_names[name] = component_type
-
-            # Strict mode: attempt import
-            if strict and package_name:
-                try:
-                    import_module(module_path, package=package_name)
-                except ImportError as e:
-                    errors.append(
-                        f"COMPONENTS['{component_type}']['{name}']: "
-                        f"module '{module_path}' cannot be imported: {e}"
-                    )
-                except Exception as e:
-                    errors.append(
-                        f"COMPONENTS['{component_type}']['{name}']: "
-                        f"unexpected error importing '{module_path}': {e}"
-                    )
-
-    return errors
+# NOTE: Validation removed - components self-validate during import via decorators.
+# If a component is malformed, it will fail at import time with clear error messages.
+# No need for separate validation layer.
 
 
 def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str) -> Tuple[Callable, Callable]:
@@ -193,14 +109,6 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
         >>> # - dir(module) lists all components (fast)
         >>> # - module.MyKernel imports only when accessed
     """
-    # Runtime validation (opt-in via environment variable)
-    if os.environ.get('BRAINSMITH_VALIDATE_PLUGINS'):
-        errors = validate_components(components, package_name, strict=False)
-        if errors:
-            logger.warning(
-                f"COMPONENTS validation warnings in '{package_name}':\n  " +
-                "\n  ".join(errors)
-            )
 
     # Flatten component types into single lookup dict, tracking source type
     _modules = {}  # component_name -> module_path
@@ -253,15 +161,22 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
                     ) from e
 
                 try:
-                    # Get the component from the module
+                    # Try to get the component from the module by name
                     _loaded[name] = getattr(module, name)
-                except AttributeError as e:
-                    # Module exists but doesn't contain the component
-                    raise AttributeError(
-                        f"Component '{name}' not found in module '{module_path}'.\n"
-                        f"The module loaded successfully but doesn't define '{name}'.\n"
-                        f"Check that {module_path.lstrip('.')} contains 'class {name}' or 'def {name}'."
-                    ) from e
+                except AttributeError:
+                    # For steps: decorator name might differ from function name
+                    # After importing, check if registry now has it
+                    # This handles @step(name='foo') on def foo_step(...)
+                    if component_type == 'steps':
+                        # Import triggered the decorator, loader will find it in registry
+                        _loaded[name] = None  # Marker that import happened
+                    else:
+                        # For kernels/backends, name must match
+                        raise AttributeError(
+                            f"Component '{name}' not found in module '{module_path}'.\n"
+                            f"The module loaded successfully but doesn't define '{name}'.\n"
+                            f"Check that {module_path.lstrip('.')} contains 'class {name}' or 'def {name}'."
+                        )
 
             return _loaded[name]
 

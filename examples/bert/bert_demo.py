@@ -232,7 +232,7 @@ def run_brainsmith_dse(model, args):
     
     # Results are automatically logged by explore_design_space()
     # Just check if we succeeded
-    stats = results.stats
+    stats = results.compute_stats()
     if stats['successful'] == 0:
         raise RuntimeError(f"No successful builds")
     

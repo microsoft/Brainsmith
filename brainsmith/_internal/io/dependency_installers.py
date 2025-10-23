@@ -3,9 +3,8 @@
 
 """Dependency installer implementations for non-Python dependencies.
 
-This module provides focused installer classes for different dependency types,
-following the Single Responsibility Principle. Each installer handles a specific
-installation method (git, zip, build) and can be tested independently.
+Simple installer classes for different dependency types. Each installer handles
+a specific installation method (git, zip, build) independently.
 """
 
 import logging
@@ -14,7 +13,6 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.request import urlretrieve
@@ -22,84 +20,46 @@ from urllib.request import urlretrieve
 logger = logging.getLogger(__name__)
 
 
-class DependencyInstallerBase(ABC):
-    """Base class for dependency installers."""
+# Module-level helpers
+def _log_error(message: str, also_print: bool = True) -> None:
+    """Log error message and optionally print to stderr.
 
-    @abstractmethod
-    def install(
-        self,
-        name: str,
-        dep: Dict,
-        dest: Path,
-        force: bool,
-        quiet: bool
-    ) -> None:
-        """Install a dependency.
-
-        Args:
-            name: Dependency name
-            dep: Dependency metadata dictionary
-            dest: Destination path for installation
-            force: Force reinstall even if exists
-            quiet: Suppress output
-
-        Raises:
-            InstallationError: If installation fails
-        """
-        pass
-
-    @abstractmethod
-    def remove(self, name: str, dest: Path, quiet: bool) -> None:
-        """Remove a dependency.
-
-        Args:
-            name: Dependency name
-            dest: Installation path
-            quiet: Suppress output
-
-        Raises:
-            RemovalError: If removal fails
-        """
-        pass
-
-    def _log_error(self, message: str, also_print: bool = True) -> None:
-        """Log error message and optionally print to stderr.
-
-        Args:
-            message: Error message to log
-            also_print: Whether to also print to stderr
-        """
-        logger.error(message)
-        if also_print:
-            print(message, file=sys.stderr)
-
-    def remove_directory(self, name: str, dest: Path, quiet: bool) -> None:
-        """Remove a dependency directory (common for git/zip types).
-
-        Args:
-            name: Dependency name (for logging)
-            dest: Directory to remove
-            quiet: Suppress output
-
-        Raises:
-            RemovalError: If removal fails
-        """
-        if not dest.exists():
-            if not quiet:
-                logger.info("%s is not installed", name)
-            return
-
-        try:
-            if not quiet:
-                logger.info("Removing %s from %s", name, dest)
-            shutil.rmtree(dest)
-        except OSError as e:
-            error_msg = f"Failed to remove {name}: {e}"
-            self._log_error(error_msg)
-            raise RemovalError(error_msg) from e
+    Args:
+        message: Error message to log
+        also_print: Whether to also print to stderr
+    """
+    logger.error(message)
+    if also_print:
+        print(message, file=sys.stderr)
 
 
-class GitDependencyInstaller(DependencyInstallerBase):
+def _remove_directory(name: str, dest: Path, quiet: bool) -> None:
+    """Remove a dependency directory.
+
+    Args:
+        name: Dependency name (for logging)
+        dest: Directory to remove
+        quiet: Suppress output
+
+    Raises:
+        RemovalError: If removal fails
+    """
+    if not dest.exists():
+        if not quiet:
+            logger.info("%s is not installed", name)
+        return
+
+    try:
+        if not quiet:
+            logger.info("Removing %s from %s", name, dest)
+        shutil.rmtree(dest)
+    except OSError as e:
+        error_msg = f"Failed to remove {name}: {e}"
+        _log_error(error_msg)
+        raise RemovalError(error_msg) from e
+
+
+class GitDependencyInstaller:
     """Installer for git-based dependencies."""
 
     def install(
@@ -132,34 +92,28 @@ class GitDependencyInstaller(DependencyInstallerBase):
         if dest.exists():
             shutil.rmtree(dest)
 
-        # Build git clone command
         cmd = ['git', 'clone', '--quiet']
 
-        # Handle sparse checkout
         if 'sparse_dirs' in dep:
             cmd.extend(['--filter=blob:none', '--sparse'])
 
         cmd.extend([dep['url'], str(dest)])
 
-        # Clone
         if not quiet:
             logger.info("Cloning %s from %s", name, dep['url'])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             error_msg = f"Failed to clone {name}: {result.stderr}"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise InstallationError(error_msg)
 
-        # Checkout specific ref if specified
         if 'ref' in dep:
-            # First fetch the ref (in case it's not a branch/tag)
             subprocess.run(
                 ['git', '-C', str(dest), 'fetch', '--quiet', 'origin', dep['ref']],
                 capture_output=True
             )
 
-            # Now checkout
             result = subprocess.run(
                 ['git', '-C', str(dest), 'checkout', '--quiet', dep['ref']],
                 capture_output=True,
@@ -167,10 +121,9 @@ class GitDependencyInstaller(DependencyInstallerBase):
             )
             if result.returncode != 0:
                 error_msg = f"Failed to checkout {dep['ref']} for {name}: {result.stderr}"
-                self._log_error(error_msg)
+                _log_error(error_msg)
                 raise InstallationError(error_msg)
 
-        # Setup sparse checkout if needed
         if 'sparse_dirs' in dep:
             subprocess.run(
                 ['git', '-C', str(dest), 'sparse-checkout', 'init'],
@@ -192,10 +145,10 @@ class GitDependencyInstaller(DependencyInstallerBase):
         Raises:
             RemovalError: If removal fails
         """
-        self.remove_directory(name, dest, quiet)
+        _remove_directory(name, dest, quiet)
 
 
-class ZipDependencyInstaller(DependencyInstallerBase):
+class ZipDependencyInstaller:
     """Installer for zip-based dependencies."""
 
     def __init__(self, temp_dir: Optional[Path] = None):
@@ -236,31 +189,26 @@ class ZipDependencyInstaller(DependencyInstallerBase):
         if dest.exists():
             shutil.rmtree(dest)
 
-        # Determine temp directory
         temp_dir = self.temp_dir or dest.parent
         zip_path = temp_dir / f"{name}.zip"
 
         try:
-            # Download
             if not quiet:
                 logger.info("Downloading %s from %s", name, dep['url'])
 
             urlretrieve(dep['url'], zip_path)
 
-            # Create destination directory
             dest.mkdir(parents=True, exist_ok=True)
 
-            # Extract
             with zipfile.ZipFile(zip_path) as zf:
                 zf.extractall(dest)
 
         except Exception as e:
             error_msg = f"Failed to download/extract {name}: {e}"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise InstallationError(error_msg)
 
         finally:
-            # Cleanup zip file
             if zip_path.exists():
                 zip_path.unlink()
 
@@ -275,10 +223,10 @@ class ZipDependencyInstaller(DependencyInstallerBase):
         Raises:
             RemovalError: If removal fails
         """
-        self.remove_directory(name, dest, quiet)
+        _remove_directory(name, dest, quiet)
 
 
-class BuildDependencyInstaller(DependencyInstallerBase):
+class BuildDependencyInstaller:
     """Installer for build-based dependencies."""
 
     def install(
@@ -331,7 +279,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
 
         except ImportError:
             error_msg = "FINN package not found. Please run 'poetry install' first."
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise BuildError(error_msg)
 
         # Get Vivado settings path from config
@@ -341,13 +289,13 @@ class BuildDependencyInstaller(DependencyInstallerBase):
 
         if not vivado_path:
             error_msg = "Vivado path not configured. Set xilinx_path in config or BSMITH_XILINX_PATH env var."
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise RequirementError(error_msg)
 
         settings_script = Path(vivado_path) / "settings64.sh"
         if not settings_script.exists():
             error_msg = f"settings64.sh not found at {settings_script}"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise RequirementError(error_msg)
 
         # Build with finn-xsim
@@ -386,7 +334,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
         # Check for errors
         if result.returncode != 0:
             error_msg = f"Failed to build finn-xsim (exit code: {result.returncode})"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             if result.stdout:
                 print("\n--- Build Output ---", file=sys.stderr)
                 print(result.stdout, file=sys.stderr)
@@ -398,7 +346,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
         # Verify output file exists
         if not output_file.exists():
             error_msg = f"Build completed but output file not found: {output_file}"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise BuildError(error_msg)
 
     def _install_generic_build(
@@ -426,7 +374,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
         source_dir = Path(deps_dir) / dep['source']
         if not source_dir.exists():
             error_msg = f"Source directory not found: {source_dir}. Install source dependency first."
-            self._log_error(error_msg)
+            _log_error(error_msg)
             raise BuildError(error_msg)
 
         if not quiet:
@@ -456,7 +404,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
         # Check for errors
         if result.returncode != 0:
             error_msg = f"Failed to build {name} (exit code: {result.returncode})"
-            self._log_error(error_msg)
+            _log_error(error_msg)
             if result.stdout:
                 print("\n--- Build Output ---", file=sys.stderr)
                 print(result.stdout, file=sys.stderr)
@@ -502,7 +450,7 @@ class BuildDependencyInstaller(DependencyInstallerBase):
                         output_file.unlink()
                     except Exception as e:
                         error_msg = f"Failed to remove finn-xsim: {e}"
-                        self._log_error(error_msg)
+                        _log_error(error_msg)
                         raise RemovalError(error_msg)
 
             except ImportError:

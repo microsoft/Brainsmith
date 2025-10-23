@@ -61,21 +61,21 @@ from .tiling_strategy import TilingStrategy, TilingOrder, TilingResult
 __all__ = [
     # Core types
     'Shape',
-    
+
     # Relationships
     'DimensionRelationship', 'RelationType',
-    
+
     # QONNX types (unified type system)
     'BaseDataType', 'create_simple_datatype', 'datatype_from_string',
-    
+
     # Constraint types
     'DatatypeConstraintGroup', 'validate_datatype_against_constraints',
-    
+
     # Core architecture
     'InputDefinition', 'OutputDefinition',
     'InputInterface', 'OutputInterface',
     'KernelDefinition', 'KernelModel',
-    
+
     # Tiling functions
     'fixed_tiles', 'adaptive_parameterized_tiles', 'parameterized_tiles', 'adaptive_tiles',
     'full_tensor',

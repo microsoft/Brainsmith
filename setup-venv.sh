@@ -150,17 +150,7 @@ if [ "$SKIP_REPOS" != "1" ]; then
     if [ -n "$FORCE_MODE" ]; then
         echo "  (Force mode: re-downloading all dependencies)"
     fi
-    
-    # Only fetch if needed or forced
-    if [ -n "$FORCE_MODE" ] || [ ! -d "${BSMITH_DEPS_DIR:-deps}" ] || [ -z "$(ls -A ${BSMITH_DEPS_DIR:-deps} 2>/dev/null)" ]; then
-        if [ -x "./docker/fetch-repos.sh" ]; then
-            ./docker/fetch-repos.sh $FORCE_MODE
-        else
-            echo "⚠️  fetch-repos.sh not found or not executable"
-        fi
-    else
-        echo "  Dependencies already fetched (use --force to re-fetch)"
-    fi
+    ./docker/fetch-repos.sh $FORCE_MODE
 else
     echo ""
     echo "⏩ Skipping repository fetch (--skip-repos)"

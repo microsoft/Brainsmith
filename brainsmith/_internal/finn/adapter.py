@@ -60,7 +60,7 @@ class FINNAdapter:
             error_msg = "Missing FINN dependencies:\n"
             for module, package in missing:
                 error_msg += f"  - {module} (from {package})\n"
-            error_msg += "\nInstall with: pip install git+https://github.com/Xilinx/finn.git"
+            error_msg += "\nPlease check the environment setup instructions in the README file."
             raise RuntimeError(error_msg)
 
     def build(
@@ -95,7 +95,6 @@ class FINNAdapter:
         from finn.builder.build_dataflow import build_dataflow_cfg
         from finn.builder.build_dataflow_config import DataflowBuildConfig
 
-        # Convert to absolute paths before chdir
         abs_input = input_model.absolute()
         abs_output = output_dir.absolute()
 
@@ -109,11 +108,9 @@ class FINNAdapter:
         try:
             os.chdir(abs_output)
 
-            # Update config to use current directory
             config_dict = config_dict.copy()
             config_dict["output_dir"] = "."
 
-            # Remove parameters that are not for DataflowBuildConfig
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
 
@@ -134,7 +131,6 @@ class FINNAdapter:
             logger.debug("Creating DataflowBuildConfig with: %s", finn_config)
             config = DataflowBuildConfig(**finn_config)
 
-            # Execute build
             # FINN output goes directly to console (controlled by no_stdout_redirect flag)
             steps_count = len(config.steps) if config.steps else 0
             logger.info("Executing FINN build with %d steps", steps_count)
@@ -145,7 +141,7 @@ class FINNAdapter:
             if exit_code != 0:
                 raise RuntimeError(f"FINN build failed with exit code {exit_code}")
 
-            # Discovery now uses absolute path (raises if not found)
+            # Raises if not found
             output_model = self._discover_output_model(abs_output)
             self._verify_output_model(output_model)
 
@@ -153,7 +149,6 @@ class FINNAdapter:
             return output_model
 
         finally:
-            # Always restore working directory
             os.chdir(old_cwd)
 
     def _discover_output_model(self, build_dir: Path) -> Path:

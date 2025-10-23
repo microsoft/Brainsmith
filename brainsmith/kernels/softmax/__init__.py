@@ -4,27 +4,14 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# Softmax kernel package - Lazy Loading for Performance
+# Softmax kernel package
+#
+# Components eagerly imported to ensure @kernel, @backend decorators fire.
+# Lazy loading is at the top level (brainsmith.kernels), not within packages.
 ############################################################################
 
-def __getattr__(name):
-    """Lazy import for performance (avoid loading scipy at discovery time)."""
-    if name == "HWSoftmax":
-        from .hwsoftmax import HWSoftmax
-        return HWSoftmax
-    elif name == "Softmax":
-        # Alias - decorator registers as 'Softmax'
-        from .hwsoftmax import HWSoftmax
-        return HWSoftmax
-    elif name == "HWSoftmax_hls":
-        from .hwsoftmax_hls import HWSoftmax_hls
-        return HWSoftmax_hls
-    elif name == "InferHWSoftmax":
-        from .infer_hwsoftmax import InferHWSoftmax
-        return InferHWSoftmax
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+from .hwsoftmax import Softmax
+from .hwsoftmax_hls import Softmax_hls
+from .infer_hwsoftmax import InferSoftmax
 
-def __dir__():
-    return ["HWSoftmax", "HWSoftmax_hls", "InferHWSoftmax", "Softmax"]
-
-__all__ = ["HWSoftmax", "HWSoftmax_hls", "InferHWSoftmax", "Softmax"]
+__all__ = ["Softmax", "Softmax_hls", "InferSoftmax"]

@@ -14,7 +14,7 @@ design_space:
     - DuplicateStreams
     - ElementwiseBinaryOperation
     - Shuffle
-    - Softmax  # Registered as 'Softmax' (class name is HWSoftmax)
+    - Softmax
     - Thresholding
     - MVAU
     

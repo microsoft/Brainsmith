@@ -43,7 +43,6 @@ def setup_logging(level: str = "warning") -> None:
     """
     from rich.logging import RichHandler
 
-    # Map string to logging level
     level_map = {
         'error': logging.ERROR,
         'warning': logging.WARNING,
@@ -52,13 +51,10 @@ def setup_logging(level: str = "warning") -> None:
     }
     log_level = level_map.get(level.lower(), logging.WARNING)
 
-    # Get root logger and set level
     root = logging.getLogger()
     root.setLevel(log_level)
 
-    # Add handler if first time, otherwise update existing handlers
     if not root.handlers:
-        # First time - add RichHandler
         handler = RichHandler(
             rich_tracebacks=(log_level == logging.DEBUG),
             show_path=False,
@@ -69,7 +65,6 @@ def setup_logging(level: str = "warning") -> None:
         handler.setFormatter(logging.Formatter("%(message)s", datefmt="[%X]"))
         root.addHandler(handler)
     else:
-        # Already configured - update handler levels
         for handler in root.handlers:
             handler.setLevel(log_level)
 

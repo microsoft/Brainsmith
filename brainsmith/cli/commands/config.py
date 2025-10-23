@@ -28,73 +28,22 @@ if TYPE_CHECKING:
 
 
 def _generate_config_template(defaults) -> str:
-    return dedent(f"""\
+    return dedent("""\
         # Brainsmith Configuration
+        # Relative paths resolve to the directory containing this config file
 
-        # ============================================================================
-        # Core Paths
-        # ============================================================================
+        # Build output directory
+        build_dir: build
 
-        # Project working directory (defaults to brainsmith root if not set)
-        project_dir: {defaults.project_dir}
-        build_dir: {defaults.build_dir}
-        deps_dir: {defaults.deps_dir}
+        # Xilinx tools (adjust paths for your installation)
+        xilinx_path: /tools/Xilinx
+        xilinx_version: "2024.2"
 
-        # ============================================================================
-        # Plugin System
-        # ============================================================================
-
-        # Default source when component has no prefix (e.g., 'LayerNorm' -> 'brainsmith:LayerNorm')
-        default_source: {defaults.default_source}
-
-        # Uncomment to add custom plugin sources
-        # plugin_sources:
-        #   custom: ~/my-custom-plugins     # Example: additional personal plugins
-
-        # Plugin loading mode (strict=error on load failure, false=warn)
-        plugins_strict: {str(defaults.plugins_strict).lower()}
-
-        # ============================================================================
-        # Xilinx Tools
-        # ============================================================================
-
-        # Xilinx root installation path
-        xilinx_path: {defaults.xilinx_path}
-        xilinx_version: "{defaults.xilinx_version}"
-
-        # Vendor platform repository paths (colon-separated paths to Xilinx/Intel FPGA platform files)
-        vendor_platform_paths: {defaults.vendor_platform_paths}
-
-        # Auto-detected tool paths (uncomment to override):
-        # vivado_path: /tools/Xilinx/Vivado/{defaults.xilinx_version}
-        # vitis_path: /tools/Xilinx/Vitis/{defaults.xilinx_version}
-        # vitis_hls_path: /tools/Xilinx/Vitis_HLS/{defaults.xilinx_version}
-
-        # Vivado IP cache (auto-computed from build_dir if not set)
-        # vivado_ip_cache: {{build_dir}}/vivado_ip_cache
-
-        # ============================================================================
-        # Build Settings
-        # ============================================================================
-
-        # Default number of workers for parallel operations
-        default_workers: {defaults.default_workers}
-
-        # ============================================================================
-        # Development Tools
-        # ============================================================================
-
-        # Port for Netron neural network visualization
-        netron_port: {defaults.netron_port}
-
-        # ============================================================================
-        # FINN Configuration (Advanced)
-        # ============================================================================
-        # FINN paths auto-detect from deps_dir, build_dir. Uncomment to override:
-        # finn:
-        #   finn_root: {{deps_dir}}/finn
-        #   finn_build_dir: {{build_dir}}
-        #   finn_deps_dir: {{deps_dir}}
+        # Advanced options
+        default_workers: 4
+        netron_port: 8080
+        plugins_strict: true
+        vendor_platform_paths: /opt/xilinx/platforms
     """)
 
 
@@ -149,24 +98,8 @@ def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
 
         # Get actual defaults WITHOUT loading from existing config files
-        # Temporarily override env vars to prevent loading existing configs
-        original_user_file = os.environ.pop('_BRAINSMITH_USER_FILE', None)
-        original_project_file = os.environ.pop('_BRAINSMITH_PROJECT_FILE', None)
-
-        try:
-            # Set dummy values to prevent YamlSettingsSource from loading real files
-            os.environ['_BRAINSMITH_USER_FILE'] = '/dev/null'
-            os.environ['_BRAINSMITH_PROJECT_FILE'] = '/dev/null'
-            from brainsmith.settings import SystemConfig  # Lazy import
-            defaults = SystemConfig()
-        finally:
-            # Restore original env vars
-            os.environ.pop('_BRAINSMITH_USER_FILE', None)
-            os.environ.pop('_BRAINSMITH_PROJECT_FILE', None)
-            if original_user_file:
-                os.environ['_BRAINSMITH_USER_FILE'] = original_user_file
-            if original_project_file:
-                os.environ['_BRAINSMITH_PROJECT_FILE'] = original_project_file
+        from brainsmith.settings import get_default_config  # Lazy import
+        defaults = get_default_config()
 
         yaml_content = _generate_config_template(defaults)
 

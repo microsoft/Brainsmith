@@ -13,10 +13,12 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 
 
-class InferHWSoftmax(Transformation):
+class InferSoftmax(Transformation):
     """
-    Infers a regular softmax node without merging the multithreshold
-    and setting the softmax to perform the quantisation.
+    Converts standard ONNX Softmax nodes to brainsmith custom Softmax nodes.
+
+    Only transforms nodes with op_type='Softmax' in standard ONNX domains.
+    Skips nodes already in the brainsmith.kernels domain to prevent infinite loops.
     """
 
     def __init__(self):
@@ -27,12 +29,17 @@ class InferHWSoftmax(Transformation):
         node_ind = 0
         graph_modified = False
         for n in graph.node:
-            if n.op_type == "Softmax":
+            # Only convert standard ONNX Softmax nodes, not custom brainsmith ones
+            is_standard_softmax = (
+                n.op_type == "Softmax" and
+                n.domain != "brainsmith.kernels"
+            )
+            if is_standard_softmax:
                 input_shape = model.get_tensor_shape(n.input[0])
                 idt0 = model.get_tensor_datatype(n.input[0])
                 odt0 = model.get_tensor_datatype(n.output[0])
                 new_node = helper.make_node(
-                    "HWSoftmax",
+                    "Softmax",
                     [n.input[0]],  # input tensor(s)
                     [n.output[0]],  # output tensor(s)
                     domain="brainsmith.kernels",

@@ -79,13 +79,11 @@ class LazyModuleLoader:
         if name not in self._cache:
             module_path = self._lazy_map[name]
 
-            # Import the module (relative if package is specified)
             if self._package:
                 module = import_module(f'.{module_path}', package=self._package)
             else:
                 module = import_module(module_path)
 
-            # Cache the attribute
             self._cache[name] = getattr(module, name)
 
         return self._cache[name]

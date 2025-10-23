@@ -5,155 +5,208 @@
 
 This module defines the complete configuration schema for Brainsmith,
 providing type safety and validation.
+
+Path Resolution Rules
+---------------------
+The settings system follows one simple principle for paths:
+"Paths resolve relative to where they're specified"
+
+1. **Full paths**: Always used as-is
+2. **Relative paths from CLI**: Resolve to current working directory
+3. **Relative paths from YAML/env/defaults**: Resolve to project directory
+
+Examples:
+    CLI:  brainsmith --build-dir build           → resolves to $PWD/build
+    YAML: build_dir: build                       → resolves to $PROJECT_DIR/build
+    Env:  BSMITH_BUILD_DIR=build                → resolves to $PROJECT_DIR/build
+
+Project directory is detected by walking up from CWD to find brainsmith_config.yaml.
+
+Internal paths (deps_dir) always resolve to brainsmith installation, ignoring user input.
+
+Configuration Priority
+----------------------
+Settings are loaded from multiple sources with the following priority (highest to lowest):
+1. CLI arguments (passed to SystemConfig constructor)
+2. Environment variables (BSMITH_* prefix)
+3. Project config file (brainsmith_config.yaml or .brainsmith/config.yaml)
+4. User config file (~/.brainsmith/config.yaml)
+5. Built-in defaults (Field defaults in SystemConfig)
+
+Path Resolution Flow
+--------------------
+1. CLI paths are resolved to CWD in load_config() before SystemConfig is created
+2. All other paths stay relative through Pydantic's settings sources
+3. model_post_init() resolves any remaining relative paths to project_dir
+4. Special paths (deps_dir) are forced to specific locations regardless of input
 """
 
 import os
-import warnings
 import yaml
 from pathlib import Path
 from functools import cached_property
-from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable
+from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict, BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
-from brainsmith._internal.io.yaml import load_config_yaml, _deep_merge
+from brainsmith._internal.io.yaml import deep_merge, expand_env_vars
 
-from .constants import (
-    get_user_config_path,
-    PROJECT_CONFIG_FILE,
-    PROJECT_CONFIG_ALT_DIR,
-    PROJECT_CONFIG_ALT_FILE,
-)
+
+# Private constants for config file discovery
+# These are internal implementation details - CLI tools should inline values as needed
+_USER_CONFIG_PATH = Path.home() / ".brainsmith" / "config.yaml"
+_PROJECT_CONFIG_FILE = "brainsmith_config.yaml"
+_PROJECT_CONFIG_ALT_DIR = ".brainsmith"
+_PROJECT_CONFIG_ALT_FILE = "config.yaml"
+
+
+def _find_project_config() -> Optional[Path]:
+    """Find project configuration file with upward directory walk.
+
+    Search order:
+    1. If BSMITH_PROJECT_DIR is set, check that directory only
+    2. Otherwise, walk up from CWD to find config file
+
+    At each location, checks for:
+    - brainsmith_config.yaml
+    - .brainsmith/config.yaml
+
+    Returns:
+        Path to config file, or None if not found
+    """
+    # Priority 1: Explicit project directory override
+    if project_dir_override := os.environ.get('BSMITH_PROJECT_DIR'):
+        project_dir = Path(project_dir_override).resolve()
+
+        # Check for config file in specified project directory
+        for candidate in [
+            project_dir / _PROJECT_CONFIG_FILE,
+            project_dir / _PROJECT_CONFIG_ALT_DIR / _PROJECT_CONFIG_ALT_FILE,
+        ]:
+            if candidate.exists():
+                return candidate
+
+        # If BSMITH_PROJECT_DIR is set but no config found, return None
+        # (don't fall through to upward walk - user explicitly set the location)
+        return None
+
+    # Priority 2: Walk up from CWD to find config file
+    current = Path.cwd().resolve()
+
+    # Walk up until we hit filesystem root
+    while current != current.parent:
+        # Check both config file locations at current level
+        for candidate in [
+            current / _PROJECT_CONFIG_FILE,
+            current / _PROJECT_CONFIG_ALT_DIR / _PROJECT_CONFIG_ALT_FILE,
+        ]:
+            if candidate.exists():
+                return candidate
+
+        current = current.parent
+
+    # Reached filesystem root without finding config
+    return None
 
 
 # Protected plugin sources that cannot be overridden by users
 PROTECTED_SOURCES = frozenset(['brainsmith', 'finn', 'project', 'user'])
 
 
-# FinnConfig nested model
-class FinnConfig(BaseModel):
-    """FINN-specific path configuration.
-
-    These paths default to sensible values derived from the parent config:
-    - finn_root: defaults to deps_dir/finn
-    - finn_build_dir: defaults to build_dir
-    - finn_deps_dir: defaults to deps_dir
-    """
-    finn_root: Path | None = Field(default=None, description="FINN root directory (defaults to deps_dir/finn)")
-    finn_build_dir: Path | None = Field(default=None, description="FINN build directory (defaults to build_dir)")
-    finn_deps_dir: Path | None = Field(default=None, description="FINN dependencies directory (defaults to deps_dir)")
-
-    model_config = ConfigDict(validate_assignment=True)
-
-
 class YamlSettingsSource(PydanticBaseSettingsSource):
     """Custom settings source for YAML files with support for user and project configs."""
-    
-    def __init__(self, settings_cls: Type[BaseSettings], yaml_file: Optional[Path] = None):
+
+    def __init__(
+        self,
+        settings_cls: Type[BaseSettings],
+        user_file: Optional[Path] = None,
+        project_file: Optional[Path] = None
+    ):
         super().__init__(settings_cls)
         self.yaml_files = []
-        
+        self.project_file_used = None  # Track which project file was actually loaded
+
         # Load user file first (lower priority)
-        if '_BRAINSMITH_USER_FILE' in os.environ:
-            self.yaml_files.append(Path(os.environ['_BRAINSMITH_USER_FILE']))
-        else:
-            # Check default user config location
-            user_file = get_user_config_path()
-            if user_file.exists():
-                self.yaml_files.append(user_file)
-        
+        if user_file and user_file.exists():
+            # Explicit user file provided and exists
+            self.yaml_files.append(user_file)
+        elif not user_file:
+            # Check default user config location only if no explicit file provided
+            default_user_file = _USER_CONFIG_PATH
+            if default_user_file.exists():
+                self.yaml_files.append(default_user_file)
+
         # Load project file second (higher priority - will override user config)
-        if '_BRAINSMITH_PROJECT_FILE' in os.environ:
-            self.yaml_files.append(Path(os.environ['_BRAINSMITH_PROJECT_FILE']))
-        else:
-            # Find project file in standard locations
-            project_file = self._find_project_yaml_file()
-            if project_file:
-                self.yaml_files.append(project_file)
-        
+        if project_file and project_file.exists():
+            # Explicit project file provided and exists
+            self.yaml_files.append(project_file)
+            self.project_file_used = project_file
+        elif not project_file:
+            # Find project file in standard locations only if no explicit file provided
+            found_project_file = _find_project_config()
+            if found_project_file:
+                self.yaml_files.append(found_project_file)
+                self.project_file_used = found_project_file
+
         # Load and merge all YAML files
         self._data = self._load_and_merge_yaml_files()
-        
-    def _find_project_yaml_file(self) -> Optional[Path]:
-        """Find project YAML file in standard locations.
 
-        Search order:
-        1. Current working directory
-        2. Brainsmith project root (auto-detected)
-        """
-        # First check current working directory
-        for location in [
-            Path.cwd() / PROJECT_CONFIG_FILE,
-            Path.cwd() / PROJECT_CONFIG_ALT_DIR / PROJECT_CONFIG_ALT_FILE,
-        ]:
-            if location.exists():
-                return location
-
-        # Then check brainsmith project root
-        try:
-            import brainsmith
-            bsmith_root = Path(brainsmith.__file__).parent.parent
-            root_settings = bsmith_root / PROJECT_CONFIG_FILE
-            if root_settings.exists():
-                return root_settings
-        except Exception:
-            pass
-
-        return None
-    
     def _load_and_merge_yaml_files(self) -> Dict[str, Any]:
         """Load and merge multiple YAML files with proper priority.
-        
+
         Files are loaded in order with later files having higher priority.
         Since we load user config first and project config second,
         project config will override user config values.
+
+        Raises:
+            yaml.YAMLError: If any config file has syntax errors
+            FileNotFoundError: If a specified config file doesn't exist
         """
         merged_data = {}
-        
-        for yaml_file in self.yaml_files:
-            if yaml_file and yaml_file.exists():
-                try:
-                    # Load config YAML with env expansion and path resolution
-                    data = load_config_yaml(
-                        yaml_file,
-                        schema_class=self.settings_cls  # Extract path fields from SystemConfig
-                    )
-                    # Deep merge the data
-                    merged_data = _deep_merge(merged_data, data)
-                except yaml.YAMLError as e:
-                    # Extract useful error information
-                    error_msg = str(e)
-                    if hasattr(e, 'problem_mark'):
-                        mark = e.problem_mark
-                        error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {e.problem or 'invalid syntax'}"
 
-                    warnings.warn(
-                        f"Failed to parse config file {yaml_file}: "
-                        f"YAML syntax error at {error_msg}. "
-                        f"Skipping this configuration file.",
-                        UserWarning,
-                        stacklevel=2
-                    )
-                except Exception as e:
-                    # For other unexpected errors, still warn but less specifically
-                    warnings.warn(
-                        f"Failed to read config file {yaml_file}: {e}. "
-                        f"Skipping this configuration file.",
-                        UserWarning,
-                        stacklevel=2
-                    )
-        
+        for yaml_file in self.yaml_files:
+            try:
+                # Load and expand env vars inline (no path resolution)
+                with open(yaml_file) as f:
+                    data = yaml.safe_load(f) or {}
+                data = expand_env_vars(data)
+
+                # Deep merge the data
+                merged_data = deep_merge(merged_data, data)
+            except yaml.YAMLError as e:
+                # Extract location info if available
+                if hasattr(e, 'problem_mark'):
+                    mark = e.problem_mark
+                    location = f"line {mark.line + 1}, column {mark.column + 1}"
+                else:
+                    location = "unknown location"
+
+                # Fail fast with clear error message
+                raise yaml.YAMLError(
+                    f"\n\nInvalid YAML in config file: {yaml_file}\n"
+                    f"Error at {location}: {e.problem or str(e)}\n\n"
+                    f"Fix the syntax error and try again."
+                ) from e
+
         return merged_data
 
     def get_field_value(self, field_name: str, field_info: Any) -> Tuple[Any, str, bool]:
         """Get field value from YAML source."""
         if field_name in self._data:
             return self._data[field_name], field_name, True
-        
+
+        # Special handling for _project_file_used
+        if field_name == '_project_file_used' and self.project_file_used:
+            return self.project_file_used, field_name, True
+
         return None, field_name, False
-    
+
     def __call__(self) -> Dict[str, Any]:
         """Return all settings from YAML file."""
-        return self._data
+        data = self._data.copy()
+        # Include project file info for project_dir detection
+        if self.project_file_used:
+            data['_project_file_used'] = self.project_file_used
+        return data
 
 
 class SystemConfig(BaseSettings):
@@ -165,7 +218,7 @@ class SystemConfig(BaseSettings):
     3. Project config (brainsmith_config.yaml)
     4. User config (~/.brainsmith/config.yaml)
     5. Built-in defaults (Field defaults) - LOWEST
-    
+
     Note: We only read BSMITH_* env vars, and only export FINN_* vars
     to avoid configuration feedback loops.
     """
@@ -202,9 +255,9 @@ class SystemConfig(BaseSettings):
         },
         description="Plugin source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
     )
-    default_source: str = Field(
-        default='brainsmith',
-        description="Default source when component reference has no prefix"
+    source_priority: List[str] = Field(
+        default=['project', 'user', 'brainsmith', 'finn'],
+        description="Plugin source resolution priority. First source with matching component wins. Custom sources are auto-appended if not explicitly listed."
     )
 
     # Xilinx configuration (flattened)
@@ -229,7 +282,7 @@ class SystemConfig(BaseSettings):
         default=None,
         description="Path to Vitis HLS (auto-detected from xilinx_path)"
     )
-    
+
     # Tool paths (flattened)
     vendor_platform_paths: str = Field(
         default="/opt/xilinx/platforms",
@@ -247,7 +300,7 @@ class SystemConfig(BaseSettings):
         default=None,
         description="Vivado IP cache directory (auto-computed from build_dir if not set)"
     )
-    
+
     # Network/visualization settings
     netron_port: int = Field(
         default=8080,
@@ -260,9 +313,20 @@ class SystemConfig(BaseSettings):
         description="Default number of workers for parallel operations (exports to NUM_DEFAULT_WORKERS for FINN)"
     )
 
-    # FINN configuration (keep nested - it's a clear subsystem)
-    finn: FinnConfig = Field(default_factory=FinnConfig)
-    
+    # FINN configuration (flattened for consistency with Xilinx)
+    finn_root: Path | None = Field(
+        default=None,
+        description="FINN root directory (defaults to deps_dir/finn)"
+    )
+    finn_build_dir: Path | None = Field(
+        default=None,
+        description="FINN build directory (defaults to build_dir)"
+    )
+    finn_deps_dir: Path | None = Field(
+        default=None,
+        description="FINN dependencies directory (defaults to deps_dir)"
+    )
+
     model_config = SettingsConfigDict(
         env_prefix='BSMITH_',
         env_nested_delimiter='__',
@@ -271,7 +335,7 @@ class SystemConfig(BaseSettings):
         case_sensitive=False,
         env_file=None,  # We handle config files via custom source
     )
-    
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -281,86 +345,151 @@ class SystemConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        """Customize settings sources to match our priority order."""
-        # Priority order in pydantic-settings: first source wins!
-        # 1. Init settings (CLI/constructor args) - highest priority
-        # 2. Environment variables (standard pydantic-settings behavior)
-        # 3. YAML files (custom source) - project config overrides user config
-        # 4. Field defaults (built into pydantic)
+        """Customize settings sources.
+
+        Priority order (first source wins):
+        1. Init settings (CLI/constructor args) - paths already resolved to CWD
+        2. Environment variables (BSMITH_*) - paths stay relative, resolved in model_post_init
+        3. YAML files (custom source) - paths stay relative, resolved in model_post_init
+        4. Field defaults (built into pydantic)
+
+        Path Resolution:
+        - CLI paths are resolved to CWD in load_config() before reaching here
+        - All other paths stay relative and are resolved in model_post_init()
+        """
+        # Extract file paths from init_settings if provided
+        init_dict = init_settings()
+        user_file = init_dict.get('_user_file')
+        project_file = init_dict.get('_project_file')
+
         return (
-            init_settings,
-            env_settings,
-            YamlSettingsSource(settings_cls),
+            init_settings,  # CLI args (already resolved to CWD in load_config)
+            env_settings,   # Env vars (stay relative, resolved in model_post_init)
+            YamlSettingsSource(settings_cls, user_file=user_file, project_file=project_file),
         )
-    
+
     def model_post_init(self, __context: Any) -> None:
-        """Resolve all paths to absolute at init time."""
+        """Resolve all paths to absolute.
 
-        # 1. Set project_dir (always brainsmith root, not user-configurable)
-        self.project_dir = self.bsmith_dir
+        At this point:
+        - CLI paths are already absolute (resolved to CWD in load_config)
+        - YAML/env/default paths may be relative (need resolution to project_dir)
 
-        # 2. Resolve core paths
-        self.build_dir = self._resolve(self.build_dir, base=self.project_dir)
-        self.deps_dir = self._resolve(self.deps_dir, base=self.bsmith_dir)
+        Resolution steps:
+        1. Detect project_dir (where config file is, or CWD)
+        2. Resolve user-facing paths (relative → project_dir)
+        3. Force internal paths (deps_dir → bsmith_dir)
+        4. Set defaults for unset paths
+        5. Validate everything is sane
+        """
+        self.project_dir = self._detect_project_root()
+        self._resolve_core_paths()
+        self._resolve_xilinx_tools()
+        self._resolve_finn_paths()
+        self._resolve_plugin_sources()
+        self._validate_plugin_sources()
+        self._resolve_source_priority()
 
-        # 3. Auto-detect and resolve Xilinx tools
-        self.vivado_path = self._resolve_xilinx_tool("Vivado", self.vivado_path)
-        self.vitis_path = self._resolve_xilinx_tool("Vitis", self.vitis_path)
-        self.vitis_hls_path = self._resolve_xilinx_tool("Vitis_HLS", self.vitis_hls_path)
+    def _resolve_core_paths(self) -> None:
+        """Resolve build_dir and force deps_dir to internal location."""
+        # build_dir: resolve if relative
+        self.build_dir = self._resolve(self.build_dir, self.project_dir)
 
-        # 4. Resolve derived path: vivado_ip_cache
+        # deps_dir: ALWAYS internal to brainsmith installation (ignore user input)
+        # This ensures dependencies (FINN, brevitas, etc.) stay with brainsmith package
+        self.deps_dir = self.bsmith_dir / "deps"
+
+    def _resolve_xilinx_tools(self) -> None:
+        """Auto-detect or resolve Xilinx tool paths."""
+        # vivado_path: auto-detect if not set, otherwise resolve if relative
+        if self.vivado_path is None:
+            self.vivado_path = self._detect_xilinx_tool("Vivado")
+        else:
+            self.vivado_path = self._resolve(self.vivado_path, self.project_dir)
+
+        # vitis_path: auto-detect if not set, otherwise resolve if relative
+        if self.vitis_path is None:
+            self.vitis_path = self._detect_xilinx_tool("Vitis")
+        else:
+            self.vitis_path = self._resolve(self.vitis_path, self.project_dir)
+
+        # vitis_hls_path: auto-detect if not set, otherwise resolve if relative
+        if self.vitis_hls_path is None:
+            self.vitis_hls_path = self._detect_xilinx_tool("Vitis_HLS")
+        else:
+            self.vitis_hls_path = self._resolve(self.vitis_hls_path, self.project_dir)
+
+        # vivado_ip_cache: derived from build_dir if not set
         if self.vivado_ip_cache:
-            self.vivado_ip_cache = self._resolve(self.vivado_ip_cache, base=self.project_dir)
+            self.vivado_ip_cache = self._resolve(self.vivado_ip_cache, self.project_dir)
         else:
             self.vivado_ip_cache = self.build_dir / "vivado_ip_cache"
 
-        # 5. Resolve FINN paths (with defaults)
-        if self.finn.finn_root:
-            self.finn.finn_root = self._resolve(self.finn.finn_root, base=self.project_dir)
+    def _resolve_finn_paths(self) -> None:
+        """Resolve FINN paths with sensible defaults."""
+        # finn_root: default to deps_dir/finn
+        if self.finn_root:
+            self.finn_root = self._resolve(self.finn_root, self.project_dir)
         else:
-            self.finn.finn_root = self.deps_dir / "finn"
+            self.finn_root = self.deps_dir / "finn"
 
-        if self.finn.finn_build_dir:
-            self.finn.finn_build_dir = self._resolve(self.finn.finn_build_dir, base=self.project_dir)
+        # finn_build_dir: default to build_dir
+        if self.finn_build_dir:
+            self.finn_build_dir = self._resolve(self.finn_build_dir, self.project_dir)
         else:
-            self.finn.finn_build_dir = self.build_dir
+            self.finn_build_dir = self.build_dir
 
-        if self.finn.finn_deps_dir:
-            self.finn.finn_deps_dir = self._resolve(self.finn.finn_deps_dir, base=self.project_dir)
+        # finn_deps_dir: default to deps_dir
+        if self.finn_deps_dir:
+            self.finn_deps_dir = self._resolve(self.finn_deps_dir, self.project_dir)
         else:
-            self.finn.finn_deps_dir = self.deps_dir
+            self.finn_deps_dir = self.deps_dir
 
-        # 6. Resolve plugin sources
-        # Protected sources are resolved from None to actual paths
+    def _resolve_plugin_sources(self) -> None:
+        """Resolve plugin source paths."""
+        # Protected sources: resolve None to actual paths
         if self.plugin_sources.get('brainsmith') is None:
             self.plugin_sources['brainsmith'] = self.bsmith_dir / 'brainsmith'
+
         if self.plugin_sources.get('finn') is None:
             self.plugin_sources['finn'] = self.deps_dir / 'finn'
+
         if self.plugin_sources.get('project') is None:
             self.plugin_sources['project'] = self.project_dir / 'plugins'
+
         if self.plugin_sources.get('user') is None:
             self.plugin_sources['user'] = Path.home() / '.brainsmith' / 'plugins'
 
-        # Resolve custom (non-protected) sources relative to project_dir
+        # Custom (non-protected) sources: resolve if relative
         for name, path in list(self.plugin_sources.items()):
             if name not in PROTECTED_SOURCES and path is not None:
                 self.plugin_sources[name] = self._resolve(path, self.project_dir)
 
-        # Validate protected sources are resolved correctly
+    def _validate_plugin_sources(self) -> None:
+        """Validate that protected sources are properly resolved."""
         for source_name in PROTECTED_SOURCES:
             if source_name in self.plugin_sources:
                 path = self.plugin_sources[source_name]
                 if path is None:
                     raise ValueError(
                         f"Protected plugin source '{source_name}' was not resolved. "
-                        f"This is likely a bug in Brainsmith's configuration initialization."
+                        f"This is a bug in Brainsmith."
                     )
                 if not path.is_absolute():
                     raise ValueError(
-                        f"Plugin source '{source_name}' must be an absolute path, got: {path}. "
-                        f"Check your configuration for relative paths in protected sources."
+                        f"Plugin source '{source_name}' must be absolute, got: {path}"
                     )
-    
+
+    def _resolve_source_priority(self) -> None:
+        """Auto-append custom plugin sources to source_priority if not already listed.
+
+        This ensures custom sources work automatically while allowing users to
+        explicitly position them in the priority list if desired.
+        """
+        for source_name in self.plugin_sources.keys():
+            if source_name not in self.source_priority:
+                self.source_priority.append(source_name)
+
     @cached_property
     def bsmith_dir(self) -> Path:
         """Brainsmith repository root containing pyproject.toml.
@@ -378,7 +507,39 @@ class SystemConfig(BaseSettings):
         except ImportError:
             raise ValueError("Cannot determine BSMITH_DIR: brainsmith package not importable")
 
+    def _detect_project_root(self) -> Path:
+        """Detect user project root with upward walk from CWD.
 
+        Project root detection priority:
+        1. BSMITH_PROJECT_DIR env var (explicit override, no config check)
+        2. Custom project file location (from load_config project_file param)
+        3. Walk up from CWD to find config file, return its parent directory
+        4. Fallback to CWD
+
+        Returns the same project_dir regardless of which subdirectory you're in,
+        providing stable path resolution.
+
+        Returns:
+            Absolute path to detected project root
+        """
+        # Priority 1: Explicit override via environment variable
+        # Trust the env var without checking for config file existence
+        if 'BSMITH_PROJECT_DIR' in os.environ:
+            return Path(os.environ['BSMITH_PROJECT_DIR']).resolve()
+
+        # Priority 2: Custom project file location (passed via load_config)
+        # This comes from YamlSettingsSource when a custom project_file is provided
+        project_file_used = getattr(self, '_project_file_used', None)
+        if project_file_used:
+            return Path(project_file_used).parent.resolve()
+
+        # Priority 3: Find config file and use its parent directory
+        config_file = _find_project_config()
+        if config_file:
+            return config_file.parent
+
+        # Priority 4: Fallback to CWD
+        return Path.cwd().resolve()
 
     @field_validator('plugin_sources', mode='before')
     @classmethod
@@ -427,22 +588,6 @@ class SystemConfig(BaseSettings):
 
         tool_path = self.xilinx_path / tool_name / self.xilinx_version
         return tool_path if tool_path.exists() else None
-
-    def _resolve_xilinx_tool(self, tool_name: str, current_path: Path | None) -> Path | None:
-        """Auto-detect Xilinx tool if not specified, or resolve provided path.
-
-        Combines detection and resolution logic for Xilinx tools to avoid repetition.
-
-        Args:
-            tool_name: Name of the Xilinx tool (e.g., "Vivado", "Vitis", "Vitis_HLS")
-            current_path: User-provided path, or None to auto-detect
-
-        Returns:
-            Resolved absolute path, or None if tool not found
-        """
-        if current_path is None:
-            return self._detect_xilinx_tool(tool_name)
-        return self._resolve(current_path, self.project_dir)
 
     # Environment Export (delegated to EnvironmentExporter for separation of concerns)
 
