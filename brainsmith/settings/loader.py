@@ -62,7 +62,7 @@ def load_config(
     Priority order (highest to lowest):
     1. CLI arguments (passed as kwargs) - resolve paths to CWD
     2. Environment variables (BSMITH_* prefix) - resolve paths to project_dir
-    3. Project config file (brainsmith_config.yaml) - resolve paths to project_dir
+    3. Project config file (.brainsmith/config.yaml) - resolve paths to project_dir
     4. User config file (~/.brainsmith/config.yaml) - resolve paths to project_dir
     5. Built-in defaults (from schema Field defaults)
 

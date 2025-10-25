@@ -51,7 +51,8 @@ def test_finn_paths_can_be_overridden():
 def test_finn_paths_resolve_relative_to_project_dir(tmp_path):
     """Verify relative FINN paths resolve to project_dir."""
     # Create a temporary config file
-    config_file = tmp_path / "brainsmith_config.yaml"
+    (tmp_path / ".brainsmith").mkdir()
+    config_file = tmp_path / ".brainsmith" / "config.yaml"
     config_file.write_text("""
 finn_root: finn_custom
 finn_build_dir: build_custom
@@ -60,7 +61,7 @@ finn_deps_dir: deps_custom
 
     config = load_config(project_file=config_file)
 
-    # Relative paths should resolve to project dir (tmp_path)
+    # Relative paths should resolve to project dir (tmp_path, not tmp_path/.brainsmith)
     assert config.finn_root == tmp_path / "finn_custom"
     assert config.finn_build_dir == tmp_path / "build_custom"
     assert config.finn_deps_dir == tmp_path / "deps_custom"

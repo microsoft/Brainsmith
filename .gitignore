@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-brainsmith_config.yaml
+.brainsmith
 plugins/
 examples/*/output/
 examples/*/results/

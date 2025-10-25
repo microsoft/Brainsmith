@@ -10,7 +10,6 @@ from the blueprint, ready for tree construction.
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
-from brainsmith.loader import has_step, list_steps
 from brainsmith.dse._constants import SKIP_INDICATOR
 
 
@@ -28,30 +27,7 @@ class GlobalDesignSpace:
 
     def _validate(self) -> None:
         """Validate design space constraints."""
-        self._validate_step_names()
         self._validate_size()
-
-    def _validate_step_names(self) -> None:
-        """Ensure all step names exist in registry."""
-        invalid_steps = []
-
-        for step_spec in self.steps:
-            if isinstance(step_spec, list):
-                # Branch point - validate each option
-                for step in step_spec:
-                    if step and step != SKIP_INDICATOR and not has_step(step):
-                        invalid_steps.append(step)
-            else:
-                # Linear step - validate
-                if step_spec and step_spec != SKIP_INDICATOR and not has_step(step_spec):
-                    invalid_steps.append(step_spec)
-
-        if invalid_steps:
-            available = ', '.join(list_steps())
-            raise ValueError(
-                f"Invalid steps: {', '.join(invalid_steps)}\n\n"
-                f"Available: {available}"
-            )
 
     def _count_combinations(self) -> int:
         """Count total design space combinations."""

@@ -18,7 +18,7 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 
-@backend(name='Shuffle_HLS', target_kernel='brainsmith:Shuffle', language='hls')
+@backend(name='Shuffle_hls', target_kernel='brainsmith:Shuffle', language='hls')
 class Shuffle_hls(Shuffle, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

@@ -18,7 +18,7 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 
-@backend(name='Softmax_HLS', target_kernel='brainsmith:Softmax', language='hls')
+@backend(name='Softmax_hls', target_kernel='brainsmith:Softmax', language='hls')
 class Softmax_hls(Softmax, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

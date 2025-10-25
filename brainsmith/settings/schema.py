@@ -20,7 +20,7 @@ Examples:
     YAML: build_dir: build                       → resolves to $PROJECT_DIR/build
     Env:  BSMITH_BUILD_DIR=build                → resolves to $PROJECT_DIR/build
 
-Project directory is detected by walking up from CWD to find brainsmith_config.yaml.
+Project directory is detected by walking up from CWD to find .brainsmith/config.yaml.
 
 Internal paths (deps_dir) always resolve to brainsmith installation, ignoring user input.
 
@@ -29,7 +29,7 @@ Configuration Priority
 Settings are loaded from multiple sources with the following priority (highest to lowest):
 1. CLI arguments (passed to SystemConfig constructor)
 2. Environment variables (BSMITH_* prefix)
-3. Project config file (brainsmith_config.yaml or .brainsmith/config.yaml)
+3. Project config file (.brainsmith/config.yaml)
 4. User config file (~/.brainsmith/config.yaml)
 5. Built-in defaults (Field defaults in SystemConfig)
 
@@ -49,14 +49,21 @@ from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable, 
 from pydantic import BaseModel, Field, field_validator, ConfigDict, BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 from brainsmith._internal.io.yaml import deep_merge, expand_env_vars
+from brainsmith.constants import (
+    PROTECTED_SOURCES,
+    SOURCE_BRAINSMITH,
+    SOURCE_FINN,
+    SOURCE_PROJECT,
+    SOURCE_USER,
+    DEFAULT_SOURCE_PRIORITY,
+)
 
 
 # Private constants for config file discovery
 # These are internal implementation details - CLI tools should inline values as needed
 _USER_CONFIG_PATH = Path.home() / ".brainsmith" / "config.yaml"
-_PROJECT_CONFIG_FILE = "brainsmith_config.yaml"
-_PROJECT_CONFIG_ALT_DIR = ".brainsmith"
-_PROJECT_CONFIG_ALT_FILE = "config.yaml"
+_PROJECT_CONFIG_DIR = ".brainsmith"
+_PROJECT_CONFIG_FILE = "config.yaml"
 
 
 def _find_project_config() -> Optional[Path]:
@@ -64,11 +71,9 @@ def _find_project_config() -> Optional[Path]:
 
     Search order:
     1. If BSMITH_PROJECT_DIR is set, check that directory only
-    2. Otherwise, walk up from CWD to find config file
+    2. Otherwise, walk up from CWD to find .brainsmith/config.yaml
 
-    At each location, checks for:
-    - brainsmith_config.yaml
-    - .brainsmith/config.yaml
+    Project directory is always the parent of .brainsmith/
 
     Returns:
         Path to config file, or None if not found
@@ -76,40 +81,34 @@ def _find_project_config() -> Optional[Path]:
     # Priority 1: Explicit project directory override
     if project_dir_override := os.environ.get('BSMITH_PROJECT_DIR'):
         project_dir = Path(project_dir_override).resolve()
+        candidate = project_dir / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
 
-        # Check for config file in specified project directory
-        for candidate in [
-            project_dir / _PROJECT_CONFIG_FILE,
-            project_dir / _PROJECT_CONFIG_ALT_DIR / _PROJECT_CONFIG_ALT_FILE,
-        ]:
-            if candidate.exists():
-                return candidate
+        if candidate.exists():
+            return candidate
 
         # If BSMITH_PROJECT_DIR is set but no config found, return None
         # (don't fall through to upward walk - user explicitly set the location)
         return None
 
-    # Priority 2: Walk up from CWD to find config file
+    # Priority 2: Walk up from CWD to find .brainsmith/config.yaml
     current = Path.cwd().resolve()
 
     # Walk up until we hit filesystem root
     while current != current.parent:
-        # Check both config file locations at current level
-        for candidate in [
-            current / _PROJECT_CONFIG_FILE,
-            current / _PROJECT_CONFIG_ALT_DIR / _PROJECT_CONFIG_ALT_FILE,
-        ]:
-            if candidate.exists():
-                return candidate
+        candidate = current / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
+
+        # Skip if this is the user config location (not a project config)
+        if candidate.resolve() == _USER_CONFIG_PATH.resolve():
+            current = current.parent
+            continue
+
+        if candidate.exists():
+            return candidate
 
         current = current.parent
 
     # Reached filesystem root without finding config
     return None
-
-
-# Protected plugin sources that cannot be overridden by users
-PROTECTED_SOURCES = frozenset(['brainsmith', 'finn', 'project', 'user'])
 
 
 class YamlSettingsSource(PydanticBaseSettingsSource):
@@ -215,7 +214,7 @@ class SystemConfig(BaseSettings):
     Configuration priority (following pydantic-settings convention):
     1. CLI arguments (passed to constructor) - HIGHEST
     2. Environment variables (BSMITH_* prefix)
-    3. Project config (brainsmith_config.yaml)
+    3. Project config (.brainsmith/config.yaml)
     4. User config (~/.brainsmith/config.yaml)
     5. Built-in defaults (Field defaults) - LOWEST
 
@@ -227,7 +226,7 @@ class SystemConfig(BaseSettings):
     # User Configuration (Input)
     # ========================================================================
     # These are the Pydantic fields that users can set via:
-    # - YAML files (brainsmith_config.yaml)
+    # - YAML files (.brainsmith/config.yaml)
     # - Environment variables (BSMITH_* prefix)
     # - Constructor arguments (programmatic usage)
     # All path fields accept relative paths in config; they are resolved
@@ -248,15 +247,15 @@ class SystemConfig(BaseSettings):
     # It's set in model_post_init as a regular attribute
     plugin_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
-            'brainsmith': None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
-            'finn': None,         # Resolved in model_post_init to deps_dir / 'finn'
-            'project': None,      # Resolved in model_post_init to project_dir / 'plugins'
-            'user': None          # Resolved in model_post_init to ~/.brainsmith/plugins
+            SOURCE_BRAINSMITH: None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
+            SOURCE_FINN: None,         # Resolved in model_post_init to deps_dir / 'finn'
+            SOURCE_PROJECT: None,      # Resolved in model_post_init to project_dir / 'plugins'
+            SOURCE_USER: None          # Resolved in model_post_init to ~/.brainsmith/plugins
         },
         description="Plugin source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
     )
     source_priority: List[str] = Field(
-        default=['project', 'user', 'brainsmith', 'finn'],
+        default=list(DEFAULT_SOURCE_PRIORITY),
         description="Plugin source resolution priority. First source with matching component wins. Custom sources are auto-appended if not explicitly listed."
     )
 
@@ -293,6 +292,11 @@ class SystemConfig(BaseSettings):
     plugins_strict: bool = Field(
         default=True,
         description="Strict plugin loading"
+    )
+
+    cache_plugins: bool = Field(
+        default=True,
+        description="Enable manifest caching for plugin discovery. When True, generates and uses a manifest cache in .brainsmith/ to speed up startup. Cache auto-invalidates when component files are modified. Set to False to always perform eager discovery."
     )
 
     # Vivado-specific settings
@@ -447,18 +451,17 @@ class SystemConfig(BaseSettings):
 
     def _resolve_plugin_sources(self) -> None:
         """Resolve plugin source paths."""
-        # Protected sources: resolve None to actual paths
-        if self.plugin_sources.get('brainsmith') is None:
-            self.plugin_sources['brainsmith'] = self.bsmith_dir / 'brainsmith'
+        if self.plugin_sources.get(SOURCE_BRAINSMITH) is None:
+            self.plugin_sources[SOURCE_BRAINSMITH] = self.bsmith_dir / 'brainsmith'
 
-        if self.plugin_sources.get('finn') is None:
-            self.plugin_sources['finn'] = self.deps_dir / 'finn'
+        if self.plugin_sources.get(SOURCE_FINN) is None:
+            self.plugin_sources[SOURCE_FINN] = self.deps_dir / 'finn'
 
-        if self.plugin_sources.get('project') is None:
-            self.plugin_sources['project'] = self.project_dir / 'plugins'
+        if self.plugin_sources.get(SOURCE_PROJECT) is None:
+            self.plugin_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
 
-        if self.plugin_sources.get('user') is None:
-            self.plugin_sources['user'] = Path.home() / '.brainsmith' / 'plugins'
+        if self.plugin_sources.get(SOURCE_USER) is None:
+            self.plugin_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
 
         # Custom (non-protected) sources: resolve if relative
         for name, path in list(self.plugin_sources.items()):
@@ -531,15 +534,19 @@ class SystemConfig(BaseSettings):
         # This comes from YamlSettingsSource when a custom project_file is provided
         project_file_used = getattr(self, '_project_file_used', None)
         if project_file_used:
-            return Path(project_file_used).parent.resolve()
+            # Config file is always .brainsmith/config.yaml, so project_dir is grandparent
+            return Path(project_file_used).parent.parent.resolve()
 
         # Priority 3: Find config file and use its parent directory
+        # Config file is always .brainsmith/config.yaml, so project_dir is grandparent
         config_file = _find_project_config()
         if config_file:
-            return config_file.parent
+            # config_file.parent is .brainsmith/, we want its parent
+            return config_file.parent.parent
 
-        # Priority 4: Fallback to CWD
-        return Path.cwd().resolve()
+        # Priority 4: Fallback to brainsmith repo root
+        # When no project config found, use the repo root as project directory
+        return self.bsmith_dir
 
     @field_validator('plugin_sources', mode='before')
     @classmethod

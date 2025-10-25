@@ -24,9 +24,9 @@ COMPONENTS = {
     },
     'backends': {
         'LayerNorm_hls': '.layernorm.layernorm_hls',
-        'Crop_HLS': '.crop.crop_hls',
-        'Softmax_HLS': '.softmax.hwsoftmax_hls',
-        'Shuffle_HLS': '.shuffle.shuffle_hls',
+        'Crop_hls': '.crop.crop_hls',
+        'Softmax_hls': '.softmax.hwsoftmax_hls',
+        'Shuffle_hls': '.shuffle.shuffle_hls',
     }
 }
 

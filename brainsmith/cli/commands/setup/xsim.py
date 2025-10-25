@@ -62,7 +62,7 @@ def xsim(ctx, force: bool, remove: bool, yes: bool) -> None:
                 "Please set up Vivado and update your configuration.",
                 "Set Vivado path using:",
                 "  - Environment variable: export BSMITH_XILINX__VIVADO_PATH=/path/to/vivado",
-                "  - Config file: Add xilinx.vivado_path to brainsmith_config.yaml"
+                "  - Config file: Add xilinx.vivado_path to .brainsmith/config.yaml"
             ]
         )
 

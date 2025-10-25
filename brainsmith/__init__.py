@@ -65,7 +65,7 @@ _LAZY_MODULES = {
     'list_kernels': 'loader',
     'list_steps': 'loader',
     'list_backends_for_kernel': 'loader',
-    'list_all_backends': 'loader',
+    'list_backends': 'loader',
     'has_step': 'loader',
 
     # Dataflow module

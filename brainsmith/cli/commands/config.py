@@ -51,7 +51,7 @@ def _generate_config_template(defaults) -> str:
 def config():
     """\b
     Configuration can be managed by editing YAML files directly:
-      Project: ./brainsmith_config.yaml
+      Project: ./.brainsmith/config.yaml
       User:    ~/.brainsmith/config.yaml
     """
     pass
@@ -81,11 +81,11 @@ def show(app_ctx: ApplicationContext, finn: bool) -> None:
 @click.option('--user', is_flag=True, help='Create user-level config (~/.brainsmith/config.yaml)')
 @click.pass_obj
 def init(app_ctx: ApplicationContext, force: bool, user: bool) -> None:
-    """By default creates project-level config (./brainsmith_config.yaml).
+    """By default creates project-level config (./.brainsmith/config.yaml).
     Use --user to create user-level config (~/.brainsmith/config.yaml).
     """
     # Determine output path
-    output = app_ctx.user_config_path if user else Path("brainsmith_config.yaml")
+    output = app_ctx.user_config_path if user else Path(".brainsmith/config.yaml")
 
     if output.exists() and not force:
         raise ValidationError(

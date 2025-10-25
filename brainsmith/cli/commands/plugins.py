@@ -8,19 +8,39 @@ from rich.table import Table
 from collections import defaultdict
 
 from brainsmith.loader import (
-    list_steps, list_kernels, list_all_backends,
-    _get_kernel_metadata, get_backend_metadata
+    list_steps, list_kernels, list_backends,
+    get_backend_metadata, _component_index
 )
 from brainsmith.registry import registry
 from ..context import ApplicationContext
 from ..utils import console, progress_spinner
 
 
+def _validate_components(names: list, getter) -> dict:
+    """Validate components by attempting to load them.
+
+    Args:
+        names: Component names to validate
+        getter: Function to load component (get_kernel, get_step, etc.)
+
+    Returns:
+        Dict mapping failed component names to error messages
+    """
+    errors = {}
+    for name in names:
+        try:
+            getter(name)
+        except Exception as e:
+            errors[name] = str(e)
+    return errors
+
+
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed component information')
 @click.option('--validate', is_flag=True, help='Validate all components by importing them (slower)')
+@click.option('--refresh', is_flag=True, help='Rebuild component manifest cache (ignore existing cache)')
 @click.pass_obj
-def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool) -> None:
+def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh: bool) -> None:
     """Shows all available steps, kernels, and backends, organized by source:
 
     - brainsmith: Core Brainsmith components
@@ -29,15 +49,18 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool) -> None:
     - user: Custom plugins from configured sources
     - <pkg>: Entry point plugins from installed packages
 
-    By default, shows fast metadata listing. Use --validate to import all
-    components and check for errors.
+    By default, shows fast metadata listing from cache. Use --refresh to
+    rebuild the cache, --validate to import all components and check for errors.
     """
     config = app_ctx.get_effective_config()
 
-    # Trigger discovery
+    # Trigger discovery (with refresh if requested)
+    from brainsmith.loader import discover_plugins
+    discover_plugins(use_cache=not refresh, force_refresh=refresh)
+
     all_steps = list_steps()
     all_kernels = list_kernels()
-    all_backends = list_all_backends()
+    all_backends = list_backends()
 
     # Group by source
     def group_by_source(components):
@@ -116,26 +139,9 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool) -> None:
         from brainsmith.loader import get_kernel, get_backend, get_step
 
         with progress_spinner("Validating components...", transient=False, no_progress=app_ctx.no_progress) as task:
-            # Validate kernels
-            for kernel_name in all_kernels:
-                try:
-                    get_kernel(kernel_name)
-                except Exception as e:
-                    validation_errors[kernel_name] = str(e)
-
-            # Validate backends
-            for backend_name in all_backends:
-                try:
-                    get_backend(backend_name)
-                except Exception as e:
-                    validation_errors[backend_name] = str(e)
-
-            # Validate steps
-            for step_name in all_steps:
-                try:
-                    get_step(step_name)
-                except Exception as e:
-                    validation_errors[step_name] = str(e)
+            validation_errors.update(_validate_components(all_kernels, get_kernel))
+            validation_errors.update(_validate_components(all_backends, get_backend))
+            validation_errors.update(_validate_components(all_steps, get_step))
 
         console.print()  # Blank line after spinner
         if validation_errors:
@@ -176,8 +182,8 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool) -> None:
                             validation_marker = " [green]✓[/green]"
 
                     try:
-                        meta = _get_kernel_metadata(full_name)
-                        has_infer = '✓' if meta.get('infer') else '✗'
+                        meta = _component_index.get(full_name)
+                        has_infer = '✓' if meta and meta.import_spec and meta.import_spec.extra.get('infer_transform') else '✗'
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")

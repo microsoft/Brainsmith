@@ -16,7 +16,7 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 
-@backend(name='Crop_HLS', target_kernel='brainsmith:Crop', language='hls')
+@backend(name='Crop_hls', target_kernel='brainsmith:Crop', language='hls')
 class Crop_hls(Crop, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
