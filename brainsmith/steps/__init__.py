@@ -1,51 +1,42 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""
-Brainsmith Steps Module - Lazy Loading
+"""Brainsmith transformation steps.
 
-Steps use lazy loading pattern (like kernels) to defer expensive imports.
-Components are imported only when accessed, avoiding upfront import costs.
+Step functions for model transformation pipelines. All steps are eagerly
+imported for simplicity. Manifest caching provides performance.
 
-All step functionality is available through the loader:
+All step functions are available through the registry:
 
-    from brainsmith.registry import get_step, list_steps
+    from brainsmith.registry import get_step
 
-    # Get step function by name
     step_fn = get_step("shell_metadata_handover")
     model = step_fn(model, cfg)
-
-    # List all available steps
-    steps = list_steps()
 """
 
-from brainsmith.registry import create_lazy_module
+# Core FINN-compatible steps
+from brainsmith.steps.core_steps import (
+    qonnx_to_finn_step,
+    specialize_layers_step,
+    constrain_folding_and_set_pumped_compute_step,
+)
 
-# ============================================================================
-# Step Registry (Metadata Only - NO imports!)
-# ============================================================================
+# BERT-specific steps
+from brainsmith.steps.bert_custom_steps import (
+    shell_metadata_handover_step,
+    bert_cleanup_step,
+    bert_streamlining_step,
+)
 
-COMPONENTS = {
-    'steps': {
-        # Core FINN-compatible steps
-        # Map decorator names to module paths
-        # When lazy loaded, the module will export the decorated function
-        'qonnx_to_finn': '.core_steps',
-        'specialize_layers': '.core_steps',
-        'constrain_folding_and_set_pumped_compute': '.core_steps',
+# Kernel inference
+from brainsmith.steps.kernel_inference import infer_kernels_step
 
-        # BERT-specific steps
-        'shell_metadata_handover': '.bert_custom_steps',
-        'bert_cleanup': '.bert_custom_steps',
-        'bert_streamlining': '.bert_custom_steps',
-
-        # Kernel inference
-        'infer_kernels': '.kernel_inference',
-    }
-}
-
-# ============================================================================
-# Lazy Loading (PEP 562) - Unified Pattern
-# ============================================================================
-
-__getattr__, __dir__ = create_lazy_module(COMPONENTS, __name__)
+__all__ = [
+    'qonnx_to_finn_step',
+    'specialize_layers_step',
+    'constrain_folding_and_set_pumped_compute_step',
+    'shell_metadata_handover_step',
+    'bert_cleanup_step',
+    'bert_streamlining_step',
+    'infer_kernels_step',
+]

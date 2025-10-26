@@ -8,6 +8,11 @@ import shutil
 import time
 from pathlib import Path
 from typing import Dict, Any, Set, List
+
+import onnx
+from onnx.onnx_cpp2py_export.checker import ValidationError as OnnxValidationError
+from onnx.onnx_cpp2py_export.shape_inference import InferenceError as OnnxInferenceError
+
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
 from brainsmith.registry import get_step
@@ -77,24 +82,23 @@ class SegmentRunner:
 
         # Note: synth_clk_period_ns and board already validated by DSEConfig
     
-    def _wrap_segment_error(self, segment_id: str, error: Exception) -> ExecutionError:
-        """Wrap segment execution errors with context.
+    def _add_segment_context(self, segment_id: str, error: Exception) -> ExecutionError:
+        """Add segment context to error if not already present.
 
-        Re-raises ExecutionError as-is, wraps unexpected errors with segment context.
+        ExecutionErrors are returned as-is (already have context).
+        Other errors are wrapped with segment information.
 
         Args:
             segment_id: ID of segment that failed
             error: The exception that occurred
 
         Returns:
-            ExecutionError with proper context
+            ExecutionError with segment context
         """
         if isinstance(error, ExecutionError):
-            logger.error(f"Segment failed: {segment_id}: {error}")
             return error
 
-        # Unexpected error - log with full traceback
-        logger.exception(f"Unexpected error in segment {segment_id}")
+        # Wrap unexpected error with context
         wrapped = ExecutionError(f"Segment '{segment_id}' failed: {error}")
         wrapped.__cause__ = error
         return wrapped
@@ -168,7 +172,10 @@ class SegmentRunner:
                 logger.warning("Build cancelled by user")
                 raise
             except Exception as e:
-                wrapped_error = self._wrap_segment_error(segment.segment_id, e)
+                wrapped_error = self._add_segment_context(segment.segment_id, e)
+                logger.error(f"Segment failed: {segment.segment_id}: {wrapped_error}")
+                if not isinstance(e, ExecutionError):
+                    logger.exception("Unexpected error details:")
 
                 if self.fail_fast:
                     raise wrapped_error
@@ -224,7 +231,6 @@ class SegmentRunner:
         # Check cache validity
         if output_model.exists():
             try:
-                import onnx
                 onnx.load(str(output_model))
                 # Valid cache - return immediately
                 logger.debug(f"Cache hit: {segment.segment_id}")
@@ -235,15 +241,14 @@ class SegmentRunner:
                     output_dir=segment_dir,
                     cached=True
                 )
-            except (onnx.onnx_cpp2py_export.checker.ValidationError,
-                    onnx.onnx_cpp2py_export.shape_inference.InferenceError) as e:
+            except (OnnxValidationError, OnnxInferenceError) as e:
                 # Invalid ONNX model - rebuild
                 logger.warning(f"Invalid cache for {segment.segment_id}, rebuilding: {e}")
                 output_model.unlink()
-            except Exception as e:
-                # Unexpected error - don't silently swallow it
-                logger.error(f"Unexpected error validating cache for {segment.segment_id}: {e}")
-                raise
+            except OSError as e:
+                # File corruption (rare but possible)
+                logger.warning(f"Corrupted cache for {segment.segment_id}, rebuilding: {e}")
+                output_model.unlink()
 
         # Cache miss or invalid - execute build
         logger.info(f"Building segment: {segment.segment_id}")
@@ -276,9 +281,13 @@ class SegmentRunner:
                 )
             else:
                 raise RuntimeError("Build succeeded but no output model generated")
-                
+
         except Exception as e:
-            raise self._wrap_segment_error(segment.segment_id, e)
+            contextualized_error = self._add_segment_context(segment.segment_id, e)
+            logger.error(f"Segment failed: {segment.segment_id}: {contextualized_error}")
+            if not isinstance(e, ExecutionError):
+                logger.exception("Unexpected error details:")
+            raise contextualized_error
     
     def _extract_kernel_selections(self, segment: DSESegment) -> List[tuple]:
         """Extract kernel selections from segment steps.

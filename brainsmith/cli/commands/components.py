@@ -7,10 +7,7 @@ import click
 from rich.table import Table
 from collections import defaultdict
 
-from brainsmith.registry import (
-    list_steps, list_kernels, list_backends,
-    get_backend_metadata, get_all_component_metadata
-)
+# Import registry functions lazily inside function to keep --help fast
 from ..context import ApplicationContext
 from ..utils import console, progress_spinner
 
@@ -53,8 +50,14 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
     """
     config = ctx.get_effective_config()
 
+    # Import registry functions only when command executes (not for --help)
+    from brainsmith.registry import (
+        discover_components,
+        list_steps, list_kernels, list_backends,
+        get_backend_metadata, get_all_component_metadata
+    )
+
     # Trigger discovery (with refresh if requested)
-    from brainsmith.registry import discover_components
     discover_components(use_cache=not refresh, force_refresh=refresh)
 
     all_steps = list_steps()

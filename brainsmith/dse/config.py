@@ -42,8 +42,18 @@ class DSEConfig:
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Validate configuration invariants."""
+        # Validate clock_ns is positive
+        if self.clock_ns <= 0:
+            raise ValueError(f"clock_ns must be positive, got {self.clock_ns}")
+
+        # Validate output type dependencies
         if self.output != OutputType.ESTIMATES and not self.board:
             raise ValueError(f"{self.output.value} requires board specification")
+
+        # Validate verify dependencies
+        if self.verify and not self.verify_data:
+            raise ValueError("verify=True requires verify_data to be specified")
 
 
 def _parse_output_type(output_str: str) -> OutputType:
@@ -59,6 +69,7 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
     """Extract DSEConfig from blueprint data.
 
     Config fields are expected at the blueprint top level (flat structure).
+    Validation happens in DSEConfig.__post_init__.
 
     Args:
         data: Merged blueprint YAML data
@@ -67,26 +78,20 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
         DSEConfig instance
 
     Raises:
-        ValueError: If required fields are missing
+        KeyError: If required field 'clock_ns' is missing
+        ValueError: If validation fails (from DSEConfig.__post_init__)
     """
-    # Extract config from top-level blueprint structure
-    config_data = data
-
-    # Validate required field
-    if 'clock_ns' not in config_data:
-        raise ValueError("Missing required field 'clock_ns' in blueprint")
-
     return DSEConfig(
-        clock_ns=float(config_data['clock_ns']),
-        output=_parse_output_type(config_data.get('output', 'estimates')),
-        board=config_data.get('board'),
-        verify=config_data.get('verify', False),
-        verify_data=Path(config_data['verify_data']) if 'verify_data' in config_data else None,
-        parallel_builds=config_data.get('parallel_builds', 4),
-        debug=config_data.get('debug', False),
-        save_intermediate_models=config_data.get('save_intermediate_models', False),
-        start_step=config_data.get('start_step'),
-        stop_step=config_data.get('stop_step'),
+        clock_ns=float(data['clock_ns']),
+        output=_parse_output_type(data.get('output', 'estimates')),
+        board=data.get('board'),
+        verify=data.get('verify', False),
+        verify_data=Path(data['verify_data']) if 'verify_data' in data else None,
+        parallel_builds=data.get('parallel_builds', 4),
+        debug=data.get('debug', False),
+        save_intermediate_models=data.get('save_intermediate_models', False),
+        start_step=data.get('start_step'),
+        stop_step=data.get('stop_step'),
         finn_overrides=data.get('finn_config', {})
     )
 

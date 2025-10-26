@@ -98,7 +98,7 @@ class TreeExecutionResult:
     dse_tree: Optional[DSETree] = None
 
     def compute_stats(self) -> Dict[str, int]:
-        """Compute execution statistics in a single pass.
+        """Compute execution statistics.
 
         Returns:
             Dict with counts: total, successful, failed, cached, skipped

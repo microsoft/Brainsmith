@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from brainsmith.dse import explore_design_space
+# Import explore_design_space lazily inside function to keep --help fast
 from ..context import ApplicationContext
 from ..utils import console, success
 from ..exceptions import CLIError
@@ -53,6 +53,9 @@ def dfc(
         console.print(f"Stop step: {stop_step}")
 
     logger.info(f"Starting dataflow core creation with model={model}, blueprint={blueprint}, output_dir={output_dir}")
+
+    # Import DSE module only when command executes (not for --help)
+    from brainsmith.dse import explore_design_space
 
     try:
         # Run design space exploration to create dataflow core

@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 _SOURCE_DERIVED = "derived"
 _SOURCE_DEFAULT = "default"
 
-# Config file names for source tracking (inlined from settings module)
 _PROJECT_CONFIG_FILE = ".brainsmith/config.yaml"
 
 

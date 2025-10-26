@@ -20,7 +20,6 @@ from ._discovery import (
     discover_components,
     _resolve_component_name,
     _load_component,
-    _COMPONENT_REGISTRIES,
     _measure_load,
 )
 from ._decorators import registry
@@ -36,8 +35,7 @@ def _get_component(name: str, component_type: str):
     """Unified component lookup - single source of truth.
 
     All public get_*() functions delegate to this implementation.
-    Type-specific behavior is driven by _COMPONENT_REGISTRIES and
-    _COMPONENT_UNWRAPPERS mappings.
+    Type-specific behavior is minimal - all lookups use _component_index.
 
     Args:
         name: Component name (with or without source prefix)
@@ -69,9 +67,8 @@ def _get_component(name: str, component_type: str):
         # Load component
         _load_component(meta)
 
-        # Get from registry (now stores objects directly, no unwrapping needed)
-        registry_dict = _COMPONENT_REGISTRIES[component_type]()
-        return registry_dict[full_name]
+        # Return loaded object from component index
+        return meta.loaded_obj
 
 
 def _has_component(name: str, component_type: str) -> bool:
@@ -236,13 +233,11 @@ def get_kernel_infer(name: str) -> Type:
     if meta.kernel_infer is None:
         raise KeyError(f"Kernel '{full_name}' has no InferTransform")
 
-    # Handle lazy import specs (dict with 'module' and 'class_name')
-    infer = meta.kernel_infer
-    if isinstance(infer, dict) and 'module' in infer:
-        import importlib
-        module = importlib.import_module(infer['module'])
-        infer = getattr(module, infer['class_name'])
-        # Cache the loaded class
+    # Resolve lazy import specs and cache
+    from ._metadata import resolve_lazy_class
+    infer = resolve_lazy_class(meta.kernel_infer)
+    if infer != meta.kernel_infer:
+        # Cache the resolved class
         meta.kernel_infer = infer
 
     return infer
@@ -328,9 +323,8 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     _load_component(meta)
 
     # Build metadata dict from ComponentMetadata fields
-    # Registry stores class directly now, metadata is in ComponentMetadata
     return {
-        'class': registry._backends[full_name],
+        'class': meta.loaded_obj,
         'target_kernel': meta.backend_target,
         'language': meta.backend_language
     }
@@ -341,7 +335,10 @@ def list_backends_for_kernel(
     language: Optional[str] = None,
     sources: Optional[List[str]] = None
 ) -> List[str]:
-    """List backends that target a specific kernel.
+    """List backends that target a specific kernel - optimized O(k) lookup.
+
+    Uses an inverted index for fast lookups. Metadata is already populated during
+    discovery, so no component loading is needed.
 
     Args:
         kernel: Kernel name (with or without source prefix)
@@ -351,10 +348,14 @@ def list_backends_for_kernel(
     Returns:
         Sorted list of backend names (with source prefixes)
 
+    Performance:
+        O(k) where k = number of backends for this kernel (typically 1-5)
+        vs O(n) where n = total components (50-100+)
+
     Examples:
         >>> # All backends for LayerNorm
         >>> backends = list_backends_for_kernel('LayerNorm')
-        >>> print(backends)  # ['brainsmith:LayerNorm_HLS', 'user:LayerNorm_HLS_Fast', ...]
+        >>> print(backends)  # ['brainsmith:LayerNorm_hls', 'user:LayerNorm_rtl', ...]
 
         >>> # Only HLS backends for LayerNorm
         >>> hls_backends = list_backends_for_kernel('LayerNorm', language='hls')
@@ -365,38 +366,32 @@ def list_backends_for_kernel(
     if not _components_discovered:
         discover_components()
 
+    # Build inverted index on first use (lazy, cached)
+    from ._state import _build_backend_index, _backends_by_kernel
+    _build_backend_index()
+
     # Resolve kernel name to full source:name format
     kernel_full = _resolve_component_name(kernel, 'kernel')
 
+    # O(1) lookup in inverted index - gets only backends for this kernel!
+    candidate_backends = _backends_by_kernel.get(kernel_full, [])
+
     matching = []
 
-    # Iterate through component index
-    for full_name, meta in _component_index.items():
-        # Filter to backends only
-        if meta.component_type != 'backend':
-            continue
+    # Filter candidates by language and sources (typically small set: 1-5 backends)
+    for backend_name in candidate_backends:
+        meta = _component_index[backend_name]
 
         # Filter by sources if specified
         if sources and meta.source not in sources:
             continue
 
-        # Load backend to ensure metadata is populated
-        try:
-            _load_component(meta)
-        except Exception:
-            # Import failed, skip this backend
-            continue
-
-        # Check metadata in ComponentMetadata (populated after loading)
-        if not meta.backend_target:
-            continue
-
-        if meta.backend_target != kernel_full:
-            continue
+        # Filter by language if specified
+        # Metadata already populated during discovery - no loading needed!
         if language and meta.backend_language != language:
             continue
 
-        matching.append(full_name)
+        matching.append(backend_name)
 
     return sorted(matching)
 

@@ -20,16 +20,7 @@ import yaml
 
 
 def load_yaml(file_path: str | Path) -> dict[str, Any]:
-    """Load a YAML file.
-
-    Returns the parsed YAML content with no processing.
-    For environment variable expansion, see expand_env_vars().
-
-    Args:
-        file_path: Path to the YAML file
-
-    Returns:
-        Parsed YAML data (empty dict if file is empty)
+    """Load YAML with no processing (for env var expansion, see expand_env_vars()).
 
     Raises:
         FileNotFoundError: If the YAML file doesn't exist
@@ -45,17 +36,9 @@ def load_yaml(file_path: str | Path) -> dict[str, Any]:
 
 
 def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-    """Deep merge two dictionaries, with overlay values taking precedence.
+    """Deep merge with overlay taking precedence. Recursively merges nested dicts.
 
-    Recursively merges nested dicts. Overlay values replace base values,
-    except when both are dicts - then they are merged recursively.
-
-    Args:
-        base: Base dictionary
-        overlay: Dictionary to merge on top
-
-    Returns:
-        Merged dictionary (new dict, does not mutate inputs)
+    Returns new dict without mutating inputs.
     """
     result = base.copy()
 
@@ -69,18 +52,9 @@ def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
 
 
 def expand_env_vars(data: Any) -> Any:
-    """Recursively expand environment variables in a data structure.
+    """Recursively expand environment variables (supports ${VAR} and $VAR).
 
-    Uses os.path.expandvars() which leaves undefined variables unchanged.
-    For example, "${UNDEFINED_VAR}" remains "${UNDEFINED_VAR}".
-
-    Supports both ${VAR} and $VAR syntax. Handles nested dicts and lists.
-
-    Args:
-        data: Data structure to process
-
-    Returns:
-        Data with environment variables expanded
+    Leaves undefined variables unchanged (e.g., "${UNDEFINED_VAR}" stays as-is).
     """
     if isinstance(data, str):
         return os.path.expandvars(data)
@@ -97,14 +71,6 @@ def dump_yaml(
     file_path: str | Path,
     **kwargs
 ) -> None:
-    """
-    Write data to a YAML file.
-
-    Args:
-        data: Data to write
-        file_path: Path to write to
-        **kwargs: Additional arguments passed to yaml.dump()
-    """
     file_path = Path(file_path)
 
     file_path.parent.mkdir(parents=True, exist_ok=True)

@@ -29,13 +29,7 @@ import warnings
 def setup_logging(level: str = "warning") -> None:
     """Configure Python logging with Rich handler.
 
-    Args:
-        level: Logging level as string: 'error', 'warning', 'info', or 'debug'
-               Maps to Python logging levels (ERROR=40, WARNING=30, INFO=20, DEBUG=10)
-
-    Example:
-        setup_logging(level="debug")
-        setup_logging(level="error")
+    Maps string level ('error', 'warning', 'info', 'debug') to logging constants.
     """
     from rich.logging import RichHandler
 

@@ -10,32 +10,11 @@ from typing import Any, TYPE_CHECKING
 
 import click
 
-# Lazy imports for settings module (PEP 562)
-# This defers the expensive Pydantic import (~685ms) until actually needed.
-# For `--help` commands, settings are never imported, making CLI 76% faster.
+# Type hints only - settings imported lazily inside methods
 if TYPE_CHECKING:
-    # Type hints only - not evaluated at runtime
     from brainsmith.settings import SystemConfig, load_config
 
 logger = logging.getLogger(__name__)
-
-# Use shared lazy loader for consistency
-from brainsmith._internal.lazy_imports import LazyModuleLoader
-
-_lazy_loader = LazyModuleLoader({
-    "SystemConfig": "brainsmith.settings",
-    "load_config": "brainsmith.settings",
-})
-
-
-def __getattr__(name):
-    """Lazy import settings module on first access (defers expensive Pydantic ~685ms import)."""
-    return _lazy_loader.get_attribute(name)
-
-
-def __dir__():
-    """Support dir() and IDE autocomplete."""
-    return list(globals().keys()) + _lazy_loader.dir()
 
 
 @dataclass
@@ -48,7 +27,7 @@ class ApplicationContext:
     overrides: dict[str, Any] = field(default_factory=dict)
 
     # Loaded configuration
-    config: SystemConfig | None = None
+    config: "SystemConfig | None" = None
 
     # User config path (~/.brainsmith/config.yaml)
     user_config_path: Path = field(default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml")
@@ -93,7 +72,6 @@ class ApplicationContext:
         return context
 
     def load_configuration(self) -> None:
-        # Lazy import settings at runtime
         from brainsmith.settings import load_config
 
         # Load with user config support and CLI overrides
@@ -104,7 +82,7 @@ class ApplicationContext:
             **self.overrides  # Pass overrides directly to Pydantic
         )
 
-    def get_effective_config(self) -> SystemConfig:
+    def get_effective_config(self) -> "SystemConfig":
         if not self.config:
             self.load_configuration()
         return self.config

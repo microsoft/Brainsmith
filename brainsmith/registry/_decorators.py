@@ -44,10 +44,8 @@ class Registry:
     """
 
     def __init__(self):
-        """Initialize empty registries."""
-        self._steps: Dict[str, Any] = {}
-        self._kernels: Dict[str, Dict[str, Any]] = {}
-        self._backends: Dict[str, Dict[str, Any]] = {}
+        """Initialize registry (state stored in _component_index)."""
+        pass
 
     def step(
         self,
@@ -57,37 +55,32 @@ class Registry:
         name: Optional[str] = None
     ) -> Union[Callable, Type]:
         """Register step in global registry."""
-        source = source or self._detect_source(func_or_class)
-        name = name or self._extract_step_name(func_or_class)
+        source = source or _current_source or 'custom'
+        name = name or getattr(func_or_class, 'name', None) or func_or_class.__name__
 
         full_name = f"{source}:{name}"
 
-        if full_name in self._steps:
-            logger.warning(f"Overriding existing step: {full_name}")
-
-        self._steps[full_name] = func_or_class
-
-        # ALWAYS create/update component index entry (Option 1)
+        # Import component index
         from ._state import _component_index
         from ._metadata import ComponentMetadata, ImportSpec
 
-        if full_name not in _component_index:
-            # Create new index entry for standalone decorator usage
-            logger.debug(f"Creating index entry for standalone step: {full_name}")
-            import_spec = ImportSpec(
-                module=func_or_class.__module__,
-                attr=func_or_class.__name__,
-                extra={}
-            )
-            _component_index[full_name] = ComponentMetadata(
-                name=name,
-                source=source,
-                component_type='step',
-                import_spec=import_spec,
-                loaded_obj=func_or_class  # Already loaded
-            )
+        if full_name in _component_index:
+            logger.warning(f"Overriding existing step: {full_name}")
 
-        logger.debug(f"Registered step: {full_name}")
+        # Create/update index entry for standalone decorator usage
+        logger.debug(f"Registering step: {full_name}")
+        import_spec = ImportSpec(
+            module=func_or_class.__module__,
+            attr=func_or_class.__name__,
+            extra={}
+        )
+        _component_index[full_name] = ComponentMetadata(
+            name=name,
+            source=source,
+            component_type='step',
+            import_spec=import_spec,
+            loaded_obj=func_or_class  # Already loaded
+        )
 
         return func_or_class
 
@@ -98,15 +91,20 @@ class Registry:
         source: Optional[str] = None,
         name: Optional[str] = None,
         infer_transform: Optional[Type] = None,
-        domain: Optional[str] = None
+        domain: Optional[str] = None,
+        **kwargs  # Accept and ignore extra parameters (e.g., op_type) for backwards compat
     ) -> Type:
         """Register kernel in global registry."""
-        source = source or self._detect_source(cls)
-        name = name or self._extract_kernel_name(cls)
+        source = source or _current_source or 'custom'
+        name = name or getattr(cls, 'op_type', None) or cls.__name__
 
         full_name = f"{source}:{name}"
 
-        if full_name in self._kernels:
+        # Import component index
+        from ._state import _component_index
+        from ._metadata import ComponentMetadata, ImportSpec
+
+        if full_name in _component_index:
             logger.warning(f"Overriding existing kernel: {full_name}")
 
         # Extract infer_transform (class attribute or parameter)
@@ -119,35 +117,33 @@ class Registry:
             module_path, class_name = infer_transform.split(':', 1)
             infer_transform = {'module': module_path, 'class_name': class_name}
 
-        # Store kernel class directly in registry
-        self._kernels[full_name] = cls
+        # Create/update index entry for standalone decorator usage
+        logger.debug(f"Registering kernel: {full_name}")
+        import_spec = ImportSpec(
+            module=cls.__module__,
+            attr=cls.__name__,
+            extra={}
+        )
+        _component_index[full_name] = ComponentMetadata(
+            name=name,
+            source=source,
+            component_type='kernel',
+            import_spec=import_spec,
+            loaded_obj=cls  # Already loaded
+        )
 
-        # ALWAYS create/update component index entry (Option 1)
-        from ._state import _component_index
-        from ._metadata import ComponentMetadata, ImportSpec
+        # Populate type-specific metadata (inline)
+        from .constants import DEFAULT_KERNEL_DOMAIN
 
-        if full_name not in _component_index:
-            # Create new index entry for standalone decorator usage
-            logger.debug(f"Creating index entry for standalone kernel: {full_name}")
-            import_spec = ImportSpec(
-                module=cls.__module__,
-                attr=cls.__name__,
-                extra={}
-            )
-            _component_index[full_name] = ComponentMetadata(
-                name=name,
-                source=source,
-                component_type='kernel',
-                import_spec=import_spec,
-                loaded_obj=cls  # Already loaded
-            )
-
-        # Populate type-specific metadata (always works now)
         meta = _component_index[full_name]
-        meta.kernel_infer = infer_transform
-        meta.kernel_domain = domain or getattr(cls, 'domain', 'finn.custom')
-
-        logger.debug(f"Registered kernel: {full_name}")
+        # Kernel-specific metadata
+        infer_spec = infer_transform
+        if isinstance(infer_spec, str) and ':' in infer_spec:
+            module_path, class_name = infer_spec.split(':', 1)
+            meta.kernel_infer = {'module': module_path, 'class_name': class_name}
+        else:
+            meta.kernel_infer = infer_spec
+        meta.kernel_domain = domain or getattr(cls, 'domain', DEFAULT_KERNEL_DOMAIN)
 
         return cls
 
@@ -162,12 +158,16 @@ class Registry:
         variant: Optional[str] = None
     ) -> Type:
         """Register backend in global registry."""
-        source = source or self._detect_source(cls)
+        source = source or _current_source or 'custom'
         name = name or cls.__name__
 
         full_name = f"{source}:{name}"
 
-        if full_name in self._backends:
+        # Import component index
+        from ._state import _component_index
+        from ._metadata import ComponentMetadata, ImportSpec
+
+        if full_name in _component_index:
             logger.warning(f"Overriding existing backend: {full_name}")
 
         # Extract metadata - parameters override class attributes
@@ -180,90 +180,52 @@ class Registry:
         if not lang:
             raise ValueError(f"Backend {full_name} missing 'language' attribute")
 
-        # Store backend class directly in registry
-        self._backends[full_name] = cls
-
-        # ALWAYS create/update component index entry (Option 1)
-        from ._state import _component_index
-        from ._metadata import ComponentMetadata, ImportSpec
-
-        if full_name not in _component_index:
-            # Create new index entry for standalone decorator usage
-            logger.debug(f"Creating index entry for standalone backend: {full_name}")
-            import_spec = ImportSpec(
-                module=cls.__module__,
-                attr=cls.__name__,
-                extra={}
-            )
-            _component_index[full_name] = ComponentMetadata(
-                name=name,
-                source=source,
-                component_type='backend',
-                import_spec=import_spec,
-                loaded_obj=cls  # Already loaded
-            )
+        # Create/update index entry for standalone decorator usage
+        logger.debug(f"Registering backend: {full_name} (target={target}, lang={lang})")
+        import_spec = ImportSpec(
+            module=cls.__module__,
+            attr=cls.__name__,
+            extra={}
+        )
+        _component_index[full_name] = ComponentMetadata(
+            name=name,
+            source=source,
+            component_type='backend',
+            import_spec=import_spec,
+            loaded_obj=cls  # Already loaded
+        )
 
         # Populate type-specific metadata (always works now)
         meta = _component_index[full_name]
         meta.backend_target = target
         meta.backend_language = lang
 
-        logger.debug(
-            f"Registered backend: {full_name} "
-            f"(target={target}, lang={lang})"
-        )
+        # Invalidate backend index if it was already built
+        # (new backend added after discovery, force rebuild on next lookup)
+        from ._state import _invalidate_backend_index
+        _invalidate_backend_index()
 
         return cls
 
-    def _detect_source(self, obj: Any) -> str:
-        """Auto-detect source: context > module prefix > config default."""
-        if _current_source:
-            return _current_source
-
-        if module := inspect.getmodule(obj):
-            for prefix, source in SOURCE_MODULE_PREFIXES.items():
-                if module.__name__.startswith(prefix):
-                    return source
-
-        try:
-            from brainsmith.settings import get_config
-            return get_config().source_priority[0]
-        except (ImportError, AttributeError):
-            return DEFAULT_SOURCE_PRIORITY[0]
-
-    def _extract_step_name(self, func_or_class: Any) -> str:
-        """Extract step name from function/class (prefers .name attribute)."""
-        # Check for explicit name attribute
-        if hasattr(func_or_class, 'name') and func_or_class.name:
-            return func_or_class.name
-
-        # Use __name__
-        return func_or_class.__name__
-
-    def _extract_kernel_name(self, cls: Type) -> str:
-        """Extract kernel name (prefers cls.op_type over __name__)."""
-        # Prefer op_type class attribute if defined (for ONNX compatibility)
-        # Note: This is just for name extraction, not stored in metadata
-        if hasattr(cls, 'op_type') and cls.op_type:
-            return cls.op_type
-
-        # Fallback to class name
-        return cls.__name__
-
     def clear(self):
         """Clear all registrations (for testing)."""
-        self._steps.clear()
-        self._kernels.clear()
-        self._backends.clear()
+        from ._state import _component_index
+        _component_index.clear()
         logger.debug("Registry cleared")
 
     def __repr__(self) -> str:
         """String representation showing registry stats."""
+        from ._state import _component_index
+
+        counts = {'step': 0, 'kernel': 0, 'backend': 0}
+        for meta in _component_index.values():
+            counts[meta.component_type] += 1
+
         return (
             f"<Registry: "
-            f"{len(self._steps)} steps, "
-            f"{len(self._kernels)} kernels, "
-            f"{len(self._backends)} backends>"
+            f"{counts['step']} steps, "
+            f"{counts['kernel']} kernels, "
+            f"{counts['backend']} backends>"
         )
 
 

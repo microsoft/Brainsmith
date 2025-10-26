@@ -1,12 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""FINN-specific adapter to isolate workarounds.
-
-All FINN-specific hacks, workarounds, and necessary evils are isolated here.
-This allows the main executor to remain clean while documenting why these
-workarounds exist.
-"""
+"""FINN-specific adapter to isolate workarounds."""
 
 import importlib.util
 import logging
@@ -36,12 +31,9 @@ class FINNAdapter:
     """
 
     def __init__(self):
-        """Initialize FINN adapter."""
-        # Check FINN availability with detailed error reporting
         self._check_finn_dependencies()
 
     def _check_finn_dependencies(self) -> None:
-        """Check all FINN dependencies are available."""
         missing = []
 
         # Check core FINN modules
@@ -70,11 +62,6 @@ class FINNAdapter:
         output_dir: Path
     ) -> Path | None:
         """Execute FINN build with proper path handling.
-
-        Args:
-            input_model: Path to input ONNX model
-            config_dict: FINN configuration as dictionary
-            output_dir: Directory for build outputs
 
         Returns:
             Path to output model if successful, None otherwise
@@ -146,16 +133,7 @@ class FINNAdapter:
             os.chdir(old_cwd)
 
     def _discover_output_model(self, build_dir: Path) -> Path:
-        """Find the final output model from intermediate_models/.
-
-        Returns the most recently modified .onnx file.
-
-        Args:
-            build_dir: Directory where build was executed
-
-        Raises:
-            RuntimeError: If no ONNX output found
-        """
+        """Most recently modified .onnx file in build_dir"""
         intermediate_dir = build_dir / "intermediate_models"
         onnx_files = list(intermediate_dir.glob("*.onnx"))
 
@@ -171,14 +149,6 @@ class FINNAdapter:
         return max(onnx_files, key=lambda p: p.stat().st_mtime)
 
     def _verify_output_model(self, model_path: Path) -> None:
-        """Verify the output model exists and is valid ONNX.
-
-        Args:
-            model_path: Path to model to verify
-
-        Raises:
-            RuntimeError: If model is invalid
-        """
         if not model_path.exists():
             raise RuntimeError(f"Output model does not exist: {model_path}")
 
@@ -190,12 +160,5 @@ class FINNAdapter:
             raise RuntimeError(f"Invalid ONNX model at {model_path}: {e}")
 
     def prepare_model(self, source: Path, destination: Path) -> None:
-        """
-        Copy model to build directory.
-
-        Args:
-            source: Source model path
-            destination: Destination model path
-        """
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)

@@ -22,35 +22,6 @@ from .kernels import parse_kernels
 logger = logging.getLogger(__name__)
 
 
-def _preload_blueprint_components(raw_data: Dict[str, Any], merged_data: Dict[str, Any]) -> None:
-    """Pre-load all kernels declared in blueprint.
-
-    Triggers lazy loading to ensure @kernel and @backend decorators fire before
-    we try to validate or list components. This allows us to keep lazy loading
-    for kernels (which have heavy dependencies) while ensuring blueprint
-    components are available when needed.
-
-    Note: Steps are eagerly loaded, so no preloading needed for them.
-
-    Args:
-        raw_data: Raw blueprint data (current file only)
-        merged_data: Merged blueprint data (includes parent inheritance)
-    """
-    from brainsmith.registry import get_kernel
-
-    # Pre-load kernels (use merged data to include inherited kernels)
-    kernels_data = merged_data.get('design_space', {}).get('kernels', [])
-    for kernel_name in kernels_data:
-        # Kernels are now always strings (backend selection removed)
-        if isinstance(kernel_name, str):
-            try:
-                logger.debug(f"Pre-loading kernel: {kernel_name}")
-                get_kernel(kernel_name)
-            except KeyError as e:
-                # Will fail again during parse_kernels with better error message
-                logger.debug(f"Failed to pre-load kernel '{kernel_name}': {e}")
-
-
 def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignSpace, DSEConfig]:
     """
     Parse blueprint YAML and return GlobalDesignSpace and DSEConfig.
@@ -70,11 +41,6 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignS
     """
     # Load blueprint data and check for inheritance
     raw_data, merged_data, parent_path = load_blueprint_with_inheritance(blueprint_path)
-
-    # Pre-load all components mentioned in blueprint
-    # This triggers lazy loading so @kernel, @backend, and @step decorators
-    # fire before we try to validate or list components
-    _preload_blueprint_components(raw_data, merged_data)
 
     parent_steps = None
 

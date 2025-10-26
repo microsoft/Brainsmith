@@ -49,11 +49,8 @@ class LazyModuleLoader:
     def __init__(self, lazy_map: dict[str, str], package: str | None = None):
         """Initialize the lazy loader.
 
-        Args:
-            lazy_map: Dict mapping attribute names to module paths.
-                     Example: {'Config': 'myapp.config'}
-            package: Package name for relative imports. If provided, module
-                    paths will be treated as relative to this package.
+        Example:
+            {'Config': 'myapp.config'}
         """
         self._lazy_map = lazy_map
         self._cache: dict[str, Any] = {}
@@ -61,12 +58,6 @@ class LazyModuleLoader:
 
     def get_attribute(self, name: str) -> Any:
         """Get an attribute, loading it lazily if needed.
-
-        Args:
-            name: Attribute name to load
-
-        Returns:
-            The requested attribute from the target module
 
         Raises:
             AttributeError: If the attribute is not in the lazy_map
@@ -89,16 +80,7 @@ class LazyModuleLoader:
         return self._cache[name]
 
     def dir(self) -> list[str]:
-        """Return list of available attributes for dir() support.
-
-        Returns:
-            List of all attribute names that can be loaded
-        """
         return list(self._lazy_map.keys())
 
     def clear_cache(self) -> None:
-        """Clear the attribute cache.
-
-        Useful for testing or when modules need to be reloaded.
-        """
         self._cache.clear()

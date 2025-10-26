@@ -53,16 +53,7 @@ class RemovalError(DependencyError):
 
 # Module-level helpers
 def _remove_directory(name: str, dest: Path, quiet: bool) -> None:
-    """Remove a dependency directory.
-
-    Args:
-        name: Dependency name (for logging)
-        dest: Directory to remove
-        quiet: Suppress output
-
-    Raises:
-        RemovalError: If removal fails
-    """
+    """Raises RemovalError if removal fails."""
     if not dest.exists():
         if not quiet:
             logger.info("%s is not installed", name)
@@ -89,14 +80,10 @@ class GitDependencyInstaller:
         force: bool,
         quiet: bool
     ) -> None:
-        """Clone a git repository.
+        """Clone git repository.
 
         Args:
-            name: Dependency name
             dep: Must contain 'url', optional 'ref' and 'sparse_dirs'
-            dest: Destination directory for clone
-            force: Force reclone even if exists
-            quiet: Suppress output
 
         Raises:
             InstallationError: If git clone fails
@@ -154,16 +141,7 @@ class GitDependencyInstaller:
             )
 
     def remove(self, name: str, dest: Path, quiet: bool) -> None:
-        """Remove a git repository.
-
-        Args:
-            name: Dependency name
-            dest: Repository directory
-            quiet: Suppress output
-
-        Raises:
-            RemovalError: If removal fails
-        """
+        """Raises RemovalError if removal fails."""
         _remove_directory(name, dest, quiet)
 
 
@@ -171,11 +149,6 @@ class ZipDependencyInstaller:
     """Installer for zip-based dependencies."""
 
     def __init__(self, temp_dir: Path | None = None):
-        """Initialize with optional temp directory.
-
-        Args:
-            temp_dir: Directory for temporary zip files (default: dest parent)
-        """
         self.temp_dir = temp_dir
 
     def install(
@@ -186,14 +159,10 @@ class ZipDependencyInstaller:
         force: bool,
         quiet: bool
     ) -> None:
-        """Download and extract a zip file.
+        """Download and extract zip file.
 
         Args:
-            name: Dependency name
             dep: Must contain 'url'
-            dest: Destination directory for extraction
-            force: Force redownload even if exists
-            quiet: Suppress output
 
         Raises:
             InstallationError: If download or extraction fails
@@ -232,16 +201,7 @@ class ZipDependencyInstaller:
                 zip_path.unlink()
 
     def remove(self, name: str, dest: Path, quiet: bool) -> None:
-        """Remove a zip-extracted directory.
-
-        Args:
-            name: Dependency name
-            dest: Extracted directory
-            quiet: Suppress output
-
-        Raises:
-            RemovalError: If removal fails
-        """
+        """Raises RemovalError if removal fails."""
         _remove_directory(name, dest, quiet)
 
 
@@ -259,11 +219,7 @@ class BuildDependencyInstaller:
         """Build a local dependency.
 
         Args:
-            name: Dependency name
             dep: Must contain 'build_cmd', optional 'source'
-            dest: Not used for build dependencies (builds in-place)
-            force: Force rebuild
-            quiet: Suppress output
 
         Raises:
             BuildError: If build fails
@@ -276,10 +232,6 @@ class BuildDependencyInstaller:
 
     def _install_finn_xsim(self, force: bool, quiet: bool) -> None:
         """Install FINN XSI module with Vivado.
-
-        Args:
-            force: Force rebuild
-            quiet: Suppress output
 
         Raises:
             BuildError: If build fails or requirements missing
@@ -378,10 +330,7 @@ class BuildDependencyInstaller:
         """Install generic build dependency.
 
         Args:
-            name: Dependency name
             dep: Dependency metadata with 'source' and 'build_cmd'
-            force: Force rebuild
-            quiet: Suppress output
 
         Raises:
             BuildError: If build fails
@@ -433,13 +382,6 @@ class BuildDependencyInstaller:
             raise BuildError(error_msg)
 
     def remove(self, name: str, dest: Path, quiet: bool) -> None:
-        """Remove a build dependency.
-
-        Args:
-            name: Dependency name
-            dest: Not used (builds are in-place)
-            quiet: Suppress output
-        """
         # Special handling for finn-xsim
         if name == 'finn-xsim':
             try:

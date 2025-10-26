@@ -34,18 +34,18 @@ class StepOperation:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Optional[StepOperation]:
         """Parse operation from YAML dict"""
-        op_mappings = {
-            "after": lambda d: cls(op_type="after", target=d["after"], insert=d.get("insert")),
-            "before": lambda d: cls(op_type="before", target=d["before"], insert=d.get("insert")),
-            "replace": lambda d: cls(op_type="replace", target=d["replace"], with_step=d.get("with")),
-            "remove": lambda d: cls(op_type="remove", target=d["remove"]),
-            "at_start": lambda d: cls(op_type="at_start", insert=d["at_start"]["insert"]),
-            "at_end": lambda d: cls(op_type="at_end", insert=d["at_end"]["insert"]),
-        }
-
-        for key, factory in op_mappings.items():
-            if key in data:
-                return factory(data)
+        if "after" in data:
+            return cls(op_type="after", target=data["after"], insert=data.get("insert"))
+        elif "before" in data:
+            return cls(op_type="before", target=data["before"], insert=data.get("insert"))
+        elif "replace" in data:
+            return cls(op_type="replace", target=data["replace"], with_step=data.get("with"))
+        elif "remove" in data:
+            return cls(op_type="remove", target=data["remove"])
+        elif "at_start" in data:
+            return cls(op_type="at_start", insert=data["at_start"]["insert"])
+        elif "at_end" in data:
+            return cls(op_type="at_end", insert=data["at_end"]["insert"])
         return None
 
 

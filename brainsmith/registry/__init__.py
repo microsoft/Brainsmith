@@ -49,10 +49,11 @@ from .constants import (
     PROTECTED_SOURCES,
     DEFAULT_SOURCE_PRIORITY,
     SOURCE_MODULE_PREFIXES,
+    DEFAULT_KERNEL_DOMAIN,
 )
 
-# Metadata structures
-from ._metadata import ComponentMetadata, ImportSpec
+# Metadata structures and helpers
+from ._metadata import ComponentMetadata, ImportSpec, resolve_lazy_class
 
 # Registration decorators and registry
 from ._decorators import (
@@ -65,7 +66,7 @@ from ._decorators import (
 )
 
 # Lazy loading helper
-from ._loading import create_lazy_module, ComponentsDict
+from ._loading import create_lazy_module
 
 # Discovery and lookup - import from specialized modules
 from ._discovery import discover_components
@@ -103,6 +104,7 @@ __all__ = [
     'PROTECTED_SOURCES',
     'DEFAULT_SOURCE_PRIORITY',
     'SOURCE_MODULE_PREFIXES',
+    'DEFAULT_KERNEL_DOMAIN',
 
     # Metadata
     'ComponentMetadata',
@@ -118,7 +120,6 @@ __all__ = [
 
     # Lazy loading
     'create_lazy_module',
-    'ComponentsDict',
 
     # Discovery
     'discover_components',

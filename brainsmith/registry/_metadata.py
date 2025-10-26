@@ -6,10 +6,11 @@
 Defines data structures used throughout the component registry:
 - ImportSpec: Lazy import specification
 - ComponentMetadata: Metadata for registered components
+- Helper functions for metadata manipulation
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional, Type, Union
 
 
 @dataclass
@@ -60,3 +61,39 @@ class ComponentMetadata:
     def is_loaded(self) -> bool:
         """Check if component has been imported."""
         return self.loaded_obj is not None
+
+
+# ============================================================================
+# Metadata Helper Functions
+# ============================================================================
+
+def resolve_lazy_class(spec: Union[Type, Dict[str, str], None]) -> Optional[Type]:
+    """Resolve lazy class import spec to actual class.
+
+    Supports two formats:
+    - Direct class reference (already loaded)
+    - Lazy spec: {'module': 'path.to.module', 'class_name': 'ClassName'}
+
+    Args:
+        spec: Class reference, lazy import dict, or None
+
+    Returns:
+        Resolved class object, or None if spec was None
+
+    Examples:
+        >>> resolve_lazy_class(MyClass)  # Direct reference
+        <class 'MyClass'>
+        >>> resolve_lazy_class({'module': 'foo.bar', 'class_name': 'Baz'})
+        <class 'foo.bar.Baz'>
+        >>> resolve_lazy_class(None)
+        None
+    """
+    if spec is None:
+        return None
+
+    if isinstance(spec, dict) and 'module' in spec:
+        import importlib
+        module = importlib.import_module(spec['module'])
+        return getattr(module, spec['class_name'])
+
+    return spec

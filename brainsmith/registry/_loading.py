@@ -37,53 +37,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Type Definitions
-# ============================================================================
-
-
-class ComponentsDict(TypedDict, total=False):
-    """Type definition for COMPONENTS dictionary structure.
-
-    All keys are optional. Each key maps to a dict of component_name -> module_path.
-    Module paths should be relative (start with '.') for proper package imports.
-
-    Example:
-        >>> COMPONENTS: ComponentsDict = {
-        ...     'kernels': {'MyKernel': '.my_kernel'},
-        ...     'backends': {'MyKernel_hls': '.my_backend'},
-        ...     'steps': {'my_step': '.my_step'},
-        ...     'modules': {'utils': '.utils'},
-        ... }
-    """
-    kernels: Dict[str, str]
-    backends: Dict[str, str]
-    steps: Dict[str, str]
-    modules: Dict[str, str]
-
-
-# ============================================================================
-# Validation
-# ============================================================================
-# NOTE: Validation removed - components self-validate during import via decorators.
-# If a component is malformed, it will fail at import time with clear error messages.
-# No need for separate validation layer.
-
-
 def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str) -> Tuple[Callable, Callable]:
     """Create lazy loading functions for a plugin module.
 
-    This helper implements PEP 562 lazy loading pattern. Components are
-    imported only when accessed, avoiding expensive upfront imports.
+    This helper implements PEP 562 lazy loading pattern using absolute import paths.
+    Components are imported only when accessed, avoiding expensive upfront imports.
+
+    IMPORTANT: Module paths must be ABSOLUTE (e.g., 'brainsmith.kernels.layernorm.layernorm'),
+    not relative (e.g., '.layernorm.layernorm'). This simplifies loading and makes paths
+    explicit.
 
     Args:
         components: Component metadata organized by type:
             {
-                'kernels': {'KernelName': '.module.path'},
-                'backends': {'BackendName': '.module.path'},
-                'steps': {'step_name': '.module.path'},
+                'kernels': {'LayerNorm': 'brainsmith.kernels.layernorm.layernorm'},
+                'backends': {'LayerNorm_hls': 'brainsmith.kernels.layernorm.layernorm_hls'},
+                'steps': {'streamline': 'brainsmith.steps.streamline'},
             }
-        package_name: Package name for relative imports (use __name__)
+        package_name: Package name (for error messages, not used for imports)
 
     Returns:
         Tuple of (__getattr__, __dir__) functions for module-level use
@@ -91,36 +62,36 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
     Design:
         - Metadata-only at import time (fast discovery)
         - Lazy import on first access (defer heavy deps)
+        - Direct imports using absolute paths (simple, explicit)
         - Cache loaded components (fast subsequent access)
-        - Standard PEP 562 pattern (familiar to users)
+        - Standard PEP 562 pattern (QONNX compatible)
 
     Example:
         >>> # In your __init__.py
-        >>> from brainsmith.plugin_helpers import create_lazy_module
+        >>> from brainsmith.registry import create_lazy_module
         >>>
         >>> COMPONENTS = {
-        ...     'kernels': {'MyKernel': '.my_kernel'},
-        ...     'steps': {'my_step': '.my_step'},
+        ...     'kernels': {
+        ...         'LayerNorm': 'brainsmith.kernels.layernorm.layernorm',
+        ...     },
         ... }
         >>>
         >>> __getattr__, __dir__ = create_lazy_module(COMPONENTS, __name__)
         >>>
-        >>> # Now your module supports lazy loading:
-        >>> # - dir(module) lists all components (fast)
-        >>> # - module.MyKernel imports only when accessed
+        >>> # Now getattr(module, 'LayerNorm') works (needed for QONNX integration)
     """
 
-    # Flatten component types into single lookup dict, tracking source type
-    _modules = {}  # component_name -> module_path
+    # Flatten component types into single lookup dict
+    _modules = {}  # component_name -> absolute_module_path
     _component_types = {}  # component_name -> component_type (for error messages)
 
     for component_type, items in components.items():
         for name, spec in items.items():
-            # Support both formats: string (old) and dict (new with metadata)
+            # Extract module path (support both string and dict format for backwards compat)
             if isinstance(spec, str):
                 module_path = spec
             else:
-                # New format: extract 'module' key from dict
+                # Dict format: {'module': 'path', ...metadata...}
                 module_path = spec.get('module', spec)
 
             _modules[name] = module_path
@@ -131,9 +102,6 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
 
     def __getattr__(name: str):
         """Lazy import components on first access (PEP 562).
-
-        Called automatically when attribute not found in module namespace.
-        Imports the specific component module and caches the result.
 
         Args:
             name: Component name to load
@@ -150,44 +118,31 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
                 component_type = _component_types.get(name, 'component')
 
                 try:
-                    # Import the module
-                    module = import_module(module_path, package=package_name)
+                    # Direct import using absolute path
+                    module = import_module(module_path)
                 except ImportError as e:
-                    # Module doesn't exist or has import errors
                     raise AttributeError(
                         f"Component '{name}' failed to load: module '{module_path}' not found.\n"
                         f"Check COMPONENTS['{component_type}']['{name}'] = '{module_path}'\n"
                         f"Error: {e}"
                     ) from e
-                except Exception as e:
-                    # Other import failures (syntax errors, etc)
-                    raise AttributeError(
-                        f"Component '{name}' failed to load: error importing '{module_path}'.\n"
-                        f"Check COMPONENTS['{component_type}']['{name}'] = '{module_path}'\n"
-                        f"Error: {type(e).__name__}: {e}"
-                    ) from e
 
                 try:
-                    # Try to get the component from the module by name
+                    # Get component from module
                     _loaded[name] = getattr(module, name)
                 except AttributeError:
-                    # For steps: decorator name might differ from function name
-                    # After importing, check if registry now has it
-                    # This handles @step(name='foo') on def foo_step(...)
+                    # For steps: decorator might have registered under different name
                     if component_type == 'steps':
-                        # Import triggered the decorator, loader will find it in registry
-                        _loaded[name] = None  # Marker that import happened
+                        _loaded[name] = None  # Marker for decorator pattern
                     else:
-                        # For kernels/backends, name must match
                         raise AttributeError(
                             f"Component '{name}' not found in module '{module_path}'.\n"
-                            f"The module loaded successfully but doesn't define '{name}'.\n"
-                            f"Check that {module_path.lstrip('.')} contains 'class {name}' or 'def {name}'."
+                            f"Module loaded but doesn't define '{name}'."
                         )
 
             return _loaded[name]
 
-        # Component name not in COMPONENTS dict
+        # Component not in COMPONENTS dict
         available = list(_modules.keys())
         raise AttributeError(
             f"module '{package_name}' has no attribute '{name}'. "
@@ -196,14 +151,7 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
         )
 
     def __dir__():
-        """List available components without importing them.
-
-        Called by dir(), IDE autocomplete, and discovery tools.
-        Returns component names from metadata (no imports).
-
-        Returns:
-            List of available component names
-        """
+        """List available components without importing them."""
         return list(_modules.keys())
 
     return __getattr__, __dir__

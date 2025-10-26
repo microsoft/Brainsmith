@@ -11,6 +11,7 @@ each node represents a segment of execution between branch points.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -20,7 +21,6 @@ from brainsmith.dse.types import SegmentStatus
 @dataclass
 class ArtifactState:
     source_dir: Optional[Path] = None
-    size_bytes: Optional[int] = None
     copied_to: List[Path] = field(default_factory=list)
 
 
@@ -53,22 +53,17 @@ class DSESegment:
     # FINN configuration
     finn_config: Dict[str, Any] = field(default_factory=dict)
 
-    # Cached properties
-    _segment_id: Optional[str] = field(default=None, init=False, repr=False)
-    
-    @property
+    @cached_property
     def segment_id(self) -> str:
         """Deterministic ID from branch path (cached for O(1) access)."""
-        if self._segment_id is None:
-            # Build ID from branch decisions in path
-            path_parts = []
-            node = self
-            while node and node.branch_choice:
-                path_parts.append(node.branch_choice)
-                node = node.parent
-            path_parts.reverse()
-            self._segment_id = "/".join(path_parts) if path_parts else "root"
-        return self._segment_id
+        # Build ID from branch decisions in path
+        path_parts = []
+        node = self
+        while node and node.branch_choice:
+            path_parts.append(node.branch_choice)
+            node = node.parent
+        path_parts.reverse()
+        return "/".join(path_parts) if path_parts else "root"
     
     @property
     def is_branch_point(self) -> bool:

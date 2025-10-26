@@ -56,10 +56,12 @@ def explore_design_space(
         RuntimeError: If no successful builds were produced
     """
     # Verify files exist
-    if not Path(model_path).exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    if not Path(blueprint_path).exists():
-        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
+    model_path_obj = Path(model_path)
+    if not model_path_obj.exists():
+        raise FileNotFoundError(f"Model file not found: {model_path_obj}")
+    blueprint_path_obj = Path(blueprint_path)
+    if not blueprint_path_obj.exists():
+        raise FileNotFoundError(f"Blueprint file not found: {blueprint_path_obj}")
 
     # Determine output directory
     if not output_dir:
@@ -124,7 +126,6 @@ def explore_design_space(
     logger.info(f"  Total time: {results.total_time:.2f}s")
     logger.info(f"  Output directory: {output_dir}")
 
-    # Return result with all fields
     return TreeExecutionResult(
         segment_results=results.segment_results,
         total_time=results.total_time,

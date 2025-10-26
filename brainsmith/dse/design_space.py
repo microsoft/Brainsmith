@@ -29,26 +29,15 @@ class GlobalDesignSpace:
     
     def __post_init__(self):
         """Validate design space after initialization."""
-        self._validate()
-
-    def _validate(self) -> None:
-        """Validate design space constraints."""
         self._validate_size()
 
-    def _count_combinations(self) -> int:
-        """Count total design space combinations."""
+    def _validate_size(self) -> None:
+        """Ensure design space doesn't exceed size limits."""
         combination_count = 1
-
         for step_spec in self.steps:
             if isinstance(step_spec, list):
                 # Branch point - multiply by number of options
                 combination_count *= len(step_spec)
-
-        return combination_count
-
-    def _validate_size(self) -> None:
-        """Ensure design space doesn't exceed size limits."""
-        combination_count = self._count_combinations()
 
         if combination_count > self.max_combinations:
             raise ValueError(
@@ -95,13 +84,10 @@ def find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str
             return i
 
     # Step not found - create helpful error message
-    available = []
-    for s in steps:
-        if isinstance(s, str):
-            available.append(s)
-        elif isinstance(s, list):
-            available.append(f"[{', '.join(str(opt) for opt in s)}]")
-
+    available = [
+        s if isinstance(s, str) else f"[{', '.join(str(opt) for opt in s)}]"
+        for s in steps
+    ]
     raise ValueError(
         f"Step '{step_name}' not found in steps list.\n"
         f"Available steps: {', '.join(available)}"

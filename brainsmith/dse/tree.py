@@ -5,6 +5,7 @@
 Design Space Exploration Tree structure and operations.
 """
 
+from collections import deque
 from typing import Dict, List, Any
 from .segment import DSESegment
 from brainsmith.dse.types import SegmentStatus
@@ -71,24 +72,23 @@ class DSETree:
         return all_segments
     
     def get_execution_order(self) -> List[DSESegment]:
-        """Get breadth-first execution order for the tree."""
-        if self.root.segment_id == "root" and not self.root.steps:
-            queue = list(self.root.children.values())
+        """Get breadth-first execution order for the tree.
+
+        Skips root if it has no steps (purely structural).
+        """
+        # Start from root's children if root is structural-only
+        if not self.root.steps and self.root.children:
+            queue = deque(self.root.children.values())
         else:
-            queue = [self.root]
-        
+            queue = deque([self.root])
+
         order = []
-        seen = set()
-        
+
         while queue:
-            node = queue.pop(0)
-            if id(node) in seen:
-                continue
-                
-            seen.add(id(node))
+            node = queue.popleft()  # O(1)
             order.append(node)
             queue.extend(node.children.values())
-        
+
         return order
     
     def get_statistics(self) -> Dict[str, Any]:

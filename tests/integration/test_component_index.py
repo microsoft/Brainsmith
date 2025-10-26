@@ -34,7 +34,7 @@ class TestComponentIndexPopulation:
         meta = _component_index['brainsmith:LayerNorm']
         assert meta.source == 'brainsmith'
         assert meta.component_type == 'kernel'
-        assert not meta.is_loaded  # Should be discovered but not yet loaded
+        assert meta.is_loaded  # Eagerly loaded during discovery
         assert meta.import_spec is not None
         assert meta.import_spec.module == 'brainsmith.kernels.layernorm.layernorm'
         assert meta.import_spec.attr == 'LayerNorm'
@@ -69,8 +69,10 @@ class TestComponentIndexPopulation:
                 f"{meta.full_name} should have import_spec"
             assert meta.import_spec.module.startswith('brainsmith.'), \
                 f"{meta.full_name} should have brainsmith module path"
-            assert meta.import_spec.attr == meta.name, \
-                f"{meta.full_name} import_spec.attr should match name"
+            # Note: import_spec.attr may differ from meta.name for steps
+            # (e.g., qonnx_to_finn_step vs qonnx_to_finn - decorator name differs)
+            assert meta.import_spec.attr, \
+                f"{meta.full_name} should have import_spec.attr"
 
 
 class TestIndexCompleteness:
@@ -155,12 +157,23 @@ class TestIndexIntegrity:
             assert meta.import_spec.module, f"{key} import_spec missing module"
             assert meta.import_spec.attr, f"{key} import_spec missing attr"
 
-    def test_all_components_start_unloaded(self):
-        """Verify all components start unloaded."""
+    def test_core_components_loaded_after_discovery(self):
+        """Verify core components are loaded after discovery (eager loading).
+
+        Core brainsmith components use eager imports - they are imported during
+        discovery and decorators fire immediately, populating both registry and
+        index. This is intentional for simplicity and debuggability.
+
+        Manifest caching provides performance for subsequent runs.
+        """
         discover_components()
 
-        for key, meta in _component_index.items():
-            # During discovery, all should be unloaded (not yet imported)
-            # Exception: eager components register immediately but aren't indexed
-            assert not meta.is_loaded, \
-                f"{key} should be unloaded after discovery"
+        # Core components should be loaded (eager imports)
+        core_loaded = sum(
+            1 for meta in _component_index.values()
+            if meta.source == 'brainsmith' and meta.is_loaded
+        )
+
+        # Should have at least kernels + backends + steps loaded
+        assert core_loaded >= 15, \
+            f"Expected at least 15 loaded core components, got {core_loaded}"

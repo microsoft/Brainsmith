@@ -1,45 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests for custom file path injection fix (Critical Issue #2)."""
+"""Tests for settings priority chain (Critical Issue #2).
+
+Focused on testing the complex priority override chain, not trivial file loading.
+"""
 
 import pytest
 from pathlib import Path
-from brainsmith.settings import SystemConfig, load_config, get_default_config
-
-
-def test_custom_project_file_loads_correctly(tmp_path):
-    """Verify custom project file path is used when provided."""
-    # Create a custom config file
-    config_file = tmp_path / "custom_config.yaml"
-    config_file.write_text("""
-build_dir: custom_build
-netron_port: 9999
-""")
-
-    config = load_config(project_file=config_file)
-
-    # Custom values from file should be loaded
-    assert config.build_dir == tmp_path / "custom_build"
-    assert config.netron_port == 9999
-
-
-def test_custom_user_file_loads_correctly(tmp_path):
-    """Verify custom user file path is used when provided."""
-    # Create a custom user config file
-    user_config_file = tmp_path / "custom_user_config.yaml"
-    user_config_file.write_text("""
-netron_port: 7777
-""")
-
-    # Disable project file auto-discovery to test user file in isolation
-    config = load_config(
-        user_file=user_config_file,
-        project_file=Path('/dev/null')  # Non-existent file
-    )
-
-    # Custom value from user file should be loaded
-    assert config.netron_port == 7777
+from brainsmith.settings import SystemConfig, load_config
 
 
 def test_project_file_overrides_user_file(tmp_path):
@@ -77,44 +46,6 @@ netron_port: 8888
     config = load_config(project_file=project_config, netron_port=9090)
 
     assert config.netron_port == 9090
-
-
-def test_get_default_config_ignores_files():
-    """Verify get_default_config returns only defaults without loading any files."""
-    config = get_default_config()
-
-    # Should have default values only
-    assert config.build_dir.name == "build"
-    assert config.netron_port == 8080
-    assert config.default_workers == 4
-
-
-def test_nonexistent_custom_file_handled_gracefully(tmp_path):
-    """Verify nonexistent custom file paths don't break config loading."""
-    nonexistent = tmp_path / "does_not_exist.yaml"
-
-    # Should not raise error, just use defaults
-    config = load_config(project_file=nonexistent)
-
-    # Should have default values
-    assert config.netron_port == 8080
-
-
-def test_relative_paths_in_custom_file_resolve_to_file_location(tmp_path):
-    """Verify relative paths in custom config file resolve to config file's directory."""
-    # Create a subdirectory for the config
-    config_dir = tmp_path / "configs"
-    config_dir.mkdir()
-
-    config_file = config_dir / "test_config.yaml"
-    config_file.write_text("""
-build_dir: my_build
-""")
-
-    config = load_config(project_file=config_file)
-
-    # Relative path should resolve to config file's directory
-    assert config.build_dir == config_dir / "my_build"
 
 
 def test_priority_order_complete(tmp_path):

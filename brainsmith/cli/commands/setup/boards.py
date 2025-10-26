@@ -3,14 +3,18 @@
 
 """Board file management command."""
 
+from typing import TYPE_CHECKING
+
 import click
 
-from brainsmith.settings import get_config
-from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
+# Import settings and dependencies lazily inside function to keep --help fast
 from ...utils import (
     console, error_exit, success, warning,
     progress_spinner, confirm_or_abort
 )
+
+if TYPE_CHECKING:
+    from brainsmith._internal.io.dependencies import BoardManager
 
 
 def _show_board_summary(boards_by_repo: dict[str, list[str]], title: str) -> None:
@@ -29,7 +33,7 @@ def _show_board_summary(boards_by_repo: dict[str, list[str]], title: str) -> Non
                     console.print(f"        • {board}")
 
 
-def _handle_existing_boards(board_mgr: BoardManager, requested_repos: list[str],
+def _handle_existing_boards(board_mgr: "BoardManager", requested_repos: list[str],
                            verbose: bool, force: bool) -> bool:
     """Handle the case where boards are already downloaded.
 
@@ -91,6 +95,10 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
     """Download FPGA board definition files."""
     if force and remove:
         error_exit("Cannot use --force and --remove together")
+
+    # Import settings and dependencies only when command executes (not for --help)
+    from brainsmith.settings import get_config
+    from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
 
     config = get_config()
     deps_mgr = DependencyManager()

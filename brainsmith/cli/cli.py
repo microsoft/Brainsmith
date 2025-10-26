@@ -25,13 +25,11 @@ def _version_callback(ctx, param, value):
     import importlib.metadata
     from .messages import PACKAGE_NAME
     version = importlib.metadata.version(PACKAGE_NAME)
-    click.echo(f"{CLI_NAME_BRAINSMITH}, version {version}")
+    console.print(f"[bold]{CLI_NAME_BRAINSMITH}[/bold], version {version}")
     ctx.exit()
 
 
 class LazyGroup(click.Group):
-    """Lazy-loading Click group that defers command imports until invoked."""
-
     def __init__(self, *args, lazy_commands=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.lazy_commands = lazy_commands or {}
@@ -106,7 +104,6 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         lazy_commands=lazy_commands
     )
 
-    # Add options
     cli.params.append(click.Option(["-b", "--build-dir"], type=click.Path(path_type=Path),
                                     help="Override build directory"))
     cli.params.append(click.Option(["-c", "--config"], type=click.Path(exists=True, path_type=Path),
@@ -119,12 +116,10 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
     cli.params.append(click.Option(["--no-progress"], is_flag=True,
                                     help="Disable progress spinners and animations"))
 
-    # Add version option
     cli.params.append(click.Option(["--version"], is_flag=True, expose_value=False,
                                     is_eager=True, callback=_version_callback,
                                     help="Show the version and exit."))
 
-    # Set help text
     if name == CLI_NAME_SMITH:
         cli.help = """Smith - Create hardware designs and components.
 
@@ -141,7 +136,6 @@ Use --help with any command for detailed options."""
 \b
 Use 'smith' subcommand or standalone 'smith' CLI for hardware design creation."""
 
-    # Add smith subcommand manually if needed
     if include_admin and name == CLI_NAME_BRAINSMITH:
         cli.add_command(_create_smith_subcommand(), name="smith")
 

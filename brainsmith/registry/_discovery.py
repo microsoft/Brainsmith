@@ -57,7 +57,15 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def _measure_load(operation: str, component: str = ""):
-    """Time and log component loading."""
+    """Time and log component loading (only when BRAINSMITH_PROFILE is set).
+
+    Set BRAINSMITH_PROFILE=1 to enable performance timing logs.
+    """
+    # Only measure when explicitly enabled
+    if not os.environ.get('BRAINSMITH_PROFILE'):
+        yield
+        return
+
     label = f"{operation}({component})" if component else operation
     start = time.perf_counter()
     try:
@@ -68,37 +76,21 @@ def _measure_load(operation: str, component: str = ""):
 
 
 # ============================================================================
-# String Transformation Helpers
-# ============================================================================
-
-def _resolve_module_path(base: str, relative: str) -> str:
-    """Join base module path with relative import using stdlib.
-
-    Uses importlib.util.resolve_name() for proper relative import resolution.
-    Handles edge cases like '..sibling' correctly.
-    """
-    return importlib.util.resolve_name(relative, base)
-
-
-# ============================================================================
 # Registry Access Helpers
 # ============================================================================
 
-# Type-to-registry mapping for unified component access
-_COMPONENT_REGISTRIES = {
-    'step': lambda: registry._steps,
-    'kernel': lambda: registry._kernels,
-    'backend': lambda: registry._backends,
-}
 
+def _is_strict_mode() -> bool:
+    """Check if components_strict setting is enabled.
 
-def _get_registry_for_type(component_type: str) -> dict:
-    """Get the appropriate registry dict for a component type."""
+    Returns:
+        True if strict mode is enabled, False otherwise (or if config unavailable)
+    """
     try:
-        return _COMPONENT_REGISTRIES[component_type]()
-    except KeyError:
-        valid = ', '.join(_COMPONENT_REGISTRIES.keys())
-        raise ValueError(f"Unknown component type: {component_type}. Valid: {valid}")
+        from brainsmith.settings import get_config
+        return get_config().components_strict
+    except (ImportError, AttributeError):
+        return False
 
 
 # ============================================================================
@@ -150,83 +142,6 @@ def _resolve_component_name(name: str, component_type: str = 'step') -> str:
 # Component Indexing
 # ============================================================================
 
-def _index_filesystem_components(source: str, modules: Dict[str, Any]):
-    """Index components from filesystem-based source (core, user, project).
-
-    This helper populates the unified component index during discovery.
-    Works for both core brainsmith components and user/project components
-    that use the COMPONENTS dict pattern.
-
-    Args:
-        source: Source name ('brainsmith', 'user', 'project')
-        modules: Dict of module references with COMPONENTS dicts
-                Example: {'kernels': brainsmith.kernels, 'steps': brainsmith.steps}
-
-    Side effects:
-        - Populates _component_index with ComponentMetadata entries
-
-    Note:
-        A single module can contain multiple component types. For example,
-        brainsmith.kernels has both 'kernels' and 'backends' in its COMPONENTS dict.
-    """
-
-    for module_key, module in modules.items():
-        if not hasattr(module, 'COMPONENTS'):
-            continue
-
-        # Index ALL component types from this module's COMPONENTS dict
-        # (A module can have kernels, backends, steps, etc.)
-        for component_type_plural, components in module.COMPONENTS.items():
-            component_type = COMPONENT_TYPE_PLURALS.get(component_type_plural, component_type_plural.rstrip('s'))
-
-            for name, spec in components.items():
-                full_name = f"{source}:{name}"
-
-                # Support both formats: string (old) and dict (new with metadata)
-                # This enables backwards compatibility with old COMPONENTS dicts
-                if isinstance(spec, str):
-                    # Old format: just module path
-                    module_path = spec
-                    metadata = {}
-                else:
-                    # New format: dict with module + metadata (Issue #9 Phase 2)
-                    module_path = spec.get('module', spec)
-                    metadata = {k: v for k, v in spec.items() if k != 'module'}
-
-                # Derive full module path for import
-                full_module = _resolve_module_path(module.__name__, module_path)
-
-                # Create ComponentMetadata with type-specific fields from COMPONENTS dict
-                component_meta = ComponentMetadata(
-                    name=name,
-                    source=source,
-                    component_type=component_type,
-                    import_spec=ImportSpec(
-                        module=full_module,
-                        attr=name,
-                        extra={}
-                    )
-                )
-
-                # Populate type-specific metadata from COMPONENTS dict (Issue #9 Phase 2!)
-                # Metadata is now available at discovery time, no loading needed
-                if component_type == 'kernel':
-                    infer_spec = metadata.get('infer_transform')
-                    if infer_spec and isinstance(infer_spec, str) and ':' in infer_spec:
-                        # Parse 'module.path:ClassName' format
-                        module_path, class_name = infer_spec.split(':', 1)
-                        component_meta.kernel_infer = {'module': module_path, 'class_name': class_name}
-                    else:
-                        component_meta.kernel_infer = infer_spec
-                    component_meta.kernel_domain = metadata.get('domain', 'finn.custom')
-                elif component_type == 'backend':
-                    component_meta.backend_target = metadata.get('target_kernel')
-                    component_meta.backend_language = metadata.get('language')
-
-                _component_index[full_name] = component_meta
-                logger.debug(f"Indexed {source} {component_type}: {full_name} with metadata")
-
-
 def _index_entry_point_components(
     source: str,
     component_type: str,
@@ -246,7 +161,6 @@ def _index_entry_point_components(
     Side effects:
         - Populates _component_index with ComponentMetadata entries
     """
-    registry_dict = _get_registry_for_type(component_type)
     attr_field = 'func_name' if component_type == 'step' else 'class_name'
 
     for meta in metas:
@@ -254,10 +168,9 @@ def _index_entry_point_components(
         full_name = f"{source}:{name}"
 
         # Check if already registered via decorator
-        if full_name in registry_dict:
+        if full_name in _component_index and _component_index[full_name].loaded_obj is not None:
             # Eager pattern: component already registered
-            # Registry now stores objects directly (not dicts)
-            existing = registry_dict[full_name]
+            existing = _component_index[full_name].loaded_obj
             module_name = existing.__module__
             class_name = existing.__name__
 
@@ -274,11 +187,16 @@ def _index_entry_point_components(
                 loaded_obj=existing
             )
 
-            # Populate type-specific metadata fields
+            # Populate type-specific metadata fields (inline)
+            from .constants import DEFAULT_KERNEL_DOMAIN
             if component_type == 'kernel':
-                # For kernels, try to get infer metadata from meta dict
-                metadata.kernel_infer = meta.get('infer_transform')
-                metadata.kernel_domain = meta.get('domain', 'finn.custom')
+                infer_spec = meta.get('infer_transform')
+                if isinstance(infer_spec, str) and ':' in infer_spec:
+                    module_path, class_name = infer_spec.split(':', 1)
+                    metadata.kernel_infer = {'module': module_path, 'class_name': class_name}
+                else:
+                    metadata.kernel_infer = infer_spec
+                metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
             elif component_type == 'backend':
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -299,10 +217,16 @@ def _index_entry_point_components(
                 )
             )
 
-            # Populate type-specific metadata fields
+            # Populate type-specific metadata fields (inline)
+            from .constants import DEFAULT_KERNEL_DOMAIN
             if component_type == 'kernel':
-                metadata.kernel_infer = meta.get('infer_transform')
-                metadata.kernel_domain = meta.get('domain', 'finn.custom')
+                infer_spec = meta.get('infer_transform')
+                if isinstance(infer_spec, str) and ':' in infer_spec:
+                    module_path, class_name = infer_spec.split(':', 1)
+                    metadata.kernel_infer = {'module': module_path, 'class_name': class_name}
+                else:
+                    metadata.kernel_infer = infer_spec
+                metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
             elif component_type == 'backend':
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -316,10 +240,11 @@ def _index_entry_point_components(
 # ============================================================================
 
 def _load_component(meta: ComponentMetadata) -> Any:
-    """Load a component on demand - unified single-path loading.
+    """Load a component on demand - unified direct import.
 
-    All components use importlib for loading. Filesystem components (brainsmith, user)
-    delegate to their module's __getattr__ for name resolution.
+    All components now use direct imports with absolute paths. The COMPONENTS dict
+    pattern (with __getattr__) handles lazy loading at the package level, but once
+    we're loading, we just import the module directly.
 
     Args:
         meta: Component metadata from _component_index
@@ -337,45 +262,33 @@ def _load_component(meta: ComponentMetadata) -> Any:
 
     logger.debug(f"Loading component: {meta.full_name}")
 
-    # Load via importlib
     spec = meta.import_spec
 
-    # For filesystem components (brainsmith, user), use module's __getattr__
-    # This handles name mapping (e.g., 'qonnx_to_finn' -> 'qonnx_to_finn_step')
-    if meta.source in (SOURCE_BRAINSMITH, SOURCE_USER, SOURCE_PROJECT):
-        # Import the top-level module that has __getattr__ defined
-        # For brainsmith: 'brainsmith.kernels' or 'brainsmith.steps'
-        # module path like 'brainsmith.kernels.layernorm.layernorm' -> 'brainsmith.kernels'
-        module_parts = spec.module.split('.')
-        if meta.source == SOURCE_BRAINSMITH:
-            # Top-level is source.{component_type}s (e.g., brainsmith.kernels)
-            parent_module_path = f"{module_parts[0]}.{module_parts[1]}"
-        else:
-            # User/project components - assume similar structure
-            parent_module_path = f"{meta.source}.{meta.component_type}s"
+    # Direct import using absolute module path
+    module = importlib.import_module(spec.module)
 
-        parent_module = importlib.import_module(parent_module_path)
-
-        # Use __getattr__ to get component (handles name mapping)
-        with source_context(meta.source):
-            obj = getattr(parent_module, meta.name)
-
-        # For steps, __getattr__ might return None (decorator already registered it)
-        if obj is None:
-            # Component registered via decorator during import
-            # Registry now stores objects directly (no unwrapping needed)
-            obj = _get_registry_for_type(meta.component_type).get(meta.full_name)
-            if not obj:
-                raise RuntimeError(f"Component {meta.full_name} registered but not found in registry")
-    else:
-        # Plugin components: direct import with exact attr name
-        module = importlib.import_module(spec.module)
+    try:
         obj = getattr(module, spec.attr)
+    except AttributeError:
+        # For steps: decorator name might differ from function name
+        # After import, check if decorator already registered it in component index
+        if meta.component_type == 'step':
+            # Check if decorator already populated loaded_obj
+            if meta.loaded_obj is not None:
+                obj = meta.loaded_obj
+            else:
+                raise AttributeError(
+                    f"Step '{meta.name}' not found in module '{spec.module}' "
+                    f"and not registered via decorator"
+                )
+        else:
+            raise
 
-        # Register plugin component if needed
-        with source_context(meta.source):
-            if meta.full_name not in _get_registry_for_type(meta.component_type):
-                _register_component(obj, meta)
+    # Register if needed (plugin components that weren't eagerly registered)
+    # Check component index, not registry dicts
+    with source_context(meta.source):
+        if meta.loaded_obj is None:
+            _register_component(obj, meta)
 
     meta.loaded_obj = obj
     logger.debug(f"Loaded component: {meta.full_name}")
@@ -398,12 +311,9 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
     extra = meta.import_spec.extra if meta.import_spec else {}
 
     if meta.component_type == 'kernel':
-        # Handle nested lazy infer_transform
-        infer_transform = extra.get('infer_transform')
-        if isinstance(infer_transform, dict) and 'module' in infer_transform:
-            # Lazy infer_transform: import it now
-            transform_module = importlib.import_module(infer_transform['module'])
-            infer_transform = getattr(transform_module, infer_transform['class_name'])
+        # Resolve lazy infer_transform if needed
+        from ._metadata import resolve_lazy_class
+        infer_transform = resolve_lazy_class(extra.get('infer_transform'))
 
         registry.kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")
@@ -495,14 +405,13 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Full discovery
         logger.info("Discovering components from all sources...")
 
-        # 1. Core brainsmith components (filesystem)
-        import brainsmith.kernels
-        import brainsmith.steps
+        # 1. Core brainsmith components (eager imports with source_context)
+        # Decorators fire during import and auto-populate registry + index
+        with source_context(SOURCE_BRAINSMITH):
+            import brainsmith.kernels
+            import brainsmith.steps
 
-        _index_filesystem_components(SOURCE_BRAINSMITH, {
-            'kernels': brainsmith.kernels,
-            'steps': brainsmith.steps,
-        })
+        logger.info(f"Loaded core brainsmith components")
 
         # 2. User/project components (filesystem)
         _load_component_sources()
@@ -608,7 +517,11 @@ def _load_component_package(source_name: str, source_path: Path):
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             sys.modules[unique_module_name] = module
-            spec.loader.exec_module(module)
+
+            # Execute module with source_context to ensure decorators inherit source
+            with source_context(source_name):
+                spec.loader.exec_module(module)
+
             logger.info(f"Loaded component source '{source_name}' from {source_path}")
         else:
             raise ImportError(f"Could not create module spec for {init_path}")
@@ -620,13 +533,9 @@ def _load_component_package(source_name: str, source_path: Path):
     except Exception as e:
         logger.error(f"Failed to load component source '{source_name}': {e}")
 
-        # Check if strict mode
-        try:
-            from brainsmith.settings import get_config
-            if get_config().components_strict:
-                raise
-        except ImportError:
-            pass  # Config not available, don't fail
+        # Re-raise in strict mode
+        if _is_strict_mode():
+            raise
 
 
 def _load_entry_point_components():
@@ -676,13 +585,9 @@ def _load_entry_point_components():
             except Exception as e:
                 logger.error(f"Failed to load entry point '{ep.name}': {e}")
 
-                # Check if strict mode
-                try:
-                    from brainsmith.settings import get_config
-                    if get_config().components_strict:
-                        raise
-                except ImportError:
-                    pass  # Config not available, don't fail
+                # Re-raise in strict mode
+                if _is_strict_mode():
+                    raise
 
     except Exception as e:
         logger.warning(f"Entry point discovery failed: {e}")

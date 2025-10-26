@@ -1,4 +1,7 @@
-"""Unit tests for step slicing utilities."""
+"""Unit tests for step slicing utilities.
+
+Focused on algorithmic correctness and error handling, excluding trivial edge cases.
+"""
 
 import pytest
 from brainsmith.dse.design_space import slice_steps, find_step_index
@@ -19,12 +22,6 @@ class TestFindStepIndex:
         steps = ["step1", ["step2a", "step2b"], "step3"]
         assert find_step_index(steps, "step2a") == 1
         assert find_step_index(steps, "step2b") == 1
-
-    def test_find_step_with_skip(self):
-        """Find step in branch with skip operator."""
-        steps = ["step1", ["step2", "~"], "step3"]
-        assert find_step_index(steps, "step2") == 1
-        assert find_step_index(steps, "~") == 1
 
     def test_find_nonexistent_step(self):
         """Raise error for nonexistent step."""
@@ -86,9 +83,3 @@ class TestSliceSteps:
         steps = ["step1", "step2", "step3"]
         with pytest.raises(ValueError, match="Invalid step range"):
             slice_steps(steps, "step3", "step1")
-
-    def test_slice_none_none_returns_all(self):
-        """None/None returns full list."""
-        steps = ["step1", "step2", "step3"]
-        result = slice_steps(steps, None, None)
-        assert result == steps

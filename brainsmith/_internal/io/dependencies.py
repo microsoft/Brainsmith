@@ -134,7 +134,6 @@ class DependencyManager:
     """
 
     def __init__(self, deps_dir: Path | None = None):
-        """Initialize with deps_dir from config if not provided."""
         if deps_dir is None:
             from brainsmith.settings import get_config
             deps_dir = get_config().deps_dir
@@ -149,18 +148,12 @@ class DependencyManager:
         }
 
     def _get_dest_path(self, dep: dict, name: str) -> Path:
-        """Determine destination path for a dependency."""
         if dep.get('group') == 'boards':
             return self.deps_dir / 'board-files' / name
         return self.deps_dir / name
         
     def install(self, name: str, force: bool = False, quiet: bool = False) -> None:
         """Install a single dependency.
-
-        Args:
-            name: Dependency name from DEPENDENCIES
-            force: Force reinstall even if exists
-            quiet: Suppress output
 
         Raises:
             UnknownDependencyError: If dependency name is unknown
@@ -194,13 +187,7 @@ class DependencyManager:
     def install_group(self, group: str, force: bool = False, quiet: bool = False) -> dict[str, Exception | None]:
         """Install all dependencies in a group.
 
-        Args:
-            group: Group name (cppsim, xsim, boards)
-            force: Force reinstall
-            quiet: Suppress output
-
-        Returns:
-            Dict mapping dependency name to error (None if successful)
+        Returns dict mapping dependency name to error (None if successful).
         """
         deps = [k for k, v in DEPENDENCIES.items() if v.get('group') == group]
         results = {}
@@ -217,14 +204,7 @@ class DependencyManager:
         return results
         
     def _check_requirements(self, dep: dict) -> list[tuple[str, str]]:
-        """Check if required tools are available.
-
-        Args:
-            dep: Dependency dictionary
-
-        Returns:
-            List of (tool, message) tuples for missing requirements
-        """
+        """Returns list of (tool, message) tuples for missing requirements."""
         missing = []
         if 'requires' not in dep:
             return missing
@@ -236,14 +216,6 @@ class DependencyManager:
         return missing
 
     def _is_tool_available(self, tool: str) -> bool:
-        """Check if a required tool is available.
-
-        Args:
-            tool: Tool name to check
-
-        Returns:
-            True if tool is available, False otherwise
-        """
         from brainsmith.settings import get_config
         config = get_config()
 
@@ -256,10 +228,6 @@ class DependencyManager:
 
     def remove(self, name: str, quiet: bool = False) -> None:
         """Remove a single dependency.
-
-        Args:
-            name: Dependency name from DEPENDENCIES
-            quiet: Suppress output
 
         Raises:
             UnknownDependencyError: If dependency name is unknown
@@ -279,12 +247,7 @@ class DependencyManager:
     def remove_group(self, group: str, quiet: bool = False) -> dict[str, Exception | None]:
         """Remove all dependencies in a group.
 
-        Args:
-            group: Group name (cppsim, xsim, boards)
-            quiet: Suppress output
-
-        Returns:
-            Dict mapping dependency name to error (None if successful)
+        Returns dict mapping dependency name to error (None if successful).
         """
         deps = [k for k, v in DEPENDENCIES.items() if v.get('group') == group]
         results = {}
@@ -306,9 +269,8 @@ class BoardManager:
     
     def __init__(self, board_dir: Path):
         self.board_dir = Path(board_dir)
-        
+
     def list_downloaded_repositories(self) -> list[str]:
-        """List all downloaded board repositories."""
         if not self.board_dir.exists():
             return []
             
@@ -321,11 +283,7 @@ class BoardManager:
         return sorted(repos)
         
     def get_board_summary(self) -> dict[str, list[str]]:
-        """Get summary of all boards organized by repository.
-
-        Returns:
-            Dict mapping repository name to list of board names
-        """
+        """Get summary of all boards organized by repository."""
         summary = {}
 
         for repo in self.list_downloaded_repositories():
@@ -337,18 +295,10 @@ class BoardManager:
         return summary
 
     def find_board_files(self, repo_path: Path) -> list[Path]:
-        """Find all board.xml files in a repository."""
         return list(repo_path.glob("**/board.xml"))
 
     def _parse_board_name(self, board_file: Path) -> str | None:
-        """Extract board name from board.xml file.
-
-        Args:
-            board_file: Path to board.xml file
-
-        Returns:
-            Board name from XML, directory name as fallback, or None
-        """
+        """Extract board name from board.xml (returns directory name as fallback, or None)."""
         try:
             tree = ET.parse(board_file)
             root = tree.getroot()
@@ -371,14 +321,7 @@ class BoardManager:
             return self._fallback_board_name(board_file)
 
     def _fallback_board_name(self, board_file: Path) -> str | None:
-        """Get board name from directory structure.
-
-        Args:
-            board_file: Path to board.xml file
-
-        Returns:
-            Directory name or None if generic
-        """
+        """Get board name from directory structure (returns None if generic)."""
         parent = board_file.parent
         # Skip generic directory names
         if parent.name in ['boards', self.board_dir.name]:
@@ -386,14 +329,7 @@ class BoardManager:
         return parent.name
 
     def extract_board_names(self, board_files: list[Path]) -> list[str]:
-        """Extract board names from board.xml files.
-
-        Args:
-            board_files: List of paths to board.xml files
-
-        Returns:
-            Sorted list of unique board names
-        """
+        """Extract board names from board.xml files (returns sorted unique list)."""
         boards = []
         for board_file in board_files:
             if board_name := self._parse_board_name(board_file):
@@ -401,14 +337,7 @@ class BoardManager:
         return sorted(set(boards))
         
     def find_board_path(self, board_name: str) -> Path | None:
-        """Find the path to a specific board's files.
-
-        Args:
-            board_name: Name of the board to find
-
-        Returns:
-            Path to board directory, or None if not found
-        """
+        """Find path to board directory, or None if not found."""
         for board_file in self.board_dir.glob("**/board.xml"):
             name = self._parse_board_name(board_file)
             if name == board_name:
@@ -419,11 +348,7 @@ class BoardManager:
     def validate_repository_names(self, names: list[str]) -> tuple[list[str], list[str]]:
         """Validate repository names against known repositories.
 
-        Args:
-            names: List of repository names to validate
-
-        Returns:
-            Tuple of (valid_names, invalid_names)
+        Returns tuple of (valid_names, invalid_names).
         """
         # Build alias mapping from DEPENDENCIES
         alias_to_canonical = {}
