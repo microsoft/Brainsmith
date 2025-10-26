@@ -7,11 +7,7 @@ Provides a structured set of exceptions for CLI error handling,
 allowing for consistent error reporting and handling patterns.
 """
 
-from .constants import (
-    EX_USAGE,
-    EX_CONFIG,
-    EX_DATAERR,
-)
+from .constants import ExitCode
 
 
 class CLIError(Exception):
@@ -23,7 +19,7 @@ class CLIError(Exception):
         exit_code: Suggested exit code for this error type (class attribute)
     """
 
-    exit_code: int = EX_USAGE
+    exit_code = ExitCode.USAGE
 
     def __init__(self, message: str, details: list[str] | None = None):
         """Initialize CLI error.
@@ -56,7 +52,7 @@ class ConfigurationError(CLIError):
     Raised when there are issues loading or validating configuration files.
     """
 
-    exit_code = EX_CONFIG
+    exit_code = ExitCode.CONFIG
 
 
 class SetupError(CLIError):
@@ -65,7 +61,7 @@ class SetupError(CLIError):
     Raised when setup operations (installing dependencies, building tools) fail.
     """
 
-    exit_code = EX_USAGE
+    exit_code = ExitCode.USAGE
 
 
 class ValidationError(CLIError):
@@ -74,7 +70,7 @@ class ValidationError(CLIError):
     Raised when user input or arguments fail validation.
     """
 
-    exit_code = EX_DATAERR
+    exit_code = ExitCode.DATAERR
 
 
 class CommandError(CLIError):
@@ -83,4 +79,4 @@ class CommandError(CLIError):
     Raised when a CLI command fails during execution.
     """
 
-    exit_code = EX_USAGE
+    exit_code = ExitCode.USAGE

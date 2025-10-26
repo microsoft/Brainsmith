@@ -9,7 +9,7 @@ Components are imported only when accessed, avoiding upfront import costs.
 
 All step functionality is available through the loader:
 
-    from brainsmith.loader import get_step, list_steps
+    from brainsmith.registry import get_step, list_steps
 
     # Get step function by name
     step_fn = get_step("shell_metadata_handover")
@@ -19,7 +19,7 @@ All step functionality is available through the loader:
     steps = list_steps()
 """
 
-from brainsmith.plugin_helpers import create_lazy_module
+from brainsmith.registry import create_lazy_module
 
 # ============================================================================
 # Step Registry (Metadata Only - NO imports!)

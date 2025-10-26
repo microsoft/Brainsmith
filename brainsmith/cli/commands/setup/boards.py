@@ -80,12 +80,12 @@ def _handle_existing_boards(board_mgr: BoardManager, requested_repos: list[str],
     return True
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
-@click.option('--force', '-f', is_flag=True, help='Force redownload even if already present')
-@click.option('--remove', is_flag=True, help='Remove board definition files')
-@click.option('--repo', '-r', multiple=True, help='Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.')
-@click.option('--verbose', '-v', is_flag=True, help='Show detailed list of all board definitions by repository')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--force", "-f", is_flag=True, help="Force redownload even if already present")
+@click.option("--remove", is_flag=True, help="Remove board definition files")
+@click.option("--repo", "-r", multiple=True, help="Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed list of all board definitions by repository")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
 @click.pass_obj
 def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> None:
     """Download FPGA board definition files."""
@@ -166,7 +166,7 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
             else:
                 # Download all board dependencies
                 # install_group returns Dict[str, Optional[Exception]] where None = success
-                results = deps_mgr.install_group('boards', force=force)
+                results = deps_mgr.install_group("boards", force=force)
                 failed = [k for k, v in results.items() if v is not None]
                 if failed:
                     error_exit(f"Failed to download boards: {', '.join(failed)}")

@@ -49,7 +49,7 @@ from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable, 
 from pydantic import BaseModel, Field, field_validator, ConfigDict, BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 from brainsmith._internal.io.yaml import deep_merge, expand_env_vars
-from brainsmith.constants import (
+from brainsmith.registry.constants import (
     PROTECTED_SOURCES,
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
@@ -245,18 +245,18 @@ class SystemConfig(BaseSettings):
     )
     # project_dir is computed (not user-configurable) - always set to brainsmith root
     # It's set in model_post_init as a regular attribute
-    plugin_sources: Dict[str, Path | None] = Field(
+    component_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
             SOURCE_BRAINSMITH: None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
             SOURCE_FINN: None,         # Resolved in model_post_init to deps_dir / 'finn'
             SOURCE_PROJECT: None,      # Resolved in model_post_init to project_dir / 'plugins'
             SOURCE_USER: None          # Resolved in model_post_init to ~/.brainsmith/plugins
         },
-        description="Plugin source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
+        description="Component source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
     )
     source_priority: List[str] = Field(
         default=list(DEFAULT_SOURCE_PRIORITY),
-        description="Plugin source resolution priority. First source with matching component wins. Custom sources are auto-appended if not explicitly listed."
+        description="Component source resolution priority. First source with matching component wins. Custom sources are auto-appended if not explicitly listed."
     )
 
     # Xilinx configuration (flattened)
@@ -288,15 +288,15 @@ class SystemConfig(BaseSettings):
         description="Vendor platform repository paths (Xilinx/Intel FPGA platforms)"
     )
 
-    # Plugin settings
-    plugins_strict: bool = Field(
+    # Component registry settings
+    components_strict: bool = Field(
         default=True,
-        description="Strict plugin loading"
+        description="Strict component loading"
     )
 
-    cache_plugins: bool = Field(
+    cache_components: bool = Field(
         default=True,
-        description="Enable manifest caching for plugin discovery. When True, generates and uses a manifest cache in .brainsmith/ to speed up startup. Cache auto-invalidates when component files are modified. Set to False to always perform eager discovery."
+        description="Enable manifest caching for component discovery. When True, generates and uses a manifest cache in .brainsmith/ to speed up startup. Cache auto-invalidates when component files are modified. Set to False to always perform eager discovery."
     )
 
     # Vivado-specific settings
@@ -390,8 +390,8 @@ class SystemConfig(BaseSettings):
         self._resolve_core_paths()
         self._resolve_xilinx_tools()
         self._resolve_finn_paths()
-        self._resolve_plugin_sources()
-        self._validate_plugin_sources()
+        self._resolve_component_sources()
+        self._validate_component_sources()
         self._resolve_source_priority()
 
     def _resolve_core_paths(self) -> None:
@@ -449,47 +449,47 @@ class SystemConfig(BaseSettings):
         else:
             self.finn_deps_dir = self.deps_dir
 
-    def _resolve_plugin_sources(self) -> None:
-        """Resolve plugin source paths."""
-        if self.plugin_sources.get(SOURCE_BRAINSMITH) is None:
-            self.plugin_sources[SOURCE_BRAINSMITH] = self.bsmith_dir / 'brainsmith'
+    def _resolve_component_sources(self) -> None:
+        """Resolve component source paths."""
+        if self.component_sources.get(SOURCE_BRAINSMITH) is None:
+            self.component_sources[SOURCE_BRAINSMITH] = self.bsmith_dir / 'brainsmith'
 
-        if self.plugin_sources.get(SOURCE_FINN) is None:
-            self.plugin_sources[SOURCE_FINN] = self.deps_dir / 'finn'
+        if self.component_sources.get(SOURCE_FINN) is None:
+            self.component_sources[SOURCE_FINN] = self.deps_dir / 'finn'
 
-        if self.plugin_sources.get(SOURCE_PROJECT) is None:
-            self.plugin_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
+        if self.component_sources.get(SOURCE_PROJECT) is None:
+            self.component_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
 
-        if self.plugin_sources.get(SOURCE_USER) is None:
-            self.plugin_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
+        if self.component_sources.get(SOURCE_USER) is None:
+            self.component_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
 
         # Custom (non-protected) sources: resolve if relative
-        for name, path in list(self.plugin_sources.items()):
+        for name, path in list(self.component_sources.items()):
             if name not in PROTECTED_SOURCES and path is not None:
-                self.plugin_sources[name] = self._resolve(path, self.project_dir)
+                self.component_sources[name] = self._resolve(path, self.project_dir)
 
-    def _validate_plugin_sources(self) -> None:
+    def _validate_component_sources(self) -> None:
         """Validate that protected sources are properly resolved."""
         for source_name in PROTECTED_SOURCES:
-            if source_name in self.plugin_sources:
-                path = self.plugin_sources[source_name]
+            if source_name in self.component_sources:
+                path = self.component_sources[source_name]
                 if path is None:
                     raise ValueError(
-                        f"Protected plugin source '{source_name}' was not resolved. "
+                        f"Protected component source '{source_name}' was not resolved. "
                         f"This is a bug in Brainsmith."
                     )
                 if not path.is_absolute():
                     raise ValueError(
-                        f"Plugin source '{source_name}' must be absolute, got: {path}"
+                        f"Component source '{source_name}' must be absolute, got: {path}"
                     )
 
     def _resolve_source_priority(self) -> None:
-        """Auto-append custom plugin sources to source_priority if not already listed.
+        """Auto-append custom component sources to source_priority if not already listed.
 
         This ensures custom sources work automatically while allowing users to
         explicitly position them in the priority list if desired.
         """
-        for source_name in self.plugin_sources.keys():
+        for source_name in self.component_sources.keys():
             if source_name not in self.source_priority:
                 self.source_priority.append(source_name)
 
@@ -548,16 +548,16 @@ class SystemConfig(BaseSettings):
         # When no project config found, use the repo root as project directory
         return self.bsmith_dir
 
-    @field_validator('plugin_sources', mode='before')
+    @field_validator('component_sources', mode='before')
     @classmethod
-    def validate_plugin_sources(cls, v: Any) -> Dict[str, Path | None]:
-        """Validate plugin sources structure and prevent protected source overrides.
+    def validate_component_sources(cls, v: Any) -> Dict[str, Path | None]:
+        """Validate component sources structure and prevent protected source overrides.
 
         Protected sources (brainsmith, finn, project, user) are resolved in model_post_init.
         Users can add custom sources but cannot override protected ones.
         """
-        # Get default plugin sources
-        default_sources = cls.model_fields['plugin_sources'].default_factory()
+        # Get default component sources
+        default_sources = cls.model_fields['component_sources'].default_factory()
 
         if v is None or not isinstance(v, dict):
             return default_sources
@@ -570,7 +570,7 @@ class SystemConfig(BaseSettings):
             # Allow protected sources if value is None (default resolution in model_post_init)
             if key in PROTECTED_SOURCES and value is not None:
                 raise ValueError(
-                    f"Cannot override protected plugin source '{key}'. "
+                    f"Cannot override protected component source '{key}'. "
                     f"Protected sources: {', '.join(sorted(PROTECTED_SOURCES))}"
                 )
 

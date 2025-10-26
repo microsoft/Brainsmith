@@ -12,18 +12,6 @@ import warnings
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from brainsmith.registry import kernel
 
-# Import InferLayerNorm for metadata (avoids circular imports at class definition time)
-# Will be set after class definition
-_InferLayerNorm = None
-
-def _get_infer_transform():
-    """Lazy load InferLayerNorm to avoid circular imports."""
-    global _InferLayerNorm
-    if _InferLayerNorm is None:
-        from brainsmith.kernels.layernorm.infer_layernorm import InferLayerNorm
-        _InferLayerNorm = InferLayerNorm
-    return _InferLayerNorm
-
 # TODO: Explain any shape assumptions -- TAFK
 
 @kernel
@@ -38,10 +26,8 @@ class LayerNorm(HWCustomOp):
     # Metadata for namespace-based registry
     op_type = "LayerNorm"
 
-    @property
-    def infer_transform(self):
-        """Lazy-loaded InferTransform to avoid circular imports."""
-        return _get_infer_transform()
+    # Lazy import spec for infer transform (avoids circular imports)
+    infer_transform = 'brainsmith.kernels.layernorm.infer_layernorm:InferLayerNorm'
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

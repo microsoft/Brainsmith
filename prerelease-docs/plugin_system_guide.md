@@ -40,7 +40,7 @@ print(list_kernels())  # ['brainsmith:LayerNorm', 'brainsmith:Softmax', ...]
 
 ```python
 # my_plugin/__init__.py
-from brainsmith.plugin_helpers import create_lazy_module
+from brainsmith.component_helpers import create_lazy_module
 
 COMPONENTS = {
     'steps': {'my_step': '.my_step'},
@@ -279,7 +279,7 @@ my_project/
 
 **plugins/__init__.py**:
 ```python
-from brainsmith.plugin_helpers import create_lazy_module
+from brainsmith.component_helpers import create_lazy_module
 
 COMPONENTS = {
     'steps': {
@@ -519,7 +519,7 @@ with source_context('my_source'):
 ✅ **DO**:
 ```python
 # plugins/__init__.py
-from brainsmith.plugin_helpers import create_lazy_module
+from brainsmith.component_helpers import create_lazy_module
 
 COMPONENTS = {
     'kernels': {'MyKernel': '.my_kernel'},

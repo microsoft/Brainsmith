@@ -66,9 +66,9 @@ class FINNAdapter:
     def build(
         self,
         input_model: Path,
-        config_dict: Dict[str, Any],
+        config_dict: dict[str, Any],
         output_dir: Path
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Execute FINN build with proper path handling.
 
         Args:
@@ -82,14 +82,12 @@ class FINNAdapter:
         Raises:
             RuntimeError: If build fails
         """
-        # Ensure FINN environment variables are set before importing FINN
-        # TODO (blocked on FINN upstream): Move away from environment variables
-        # FINN currently requires FINN_ROOT, FINN_BUILD_DIR, etc. to be set via
-        # os.environ. Ideally these would be passed directly to FINN components.
-        # This requires changes to finn-base library.
+        # WORKAROUND: FINN requires environment variables (FINN_ROOT, FINN_BUILD_DIR)
+        # instead of accepting them as parameters. This pollutes the process environment
+        # and prevents concurrent builds in the same process.
         from brainsmith.settings import load_config
         config = load_config()
-        config.export_to_environment()
+        config.export_to_environment()  # Mutates os.environ - not thread-safe
 
         # Import FINN lazily to avoid circular dependencies
         from finn.builder.build_dataflow import build_dataflow_cfg
@@ -100,9 +98,9 @@ class FINNAdapter:
 
         logger.info("FINN build: input=%s, output=%s", abs_input, abs_output)
 
-        # TAFK TODO: Figure this out
-        # FINN requires working directory change - NOT THREAD-SAFE
-        # This affects the entire process. Do not run concurrent builds in same process.
+        # FINN requires os.chdir() for relative paths in build outputs
+        # This is NOT THREAD-SAFE and affects the entire process.
+        # Do not run concurrent builds in the same process.
         old_cwd = os.getcwd()
 
         try:
@@ -114,12 +112,8 @@ class FINNAdapter:
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
 
-            # TODO (requires FINN API changes): Get output model path directly from FINN
-            # Currently FINN's build_dataflow_cfg() doesn't return the final model path,
-            # so we must:
-            # 1. Mandate save_intermediate_models=True
-            # 2. Discover the last model in intermediate_models/ directory
-            # This coupling should be improved in future FINN versions.
+            # WORKAROUND: FINN doesn't return output path, so we discover it from
+            # intermediate_models/ directory (requires save_intermediate_models=True)
             finn_config["save_intermediate_models"] = True
 
             # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr
@@ -152,35 +146,29 @@ class FINNAdapter:
             os.chdir(old_cwd)
 
     def _discover_output_model(self, build_dir: Path) -> Path:
-        """Find the actual output model from FINN build.
+        """Find the final output model from intermediate_models/.
 
-        Since we mandate save_intermediate_models=True, FINN will save
-        one ONNX file per transform step in the intermediate_models directory.
-        We return the most recent file as the final output.
+        Returns the most recently modified .onnx file.
 
         Args:
             build_dir: Directory where build was executed
 
-        Returns:
-            Path to discovered model (guaranteed to exist)
-
         Raises:
-            RuntimeError: If no models found or intermediate_models missing
+            RuntimeError: If no ONNX output found
         """
         intermediate_dir = build_dir / "intermediate_models"
-        if not intermediate_dir.exists():
-            raise RuntimeError(f"No intermediate_models directory found in {build_dir}")
-
-        # Get all ONNX files from intermediate_models
         onnx_files = list(intermediate_dir.glob("*.onnx"))
+
         if not onnx_files:
-            raise RuntimeError(f"No ONNX files found in {intermediate_dir}")
+            raise RuntimeError(
+                f"No ONNX output found in {intermediate_dir}. "
+                "FINN build may have failed silently."
+            )
 
         logger.debug("ONNX files in %s: %s", intermediate_dir, [f.name for f in onnx_files])
 
-        # Return the last (most recent) file - this is the output of the last transform
-        onnx_files.sort(key=lambda p: p.stat().st_mtime)
-        return onnx_files[-1]
+        # Most recent file is the final output
+        return max(onnx_files, key=lambda p: p.stat().st_mtime)
 
     def _verify_output_model(self, model_path: Path) -> None:
         """Verify the output model exists and is valid ONNX.

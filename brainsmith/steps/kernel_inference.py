@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from brainsmith.loader import get_kernel_infer
+from brainsmith.registry import get_kernel_infer
 from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 def infer_kernels_step(model: Any, cfg: Any) -> Any:
     """Infer kernels using transforms stored in kernel metadata.
 
-    In the new system, InferTransforms are stored as metadata on kernels,
-    retrieved via get_kernel_infer(kernel_name).
+    Retrieves InferTransforms from kernel metadata via get_kernel_infer().
+    The backend class is used only for logging/metadata display.
     """
     kernel_selections = getattr(cfg, 'kernel_selections', None)
     if not kernel_selections:
@@ -27,12 +27,21 @@ def infer_kernels_step(model: Any, cfg: Any) -> Any:
     logger.info(f"Inferring {len(kernel_selections)} kernels...")
 
     # Apply inference for each selected kernel
-    for kernel_name, backend in kernel_selections:
+    for kernel_name, backend_class in kernel_selections:
         try:
-            # Get InferTransform from kernel metadata
+            # Get InferTransform from kernel metadata (by kernel name only)
             InferTransform = get_kernel_infer(kernel_name)
-            transform_name = InferTransform.__name__
-            logger.info(f"  {kernel_name} ({backend}) using {transform_name}")
+
+            # Log with full backend metadata
+            backend_name = backend_class.__name__
+            backend_language = getattr(backend_class, 'language', 'unknown')
+            logger.info(
+                f"  {kernel_name} "
+                f"backend={backend_name} "
+                f"language={backend_language} "
+                f"using {InferTransform.__name__}"
+            )
+
             model = model.transform(InferTransform())
         except KeyError:
             logger.warning(f"  No inference transform found for kernel: {kernel_name}")

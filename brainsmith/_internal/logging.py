@@ -10,20 +10,16 @@ Key principle: Use what exists. Python's logging module already provides
 everything we need - don't reinvent it.
 
 Usage:
-    from brainsmith._internal.logging import setup_logging, capture_finn_output
+    from brainsmith._internal.logging import setup_logging
 
     # In CLI setup
-    setup_logging(quiet=False, verbose=True, debug=False)
+    setup_logging(level="info")
 
     # In application code
     import logging
     logger = logging.getLogger(__name__)
     logger.info("Processing...")
     logger.error("Failed!")
-
-    # For FINN builds
-    with capture_finn_output():
-        build_dataflow_cfg(model, config)
 """
 
 import logging

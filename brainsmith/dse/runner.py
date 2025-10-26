@@ -10,19 +10,11 @@ from pathlib import Path
 from typing import Dict, Any, Set, List
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
-from brainsmith.loader import get_step
+from brainsmith.registry import get_step
 from brainsmith.dse.types import SegmentResult, SegmentStatus, TreeExecutionResult, ExecutionError, OutputType
 from brainsmith._internal.finn.adapter import FINNAdapter
 
 logger = logging.getLogger(__name__)
-
-# Reverse mapping from FINN output_products to OutputType
-# Generated from OutputType.to_finn_products() to ensure single source of truth
-PRODUCTS_TO_OUTPUT_TYPE = {
-    product: output_type
-    for output_type in OutputType
-    for product in output_type.to_finn_products()
-}
 
 
 def _share_artifacts_at_branch(
@@ -81,7 +73,7 @@ class SegmentRunner:
         self.fail_fast = False  # TODO: Add more robust tree exit options
         output_products = base_config.get("output_products", ["estimates"])
         output_product = output_products[0] if output_products else "estimates"
-        self.output_type = PRODUCTS_TO_OUTPUT_TYPE[output_product]
+        self.output_type = OutputType.from_finn_product(output_product)
 
         # Note: synth_clk_period_ns and board already validated by DSEConfig
     
@@ -292,23 +284,26 @@ class SegmentRunner:
         """Extract kernel selections from segment steps.
 
         Searches for 'infer_kernels' steps that contain kernel_backends
-        and converts them to FINN's expected format.
+        and extracts backend classes for inference.
 
         Args:
             segment: Segment to extract kernel selections from
 
         Returns:
-            List of (kernel_name, backend_name) tuples
+            List of (kernel_name, backend_class) tuples
+
+        Note:
+            Currently uses first backend per kernel. Future enhancement
+            will support selecting specific backends from the list.
         """
         kernel_selections = []
         for step in segment.steps:
             if step.get("name") == "infer_kernels" and "kernel_backends" in step:
                 for kernel_name, backend_classes in step["kernel_backends"]:
                     if backend_classes:
-                        # Convert backend class name to FINN format
-                        # e.g., ConvolutionInputGenerator_hls -> ConvolutionInputGenerator
-                        backend_name = backend_classes[0].__name__.replace('_hls', '').replace('_rtl', '')
-                        kernel_selections.append((kernel_name, backend_name))
+                        # TODO: Future - support selecting specific backends
+                        # For now, use first registered backend per kernel
+                        kernel_selections.append((kernel_name, backend_classes[0]))
         return kernel_selections
 
     def _resolve_steps(self, segment: DSESegment) -> List:

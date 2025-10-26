@@ -4,14 +4,13 @@
 """Integration tests for unified component index.
 
 These tests verify that the new unified component indexing system
-populates the _component_index correctly during plugin discovery.
+populates the _component_index correctly during component discovery.
 """
 
 import pytest
-from brainsmith.loader import (
-    discover_plugins,
+from brainsmith.registry import (
+    discover_components,
     _component_index,
-    LoadState,
 )
 
 
@@ -21,7 +20,7 @@ class TestComponentIndexPopulation:
     def test_index_populated_after_discovery(self):
         """Verify component index is populated during discovery."""
         # Force fresh discovery (not from cache)
-        discover_plugins(use_cache=False)
+        discover_components(use_cache=False)
 
         # Check index has components
         assert len(_component_index) > 0, "Index should be populated after discovery"
@@ -35,14 +34,14 @@ class TestComponentIndexPopulation:
         meta = _component_index['brainsmith:LayerNorm']
         assert meta.source == 'brainsmith'
         assert meta.component_type == 'kernel'
-        assert meta.state == LoadState.DISCOVERED
+        assert not meta.is_loaded  # Should be discovered but not yet loaded
         assert meta.import_spec is not None
         assert meta.import_spec.module == 'brainsmith.kernels.layernorm.layernorm'
         assert meta.import_spec.attr == 'LayerNorm'
 
     def test_all_component_types_indexed(self):
         """Verify all component types are represented in index."""
-        discover_plugins()
+        discover_components()
 
         # Count by type
         kernels = [k for k in _component_index if _component_index[k].component_type == 'kernel']
@@ -56,7 +55,7 @@ class TestComponentIndexPopulation:
     def test_core_components_have_import_specs(self):
         """Verify core brainsmith components have proper import specs."""
         # Force fresh discovery (not from cache)
-        discover_plugins(use_cache=False)
+        discover_components(use_cache=False)
 
         core_components = [
             meta for meta in _component_index.values()
@@ -79,7 +78,7 @@ class TestIndexCompleteness:
 
     def test_filesystem_components_counted_correctly(self):
         """Verify filesystem components (core + user) are indexed."""
-        discover_plugins()
+        discover_components()
 
         # Core brainsmith components
         brainsmith_components = [
@@ -93,32 +92,32 @@ class TestIndexCompleteness:
             f"Expected 15 core components, got {len(brainsmith_components)}"
 
 
-class TestPluginComponents:
-    """Tests for plugin components loaded from entry points."""
+class TestExternalComponents:
+    """Tests for external components loaded from entry points."""
 
-    def test_plugin_components_indexed_if_available(self):
-        """Verify plugin components are indexed (if plugins installed)."""
-        discover_plugins()
+    def test_external_components_indexed_if_available(self):
+        """Verify external components are indexed (if installed)."""
+        discover_components()
 
-        # Check if any plugin components exist (non-brainsmith source)
-        plugin_components = [
+        # Check if any external components exist (non-brainsmith source)
+        external_components = [
             k for k, v in _component_index.items()
             if v.source != 'brainsmith'
         ]
 
-        if len(plugin_components) > 0:
-            # Plugins available - verify structure
-            sample = plugin_components[0]
+        if len(external_components) > 0:
+            # External components available - verify structure
+            sample = external_components[0]
             meta = _component_index[sample]
 
-            assert meta.import_spec is not None, "Plugin should have import_spec"
+            assert meta.import_spec is not None, "External component should have import_spec"
             assert meta.import_spec.module, "import_spec should have module"
             assert meta.import_spec.attr, "import_spec should have attr"
 
-            print(f"✓ Found {len(plugin_components)} plugin components")
+            print(f"✓ Found {len(external_components)} external components")
             print(f"  Sample: {meta.full_name} from {meta.import_spec.module}")
         else:
-            print("⚠ No plugin components found (FINN/QONNX not installed)")
+            print("⚠ No external components found (FINN/QONNX not installed)")
 
 
 class TestIndexIntegrity:
@@ -126,7 +125,7 @@ class TestIndexIntegrity:
 
     def test_full_name_property_matches_key(self):
         """Verify component full_name property matches index key."""
-        discover_plugins()
+        discover_components()
 
         for key, meta in _component_index.items():
             assert meta.full_name == key, \
@@ -134,7 +133,7 @@ class TestIndexIntegrity:
 
     def test_no_duplicate_components(self):
         """Verify no duplicate component registrations."""
-        discover_plugins()
+        discover_components()
 
         # Check for duplicates (same source:name)
         seen = set()
@@ -149,19 +148,19 @@ class TestIndexIntegrity:
 
     def test_all_components_have_valid_import_specs(self):
         """Verify all indexed components have valid import specs."""
-        discover_plugins()
+        discover_components()
 
         for key, meta in _component_index.items():
             assert meta.import_spec is not None, f"{key} missing import_spec"
             assert meta.import_spec.module, f"{key} import_spec missing module"
             assert meta.import_spec.attr, f"{key} import_spec missing attr"
 
-    def test_all_components_start_discovered(self):
-        """Verify all components start in DISCOVERED state."""
-        discover_plugins()
+    def test_all_components_start_unloaded(self):
+        """Verify all components start unloaded."""
+        discover_components()
 
         for key, meta in _component_index.items():
-            # During discovery, all should be DISCOVERED (not yet loaded)
-            # Exception: eager plugin components register immediately but aren't indexed
-            assert meta.state == LoadState.DISCOVERED, \
-                f"{key} should be DISCOVERED, got {meta.state}"
+            # During discovery, all should be unloaded (not yet imported)
+            # Exception: eager components register immediately but aren't indexed
+            assert not meta.is_loaded, \
+                f"{key} should be unloaded after discovery"

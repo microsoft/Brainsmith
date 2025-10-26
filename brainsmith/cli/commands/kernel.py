@@ -7,31 +7,34 @@ from pathlib import Path
 
 import click
 
-from ..utils import console, error_exit, success, progress_spinner
+from ..context import ApplicationContext
+from ..utils import console, success, progress_spinner
+from ..exceptions import CLIError
+from ..messages import KERNEL_VALIDATION_HINTS, KERNEL_TOOL_NOT_FOUND_HINTS
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
-@click.argument('rtl_file', type=click.Path(exists=True, path_type=Path))
-@click.option('--artifacts', multiple=True,
-              type=click.Choice(['autohwcustomop', 'rtlbackend', 'wrapper']),
-              help='Generate specific files only (can specify multiple)')
-@click.option('--include-rtl', multiple=True, type=click.Path(exists=True, path_type=Path),
-              help='Additional RTL files to include (can specify multiple)')
-@click.option('--info', is_flag=True,
-              help='Display parsed kernel metadata and exit')
-@click.option('--no-strict', is_flag=True,
-              help='Disable strict validation')
-@click.option('--output-dir', '-o', type=click.Path(path_type=Path),
-              help='Directory where generated files will be saved (default: same as RTL file)')
-@click.option('--rtl-path', type=str,
-              help='Colon-separated paths to search for RTL files')
-@click.option('--validate', is_flag=True,
-              help='Validate RTL only without generating files')
-@click.option('--verbose', '-v', is_flag=True,
-              help='Show detailed output from kernel integrator tool')
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("rtl_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--artifacts", multiple=True,
+              type=click.Choice(["autohwcustomop", "rtlbackend", "wrapper"]),
+              help="Generate specific files only (can specify multiple)")
+@click.option("--include-rtl", multiple=True, type=click.Path(exists=True, path_type=Path),
+              help="Additional RTL files to include (can specify multiple)")
+@click.option("--info", is_flag=True,
+              help="Display parsed kernel metadata and exit")
+@click.option("--no-strict", is_flag=True,
+              help="Disable strict validation")
+@click.option("--output-dir", "-o", type=click.Path(path_type=Path),
+              help="Directory where generated files will be saved (default: same as RTL file)")
+@click.option("--rtl-path", type=str,
+              help="Colon-separated paths to search for RTL files")
+@click.option("--validate", is_flag=True,
+              help="Validate RTL only without generating files")
+@click.option("--verbose", "-v", is_flag=True,
+              help="Show detailed output from kernel integrator tool")
 @click.pass_obj
 def kernel(
-    ctx,
+    ctx: "ApplicationContext",
     rtl_file: Path,
     artifacts: tuple[str, ...],
     include_rtl: tuple[Path, ...],
@@ -81,7 +84,7 @@ def kernel(
             if result.returncode == 0:
                 console.print(result.stdout)
             else:
-                error_exit(f"Failed to parse RTL: {result.stderr}")
+                raise CLIError(f"Failed to parse RTL: {result.stderr}")
         else:
             with progress_spinner(action, no_progress=ctx.no_progress) as task:
                 result = subprocess.run(cmd, capture_output=True, text=True)
@@ -96,23 +99,15 @@ def kernel(
                     console.print("\n[dim]Tool output:[/dim]")
                     console.print(result.stdout)
             else:
-                error_exit(
+                raise CLIError(
                     f"Kernel integrator failed: {result.stderr}",
-                    details=[
-                        "Verify the RTL file contains valid SystemVerilog with @brainsmith pragmas",
-                        "Check that all pragma syntax is correct",
-                        "Ensure any referenced RTL files in pragmas exist",
-                        "Confirm you have write permissions to the output directory"
-                    ]
+                    details=KERNEL_VALIDATION_HINTS
                 )
-            
+
     except FileNotFoundError:
-        error_exit(
+        raise CLIError(
             "Kernel integrator tool not found",
-            details=[
-                "Ensure brainsmith is fully installed: pip install -e .",
-                "Verify the kernel_integrator module exists in brainsmith/tools/"
-            ]
+            details=KERNEL_TOOL_NOT_FOUND_HINTS
         )
     except Exception as e:
-        error_exit(f"Unexpected error: {e}")
+        raise CLIError(f"Unexpected error: {e}")

@@ -115,8 +115,15 @@ def create_lazy_module(components: Dict[str, Dict[str, str]], package_name: str)
     _component_types = {}  # component_name -> component_type (for error messages)
 
     for component_type, items in components.items():
-        for name, path in items.items():
-            _modules[name] = path
+        for name, spec in items.items():
+            # Support both formats: string (old) and dict (new with metadata)
+            if isinstance(spec, str):
+                module_path = spec
+            else:
+                # New format: extract 'module' key from dict
+                module_path = spec.get('module', spec)
+
+            _modules[name] = module_path
             _component_types[name] = component_type
 
     # Cache for loaded components

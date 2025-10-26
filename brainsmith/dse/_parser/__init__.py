@@ -17,7 +17,7 @@ from brainsmith.dse.config import DSEConfig, extract_config
 
 from .loader import load_blueprint_with_inheritance
 from .steps import parse_steps
-from .kernels import parse_kernels, _extract_kernel_spec
+from .kernels import parse_kernels
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +36,19 @@ def _preload_blueprint_components(raw_data: Dict[str, Any], merged_data: Dict[st
         raw_data: Raw blueprint data (current file only)
         merged_data: Merged blueprint data (includes parent inheritance)
     """
-    from brainsmith.loader import get_kernel
+    from brainsmith.registry import get_kernel
 
     # Pre-load kernels (use merged data to include inherited kernels)
     kernels_data = merged_data.get('design_space', {}).get('kernels', [])
-    for spec in kernels_data:
-        kernel_name, _ = _extract_kernel_spec(spec)
-        try:
-            logger.debug(f"Pre-loading kernel: {kernel_name}")
-            get_kernel(kernel_name)
-        except KeyError as e:
-            # Will fail again during parse_kernels with better error message
-            logger.debug(f"Failed to pre-load kernel '{kernel_name}': {e}")
+    for kernel_name in kernels_data:
+        # Kernels are now always strings (backend selection removed)
+        if isinstance(kernel_name, str):
+            try:
+                logger.debug(f"Pre-loading kernel: {kernel_name}")
+                get_kernel(kernel_name)
+            except KeyError as e:
+                # Will fail again during parse_kernels with better error message
+                logger.debug(f"Failed to pre-load kernel '{kernel_name}': {e}")
 
 
 def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignSpace, DSEConfig]:

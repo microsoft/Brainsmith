@@ -7,7 +7,6 @@ import logging
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from .dependency_installers import (
     BuildDependencyInstaller,
@@ -134,7 +133,7 @@ class DependencyManager:
     specialized installer classes for each dependency type (git, zip, build).
     """
 
-    def __init__(self, deps_dir: Optional[Path] = None):
+    def __init__(self, deps_dir: Path | None = None):
         """Initialize with deps_dir from config if not provided."""
         if deps_dir is None:
             from brainsmith.settings import get_config
@@ -192,7 +191,7 @@ class DependencyManager:
         dest = self._get_dest_path(dep, name)
         self.installers[dep_type].install(name, dep, dest, force, quiet)
             
-    def install_group(self, group: str, force: bool = False, quiet: bool = False) -> Dict[str, Optional[Exception]]:
+    def install_group(self, group: str, force: bool = False, quiet: bool = False) -> dict[str, Exception | None]:
         """Install all dependencies in a group.
 
         Args:
@@ -217,34 +216,43 @@ class DependencyManager:
 
         return results
         
-    def _check_requirements(self, dep: dict) -> List[Tuple[str, str]]:
+    def _check_requirements(self, dep: dict) -> list[tuple[str, str]]:
         """Check if required tools are available.
-        
+
         Args:
             dep: Dependency dictionary
-            
+
         Returns:
             List of (tool, message) tuples for missing requirements
         """
         missing = []
-        if 'requires' in dep:
-            for tool, message in dep['requires'].items():
-                # Special handling for Vivado - use config's robust detection
-                if tool == 'vivado':
-                    try:
-                        from brainsmith.settings import get_config
-                        config = get_config()
-                        if not config.vivado_path:
-                            missing.append((tool, message))
-                    except ImportError:
-                        # Fallback to simple PATH check if config not available
-                        if not shutil.which(tool):
-                            missing.append((tool, message))
-                else:
-                    # For other tools, check if they're on PATH
-                    if not shutil.which(tool):
-                        missing.append((tool, message))
+        if 'requires' not in dep:
+            return missing
+
+        for tool, message in dep['requires'].items():
+            if not self._is_tool_available(tool):
+                missing.append((tool, message))
+
         return missing
+
+    def _is_tool_available(self, tool: str) -> bool:
+        """Check if a required tool is available.
+
+        Args:
+            tool: Tool name to check
+
+        Returns:
+            True if tool is available, False otherwise
+        """
+        from brainsmith.settings import get_config
+        config = get_config()
+
+        # Config handles special tool detection
+        if tool == 'vivado':
+            return bool(config.vivado_path)
+
+        # Default: check PATH
+        return bool(shutil.which(tool))
 
     def remove(self, name: str, quiet: bool = False) -> None:
         """Remove a single dependency.
@@ -268,7 +276,7 @@ class DependencyManager:
         dest = self._get_dest_path(dep, name)
         self.installers[dep_type].remove(name, dest, quiet)
             
-    def remove_group(self, group: str, quiet: bool = False) -> Dict[str, Optional[Exception]]:
+    def remove_group(self, group: str, quiet: bool = False) -> dict[str, Exception | None]:
         """Remove all dependencies in a group.
 
         Args:
@@ -299,7 +307,7 @@ class BoardManager:
     def __init__(self, board_dir: Path):
         self.board_dir = Path(board_dir)
         
-    def list_downloaded_repositories(self) -> List[str]:
+    def list_downloaded_repositories(self) -> list[str]:
         """List all downloaded board repositories."""
         if not self.board_dir.exists():
             return []
@@ -312,7 +320,7 @@ class BoardManager:
                 
         return sorted(repos)
         
-    def get_board_summary(self) -> Dict[str, List[str]]:
+    def get_board_summary(self) -> dict[str, list[str]]:
         """Get summary of all boards organized by repository.
 
         Returns:
@@ -328,11 +336,11 @@ class BoardManager:
 
         return summary
 
-    def find_board_files(self, repo_path: Path) -> List[Path]:
+    def find_board_files(self, repo_path: Path) -> list[Path]:
         """Find all board.xml files in a repository."""
         return list(repo_path.glob("**/board.xml"))
 
-    def _parse_board_name(self, board_file: Path) -> Optional[str]:
+    def _parse_board_name(self, board_file: Path) -> str | None:
         """Extract board name from board.xml file.
 
         Args:
@@ -345,7 +353,7 @@ class BoardManager:
             tree = ET.parse(board_file)
             root = tree.getroot()
 
-            # Try attribute first (use walrus operator for clarity)
+            # Prefer XML attribute over nested element
             if name := root.get('name'):
                 return name
 
@@ -362,7 +370,7 @@ class BoardManager:
             logger.debug("Failed to parse %s: %s", board_file, e)
             return self._fallback_board_name(board_file)
 
-    def _fallback_board_name(self, board_file: Path) -> Optional[str]:
+    def _fallback_board_name(self, board_file: Path) -> str | None:
         """Get board name from directory structure.
 
         Args:
@@ -377,7 +385,7 @@ class BoardManager:
             return None
         return parent.name
 
-    def extract_board_names(self, board_files: List[Path]) -> List[str]:
+    def extract_board_names(self, board_files: list[Path]) -> list[str]:
         """Extract board names from board.xml files.
 
         Args:
@@ -392,7 +400,7 @@ class BoardManager:
                 boards.append(board_name)
         return sorted(set(boards))
         
-    def find_board_path(self, board_name: str) -> Optional[Path]:
+    def find_board_path(self, board_name: str) -> Path | None:
         """Find the path to a specific board's files.
 
         Args:
@@ -408,7 +416,7 @@ class BoardManager:
 
         return None
         
-    def validate_repository_names(self, names: List[str]) -> Tuple[List[str], List[str]]:
+    def validate_repository_names(self, names: list[str]) -> tuple[list[str], list[str]]:
         """Validate repository names against known repositories.
 
         Args:

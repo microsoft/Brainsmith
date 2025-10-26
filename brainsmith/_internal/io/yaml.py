@@ -14,16 +14,16 @@ All implementations are thread-safe and do not mutate os.environ.
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import yaml
 
 
 def load_yaml(file_path: str | Path) -> dict[str, Any]:
-    """Load a YAML file with no additional processing.
+    """Load a YAML file.
 
-    Basic YAML loading - returns parsed data as-is. Use this when you just
-    need to read YAML without env expansion, inheritance, or path resolution.
+    Returns the parsed YAML content with no processing.
+    For environment variable expansion, see expand_env_vars().
 
     Args:
         file_path: Path to the YAML file
@@ -44,7 +44,7 @@ def load_yaml(file_path: str | Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries, with overlay values taking precedence.
 
     Recursively merges nested dicts. Overlay values replace base values,
@@ -69,8 +69,10 @@ def deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def expand_env_vars(data: Any) -> Any:
-    """
-    Recursively expand environment variables in a data structure.
+    """Recursively expand environment variables in a data structure.
+
+    Uses os.path.expandvars() which leaves undefined variables unchanged.
+    For example, "${UNDEFINED_VAR}" remains "${UNDEFINED_VAR}".
 
     Supports both ${VAR} and $VAR syntax. Handles nested dicts and lists.
 
@@ -91,8 +93,8 @@ def expand_env_vars(data: Any) -> Any:
 
 
 def dump_yaml(
-    data: Dict[str, Any],
-    file_path: Union[str, Path],
+    data: dict[str, Any],
+    file_path: str | Path,
     **kwargs
 ) -> None:
     """

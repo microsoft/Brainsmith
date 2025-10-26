@@ -46,16 +46,16 @@ class DSETreeBuilder:
         
         for step_i, step_spec in enumerate(space.steps):
             if isinstance(step_spec, list):
-                # Branch point - flush and split
-                self._flush_steps(current_segments, pending_steps)
+                # Branch point - append accumulated steps and split
+                self._append_steps_to_segments(current_segments, pending_steps)
                 current_segments = self._create_branches(current_segments, step_i, step_spec)
                 pending_steps = []
             else:
                 # Linear step - accumulate
                 pending_steps.append(self._create_step_dict(step_spec, space))
-        
-        # Flush final steps
-        self._flush_steps(current_segments, pending_steps)
+
+        # Append final accumulated steps
+        self._append_steps_to_segments(current_segments, pending_steps)
         
         # Validate tree size
         tree = DSETree(root)
@@ -101,16 +101,15 @@ class DSETreeBuilder:
 
         return finn_config
     
-    def _flush_steps(self, segments: List[DSESegment], steps: List[Dict]) -> None:
-        """Add accumulated steps to segments.
+    def _append_steps_to_segments(self, segments: List[DSESegment], steps: List[Dict]) -> None:
+        """Append accumulated steps to all segments.
 
         Args:
-            segments: List of DSESegment segments to update
-            steps: List of step dictionaries to add
+            segments: List of segments to update
+            steps: List of step dictionaries to append
         """
-        if steps:
-            for segment in segments:
-                segment.steps.extend(steps)
+        for segment in segments:
+            segment.steps.extend(steps)
     
     def _create_branches(self, segments: List[DSESegment],
                         branch_index: int,

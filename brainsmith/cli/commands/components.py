@@ -1,17 +1,16 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Plugin discovery and management commands."""
+"""Component discovery and management commands."""
 
 import click
 from rich.table import Table
 from collections import defaultdict
 
-from brainsmith.loader import (
+from brainsmith.registry import (
     list_steps, list_kernels, list_backends,
-    get_backend_metadata, _component_index
+    get_backend_metadata, get_all_component_metadata
 )
-from brainsmith.registry import registry
 from ..context import ApplicationContext
 from ..utils import console, progress_spinner
 
@@ -35,28 +34,28 @@ def _validate_components(names: list, getter) -> dict:
     return errors
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
-@click.option('--verbose', '-v', is_flag=True, help='Show detailed component information')
-@click.option('--validate', is_flag=True, help='Validate all components by importing them (slower)')
-@click.option('--refresh', is_flag=True, help='Rebuild component manifest cache (ignore existing cache)')
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed component information")
+@click.option("--validate", is_flag=True, help="Validate all components by importing them (slower)")
+@click.option("--refresh", is_flag=True, help="Rebuild component manifest cache (ignore existing cache)")
 @click.pass_obj
-def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh: bool) -> None:
+def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: bool) -> None:
     """Shows all available steps, kernels, and backends, organized by source:
 
     - brainsmith: Core Brainsmith components
     - finn: FINN framework components
     - qonnx: QONNX framework components
-    - user: Custom plugins from configured sources
-    - <pkg>: Entry point plugins from installed packages
+    - user: Custom components from configured sources
+    - <pkg>: Entry point components from installed packages
 
     By default, shows fast metadata listing from cache. Use --refresh to
     rebuild the cache, --validate to import all components and check for errors.
     """
-    config = app_ctx.get_effective_config()
+    config = ctx.get_effective_config()
 
     # Trigger discovery (with refresh if requested)
-    from brainsmith.loader import discover_plugins
-    discover_plugins(use_cache=not refresh, force_refresh=refresh)
+    from brainsmith.registry import discover_components
+    discover_components(use_cache=not refresh, force_refresh=refresh)
 
     all_steps = list_steps()
     all_kernels = list_kernels()
@@ -66,7 +65,7 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
     def group_by_source(components):
         by_source = defaultdict(list)
         for comp in components:
-            source, name = comp.split(':', 1)
+            source, name = comp.split(":", 1)
             by_source[source].append(name)
         return by_source
 
@@ -81,15 +80,15 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
         list(backends_by_source.keys())
     ))
 
-    # Show plugin sources from config
-    plugin_sources = config.plugin_sources
-    if plugin_sources:
-        sources_table = Table(title="Configured Plugin Sources")
+    # Show component sources from config
+    component_sources = config.component_sources
+    if component_sources:
+        sources_table = Table(title="Configured Component Sources")
         sources_table.add_column("Source", style="cyan")
         sources_table.add_column("Path", style="white")
         sources_table.add_column("Exists", justify="center")
 
-        for source_name, path in sorted(plugin_sources.items()):
+        for source_name, path in sorted(component_sources.items()):
             exists = "✓" if path.exists() else "✗"
             exists_colored = f"[green]{exists}[/green]" if exists == "✓" else f"[red]{exists}[/red]"
             sources_table.add_row(source_name, str(path), exists_colored)
@@ -98,7 +97,7 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
         console.print()
 
     # Summary table by source
-    summary_table = Table(title="Plugin Summary by Source")
+    summary_table = Table(title="Component Summary by Source")
     summary_table.add_column("Source", style="cyan")
     summary_table.add_column("Steps", justify="right")
     summary_table.add_column("Kernels", justify="right")
@@ -136,9 +135,9 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
     # Validate components if requested (after showing tables)
     validation_errors = {}
     if validate:
-        from brainsmith.loader import get_kernel, get_backend, get_step
+        from brainsmith.registry import get_kernel, get_backend, get_step
 
-        with progress_spinner("Validating components...", transient=False, no_progress=app_ctx.no_progress) as task:
+        with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress) as task:
             validation_errors.update(_validate_components(all_kernels, get_kernel))
             validation_errors.update(_validate_components(all_backends, get_backend))
             validation_errors.update(_validate_components(all_steps, get_step))
@@ -182,8 +181,9 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
                             validation_marker = " [green]✓[/green]"
 
                     try:
-                        meta = _component_index.get(full_name)
-                        has_infer = '✓' if meta and meta.import_spec and meta.import_spec.extra.get('infer_transform') else '✗'
+                        all_metadata = get_all_component_metadata()
+                        meta = all_metadata.get(full_name)
+                        has_infer = "✓" if meta and meta.kernel_infer else "✗"
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")
@@ -206,8 +206,8 @@ def plugins(app_ctx: ApplicationContext, verbose: bool, validate: bool, refresh:
 
                     try:
                         meta = get_backend_metadata(full_name)
-                        target = meta.get('target_kernel', 'N/A')
-                        lang = meta.get('language', 'N/A')
+                        target = meta.get("target_kernel", "N/A")
+                        lang = meta.get("language", "N/A")
                         console.print(f"    • {name:25} → {target:25} ({lang}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:25} [red](error: {e})[/red]")

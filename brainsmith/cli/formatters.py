@@ -11,6 +11,8 @@ import yaml
 from rich.table import Table
 from rich.console import Console as RichConsole
 
+from .messages import XILINX_NOT_CONFIGURED, XILINX_NOT_FOUND
+
 # Lazy import settings
 if TYPE_CHECKING:
     from brainsmith.settings import SystemConfig
@@ -54,23 +56,23 @@ class ConfigFormatter:
                       self._get_source("deps_dir", "BSMITH_DEPS_DIR"))
 
         table.add_row("", "", "")
-        table.add_row("Plugin Settings", "", "")
+        table.add_row("Component Registry", "", "")
 
         table.add_row("  Source Priority", ", ".join(config.source_priority),
                       self._get_source("source_priority", "BSMITH_SOURCE_PRIORITY"))
 
-        # Plugin sources - show each source with its path (exclude brainsmith)
-        plugin_sources = {k: v for k, v in config.plugin_sources.items() if k != 'brainsmith'}
-        source = self._get_source("plugin_sources", "BSMITH_PLUGIN_SOURCES")
-        for i, (source_name, source_path) in enumerate(sorted(plugin_sources.items())):
-            label = "  Plugin Sources" if i == 0 else ""
+        # Component sources - show each source with its path (exclude brainsmith)
+        component_sources = {k: v for k, v in config.component_sources.items() if k != "brainsmith"}
+        source = self._get_source("component_sources", "BSMITH_COMPONENT_SOURCES")
+        for i, (source_name, source_path) in enumerate(sorted(component_sources.items())):
+            label = "  Component Sources" if i == 0 else ""
             formatted_path = self._format_path(source_path, config.bsmith_dir)
             display_value = f"{source_name}: {formatted_path}"
             row_source = source if i == 0 else ""
             table.add_row(label, display_value, row_source)
 
-        table.add_row("  Plugins Strict", str(config.plugins_strict),
-                      self._get_source("plugins_strict", "BSMITH_PLUGINS_STRICT"))
+        table.add_row("  Components Strict", str(config.components_strict),
+                      self._get_source("components_strict", "BSMITH_COMPONENTS_STRICT"))
 
         table.add_row("", "", "")
         table.add_row("Toolchain Settings", "", "")
@@ -90,8 +92,8 @@ class ConfigFormatter:
     def _add_xilinx_tools_section(self, table: Table, config: SystemConfig) -> None:
         table.add_row("", "", "")
         table.add_row("Xilinx Tools", "", "")
-        table.add_row("  Base Path", 
-                      str(config.xilinx_path) if config.xilinx_path else "Not configured",
+        table.add_row("  Base Path",
+                      str(config.xilinx_path) if config.xilinx_path else XILINX_NOT_CONFIGURED,
                       self._get_source("xilinx_path", "BSMITH_XILINX_PATH"))
         table.add_row("  Version", config.xilinx_version,
                       self._get_source("xilinx_version", "BSMITH_XILINX_VERSION"))
@@ -110,7 +112,7 @@ class ConfigFormatter:
                 )
                 source = self._get_source(path_attr, env_var)
             else:
-                display = "[yellow]Not found[/yellow]"
+                display = f"[yellow]{XILINX_NOT_FOUND}[/yellow]"
                 source = "—"
             table.add_row(f"  {tool_name}", display, source)
     
@@ -153,10 +155,10 @@ class ConfigFormatter:
     ) -> str:
         """Format Xilinx tool path with color based on existence."""
         if not path:
-            return "[yellow]Not configured[/yellow]"
+            return f"[yellow]{XILINX_NOT_CONFIGURED}[/yellow]"
 
         if not path.exists():
-            return "[yellow]Not found[/yellow]"
+            return f"[yellow]{XILINX_NOT_FOUND}[/yellow]"
 
         # Show as: base/tool/version
         return f"[green]{base}[/green][dim]/{tool}/[/dim][green]{version}[/green]"
@@ -172,27 +174,31 @@ class ConfigFormatter:
         return _SOURCE_DEFAULT
     
     def _check_yaml_files(self, setting_name: str) -> str | None:
-        """Check if setting exists in project YAML files. Supports nested paths."""
-        for filename in [_PROJECT_CONFIG_FILE]:
-            # Cache parsed YAML
-            if filename not in self._yaml_cache:
-                yaml_path = Path(filename)
-                if not yaml_path.exists():
-                    continue
-                try:
-                    with open(yaml_path) as f:
-                        self._yaml_cache[filename] = yaml.safe_load(f) or {}
-                except (OSError, yaml.YAMLError):
-                    self._yaml_cache[filename] = {}
+        """Check if setting exists in project config file."""
+        filename = _PROJECT_CONFIG_FILE
 
-            data = self._yaml_cache[filename]
-            if self._nested_key_exists(data, setting_name):
-                return filename
-        return None
+        if filename not in self._yaml_cache:
+            self._load_yaml_to_cache(filename)
+
+        data = self._yaml_cache[filename]
+        return filename if self._nested_key_exists(data, setting_name) else None
+
+    def _load_yaml_to_cache(self, filename: str) -> None:
+        """Load YAML file into cache."""
+        yaml_path = Path(filename)
+        if not yaml_path.exists():
+            self._yaml_cache[filename] = {}
+            return
+
+        try:
+            with open(yaml_path) as f:
+                self._yaml_cache[filename] = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            self._yaml_cache[filename] = {}
 
     def _nested_key_exists(self, data: dict, key: str) -> bool:
         """Supports nested notation (e.g., 'finn.finn_root')."""
-        parts = key.split('.')
+        parts = key.split(".")
         current = data
         for part in parts:
             if not isinstance(current, dict) or part not in current:
@@ -201,13 +207,10 @@ class ConfigFormatter:
         return True
     
     def show_validation_warnings(self, config: SystemConfig) -> None:
-        warnings = []
-        
-        if config.deps_dir and not config.deps_dir.is_absolute():
-            expected = config.bsmith_dir / config.deps_dir
-            if config.deps_dir.absolute() != expected.absolute():
-                warnings.append("Relative deps_dir may not resolve correctly")
-        
+        """Display configuration validation warnings."""
+        from brainsmith.settings.validation import get_config_warnings
+
+        warnings = get_config_warnings(config)
         if warnings:
             self.console.print("\n[bold yellow]Warnings:[/bold yellow]")
             for warning in warnings:

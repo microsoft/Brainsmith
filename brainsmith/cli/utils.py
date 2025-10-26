@@ -14,19 +14,19 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
-from typing import NoReturn, Iterator, Protocol
+from typing import NoReturn, Iterator
 
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn, TaskID
 from rich.panel import Panel
 
-from .constants import ENV_QUIET, EX_INTERRUPTED, EX_USAGE
+from .constants import ENV_QUIET, ExitCode
 
 console = Console()
 
 
-def error_exit(message: str, details: list[str] | None = None, code: int = EX_USAGE) -> NoReturn:
+def error_exit(message: str, details: list[str] | None = None, code: int = ExitCode.USAGE) -> NoReturn:
     """Print error message and exit (defaults to EX_USAGE per BSD sysexits.h)."""
     console.print(f"[red]Error:[/red] {message}")
 
@@ -38,39 +38,25 @@ def error_exit(message: str, details: list[str] | None = None, code: int = EX_US
     sys.exit(code)
 
 
-class TaskProtocol(Protocol):
-    """Both Rich's TaskID and NoOpTask implement this interface."""
-    def update(self, **kwargs) -> None:
-        ...
-
-
-class NoOpTask:
-    """No-op implementation for quiet mode."""
-    def update(self, **kwargs) -> None:
-        pass
-
-
 @contextmanager
-def progress_spinner(description: str, transient: bool = True, no_progress: bool = False) -> Iterator[TaskID | NoOpTask]:
+def progress_spinner(description: str, transient: bool = True, no_progress: bool = False) -> Iterator[TaskID | None]:
     """Display a progress spinner during long-running operations.
-
-    In quiet mode (no_progress=True), returns NoOpTask that accepts all method calls.
-    Otherwise, yields a Rich TaskID for progress updates.
 
     Args:
         description: Text to display next to the spinner
         transient: If True, spinner disappears after completion
-        no_progress: If True, disable spinner and use NoOpTask
+        no_progress: If True, disable spinner and yield None
 
     Yields:
-        TaskID for progress updates, or NoOpTask in quiet mode
+        TaskID for progress updates, or None in quiet mode
 
     Example:
         >>> with progress_spinner("Installing dependencies...") as task:
-        ...     task.update(description="Still working...")  # Works in both modes
+        ...     if task:
+        ...         task.update(description="Still working...")
     """
     if no_progress:
-        yield NoOpTask()
+        yield None
         return
 
     with Progress(

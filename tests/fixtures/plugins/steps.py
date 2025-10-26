@@ -2,12 +2,12 @@
 
 import logging
 from typing import Any, Dict
-# Note: Old registry decorators removed - new plugin system doesn't use decorators
-from brainsmith.primitives.utils import apply_transforms
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
 
+@step(name='test_identity_step')
 def test_identity_step(model: Any, cfg: Any) -> Any:
     """Test step that simply returns the model unchanged."""
     logger.info("Executing test_identity_step")
@@ -24,20 +24,23 @@ def test_identity_step(model: Any, cfg: Any) -> Any:
     return model
 
 
+@step(name='test_transform_sequence_step')
 def test_transform_sequence_step(model: Any, cfg: Any) -> Any:
     """Test step that applies multiple transforms in sequence."""
+    from qonnx.transformation.general import GiveUniqueNodeNames
+    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.transformation.infer_datatypes import InferDataTypes
+
     logger.info("Executing test_transform_sequence")
-    
+
     # Apply some basic transforms
-    model = apply_transforms(model, [
-        'GiveUniqueNodeNames',
-        'InferShapes',
-        'InferDataTypes'
-    ])
-    
+    for transform in [GiveUniqueNodeNames(), InferShapes(), InferDataTypes()]:
+        model = model.transform(transform)
+
     return model
 
 
+@step(name='test_config_aware_step')
 def test_config_aware_step(model: Any, cfg: Any) -> Any:
     """Test step that reads and uses configuration."""
     logger.info(f"Executing test_config_aware_step with config: {cfg}")
@@ -57,30 +60,34 @@ def test_config_aware_step(model: Any, cfg: Any) -> Any:
     return model
 
 
+@step(name='test_failing_step')
 def test_failing_step(model: Any, cfg: Any) -> Any:
     """Test step that always raises an exception."""
     raise RuntimeError("This test step always fails as designed")
 
 
+@step(name='test_conditional_step')
 def test_conditional_step(model: Any, cfg: Any) -> Any:
     """Test step that behaves differently based on config."""
+    from qonnx.transformation.fold_constants import FoldConstants
+    from qonnx.transformation.general import RemoveUnusedTensors
+
     logger.info("Executing test_conditional_step")
-    
+
     # Check for a flag in config
     should_apply_transforms = getattr(cfg, 'apply_transforms', False)
-    
+
     if should_apply_transforms:
         logger.info("Applying transforms based on config flag")
-        model = apply_transforms(model, [
-            'FoldConstants',
-            'RemoveUnusedTensors'
-        ])
+        for transform in [FoldConstants(), RemoveUnusedTensors()]:
+            model = model.transform(transform)
     else:
         logger.info("Skipping transforms based on config flag")
-    
+
     return model
 
 
+@step(name='test_custom_transform_step')
 def test_custom_transform_step(model: Any, cfg: Any) -> Any:
     """Test step demonstrating custom transform logic."""
     logger.info("Executing test_custom_transform_step")
@@ -100,30 +107,55 @@ def test_custom_transform_step(model: Any, cfg: Any) -> Any:
     return model
 
 
+@step(name='test_debug_output_step')
 def test_debug_output_step(model: Any, cfg: Any) -> Any:
     """Test step that demonstrates debug output capabilities."""
+    from qonnx.transformation.general import GiveReadableTensorNames, SortGraph
+
     logger.info("Executing test_debug_output_step")
-    
+
     # Get output directory from config if available
     output_dir = getattr(cfg, 'output_dir', '/tmp')
     debug_mode = getattr(cfg, 'debug_mode', False)
-    
+
     if debug_mode:
         import os
         debug_path = os.path.join(output_dir, "test_debug")
         logger.info(f"Debug mode enabled, saving to {debug_path}")
-        
-        # Apply transforms with debug output
-        from brainsmith.primitives.utils import apply_transforms
-        model = apply_transforms(
-            model, 
-            ['GiveReadableTensorNames', 'SortGraph'],
-            debug_path=debug_path
-        )
-    
+
+        # Apply transforms
+        for transform in [GiveReadableTensorNames(), SortGraph()]:
+            model = model.transform(transform)
+
     return model
 
 
-# Steps with blueprint/context signature (from plugins.py)
-# These are used in design space and test plugins
+# Simple test steps for blueprint testing
+# These are minimal steps used in integration tests
 
+@step(name='test_step')
+def test_step(model: Any, cfg: Any) -> Any:
+    """Minimal test step."""
+    logger.info("Executing test_step")
+    return model
+
+
+@step(name='test_step1')
+def test_step1(model: Any, cfg: Any) -> Any:
+    """Minimal test step 1."""
+    logger.info("Executing test_step1")
+    return model
+
+
+@step(name='test_step2')
+def test_step2(model: Any, cfg: Any) -> Any:
+    """Minimal test step 2."""
+    logger.info("Executing test_step2")
+    return model
+
+
+@step(name='test_step3')
+def test_step3(model: Any, cfg: Any) -> Any:
+    """Minimal test step 3."""
+    logger.info("Executing test_step3")
+    return model

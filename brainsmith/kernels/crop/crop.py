@@ -17,10 +17,8 @@ from brainsmith.registry import kernel
 class Crop(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
 
-    @property
-    def infer_transform(self):
-        from brainsmith.kernels.crop.infer_crop_from_gather import InferCropFromGather
-        return InferCropFromGather
+    # Lazy import spec for infer transform (avoids circular imports)
+    infer_transform = 'brainsmith.kernels.crop.infer_crop_from_gather:InferCropFromGather'
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

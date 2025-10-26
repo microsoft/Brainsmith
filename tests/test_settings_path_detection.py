@@ -22,7 +22,7 @@ def test_is_path_field_detects_common_patterns():
     # Should NOT be detected as path fields
     assert not _is_path_field('netron_port')
     assert not _is_path_field('default_workers')
-    assert not _is_path_field('plugins_strict')
+    assert not _is_path_field('components_strict')
     assert not _is_path_field('xilinx_version')
 
 

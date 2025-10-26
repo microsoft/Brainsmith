@@ -27,12 +27,8 @@ SOURCE_MODULE_PREFIXES = {
     'qonnx.': 'qonnx',
 }
 
-# Component types
-COMPONENT_TYPES = {'step', 'kernel', 'backend'}
+# Component types (canonical singular forms)
+COMPONENT_TYPES = ('step', 'kernel', 'backend')
 
-# Component type plural->singular mapping
-COMPONENT_TYPE_PLURALS = {
-    'steps': 'step',
-    'kernels': 'kernel',
-    'backends': 'backend',
-}
+# Component type plural->singular mapping (derived from COMPONENT_TYPES)
+COMPONENT_TYPE_PLURALS = {f'{t}s': t for t in COMPONENT_TYPES}

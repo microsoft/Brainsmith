@@ -9,24 +9,55 @@ Kernels are imported only when actually accessed, avoiding expensive upfront
 imports of torch, numpy, scipy, etc.
 """
 
-from brainsmith.plugin_helpers import create_lazy_module
+from brainsmith.registry import create_lazy_module
 
 # ============================================================================
 # Kernel Registry (Metadata Only - NO imports!)
 # ============================================================================
+# Enhanced format includes type-specific metadata for manifest caching (Issue #9)
+# Supports both old format (string) and new format (dict) for backwards compat
 
 COMPONENTS = {
     'kernels': {
-        'LayerNorm': '.layernorm.layernorm',
-        'Crop': '.crop.crop',
-        'Softmax': '.softmax',
-        'Shuffle': '.shuffle.shuffle',
+        'LayerNorm': {
+            'module': '.layernorm.layernorm',
+            'infer_transform': 'brainsmith.kernels.layernorm.infer_layernorm:InferLayerNorm',
+            'domain': 'finn.custom',
+        },
+        'Crop': {
+            'module': '.crop.crop',
+            'infer_transform': 'brainsmith.kernels.crop.infer_crop_from_gather:InferCropFromGather',
+        },
+        'Softmax': {
+            'module': '.softmax',
+            'infer_transform': 'brainsmith.kernels.softmax.infer_softmax:InferSoftmax',
+        },
+        'Shuffle': {
+            'module': '.shuffle.shuffle',
+            # No infer_transform for Shuffle
+        },
     },
     'backends': {
-        'LayerNorm_hls': '.layernorm.layernorm_hls',
-        'Crop_hls': '.crop.crop_hls',
-        'Softmax_hls': '.softmax.hwsoftmax_hls',
-        'Shuffle_hls': '.shuffle.shuffle_hls',
+        'LayerNorm_hls': {
+            'module': '.layernorm.layernorm_hls',
+            'target_kernel': 'brainsmith:LayerNorm',
+            'language': 'hls',
+        },
+        'Crop_hls': {
+            'module': '.crop.crop_hls',
+            'target_kernel': 'brainsmith:Crop',
+            'language': 'hls',
+        },
+        'Softmax_hls': {
+            'module': '.softmax.hwsoftmax_hls',
+            'target_kernel': 'brainsmith:Softmax',
+            'language': 'hls',
+        },
+        'Shuffle_hls': {
+            'module': '.shuffle.shuffle_hls',
+            'target_kernel': 'brainsmith:Shuffle',
+            'language': 'hls',
+        },
     }
 }
 

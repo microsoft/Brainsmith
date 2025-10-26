@@ -18,7 +18,13 @@ class GlobalDesignSpace:
     """Design space with resolved plugin objects."""
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
-    kernel_backends: List[Tuple[str, List[Type]]]  # [(kernel_name, [Backend classes])]
+
+    # Kernel backends: [(kernel_name, [Backend classes])]
+    # Currently all registered backends are included automatically.
+    # TODO: Future - support backend filtering in blueprint YAML
+    #   Example: {'LayerNorm': ['hls']} → only HLS backends
+    kernel_backends: List[Tuple[str, List[Type]]]
+
     max_combinations: int = 100000  # Maximum allowed design space combinations
     
     def __post_init__(self):

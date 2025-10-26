@@ -4,10 +4,9 @@
 """Unit tests for unified component metadata structures."""
 
 import pytest
-from brainsmith.loader import (
+from brainsmith.registry import (
     ComponentMetadata,
     ImportSpec,
-    LoadState,
 )
 
 
@@ -65,7 +64,7 @@ class TestComponentMetadata:
         assert meta.source == 'brainsmith'
         assert meta.component_type == 'kernel'
         assert meta.full_name == 'brainsmith:LayerNorm'
-        assert meta.state == LoadState.DISCOVERED
+        assert not meta.is_loaded
         assert meta.import_spec is spec
         assert meta.loaded_obj is None
 
@@ -87,7 +86,7 @@ class TestComponentMetadata:
         assert meta.source == 'finn'
         assert meta.component_type == 'kernel'
         assert meta.full_name == 'finn:StreamingFCLayer'
-        assert meta.state == LoadState.DISCOVERED
+        assert not meta.is_loaded
         assert meta.import_spec is spec
         assert meta.loaded_obj is None
 
@@ -148,17 +147,8 @@ class TestComponentMetadata:
         assert meta.component_type == 'step'
         assert meta.full_name == 'brainsmith:streamline'
 
-    def test_metadata_validation_fails_with_no_import_spec(self):
-        """Ensure validation catches missing import_spec."""
-        with pytest.raises(ValueError, match="missing import_spec"):
-            ComponentMetadata(
-                name='Test',
-                source='test',
-                component_type='kernel'
-            )
-
-    def test_metadata_state_can_be_updated(self):
-        """Test that component state can be updated after creation."""
+    def test_metadata_loaded_obj_can_be_set(self):
+        """Test that component loaded_obj can be set after creation."""
         spec = ImportSpec(
             module='brainsmith.kernels.layernorm.layernorm',
             attr='LayerNorm'
@@ -171,15 +161,14 @@ class TestComponentMetadata:
             import_spec=spec
         )
 
-        assert meta.state == LoadState.DISCOVERED
+        assert not meta.is_loaded
         assert meta.loaded_obj is None
 
         # Simulate loading
         mock_obj = object()
-        meta.state = LoadState.LOADED
         meta.loaded_obj = mock_obj
 
-        assert meta.state == LoadState.LOADED
+        assert meta.is_loaded
         assert meta.loaded_obj is mock_obj
 
     def test_full_name_property(self):
@@ -222,16 +211,3 @@ class TestComponentMetadata:
 
         assert meta.import_spec.extra['target_kernel'] == 'finn:StreamingFCLayer'
         assert meta.import_spec.extra['language'] == 'hls'
-
-
-class TestLoadState:
-    """Tests for LoadState enum."""
-
-    def test_load_states_exist(self):
-        """Test that load states are defined."""
-        assert hasattr(LoadState, 'DISCOVERED')
-        assert hasattr(LoadState, 'LOADED')
-
-    def test_load_states_are_distinct(self):
-        """Test that load states are distinct values."""
-        assert LoadState.DISCOVERED != LoadState.LOADED

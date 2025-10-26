@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 from brainsmith._internal.lazy_imports import LazyModuleLoader
 
 _lazy_loader = LazyModuleLoader({
-    'SystemConfig': 'brainsmith.settings',
-    'load_config': 'brainsmith.settings',
+    "SystemConfig": "brainsmith.settings",
+    "load_config": "brainsmith.settings",
 })
 
 
@@ -52,6 +52,45 @@ class ApplicationContext:
 
     # User config path (~/.brainsmith/config.yaml)
     user_config_path: Path = field(default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml")
+
+    @classmethod
+    def from_cli_args(
+        cls,
+        config_file: Path | None,
+        build_dir_override: Path | None,
+        log_level: str,
+        no_progress: bool,
+        cli_name: str
+    ) -> "ApplicationContext":
+        """Create context from CLI arguments and perform all initialization.
+
+        Args:
+            config_file: Path to config file override
+            build_dir_override: Path to build directory override
+            log_level: Logging level
+            no_progress: Disable progress indicators
+            cli_name: Name of CLI (for logging)
+
+        Returns:
+            Initialized ApplicationContext with loaded configuration
+        """
+        import logging
+        from brainsmith._internal.logging import setup_logging
+
+        logger = logging.getLogger(__name__)
+
+        context = cls(config_file=config_file, no_progress=no_progress)
+
+        if build_dir_override:
+            context.overrides["build_dir"] = str(build_dir_override)
+
+        setup_logging(level=log_level)
+        logger.debug(f"{cli_name} CLI initialized with logs={log_level}, no_progress={no_progress}")
+
+        context.load_configuration()
+        context.get_effective_config().export_to_environment(verbose=False)
+
+        return context
 
     def load_configuration(self) -> None:
         # Lazy import settings at runtime

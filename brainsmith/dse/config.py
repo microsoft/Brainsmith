@@ -58,6 +58,8 @@ def _parse_output_type(output_str: str) -> OutputType:
 def extract_config(data: Dict[str, Any]) -> DSEConfig:
     """Extract DSEConfig from blueprint data.
 
+    Config fields are expected at the blueprint top level (flat structure).
+
     Args:
         data: Merged blueprint YAML data
 
@@ -67,8 +69,8 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
     Raises:
         ValueError: If required fields are missing
     """
-    # Extract config - check both flat and global_config
-    config_data = {**data.get('global_config', {}), **data}
+    # Extract config from top-level blueprint structure
+    config_data = data
 
     # Validate required field
     if 'clock_ns' not in config_data:

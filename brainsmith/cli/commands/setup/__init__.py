@@ -32,16 +32,16 @@ from .helpers import _is_cnpy_installed, _are_hlslib_headers_installed, _is_finn
 logger = logging.getLogger(__name__)
 
 
-@click.group(context_settings={'help_option_names': ['-h', '--help']})
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def setup():
     """Install and configure optional Brainsmith dependencies."""
     pass
 
 
-@setup.command(name='all', context_settings={'help_option_names': ['-h', '--help']})
-@click.option('--force', '-f', is_flag=True, help='Force reinstallation even if already installed')
-@click.option('--remove', '-r', is_flag=True, help='Remove all dependencies')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
+@setup.command(name="all", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--force", "-f", is_flag=True, help="Force reinstallation even if already installed")
+@click.option("--remove", "-r", is_flag=True, help="Remove all dependencies")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
 def setup_all(force: bool, remove: bool, yes: bool) -> None:
     """Install all dependencies (cppsim, xsim, boards)."""
     if remove:
@@ -69,7 +69,7 @@ def setup_all(force: bool, remove: bool, yes: bool) -> None:
     success(f"All {'removal' if remove else 'setup'} tasks completed!")
 
 
-@setup.command(context_settings={'help_option_names': ['-h', '--help']})
+@setup.command(context_settings={"help_option_names": ["-h", "--help"]})
 def check() -> None:
     """Check the status of all setup components.
 
@@ -167,4 +167,4 @@ setup.add_command(cppsim)
 setup.add_command(xsim)
 setup.add_command(boards)
 
-__all__ = ['setup']
+__all__ = ["setup"]

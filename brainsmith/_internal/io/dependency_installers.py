@@ -14,25 +14,44 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from urllib.request import urlretrieve
 
 logger = logging.getLogger(__name__)
 
 
+# Custom exceptions for better error handling
+class DependencyError(Exception):
+    """Base exception for dependency operations."""
+    pass
+
+
+class UnknownDependencyError(DependencyError):
+    """Requested dependency not found in registry."""
+    pass
+
+
+class InstallationError(DependencyError):
+    """Dependency installation failed."""
+    pass
+
+
+class BuildError(DependencyError):
+    """Dependency build failed."""
+    pass
+
+
+class RequirementError(DependencyError):
+    """Required tool or dependency missing."""
+    pass
+
+
+class RemovalError(DependencyError):
+    """Dependency removal failed."""
+    pass
+
+
 # Module-level helpers
-def _log_error(message: str, also_print: bool = True) -> None:
-    """Log error message and optionally print to stderr.
-
-    Args:
-        message: Error message to log
-        also_print: Whether to also print to stderr
-    """
-    logger.error(message)
-    if also_print:
-        print(message, file=sys.stderr)
-
-
 def _remove_directory(name: str, dest: Path, quiet: bool) -> None:
     """Remove a dependency directory.
 
@@ -55,7 +74,7 @@ def _remove_directory(name: str, dest: Path, quiet: bool) -> None:
         shutil.rmtree(dest)
     except OSError as e:
         error_msg = f"Failed to remove {name}: {e}"
-        _log_error(error_msg)
+        logger.error(error_msg)
         raise RemovalError(error_msg) from e
 
 
@@ -105,7 +124,7 @@ class GitDependencyInstaller:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             error_msg = f"Failed to clone {name}: {result.stderr}"
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise InstallationError(error_msg)
 
         if 'ref' in dep:
@@ -121,7 +140,7 @@ class GitDependencyInstaller:
             )
             if result.returncode != 0:
                 error_msg = f"Failed to checkout {dep['ref']} for {name}: {result.stderr}"
-                _log_error(error_msg)
+                logger.error(error_msg)
                 raise InstallationError(error_msg)
 
         if 'sparse_dirs' in dep:
@@ -151,7 +170,7 @@ class GitDependencyInstaller:
 class ZipDependencyInstaller:
     """Installer for zip-based dependencies."""
 
-    def __init__(self, temp_dir: Optional[Path] = None):
+    def __init__(self, temp_dir: Path | None = None):
         """Initialize with optional temp directory.
 
         Args:
@@ -205,7 +224,7 @@ class ZipDependencyInstaller:
 
         except Exception as e:
             error_msg = f"Failed to download/extract {name}: {e}"
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise InstallationError(error_msg)
 
         finally:
@@ -279,7 +298,7 @@ class BuildDependencyInstaller:
 
         except ImportError:
             error_msg = "FINN package not found. Please run 'poetry install' first."
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise BuildError(error_msg)
 
         # Get Vivado settings path from config
@@ -289,13 +308,13 @@ class BuildDependencyInstaller:
 
         if not vivado_path:
             error_msg = "Vivado path not configured. Set xilinx_path in config or BSMITH_XILINX_PATH env var."
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise RequirementError(error_msg)
 
         settings_script = Path(vivado_path) / "settings64.sh"
         if not settings_script.exists():
             error_msg = f"settings64.sh not found at {settings_script}"
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise RequirementError(error_msg)
 
         # Build with finn-xsim
@@ -334,7 +353,7 @@ class BuildDependencyInstaller:
         # Check for errors
         if result.returncode != 0:
             error_msg = f"Failed to build finn-xsim (exit code: {result.returncode})"
-            _log_error(error_msg)
+            logger.error(error_msg)
             if result.stdout:
                 print("\n--- Build Output ---", file=sys.stderr)
                 print(result.stdout, file=sys.stderr)
@@ -346,7 +365,7 @@ class BuildDependencyInstaller:
         # Verify output file exists
         if not output_file.exists():
             error_msg = f"Build completed but output file not found: {output_file}"
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise BuildError(error_msg)
 
     def _install_generic_build(
@@ -374,7 +393,7 @@ class BuildDependencyInstaller:
         source_dir = Path(deps_dir) / dep['source']
         if not source_dir.exists():
             error_msg = f"Source directory not found: {source_dir}. Install source dependency first."
-            _log_error(error_msg)
+            logger.error(error_msg)
             raise BuildError(error_msg)
 
         if not quiet:
@@ -404,7 +423,7 @@ class BuildDependencyInstaller:
         # Check for errors
         if result.returncode != 0:
             error_msg = f"Failed to build {name} (exit code: {result.returncode})"
-            _log_error(error_msg)
+            logger.error(error_msg)
             if result.stdout:
                 print("\n--- Build Output ---", file=sys.stderr)
                 print(result.stdout, file=sys.stderr)
@@ -450,7 +469,7 @@ class BuildDependencyInstaller:
                         output_file.unlink()
                     except Exception as e:
                         error_msg = f"Failed to remove finn-xsim: {e}"
-                        _log_error(error_msg)
+                        logger.error(error_msg)
                         raise RemovalError(error_msg)
 
             except ImportError:
@@ -461,34 +480,3 @@ class BuildDependencyInstaller:
             # Generic build dependency removal not implemented
             if not quiet:
                 logger.info("Build dependency %s removal not implemented", name)
-
-
-# Custom exceptions for better error handling
-class DependencyError(Exception):
-    """Base exception for dependency operations."""
-    pass
-
-
-class UnknownDependencyError(DependencyError):
-    """Requested dependency not found in registry."""
-    pass
-
-
-class InstallationError(DependencyError):
-    """Dependency installation failed."""
-    pass
-
-
-class BuildError(DependencyError):
-    """Dependency build failed."""
-    pass
-
-
-class RequirementError(DependencyError):
-    """Required tool or dependency missing."""
-    pass
-
-
-class RemovalError(DependencyError):
-    """Dependency removal failed."""
-    pass

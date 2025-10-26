@@ -56,17 +56,17 @@ _LAZY_MODULES = {
     'OutputType': 'dse',
     'ExecutionError': 'dse',
 
-    # Loader module
-    'get_kernel': 'loader',
-    'get_step': 'loader',
-    'get_kernel_infer': 'loader',
-    'get_backend': 'loader',
-    'get_backend_metadata': 'loader',
-    'list_kernels': 'loader',
-    'list_steps': 'loader',
-    'list_backends_for_kernel': 'loader',
-    'list_backends': 'loader',
-    'has_step': 'loader',
+    # Registry module (component lookup)
+    'get_kernel': 'registry',
+    'get_step': 'registry',
+    'get_kernel_infer': 'registry',
+    'get_backend': 'registry',
+    'get_backend_metadata': 'registry',
+    'list_kernels': 'registry',
+    'list_steps': 'registry',
+    'list_backends_for_kernel': 'registry',
+    'list_backends': 'registry',
+    'has_step': 'registry',
 
     # Dataflow module
     'KernelDefinition': 'dataflow',

@@ -13,10 +13,9 @@ import os
 import logging
 from typing import Any
 
-from brainsmith.primitives.utils import apply_transforms
-from brainsmith.primitives.transforms.cleanup.expand_norms import ExpandNorms
-from brainsmith.primitives.transforms.kernel_opt.temp_shuffle_fixer import TempShuffleFixer
-from brainsmith.primitives.transforms.kernel_opt.set_pumped_compute import SetPumpedCompute
+from brainsmith.primitives.transforms.expand_norms import ExpandNorms
+from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
+from brainsmith.primitives.transforms.set_pumped_compute import SetPumpedCompute
 from qonnx.transformation.fold_constants import FoldConstants
 from qonnx.transformation.general import (
     ConvertDivToMul,
@@ -39,12 +38,13 @@ from brainsmith.registry import step
 def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     """Convert QONNX to FINN opset."""
 
-    model = apply_transforms(model, [
+    for transform in [
         ExpandNorms(),
         FoldConstants(),
         ConvertDivToMul(),
         ConvertQONNXtoFINN()
-    ])
+    ]:
+        model = model.transform(transform)
 
     return model
 
@@ -61,11 +61,12 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
 
     model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
 
-    model = apply_transforms(model, [
+    for transform in [
         GiveUniqueNodeNames(),
         InferShapes(),
         InferDataTypes()
-    ])
+    ]:
+        model = model.transform(transform)
 
     return model
 
@@ -75,8 +76,6 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
 @step(name='constrain_folding_and_set_pumped_compute')
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
-    model = apply_transforms(model, [
-        TempShuffleFixer(),
-        SetPumpedCompute()
-    ])
+    for transform in [TempShuffleFixer(), SetPumpedCompute()]:
+        model = model.transform(transform)
     return model

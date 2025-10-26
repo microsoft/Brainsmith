@@ -4,10 +4,21 @@
 """
 Brainsmith Transforms
 
-Plugin-based transforms organized by compilation stage.
+Graph transformation utilities for ONNX model optimization and compilation.
+
+Provides QONNX Transformation classes for various graph rewrites including
+normalization expansion, hardware-specific optimizations, and metadata extraction.
 """
 
-# Import all transforms by category to trigger plugin registration
-from . import cleanup
-from . import kernel_opt
-from . import post_proc
+# Explicit imports for public API
+from .expand_norms import ExpandNorms
+from .set_pumped_compute import SetPumpedCompute
+from .temp_shuffle_fixer import TempShuffleFixer
+from .extract_shell_integration_metadata import ExtractShellIntegrationMetadata
+
+__all__ = [
+    "ExpandNorms",
+    "SetPumpedCompute",
+    "TempShuffleFixer",
+    "ExtractShellIntegrationMetadata",
+]

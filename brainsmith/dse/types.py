@@ -48,6 +48,36 @@ class OutputType(Enum):
             ]
         }[self]
 
+    @classmethod
+    def from_finn_product(cls, product: str) -> 'OutputType':
+        """Get OutputType from FINN product string.
+
+        Args:
+            product: FINN product name (e.g., 'estimates', 'bitfile', 'rtl_sim')
+
+        Returns:
+            Matching OutputType
+
+        Raises:
+            ValueError: If product is unknown
+
+        Example:
+            >>> OutputType.from_finn_product('bitfile')
+            <OutputType.BITFILE: 'bitfile'>
+            >>> OutputType.from_finn_product('rtl_sim')
+            <OutputType.RTL: 'rtl'>
+        """
+        for output_type in cls:
+            if product in output_type.to_finn_products():
+                return output_type
+
+        # Product not found - create helpful error message
+        all_products = [p for ot in cls for p in ot.to_finn_products()]
+        raise ValueError(
+            f"Unknown FINN product '{product}'. "
+            f"Valid products: {', '.join(all_products)}"
+        )
+
 
 @dataclass
 class SegmentResult:

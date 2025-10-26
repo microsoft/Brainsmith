@@ -14,6 +14,8 @@ SystemConfig with env_prefix='BSMITH_'. Only runtime flags like ENV_QUIET
 are defined here.
 """
 
+from enum import IntEnum
+
 # ============================================================================
 # Environment Variables
 # ============================================================================
@@ -31,12 +33,16 @@ CLI_NAME_SMITH = "smith"
 # ============================================================================
 # Exit Codes (BSD sysexits.h standard)
 # ============================================================================
-# Following BSD sysexits.h conventions for shell compatibility and clarity.
-# See: https://man.freebsd.org/cgi/man.cgi?query=sysexits
 
-EX_OK = 0               # Successful termination
-EX_USAGE = 64           # Command line usage error
-EX_DATAERR = 65         # Data format error (validation)
-EX_SOFTWARE = 70        # Internal software error
-EX_CONFIG = 78          # Configuration error
-EX_INTERRUPTED = 130    # SIGINT (128 + 2)
+
+class ExitCode(IntEnum):
+    """BSD sysexits.h standard exit codes for shell compatibility.
+
+    See: https://man.freebsd.org/cgi/man.cgi?query=sysexits
+    """
+    OK = 0                # Successful termination
+    USAGE = 64            # Command line usage error
+    DATAERR = 65          # Data format error (validation)
+    SOFTWARE = 70         # Internal software error
+    CONFIG = 78           # Configuration error
+    INTERRUPTED = 130     # SIGINT (128 + 2)

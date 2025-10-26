@@ -8,15 +8,12 @@ from pathlib import Path
 
 import click
 
-from brainsmith._internal.logging import setup_logging
 from .context import ApplicationContext
 from .utils import console
 from .constants import (
     CLI_NAME_BRAINSMITH,
     CLI_NAME_SMITH,
-    EX_INTERRUPTED,
-    EX_SOFTWARE,
-    EX_USAGE,
+    ExitCode,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,8 +23,9 @@ def _version_callback(ctx, param, value):
     if not value:
         return
     import importlib.metadata
-    version = importlib.metadata.version('brainsmith')
-    click.echo(f'{CLI_NAME_BRAINSMITH}, version {version}')
+    from .messages import PACKAGE_NAME
+    version = importlib.metadata.version(PACKAGE_NAME)
+    click.echo(f"{CLI_NAME_BRAINSMITH}, version {version}")
     ctx.exit()
 
 
@@ -52,21 +50,10 @@ class LazyGroup(click.Group):
 
         return super().get_command(ctx, name)
 
-OPERATIONAL_COMMAND_MAP = {
-    'dfc': ('brainsmith.cli.commands.dfc', 'dfc'),
-    'kernel': ('brainsmith.cli.commands.kernel', 'kernel'),
-}
-
-ADMIN_COMMAND_MAP = {
-    'config': ('brainsmith.cli.commands.config', 'config'),
-    'plugins': ('brainsmith.cli.commands.plugins', 'plugins'),
-    'setup': ('brainsmith.cli.commands.setup', 'setup'),
-}
-
 
 def _create_smith_subcommand() -> click.Command:
-    @click.command(context_settings={'help_option_names': ['-h', '--help']})
-    @click.argument('args', nargs=-1, type=click.UNPROCESSED)
+    @click.command(context_settings={"help_option_names": ["-h", "--help"]})
+    @click.argument("args", nargs=-1, type=click.UNPROCESSED)
     @click.pass_context
     def smith(ctx: click.Context, args: tuple[str, ...]) -> None:
         """Create hardware designs and components.
@@ -85,6 +72,9 @@ def _create_smith_subcommand() -> click.Command:
 
 
 def create_cli(name: str, include_admin: bool = True) -> click.Group:
+    # Import command maps from single source of truth
+    from brainsmith.cli.commands import OPERATIONAL_COMMAND_MAP, ADMIN_COMMAND_MAP
+
     lazy_commands = {}
     if name == CLI_NAME_SMITH:
         lazy_commands.update(OPERATIONAL_COMMAND_MAP)
@@ -100,49 +90,39 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         logs: str,
         no_progress: bool
     ) -> None:
-        """Brainsmith - Hardware acceleration for neural networks."""
-        context = ApplicationContext(
+        ctx.obj = ApplicationContext.from_cli_args(
             config_file=config,
-            no_progress=no_progress
+            build_dir_override=build_dir,
+            log_level=logs,
+            no_progress=no_progress,
+            cli_name=name
         )
-
-        if build_dir:
-            context.overrides['build_dir'] = str(build_dir)
-
-        ctx.obj = context
-
-        setup_logging(level=logs)
-        logger.debug(f"{name} CLI initialized with logs={logs}, no_progress={no_progress}")
-
-        context.load_configuration()
-        effective_config = context.get_effective_config()
-        effective_config.export_to_environment(verbose=False)
 
     # Create the lazy group
     cli = LazyGroup(
         name=name,
         callback=callback,
-        context_settings={'help_option_names': ['-h', '--help']},
+        context_settings={"help_option_names": ["-h", "--help"]},
         lazy_commands=lazy_commands
     )
 
     # Add options
-    cli.params.append(click.Option(['-b', '--build-dir'], type=click.Path(path_type=Path),
-                                    help='Override build directory'))
-    cli.params.append(click.Option(['-c', '--config'], type=click.Path(exists=True, path_type=Path),
-                                    help='Override configuration file'))
-    cli.params.append(click.Option(['-l', '--logs'],
-                                    type=click.Choice(['error', 'warning', 'info', 'debug']),
-                                    default='warning',
-                                    metavar='LEVEL',
-                                    help='Set log level (error|warning|info|debug)'))
-    cli.params.append(click.Option(['--no-progress'], is_flag=True,
-                                    help='Disable progress spinners and animations'))
+    cli.params.append(click.Option(["-b", "--build-dir"], type=click.Path(path_type=Path),
+                                    help="Override build directory"))
+    cli.params.append(click.Option(["-c", "--config"], type=click.Path(exists=True, path_type=Path),
+                                    help="Override configuration file"))
+    cli.params.append(click.Option(["-l", "--logs"],
+                                    type=click.Choice(["error", "warning", "info", "debug"]),
+                                    default="warning",
+                                    metavar="LEVEL",
+                                    help="Set log level (error|warning|info|debug)"))
+    cli.params.append(click.Option(["--no-progress"], is_flag=True,
+                                    help="Disable progress spinners and animations"))
 
     # Add version option
-    cli.params.append(click.Option(['--version'], is_flag=True, expose_value=False,
+    cli.params.append(click.Option(["--version"], is_flag=True, expose_value=False,
                                     is_eager=True, callback=_version_callback,
-                                    help='Show the version and exit.'))
+                                    help="Show the version and exit."))
 
     # Set help text
     if name == CLI_NAME_SMITH:
@@ -163,7 +143,7 @@ Use 'smith' subcommand or standalone 'smith' CLI for hardware design creation.""
 
     # Add smith subcommand manually if needed
     if include_admin and name == CLI_NAME_BRAINSMITH:
-        cli.add_command(_create_smith_subcommand(), name='smith')
+        cli.add_command(_create_smith_subcommand(), name="smith")
 
     return cli
 
@@ -177,7 +157,7 @@ def _run_cli(name: str, include_admin: bool) -> None:
         cli()
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
-        sys.exit(EX_INTERRUPTED)
+        sys.exit(ExitCode.INTERRUPTED)
     except CLIError as e:
         # Structured CLI errors - format nicely
         console.print(e.format_for_console())
@@ -185,7 +165,7 @@ def _run_cli(name: str, include_admin: bool) -> None:
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {e}")
         logging.exception(f"Unexpected error in {name} CLI")
-        sys.exit(EX_SOFTWARE)
+        sys.exit(ExitCode.SOFTWARE)
 
 
 def brainsmith_main() -> None:

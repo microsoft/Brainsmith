@@ -20,10 +20,8 @@ from brainsmith.registry import kernel
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
 
-    @property
-    def infer_transform(self):
-        from brainsmith.kernels.shuffle.infer_shuffle import InferShuffle
-        return InferShuffle
+    # Lazy import spec for infer transform (avoids circular imports)
+    infer_transform = 'brainsmith.kernels.shuffle.infer_shuffle:InferShuffle'
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

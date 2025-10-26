@@ -18,8 +18,7 @@ import shutil
 import logging
 from typing import Any
 
-from brainsmith.primitives.utils import apply_transforms
-from brainsmith.primitives.transforms.post_proc.extract_shell_integration_metadata import ExtractShellIntegrationMetadata
+from brainsmith.primitives.transforms.extract_shell_integration_metadata import ExtractShellIntegrationMetadata
 from qonnx.transformation.general import SortCommutativeInputsInitializerLast, GiveUniqueNodeNames
 from qonnx.transformation.remove import RemoveIdentityOps
 from qonnx.transformation.infer_datatypes import InferDataTypes
@@ -76,10 +75,11 @@ def shell_metadata_handover_step(model, cfg):
 def bert_cleanup_step(model: Any, cfg: Any) -> Any:
     """Basic cleanup with identity removal and input sorting."""
 
-    model = apply_transforms(model, [
+    for transform in [
         SortCommutativeInputsInitializerLast(),
         RemoveIdentityOps()
-    ])
+    ]:
+        model = model.transform(transform)
 
     return model
 
@@ -103,22 +103,24 @@ def bert_streamlining_step(model: Any, cfg: Any) -> Any:
         Requires qonnx_to_finn step.
     """
     # Apply bulk transforms without parameters
-    model = apply_transforms(model, [
+    for transform in [
         AbsorbSignBiasIntoMultiThreshold(),
         AbsorbAddIntoMultiThreshold(),
         AbsorbMulIntoMultiThreshold(),
         RoundAndClipThresholds()
-    ])
+    ]:
+        model = model.transform(transform)
 
     # Transform with parameters
     model = model.transform(MoveOpPastFork(["Mul"]))
 
-    model = apply_transforms(model, [
+    for transform in [
         MoveScalarMulPastMatMul(),
         MoveScalarLinearPastInvariants(),
         AbsorbMulIntoMultiThreshold(),
         AbsorbAddIntoMultiThreshold()
-    ])
+    ]:
+        model = model.transform(transform)
 
     # Final cleanup with parameterized transforms
     model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
