@@ -6,7 +6,7 @@
 Public API for component registration, discovery, and lookup.
 
 Registration (for component authors):
-    from brainsmith.registry import kernel, backend, step, registry, source_context
+    from brainsmith.registry import kernel, backend, step, source_context
 
     @kernel
     class MyKernel(HWCustomOp):
@@ -55,14 +55,12 @@ from .constants import (
 # Metadata structures and helpers
 from ._metadata import ComponentMetadata, ImportSpec, resolve_lazy_class
 
-# Registration decorators and registry
+# Registration decorators
 from ._decorators import (
     kernel,
     backend,
     step,
-    registry,
     source_context,
-    Registry,
 )
 
 # Lazy loading helper
@@ -114,9 +112,7 @@ __all__ = [
     'kernel',
     'backend',
     'step',
-    'registry',
     'source_context',
-    'Registry',
 
     # Lazy loading
     'create_lazy_module',

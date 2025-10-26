@@ -22,7 +22,7 @@ from ._discovery import (
     _load_component,
     _measure_load,
 )
-from ._decorators import registry
+from ._metadata import resolve_lazy_class
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +131,11 @@ def _list_components(component_type: str, source: Optional[str] = None) -> List[
 def get_step(name: str):
     """Get step callable by name.
 
-    Accepts both short names (uses default_source) and fully-qualified names (source:name).
+    Accepts both short names ('streamline') and qualified names ('user:custom_step').
+    Short names are resolved using source priority from settings.
 
     Args:
-        name: Step name (e.g., 'streamline' or 'user:custom_step')
+        name: Step name - either short ('streamline') or qualified ('user:custom_step')
 
     Returns:
         Callable step function or Step instance
@@ -143,8 +144,8 @@ def get_step(name: str):
         KeyError: If step not found
 
     Examples:
-        >>> streamline = get_step('streamline')  # Uses default_source
-        >>> custom = get_step('user:custom_step')  # Explicit source
+        >>> streamline = get_step('streamline')  # Short name, uses source priority
+        >>> custom = get_step('user:custom_step')  # Qualified name, explicit source
     """
     return _get_component(name, 'step')
 
@@ -182,18 +183,19 @@ def list_steps(source: Optional[str] = None) -> List[str]:
 def get_kernel(name: str) -> Type:
     """Get kernel class.
 
-    Accepts both short names (uses default_source) and fully-qualified names (source:name).
+    Accepts both short names ('LayerNorm') and qualified names ('user:LayerNorm').
+    Short names are resolved using source priority from settings.
 
     Args:
-        name: Kernel name (e.g., 'LayerNorm' or 'user:LayerNorm')
+        name: Kernel name - either short ('LayerNorm') or qualified ('user:LayerNorm')
 
     Returns:
         Kernel class
 
     Examples:
-        >>> LayerNorm = get_kernel('LayerNorm')  # Uses default_source
+        >>> LayerNorm = get_kernel('LayerNorm')  # Short name, uses source priority
         >>> kernel = LayerNorm(onnx_node)
-        >>> CustomKernel = get_kernel('user:CustomKernel')  # Explicit source
+        >>> CustomKernel = get_kernel('user:CustomKernel')  # Qualified name, explicit source
     """
     return _get_component(name, 'kernel')
 
@@ -234,7 +236,6 @@ def get_kernel_infer(name: str) -> Type:
         raise KeyError(f"Kernel '{full_name}' has no InferTransform")
 
     # Resolve lazy import specs and cache
-    from ._metadata import resolve_lazy_class
     infer = resolve_lazy_class(meta.kernel_infer)
     if infer != meta.kernel_infer:
         # Cache the resolved class
@@ -276,17 +277,18 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
 def get_backend(name: str) -> Type:
     """Get independent backend by name.
 
-    Accepts both short names (uses default_source) and fully-qualified names (source:name).
+    Accepts both short names ('LayerNorm_HLS') and qualified names ('user:LayerNorm_HLS_Fast').
+    Short names are resolved using source priority from settings.
 
     Args:
-        name: Backend name (e.g., 'LayerNorm_HLS' or 'user:LayerNorm_HLS_Fast')
+        name: Backend name - either short ('LayerNorm_HLS') or qualified ('user:LayerNorm_HLS_Fast')
 
     Returns:
         Backend class
 
     Examples:
-        >>> backend = get_backend('LayerNorm_HLS')  # Uses default_source
-        >>> custom = get_backend('user:LayerNorm_HLS_Fast')  # Explicit source
+        >>> backend = get_backend('LayerNorm_HLS')  # Short name, uses source priority
+        >>> custom = get_backend('user:LayerNorm_HLS_Fast')  # Qualified name, explicit source
     """
     return _get_component(name, 'backend')
 
@@ -335,10 +337,10 @@ def list_backends_for_kernel(
     language: Optional[str] = None,
     sources: Optional[List[str]] = None
 ) -> List[str]:
-    """List backends that target a specific kernel - optimized O(k) lookup.
+    """List backends that target a specific kernel.
 
-    Uses an inverted index for fast lookups. Metadata is already populated during
-    discovery, so no component loading is needed.
+    Backends are stored directly on kernel metadata during discovery, so this
+    is a simple field access followed by optional filtering.
 
     Args:
         kernel: Kernel name (with or without source prefix)
@@ -347,10 +349,6 @@ def list_backends_for_kernel(
 
     Returns:
         Sorted list of backend names (with source prefixes)
-
-    Performance:
-        O(k) where k = number of backends for this kernel (typically 1-5)
-        vs O(n) where n = total components (50-100+)
 
     Examples:
         >>> # All backends for LayerNorm
@@ -366,15 +364,19 @@ def list_backends_for_kernel(
     if not _components_discovered:
         discover_components()
 
-    # Build inverted index on first use (lazy, cached)
-    from ._state import _build_backend_index, _backends_by_kernel
-    _build_backend_index()
-
     # Resolve kernel name to full source:name format
     kernel_full = _resolve_component_name(kernel, 'kernel')
 
-    # O(1) lookup in inverted index - gets only backends for this kernel!
-    candidate_backends = _backends_by_kernel.get(kernel_full, [])
+    # Get kernel metadata
+    kernel_meta = _component_index.get(kernel_full)
+    if not kernel_meta:
+        raise KeyError(
+            f"Kernel '{kernel_full}' not found. "
+            f"Available kernels: {', '.join(list_kernels()[:10])}"
+        )
+
+    # Get backends list from kernel metadata (populated during discovery)
+    candidate_backends = kernel_meta.kernel_backends or []
 
     matching = []
 

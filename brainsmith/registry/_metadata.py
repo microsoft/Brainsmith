@@ -47,6 +47,7 @@ class ComponentMetadata:
     # Kernel metadata
     kernel_infer: Optional[Any] = None  # InferTransform class or lazy import spec
     kernel_domain: Optional[str] = None
+    kernel_backends: Optional[list[str]] = None  # List of backend names targeting this kernel
 
     # Backend metadata
     backend_target: Optional[str] = None  # Target kernel name (source:name format)
@@ -56,11 +57,6 @@ class ComponentMetadata:
     def full_name(self) -> str:
         """Get source-prefixed name (e.g., 'brainsmith:LayerNorm')."""
         return f"{self.source}:{self.name}"
-
-    @property
-    def is_loaded(self) -> bool:
-        """Check if component has been imported."""
-        return self.loaded_obj is not None
 
 
 # ============================================================================

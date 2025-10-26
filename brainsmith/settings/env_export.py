@@ -53,7 +53,7 @@ class EnvironmentExporter:
             Dict of environment variable names to string values
         """
         env = {}
-        c = self.config  # Short alias for readability
+        c = self.config
 
         # Xilinx tool paths (dual naming for FINN compatibility)
         # Both XILINX_* and *_PATH variants are exported for maximum FINN compatibility.
@@ -77,14 +77,11 @@ class EnvironmentExporter:
             env['XILINX_HLS'] = hls_str
             env['HLS_PATH'] = hls_str
 
-        # Platform and tool paths
         env['PLATFORM_REPO_PATHS'] = c.vendor_platform_paths
         env['OHMYXILINX'] = str(c.deps_dir / "oh-my-xilinx")
 
-        # Visualization
         env['NETRON_PORT'] = str(c.netron_port)
 
-        # FINN configuration
         if c.finn_root:
             env['FINN_ROOT'] = str(c.finn_root)
         if c.finn_build_dir:
@@ -107,7 +104,6 @@ class EnvironmentExporter:
         """
         env_dict = self.to_external_dict()
 
-        # Add internal BSMITH variables
         env_dict['BSMITH_BUILD_DIR'] = str(self.config.build_dir)
         env_dict['BSMITH_DEPS_DIR'] = str(self.config.deps_dir)
         env_dict['BSMITH_DIR'] = str(self.config.bsmith_dir)
@@ -136,16 +132,13 @@ class EnvironmentExporter:
         Returns:
             Dict of exported environment variables
         """
-        # Get environment variables based on what's requested
         if include_internal:
             env_dict = self.to_all_dict()
         else:
             env_dict = self.to_external_dict()
 
-        # Handle PATH updates
         path_components = os.environ.get("PATH", "").split(":")
 
-        # Collect new paths and filter out duplicates
         new_paths = [
             str(p) for p in self._collect_path_additions()
             if str(p) not in path_components
@@ -156,15 +149,12 @@ class EnvironmentExporter:
         # FINN XSI no longer requires PYTHONPATH manipulation
         # The new finn.xsi module handles path management internally
 
-        # Handle LD_LIBRARY_PATH updates
         ld_lib_components = os.environ.get("LD_LIBRARY_PATH", "").split(":")
 
-        # Add libudev if needed and exists for Xilinx tool compatibility
         libudev_path = "/lib/x86_64-linux-gnu/libudev.so.1"
         if self.config.vivado_path and Path(libudev_path).exists():
             env_dict["LD_PRELOAD"] = libudev_path
 
-        # Add Vivado libraries (Brainsmith currently supports x86_64 only)
         if self.config.vivado_path:
             arch = platform.machine()
             if arch != 'x86_64':
@@ -175,13 +165,11 @@ class EnvironmentExporter:
                     f"If you need ARM support, please open an issue."
                 )
 
-            # Add x86_64 system library path for Vivado compatibility
             ld_lib_components.append("/lib/x86_64-linux-gnu/")
 
             vivado_lib = str(self.config.vivado_path / "lib" / "lnx64.o")
             ld_lib_components.append(vivado_lib)
 
-        # Add Vitis FPO libraries
         if self.config.vitis_path:
             vitis_fpo_lib = str(self.config.vitis_path / "lnx64" / "tools" / "fpo_v7_1")
             if vitis_fpo_lib not in ld_lib_components:
@@ -189,15 +177,12 @@ class EnvironmentExporter:
 
         env_dict["LD_LIBRARY_PATH"] = ":".join(filter(None, ld_lib_components))
 
-        # Set Xilinx environment variables for better caching behavior
         # The actual HOME override is handled at container level in entrypoint scripts
         if self.config.vivado_path:
             # Ensure XILINX_LOCAL_USER_DATA is set to prevent network operations
             env_dict["XILINX_LOCAL_USER_DATA"] = "no"
 
-        # Apply all environment variables only if export=True
         if export:
-            # Create console once if needed
             console = None
             if verbose:
                 from rich.console import Console

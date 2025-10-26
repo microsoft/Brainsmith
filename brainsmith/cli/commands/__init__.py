@@ -10,7 +10,7 @@ Command mappings are used by cli.py's LazyGroup for lazy loading.
 # Single source of truth for command registration
 # Format: 'command_name': (relative_module, attribute_name, category)
 _COMMAND_REGISTRY = {
-    "components": (".components", "components", "admin"),
+    "registry": (".registry", "registry", "admin"),
     "config": (".config", "config", "admin"),
     "setup": (".setup", "setup", "admin"),
     "dfc": (".dfc", "dfc", "operational"),

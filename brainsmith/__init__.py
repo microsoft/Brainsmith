@@ -35,7 +35,7 @@ Modules are loaded on-demand when attributes are accessed.
 __version__ = "0.1.0"
 
 # Eager imports for decorators (needed at import time for deferred registration)
-from .registry import step, kernel, backend, registry
+from .registry import step, kernel, backend
 
 # Lazy import mappings - using shared LazyModuleLoader for performance
 from ._internal.lazy_imports import LazyModuleLoader
@@ -110,4 +110,4 @@ def __dir__():
     return _lazy_loader.dir() + ['__version__']
 
 # __all__ is generated from lazy modules to avoid duplication
-__all__ = list(_LAZY_MODULES.keys()) + ['__version__', 'step', 'kernel', 'backend', 'registry']
+__all__ = list(_LAZY_MODULES.keys()) + ['__version__', 'step', 'kernel', 'backend']

@@ -80,10 +80,8 @@ def load_config(
         Validated SystemConfig object
     """
     try:
-        # Resolve CLI path overrides to CWD
         cli_overrides = _resolve_cli_paths(cli_overrides)
 
-        # Pass config file paths through constructor if provided
         if project_file:
             cli_overrides['_project_file'] = project_file
         if user_file:
@@ -116,17 +114,15 @@ def reset_config() -> None:
 
 def get_default_config() -> SystemConfig:
     """Get a configuration instance with only default values (no files or env vars)."""
-    # Filter out all Brainsmith env vars
     filtered_env = {
         k: v for k, v in os.environ.items()
         if not k.startswith('BSMITH_')
     }
 
     with patch.dict(os.environ, filtered_env, clear=True):
-        # Pass empty paths to prevent loading any config files
-        # This creates a truly clean defaults-only config
+        # Prevent loading config files
         from pathlib import Path
         return load_config(
-            project_file=Path('/dev/null'),  # Non-existent file
-            user_file=Path('/dev/null')       # Non-existent file
+            project_file=Path('/dev/null'),
+            user_file=Path('/dev/null')
         )

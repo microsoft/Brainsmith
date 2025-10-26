@@ -33,11 +33,10 @@ def _validate_components(names: list, getter) -> dict:
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed component information")
-@click.option("--validate", is_flag=True, help="Validate all components by importing them (slower)")
-@click.option("--refresh", is_flag=True, help="Rebuild component manifest cache (ignore existing cache)")
+@click.option("--rebuild", is_flag=True, help="Rebuild cache and validate all components (slower)")
 @click.pass_obj
-def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: bool) -> None:
-    """Shows all available steps, kernels, and backends, organized by source:
+def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
+    """Shows all registered components (steps, kernels, backends) organized by source:
 
     - brainsmith: Core Brainsmith components
     - finn: FINN framework components
@@ -45,8 +44,8 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
     - user: Custom components from configured sources
     - <pkg>: Entry point components from installed packages
 
-    By default, shows fast metadata listing from cache. Use --refresh to
-    rebuild the cache, --validate to import all components and check for errors.
+    By default, shows fast metadata listing from cache. Use --rebuild to
+    force cache regeneration and validate all components by importing them.
     """
     config = ctx.get_effective_config()
 
@@ -54,11 +53,11 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
     from brainsmith.registry import (
         discover_components,
         list_steps, list_kernels, list_backends,
-        get_backend_metadata, get_all_component_metadata
+        get_all_component_metadata
     )
 
-    # Trigger discovery (with refresh if requested)
-    discover_components(use_cache=not refresh, force_refresh=refresh)
+    # Trigger discovery (with rebuild if requested)
+    discover_components(use_cache=not rebuild, force_refresh=rebuild)
 
     all_steps = list_steps()
     all_kernels = list_kernels()
@@ -137,7 +136,7 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
 
     # Validate components if requested (after showing tables)
     validation_errors = {}
-    if validate:
+    if rebuild:
         from brainsmith.registry import get_kernel, get_backend, get_step
 
         with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress) as task:
@@ -170,6 +169,7 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
         # Kernels by source
         if all_kernels:
             console.print(f"\n[bold cyan]KERNELS[/bold cyan]")
+            all_metadata = get_all_component_metadata()
             for source in sorted(kernels_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(kernels_by_source[source]):
@@ -177,14 +177,13 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
 
                     # Check validation status
                     validation_marker = ""
-                    if validate:
+                    if rebuild:
                         if full_name in validation_errors:
                             validation_marker = " [red]✗ FAILED[/red]"
                         else:
                             validation_marker = " [green]✓[/green]"
 
                     try:
-                        all_metadata = get_all_component_metadata()
                         meta = all_metadata.get(full_name)
                         has_infer = "✓" if meta and meta.kernel_infer else "✗"
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
@@ -194,6 +193,7 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
         # Backends by source
         if all_backends:
             console.print(f"\n[bold cyan]BACKENDS[/bold cyan]")
+            all_metadata = get_all_component_metadata()
             for source in sorted(backends_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")
                 for name in sorted(backends_by_source[source]):
@@ -201,16 +201,16 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
 
                     # Check validation status
                     validation_marker = ""
-                    if validate:
+                    if rebuild:
                         if full_name in validation_errors:
                             validation_marker = " [red]✗ FAILED[/red]"
                         else:
                             validation_marker = " [green]✓[/green]"
 
                     try:
-                        meta = get_backend_metadata(full_name)
-                        target = meta.get("target_kernel", "N/A")
-                        lang = meta.get("language", "N/A")
+                        meta = all_metadata.get(full_name)
+                        target = meta.backend_target if meta else "N/A"
+                        lang = meta.backend_language if meta else "N/A"
                         console.print(f"    • {name:25} → {target:25} ({lang}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:25} [red](error: {e})[/red]")
@@ -219,8 +219,8 @@ def components(ctx: ApplicationContext, verbose: bool, validate: bool, refresh: 
     hints = []
     if not verbose:
         hints.append("--verbose to see detailed component listings")
-    if not validate:
-        hints.append("--validate to test import all components")
+    if not rebuild:
+        hints.append("--rebuild to regenerate cache and validate all components")
 
     if hints:
         console.print(f"\n[dim]Use {' or '.join(hints)}[/dim]")

@@ -17,13 +17,11 @@ Functions:
 
 import os
 import json
-import datetime
 import importlib.util
 import logging
 from pathlib import Path
-from typing import Literal, Union, Dict, Any, Optional
-from datetime import datetime as dt
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from datetime import datetime
+from typing import Dict, Any
 
 from ._state import _component_index
 from ._metadata import ComponentMetadata, ImportSpec
@@ -32,69 +30,22 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# Pydantic Schema for Manifest Validation (Issue #8)
+# Manifest Caching (Simplified - Direct JSON Operations)
 # ============================================================================
 
-class ManifestComponentV1(BaseModel):
-    """Component entry in manifest v1.
+def _build_manifest_from_index() -> Dict[str, Any]:
+    """Build manifest dict from current component index with full metadata.
 
-    Includes type-specific metadata fields to fix Issue #9 (metadata loss).
-    Supports backwards compatibility with old manifests using 'class_name'.
-    """
-    type: Literal['step', 'kernel', 'backend']
-    module: str
-    class_name: str = Field(..., description="Component class/function name")
-    attr: Optional[str] = None  # New format uses 'attr', backwards compat with 'class_name'
-    metadata: Dict[str, Any] = Field(default_factory=dict)  # Deprecated, kept for backwards compat
-    file_path: Optional[str] = None
-    mtime: Optional[float] = None
-
-    # Type-specific metadata (NEW - fixes issue #9)
-    kernel_infer: Optional[Union[str, Dict[str, str]]] = None
-    kernel_domain: Optional[str] = None
-    backend_target: Optional[str] = None
-    backend_language: Optional[str] = None
-
-    @field_validator('attr', mode='before')
-    @classmethod
-    def attr_from_class_name(cls, v, info):
-        """Backwards compat: use class_name if attr not provided."""
-        if v is None and 'class_name' in info.data:
-            return info.data['class_name']
-        return v
-
-    model_config = ConfigDict(extra='ignore')  # Ignore unknown fields for forward compat
-
-
-class ManifestV1(BaseModel):
-    """Manifest schema v1 with Pydantic validation (Issue #8)."""
-    version: Literal["1.0"]
-    generated_at: dt
-    components: Dict[str, ManifestComponentV1]
-
-    model_config = ConfigDict(
-        json_encoders={dt: lambda v: v.isoformat()}
-    )
-
-
-# ============================================================================
-# Manifest Caching (Arete: Eager Discovery + Optional Performance Cache)
-# ============================================================================
-
-def _build_manifest_from_index() -> ManifestV1:
-    """Build validated manifest from current component index with full metadata.
-
-    Converts _component_index to Pydantic-validated manifest for caching.
-    Includes file mtimes for cache invalidation and type-specific metadata
-    to fix Issue #9 (metadata loss).
+    Converts _component_index to simple dict for JSON caching. Includes file
+    mtimes for cache invalidation and type-specific metadata for full restoration.
 
     Returns:
-        Validated ManifestV1 with complete component metadata
+        Manifest dict with version, timestamp, and components
     """
     components = {}
 
     for full_name, meta in _component_index.items():
-        # Resolve module to file path and get mtime
+        # Resolve module to file path and get mtime for staleness detection
         file_path = None
         mtime = None
         try:
@@ -105,75 +56,79 @@ def _build_manifest_from_index() -> ManifestV1:
         except Exception as e:
             logger.debug(f"Could not get mtime for {meta.import_spec.module}: {e}")
 
-        # Build component data with type-specific metadata (fixes #9!)
-        component = ManifestComponentV1(
-            type=meta.component_type,
-            module=meta.import_spec.module,
-            class_name=meta.import_spec.attr,
-            attr=meta.import_spec.attr,
-            metadata=meta.import_spec.extra,
-            file_path=file_path,
-            mtime=mtime,
-            # Type-specific metadata (preserved now!)
-            kernel_infer=meta.kernel_infer if meta.component_type == 'kernel' else None,
-            kernel_domain=meta.kernel_domain if meta.component_type == 'kernel' else None,
-            backend_target=meta.backend_target if meta.component_type == 'backend' else None,
-            backend_language=meta.backend_language if meta.component_type == 'backend' else None,
-        )
+        # Build component data with type-specific metadata
+        components[full_name] = {
+            'type': meta.component_type,
+            'module': meta.import_spec.module,
+            'attr': meta.import_spec.attr,
+            'metadata': meta.import_spec.extra,
+            'file_path': file_path,
+            'mtime': mtime,
+            # Type-specific metadata (preserved for restoration)
+            'kernel_infer': meta.kernel_infer if meta.component_type == 'kernel' else None,
+            'kernel_domain': meta.kernel_domain if meta.component_type == 'kernel' else None,
+            'kernel_backends': meta.kernel_backends if meta.component_type == 'kernel' else None,
+            'backend_target': meta.backend_target if meta.component_type == 'backend' else None,
+            'backend_language': meta.backend_language if meta.component_type == 'backend' else None,
+        }
 
-        components[full_name] = component
-
-    return ManifestV1(
-        version="1.0",
-        generated_at=dt.now(),
-        components=components
-    )
+    return {
+        'version': '1.0',
+        'generated_at': datetime.now().isoformat(),
+        'components': components
+    }
 
 
-def _save_manifest(manifest: ManifestV1, path: Path) -> None:
-    """Save validated manifest to JSON file with Pydantic serialization.
+def _save_manifest(manifest: Dict[str, Any], path: Path) -> None:
+    """Save manifest dict to JSON file.
 
     Args:
-        manifest: Validated ManifestV1 from _build_manifest_from_index()
+        manifest: Manifest dict from _build_manifest_from_index()
         path: Path to save manifest (typically .brainsmith/component_manifest.json)
     """
     # Create parent directory if needed
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, 'w') as f:
-        f.write(manifest.model_dump_json(indent=2))
+        json.dump(manifest, f, indent=2)
 
-    logger.debug(f"Saved manifest with {len(manifest.components)} components to {path}")
+    logger.debug(f"Saved manifest with {len(manifest['components'])} components to {path}")
 
 
-def _load_manifest(path: Path) -> ManifestV1:
-    """Load and validate manifest from JSON file with Pydantic validation.
+def _load_manifest(path: Path) -> Dict[str, Any]:
+    """Load and validate manifest from JSON file.
 
     Args:
         path: Path to manifest file
 
     Returns:
-        Validated ManifestV1
+        Manifest dict with version, timestamp, and components
 
     Raises:
         FileNotFoundError: If manifest doesn't exist
-        ValueError: If manifest fails Pydantic validation
+        ValueError: If manifest has invalid version or structure
         json.JSONDecodeError: If manifest is corrupted JSON
     """
     with open(path, 'r') as f:
         data = json.load(f)
 
-    try:
-        manifest = ManifestV1.model_validate(data)
-        logger.debug(f"Loaded manifest with {len(manifest.components)} components from {path}")
-        return manifest
-    except Exception as e:
-        logger.warning(f"Manifest validation failed: {e}")
-        logger.info("Invalidating stale manifest, will regenerate")
-        raise ValueError(f"Invalid manifest schema: {e}") from e
+    # Simple version validation
+    version = data.get('version')
+    if version != '1.0':
+        raise ValueError(
+            f"Unknown manifest version: {version}. "
+            f"Expected '1.0'. Cache will be regenerated."
+        )
+
+    # Basic structure validation
+    if 'components' not in data:
+        raise ValueError("Manifest missing 'components' field. Cache will be regenerated.")
+
+    logger.debug(f"Loaded manifest with {len(data['components'])} components from {path}")
+    return data
 
 
-def _is_manifest_stale(manifest: ManifestV1) -> bool:
+def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
     """Check if manifest is stale by comparing file mtimes.
 
     A manifest is stale if any component file has been modified since the
@@ -184,16 +139,16 @@ def _is_manifest_stale(manifest: ManifestV1) -> bool:
     manually refresh (--refresh) when adding new component files.
 
     Args:
-        manifest: Validated ManifestV1 from _load_manifest()
+        manifest: Manifest dict from _load_manifest()
 
     Returns:
         True if manifest is stale and should be regenerated
     """
-    for full_name, comp_data in manifest.components.items():
-        file_path = comp_data.file_path
-        cached_mtime = comp_data.mtime
+    for full_name, comp_data in manifest['components'].items():
+        file_path = comp_data.get('file_path')
+        cached_mtime = comp_data.get('mtime')
 
-        # Skip if we don't have mtime data (old manifest format)
+        # Skip if we don't have mtime data
         if file_path is None or cached_mtime is None:
             continue
 
@@ -213,35 +168,36 @@ def _is_manifest_stale(manifest: ManifestV1) -> bool:
     return False
 
 
-def _populate_index_from_manifest(manifest: ManifestV1) -> None:
+def _populate_index_from_manifest(manifest: Dict[str, Any]) -> None:
     """Populate component index from cached manifest with full metadata.
 
     Rebuilds _component_index from manifest without importing components.
     Components will be lazy-loaded on first use. Type-specific metadata is
-    restored from manifest, fixing Issue #9.
+    restored from manifest.
 
     Args:
-        manifest: Validated ManifestV1 from _load_manifest()
+        manifest: Manifest dict from _load_manifest()
     """
-    for full_name, component in manifest.components.items():
+    for full_name, component in manifest['components'].items():
         # Parse source and name from key (source:name)
         source, name = full_name.split(':', 1)
 
-        # Build ComponentMetadata with type-specific fields (fixes #9!)
+        # Build ComponentMetadata with type-specific fields
         meta = ComponentMetadata(
             name=name,
             source=source,
-            component_type=component.type,
+            component_type=component['type'],
             import_spec=ImportSpec(
-                module=component.module,
-                attr=component.attr or component.class_name,  # Backwards compat
-                extra=component.metadata
+                module=component['module'],
+                attr=component['attr'],
+                extra=component.get('metadata', {})
             ),
-            # Restore type-specific metadata (preserved from manifest now!)
-            kernel_infer=component.kernel_infer,
-            kernel_domain=component.kernel_domain,
-            backend_target=component.backend_target,
-            backend_language=component.backend_language,
+            # Restore type-specific metadata from manifest
+            kernel_infer=component.get('kernel_infer'),
+            kernel_domain=component.get('kernel_domain'),
+            kernel_backends=component.get('kernel_backends'),
+            backend_target=component.get('backend_target'),
+            backend_language=component.get('backend_language'),
         )
 
         _component_index[full_name] = meta

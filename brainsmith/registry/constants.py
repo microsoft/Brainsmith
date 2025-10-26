@@ -27,11 +27,5 @@ SOURCE_MODULE_PREFIXES = {
     'qonnx.': 'qonnx',
 }
 
-# Component types (canonical singular forms)
-COMPONENT_TYPES = ('step', 'kernel', 'backend')
-
-# Component type plural->singular mapping (derived from COMPONENT_TYPES)
-COMPONENT_TYPE_PLURALS = {f'{t}s': t for t in COMPONENT_TYPES}
-
 # Default ONNX domain for custom kernels
 DEFAULT_KERNEL_DOMAIN = 'finn.custom'

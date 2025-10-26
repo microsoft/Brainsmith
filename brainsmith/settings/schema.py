@@ -222,18 +222,6 @@ class SystemConfig(BaseSettings):
     to avoid configuration feedback loops.
     """
 
-    # ========================================================================
-    # User Configuration (Input)
-    # ========================================================================
-    # These are the Pydantic fields that users can set via:
-    # - YAML files (.brainsmith/config.yaml)
-    # - Environment variables (BSMITH_* prefix)
-    # - Constructor arguments (programmatic usage)
-    # All path fields accept relative paths in config; they are resolved
-    # to absolute paths by the full_* properties below.
-    # ========================================================================
-
-    # Core paths
     # NOTE: bsmith_dir is now a cached property, not a configurable field
     build_dir: Path = Field(
         default=Path("build"),
@@ -268,7 +256,6 @@ class SystemConfig(BaseSettings):
         default="2024.2",
         description="Xilinx tool version"
     )
-    # These are auto-derived from xilinx_path but can be overridden
     vivado_path: Path | None = Field(
         default=None,
         description="Path to Vivado (auto-detected from xilinx_path)"
@@ -282,13 +269,11 @@ class SystemConfig(BaseSettings):
         description="Path to Vitis HLS (auto-detected from xilinx_path)"
     )
 
-    # Tool paths (flattened)
     vendor_platform_paths: str = Field(
         default="/opt/xilinx/platforms",
         description="Vendor platform repository paths (Xilinx/Intel FPGA platforms)"
     )
 
-    # Component registry settings
     components_strict: bool = Field(
         default=True,
         description="Strict component loading"
@@ -299,25 +284,21 @@ class SystemConfig(BaseSettings):
         description="Enable manifest caching for component discovery. When True, generates and uses a manifest cache in .brainsmith/ to speed up startup. Cache auto-invalidates when component files are modified. Set to False to always perform eager discovery."
     )
 
-    # Vivado-specific settings
     vivado_ip_cache: Path | None = Field(
         default=None,
         description="Vivado IP cache directory (auto-computed from build_dir if not set)"
     )
 
-    # Network/visualization settings
     netron_port: int = Field(
         default=8080,
         description="Port for Netron neural network visualization"
     )
 
-    # Worker configuration
     default_workers: int = Field(
         default=4,
         description="Default number of workers for parallel operations (exports to NUM_DEFAULT_WORKERS for FINN)"
     )
 
-    # FINN configuration (flattened for consistency with Xilinx)
     finn_root: Path | None = Field(
         default=None,
         description="FINN root directory (defaults to deps_dir/finn)"
@@ -396,7 +377,6 @@ class SystemConfig(BaseSettings):
 
     def _resolve_core_paths(self) -> None:
         """Resolve build_dir and force deps_dir to internal location."""
-        # build_dir: resolve if relative
         self.build_dir = self._resolve(self.build_dir, self.project_dir)
 
         # deps_dir: ALWAYS internal to brainsmith installation (ignore user input)
@@ -405,25 +385,21 @@ class SystemConfig(BaseSettings):
 
     def _resolve_xilinx_tools(self) -> None:
         """Auto-detect or resolve Xilinx tool paths."""
-        # vivado_path: auto-detect if not set, otherwise resolve if relative
         if self.vivado_path is None:
             self.vivado_path = self._detect_xilinx_tool("Vivado")
         else:
             self.vivado_path = self._resolve(self.vivado_path, self.project_dir)
 
-        # vitis_path: auto-detect if not set, otherwise resolve if relative
         if self.vitis_path is None:
             self.vitis_path = self._detect_xilinx_tool("Vitis")
         else:
             self.vitis_path = self._resolve(self.vitis_path, self.project_dir)
 
-        # vitis_hls_path: auto-detect if not set, otherwise resolve if relative
         if self.vitis_hls_path is None:
             self.vitis_hls_path = self._detect_xilinx_tool("Vitis_HLS")
         else:
             self.vitis_hls_path = self._resolve(self.vitis_hls_path, self.project_dir)
 
-        # vivado_ip_cache: derived from build_dir if not set
         if self.vivado_ip_cache:
             self.vivado_ip_cache = self._resolve(self.vivado_ip_cache, self.project_dir)
         else:
@@ -431,19 +407,16 @@ class SystemConfig(BaseSettings):
 
     def _resolve_finn_paths(self) -> None:
         """Resolve FINN paths with sensible defaults."""
-        # finn_root: default to deps_dir/finn
         if self.finn_root:
             self.finn_root = self._resolve(self.finn_root, self.project_dir)
         else:
             self.finn_root = self.deps_dir / "finn"
 
-        # finn_build_dir: default to build_dir
         if self.finn_build_dir:
             self.finn_build_dir = self._resolve(self.finn_build_dir, self.project_dir)
         else:
             self.finn_build_dir = self.build_dir
 
-        # finn_deps_dir: default to deps_dir
         if self.finn_deps_dir:
             self.finn_deps_dir = self._resolve(self.finn_deps_dir, self.project_dir)
         else:
@@ -525,27 +498,17 @@ class SystemConfig(BaseSettings):
         Returns:
             Absolute path to detected project root
         """
-        # Priority 1: Explicit override via environment variable
-        # Trust the env var without checking for config file existence
         if 'BSMITH_PROJECT_DIR' in os.environ:
             return Path(os.environ['BSMITH_PROJECT_DIR']).resolve()
 
-        # Priority 2: Custom project file location (passed via load_config)
-        # This comes from YamlSettingsSource when a custom project_file is provided
         project_file_used = getattr(self, '_project_file_used', None)
         if project_file_used:
-            # Config file is always .brainsmith/config.yaml, so project_dir is grandparent
             return Path(project_file_used).parent.parent.resolve()
 
-        # Priority 3: Find config file and use its parent directory
-        # Config file is always .brainsmith/config.yaml, so project_dir is grandparent
         config_file = _find_project_config()
         if config_file:
-            # config_file.parent is .brainsmith/, we want its parent
             return config_file.parent.parent
 
-        # Priority 4: Fallback to brainsmith repo root
-        # When no project config found, use the repo root as project directory
         return self.bsmith_dir
 
     @field_validator('component_sources', mode='before')
@@ -556,16 +519,13 @@ class SystemConfig(BaseSettings):
         Protected sources (brainsmith, finn, project, user) are resolved in model_post_init.
         Users can add custom sources but cannot override protected ones.
         """
-        # Get default component sources
         default_sources = cls.model_fields['component_sources'].default_factory()
 
         if v is None or not isinstance(v, dict):
             return default_sources
 
-        # Start with defaults
         result = default_sources.copy()
 
-        # Add user-provided sources, rejecting protected overrides
         for key, value in v.items():
             # Allow protected sources if value is None (default resolution in model_post_init)
             if key in PROTECTED_SOURCES and value is not None:
@@ -574,14 +534,9 @@ class SystemConfig(BaseSettings):
                     f"Protected sources: {', '.join(sorted(PROTECTED_SOURCES))}"
                 )
 
-            # Convert string to Path
             result[key] = Path(value) if isinstance(value, str) else value
 
         return result
-
-    # ========================================================================
-    # Path Resolution Helpers
-    # ========================================================================
 
     @staticmethod
     def _resolve(path: Path, base: Path) -> Path:

@@ -184,9 +184,17 @@ smith = "brainsmith.cli.cli:smith_main"
 optional = false
 
 [tool.poetry.group.dev.dependencies]
-# Minimal testing setup
-pytest = "~=6.2.5"
-pytest-cov = "~=4.1.0"  # Optional, for coverage reports
+# Core testing framework (upgraded for DSE integration tests)
+pytest = "~=8.0"
+pytest-cov = "~=4.1.0"
+
+# Parallel execution and timeouts (critical for FINN/RTL builds)
+pytest-xdist = "~=3.5"       # Parallel test execution
+pytest-timeout = "~=2.2"     # Prevent hanging builds
+
+# Regression testing
+syrupy = "~=4.0"             # Snapshot testing for tree structures
+pytest-regressions = "~=2.5" # Golden file testing for artifacts
 
 # Essential linting only
 ruff = "~=0.1.0"

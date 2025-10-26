@@ -30,15 +30,14 @@ from importlib.metadata import entry_points
 from typing import Dict, List, Any
 
 from ._state import _component_index, _components_discovered
-from ._decorators import registry, source_context
-from ._metadata import ComponentMetadata, ImportSpec
+from ._decorators import _register_kernel, _register_backend, _register_step, source_context
+from ._metadata import ComponentMetadata, ImportSpec, resolve_lazy_class
 from .constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
     SOURCE_USER,
     DEFAULT_SOURCE_PRIORITY,
-    COMPONENT_TYPE_PLURALS,
 )
 from ._manifest import (
     _build_manifest_from_index,
@@ -97,8 +96,8 @@ def _is_strict_mode() -> bool:
 # Component Name Resolution
 # ============================================================================
 
-def _resolve_component_name(name: str, component_type: str = 'step') -> str:
-    """Resolve 'LayerNorm' → 'brainsmith:LayerNorm' using source priority.
+def _resolve_component_name(name_or_qualified: str, component_type: str = 'step') -> str:
+    """Resolve 'LayerNorm' or 'brainsmith:LayerNorm' → 'brainsmith:LayerNorm'.
 
     Returns the full name even if component doesn't exist - the caller is
     responsible for validation. Falls through to source_priority[0] when
@@ -106,15 +105,15 @@ def _resolve_component_name(name: str, component_type: str = 'step') -> str:
     better error messages about which sources were searched).
 
     Args:
-        name: Component name (short or fully-qualified)
+        name_or_qualified: Short name ('LayerNorm') or qualified ('brainsmith:LayerNorm')
         component_type: Type of component to resolve ('step', 'kernel', 'backend')
 
     Returns:
-        Fully-qualified name (source:name format)
+        Fully-qualified name in 'source:name' format
     """
     # Already qualified?
-    if ':' in name:
-        return name
+    if ':' in name_or_qualified:
+        return name_or_qualified
 
     # Get source priority from config
     try:
@@ -127,14 +126,14 @@ def _resolve_component_name(name: str, component_type: str = 'step') -> str:
     # Search discovered components if available
     if _components_discovered:
         for source in source_priority:
-            full_name = f"{source}:{name}"
+            full_name = f"{source}:{name_or_qualified}"
             meta = _component_index.get(full_name)
             if meta and meta.component_type == component_type:
                 return full_name
 
     # Not found - return default source (caller will raise KeyError if needed)
-    default_name = f"{source_priority[0]}:{name}"
-    logger.debug(f"Component '{name}' not in index, assuming: {default_name}")
+    default_name = f"{source_priority[0]}:{name_or_qualified}"
+    logger.debug(f"Component '{name_or_qualified}' not in index, assuming: {default_name}")
     return default_name
 
 
@@ -161,6 +160,8 @@ def _index_entry_point_components(
     Side effects:
         - Populates _component_index with ComponentMetadata entries
     """
+    from .constants import DEFAULT_KERNEL_DOMAIN
+
     attr_field = 'func_name' if component_type == 'step' else 'class_name'
 
     for meta in metas:
@@ -188,7 +189,6 @@ def _index_entry_point_components(
             )
 
             # Populate type-specific metadata fields (inline)
-            from .constants import DEFAULT_KERNEL_DOMAIN
             if component_type == 'kernel':
                 infer_spec = meta.get('infer_transform')
                 if isinstance(infer_spec, str) and ':' in infer_spec:
@@ -218,7 +218,6 @@ def _index_entry_point_components(
             )
 
             # Populate type-specific metadata fields (inline)
-            from .constants import DEFAULT_KERNEL_DOMAIN
             if component_type == 'kernel':
                 infer_spec = meta.get('infer_transform')
                 if isinstance(infer_spec, str) and ':' in infer_spec:
@@ -233,6 +232,49 @@ def _index_entry_point_components(
 
             _component_index[full_name] = metadata
             logger.debug(f"Indexed lazy {component_type}: {full_name}")
+
+
+def _link_backends_to_kernels() -> None:
+    """Link backends to their target kernels after all components indexed.
+
+    Scans all backends in _component_index and populates the kernel_backends
+    field on their target kernels. Called once after discovery completes.
+
+    This builds the kernel->backends relationship naturally from the
+    backend->kernel metadata, avoiding the need for a separate inverted index.
+    """
+    for full_name, meta in _component_index.items():
+        if meta.component_type != 'backend':
+            continue
+
+        target = meta.backend_target
+        if not target:
+            logger.warning(
+                f"Backend {full_name} missing target_kernel metadata. "
+                "Skipping backend->kernel linking."
+            )
+            continue
+
+        kernel_meta = _component_index.get(target)
+        if not kernel_meta:
+            logger.warning(
+                f"Backend {full_name} targets unknown kernel {target}. "
+                "This backend will not be discoverable via list_backends_for_kernel()."
+            )
+            continue
+
+        # Initialize backends list if needed
+        if kernel_meta.kernel_backends is None:
+            kernel_meta.kernel_backends = []
+
+        # Add backend to kernel's list (avoid duplicates from decorator registration)
+        if full_name not in kernel_meta.kernel_backends:
+            kernel_meta.kernel_backends.append(full_name)
+            logger.debug(f"Linked backend {full_name} to kernel {target}")
+        else:
+            logger.debug(f"Backend {full_name} already linked to kernel {target} (skipping duplicate)")
+
+    logger.debug("Linked backends to their target kernels")
 
 
 # ============================================================================
@@ -257,7 +299,7 @@ def _load_component(meta: ComponentMetadata) -> Any:
         - Registers component with registry if not already registered
     """
     # Already loaded? Return cached
-    if meta.is_loaded:
+    if meta.loaded_obj is not None:
         return meta.loaded_obj
 
     logger.debug(f"Loading component: {meta.full_name}")
@@ -266,6 +308,16 @@ def _load_component(meta: ComponentMetadata) -> Any:
 
     # Direct import using absolute module path
     module = importlib.import_module(spec.module)
+
+    # After import, decorator may have replaced the ComponentMetadata in _component_index
+    # Re-fetch to get the updated metadata
+    meta = _component_index[meta.full_name]
+
+    # Check again if already loaded (decorator may have just loaded it during import).
+    # This happens when modules use @step/@kernel/@backend decorators - the decorator
+    # fires during module execution and calls _register_*() which sets loaded_obj.
+    if meta.loaded_obj is not None:
+        return meta.loaded_obj
 
     try:
         obj = getattr(module, spec.attr)
@@ -312,23 +364,22 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
 
     if meta.component_type == 'kernel':
         # Resolve lazy infer_transform if needed
-        from ._metadata import resolve_lazy_class
         infer_transform = resolve_lazy_class(extra.get('infer_transform'))
 
-        registry.kernel(obj, name=meta.name, infer_transform=infer_transform)
+        _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")
 
     elif meta.component_type == 'backend':
-        registry.backend(
+        _register_backend(
             obj,
             name=meta.name,
-            target_kernel=extra['target_kernel'],
-            language=extra['language']
+            target_kernel=meta.backend_target,
+            language=meta.backend_language
         )
         logger.debug(f"Registered backend: {meta.full_name}")
 
     elif meta.component_type == 'step':
-        registry.step(obj, name=meta.name)
+        _register_step(obj, name=meta.name)
         logger.debug(f"Registered step: {meta.full_name}")
 
     else:
@@ -421,11 +472,19 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
 
         _components_discovered = True
 
+        # Link backends to their target kernels after all components indexed
+        _link_backends_to_kernels()
+
+        # Count components by type
+        counts = {'step': 0, 'kernel': 0, 'backend': 0}
+        for meta in _component_index.values():
+            counts[meta.component_type] += 1
+
         logger.info(
-            f"Component discovery complete: {registry}"
-        )
-        logger.info(
-            f"Component index: {len(_component_index)} components indexed"
+            f"Component discovery complete: "
+            f"{counts['step']} steps, "
+            f"{counts['kernel']} kernels, "
+            f"{counts['backend']} backends"
         )
 
         # Save manifest for next time (only if caching is enabled)
