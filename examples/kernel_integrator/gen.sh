@@ -1,1 +1,1 @@
-python -m brainsmith.tools.kernel_integrator examples/kernel_integrator/source/thresholding_axi.sv -o examples/kernel_integrator/kernel/
+python -m brainsmith.tools.kernel_integrator examples/tools/kernel_integrator/source/thresholding_axi.sv -o examples/tools/kernel_integrator/kernel/

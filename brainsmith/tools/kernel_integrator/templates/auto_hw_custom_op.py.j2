@@ -16,16 +16,16 @@ from brainsmith.dataflow.qonnx_types import DatatypeConstraintGroup
 class {{ kernel_metadata.class_name }}(KernelOp):
     """
     Auto-generated KernelOp for {{ kernel_metadata.name }} kernel.
-    
+
     Generated from RTL: {{ kernel_metadata.source_file }}
     Uses direct KernelMetadata access with KernelOp base class.
     """
-    
+
     def __init__(self, onnx_node, **kwargs):
         """Initialize {{ kernel_metadata.class_name }} with KernelDefinition."""
         kernel_def = self._create_kernel_definition()
         super().__init__(onnx_node, kernel_def, **kwargs)
-    
+
     def get_nodeattr_types(self):
         """
         Define all node attributes for {{ kernel_metadata.name }}.
@@ -40,17 +40,17 @@ class {{ kernel_metadata.class_name }}(KernelOp):
             "preferred_impl_style": ('s', False, "rtl"),
         }
         attrs.update(kernel_attrs)
-        
+
         return attrs
-    
+
     def _create_kernel_definition(self) -> KernelDefinition:
         """
         Create KernelDefinition for {{ kernel_metadata.name }}.
-        
+
         Creates KernelDefinition using direct metadata access.
         """
         kernel_def = KernelDefinition("{{ kernel_metadata.name }}")
-        
+
         # All input definitions (regular inputs and AXI-Stream weights)
         {% for interface in kernel_metadata.inputs %}
         input_def = InputDefinition(
@@ -76,7 +76,7 @@ class {{ kernel_metadata.class_name }}(KernelOp):
         )
         kernel_def.add_input(input_def)
         {% endfor %}
-        
+
         # AXI-Lite weight interfaces as input definitions
         {% for interface in kernel_metadata.config %}
         {% if interface.is_weight %}
@@ -102,7 +102,7 @@ class {{ kernel_metadata.class_name }}(KernelOp):
         kernel_def.add_input(input_def)
         {% endif %}
         {% endfor %}
-        
+
         # Output definitions
         {% for interface in kernel_metadata.outputs %}
         output_def = OutputDefinition(
@@ -122,7 +122,7 @@ class {{ kernel_metadata.class_name }}(KernelOp):
         )
         kernel_def.add_output(output_def)
         {% endfor %}
-        
+
         # Add relationships (if they exist on KernelMetadata)
         {% if kernel_metadata.relationships is defined %}
         {% for rel in kernel_metadata.relationships %}
@@ -137,7 +137,7 @@ class {{ kernel_metadata.class_name }}(KernelOp):
         )
         {% endfor %}
         {% endif %}
-        
+
         return kernel_def
 
     ############################################################################
@@ -145,14 +145,14 @@ class {{ kernel_metadata.class_name }}(KernelOp):
     # Add custom helper methods, execution logic, and resource estimation logic
     # here. This section is intentionally left for manual implementation.
     ############################################################################
-        
+
     def execute_node(self, context, graph):
         """
         Execute the hardware kernel in simulation.
-        
+
         TODO: Implement this method for your specific kernel.
         This should handle both 'cppsim' and 'rtlsim' execution modes.
-        
+
         For reference implementation, see:
         # TAFK TODO
         """
@@ -160,14 +160,14 @@ class {{ kernel_metadata.class_name }}(KernelOp):
             f"execute_node() not implemented for {self.__class__.__name__}. "
             "Please implement this method to support simulation."
         )
-    
+
     def bram_estimation(self):
         """
         Estimate BRAM usage for this kernel.
-        
+
         TODO: Implement based on your kernel's memory requirements.
         Return the number of BRAM blocks needed.
-        
+
         For kernels without memory requirements, return 0.
         For kernels with weights/parameters, calculate based on:
         - Weight tensor dimensions
@@ -178,14 +178,14 @@ class {{ kernel_metadata.class_name }}(KernelOp):
             f"bram_estimation() not implemented for {self.__class__.__name__}. "
             "Please implement this method to provide resource estimates."
         )
-    
+
     def uram_estimation(self):
         """
         Estimate URAM usage for this kernel.
-        
+
         TODO: Implement based on your kernel's memory requirements.
         Return the number of URAM blocks needed.
-        
+
         For kernels without memory requirements, return 0.
         For kernels with large weight tensors, consider URAM usage.
         """
@@ -193,14 +193,14 @@ class {{ kernel_metadata.class_name }}(KernelOp):
             f"uram_estimation() not implemented for {self.__class__.__name__}. "
             "Please implement this method to provide resource estimates."
         )
-    
+
     def lut_estimation(self):
         """
         Estimate LUT usage for this kernel.
-        
+
         TODO: Implement based on your kernel's logic requirements.
         Return the number of LUTs needed.
-        
+
         Consider:
         - Computational complexity
         - Data path width
@@ -233,7 +233,7 @@ Interface Attributes:
 - {{ interface.compiler_name }}DataType: Input interface datatype selection
 {% endfor %}
 {% for interface in kernel_metadata.outputs %}
-- {{ interface.compiler_name }}DataType: Output interface datatype selection  
+- {{ interface.compiler_name }}DataType: Output interface datatype selection
 {% endfor %}
 {% for interface in kernel_metadata.config %}
 {% if interface.is_weight %}

@@ -16,15 +16,10 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.shuffle.shuffle import Shuffle
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
-@backend(
-    name="ShuffleHLS",
-    kernel="Shuffle",
-    language="hls",
-    description="HLS implementation of Shuffle",
-    author="Shane Fleming"
-)
+
+@backend(name='Shuffle_hls', target_kernel='brainsmith:Shuffle', language='hls')
 class Shuffle_hls(Shuffle, HLSBackend):
     """HLS backend for Shuffle kernel (KernelOp-based).
 

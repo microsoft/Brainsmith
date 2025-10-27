@@ -17,57 +17,103 @@ import os
 import shutil
 import logging
 from typing import Any
-import numpy as np
 
-from brainsmith.core.plugins import step, get_transform
+from brainsmith.primitives.transforms.extract_shell_integration_metadata import ExtractShellIntegrationMetadata
+from qonnx.transformation.general import SortCommutativeInputsInitializerLast, GiveUniqueNodeNames
+from qonnx.transformation.remove import RemoveIdentityOps
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from finn.transformation.streamline.absorb import (
+    AbsorbSignBiasIntoMultiThreshold,
+    AbsorbAddIntoMultiThreshold,
+    AbsorbMulIntoMultiThreshold
+)
+from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from finn.transformation.streamline.reorder import (
+    MoveOpPastFork,
+    MoveScalarMulPastMatMul,
+    MoveScalarLinearPastInvariants
+)
 
 logger = logging.getLogger(__name__)
 
+# Import decorator for registration
+from brainsmith.registry import step
 
-def save_debug_model(model, cfg, step_name):
-    """Save model for debugging if preserve_intermediate_models is enabled."""
-    if getattr(cfg, 'preserve_intermediate_models', False):
-        debug_dir = os.path.join(cfg.output_dir, "debug_models")
-        os.makedirs(debug_dir, exist_ok=True)
-        
-        # Save ONNX model
-        model_path = os.path.join(debug_dir, f"{step_name}.onnx")
-        model.save(model_path)
-        
-        # Log model structure info
-        logger.info(f"Saved debug model: {step_name}")
-        logger.info(f"  - Inputs: {[i.name for i in model.graph.input]}")
-        logger.info(f"  - Outputs: {[o.name for o in model.graph.output]}")
-        logger.info(f"  - Nodes: {len(model.graph.node)}")
-        if model.graph.node:
-            logger.info(f"  - First node: {model.graph.node[0].name} ({model.graph.node[0].op_type})")
-            # Check for LayerNormalization nodes
-            ln_nodes = [n for n in model.graph.node if n.op_type == "LayerNormalization"]
-            if ln_nodes:
-                logger.info(f"  - Found {len(ln_nodes)} LayerNormalization nodes")
+
+# === Pre-Processing ===
+
+@step(name='bert_cleanup')
+def bert_cleanup_step(model: Any, cfg: Any) -> Any:
+    """Basic cleanup with identity removal and input sorting."""
+
+    for transform in [
+        SortCommutativeInputsInitializerLast(),
+        RemoveIdentityOps()
+    ]:
+        model = model.transform(transform)
+
+    return model
+
+
+# === Streamlining Steps ===
+
+@step(name='bert_streamlining')
+def bert_streamlining_step(model: Any, cfg: Any) -> Any:
+    """BERT-specific streamlining with SoftMax Mul node handling.
+
+    Problem:
+        SoftMax transformations in qonnx_to_finn leave Mul nodes that must
+        be moved lower in the graph to merge with MultiThreshold nodes.
+
+    Solution:
+        1. MoveScalarMulPastMatMul - move Mul past DynMatMul
+        2. MoveScalarLinearPastInvariants - move over reshape/transpose
+        3. AbsorbMulIntoMultiThreshold - merge into MultiThreshold
+
+    Dependencies:
+        Requires qonnx_to_finn step.
+    """
+    # Apply bulk transforms without parameters
+    for transform in [
+        AbsorbSignBiasIntoMultiThreshold(),
+        AbsorbAddIntoMultiThreshold(),
+        AbsorbMulIntoMultiThreshold(),
+        RoundAndClipThresholds()
+    ]:
+        model = model.transform(transform)
+
+    # Transform with parameters
+    model = model.transform(MoveOpPastFork(["Mul"]))
+
+    for transform in [
+        MoveScalarMulPastMatMul(),
+        MoveScalarLinearPastInvariants(),
+        AbsorbMulIntoMultiThreshold(),
+        AbsorbAddIntoMultiThreshold()
+    ]:
+        model = model.transform(transform)
+
+    # Final cleanup with parameterized transforms
+    model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
+    model = model.transform(GiveUniqueNodeNames())
+
+    return model
 
 
 # === Metadata Steps ===
 
-@step(
-    name="shell_metadata_handover",
-    category="metadata",
-    dependencies=[],
-    description="Extract metadata for shell integration process"
-)
+@step(name='shell_metadata_handover')
 def shell_metadata_handover_step(model, cfg):
     """
     Extract metadata for shell integration process.
-    
+
     This information is stored in a json file that is passed to the build process.
     It adds this to the stitched_ip output directory and checks it exists ahead of time.
     """
     from finn.builder.build_dataflow_config import DataflowOutputType
-    
+
     if DataflowOutputType.STITCHED_IP in cfg.generate_outputs:
         if os.path.isdir(cfg.output_dir + '/stitched_ip'):
-            # Brainsmith native transform - load when needed
-            ExtractShellIntegrationMetadata = get_transform('ExtractShellIntegrationMetadata')
             model = model.transform(ExtractShellIntegrationMetadata(
                 cfg.output_dir + "/stitched_ip/shell_handover.json"
             ))
@@ -76,89 +122,8 @@ def shell_metadata_handover_step(model, cfg):
             shutil.copy(cfg.verify_expected_output_npy, cfg.output_dir + '/stitched_ip')
             return model
         else:
-            raise RuntimeError(f"Error: could not find stitched IP directory so unable to create metadata. Please ensure this is called after the create_stitched_ip step")
-    return model
-
-
-# === Pre-Processing ===
-
-@step(
-    name="bert_cleanup",
-    category="cleanup",
-    dependencies=[],
-    description="Graph cleanup/preparation step for BERT models",
-)
-def bert_cleanup_step(model: Any, cfg: Any) -> Any:
-    """Basic cleanup with identity removal and input sorting."""
-
-    SortCommutativeInputsInitializerLast = get_transform('SortCommutativeInputsInitializerLast')
-    model = model.transform(SortCommutativeInputsInitializerLast())
-
-    RemoveIdentityOps = get_transform('RemoveIdentityOps')
-    model = model.transform(RemoveIdentityOps())
-
-    return model
-
-
-# === Streamlining Steps ===
-
-@step(
-    name="bert_streamlining",
-    category="topology_opt",
-    dependencies=["qonnx_to_finn"],
-    description="Comprehensive streamlining with QONNX preprocessing and FINN absorption"
-)
-def bert_streamlining_step(model, cfg):
-    """
-    BERT custom step for streamlining
-
-    Some additional streamlining steps are required here
-    to handle the Mul nodes leftover from the SoftMax
-    transformations done in custom_step_qonnx2finn.
-
-    In particular, we need to move the Mul operation
-    at the output of the QuantSoftMax lower in the graph
-    so that it has the option to be merged into a MultiThreshold 
-    node. In particular:
-
-        * MoveScalarMulPastMatMul : moves the Mul past the DynMatMul
-        * ModeScalarLinearPartInvariants : moves the Mul over the
-          reshape and transpose
-        * AbsorbMulIntoMultiThreshold : absorbs the Mul into the MT
-    """
-
-    AbsorbSignBiasIntoMultiThreshold = get_transform('AbsorbSignBiasIntoMultiThreshold')
-    model = model.transform(AbsorbSignBiasIntoMultiThreshold())
-
-    AbsorbAddIntoMultiThreshold = get_transform('AbsorbAddIntoMultiThreshold')
-    model = model.transform(AbsorbAddIntoMultiThreshold())
-
-    AbsorbMulIntoMultiThreshold = get_transform('AbsorbMulIntoMultiThreshold')
-    model = model.transform(AbsorbMulIntoMultiThreshold())
-
-    RoundAndClipThresholds = get_transform('RoundAndClipThresholds')
-    model = model.transform(RoundAndClipThresholds())
-
-    # Apply transform with parameter
-    MoveOpPastFork = get_transform('MoveOpPastFork')
-    model = model.transform(MoveOpPastFork(["Mul"]))
-
-    MoveScalarMulPastMatMul = get_transform('MoveScalarMulPastMatMul')
-    model = model.transform(MoveScalarMulPastMatMul())
-
-    MoveScalarLinearPastInvariants = get_transform('MoveScalarLinearPastInvariants')
-    model = model.transform(MoveScalarLinearPastInvariants())
-
-    AbsorbMulIntoMultiThreshold = get_transform('AbsorbMulIntoMultiThreshold')
-    model = model.transform(AbsorbMulIntoMultiThreshold())
-
-    AbsorbAddIntoMultiThreshold = get_transform('AbsorbAddIntoMultiThreshold')
-    model = model.transform(AbsorbAddIntoMultiThreshold())
-
-    # Final cleanup
-    InferDataTypes = get_transform('InferDataTypes')
-    GiveUniqueNodeNames = get_transform('GiveUniqueNodeNames')
-    model = model.transform(InferDataTypes(allow_scaledint_dtypes=False))
-    model = model.transform(GiveUniqueNodeNames())
-    
+            raise RuntimeError(
+                "Stitched IP directory not found. "
+                "Ensure shell_metadata_handover runs after create_stitched_ip step."
+            )
     return model

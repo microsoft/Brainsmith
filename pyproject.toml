@@ -67,38 +67,32 @@ minversion = "6.0"
 addopts = ["-ra"]  # Show all test outcomes
 testpaths = ["tests"]
 
-# Coverage configuration - optional for alpha stage
+# Coverage configuration - optional for alpha (pre-release) stage
 [tool.coverage.run]
 source = ["brainsmith"]
 omit = ["*/tests/*"]
 
 [tool.mypy]
 python_version = "3.10"
-# Relaxed settings for alpha stage
+# Relaxed settings for alpha (pre-release) stage
 ignore_missing_imports = true
 allow_untyped_defs = true
 allow_incomplete_defs = true
 allow_untyped_calls = true
 no_implicit_optional = false
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | deps
-)/
-'''
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Auto-detect line endings
+line-ending = "auto"
 
 [tool.poetry.dependencies]
 python = ">=3.10"
@@ -131,7 +125,7 @@ onnxsim = "~=0.4.36"
 netron = "~=8.6"
 ipython = "~=8.12.2"
 ipykernel = "~=6.21.2"
-pygments = "~=2.14.0"
+pygments = ">=2.16,<3.0"  # Updated for mkdocs-material compatibility
 tqdm = "~=4.64.1"
 
 # Hardware and optimization
@@ -174,19 +168,27 @@ qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}
 onnxscript = {path = "deps/onnxscript", develop = true}
 finn-experimental = {path = "deps/finn-experimental", develop = true}
-dataset-loading = {path = "deps/dataset-loading", develop = true}
+# dataset-loading = {path = "deps/dataset-loading", develop = true}  # Temporarily commented - missing
 
 [tool.poetry.scripts]
-brainsmith = "brainsmith.interface.cli:brainsmith_main"
-smith = "brainsmith.interface.cli:smith_main"
+brainsmith = "brainsmith.cli.cli:brainsmith_main"
+smith = "brainsmith.cli.cli:smith_main"
 
 [tool.poetry.group.dev]
 optional = false
 
 [tool.poetry.group.dev.dependencies]
-# Minimal testing setup
-pytest = "~=6.2.5"
-pytest-cov = "~=4.1.0"  # Optional, for coverage reports
+# Core testing framework (upgraded for DSE integration tests)
+pytest = "~=8.0"
+pytest-cov = "~=4.1.0"
+
+# Parallel execution and timeouts (critical for large builds)
+pytest-xdist = "~=3.5"       # Parallel test execution
+pytest-timeout = "~=2.2"     # Prevent hanging builds
+
+# Regression testing
+syrupy = "~=4.0"             # Snapshot testing for tree structures
+pytest-regressions = "~=2.5" # Golden file testing for artifacts
 
 # Essential linting only
 ruff = "~=0.1.0"
@@ -202,5 +204,15 @@ optional = true
 [tool.poetry.group.boards.dependencies]
 pyserial = "~=3.5"
 
-# Documentation and benchmarking groups removed for alpha stage
-# Add back when project matures and these become relevant
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "~=1.6.0"
+mkdocs-material = "~=9.5.0"
+mkdocstrings = {extras = ["python"], version = "~=0.26.0"}
+mkdocs-autorefs = "~=1.2.0"
+mkdocs-git-revision-date-localized-plugin = "~=1.2.0"
+mkdocs-minify-plugin = "~=0.8.0"
+mike = "~=2.1.0"
+pymdown-extensions = "~=10.8.0"

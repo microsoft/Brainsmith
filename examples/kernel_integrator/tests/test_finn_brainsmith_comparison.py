@@ -183,45 +183,45 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
     
     # Test FINN implementation if available
     if finn_model is not None:
-        report_lines.append("\n📝 Testing FINN Thresholding RTL generation...")
-        
+        report_lines.append("\nTesting FINN Thresholding RTL generation...")
+
         try:
             # Apply SpecializeLayers to get RTL backend
             finn_specialized = finn_model.transform(SpecializeLayers(fpgapart=fpgapart))
-            
+
             # Get the Thresholding node
             finn_nodes = finn_specialized.get_nodes_by_op_type("Thresholding_rtl")
             if not finn_nodes:
                 finn_nodes = finn_specialized.get_nodes_by_op_type("Thresholding_hls")
-            
+
             if finn_nodes:
                 finn_node = finn_nodes[0]
                 report_lines.append(f"  Found node type: {finn_node.op_type}, domain: {finn_node.domain}")
                 finn_inst = getCustomOp(finn_node)
-                
+
                 # Set up code generation directory
                 finn_codegen_dir = test_output_dir / "finn_rtl"
                 finn_codegen_dir.mkdir(parents=True, exist_ok=True)
                 finn_inst.set_nodeattr("code_gen_dir_ipgen", str(finn_codegen_dir))
-                
+
                 # Generate HDL
                 finn_inst.generate_hdl(finn_specialized, fpgapart=fpgapart, clk=5.0)
-                
+
                 # Collect generated files
                 finn_files = []
                 for root, dirs, files in os.walk(finn_codegen_dir):
                     for file in files:
                         rel_path = os.path.relpath(os.path.join(root, file), finn_codegen_dir)
                         finn_files.append(rel_path)
-                
+
                 results["finn"]["success"] = True
                 results["finn"]["files"] = sorted(finn_files)
                 results["finn"]["file_count"] = len(finn_files)
                 results["finn"]["codegen_dir"] = finn_codegen_dir
-                
-                report_lines.append(f"  ✅ Generated {len(finn_files)} files")
-                report_lines.append(f"  📁 Files: {', '.join(finn_files[:5])}{'...' if len(finn_files) > 5 else ''}")
-                
+
+                report_lines.append(f"  ✓ Generated {len(finn_files)} files")
+                report_lines.append(f"  Files: {', '.join(finn_files[:5])}{'...' if len(finn_files) > 5 else ''}")
+
                 # Copy wrapper file for easy comparison
                 wrapper_candidates = [f for f in finn_files if f.endswith(".v") and "wrapper" in f.lower()]
                 if not wrapper_candidates:
@@ -230,19 +230,19 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
                     wrapper_src = finn_codegen_dir / wrapper_candidates[0]
                     wrapper_dst = test_output_dir / "finn_wrapper.v"
                     shutil.copy2(wrapper_src, wrapper_dst)
-                    report_lines.append(f"  📄 Wrapper copied to: finn_wrapper.v")
+                    report_lines.append(f"  Wrapper copied to: finn_wrapper.v")
             else:
-                report_lines.append("  ⚠️  No specialized Thresholding node found after SpecializeLayers")
+                report_lines.append("  ⚠️ No specialized Thresholding node found after SpecializeLayers")
                 results["finn"]["success"] = False
                 results["finn"]["error"] = "No specialized node found"
-                
+
         except Exception as e:
             results["finn"]["success"] = False
             results["finn"]["error"] = str(e)
-            report_lines.append(f"  ❌ RTL generation failed: {e}")
-    
+            report_lines.append(f"  ✗ RTL generation failed: {e}")
+
     # Test Brainsmith implementation
-    report_lines.append("\n📝 Testing Brainsmith ThresholdingAxi RTL generation...")
+    report_lines.append("\nTesting Brainsmith ThresholdingAxi RTL generation...")
     report_lines.append("  Note: RTL generation from examples directory requires manual instantiation")
     
     try:
@@ -297,10 +297,10 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
             results["brainsmith"]["files"] = sorted(brainsmith_files)
             results["brainsmith"]["file_count"] = len(brainsmith_files)
             results["brainsmith"]["codegen_dir"] = brainsmith_codegen_dir
-            
-            report_lines.append(f"  ✅ Generated {len(brainsmith_files)} files")
-            report_lines.append(f"  📁 Files: {', '.join(brainsmith_files[:5])}{'...' if len(brainsmith_files) > 5 else ''}")
-            
+
+            report_lines.append(f"  ✓ Generated {len(brainsmith_files)} files")
+            report_lines.append(f"  Files: {', '.join(brainsmith_files[:5])}{'...' if len(brainsmith_files) > 5 else ''}")
+
             # Copy wrapper file for easy comparison
             wrapper_candidates = [f for f in brainsmith_files if f.endswith(".v") and "wrapper" in f.lower()]
             if not wrapper_candidates:
@@ -309,16 +309,16 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
                 wrapper_src = brainsmith_codegen_dir / wrapper_candidates[0]
                 wrapper_dst = test_output_dir / "brainsmith_wrapper.v"
                 shutil.copy2(wrapper_src, wrapper_dst)
-                report_lines.append(f"  📄 Wrapper copied to: brainsmith_wrapper.v")
+                report_lines.append(f"  Wrapper copied to: brainsmith_wrapper.v")
         else:
-            report_lines.append("  ⚠️  No specialized ThresholdingAxi node found after SpecializeLayers")
+            report_lines.append("  ⚠️ No specialized ThresholdingAxi node found after SpecializeLayers")
             results["brainsmith"]["success"] = False
             results["brainsmith"]["error"] = "No specialized node found"
-            
+
     except Exception as e:
         results["brainsmith"]["success"] = False
         results["brainsmith"]["error"] = str(e)
-        report_lines.append(f"  ❌ RTL generation failed: {e}")
+        report_lines.append(f"  ✗ RTL generation failed: {e}")
     
     # Compare results
     report_lines.append("\n=== RTL Generation Comparison ===")
@@ -388,22 +388,22 @@ def run_comprehensive_test(test_name, channels, input_dt, output_dt, bias=0):
         finn_model = model.transform(InferThresholdingLayer())
         finn_nodes = finn_model.get_nodes_by_op_type("Thresholding")
         if not finn_nodes:
-            print(f"  ⚠️  FINN InferThresholdingLayer did not create Thresholding node")
+            print(f"  ⚠️ FINN InferThresholdingLayer did not create Thresholding node")
             finn_model = None
     except Exception as e:
-        print(f"  ⚠️  FINN InferThresholdingLayer failed: {e}")
+        print(f"  ⚠️ FINN InferThresholdingLayer failed: {e}")
         print(f"      (This is expected for some configurations)")
         finn_model = None
-    
+
     # Apply Brainsmith transform
     try:
         brainsmith_model = model.transform(InferThresholdingAxi())
         brainsmith_nodes = brainsmith_model.get_nodes_by_op_type("ThresholdingAxi")
         if not brainsmith_nodes:
-            print(f"  ❌ InferThresholdingAxi did not create ThresholdingAxi node")
+            print(f"  ✗ InferThresholdingAxi did not create ThresholdingAxi node")
             return False
     except Exception as e:
-        print(f"  ❌ InferThresholdingAxi failed: {e}")
+        print(f"  ✗ InferThresholdingAxi failed: {e}")
         return False
     
     # Create test-specific output directory
@@ -429,17 +429,17 @@ def run_comprehensive_test(test_name, channels, input_dt, output_dt, bias=0):
     report_path = OUTPUT_DIR / test_id / "comparison_report.txt"
     with open(report_path, 'w') as f:
         f.write('\n'.join(all_report_lines))
-    
-    print(f"\n✅ Test completed. Results saved to: {OUTPUT_DIR / test_id}")
-    
+
+    print(f"\n✓ Test completed. Results saved to: {OUTPUT_DIR / test_id}")
+
     # Return success if Brainsmith worked
     return results["brainsmith"].get("success", False)
 
 
 def main():
     """Run all comprehensive comparison tests."""
-    print("🚀 Starting Comprehensive FINN vs Brainsmith Comparison Tests")
-    print(f"📁 Output directory: {OUTPUT_DIR}")
+    print("Starting Comprehensive FINN vs Brainsmith Comparison Tests")
+    print(f"Output directory: {OUTPUT_DIR}")
     print("="*60)
     
     # Create main output directory
@@ -467,7 +467,7 @@ def main():
     summary_lines.append("")
     summary_lines.append("Test Details:")
     for i, (test_name, channels, input_dt, output_dt, bias) in enumerate(tests):
-        status = "✅ PASS" if i < passed else "❌ FAIL"
+        status = "✓ PASS" if i < passed else "✗ FAIL"
         summary_lines.append(f"  {status} - {test_name}")
     summary_lines.append("")
     summary_lines.append(f"Results saved to: {OUTPUT_DIR}")
