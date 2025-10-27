@@ -533,6 +533,226 @@ class ElementwiseBinaryOp(KernelOp):
         func = self.get_nodeattr("func")
         return op_map[func]
 
+    # ================================================================
+    # Configuration Validation (Phase 3c)
+    # ================================================================
+
+    def validate_configuration(self, model=None):
+        """Validate kernel configuration before building.
+
+        Performs production-grade validation checks:
+        - PE divisibility
+        - Broadcast compatibility
+        - Operation support
+        - Datatype compatibility
+        - Edge case warnings (division by zero, overflow)
+
+        Args:
+            model: Optional ModelWrapper for accessing initializers
+
+        Raises:
+            ValueError: With helpful error message if invalid configuration
+
+        Warnings:
+            RuntimeWarning: For edge cases (division by zero, overflow risk)
+        """
+        # Validate PE divisibility
+        self._validate_pe_divisibility()
+
+        # Validate broadcast compatibility
+        self._validate_broadcast_compatibility()
+
+        # Validate operation support
+        self._validate_operation_support()
+
+        # Validate datatype compatibility
+        self._validate_datatype_compatibility()
+
+        # Check edge cases (warnings, not errors)
+        self._handle_zero_division(model)
+        self._check_overflow_risk()
+
+    def _validate_pe_divisibility(self):
+        """Validate PE evenly divides channel dimension.
+
+        Raises:
+            ValueError: If PE doesn't divide channels, with suggested alternatives
+        """
+        if not hasattr(self, 'design_point') or self.design_point is None:
+            # Skip if design_point not initialized yet
+            return
+
+        lhs_shape = self.design_point.inputs["lhs"].tensor_shape
+        pe = self.design_point.inputs["lhs"].stream_shape[-1]
+        num_channels = lhs_shape[-1]
+
+        if num_channels % pe != 0:
+            valid_pe_values = self._suggest_pe_values(num_channels)
+            raise ValueError(
+                f"{self.onnx_node.name}: PE={pe} must evenly divide "
+                f"channel dimension {num_channels}.\n"
+                f"  Valid PE values for {num_channels} channels: "
+                f"{', '.join(map(str, valid_pe_values))}\n"
+                f"  Example: Set PE={valid_pe_values[len(valid_pe_values)//2]} "
+                f"for moderate parallelism."
+            )
+
+    def _suggest_pe_values(self, channels):
+        """Suggest valid PE values for given channel count.
+
+        Args:
+            channels: Number of channels
+
+        Returns:
+            List of valid PE values (all divisors of channels, sorted)
+        """
+        # Find all divisors by checking up to sqrt(channels)
+        divisors = []
+        for i in range(1, int(channels**0.5) + 1):
+            if channels % i == 0:
+                divisors.append(i)
+                if i != channels // i:  # Avoid duplicates for perfect squares
+                    divisors.append(channels // i)
+        return sorted(divisors)
+
+    def _validate_broadcast_compatibility(self):
+        """Validate input shapes are broadcastable (for dynamic_dynamic pattern).
+
+        Raises:
+            ValueError: If shapes not broadcastable, with examples
+        """
+        input_pattern = self.get_nodeattr("input_pattern")
+
+        if input_pattern != "dynamic_dynamic":
+            # Only validate for dynamic_dynamic pattern
+            return
+
+        if not hasattr(self, 'design_point') or self.design_point is None:
+            # Skip if design_point not initialized yet
+            return
+
+        lhs_shape = self.design_point.inputs["lhs"].tensor_shape
+        rhs_shape = self.design_point.inputs["rhs"].tensor_shape
+
+        try:
+            output_shape = np.broadcast_shapes(lhs_shape, rhs_shape)
+        except ValueError as e:
+            raise ValueError(
+                f"{self.onnx_node.name}: Input shapes not broadcastable.\n"
+                f"  LHS shape: {lhs_shape}\n"
+                f"  RHS shape: {rhs_shape}\n"
+                f"  ONNX broadcasting rules:\n"
+                f"    - Shapes align from the right\n"
+                f"    - Dimensions must be equal OR one must be 1\n"
+                f"  Examples of valid broadcasts:\n"
+                f"    [1,64,64,128] + [128] → [1,64,64,128] (channel broadcast)\n"
+                f"    [1,64,64,128] + [1,1,1,128] → [1,64,64,128] (spatial broadcast)\n"
+                f"    [1,64,1,128] + [1,1,64,1] → [1,64,64,128] (bidirectional)\n"
+                f"  Original error: {e}"
+            )
+
+    def _validate_operation_support(self):
+        """Validate operation is supported.
+
+        Raises:
+            ValueError: If operation not supported
+        """
+        operation = self.get_nodeattr("func")
+        # Get supported ops from schema
+        schema_ops = ELEMENTWISE_BINARY_SCHEMA.kernel_params["func"][3]
+
+        if operation not in schema_ops:
+            supported_list = sorted(schema_ops)
+            raise ValueError(
+                f"{self.onnx_node.name}: Unsupported operation '{operation}'.\n"
+                f"  Supported operations: {', '.join(supported_list)}\n"
+                f"  Note: This check is redundant with schema validation."
+            )
+
+    def _validate_datatype_compatibility(self):
+        """Validate input/output datatypes are compatible.
+
+        Raises:
+            ValueError: If non-integer datatypes used
+        """
+        if not hasattr(self, 'design_point') or self.design_point is None:
+            # Skip if design_point not initialized yet
+            return
+
+        lhs_dt = self.design_point.inputs["lhs"].datatype
+        rhs_dt = self.design_point.inputs["rhs"].datatype
+
+        if not (lhs_dt.is_integer() and rhs_dt.is_integer()):
+            raise ValueError(
+                f"{self.onnx_node.name}: Only integer datatypes supported.\n"
+                f"  LHS datatype: {lhs_dt}\n"
+                f"  RHS datatype: {rhs_dt}\n"
+                f"  For floating-point operations, apply quantization first."
+            )
+
+    def _handle_zero_division(self, model=None):
+        """Check for potential division by zero in Div operation.
+
+        Args:
+            model: Optional ModelWrapper for accessing initializers
+
+        Warnings:
+            RuntimeWarning: If RHS initializer contains zeros
+        """
+        if self.get_nodeattr("func") != "Div":
+            return
+
+        # Need model to check initializers
+        if model is None:
+            return
+
+        # Check RHS for zeros (only if it's an initializer)
+        rhs_name = self.onnx_node.input[1]
+
+        if rhs_name in [init.name for init in model.graph.initializer]:
+            rhs_data = model.get_initializer(rhs_name)
+            if rhs_data is not None and np.any(rhs_data == 0):
+                import warnings
+                warnings.warn(
+                    f"{self.onnx_node.name}: RHS initializer contains zeros. "
+                    f"Division by zero will produce undefined results.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
+
+    def _check_overflow_risk(self):
+        """Check if operation might overflow output datatype.
+
+        Warnings:
+            RuntimeWarning: If output type might be too small
+        """
+        operation = self.get_nodeattr("func")
+        if operation not in {"Add", "Mul"}:
+            return  # Sub/Div less likely to overflow
+
+        if not hasattr(self, 'design_point') or self.design_point is None:
+            return
+
+        lhs_dt = self.design_point.inputs["lhs"].datatype
+        out_dt = self.design_point.outputs["output"].datatype
+
+        # For Add: need at least input_width + 1 bit
+        # For Mul: need at least 2 * input_width bits
+        required_bits = lhs_dt.bitwidth() + 1 if operation == "Add" else 2 * lhs_dt.bitwidth()
+
+        if out_dt.bitwidth() < required_bits:
+            import warnings
+            warnings.warn(
+                f"{self.onnx_node.name}: Output datatype {out_dt} may be too "
+                f"small for {operation} operation on {lhs_dt} inputs.\n"
+                f"  Input bitwidth: {lhs_dt.bitwidth()}\n"
+                f"  Output bitwidth: {out_dt.bitwidth()}\n"
+                f"  Recommended minimum: {required_bits} bits\n"
+                f"  Consider using a wider output type or adding saturation.",
+                RuntimeWarning,
+                stacklevel=2
+            )
+
     def execute_node(self, context, graph):
         """Execute node in Python simulation.
 

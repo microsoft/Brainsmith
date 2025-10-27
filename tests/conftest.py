@@ -45,3 +45,15 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "parity: marks tests comparing manual vs auto HWCustomOp implementations"
     )
+    config.addinivalue_line(
+        "markers", "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS"
+    )
+    config.addinivalue_line(
+        "markers", "hls: marks tests requiring HLS code generation"
+    )
+    config.addinivalue_line(
+        "markers", "rtl: marks tests requiring RTL synthesis"
+    )
+    config.addinivalue_line(
+        "markers", "rtlsim: marks tests requiring RTL simulation"
+    )

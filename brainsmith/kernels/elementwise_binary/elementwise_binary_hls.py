@@ -21,6 +21,7 @@ Phase 2/3 (Future):
 - Layout optimizations
 """
 
+import os
 import numpy as np
 from math import ceil
 from qonnx.core.datatype import DataType
@@ -358,20 +359,37 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         Modes:
         - python: Pure Python/numpy execution (golden reference)
-        - cppsim: C++ simulation (requires HLS compilation)
-        - rtlsim: RTL simulation (requires synthesis)
+        - cppsim: C++ simulation (requires HLS compilation) - uses HLSBackend
+        - rtlsim: RTL simulation (requires synthesis) - uses HLSBackend
 
         Raises:
             ValueError: If exec_mode is not set or invalid
+            RuntimeError: If compilation fails (cppsim/rtlsim)
+            Exception: If VITIS_PATH/HLS_PATH not set (cppsim/rtlsim)
+
+        Environment Requirements (cppsim/rtlsim):
+            - VITIS_PATH or HLS_PATH environment variable must be set
+            - Set via: `config.export_to_environment()` from brainsmith.config
+            - Compilation may take 2-10 minutes on first run
+            - Subsequent runs use cached executable
+
+        Example:
+            >>> from brainsmith.config import get_config
+            >>> config = get_config()
+            >>> config.export_to_environment()  # Setup Vivado environment
+            >>>
+            >>> hw_op.set_nodeattr("exec_mode", "cppsim")
+            >>> result = hw_op.execute_node(context, model.graph)
         """
         mode = self.get_nodeattr("exec_mode")
 
         if mode == "python":
+            # Custom Python execution for golden reference
             self._execute_python(context, graph)
-        elif mode == "cppsim":
-            self._execute_cppsim(context, graph)
-        elif mode == "rtlsim":
-            self._execute_rtlsim(context, graph)
+        elif mode in ["cppsim", "rtlsim"]:
+            # Delegate to HLSBackend's execute_node for cppsim/rtlsim
+            # It handles all the C++ compilation, input/output prep, and execution
+            super().execute_node(context, graph)
         else:
             raise ValueError(
                 f"Invalid or unset exec_mode: '{mode}'. "
@@ -433,29 +451,8 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         return result
 
-    def _execute_cppsim(self, context, graph):
-        """Execute in C++ simulation mode (Phase 3d).
-
-        Raises:
-            NotImplementedError: Cppsim execution not yet implemented
-        """
-        raise NotImplementedError(
-            "Cppsim execution mode not yet implemented for ElementwiseBinaryOp. "
-            "See Phase 3d of the implementation plan. "
-            "Use exec_mode='python' for functional validation."
-        )
-
-    def _execute_rtlsim(self, context, graph):
-        """Execute in RTL simulation mode (Phase 3e).
-
-        Raises:
-            NotImplementedError: RTL simulation not yet implemented
-        """
-        raise NotImplementedError(
-            "RTL simulation mode not yet implemented for ElementwiseBinaryOp. "
-            "See Phase 3e of the implementation plan. "
-            "Use exec_mode='python' or 'cppsim' for validation."
-        )
+    # Note: cppsim and rtlsim execution are handled by HLSBackend.execute_node()
+    # We delegate to parent class via super().execute_node() in execute_node() above.
 
     def global_includes(self):
         """Generate global includes.

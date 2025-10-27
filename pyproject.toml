@@ -17,16 +17,16 @@ homepage = "https://github.com/microsoft/Brainsmith/"
 repository = "https://github.com/microsoft/Brainsmith/"
 documentation = "https://github.com/microsoft/Brainsmith/tree/main/docs"
 keywords = ["fpga", "accelerator", "pytorch", "rtl", "neural-network", "hardware", "xilinx", "amd", "dse", "ml-compiler"]
-classifiers = [ 
-    "Development Status :: 3 - Alpha", 
-    "Intended Audience :: Science/Research", 
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Compilers",
     "Topic :: System :: Hardware",
-    "License :: OSI Approved :: MIT License", 
-    "Programming Language :: Python :: 3.10", 
-    "Programming Language :: Python :: 3.11", 
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Operating System :: POSIX :: Linux",

@@ -3048,7 +3048,7 @@ sympy = "*"
 
 [[package]]
 name = "onnxscript"
-version = "0.3.0.dev20251007"
+version = "0.3.0.dev20251024"
 description = "Naturally author ONNX functions and models using a subset of Python"
 optional = false
 python-versions = ">=3.8"
@@ -4115,7 +4115,7 @@ cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
 [[package]]
 name = "qonnx"
-version = "0.4.0.post1.dev126+g915339571"
+version = "0.3.0.post1.dev391+gb329fcbd1"
 description = "Frontend and utilities for QONNX"
 optional = false
 python-versions = "*"
@@ -4132,7 +4132,7 @@ numpy = ">=1.24.1"
 onnx = ">=1.13.0"
 onnxruntime = ">=1.16.1"
 onnxscript = ">=0.1.0"
-protobuf = ">=3.20.3"
+protobuf = "3.20.3"
 sigtools = ">=4.0.1"
 toposort = ">=1.7.0"
 
