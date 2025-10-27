@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 def _generate_config_template(defaults) -> str:
     return dedent("""\
         # Brainsmith Configuration
-        # Relative paths resolve to the directory containing this config file
+        # Relative paths resolve to the directory containing the .brainsmith folder
 
         # Build output directory
         build_dir: build

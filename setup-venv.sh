@@ -93,7 +93,7 @@ if [ "$QUIET_MODE" == "1" ]; then
     export BSMITH_QUIET="1"
 fi
 
-echo "🔧 Setting up Brainsmith developer environment..."
+echo -e "\033[36mSetting up Brainsmith developer environment...\033[0m"
 
 # Docker-specific configuration
 if [ "$DOCKER_MODE" == "1" ]; then
@@ -101,23 +101,23 @@ if [ "$DOCKER_MODE" == "1" ]; then
         # Remove stale completion marker from previous runs
         if [ -f "$BSMITH_CONTAINER_DIR/setup_complete" ]; then
             rm -f "$BSMITH_CONTAINER_DIR/setup_complete"
-            echo "🗑️  Removed stale setup completion marker"
+            echo -e "\033[33mRemoved stale setup completion marker\033[0m"
         fi
 
-        echo "📦 Configuring Poetry for Docker container..."
+        echo -e "\033[36mConfiguring Poetry for Docker container...\033[0m"
         export POETRY_CONFIG_DIR="$BSMITH_CONTAINER_DIR/poetry-config"
         export POETRY_CACHE_DIR="$BSMITH_CONTAINER_DIR/poetry-cache"
         mkdir -p "$POETRY_CONFIG_DIR" "$POETRY_CACHE_DIR"
     else
-        echo "⚠️  Warning: BSMITH_CONTAINER_DIR not set in Docker mode"
+        echo "⚠️ Warning: BSMITH_CONTAINER_DIR not set in Docker mode"
     fi
 else
     # Run environment validation for local installations
     if [ -f "docker/validate-env.sh" ]; then
-        echo "🔍 Validating system requirements..."
+        echo -e "\033[36mValidating system requirements...\033[0m"
         if ! bash docker/validate-env.sh; then
             echo ""
-            echo "⚠️  System validation failed. Some features may not work properly."
+            echo "⚠️ System validation failed. Some features may not work properly."
             echo ""
             read -p "Continue anyway? [y/N] " -n 1 -r
             echo
@@ -131,35 +131,35 @@ fi
 
 # Check for Python
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is required but not found"
+    echo "✗ Python 3 is required but not found"
     exit 1
 fi
 
 # Check for Git (needed for fetch-repos.sh)
 if ! command -v git &> /dev/null; then
-    echo "❌ Git is required but not found"
+    echo "✗ Git is required but not found"
     exit 1
 fi
 
-echo "✅ Basic prerequisites satisfied"
+echo -e "\033[32m✓\033[0m Basic prerequisites satisfied"
 
 # Step 1: Fetch Git repositories (unless skipped)
 if [ "$SKIP_REPOS" != "1" ]; then
     echo ""
-    echo "📥 Step 1: Fetching Git dependencies..."
+    echo -e "\033[36mStep 1: Fetching Git dependencies...\033[0m"
     if [ -n "$FORCE_MODE" ]; then
         echo "  (Force mode: re-downloading all dependencies)"
     fi
     ./docker/fetch-repos.sh $FORCE_MODE
 else
     echo ""
-    echo "⏩ Skipping repository fetch (--skip-repos)"
+    echo -e "\033[33mSkipping repository fetch (--skip-repos)\033[0m"
 fi
 
 # Step 2: Install Poetry if not available (unless skipped)
 if ! command -v poetry &> /dev/null && [ "$SKIP_POETRY" != "1" ]; then
     echo ""
-    echo "📦 Installing Poetry..."
+    echo -e "\033[36mInstalling Poetry...\033[0m"
     curl -sSL https://install.python-poetry.org | python3 -
     # Add Poetry to PATH for this session
     export PATH="$HOME/.local/bin:$PATH"
@@ -167,14 +167,14 @@ fi
 
 # Verify Poetry is available
 if ! command -v poetry &> /dev/null; then
-    echo "❌ Poetry is required but not found"
+    echo "✗ Poetry is required but not found"
     echo "Install with: curl -sSL https://install.python-poetry.org | sh"
     exit 1
 fi
 
 # Step 3: Configure Poetry for project-local virtual environment
 echo ""
-echo "⚙️  Configuring Poetry..."
+echo -e "\033[36mConfiguring Poetry...\033[0m"
 poetry config virtualenvs.in-project true
 poetry config virtualenvs.create true
 
@@ -183,7 +183,7 @@ export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
 # Clean environments if forced
 if [ -n "$FORCE_MODE" ] && [ -d ".venv" ]; then
-    echo "📋 Force mode: Removing existing .venv directory..."
+    echo -e "\033[33mForce mode: Removing existing .venv directory...\033[0m"
     if [ "$DOCKER_MODE" == "1" ]; then
         # In Docker, the .venv might be a mounted volume - just clean its contents
         echo "  Docker mode: Cleaning .venv contents instead of removing directory..."
@@ -197,7 +197,7 @@ fi
 
 # Step 4: Install Python dependencies
 echo ""
-echo "📦 Installing Python dependencies..."
+echo -e "\033[36mInstalling Python dependencies...\033[0m"
 if [ "$DOCS_MODE" == "1" ]; then
     echo "  Including documentation dependencies (mkdocs, mike, etc.)..."
 fi
@@ -216,15 +216,30 @@ else
 fi
 
 if [ $? -eq 0 ]; then
-    echo "✅ Dependencies installed successfully"
+    echo -e "\033[32m✓\033[0m Dependencies installed successfully"
 else
-    echo "❌ Poetry install failed"
+    echo "✗ Poetry install failed"
     exit 1
 fi
 
-# Step 5: Run brainsmith setup based on skip flags
+# Step 5: Initialize config if needed
+if [ ! -f ".brainsmith/config.yaml" ]; then
+    echo ""
+    echo "No config found at .brainsmith/config.yaml, generating default"
+    poetry run brainsmith config init
+    if [ $? -eq 0 ]; then
+        echo -e "\033[32m✓\033[0m Config initialized successfully"
+    else
+        echo "✗ Config initialization failed"
+        exit 1
+    fi
+else
+    echo -e "\033[32m.brainsmith/config.yaml\033[0m"
+fi
+
+# Step 6: Run brainsmith setup based on skip flags
 echo ""
-echo "🔧 Running brainsmith setup..."
+echo -e "\033[36mRunning brainsmith setup...\033[0m"
 
 # Determine which setup commands to run
 if [ "$SKIP_BOARDS" == "1" ] && [ "$SKIP_SIM" == "1" ]; then
@@ -249,12 +264,12 @@ fi
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "🎉 Development environment setup complete!"
+    echo -e "\033[1;32mDevelopment environment setup complete!\033[0m"
 
     # Write completion marker for container readiness check (Docker mode only)
     if [ "$DOCKER_MODE" == "1" ] && [ -n "$BSMITH_CONTAINER_DIR" ]; then
         touch "$BSMITH_CONTAINER_DIR/setup_complete"
-        echo "✓ Setup completion marker written to $BSMITH_CONTAINER_DIR/setup_complete"
+        echo -e "\033[32m✓\033[0m Setup completion marker written to $BSMITH_CONTAINER_DIR/setup_complete"
     fi
 
     echo ""
@@ -265,5 +280,5 @@ if [ $? -eq 0 ]; then
     echo "  poetry run smith --help"
 else
     echo ""
-    echo "⚠️  Setup completed with warnings. Check the output above."
+    echo "⚠️ Setup completed with warnings. Check the output above."
 fi

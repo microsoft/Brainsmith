@@ -87,8 +87,7 @@ def _register_kernel(
     source: Optional[str] = None,
     name: Optional[str] = None,
     infer_transform: Optional[Type] = None,
-    domain: Optional[str] = None,
-    **kwargs  # Accept and ignore extra parameters (e.g., op_type) for backwards compat
+    **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
 ) -> Type:
     """Register kernel in global component index."""
     source = source or _current_source.get() or 'custom'
@@ -127,12 +126,9 @@ def _register_kernel(
     )
 
     # Populate type-specific metadata (inline)
-    from .constants import DEFAULT_KERNEL_DOMAIN
-
     meta = _component_index[full_name]
     # Kernel-specific metadata (infer_transform already converted above)
     meta.kernel_infer = infer_transform
-    meta.kernel_domain = domain or getattr(cls, 'domain', DEFAULT_KERNEL_DOMAIN)
 
     return cls
 

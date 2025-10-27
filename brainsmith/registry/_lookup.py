@@ -57,7 +57,7 @@ def _format_not_found_error(
 
     if similar:
         # Name exists in different source - show alternatives
-        msg += f"\n💡 Found '{requested_name}' in other sources:\n"
+        msg += f"\nHint: Found '{requested_name}' in other sources:\n"
         for s in similar:
             msg += f"   • {s}\n"
 
@@ -71,7 +71,7 @@ def _format_not_found_error(
         msg += f"\n→ Try: get_{type_str}('{similar[0]}')  # Use fully-qualified name\n"
     else:
         # Name doesn't exist anywhere - show troubleshooting
-        msg += f"\n❌ No {type_str} named '{requested_name}' found in any source.\n"
+        msg += f"\n✗ No {type_str} named '{requested_name}' found in any source.\n"
         msg += f"\nTroubleshooting:\n"
         msg += f"  1. List all: list_{type_str}s()\n"
         msg += f"  2. Check decorator: @{type_str} applied?\n"

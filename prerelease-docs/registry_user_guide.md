@@ -460,7 +460,7 @@ Short names use **source priority** to resolve ambiguity:
 get_kernel('LayerNorm')  # Searches in order:
 # 1. project:LayerNorm (if exists)
 # 2. user:LayerNorm (if exists)
-# 3. brainsmith:LayerNorm ✓ (found!)
+# 3. brainsmith:LayerNorm ✅ (found!)
 
 # Override with qualified name
 get_kernel('finn:LayerNorm')  # Explicit source
@@ -626,17 +626,17 @@ brainsmith dfc model.onnx blueprint.yaml --output-dir ./build
 │ For each step in blueprint:     │  │ For each kernel in blueprint:        │
 │                                 │  │                                      │
 │ ┌─────────────────────────────┐ │  │ ┌──────────────────────────────────┐ │
-│ │ 🔍 REGISTRY ACCESS #1       │ │  │ │ 🔍 REGISTRY ACCESS #2            │ │
+│ │ REGISTRY ACCESS #1          │ │  │ │ REGISTRY ACCESS #2               │ │
 │ │                             │ │  │ │                                  │ │
 │ │ has_step('cleanup')         │ │  │ │ list_backends_for_kernel(       │ │
-│ │   → True ✓                  │ │  │ │     'LayerNorm'                 │ │
+│ │   → True ✅                  │ │  │ │     'LayerNorm'                 │ │
 │ │                             │ │  │ │ )                                │ │
 │ │ has_step('streamline')      │ │  │ │   → ['brainsmith:LayerNorm_hls',│ │
-│ │   → True ✓                  │ │  │ │       'brainsmith:LayerNorm_rtl']│ │
+│ │   → True ✅                  │ │  │ │       'brainsmith:LayerNorm_rtl']│ │
 │ │                             │ │  │ └──────────────────────────────────┘ │
 │ │ has_step('infer_kernels')   │ │  │                                      │
-│ │   → True ✓                  │ │  │ ┌──────────────────────────────────┐ │
-│ └─────────────────────────────┘ │  │ │ 🔍 REGISTRY ACCESS #3            │ │
+│ │   → True ✅                  │ │  │ ┌──────────────────────────────────┐ │
+│ └─────────────────────────────┘ │  │ │ REGISTRY ACCESS #3               │ │
 │                                 │  │ │                                  │ │
 │ • Validates existence           │  │ │ get_backend(                     │ │
 │ • No imports triggered          │  │ │     'brainsmith:LayerNorm_hls'  │ │
@@ -716,7 +716,7 @@ brainsmith dfc model.onnx blueprint.yaml --output-dir ./build
 │   │ _resolve_steps():                                                  │  │
 │   │                                                                     │  │
 │   │ ┌─────────────────────────────────────────────────────────────────┐│  │
-│   │ │ 🔍 REGISTRY ACCESS #4 (Per Step)                               ││  │
+│   │ │ REGISTRY ACCESS #4 (Per Step)                                  ││  │
 │   │ │                                                                 ││  │
 │   │ │ get_step('cleanup')                                             ││  │
 │   │ │   → <function cleanup at 0x7f...>                               ││  │

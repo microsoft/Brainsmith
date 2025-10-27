@@ -163,8 +163,6 @@ def _index_entry_point_components(
     Side effects:
         - Populates _component_index with ComponentMetadata entries
     """
-    from .constants import DEFAULT_KERNEL_DOMAIN
-
     # Convert string to enum
     component_type_enum = ComponentType.from_string(component_type)
 
@@ -197,7 +195,6 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
-                metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -221,7 +218,6 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
-                metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')

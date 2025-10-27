@@ -40,7 +40,6 @@ from .constants import (
     PROTECTED_SOURCES,
     DEFAULT_SOURCE_PRIORITY,
     SOURCE_MODULE_PREFIXES,
-    DEFAULT_KERNEL_DOMAIN,
 )
 
 # Metadata structures and helpers
@@ -142,7 +141,6 @@ __all__ = [
     'PROTECTED_SOURCES',
     'DEFAULT_SOURCE_PRIORITY',
     'SOURCE_MODULE_PREFIXES',
-    'DEFAULT_KERNEL_DOMAIN',
 
     # Metadata
     'ComponentMetadata',

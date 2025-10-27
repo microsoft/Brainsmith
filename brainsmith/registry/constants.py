@@ -41,6 +41,3 @@ SOURCE_MODULE_PREFIXES = {
     f'{SOURCE_FINN}.': SOURCE_FINN,
     'qonnx.': 'qonnx',
 }
-
-# Default ONNX domain for custom kernels
-DEFAULT_KERNEL_DOMAIN = 'finn.custom'

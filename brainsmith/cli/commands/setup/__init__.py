@@ -103,7 +103,7 @@ def check() -> None:
         # Check if settings64.sh has been sourced
         is_sourced = "XILINX_VIVADO" in os.environ
         if not is_sourced:
-            vivado_details.append("⚠️  Not sourced")
+            vivado_details.append("⚠️ Not sourced")
         else:
             vivado_details.append("✓ Sourced")
 
@@ -127,7 +127,7 @@ def check() -> None:
         # Check if sourced
         is_sourced = "XILINX_HLS" in os.environ or "XILINX_VITIS_HLS" in os.environ
         if not is_sourced:
-            hls_details.append("⚠️  Not sourced")
+            hls_details.append("⚠️ Not sourced")
         else:
             hls_details.append("✓ Sourced")
 

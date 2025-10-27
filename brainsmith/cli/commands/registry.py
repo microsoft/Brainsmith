@@ -179,7 +179,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
                 console.print(f"    [dim]{error}[/dim]")
             console.print()
         else:
-            console.print("[bold green]✓ All components validated successfully[/bold green]\n")
+            console.print("[bold green]✅ All components validated successfully[/bold green]\n")
 
     # Show detailed listings if verbose
     if verbose:
@@ -212,7 +212,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
                     try:
                         meta = all_metadata.get(full_name)
-                        has_infer = "✓" if meta and meta.kernel_infer else "✗"
+                        has_infer = "[green]✓[/green]" if meta and meta.kernel_infer else "[red]✗[/red]"
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")

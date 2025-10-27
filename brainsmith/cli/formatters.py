@@ -214,4 +214,4 @@ class ConfigFormatter:
         if warnings:
             self.console.print("\n[bold yellow]Warnings:[/bold yellow]")
             for warning in warnings:
-                self.console.print(f"  ⚠ {warning}")
+                self.console.print(f"  ⚠️ {warning}")

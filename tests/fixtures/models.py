@@ -226,9 +226,9 @@ def brevitas_fc_model(tmp_path_factory):
     - Output: (1, 10) logits
 
     Compatible with FULL hardware conversion pipeline:
-    - finn:streamline ✅
-    - finn:convert_to_hw ✅
-    - finn:generate_estimate_reports ✅
+    - finn:streamline ✓
+    - finn:convert_to_hw ✓
+    - finn:generate_estimate_reports ✓
 
     Expected hardware layers after convert_to_hw:
     - Thresholding_rtl (input quantizer)

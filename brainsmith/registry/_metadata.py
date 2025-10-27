@@ -89,7 +89,6 @@ class ComponentMetadata:
     # Type-specific metadata fields (only populated for relevant types)
     # Kernel metadata
     kernel_infer: Optional[Any] = None  # InferTransform class or lazy import spec
-    kernel_domain: Optional[str] = None
     kernel_backends: Optional[list[str]] = None  # List of backend names targeting this kernel
 
     # Backend metadata
