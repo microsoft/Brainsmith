@@ -148,10 +148,10 @@ nav:
     - Configuration: getting-started/configuration.md
   - Architecture:
     - Overview: architecture/overview.md
-    - Plugin System: architecture/plugin-system.md
+    - Component Registry: architecture/component-registry.md
   - API Reference:
     - Core: api-reference/core.md
-    - Plugins: api-reference/plugins.md
+    - Registry: api-reference/registry.md
   - Contributing: contributing.md
 
 extra:
@@ -196,7 +196,7 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 
 ## Key Features
 
-- **Plugin System** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Component Registry** - Extensible architecture for registering custom kernels, transforms, and build steps
 - **Blueprint Interface** - YAML-based declarative configuration with inheritance support
 - **Segment-based Execution** - Efficient DSE through intelligent computation reuse
 - **BERT Demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL)
@@ -460,7 +460,7 @@ smith model.onnx blueprint.yaml --output-dir ./results
 ```markdown
 # Architecture Overview
 
-Brainsmith's architecture is built around three core concepts: **Blueprints**, **Plugins**, and **Segment-based DSE**.
+Brainsmith's architecture is built around three core concepts: **Blueprints**, **Component Registry**, and **Segment-based DSE**.
 
 ## High-Level Architecture
 
@@ -470,7 +470,7 @@ graph TB
     B --> C[DSE Tree Builder]
     C --> D[Exploration Tree]
     D --> E[Segment Runner]
-    E --> F{Plugin Registry}
+    E --> F{Component Registry}
     F --> G[Transforms]
     F --> H[Kernels]
     F --> I[Steps]
@@ -504,12 +504,12 @@ design_space:
 
 **Location:** `brainsmith/core/design/`
 
-### 2. Plugin Registry
+### 2. Component Registry
 
 A singleton registry manages all extensible components:
 
 ```python
-from brainsmith.core.plugins import transform, kernel, step
+from brainsmith.registry import transform, kernel, step
 
 @transform(name="MyTransform")
 class MyTransform:
@@ -523,14 +523,14 @@ class MyKernel:
     pass
 ```
 
-**Plugin Types:**
+**Component Types:**
 
 - **Transforms** - Graph transformations
 - **Kernels** - Hardware operator implementations
 - **Backends** - RTL/HLS implementations per kernel
 - **Steps** - Build pipeline operations
 
-**Location:** `brainsmith/core/plugins/registry.py`
+**Location:** `brainsmith/registry/registry.py`
 
 ### 3. Segment-Based DSE
 
@@ -563,13 +563,13 @@ sequenceDiagram
     participant U as User
     participant B as Blueprint Parser
     participant D as DSE Engine
-    participant P as Plugin Registry
+    participant P as Component Registry
     participant F as FINN
 
     U->>B: Load blueprint
     B->>D: Build exploration tree
     D->>P: Get transforms/kernels
-    P->>D: Return plugin instances
+    P->>D: Return component instances
     D->>F: Execute transforms
     F->>D: Return transformed model
     D->>U: Generate RTL + reports
@@ -605,8 +605,8 @@ graph LR
 
 1. CLI arguments / environment vars (highest)
 2. Explicit `--config` file
-3. `~/.brainsmith/config.yaml` (user)
-4. `.brainsmith/config.yaml` (project)
+3. Project config (`./brainsmith_config.yaml` or `./.brainsmith/config.yaml`)
+4. User config (`~/.brainsmith/config.yaml`)
 5. Built-in defaults (lowest)
 
 **Location:** `brainsmith/config/`
@@ -650,9 +650,9 @@ get_transform("finn:Streamline")  # FINN transform
 get_transform("qonnx:InferShapes")  # QONNX transform
 ```
 
-### Lazy Plugin Loading
+### Lazy Component Loading
 
-Plugins are discovered on first access:
+Components are discovered on first access:
 
 ```python
 # First call triggers discovery
@@ -661,7 +661,7 @@ transform_cls = get_transform("MyTransform")
 
 ## Next Steps
 
-- [Plugin System](plugin-system.md) - Deep dive into plugins
+- [Component Registry](component-registry.md) - Deep dive into the registry
 - [Segment Execution](segment-execution.md) - DSE tree mechanics (coming soon)
 - [Dataflow Pipeline](dataflow-pipeline.md) - Compilation stages (coming soon)
 ```
@@ -721,16 +721,16 @@ transform_cls = get_transform("MyTransform")
       heading_level: 3
 ```
 
-### 3.7 Create api-reference/plugins.md
+### 3.7 Create api-reference/registry.md
 
 ```markdown
-# Plugin System API Reference
+# Component Registry API Reference
 
-The plugin system is the core of Brainsmith's extensibility.
+The component registry is the core of Brainsmith's extensibility.
 
 ## Registry
 
-::: brainsmith.core.plugins.registry.Registry
+::: brainsmith.registry.Registry
     options:
       show_root_heading: true
       heading_level: 3
@@ -743,66 +743,66 @@ The plugin system is the core of Brainsmith's extensibility.
 
 ## Registration Functions
 
-::: brainsmith.core.plugins.registry.plugin
+::: brainsmith.registry
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.transform
+::: brainsmith.registry.transform
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.kernel
+::: brainsmith.registry.kernel
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.backend
+::: brainsmith.registry.backend
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.step
+::: brainsmith.registry.step
     options:
       show_root_heading: true
       heading_level: 3
 
 ## Access Functions
 
-::: brainsmith.core.plugins.registry.get_transform
+::: brainsmith.registry.get_transform
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_kernel
+::: brainsmith.registry.get_kernel
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_backend
+::: brainsmith.registry.get_backend
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.get_step
+::: brainsmith.registry.get_step
     options:
       show_root_heading: true
       heading_level: 3
 
 ## Query Functions
 
-::: brainsmith.core.plugins.registry.list_transforms
+::: brainsmith.registry.list_transforms
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.list_kernels
+::: brainsmith.registry.list_kernels
     options:
       show_root_heading: true
       heading_level: 3
 
-::: brainsmith.core.plugins.registry.has_transform
+::: brainsmith.registry.has_transform
     options:
       show_root_heading: true
       heading_level: 3
@@ -841,7 +841,7 @@ We welcome contributions! This guide will help you get started.
 pytest tests/
 
 # Specific test file
-pytest tests/integration/test_plugin_system.py
+pytest tests/integration/test_registry.py
 
 # With coverage
 pytest tests/ --cov=brainsmith.core

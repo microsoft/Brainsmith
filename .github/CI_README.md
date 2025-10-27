@@ -4,7 +4,7 @@
 
 ```
 .github/
-├── actions/          # 8 modular composite actions
+├── actions/          # 7 modular composite actions
 │   ├── build-docker/        # Docker build with verification
 │   ├── check-disk/          # Disk space validation
 │   ├── collect-artifacts/   # Safe artifact collection
@@ -12,9 +12,10 @@
 │   ├── run-test-with-artifacts/  # Complete test lifecycle
 │   ├── docker-exec/         # Command execution with container lifecycle
 │   └── workflow-setup/      # Standard initialization
-└── workflows/        # 2 focused workflows
-    ├── pr-validation.yml     # BERT Quicktest
-    └── biweekly-tests.yml    # BERT Large Model Test
+└── workflows/        # 3 focused workflows
+    ├── pr-validation.yml     # Pytest + BERT Quicktest (fail-fast)
+    ├── biweekly-tests.yml    # BERT Large Model Test
+    └── docs.yml              # Documentation deployment
 ```
 
 ## Workflows
@@ -23,10 +24,19 @@
 Fast validation for pull requests and develop branch pushes.
 
 **Triggers**: Push to `develop`, Pull Requests
-**Runtime**: ~5 hours (4 hours test + 1 hour setup/cleanup)
-**Job**: `bert-quicktest` (BERT Quicktest)
+**Runtime**: ~5 hours total (3 min pytest + 4 hours BERT + 1 hour setup/cleanup)
+**Jobs**:
+1. `pytest-validation` (Pytest Test Suite) - Fast fail-fast validation
+2. `bert-quicktest` (BERT Quicktest) - Only runs if pytest passes
 
-**Steps**:
+**Job 1: Pytest Test Suite** (~3 minutes)
+1. Checkout repository
+2. Setup workflow (disk check, cleanup, build)
+3. Run full pytest suite with coverage (unit + fast integration + FINN integration)
+4. Upload coverage report and test results
+5. Collect failure artifacts if tests fail
+
+**Job 2: BERT Quicktest** (runs only if Job 1 passes)
 1. Checkout repository
 2. Setup workflow (disk check, cleanup, build)
 3. Run E2E test with artifact collection using `./examples/bert/quicktest.sh`

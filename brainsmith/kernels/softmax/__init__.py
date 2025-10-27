@@ -5,15 +5,13 @@
 # SPDX-License-Identifier: MIT
 #
 # Softmax kernel package
+#
+# Components eagerly imported to ensure @kernel, @backend decorators fire.
+# Lazy loading is at the top level (brainsmith.kernels), not within packages.
 ############################################################################
 
-# Import the main HWSoftmax operator
-from .hwsoftmax import HWSoftmax
+from .hwsoftmax import Softmax
+from .hwsoftmax_hls import Softmax_hls
+from .infer_hwsoftmax import InferSoftmax
 
-# Import HLS backend if needed
-from .hwsoftmax_hls import HWSoftmax_hls
-
-# Import inference transform
-from .infer_hwsoftmax import InferHWSoftmax
-
-__all__ = ["HWSoftmax", "HWSoftmax_hls", "InferHWSoftmax"]
+__all__ = ["Softmax", "Softmax_hls", "InferSoftmax"]

@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Iterator, Tuple, Any
 from collections.abc import MutableMapping
 
-from brainsmith.core.dataflow.types import Direction, InterfaceType
-from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
+from brainsmith.dataflow.types import Direction, InterfaceType
+from brainsmith.dataflow.constraint_types import DatatypeConstraintGroup
 
 from .rtl_parser.types import Port, Parameter
 

@@ -2,7 +2,8 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-brainsmith_settings.yaml
+.brainsmith
+plugins/
 examples/*/output/
 examples/*/results/
 examples/*/checkpoints/
@@ -428,8 +429,7 @@ temp/
 staging/
 
 # Output directories
-output/
-outputs/
+builds/
 results/
 !tests/expected_results/
 

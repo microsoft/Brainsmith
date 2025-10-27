@@ -44,7 +44,7 @@ if [ "$BSMITH_SKIP_SETUP" != "1" ]; then
     if ./setup-venv.sh $SETUP_FLAGS; then
         log "✓ Setup completed successfully"
     else
-        log "⚠️  Setup completed with warnings"
+        log "⚠️ Setup completed with warnings"
     fi
 else
     log "Skipping setup (BSMITH_SKIP_SETUP=1)"

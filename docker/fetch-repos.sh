@@ -70,16 +70,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "$INFO_ONLY" = true ]; then
-    echo -e "${BLUE}📊 Analyzing Git dependencies for Brainsmith${NC}"
+    echo -e "${BLUE}Analyzing Git dependencies for Brainsmith${NC}"
 else
-    echo -e "${BLUE}📥 Managing Git dependencies for Brainsmith${NC}"
+    echo -e "${BLUE}Managing Git dependencies for Brainsmith${NC}"
 fi
 
 # Define our Git dependencies - URLs and revisions
 declare -A GIT_DEPS=(
     ["brevitas"]="https://github.com/Xilinx/brevitas.git@95edaa0bdc8e639e39b1164466278c59df4877be"
-    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@9153395712b5617d38b058900c873c6fc522b343"
-    ["finn"]="https://github.com/Xilinx/finn.git@ffcdb202c1b9fd3535c5bd7eb31f2b216db1246c"
+    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@f2c4ccd3e71795c9f116ee5a0c87a7dfd590c6d0"
+    ["finn"]="https://github.com/tafk7/finn.git@custom/transformer"
     ["onnxscript"]="https://github.com/jsmonson/onnxscript.git@62c7110aba46554432ce8e82ba2d8a086bd6227c"
     ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
     ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
@@ -152,7 +152,7 @@ analyze_repo() {
     local rev="${url_rev#*@}"
 
     if [ ! -d "$name" ]; then
-        echo -e "  ${RED}❌ Missing${NC} $name"
+        echo -e "  ${RED}✗ Missing${NC} $name"
         echo -e "    Expected: $rev"
         echo -e "    Status: Not cloned"
         return 0
@@ -166,21 +166,21 @@ analyze_repo() {
     # Check if at correct revision (compare actual commit hashes)
     if [ "$current_commit" = "$expected_commit" ]; then
         if has_changes "$name"; then
-            echo -e "  ${YELLOW}⚠️  Modified${NC} $name"
-            echo -e "    Current: ${current_commit:0:8} ✓ (matches $rev)"
+            echo -e "  ${YELLOW}⚠️ Modified${NC} $name"
+            echo -e "    Current: ${current_commit:0:8} ${GREEN}✓${NC} (matches $rev)"
             changes_status=" (has local changes)"
         else
-            echo -e "  ${GREEN}✅ Ready${NC} $name"
-            echo -e "    Current: ${current_commit:0:8} ✓ (matches $rev)"
+            echo -e "  ${GREEN}✓ Ready${NC} $name"
+            echo -e "    Current: ${current_commit:0:8} ${GREEN}✓${NC} (matches $rev)"
             changes_status=" (clean)"
         fi
     else
         if has_changes "$name"; then
-            echo -e "  ${RED}🔄 Outdated + Modified${NC} $name"
+            echo -e "  ${RED}Outdated + Modified${NC} $name"
             echo -e "    Current: ${current_commit:0:8} (expected: $rev → ${expected_commit:0:8})"
             changes_status=" (has local changes)"
         else
-            echo -e "  ${CYAN}🔄 Outdated${NC} $name"
+            echo -e "  ${CYAN}Outdated${NC} $name"
             echo -e "    Current: ${current_commit:0:8} (expected: $rev → ${expected_commit:0:8})"
             changes_status=" (can update)"
         fi
@@ -196,7 +196,7 @@ analyze_repo() {
 
     # Check for origin mismatch
     if [ "$origin_url" != "$url" ]; then
-        echo -e "    ${YELLOW}⚠️  Origin mismatch${NC}: expected ${url##*/}"
+        echo -e "    ${YELLOW}⚠️ Origin mismatch${NC}: expected ${url##*/}"
     fi
     cd ..
 }
@@ -274,7 +274,7 @@ update_repo() {
                 cd "$name"
                 git fetch --all --quiet
                 git -c advice.detachedHead=false checkout "$rev" --quiet
-                echo -e "    ✓ Updated to $rev"
+                echo -e "    ${GREEN}✓${NC} Updated to $rev"
                 cd ..
                 return 0
             fi
@@ -288,7 +288,7 @@ update_repo() {
     cd "$name"
     git -c advice.detachedHead=false checkout "$rev" --quiet
     local final_commit=$(git rev-parse HEAD 2>/dev/null | cut -c1-8 || echo "unknown")
-    echo -e "    ✓ Cloned and checked out $rev (${final_commit})"
+    echo -e "    ${GREEN}✓${NC} Cloned and checked out $rev (${final_commit})"
     cd ..
 }
 
@@ -349,14 +349,14 @@ cd ..
 echo ""
 
 if [ "$INFO_ONLY" = true ]; then
-    echo -e "${BLUE}📊 Analysis complete!${NC}"
+    echo -e "${BLUE}Analysis complete!${NC}"
     echo ""
     echo "To update dependencies:"
     echo "  ./fetch-repos.sh             # Update all"
     echo "  ./fetch-repos.sh <names>     # Update specific ones"
     echo "  ./fetch-repos.sh --force     # Overwrite local changes"
 else
-    echo -e "${GREEN}✅ Git dependencies ready!${NC}"
+    echo -e "${GREEN}✓ Git dependencies ready!${NC}"
     echo ""
     echo "Next steps:"
     echo "  1. Run: poetry install"
