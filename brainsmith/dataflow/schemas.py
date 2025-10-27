@@ -24,21 +24,80 @@ Key classes:
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Union, Dict, Any, Callable, TYPE_CHECKING
+from typing import List, Optional, Sequence, Union, Dict, Any, Callable, Set, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
-from .dimension_sources import DimensionSource
-from .datatype_sources import DatatypeSource
-from .types import FULL_DIM
+from .types import FULL_DIM, FULL_SHAPE
 
 if TYPE_CHECKING:
     from .constraints import Constraint
+    from .builder import BuildContext
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for better clarity
-TilingSpec = Sequence[Union[int, str, type(FULL_DIM), DimensionSource]]
+TilingSpec = Union[
+    Sequence[Union[int, str, type(FULL_DIM), Callable]],  # List of DimSpecs
+    type(FULL_SHAPE),                                      # Bare sentinel (rank-agnostic)
+]
+
+
+# ============================================================================
+# DSE Dimension Type
+# ============================================================================
+
+@dataclass(frozen=True)
+class DSEDimension:
+    """Explorable dimension in design space.
+
+    Represents resource allocation or implementation choices that can be
+    explored during DSE (ram_style, res_type, mem_mode, etc.).
+
+    Does NOT include tiling dimensions (PE, SIMD) - those are auto-extracted
+    from stream_tiling templates with valid values computed from factoring.
+
+    Attributes:
+        name: Dimension name (e.g., "ram_style", "res_type")
+        values: Valid values for this dimension
+            - Set: Explicit values like {1, 2, 4, 8} or {"distributed", "block"}
+            - Callable: Computed from BuildContext (for context-dependent values)
+        default: Default value (None = auto-select smallest/first from values)
+
+    Examples:
+        >>> # Explicit integer values
+        >>> DSEDimension("mem_depth", {128, 256, 512, 1024}, default=256)
+
+        >>> # Explicit string values
+        >>> DSEDimension("ram_style", {"distributed", "block"}, default="distributed")
+
+        >>> # Auto-default (will use min for numeric, alphabetical first for string)
+        >>> DSEDimension("res_type", {"lut", "dsp"})
+    """
+    name: str
+    values: Union[
+        Set[Union[int, str]],
+        Callable[['BuildContext'], Set[Union[int, str]]]
+    ]
+    default: Optional[Union[int, str]] = None
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _extract_tiling_params(block_tiling: Optional[TilingSpec], stream_tiling: Optional[TilingSpec]) -> List[str]:
+    """Extract unique string parameters from tiling specs."""
+    params = set()
+    for spec in (block_tiling, stream_tiling):
+        if spec is None:
+            continue
+        # Skip FULL_SHAPE sentinel (has no parameters - expands to FULL_DIM)
+        if spec is FULL_SHAPE:
+            continue
+        # Extract string parameters from list-based specs
+        params.update(dim for dim in spec if isinstance(dim, str))
+    return list(params)
 
 
 # ============================================================================
@@ -51,17 +110,18 @@ class InputSchema:
     """Self-contained input specification with embedded requirements.
 
     Complete schema for an input interface including both structure (tiling)
-    and transformation requirements (layout, constraints).
+    and transformation requirements (layout).
 
     Attributes:
         name: Interface name (e.g., "input", "input0")
         block_tiling: Block tiling specification (e.g., [FULL_DIM, FULL_DIM])
         stream_tiling: Stream tiling specification (e.g., ["SIMD"], [1, 1, 1, "PE"])
-        required_layout: Required data layout for transformation (e.g., "NHWC", "NCHW")
-                        This is part of what the interface IS, not how we create it.
+        datatype: Datatype spec (None to use from ONNX, or DatatypeSpec union type to derive/optimize)
+        required_layout: DECLARATIVE layout requirement (e.g., "NHWC", "NCHW")
+                        Documents what layout the kernel expects. Actual enforcement
+                        is handled by the normalize_dataflow_layouts preprocessing
+                        step which must run before kernel inference.
                         None means no layout requirement.
-        constraints: Interface-level validation constraints (e.g., IsDynamic(), DatatypeInteger())
-                    These are scoped to this specific interface.
     """
 
     # Identity
@@ -70,16 +130,13 @@ class InputSchema:
     # Structure
     block_tiling: Optional[TilingSpec] = None
     stream_tiling: Optional[TilingSpec] = None
+    datatype: Optional[Any] = None  # DatatypeSpec union type
 
     # Transformation requirements (NEW - embedded in interface)
     required_layout: Optional[str] = None
 
-    # Interface-level constraints (NEW - scoped to this interface)
-    constraints: List['Constraint'] = field(default_factory=list)
-
     def __post_init__(self):
         """Validate interface requirements."""
-        # Validate layout if specified
         if self.required_layout and self.required_layout not in {"NCHW", "NHWC"}:
             raise ValueError(
                 f"Invalid required_layout '{self.required_layout}' for input '{self.name}'. "
@@ -89,11 +146,7 @@ class InputSchema:
     @property
     def tiling_attrs(self) -> List[str]:
         """Extract unique template parameter names from tiling specs."""
-        params = set()
-        for spec in (self.block_tiling, self.stream_tiling):
-            if spec:
-                params.update(dim for dim in spec if isinstance(dim, str))
-        return list(params)
+        return _extract_tiling_params(self.block_tiling, self.stream_tiling)
 
 
 @dataclass(frozen=True)
@@ -107,8 +160,11 @@ class OutputSchema:
         name: Interface name (e.g., "output", "output0")
         block_tiling: Block tiling specification
         stream_tiling: Stream tiling specification
-        datatype: Datatype source (None to use from ONNX, or DatatypeSource to derive)
-        required_layout: Required output layout (e.g., "NHWC")
+        datatype: Datatype spec (None to use from ONNX, or DatatypeSpec union type to derive)
+        required_layout: DECLARATIVE output layout requirement (e.g., "NHWC")
+                        Documents what layout the kernel produces. Most kernels
+                        preserve input layout (NHWC in, NHWC out). Actual enforcement
+                        is handled by the normalize_dataflow_layouts preprocessing step.
         preserves_input_layout: Whether this output preserves the layout of the first input
                                (default True, common for element-wise operations)
     """
@@ -119,7 +175,7 @@ class OutputSchema:
     # Structure
     block_tiling: Optional[TilingSpec] = None
     stream_tiling: Optional[TilingSpec] = None
-    datatype: Optional[DatatypeSource] = None
+    datatype: Optional[Any] = None  # DatatypeSpec union type
 
     # Transformation requirements (NEW)
     required_layout: Optional[str] = None
@@ -136,30 +192,23 @@ class OutputSchema:
     @property
     def tiling_attrs(self) -> List[str]:
         """Extract unique template parameter names from tiling specs."""
-        params = set()
-        for spec in (self.block_tiling, self.stream_tiling):
-            if spec:
-                params.update(dim for dim in spec if isinstance(dim, str))
-        return list(params)
+        return _extract_tiling_params(self.block_tiling, self.stream_tiling)
 
 
 @dataclass
 class KernelSchema:
-    """Complete kernel specification - structure, validation, and transformation.
+    """Complete kernel specification - structure and validation.
 
     Unified schema that combines interface definitions, validation constraints,
-    and transformation requirements in one place.
+    and parallelization parameters in one place.
 
     Defines kernel STRUCTURE:
     - Input/output interfaces with tiling templates and layout requirements
     - Unified validation constraints (datatype, shape, cross-interface)
     - Internal datatype derivation patterns
     - Kernel-specific parameters (algorithm, hardware, features)
-
-    Defines kernel TRANSFORMATION:
-    - source_ops: Which ONNX ops can be transformed to this kernel
-    - attribute_mapping: Map ONNX attributes to kernel parameters
-    - initial_parallelization: Initial DSE entry point
+    - Transformation metadata (attribute_mapping)
+    - DSE dimensions (explorable parameters: tiling + resource)
 
     Does NOT define STORAGE:
     - Shapes are extracted from ModelWrapper or computed from templates
@@ -179,44 +228,39 @@ class KernelSchema:
 
     # ============= IDENTITY =============
     name: str
-    domain: str = "brainsmith.kernels"
 
     # ============= STRUCTURE =============
     inputs: List[InputSchema] = field(default_factory=list)
     outputs: List[OutputSchema] = field(default_factory=list)
-    internal_datatypes: Dict[str, DatatypeSource] = field(default_factory=dict)
+    internal_datatypes: Dict[str, Any] = field(default_factory=dict)  # DatatypeSpec union type
     kernel_params: Dict[str, tuple] = field(default_factory=dict)
+
+    # ============= DSE DIMENSIONS =============
+    dse_dimensions: Dict[str, DSEDimension] = field(default_factory=dict)
+    """Explorable resource/implementation dimensions (ram_style, res_type, etc.).
+
+    Tiling dimensions (PE, SIMD) NOT declared here - auto-extracted from
+    stream_tiling templates with defaults computed from factoring.
+
+    Example: {"ram_style": DSEDimension("ram_style", {"distributed", "block"}, "distributed")}
+    """
 
     # ============= VALIDATION =============
     constraints: List['Constraint'] = field(default_factory=list)
 
     # ============= TRANSFORMATION =============
-    source_ops: List[str] = field(default_factory=list)
-    """ONNX op types that can be transformed to this kernel.
-
-    Empty list means no ONNX transformation support.
-    Example: ["FuncLayerNorm", "LayerNormalization"]
-    """
-
     attribute_mapping: Dict[str, str] = field(default_factory=dict)
     """Map ONNX attributes to kernel parameters.
 
     Example: {"epsilon": "epsilon", "axis": "normalized_axis"}
     """
 
-    initial_parallelization: Dict[str, int] = field(default_factory=lambda: {"SIMD": 1})
-    """Initial parallelization parameters for DSE entry point.
-
-    Example: {"SIMD": 1, "PE": 1}
-    """
-
     def __post_init__(self):
         """Validate schema structure and transformation consistency."""
         self.validate()
 
-        # Validate transformation fields if present
-        if self.source_ops:
-            self._validate_transformation_fields()
+        # Validate transformation fields
+        self._validate_transformation_fields()
 
     def validate(self) -> None:
         """Validate the schema structure."""
@@ -259,67 +303,23 @@ class KernelSchema:
                     f"Available params: {list(self.kernel_params.keys())}"
                 )
 
-        # Validate initial_parallelization values
-        for param, value in self.initial_parallelization.items():
-            if not isinstance(value, int) or value < 1:
+        # Validate dse_dimensions have unique names
+        for dim_name in self.dse_dimensions.keys():
+            if dim_name in self.kernel_params:
                 raise ValueError(
-                    f"initial_parallelization['{param}'] must be positive integer, got {value}"
+                    f"DSE dimension '{dim_name}' conflicts with kernel_param. "
+                    f"DSE dimensions must have unique names."
                 )
 
-    def can_transform(self, node, model) -> bool:
-        """Check if this schema can transform the given ONNX node.
+    def build_nodeattr_registry(self) -> Dict[str, tuple]:
+        """Build nodeattr registry from schema definition.
 
-        Pure validation - no side effects.
-
-        Args:
-            node: ONNX NodeProto to validate
-            model: ModelWrapper for graph context
-
-        Returns:
-            True if transformation possible, False otherwise
-        """
-        # Import here to avoid circular dependency
-        from onnx import NodeProto
-        from qonnx.core.modelwrapper import ModelWrapper
-
-        # Check op type
-        if not self.source_ops or node.op_type not in self.source_ops:
-            return False
-
-        # Check interface counts match
-        if len(node.input) != len(self.inputs):
-            logger.debug(
-                f"{self.name}: Input count mismatch. "
-                f"Schema expects {len(self.inputs)}, node has {len(node.input)}"
-            )
-            return False
-
-        if len(node.output) != len(self.outputs):
-            logger.debug(
-                f"{self.name}: Output count mismatch. "
-                f"Schema expects {len(self.outputs)}, node has {len(node.output)}"
-            )
-            return False
-
-        # Check global constraints
-        from .validation import OnnxValidationContext
-        ctx = OnnxValidationContext(node=node, model=model, schema=self)
-        for constraint in self.constraints:
-            error = constraint.check(ctx)
-            if error:
-                logger.debug(f"{self.name}: {error}")
-                return False
-
-        return True
-
-    def get_nodeattr_types(self) -> Dict[str, tuple]:
-        """Generate nodeattr registry from schema.
-
-        Schemas define STRUCTURE, not STORAGE. Returns only attributes
-        that need persistence:
+        Schemas define STRUCTURE, not STORAGE. Generates persistence layer
+        from structural schema, returning only attributes that need persistence:
         - Datatypes (for interfaces and internals)
-        - User parameters (SIMD, PE, etc.)
-        - Kernel-specific parameters (epsilon, algorithm, etc.)
+        - Tiling parameters (SIMD, PE, etc.) - auto-extracted from stream_tiling
+        - DSE dimensions (ram_style, res_type, etc.) - from dse_dimensions
+        - Kernel-specific parameters (epsilon, algorithm, etc.) - from kernel_params
 
         Shapes are NEVER stored in nodeattrs. They are either:
         - Tensor shapes: extracted from ModelWrapper (ONNX graph)
@@ -331,36 +331,38 @@ class KernelSchema:
         """
         attrs = {}
 
-        # ================================================================
-        # 1. Interface Datatypes (datatypes only, NO shapes)
-        # ================================================================
-
+        # Datatypes
         for i in range(len(self.inputs)):
             attrs[f"input{i}Datatype"] = ("s", False, "")
 
         for i in range(len(self.outputs)):
             attrs[f"output{i}Datatype"] = ("s", False, "")
 
-        # ================================================================
-        # 2. Internal Datatypes
-        # ================================================================
-
         for internal_name in self.internal_datatypes.keys():
-            attr_name = f"{internal_name}Datatype"
-            attrs[attr_name] = ("s", False, "")
+            attrs[f"{internal_name}Datatype"] = ("s", False, "")
 
-        # ================================================================
-        # 3. User Parameters (template params from tiling specs)
-        # ================================================================
-
+        # Tiling parameters (PE, SIMD, etc.) - auto-extracted
         template_params = self._extract_template_params()
         for param in template_params:
-            attrs[param] = ("i", True, 1)
+            attrs[param] = ("i", False, 1)  # Default 1, will be computed from factoring
 
-        # ================================================================
-        # 4. Kernel-Specific Parameters (algorithm, hardware, features)
-        # ================================================================
+        # DSE dimensions (resource parameters)
+        for dim_name, dim_spec in self.dse_dimensions.items():
+            # Determine type from values
+            if callable(dim_spec.values):
+                # Callable - assume int for now (can't inspect without context)
+                attrs[dim_name] = ("i", False, dim_spec.default if dim_spec.default is not None else 1)
+            else:
+                # Set - check first value type
+                first_val = next(iter(dim_spec.values))
+                if isinstance(first_val, int):
+                    default = dim_spec.default if dim_spec.default is not None else min(dim_spec.values)
+                    attrs[dim_name] = ("i", False, default)
+                else:
+                    default = dim_spec.default if dim_spec.default is not None else sorted(dim_spec.values)[0]
+                    attrs[dim_name] = ("s", False, default)
 
+        # Kernel-specific parameters (structural)
         attrs.update(self.kernel_params)
 
         return attrs
@@ -406,35 +408,35 @@ class KernelSchema:
 
         # Parameters in block_tiling are structural (rare)
         for inp in self.inputs:
-            if inp.block_tiling:
+            if inp.block_tiling and inp.block_tiling is not FULL_SHAPE:
                 for elem in inp.block_tiling:
                     if isinstance(elem, str):
                         structural.add(elem)
         for out in self.outputs:
-            if out.block_tiling:
+            if out.block_tiling and out.block_tiling is not FULL_SHAPE:
                 for elem in out.block_tiling:
                     if isinstance(elem, str):
                         structural.add(elem)
 
         return structural
 
-    def get_parametric_nodeattrs(self) -> set:
-        """Get nodeattrs that affect configuration (reconfigure if changed).
+    def get_optimization_nodeattrs(self) -> set:
+        """Get nodeattrs that affect optimization (re-explore if changed).
 
-        Parametric nodeattrs are those whose changes only require
-        reconfiguration (selecting a different stream shape), not
-        rebuilding the entire design space.
+        Optimization nodeattrs are those whose changes only require
+        re-exploring the design space (trying different stream shapes),
+        not rebuilding the entire design space.
 
         These include:
         - Parallelization parameters (SIMD, PE, MW, MH, etc.): Appear in
-          stream_tiling templates and determine stream shapes
+          stream_tiling templates and determine stream shapes during DSE
 
         Returns:
-            Set of parametric nodeattr names
+            Set of optimization nodeattr names
 
         Example:
-            >>> schema.get_parametric_nodeattrs()
+            >>> schema.get_optimization_nodeattrs()
             {'SIMD', 'PE'}
         """
-        # Parameters in stream_tiling are parametric
+        # Parameters in stream_tiling affect optimization
         return self._extract_template_params()

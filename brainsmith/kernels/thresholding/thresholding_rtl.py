@@ -91,8 +91,8 @@ class Thresholding_rtl(Thresholding, RTLBackend):
         odt = self.get_output_datatype()
         odt_bits = odt.bitwidth()
 
-        # Extract NumChannels from kernel_instance (Arete principle)
-        ki = self.kernel_instance
+        # Extract NumChannels from design_point (Arete principle)
+        ki = self.design_point
         t_channels = ki.inputs["input"].tensor_shape[-1]
 
         cf = t_channels / pe
@@ -189,8 +189,8 @@ class Thresholding_rtl(Thresholding, RTLBackend):
         o_bitwidth = DataType[output_data_type].bitwidth()
         pe = self.get_nodeattr("PE")
 
-        # Extract NumChannels from kernel_instance (Arete principle)
-        ki = self.kernel_instance
+        # Extract NumChannels from design_point (Arete principle)
+        ki = self.design_point
         num_channels = ki.inputs["input"].tensor_shape[-1]
 
         # RTL expects 2^N-1 thresholds, but narrow range quantization results in
@@ -490,8 +490,8 @@ class Thresholding_rtl(Thresholding, RTLBackend):
         thresholds = weights
         pe = self.get_nodeattr("PE")
 
-        # Extract NumChannels from kernel_instance (Arete principle)
-        ki = self.kernel_instance
+        # Extract NumChannels from design_point (Arete principle)
+        ki = self.design_point
         num_channels = ki.inputs["input"].tensor_shape[-1]
 
         output_data_type = self.get_nodeattr("output_dtype")

@@ -33,7 +33,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
 
     Key features:
     - Uses uppercase "SIMD" (KernelOp convention)
-    - Extracts shapes from kernel_instance (not nodeattrs)
+    - Extracts shapes from design_point (not nodeattrs)
     - Follows Arete principle: no shape storage
     """
 
@@ -72,7 +72,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
     def defines(self, var):
         """Generate HLS constant definitions.
 
-        Extracts values from kernel_instance instead of nodeattrs (Arete principle).
+        Extracts values from design_point instead of nodeattrs (Arete principle).
         Uses uppercase "SIMD" for KernelOp convention.
         """
         # Get parallelization parameter (uppercase for KernelOp)
@@ -90,10 +90,10 @@ class Shuffle_hls(Shuffle, HLSBackend):
     def get_exp_cycles(self):
         """Compute expected cycles for execution.
 
-        Extracts output shape from kernel_instance (Arete principle).
+        Extracts output shape from design_point (Arete principle).
         """
         # Extract from cached kernel instance
-        ki = self.kernel_instance
+        ki = self.design_point
         out_shape = ki.outputs["output"].tensor_shape
         simd = self.get_nodeattr("SIMD")
 
@@ -107,7 +107,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
         simd = self.get_nodeattr("SIMD")
 
         # Extract from kernel instance (Arete principle)
-        ki = self.kernel_instance
+        ki = self.design_point
         out_shape = list(ki.outputs["output"].tensor_shape)
 
         # Adjust output shape for SIMD (last dimension divided)
@@ -261,7 +261,7 @@ class Shuffle_hls(Shuffle, HLSBackend):
         simd = self.get_nodeattr("SIMD")
 
         # Extract from kernel instance (Arete principle)
-        ki = self.kernel_instance
+        ki = self.design_point
         out_shape = list(ki.outputs["output"].tensor_shape)
 
         # Adjust for SIMD

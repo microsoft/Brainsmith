@@ -31,9 +31,9 @@ class {{ kernel_metadata.class_name }}(KernelOp):
         Define all node attributes for {{ kernel_metadata.name }}.
         """
         attrs = super().get_nodeattr_types()
-        
+
         kernel_attrs = {
-        {% for name, (type_char, required, default) in kernel_metadata.get_nodeattr_types().items() %}
+        {% for name, (type_char, required, default) in kernel_metadata.build_nodeattr_registry().items() %}
             "{{ name }}": ('{{ type_char }}', {{ required }}, {% if default is string %}"{{ default }}"{% elif default is none %}None{% else %}{{ default }}{% endif %}),
         {% endfor %}
             # Backend selection attribute

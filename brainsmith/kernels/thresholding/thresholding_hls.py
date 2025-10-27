@@ -40,7 +40,7 @@ class Thresholding_hls(Thresholding, HLSBackend):
     to work with FINN's HLS code generation system.
 
     Key features:
-    - Extracts shapes from kernel_instance (not nodeattrs)
+    - Extracts shapes from design_point (not nodeattrs)
     - Supports two memory modes:
       * internal_embedded: Thresholds in thresh.h header
       * internal_decoupled: Streaming thresholds via separate interface
@@ -403,8 +403,8 @@ class Thresholding_hls(Thresholding, HLSBackend):
         num_input_vectors = list(self.get_nodeattr("num_input_vectors"))
         total_spatial_size = int(np.prod(num_input_vectors))
 
-        # Extract NumChannels from kernel_instance (Arete principle)
-        ki = self.kernel_instance
+        # Extract NumChannels from design_point (Arete principle)
+        ki = self.design_point
         num_channels = ki.inputs["input"].tensor_shape[-1]
 
         self.code_gen_dict["$DEFINES$"] = [
@@ -552,8 +552,8 @@ class Thresholding_hls(Thresholding, HLSBackend):
             ram_style = self.get_nodeattr("ram_style")
             pe = self.get_nodeattr("PE")
 
-            # Extract NumChannels from kernel_instance (Arete principle)
-            ki = self.kernel_instance
+            # Extract NumChannels from design_point (Arete principle)
+            ki = self.design_point
             ich = ki.inputs["input"].tensor_shape[-1]
 
             # If PE < NumChannels, assign cores according to ram_style
@@ -726,8 +726,8 @@ class Thresholding_hls(Thresholding, HLSBackend):
 
         weight_bits = self.get_input_datatype(1).bitwidth()
 
-        # Extract NumChannels from kernel_instance (Arete principle)
-        ki = self.kernel_instance
+        # Extract NumChannels from design_point (Arete principle)
+        ki = self.design_point
         out_features = ki.inputs["input"].tensor_shape[-1]
 
         num_steps = self.get_nodeattr("num_steps")

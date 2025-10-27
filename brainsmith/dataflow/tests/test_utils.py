@@ -146,7 +146,7 @@ def test_iter_valid_configurations_filter_nonexistent_param():
 
 
 def test_iter_valid_configurations_validates():
-    """Test that all generated configs work with get_kernel_instance()."""
+    """Test that all generated configs work with get_design_point()."""
     model_w, node = create_layernorm_model()
     kernel_op = LayerNorm(node)
 
@@ -164,7 +164,7 @@ def test_iter_valid_configurations_validates():
             kernel_op.set_nodeattr(param_name, param_value)
 
         # Should not raise
-        configured = kernel_op.get_kernel_instance(model_w)
+        configured = kernel_op.get_design_point(model_w)
 
         # Verify parameters match
         assert configured.params["SIMD"] == config["SIMD"], \

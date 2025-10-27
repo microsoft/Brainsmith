@@ -12,7 +12,7 @@ from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.builder import DesignSpaceBuilder, BuildContext
 from brainsmith.dataflow.schemas import KernelSchema, InputSchema, OutputSchema
-from brainsmith.dataflow.models import KernelDesignSpace
+from brainsmith.dataflow.dse_models import KernelDesignSpace
 from brainsmith.dataflow.validation import DesignSpaceValidationContext
 from brainsmith.dataflow.constraints import DatatypeInteger, ShapesEqual
 from brainsmith.dataflow.types import ShapeHierarchy, FULL_DIM
@@ -97,9 +97,9 @@ def test_build_basic():
     assert output0.stream_tiling == ["SIMD"]  # Preserved, not resolved
 
     # Verify valid ranges computed
-    assert "SIMD" in design_space.parallelization_params
-    assert 64 in design_space.parallelization_params["SIMD"]
-    assert len(design_space.parallelization_params["SIMD"]) == 18  # divisors of 768
+    assert "SIMD" in design_space.dimensions
+    assert 64 in design_space.dimensions["SIMD"]
+    assert len(design_space.dimensions["SIMD"]) == 18  # divisors of 768
 
 
 def test_build_multi_parameter():
@@ -138,10 +138,10 @@ def test_build_multi_parameter():
     design_space = builder.build(ctx)
 
     # Verify both parameters have valid ranges
-    assert "MW" in design_space.parallelization_params
-    assert "MH" in design_space.parallelization_params
-    assert len(design_space.parallelization_params["MW"]) == 18  # divisors of 768
-    assert len(design_space.parallelization_params["MH"]) == 7   # divisors of 64
+    assert "MW" in design_space.dimensions
+    assert "MH" in design_space.dimensions
+    assert len(design_space.dimensions["MW"]) == 18  # divisors of 768
+    assert len(design_space.dimensions["MH"]) == 7   # divisors of 64
 
 
 def test_build_no_stream_tiling():
@@ -172,7 +172,7 @@ def test_build_no_stream_tiling():
     design_space = builder.build(ctx)
 
     # No parallelization params
-    assert design_space.parallelization_params == {}
+    assert design_space.dimensions == {}
     assert design_space.inputs["input0"].stream_tiling is None
 
 
@@ -224,10 +224,10 @@ def test_constraint_splitting():
     # Verify constraint splitting
     # Note: Structural constraints (3 total: DatatypeInteger + 2 ShapesEqual)
     # are validated during build() but not stored in the model
-    assert len(design_space.parametric_constraints) == 1    # ShapesEqual(STREAM)
+    assert len(design_space.optimization_constraints) == 1    # ShapesEqual(STREAM)
 
-    # Verify parametric constraint is the STREAM one
-    assert design_space.parametric_constraints[0].hierarchy == ShapeHierarchy.STREAM
+    # Verify optimization constraint is the STREAM one
+    assert design_space.optimization_constraints[0].hierarchy == ShapeHierarchy.STREAM
 
 
 def test_evaluation_phase_classification():
@@ -246,7 +246,7 @@ def test_evaluation_phase_classification():
 
     # Constraint with STREAM hierarchy: parametric
     c4 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM)
-    assert c4.evaluation_phase == 'parametric'
+    assert c4.evaluation_phase == 'optimization'
 
 
 # =============================================================================
@@ -254,8 +254,8 @@ def test_evaluation_phase_classification():
 # =============================================================================
 
 def test_design_space_validation_context_datatype():
-    """Test DesignSpaceValidationContext get_datatype()."""
-    from brainsmith.dataflow.models import InterfaceDesignSpace
+    """Test DesignSpaceValidationContext get_datatype() in design space context."""
+    from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
     inv_input = InterfaceDesignSpace(
         name="input0",
@@ -284,7 +284,7 @@ def test_design_space_validation_context_datatype():
 
 def test_design_space_validation_context_shapes():
     """Test DesignSpaceValidationContext get_shape() for TENSOR and BLOCK."""
-    from brainsmith.dataflow.models import InterfaceDesignSpace
+    from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
     inv_input = InterfaceDesignSpace(
         name="input0",
@@ -317,7 +317,7 @@ def test_design_space_validation_context_shapes():
 
 def test_design_space_validation_context_is_dynamic():
     """Test DesignSpaceValidationContext is_dynamic()."""
-    from brainsmith.dataflow.models import InterfaceDesignSpace
+    from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
     inv_input_dynamic = InterfaceDesignSpace(
         name="input0",
@@ -353,7 +353,7 @@ def test_design_space_validation_context_is_dynamic():
 
 def test_design_space_validation_context_get_interfaces():
     """Test DesignSpaceValidationContext get_interfaces()."""
-    from brainsmith.dataflow.models import InterfaceDesignSpace
+    from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
     inv_input = InterfaceDesignSpace(
         name="input0",

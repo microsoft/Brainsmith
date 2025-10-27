@@ -15,36 +15,6 @@ if TYPE_CHECKING:
     from .kernel_op import KernelOp
 
 
-def get_interface(
-    interfaces: Dict[str, Any],
-    name: str,
-    context: str = ""
-) -> Any:
-    """Retrieve interface with helpful error on missing key.
-
-    Args:
-        interfaces: Dict mapping interface names to InterfaceModel instances
-        name: Interface name to retrieve
-        context: Optional context string for error messages
-
-    Returns:
-        Interface object
-
-    Raises:
-        ValueError: If interface not found, with list of available interfaces
-
-    Example:
-        >>> source = get_interface(interfaces, "input0", "DerivedDim")
-    """
-    if name not in interfaces:
-        available = ', '.join(sorted(interfaces.keys()))
-        raise ValueError(
-            f"Source '{name}' not found. "
-            f"Available interfaces/internals: {available}"
-        )
-    return interfaces[name]
-
-
 def iter_valid_configurations(
     kernel_op: 'KernelOp',
     model_w: 'ModelWrapper',
@@ -76,8 +46,8 @@ def iter_valid_configurations(
         >>> kernel_op = LayerNorm(node)
         >>> for config in iter_valid_configurations(kernel_op, model_w):
         ...     kernel_op.set_nodeattr("SIMD", config["SIMD"])
-        ...     kernel_instance = kernel_op.get_kernel_instance(model_w)
-        ...     # Profile or analyze kernel_instance
+        ...     design_point = kernel_op.get_design_point(model_w)
+        ...     # Profile or analyze design_point
 
     Example with filtering:
         >>> # Only explore SIMD values >= 4
@@ -131,4 +101,4 @@ def iter_valid_configurations(
         yield dict(zip(param_names, value_tuple))
 
 
-__all__ = ['get_interface', 'iter_valid_configurations']
+__all__ = ['iter_valid_configurations']

@@ -15,7 +15,7 @@ using the unified constraint-based inference system.
 Key validation points:
 1. Transformation occurs (FuncLayerNorm → LayerNorm)
 2. Node attributes are correct (SIMD, epsilon, datatypes)
-3. ifm_dim and NumChannels are NOT present (inferred from kernel_instance)
+3. ifm_dim and NumChannels are NOT present (inferred from design_point)
 4. Shape and datatype inference works
 5. Multiple scenarios (different shapes, datatypes, layouts)
 """
@@ -126,14 +126,13 @@ def test_auto_layernorm_node_attributes():
     attr_names = [a.name for a in node.attribute]
 
     # Should have these attributes
-    assert "SIMD" in attr_names, "SIMD attribute missing"
+    # SIMD is auto-populated during build_design_space(), not in infer_from()
     assert "epsilon" in attr_names, "epsilon attribute missing"
     assert "input0Datatype" in attr_names, "input0Datatype attribute missing"
     assert "output0Datatype" in attr_names, "output0Datatype attribute missing"
-    print(f"  ✓ Required attributes present: SIMD, epsilon, datatypes")
+    print(f"  ✓ Required attributes present: epsilon, datatypes")
 
     # Verify attribute values
-    simd_val = helper.get_node_attr_value(node, "SIMD")
     epsilon_val = helper.get_node_attr_value(node, "epsilon")
     idt_val = helper.get_node_attr_value(node, "input0Datatype")
     odt_val = helper.get_node_attr_value(node, "output0Datatype")
@@ -144,12 +143,10 @@ def test_auto_layernorm_node_attributes():
     if isinstance(odt_val, bytes):
         odt_val = odt_val.decode()
 
-    assert simd_val == 1, f"SIMD should default to 1, got {simd_val}"
     assert abs(epsilon_val - epsilon) < 1e-10, f"Epsilon should be {epsilon}, got {epsilon_val}"
     assert idt_val == datatype, f"input0Datatype should be {datatype}, got {idt_val}"
     assert odt_val == datatype, f"output0Datatype should be {datatype}, got {odt_val}"
     print(f"  ✓ Attribute values correct:")
-    print(f"    - SIMD: {helper.get_node_attr_value(node, 'SIMD')}")
     print(f"    - epsilon: {helper.get_node_attr_value(node, 'epsilon')}")
     print(f"    - input0Datatype: {helper.get_node_attr_value(node, 'input0Datatype')}")
     print(f"    - output0Datatype: {helper.get_node_attr_value(node, 'output0Datatype')}")
@@ -173,7 +170,7 @@ def test_no_redundant_attributes():
 
     print(f"  ✓ ifm_dim not present (inferred from tensor context)")
     print(f"  ✓ NumChannels not present (inferred from tensor context)")
-    print(f"  → Shape information automatically inferred via kernel_instance")
+    print(f"  → Shape information automatically inferred via design_point")
 
 
 # ============================================================================
@@ -244,8 +241,8 @@ def test_auto_layernorm_instantiation():
     op_inst = LayerNorm(node)
     print(f"  ✓ LayerNorm instantiated successfully")
 
-    # Build kernel instance from context (required for kernel_instance)
-    kernel_instance = op_inst.get_kernel_instance(model_transformed)
+    # Build kernel instance from context (required for design_point)
+    design_point = op_inst.get_design_point(model_transformed)
     print(f"  ✓ Kernel instance built successfully")
 
     # Verify shape inference works
@@ -272,7 +269,7 @@ def test_auto_layernorm_execution():
 
     # Instantiate and setup
     op_inst = LayerNorm(node)
-    op_inst.get_kernel_instance(model_transformed)
+    op_inst.get_design_point(model_transformed)
 
     # Create input data
     np.random.seed(42)

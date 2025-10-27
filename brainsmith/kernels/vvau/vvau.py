@@ -22,7 +22,6 @@ from qonnx.util.basic import (
     roundup_to_integer_multiple,
 )
 import qonnx.core.data_layout as DataLayout
-from qonnx.util.onnx import nchw_to_nhwc
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
 from brainsmith.core.plugins import kernel
@@ -35,7 +34,6 @@ import brainsmith.dataflow as df
 
 VVAU_SCHEMA = df.KernelSchema(
     name="VectorVectorActivation",
-    domain="brainsmith.kernels",
 
     # =========================================================================
     # STRUCTURE: Input/Output interfaces
@@ -47,21 +45,18 @@ VVAU_SCHEMA = df.KernelSchema(
             block_tiling=[FULL_DIM, FULL_DIM],  # Process full H, W dimensions
             stream_tiling=["nf", "sf", "SIMD", "PE"],  # Folded streaming: [nf, sf, SIMD*PE]
             required_layout="NHWC",
-            constraints=[df.IsDynamic(("input",))]
         ),
         df.InputSchema(
             name="weights",
             # Depthwise weights: (Channels, 1, k_h, k_w)
             block_tiling=[],  # No block tiling (static data)
             stream_tiling=[],  # Not streamed (static initializer or external stream)
-            constraints=[df.IsStatic(("weights",))]
         ),
         # Optional thresholds input (only if noActivation=0)
         df.InputSchema(
             name="thresholds",
             block_tiling=[],
             stream_tiling=[],
-            constraints=[df.IsStatic(("thresholds",))]
         ),
     ],
 
@@ -93,10 +88,7 @@ VVAU_SCHEMA = df.KernelSchema(
         "runtime_writeable_weights": ("i", False, 0),
         "ram_style": ("s", False, "auto"),
 
-        # Datatypes stored as nodeattrs for FINN backend compatibility
-        "input_dtype": ("s", True, ""),
-        "weight_dtype": ("s", True, ""),
-        "output_dtype": ("s", True, ""),
+        # Accumulator datatype (kernel-specific parameter)
         "acc_dtype": ("s", False, "INT32"),
     },
 
@@ -105,6 +97,11 @@ VVAU_SCHEMA = df.KernelSchema(
     # =========================================================================
 
     constraints=[
+        # Input must be dynamic, weights and thresholds must be static
+        df.IsDynamic(("input",)),
+        df.IsStatic(("weights",)),
+        df.IsStatic(("thresholds",)),
+
         # PE must divide Channels
         df.DimensionDivisible("input", -1, "PE", hierarchy=df.ShapeHierarchy.STREAM),
 
@@ -116,9 +113,6 @@ VVAU_SCHEMA = df.KernelSchema(
     # TRANSFORMATION
     # =========================================================================
 
-    source_ops=[],  # Not directly inferred from ONNX ops; MatMul with sparsity
-
-    initial_parallelization={"PE": 1, "SIMD": 1},
 )
 
 
@@ -144,7 +138,7 @@ class VectorVectorActivation(KernelOp):
     - Optional threshold activation
 
     Arete principles:
-    - Shapes extracted from kernel_instance (not nodeattrs)
+    - Shapes extracted from design_point (not nodeattrs)
     - Declarative constraints in schema
     - Two-phase construction (DesignSpace → Configuration)
     """
@@ -198,6 +192,9 @@ class VectorVectorActivation(KernelOp):
 
         Extracts depthwise convolution structure from sparse MatMul and creates
         VVAU node. Optionally absorbs following MultiThreshold into VVAU.
+
+        NOTE: Assumes input is already in NHWC layout. The global
+        normalize_dataflow_layouts preprocessing pass ensures this.
 
         Args:
             node: MatMul ONNX node with sparsity annotation
@@ -300,14 +297,9 @@ class VectorVectorActivation(KernelOp):
                 name=f"VectorVectorActivation_{node.name}",
 
                 # Parameters
-                PE=pe,
-                SIMD=1,  # Start with SIMD=1
                 Dim=[mm_in_shape[1], mm_in_shape[2]],
                 Channels=channels,
                 Kernel=[k_h, k_w],
-                input_dtype=idt.name,
-                weight_dtype=wdt.name,
-                output_dtype=odt.name,
                 act_val=actval,
                 no_activation=0,
             )
@@ -330,14 +322,9 @@ class VectorVectorActivation(KernelOp):
                 name=f"VectorVectorActivation_{node.name}",
 
                 # Parameters
-                PE=pe,
-                SIMD=1,
                 Dim=[mm_in_shape[1], mm_in_shape[2]],
                 Channels=channels,
                 Kernel=[k_h, k_w],
-                input_dtype=idt.name,
-                weight_dtype=wdt.name,
-                output_dtype=odt.name,
                 act_val=0,
                 no_activation=1,
             )
@@ -349,7 +336,7 @@ class VectorVectorActivation(KernelOp):
         )
 
     # ================================================================
-    # Shape Methods (Arete: Extract from kernel_instance)
+    # Shape Methods (Arete: Extract from design_point)
     # ================================================================
 
     def _infer_sparse_weight_tensor(self, W_conv, k_h, k_w, channels):
@@ -364,7 +351,7 @@ class VectorVectorActivation(KernelOp):
         return W_matmul
 
     def get_normal_input_shape(self, ind=0):
-        """Get unfolded input shape from kernel_instance."""
+        """Get unfolded input shape from design_point."""
         if ind == 0:
             # Input data shape: (1, dim_h, dim_w, channels * k_h * k_w)
             dim_h, dim_w = self.get_nodeattr("Dim")
@@ -390,7 +377,7 @@ class VectorVectorActivation(KernelOp):
             raise Exception(f"Invalid input index: {ind}")
 
     def get_normal_output_shape(self, ind=0):
-        """Get unfolded output shape from kernel_instance."""
+        """Get unfolded output shape from design_point."""
         dim_h, dim_w = self.get_nodeattr("Dim")
         channels = self.get_nodeattr("Channels")
         return tuple([1, dim_h, dim_w, channels])
@@ -442,22 +429,9 @@ class VectorVectorActivation(KernelOp):
     # Datatype Methods
     # ================================================================
 
-    def get_input_datatype(self, ind=0):
-        """Returns FINN DataType of input."""
-        if ind == 0:
-            return DataType[self.get_nodeattr("input_dtype")]
-        elif ind == 1:
-            return DataType[self.get_nodeattr("weight_dtype")]
-        else:
-            raise Exception("Undefined input ind for this layer type")
-
     def get_accumulator_datatype(self):
         """Returns FINN DataType of accumulator."""
         return DataType[self.get_nodeattr("acc_dtype")]
-
-    def get_output_datatype(self, ind=0):
-        """Returns FINN DataType of output."""
-        return DataType[self.get_nodeattr("output_dtype")]
 
     # ================================================================
     # Stream Width Methods
@@ -615,7 +589,7 @@ class VectorVectorActivation(KernelOp):
                 bw = roundup_to_integer_multiple(adt.bitwidth(), 8)
                 new_adt_name = adt.name.replace(str(adt.bitwidth()), str(bw))
                 adt = DataType[new_adt_name]
-            self.set_nodeattr("output_dtype", adt.name)
+            self.set_nodeattr("output0Datatype", adt.name)
 
         self.set_nodeattr("acc_dtype", adt.name)
         return DataType[self.get_nodeattr("acc_dtype")]
@@ -633,8 +607,8 @@ class VectorVectorActivation(KernelOp):
                     wdt = DataType.get_smallest_possible(-w_max - 1)
             else:
                 wdt = DataType.get_smallest_possible(w_max)
-            self.set_nodeattr("weight_dtype", wdt.name)
-        return DataType[self.get_nodeattr("weight_dtype")]
+            self.set_nodeattr("input1Datatype", wdt.name)
+        return self.get_input_datatype(1)
 
     # ================================================================
     # HW-Compatible Tensor Conversion
@@ -742,8 +716,8 @@ class VectorVectorActivation(KernelOp):
         vvau_w_onnx = self._infer_sparse_weight_tensor(vvau_w, k_h, k_w, channels)
 
         # Compute matmul
-        if (self.get_nodeattr("input_dtype") == "BIPOLAR" and
-                self.get_nodeattr("weight_dtype") == "BIPOLAR"):
+        if (self.get_input_datatype(0) == DataType["BIPOLAR"] and
+                self.get_input_datatype(1) == DataType["BIPOLAR"]):
             result = np.matmul(in_act, vvau_w_onnx)
             result = (result + k_h * k_w) / 2
         else:
@@ -753,7 +727,7 @@ class VectorVectorActivation(KernelOp):
         if self.get_nodeattr("no_activation") == 0:
             vvau_thr_init = [x for x in graph.initializer if x.name == node.input[2]][0]
             vvau_thr = np_helper.to_array(vvau_thr_init)
-            odt_is_bipolar = self.get_nodeattr("output_dtype") == "BIPOLAR"
+            odt_is_bipolar = self.get_output_datatype() == DataType["BIPOLAR"]
             out_scale = 2 if odt_is_bipolar else 1
             out_bias = -1 if odt_is_bipolar else self.get_nodeattr("act_val")
 
@@ -776,12 +750,12 @@ class VectorVectorActivation(KernelOp):
 
         if idt != self.get_input_datatype(0):
             warn_str = (
-                f"input_dtype changing for {node.name}: "
+                f"input0Datatype changing for {node.name}: "
                 f"{self.get_input_datatype(0)} -> {idt}"
             )
             warnings.warn(warn_str)
 
-        self.set_nodeattr("input_dtype", idt.name)
+        self.set_nodeattr("input0Datatype", idt.name)
 
         # Set output datatype from property
         odt = self.get_output_datatype()

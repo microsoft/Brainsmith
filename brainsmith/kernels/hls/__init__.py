@@ -8,7 +8,7 @@
 Brainsmith HLS Kernel Imports
 
 This is a TEMPORARY measure to ensure HLS variants are properly registered
-in the kernels.hls namepace until backend refactoring is complete.
+in the kernels.hls namespace until backend refactoring is complete.
 
 Similar to how FINN imports its HLS variants in:
 deps/finn/src/finn/custom_op/fpgadataflow/hls/__init__.py
@@ -18,6 +18,8 @@ deps/finn/src/finn/custom_op/fpgadataflow/hls/__init__.py
 # Note: Using absolute imports to ensure proper registration
 
 # Import Brainsmith HLS kernels
+from brainsmith.kernels.addstreams.addstreams_hls import AddStreams_hls
+from brainsmith.kernels.channelwise.channelwise_hls import ChannelwiseOp_hls
 from brainsmith.kernels.crop.crop_hls import LegacyCrop_hls
 from brainsmith.kernels.crop.auto_crop_hls import Crop_hls
 from brainsmith.kernels.layernorm.layernorm_hls import LayerNorm_hls

@@ -11,7 +11,7 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.builder import DesignSpaceBuilder
-from brainsmith.dataflow.models import InterfaceDesignSpace
+from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
 
 # =============================================================================

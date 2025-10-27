@@ -7,7 +7,7 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List, Dict, Any, Callable
+from typing import Tuple, Union, List, Dict, Any, Callable, Optional, TYPE_CHECKING
 from enum import Enum
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -21,17 +21,44 @@ Shape = Tuple[int, ...]
 ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
 ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
 
-# Sentinel value for tiling specs: "copy full dimension from reference shape"
-# Used in block_tiling and stream_tiling to indicate that a dimension should
-# be taken as-is from the parent shape (analogous to ":" in NumPy slicing).
-# Example: block_tiling=[FULL_DIM] means "use the full tensor dimension"
+# Sentinel for "copy full dimension" in tiling specs
 class _FullDimType:
-    """Sentinel type for FULL_DIM constant."""
+    """Singleton sentinel for FULL_DIM constant.
+
+    Used in tiling specs to indicate 'copy full dimension from reference'.
+    Analogous to ":" in NumPy slicing - takes the dimension as-is.
+
+    Example:
+        block_tiling=[FULL_DIM, FULL_DIM]  # Use complete tensor dimensions
+    """
+    __slots__ = ()  # No instance dict, true singleton
+
     def __repr__(self):
         return "FULL_DIM"
-    __str__ = __repr__
 
 FULL_DIM = _FullDimType()
+
+
+# Sentinel for "copy full shape" in tiling specs
+class _FullShapeType:
+    """Singleton sentinel for FULL_SHAPE constant.
+
+    Used in tiling specs to indicate 'expand to full rank with FULL_DIM'.
+    Unlike FULL_DIM (which copies a single dimension), FULL_SHAPE expands
+    to match the complete shape hierarchy.
+
+    Usage: block_tiling=FULL_SHAPE (not [FULL_SHAPE])
+
+    Examples:
+        block_tiling=FULL_SHAPE  # For 4D tensor → [FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM]
+        stream_tiling=FULL_SHAPE  # Copies resolved block_shape
+    """
+    __slots__ = ()  # No instance dict, true singleton
+
+    def __repr__(self):
+        return "FULL_SHAPE"
+
+FULL_SHAPE = _FullShapeType()
 
 
 # === Enums ===
@@ -63,41 +90,56 @@ class Direction(Enum):
     INOUT = "inout"
 
 
-# === Base Classes ===
+# === Dimension and Datatype Specifications ===
 
-@dataclass(frozen=True)
-class DimensionSource(ABC):
-    """Base class for dimension derivation strategies.
+# Simplified dimension specification (union type replaces ABC hierarchy)
+# Supported formats:
+#   int:                  Literal dimension (1 only allowed)
+#   str:                  Parameter name ("SIMD", "PE")
+#   tuple[str, int]:      Shorthand for deriving from interface, uses context hierarchy
+#                         ("input", -1) → derive from input's BLOCK/STREAM based on context
+#   tuple[str, int, ShapeHierarchy]: Shorthand with explicit hierarchy override
+#                         ("input", -1, STREAM) → always derive from input's STREAM hierarchy
+#   Callable:             Custom computation function
+#   FULL_DIM:             Copy full dimension from reference shape
+# Note: For rank-agnostic specs, use FULL_SHAPE (not a DimSpec, but a TilingSpec alternative)
+#       block_tiling=FULL_SHAPE expands to [FULL_DIM, FULL_DIM, ...] matching tensor rank
+# Example: block_tiling=[1, 1, ("input", -1)] means dims [1, 1, <last BLOCK dim of input>]
+DimSpec = Union[
+    int,                                               # Literal (1 only)
+    str,                                               # Parameter name
+    Tuple[str, int],                                   # Derive from interface (context hierarchy)
+    Tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
+    Callable[[Dict[str, Any], Callable, Any, Optional[str]], int],  # Custom computation (unified signature)
+    type(FULL_DIM),                                    # Copy full dimension
+]
 
-    Subclass to add new dimension derivation patterns.
-    All subclasses must be frozen dataclasses for immutability and hashability.
+# NEW: Datatype specification (union type replaces ABC hierarchy)
+# Supported formats:
+#   DataType:             Fixed datatype (e.g., DataType["INT8"])
+#   str:                  Derive from interface name (shorthand: "input" means copy from input)
+#   VALUE_OPTIMIZED:      Optimize from actual tensor values (static inputs only)
+#   Callable:             Custom datatype computation function
+# Example: "input" means copy datatype from input interface
+if TYPE_CHECKING:
+    from qonnx.core.datatype import BaseDataType
 
-    The resolve() method is called during model building to compute the
-    dimension value from available interfaces and parameters.
-
-    Concrete implementations (DerivedDim, ScaledDim, etc.) are in dimension_sources.py
-    """
-
-    @abstractmethod
-    def resolve(self, interfaces: Dict[str, Any], param_getter: Callable[[str], Any]) -> int:
-        """Compute dimension value from interfaces and parameters.
-
-        Args:
-            interfaces: Dict mapping interface name -> InterfaceModel
-            param_getter: Function to retrieve nodeattr values (e.g., get_nodeattr)
-
-        Returns:
-            Resolved dimension value (positive integer)
-
-        Raises:
-            ValueError: If dimension cannot be resolved or is invalid
-        """
-        pass
+    DatatypeSpec = Union[
+        BaseDataType,                                               # Fixed datatype
+        str,                                                        # Interface name (derive from)
+        Callable[[Dict, Callable, Any, str], BaseDataType],        # Custom computation
+        type(lambda: None),                                         # Sentinel type (VALUE_OPTIMIZED)
+    ]
 
 
-# Template dimension specification (for schemas)
-# Supports both static values (str/int) and dynamic derivation (DimensionSource subclasses)
-DimSpec = Union[str, int, DimensionSource]
+# Sentinel for value-optimized datatype derivation
+class _ValueOptimizedType:
+    """Sentinel type for VALUE_OPTIMIZED constant."""
+    def __repr__(self):
+        return "VALUE_OPTIMIZED"
+    __str__ = __repr__
+
+VALUE_OPTIMIZED = _ValueOptimizedType()
 
 
 class InterfaceType(Enum):

@@ -30,6 +30,44 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.custom_op.registry import getCustomOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
+# Parity test helpers
+# Use absolute imports for compatibility with sys.path-based imports
+try:
+    from assertions import (
+        assert_shapes_match,
+        assert_datatypes_match,
+        assert_widths_match,
+        assert_values_match,
+        assert_arrays_close,
+        assert_model_tensors_match,
+    )
+    from executors import CppSimExecutor, RTLSimExecutor
+    from test_fixtures import make_execution_context
+    from backend_helpers import (
+        is_hls_backend,
+        is_rtl_backend,
+        setup_hls_backend_via_specialize,
+        setup_rtl_backend_via_specialize,
+    )
+except ImportError:
+    # Fall back to relative imports for package-based imports
+    from .assertions import (
+        assert_shapes_match,
+        assert_datatypes_match,
+        assert_widths_match,
+        assert_values_match,
+        assert_arrays_close,
+        assert_model_tensors_match,
+    )
+    from .executors import CppSimExecutor, RTLSimExecutor
+    from .test_fixtures import make_execution_context
+    from .backend_helpers import (
+        is_hls_backend,
+        is_rtl_backend,
+        setup_hls_backend_via_specialize,
+        setup_rtl_backend_via_specialize,
+    )
+
 
 class ParityTestBase(ABC):
     """Base class for parity testing between manual and KernelOp implementations.
@@ -323,12 +361,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_inputs()):
             manual_shape = manual_op.get_normal_input_shape(ind)
             auto_shape = auto_op.get_normal_input_shape(ind)
-
-            assert manual_shape == auto_shape, (
-                f"Input {ind} normal shape mismatch:\n"
-                f"  Manual: {manual_shape}\n"
-                f"  Auto:   {auto_shape}"
-            )
+            assert_shapes_match(manual_shape, auto_shape, ind, "normal input")
 
     @pytest.mark.parity
     def test_normal_output_shape_parity(self):
@@ -339,12 +372,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_outputs()):
             manual_shape = manual_op.get_normal_output_shape(ind)
             auto_shape = auto_op.get_normal_output_shape(ind)
-
-            assert manual_shape == auto_shape, (
-                f"Output {ind} normal shape mismatch:\n"
-                f"  Manual: {manual_shape}\n"
-                f"  Auto:   {auto_shape}"
-            )
+            assert_shapes_match(manual_shape, auto_shape, ind, "normal output")
 
     @pytest.mark.parity
     def test_folded_input_shape_parity(self):
@@ -355,12 +383,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_inputs()):
             manual_shape = manual_op.get_folded_input_shape(ind)
             auto_shape = auto_op.get_folded_input_shape(ind)
-
-            assert manual_shape == auto_shape, (
-                f"Input {ind} folded shape mismatch:\n"
-                f"  Manual: {manual_shape}\n"
-                f"  Auto:   {auto_shape}"
-            )
+            assert_shapes_match(manual_shape, auto_shape, ind, "folded input")
 
     @pytest.mark.parity
     def test_folded_output_shape_parity(self):
@@ -371,12 +394,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_outputs()):
             manual_shape = manual_op.get_folded_output_shape(ind)
             auto_shape = auto_op.get_folded_output_shape(ind)
-
-            assert manual_shape == auto_shape, (
-                f"Output {ind} folded shape mismatch:\n"
-                f"  Manual: {manual_shape}\n"
-                f"  Auto:   {auto_shape}"
-            )
+            assert_shapes_match(manual_shape, auto_shape, ind, "folded output")
 
     @pytest.mark.parity
     def test_instream_width_parity(self):
@@ -387,12 +405,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_inputs()):
             manual_width = manual_op.get_instream_width(ind)
             auto_width = auto_op.get_instream_width(ind)
-
-            assert manual_width == auto_width, (
-                f"Input {ind} stream width mismatch:\n"
-                f"  Manual: {manual_width} bits\n"
-                f"  Auto:   {auto_width} bits"
-            )
+            assert_widths_match(manual_width, auto_width, ind, "Input")
 
     @pytest.mark.parity
     def test_outstream_width_parity(self):
@@ -403,12 +416,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_outputs()):
             manual_width = manual_op.get_outstream_width(ind)
             auto_width = auto_op.get_outstream_width(ind)
-
-            assert manual_width == auto_width, (
-                f"Output {ind} stream width mismatch:\n"
-                f"  Manual: {manual_width} bits\n"
-                f"  Auto:   {auto_width} bits"
-            )
+            assert_widths_match(manual_width, auto_width, ind, "Output")
 
     @pytest.mark.parity
     def test_input_datatype_parity(self):
@@ -419,12 +427,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_inputs()):
             manual_dt = manual_op.get_input_datatype(ind)
             auto_dt = auto_op.get_input_datatype(ind)
-
-            assert manual_dt == auto_dt, (
-                f"Input {ind} datatype mismatch:\n"
-                f"  Manual: {manual_dt.name}\n"
-                f"  Auto:   {auto_dt.name}"
-            )
+            assert_datatypes_match(manual_dt, auto_dt, ind, "Input")
 
     @pytest.mark.parity
     def test_output_datatype_parity(self):
@@ -435,12 +438,7 @@ class ParityTestBase(ABC):
         for ind in range(self.get_num_outputs()):
             manual_dt = manual_op.get_output_datatype(ind)
             auto_dt = auto_op.get_output_datatype(ind)
-
-            assert manual_dt == auto_dt, (
-                f"Output {ind} datatype mismatch:\n"
-                f"  Manual: {manual_dt.name}\n"
-                f"  Auto:   {auto_dt.name}"
-            )
+            assert_datatypes_match(manual_dt, auto_dt, ind, "Output")
 
     @pytest.mark.parity
     def test_exp_cycles_parity(self):
@@ -451,11 +449,7 @@ class ParityTestBase(ABC):
         manual_cycles = manual_op.get_exp_cycles()
         auto_cycles = auto_op.get_exp_cycles()
 
-        assert manual_cycles == auto_cycles, (
-            f"Expected cycles mismatch:\n"
-            f"  Manual: {manual_cycles}\n"
-            f"  Auto:   {auto_cycles}"
-        )
+        assert_values_match(manual_cycles, auto_cycles, "Expected cycles")
 
     @pytest.mark.parity
     def test_execute_node_parity(self):
@@ -476,15 +470,14 @@ class ParityTestBase(ABC):
 
         # Compare all outputs
         for ind in range(self.get_num_outputs()):
-            manual_output = manual_context[manual_op.onnx_node.output[ind]]
-            auto_output = auto_context[auto_op.onnx_node.output[ind]]
+            output_name = manual_op.onnx_node.output[ind]
+            manual_output = manual_context[output_name]
+            auto_output = auto_context[output_name]
 
-            np.testing.assert_allclose(
+            assert_arrays_close(
                 manual_output,
                 auto_output,
-                rtol=1e-5,
-                atol=1e-6,
-                err_msg=f"Output {ind} execution results differ"
+                f"Output {ind} ({output_name}) execution results"
             )
 
     @pytest.mark.parity
@@ -496,11 +489,7 @@ class ParityTestBase(ABC):
         manual_count = manual_op.get_number_output_values()
         auto_count = auto_op.get_number_output_values()
 
-        assert manual_count == auto_count, (
-            f"Number of output values mismatch:\n"
-            f"  Manual: {manual_count}\n"
-            f"  Auto:   {auto_count}"
-        )
+        assert_values_match(manual_count, auto_count, "Number of output values")
 
     @pytest.mark.parity
     def test_instream_width_padded_parity(self):
@@ -512,11 +501,10 @@ class ParityTestBase(ABC):
             manual_width = manual_op.get_instream_width_padded(ind)
             auto_width = auto_op.get_instream_width_padded(ind)
 
-            assert manual_width == auto_width, (
-                f"Input {ind} padded stream width mismatch:\n"
-                f"  Manual: {manual_width} bits\n"
-                f"  Auto:   {auto_width} bits"
-            )
+            # Use custom formatting for padded width
+            def format_width(w):
+                return f"{w} bits (padded)"
+            assert_values_match(manual_width, auto_width, f"Input {ind} stream width", format_width)
 
     @pytest.mark.parity
     def test_outstream_width_padded_parity(self):
@@ -528,35 +516,50 @@ class ParityTestBase(ABC):
             manual_width = manual_op.get_outstream_width_padded(ind)
             auto_width = auto_op.get_outstream_width_padded(ind)
 
-            assert manual_width == auto_width, (
-                f"Output {ind} padded stream width mismatch:\n"
-                f"  Manual: {manual_width} bits\n"
-                f"  Auto:   {auto_width} bits"
-            )
+            # Use custom formatting for padded width
+            def format_width(w):
+                return f"{w} bits (padded)"
+            assert_values_match(manual_width, auto_width, f"Output {ind} stream width", format_width)
 
     @pytest.mark.parity
     def test_make_shape_compatible_op_parity(self):
-        """Test that shape-compatible ops have matching types and attributes."""
+        """Test that shape-compatible ops preserve output structure.
+
+        Shape-compatible ops are used for ONNX shape inference. What matters
+        is that they preserve the output tensor count and names for the ONNX
+        graph, enabling correct shape propagation.
+
+        Different implementations may use different underlying operators:
+        - RandomNormal (0 inputs) - generates data
+        - Split (1 input) - divides existing tensor
+        - Identity (1 input) - passes through
+
+        The key requirement is that outputs match the original node's outputs,
+        preserving tensor identity for downstream shape inference.
+        """
         manual_op, manual_model = self.setup_manual_op()
         auto_op, auto_model = self.setup_auto_op()
 
         manual_compat_op = manual_op.make_shape_compatible_op(manual_model)
         auto_compat_op = auto_op.make_shape_compatible_op(auto_model)
 
-        # Verify both create compatible ops of the same type
-        assert manual_compat_op.op_type == auto_compat_op.op_type, (
-            f"Shape-compatible op type mismatch:\n"
-            f"  Manual: {manual_compat_op.op_type}\n"
-            f"  Auto:   {auto_compat_op.op_type}"
+        # Verify output count matches (critical for graph structure)
+        assert_values_match(
+            len(manual_compat_op.output),
+            len(auto_compat_op.output),
+            "Shape-compatible op output count"
         )
 
-        # Verify inputs/outputs match
-        assert len(manual_compat_op.input) == len(auto_compat_op.input), (
-            "Shape-compatible op input count mismatch"
-        )
-        assert len(manual_compat_op.output) == len(auto_compat_op.output), (
-            "Shape-compatible op output count mismatch"
-        )
+        # Verify output names match (preserves tensor identity)
+        for i in range(len(manual_compat_op.output)):
+            assert_values_match(
+                manual_compat_op.output[i],
+                auto_compat_op.output[i],
+                f"Shape-compatible op output {i} name"
+            )
+
+        # Note: Input counts may differ (RandomNormal=0, Split=1, Identity=1)
+        # This is acceptable as shape inference only cares about output structure
 
     @pytest.mark.parity
     def test_infer_node_datatype_parity(self):
@@ -586,26 +589,18 @@ class ParityTestBase(ABC):
             if not input_name:  # Skip optional inputs
                 continue
 
-            manual_dt = manual_model.get_tensor_datatype(input_name)
-            auto_dt = auto_model.get_tensor_datatype(input_name)
-
-            assert manual_dt == auto_dt, (
-                f"After infer_node_datatype, input {ind} ({input_name}) datatype mismatch:\n"
-                f"  Manual model: {manual_dt.name if manual_dt else 'None'}\n"
-                f"  Auto model:   {auto_dt.name if auto_dt else 'None'}"
+            assert_model_tensors_match(
+                manual_model, auto_model, input_name,
+                f"After infer_node_datatype, input {ind}"
             )
 
         # Verify output datatypes were set correctly in model
         for ind in range(self.get_num_outputs()):
             output_name = manual_op.onnx_node.output[ind]
 
-            manual_dt = manual_model.get_tensor_datatype(output_name)
-            auto_dt = auto_model.get_tensor_datatype(output_name)
-
-            assert manual_dt == auto_dt, (
-                f"After infer_node_datatype, output {ind} ({output_name}) datatype mismatch:\n"
-                f"  Manual model: {manual_dt.name if manual_dt else 'None'}\n"
-                f"  Auto model:   {auto_dt.name if auto_dt else 'None'}"
+            assert_model_tensors_match(
+                manual_model, auto_model, output_name,
+                f"After infer_node_datatype, output {ind}"
             )
 
     @pytest.mark.parity
@@ -618,9 +613,9 @@ class ParityTestBase(ABC):
         It validates the entire code generation pipeline end-to-end:
 
         **Pipeline Steps**:
-        1. **Code Generation**: Both backends generate C++ (via PrepareCppSim)
-        2. **Compilation**: C++ compiles successfully (via CompileCppSim)
-        3. **Execution**: Compiled binary executes (via SetExecMode("cppsim"))
+        1. **Code Generation**: Both backends generate C++ (via code_generation_cppsim)
+        2. **Compilation**: C++ compiles successfully (via compile_singlenode_code)
+        3. **Execution**: Compiled binary executes (via execute_node)
         4. **Validation**: Both produce identical numerical results
 
         **Confidence Level**: If this test passes, we have high confidence that:
@@ -648,221 +643,21 @@ class ParityTestBase(ABC):
             pytest.skip: If backend not HLS or Vitis unavailable
             AssertionError: If compilation fails or outputs differ
         """
-        # Check for Vitis availability
-        import os
-        if not os.environ.get("VITIS_PATH"):
-            pytest.skip("Vitis required for C++ compilation (set VITIS_PATH)")
-
-        # Import FINN transformations
-        try:
-            from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
-            from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
-            from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
-            from qonnx.transformation.infer_shapes import InferShapes
-            from qonnx.transformation.infer_datatypes import InferDataTypes
-            import finn.core.onnx_exec as oxe
-        except ImportError as e:
-            pytest.skip(f"FINN transformations not available: {e}")
-
         # Setup both backends with fresh models
         manual_op, manual_model = self.setup_manual_op()
         auto_op, auto_model = self.setup_auto_op()
 
-        # Verify both are HLS backends
-        if not self._is_hls_backend(manual_op):
-            pytest.skip(
-                f"{manual_op.__class__.__name__} is not an HLS backend. "
-                f"cppsim execution requires HLSBackend inheritance."
-            )
-        if not self._is_hls_backend(auto_op):
-            pytest.skip(
-                f"{auto_op.__class__.__name__} is not an HLS backend. "
-                f"cppsim execution requires HLSBackend inheritance."
-            )
-
-        # Generate identical test inputs for both executions
-        np.random.seed(42)  # Deterministic for reproducibility
+        # Generate test context with deterministic inputs
+        np.random.seed(42)
         test_context = self._make_execution_context(manual_model, manual_op)
 
-        # Extract input tensors (exclude initializers/weights)
-        input_dict = {}
-        for inp_name in manual_op.onnx_node.input:
-            if inp_name and inp_name in test_context:
-                # Only include if not an initializer
-                if manual_model.get_initializer(inp_name) is None:
-                    input_dict[inp_name] = test_context[inp_name]
-
-        # Ensure we have at least one input
-        if not input_dict:
-            pytest.skip(
-                f"No streaming inputs found for {manual_op.__class__.__name__}. "
-                f"All inputs are initializers (weights/parameters)."
-            )
-
-        # Compile and execute manual backend directly (no transforms)
-        import tempfile
-        import os
-
-        # Set BSMITH_DIR for compilation (needed by Brainsmith kernels)
-        # TAFK TODO: Change to use pydantic config after branch merge
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
-
-        try:
-            # Create temp directory for code generation
-            manual_tmpdir = tempfile.mkdtemp(prefix="crop_hls_manual_")
-            manual_op.set_nodeattr("code_gen_dir_cppsim", manual_tmpdir)
-
-            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
-            manual_model.save(os.path.join(manual_tmpdir, "node_model.onnx"))
-
-            # Generate C++ code
-            manual_op.code_generation_cppsim(manual_model)
-
-            # Compile C++ code
-            manual_op.compile_singlenode_code()
-
-            # Set execution mode
-            manual_op.set_nodeattr("exec_mode", "cppsim")
-
-        except Exception as e:
-            pytest.fail(
-                f"Manual backend cppsim pipeline failed for {manual_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"This indicates a code generation or compilation bug in the manual backend.\n"
-                f"\n"
-                f"Debug steps:\n"
-                f"1. Check {getattr(manual_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_cppsim') if hasattr(manual_op, 'get_nodeattr') else manual_tmpdir} for generated C++ files\n"
-                f"2. Look for compilation errors in build logs\n"
-                f"3. Compare with working backend implementation"
-            )
-
-        # Compile and execute auto backend directly (no transforms)
-        try:
-            # Create temp directory for code generation
-            auto_tmpdir = tempfile.mkdtemp(prefix="autocrop_hls_auto_")
-            auto_op.set_nodeattr("code_gen_dir_cppsim", auto_tmpdir)
-
-            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
-            auto_model.save(os.path.join(auto_tmpdir, "node_model.onnx"))
-
-            # Ensure kernel instance is available for KernelOp-based backends
-            # Modern KernelOp uses get_kernel_instance(), legacy uses get_kernel_model()
-            if hasattr(auto_op, 'get_kernel_instance'):
-                auto_op.get_kernel_instance(auto_model)
-            elif hasattr(auto_op, 'get_kernel_model'):
-                auto_op.get_kernel_model(auto_model)
-
-            # Generate C++ code
-            auto_op.code_generation_cppsim(auto_model)
-
-            # Compile C++ code
-            auto_op.compile_singlenode_code()
-
-            # Set execution mode
-            auto_op.set_nodeattr("exec_mode", "cppsim")
-
-        except Exception as e:
-            pytest.fail(
-                f"Auto backend cppsim pipeline failed for {auto_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"This indicates a code generation or compilation bug in the auto backend.\n"
-                f"\n"
-                f"Debug steps:\n"
-                f"1. Check {getattr(auto_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_cppsim') if hasattr(auto_op, 'get_nodeattr') else auto_tmpdir} for generated C++ files\n"
-                f"2. Verify test_hls_defines_generation passes (constants match)\n"
-                f"3. Compare with manual backend implementation"
-            )
-
-        # Execute manual backend via cppsim
-        try:
-            manual_op.execute_node(test_context, manual_model.graph)
-            manual_result = {manual_op.onnx_node.output[0]: test_context[manual_op.onnx_node.output[0]]}
-        except Exception as e:
-            pytest.fail(
-                f"Manual backend execution failed for {manual_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"Code compiled successfully but execution failed.\n"
-                f"Check execute_node() implementation."
-            )
-
-        # Execute auto backend via cppsim
-        # Recreate context with same seed for auto
-        np.random.seed(42)
-
-        # Ensure kernel instance is available for KernelOp-based backends
-        # Modern KernelOp uses get_kernel_instance(), legacy uses get_kernel_model()
-        if hasattr(auto_op, 'get_kernel_instance'):
-            auto_op.get_kernel_instance(auto_model)
-        elif hasattr(auto_op, 'get_kernel_model'):
-            auto_op.get_kernel_model(auto_model)
-
-        auto_context = self._make_execution_context(auto_model, auto_op)
-
-        try:
-            auto_op.execute_node(auto_context, auto_model.graph)
-            auto_result = {auto_op.onnx_node.output[0]: auto_context[auto_op.onnx_node.output[0]]}
-        except Exception as e:
-            pytest.fail(
-                f"Auto backend execution failed for {auto_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"Code compiled successfully but execution failed.\n"
-                f"Check execute_node() implementation."
-            )
-
-        # Compare all outputs
-        for ind in range(self.get_num_outputs()):
-            output_name = manual_op.onnx_node.output[ind]
-
-            assert output_name in manual_result, \
-                f"Manual backend didn't produce output: {output_name}"
-            assert output_name in auto_result, \
-                f"Auto backend didn't produce output: {output_name}"
-
-            manual_output = manual_result[output_name]
-            auto_output = auto_result[output_name]
-
-            # Verify shapes match
-            assert manual_output.shape == auto_output.shape, (
-                f"Output {ind} ({output_name}) shape mismatch:\n"
-                f"  Manual: {manual_output.shape}\n"
-                f"  Auto:   {auto_output.shape}"
-            )
-
-            # Verify numerical equivalence
-            np.testing.assert_allclose(
-                manual_output,
-                auto_output,
-                rtol=1e-5,
-                atol=1e-6,
-                err_msg=(
-                    f"\n"
-                    f"{'='*70}\n"
-                    f"cppsim output {ind} ({output_name}) differs between backends\n"
-                    f"{'='*70}\n"
-                    f"\n"
-                    f"Both backends compiled and executed successfully, but produced\n"
-                    f"different numerical results. This indicates a CODE GENERATION BUG.\n"
-                    f"\n"
-                    f"Backends:\n"
-                    f"  Manual: {manual_op.__class__.__name__}\n"
-                    f"  Auto:   {auto_op.__class__.__name__}\n"
-                    f"\n"
-                    f"Debug checklist:\n"
-                    f"  1. Run test_hls_defines_generation to check constants\n"
-                    f"  2. Check docompute() - verify template parameters match\n"
-                    f"  3. Check stream widths - verify packing calculations\n"
-                    f"  4. Compare generated C++ files in code_gen_dir_cppsim\n"
-                    f"{'='*70}\n"
-                )
-            )
+        # Execute and compare using CppSimExecutor
+        executor = CppSimExecutor()
+        executor.execute_and_compare(
+            manual_op, manual_model,
+            auto_op, auto_model,
+            test_context
+        )
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -888,11 +683,9 @@ class ParityTestBase(ABC):
         manual_luts = manual_op.lut_estimation()
         auto_luts = auto_op.lut_estimation()
 
-        assert manual_luts == auto_luts, (
-            f"LUT estimation mismatch:\n"
-            f"  Manual: {manual_luts:,} LUTs\n"
-            f"  Auto:   {auto_luts:,} LUTs"
-        )
+        def format_lut(count):
+            return f"{count:,} LUTs"
+        assert_values_match(manual_luts, auto_luts, "LUT estimation", format_lut)
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -920,12 +713,9 @@ class ParityTestBase(ABC):
         manual_dsps = manual_op.dsp_estimation(fpgapart)
         auto_dsps = auto_op.dsp_estimation(fpgapart)
 
-        assert manual_dsps == auto_dsps, (
-            f"DSP estimation mismatch:\n"
-            f"  Manual: {manual_dsps:,} DSPs\n"
-            f"  Auto:   {auto_dsps:,} DSPs\n"
-            f"  FPGA:   {fpgapart}"
-        )
+        def format_dsp(count):
+            return f"{count:,} DSPs (FPGA: {fpgapart})"
+        assert_values_match(manual_dsps, auto_dsps, "DSP estimation", format_dsp)
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -951,11 +741,9 @@ class ParityTestBase(ABC):
         manual_brams = manual_op.bram_estimation()
         auto_brams = auto_op.bram_estimation()
 
-        assert manual_brams == auto_brams, (
-            f"BRAM estimation mismatch:\n"
-            f"  Manual: {manual_brams:,} BRAMs\n"
-            f"  Auto:   {auto_brams:,} BRAMs"
-        )
+        def format_bram(count):
+            return f"{count:,} BRAMs"
+        assert_values_match(manual_brams, auto_brams, "BRAM estimation", format_bram)
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -981,11 +769,9 @@ class ParityTestBase(ABC):
         manual_urams = manual_op.uram_estimation()
         auto_urams = auto_op.uram_estimation()
 
-        assert manual_urams == auto_urams, (
-            f"URAM estimation mismatch:\n"
-            f"  Manual: {manual_urams:,} URAMs\n"
-            f"  Auto:   {auto_urams:,} URAMs"
-        )
+        def format_uram(count):
+            return f"{count:,} URAMs"
+        assert_values_match(manual_urams, auto_urams, "URAM estimation", format_uram)
 
     @pytest.mark.parity
     def test_bram_efficiency_parity(self):
@@ -1013,11 +799,9 @@ class ParityTestBase(ABC):
         manual_eff = manual_op.bram_efficiency_estimation()
         auto_eff = auto_op.bram_efficiency_estimation()
 
-        assert manual_eff == auto_eff, (
-            f"BRAM efficiency estimation mismatch:\n"
-            f"  Manual: {manual_eff:.4f} ({manual_eff*100:.2f}%)\n"
-            f"  Auto:   {auto_eff:.4f} ({auto_eff*100:.2f}%)"
-        )
+        def format_efficiency(eff):
+            return f"{eff:.4f} ({eff*100:.2f}%)"
+        assert_values_match(manual_eff, auto_eff, "BRAM efficiency estimation", format_efficiency)
 
     @pytest.mark.parity
     def test_uram_efficiency_parity(self):
@@ -1045,11 +829,9 @@ class ParityTestBase(ABC):
         manual_eff = manual_op.uram_efficiency_estimation()
         auto_eff = auto_op.uram_efficiency_estimation()
 
-        assert manual_eff == auto_eff, (
-            f"URAM efficiency estimation mismatch:\n"
-            f"  Manual: {manual_eff:.4f} ({manual_eff*100:.2f}%)\n"
-            f"  Auto:   {auto_eff:.4f} ({auto_eff*100:.2f}%)"
-        )
+        def format_efficiency(eff):
+            return f"{eff:.4f} ({eff*100:.2f}%)"
+        assert_values_match(manual_eff, auto_eff, "URAM efficiency estimation", format_efficiency)
 
     @pytest.mark.parity
     def test_op_and_param_counts_parity(self):
@@ -1080,11 +862,7 @@ class ParityTestBase(ABC):
         manual_counts = manual_op.get_op_and_param_counts()
         auto_counts = auto_op.get_op_and_param_counts()
 
-        assert manual_counts == auto_counts, (
-            f"Operation and parameter counts mismatch:\n"
-            f"  Manual: {manual_counts}\n"
-            f"  Auto:   {auto_counts}"
-        )
+        assert_values_match(manual_counts, auto_counts, "Operation and parameter counts")
 
     @pytest.mark.parity
     @pytest.mark.rtlsim
@@ -1096,13 +874,15 @@ class ParityTestBase(ABC):
         It validates the entire RTL generation and simulation pipeline end-to-end:
 
         **Pipeline Steps**:
-        1. **HDL Generation**: Both backends generate Verilog (via PrepareRTLSim)
-        2. **Simulation Setup**: Verilator compiles RTL (via SetExecMode("rtlsim"))
-        3. **Execution**: Compiled simulator executes
+        1. **HDL Generation**: Both backends generate Verilog
+           - HLS: via code_generation_ipgen → ipgen_singlenode_code (Vitis HLS synthesis)
+           - RTL: via generate_hdl (direct HDL generation)
+        2. **Simulation Setup**: xsim compiles RTL (via prepare_rtlsim)
+        3. **Execution**: Compiled simulator executes (via execute_node)
         4. **Validation**: Both produce identical numerical results
 
         **Confidence Level**: If this test passes, we have high confidence that:
-        - Generated Verilog is syntactically correct (Verilator compiles)
+        - Generated Verilog is syntactically correct (xsim compiles)
         - Generated Verilog is semantically correct (it executes correctly)
         - Manual and auto backends are functionally equivalent
         - All HDL generation methods are correct
@@ -1118,224 +898,30 @@ class ParityTestBase(ABC):
             pytest tests/parity/ -v -m rtlsim
 
         **Requirements**:
-            - Verilator installed and available
-            - Both backends inherit from RTLBackend
+            - XSI (Xilinx Simulator) support built and available
+            - Vitis HLS available (for HLS backends)
+            - Both backends inherit from RTLBackend or HLSBackend
             - Valid setup_manual_op() and setup_auto_op() implementations
 
         Raises:
-            pytest.skip: If backend not RTL or Verilator unavailable
+            pytest.skip: If XSI unavailable or backend incompatible
             AssertionError: If compilation fails or outputs differ
         """
-        # Check for Verilator availability
-        import shutil
-        if not shutil.which("verilator"):
-            pytest.skip("Verilator required for RTL simulation")
-
-        # Import FINN transformations
-        try:
-            from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
-            from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
-            from qonnx.transformation.infer_shapes import InferShapes
-            from qonnx.transformation.infer_datatypes import InferDataTypes
-        except ImportError as e:
-            pytest.skip(f"FINN transformations not available: {e}")
-
         # Setup both backends with fresh models
         manual_op, manual_model = self.setup_manual_op()
         auto_op, auto_model = self.setup_auto_op()
 
-        # Verify both are RTL backends
-        if not self._is_rtl_backend(manual_op):
-            pytest.skip(
-                f"{manual_op.__class__.__name__} is not an RTL backend. "
-                f"rtlsim execution requires RTLBackend inheritance."
-            )
-        if not self._is_rtl_backend(auto_op):
-            pytest.skip(
-                f"{auto_op.__class__.__name__} is not an RTL backend. "
-                f"rtlsim execution requires RTLBackend inheritance."
-            )
-
-        # Generate identical test inputs for both executions
-        np.random.seed(42)  # Deterministic for reproducibility
+        # Generate test context with deterministic inputs
+        np.random.seed(42)
         test_context = self._make_execution_context(manual_model, manual_op)
 
-        # Extract input tensors (exclude initializers/weights)
-        input_dict = {}
-        for inp_name in manual_op.onnx_node.input:
-            if inp_name and inp_name in test_context:
-                # Only include if not an initializer
-                if manual_model.get_initializer(inp_name) is None:
-                    input_dict[inp_name] = test_context[inp_name]
-
-        # Ensure we have at least one input
-        if not input_dict:
-            pytest.skip(
-                f"No streaming inputs found for {manual_op.__class__.__name__}. "
-                f"All inputs are initializers (weights/parameters)."
-            )
-
-        # Set up and execute manual backend
-        import tempfile
-        import os
-
-        # Set BSMITH_DIR for RTL generation (needed by Brainsmith kernels)
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
-
-        try:
-            # Create temp directory for RTL generation
-            manual_tmpdir = tempfile.mkdtemp(prefix="rtl_manual_")
-            manual_op.set_nodeattr("code_gen_dir_ipgen", manual_tmpdir)
-
-            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
-            manual_model.save(os.path.join(manual_tmpdir, "node_model.onnx"))
-
-            # Generate RTL code
-            manual_op.generate_hdl(manual_model, fpgapart=self.get_test_fpgapart())
-
-            # Prepare RTL simulation
-            manual_op.prepare_rtlsim(manual_model)
-
-            # Set execution mode
-            manual_op.set_nodeattr("exec_mode", "rtlsim")
-
-        except Exception as e:
-            pytest.fail(
-                f"Manual backend rtlsim pipeline failed for {manual_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"This indicates a code generation or compilation bug in the manual backend.\n"
-                f"\n"
-                f"Debug steps:\n"
-                f"1. Check {getattr(manual_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_ipgen') if hasattr(manual_op, 'get_nodeattr') else manual_tmpdir} for generated Verilog files\n"
-                f"2. Look for Verilator compilation errors\n"
-                f"3. Compare with working backend implementation"
-            )
-
-        # Set up and execute auto backend
-        try:
-            # Create temp directory for RTL generation
-            auto_tmpdir = tempfile.mkdtemp(prefix="rtl_auto_")
-            auto_op.set_nodeattr("code_gen_dir_ipgen", auto_tmpdir)
-
-            # Save model to code_gen_dir (needed by exec_precompiled_singlenode_model)
-            auto_model.save(os.path.join(auto_tmpdir, "node_model.onnx"))
-
-            # Ensure kernel instance is available for KernelOp-based backends
-            if hasattr(auto_op, 'get_kernel_instance'):
-                auto_op.get_kernel_instance(auto_model)
-            elif hasattr(auto_op, 'get_kernel_model'):
-                auto_op.get_kernel_model(auto_model)
-
-            # Generate RTL code
-            auto_op.generate_hdl(auto_model, fpgapart=self.get_test_fpgapart())
-
-            # Prepare RTL simulation
-            auto_op.prepare_rtlsim(auto_model)
-
-            # Set execution mode
-            auto_op.set_nodeattr("exec_mode", "rtlsim")
-
-        except Exception as e:
-            pytest.fail(
-                f"Auto backend rtlsim pipeline failed for {auto_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"This indicates a code generation or compilation bug in the auto backend.\n"
-                f"\n"
-                f"Debug steps:\n"
-                f"1. Check {getattr(auto_op, 'get_nodeattr', lambda x: 'N/A')('code_gen_dir_ipgen') if hasattr(auto_op, 'get_nodeattr') else auto_tmpdir} for generated Verilog files\n"
-                f"2. Look for Verilator compilation errors\n"
-                f"3. Compare with manual backend implementation"
-            )
-
-        # Execute manual backend via rtlsim
-        try:
-            manual_op.execute_node(test_context, manual_model.graph)
-            manual_result = {manual_op.onnx_node.output[0]: test_context[manual_op.onnx_node.output[0]]}
-        except Exception as e:
-            pytest.fail(
-                f"Manual backend execution failed for {manual_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"RTL compiled successfully but execution failed.\n"
-                f"Check execute_node() implementation."
-            )
-
-        # Execute auto backend via rtlsim
-        # Recreate context with same seed for auto
-        np.random.seed(42)
-
-        # Ensure kernel instance is available for KernelOp-based backends
-        if hasattr(auto_op, 'get_kernel_instance'):
-            auto_op.get_kernel_instance(auto_model)
-        elif hasattr(auto_op, 'get_kernel_model'):
-            auto_op.get_kernel_model(auto_model)
-
-        auto_context = self._make_execution_context(auto_model, auto_op)
-
-        try:
-            auto_op.execute_node(auto_context, auto_model.graph)
-            auto_result = {auto_op.onnx_node.output[0]: auto_context[auto_op.onnx_node.output[0]]}
-        except Exception as e:
-            pytest.fail(
-                f"Auto backend execution failed for {auto_op.__class__.__name__}:\n"
-                f"\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"\n"
-                f"RTL compiled successfully but execution failed.\n"
-                f"Check execute_node() implementation."
-            )
-
-        # Compare all outputs
-        for ind in range(self.get_num_outputs()):
-            output_name = manual_op.onnx_node.output[ind]
-
-            assert output_name in manual_result, \
-                f"Manual backend didn't produce output: {output_name}"
-            assert output_name in auto_result, \
-                f"Auto backend didn't produce output: {output_name}"
-
-            manual_output = manual_result[output_name]
-            auto_output = auto_result[output_name]
-
-            # Verify shapes match
-            assert manual_output.shape == auto_output.shape, (
-                f"Output {ind} ({output_name}) shape mismatch:\n"
-                f"  Manual: {manual_output.shape}\n"
-                f"  Auto:   {auto_output.shape}"
-            )
-
-            # Verify numerical equivalence
-            np.testing.assert_allclose(
-                manual_output,
-                auto_output,
-                rtol=1e-5,
-                atol=1e-6,
-                err_msg=(
-                    f"\n"
-                    f"{'='*70}\n"
-                    f"rtlsim output {ind} ({output_name}) differs between backends\n"
-                    f"{'='*70}\n"
-                    f"\n"
-                    f"Both backends compiled and executed successfully, but produced\n"
-                    f"different numerical results. This indicates a CODE GENERATION BUG.\n"
-                    f"\n"
-                    f"Backends:\n"
-                    f"  Manual: {manual_op.__class__.__name__}\n"
-                    f"  Auto:   {auto_op.__class__.__name__}\n"
-                    f"\n"
-                    f"Debug checklist:\n"
-                    f"  1. Compare generated Verilog files in code_gen_dir_ipgen\n"
-                    f"  2. Check HDL template parameters\n"
-                    f"  3. Check stream widths and packing\n"
-                    f"  4. Verify resource parameters (PE, SIMD, etc.)\n"
-                    f"{'='*70}\n"
-                )
-            )
+        # Execute and compare using RTLSimExecutor
+        executor = RTLSimExecutor()
+        executor.execute_and_compare(
+            manual_op, manual_model,
+            auto_op, auto_model,
+            test_context
+        )
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -1397,11 +983,7 @@ class ParityTestBase(ABC):
         manual_filenames = [os.path.basename(f) for f in manual_files]
         auto_filenames = [os.path.basename(f) for f in auto_files]
 
-        assert manual_filenames == auto_filenames, (
-            f"RTL file list mismatch:\n"
-            f"  Manual files: {manual_filenames}\n"
-            f"  Auto files:   {auto_filenames}"
-        )
+        assert_values_match(manual_filenames, auto_filenames, "RTL file list")
 
     @pytest.mark.parity
     @pytest.mark.rtl
@@ -1492,8 +1074,7 @@ class ParityTestBase(ABC):
     def _is_hls_backend(self, op: HWCustomOp) -> bool:
         """Check if op is an HLS backend (has cppsim capability).
 
-        HLS backends inherit from HLSBackend and have code generation methods.
-        Only HLS backends can use cppsim execution mode.
+        Delegates to backend_helpers.is_hls_backend() for implementation.
 
         Args:
             op: HWCustomOp instance to check
@@ -1501,11 +1082,7 @@ class ParityTestBase(ABC):
         Returns:
             True if HLS backend, False otherwise
         """
-        try:
-            from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-            return isinstance(op, HLSBackend)
-        except ImportError:
-            return False
+        return is_hls_backend(op)
 
     def _setup_hls_backend_via_specialize(
         self,
@@ -1515,10 +1092,7 @@ class ParityTestBase(ABC):
     ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Setup HLS backend by applying SpecializeLayers transform.
 
-        This matches the production FINN workflow:
-        1. Base kernel node with preferred_impl_style="hls"
-        2. SpecializeLayers transform → Kernel_hls node
-        3. getCustomOp() returns HLS backend class
+        Delegates to backend_helpers.setup_hls_backend_via_specialize() for implementation.
 
         Args:
             base_op: Base kernel op instance (e.g., Shuffle, AutoShuffle)
@@ -1527,53 +1101,13 @@ class ParityTestBase(ABC):
 
         Returns:
             Tuple of (HLS backend op instance, transformed model)
-
-        Example:
-            # Create base Shuffle node
-            shuffle_op, model = setup_base_shuffle()
-
-            # Convert to Shuffle_hls via SpecializeLayers
-            shuffle_hls_op, model = self._setup_hls_backend_via_specialize(
-                shuffle_op, model
-            )
         """
-        from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-        from qonnx.custom_op.registry import getCustomOp
-
-        # Set preferred implementation style to HLS
-        base_op.set_nodeattr("preferred_impl_style", "hls")
-
-        # Apply SpecializeLayers transform (matches FINN build flow)
-        # This converts domain from "brainsmith.kernels" to "brainsmith.kernels.hls"
-        # and op_type from "Shuffle" to "Shuffle_hls"
-        model = base_model.transform(SpecializeLayers(fpgapart))
-
-        # Find the specialized node (should be the same node, transformed)
-        # The node's domain and op_type have been modified by SpecializeLayers
-        specialized_node = None
-        for node in model.graph.node:
-            if node.domain.endswith(".hls") or node.domain.endswith(".rtl"):
-                specialized_node = node
-                break
-
-        if specialized_node is None:
-            raise RuntimeError(
-                f"SpecializeLayers did not create HLS/RTL backend node. "
-                f"Node domain: {base_op.onnx_node.domain}, "
-                f"preferred_impl_style: {base_op.get_nodeattr('preferred_impl_style')}"
-            )
-
-        # Use getCustomOp to retrieve the HLS backend class
-        # This will look up the class based on the specialized domain and op_type
-        hls_op = getCustomOp(specialized_node)
-
-        return hls_op, model
+        return setup_hls_backend_via_specialize(base_op, base_model, fpgapart)
 
     def _is_rtl_backend(self, op: HWCustomOp) -> bool:
         """Check if op is an RTL backend (has rtlsim capability).
 
-        RTL backends inherit from RTLBackend and have HDL generation methods.
-        Only RTL backends can use rtlsim execution mode.
+        Delegates to backend_helpers.is_rtl_backend() for implementation.
 
         Args:
             op: HWCustomOp instance to check
@@ -1581,11 +1115,7 @@ class ParityTestBase(ABC):
         Returns:
             True if RTL backend, False otherwise
         """
-        try:
-            from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
-            return isinstance(op, RTLBackend)
-        except ImportError:
-            return False
+        return is_rtl_backend(op)
 
     def get_test_fpgapart(self) -> str:
         """Get FPGA part for RTL testing.
@@ -1618,11 +1148,9 @@ class ParityTestBase(ABC):
     ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Setup RTL backend by applying SpecializeLayers transform.
 
-        This matches the production FINN workflow:
-        1. Base kernel node with preferred_impl_style="rtl"
-        2. Set clk_ns and fpgapart attributes
-        3. SpecializeLayers transform → Kernel_rtl node
-        4. getCustomOp() returns RTL backend class
+        Delegates to backend_helpers.setup_rtl_backend_via_specialize() for implementation.
+        Uses get_test_fpgapart() and get_test_clock_period() configuration hooks when
+        parameters are None, allowing subclasses to customize defaults.
 
         Args:
             base_op: Base kernel op instance (e.g., Shuffle, AutoShuffle)
@@ -1632,57 +1160,14 @@ class ParityTestBase(ABC):
 
         Returns:
             Tuple of (RTL backend op instance, transformed model)
-
-        Example:
-            # Create base Shuffle node
-            shuffle_op, model = setup_base_shuffle()
-
-            # Convert to Shuffle_rtl via SpecializeLayers
-            shuffle_rtl_op, model = self._setup_rtl_backend_via_specialize(
-                shuffle_op, model
-            )
         """
-        from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-        from qonnx.custom_op.registry import getCustomOp
-
-        # Use test defaults if not provided
+        # Use test defaults if not provided (allows subclass overrides)
         if fpgapart is None:
             fpgapart = self.get_test_fpgapart()
         if clk is None:
             clk = self.get_test_clock_period()
 
-        # Set preferred implementation style to RTL
-        base_op.set_nodeattr("preferred_impl_style", "rtl")
-
-        # Set RTL-specific attributes
-        base_op.set_nodeattr("fpgapart", fpgapart)
-        base_op.set_nodeattr("clk_ns", clk)
-
-        # Apply SpecializeLayers transform (matches FINN build flow)
-        # This converts domain from "brainsmith.kernels" to "brainsmith.kernels.rtl"
-        # and op_type from "Shuffle" to "Shuffle_rtl"
-        model = base_model.transform(SpecializeLayers(fpgapart))
-
-        # Find the specialized node (should be the same node, transformed)
-        # The node's domain and op_type have been modified by SpecializeLayers
-        specialized_node = None
-        for node in model.graph.node:
-            if node.domain.endswith(".rtl"):
-                specialized_node = node
-                break
-
-        if specialized_node is None:
-            raise RuntimeError(
-                f"SpecializeLayers did not create RTL backend node. "
-                f"Node domain: {base_op.onnx_node.domain}, "
-                f"preferred_impl_style: {base_op.get_nodeattr('preferred_impl_style')}"
-            )
-
-        # Use getCustomOp to retrieve the RTL backend class
-        # This will look up the class based on the specialized domain and op_type
-        rtl_op = getCustomOp(specialized_node)
-
-        return rtl_op, model
+        return setup_rtl_backend_via_specialize(base_op, base_model, fpgapart, clk)
 
     def _make_execution_context(
         self,
@@ -1690,6 +1175,9 @@ class ParityTestBase(ABC):
         op: HWCustomOp
     ) -> Dict[str, np.ndarray]:
         """Create execution context with random inputs.
+
+        Wrapper around test_fixtures.make_execution_context that converts
+        ValueError to pytest.skip for test-friendly error handling.
 
         Generates random test data based on:
         - Input shapes from op.get_normal_input_shape()
@@ -1701,55 +1189,12 @@ class ParityTestBase(ABC):
 
         Returns:
             Dict mapping tensor names to numpy arrays
+
+        Raises:
+            pytest.skip: If shape or datatype cannot be determined
         """
-        context = {}
-        node = op.onnx_node
-
-        # Create random inputs
-        for i, inp_name in enumerate(node.input):
-            if not inp_name:  # Optional input (empty string)
-                continue
-
-            # Check if it's an initializer (weight/parameter)
-            init = model.get_initializer(inp_name)
-            if init is not None:
-                context[inp_name] = init
-                continue
-
-            # Generate random input for streaming data
-            try:
-                shape = op.get_normal_input_shape(i)
-                dtype = op.get_input_datatype(i)
-
-                # Generate data in datatype's range
-                if dtype.min() >= 0:
-                    # Unsigned type
-                    data = np.random.randint(
-                        max(dtype.min(), 0),  # Ensure non-negative
-                        min(dtype.max() + 1, 256),  # Cap at reasonable value
-                        size=shape
-                    ).astype(np.float32)
-                else:
-                    # Signed type
-                    data = np.random.randint(
-                        max(dtype.min(), -128),
-                        min(dtype.max() + 1, 128),
-                        size=shape
-                    ).astype(np.float32)
-
-                context[inp_name] = data
-
-            except Exception as e:
-                # If shape/datatype retrieval fails, skip this input
-                # Subclass can override _make_execution_context for special handling
-                pytest.skip(f"Cannot generate input {i} ({inp_name}): {e}")
-
-        # Pre-allocate outputs
-        for i, out_name in enumerate(node.output):
-            try:
-                shape = op.get_normal_output_shape(i)
-                context[out_name] = np.zeros(shape, dtype=np.float32)
-            except Exception as e:
-                pytest.skip(f"Cannot pre-allocate output {i} ({out_name}): {e}")
-
-        return context
+        try:
+            return make_execution_context(model, op)
+        except ValueError as e:
+            # Convert ValueError to pytest.skip for test-friendly error handling
+            pytest.skip(str(e))

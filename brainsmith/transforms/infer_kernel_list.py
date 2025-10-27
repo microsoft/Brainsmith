@@ -111,15 +111,9 @@ class InferKernelList(Transformation):
             for name in all_kernel_names:
                 cls = get_kernel(name)
                 if issubclass(cls, KernelOp):
-                    # Check if it has inference support via schema.source_ops
-                    try:
-                        # Build schema with minimal context (node=None, model=None)
-                        # Schema should be buildable without full context for static schemas
-                        schema = cls.build_schema(node=None, model=None)
-                        if schema.source_ops:
-                            kernels_to_process.append(cls)
-                    except (NotImplementedError, Exception) as e:
-                        logger.debug(f"{name} doesn't support inference or failed to build schema: {e}")
+                    # Include all KernelOp subclasses
+                    # can_infer_from() will determine if transformation applies
+                    kernels_to_process.append(cls)
         else:
             # Use explicit list
             kernels_to_process = self.kernel_classes

@@ -133,9 +133,9 @@ class TestVVAUShapes:
             Dim=[dim_h, dim_w],
             Channels=channels,
             Kernel=[k_h, k_w],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -194,9 +194,9 @@ class TestVVAUBackends:
             Dim=[28, 28],
             Channels=32,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -218,9 +218,9 @@ class TestVVAUBackends:
             Dim=[14, 14],
             Channels=64,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -244,9 +244,9 @@ class TestVVAUMemoryCalculations:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -272,9 +272,9 @@ class TestVVAUMemoryCalculations:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -293,9 +293,9 @@ class TestVVAUMemoryCalculations:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=0,
         )
 
@@ -320,9 +320,9 @@ class TestVVAUStreamWidths:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -344,9 +344,9 @@ class TestVVAUStreamWidths:
             Dim=[14, 14],
             Channels=32,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -372,9 +372,9 @@ class TestVVAUDatatypes:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT4",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT4",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -395,9 +395,9 @@ class TestVVAUDatatypes:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="UINT4",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="UINT4",
             no_activation=1,
         )
 
@@ -423,9 +423,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=32,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -448,9 +448,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -474,9 +474,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -497,9 +497,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -531,9 +531,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
             res_type="dsp",
         )
@@ -557,9 +557,9 @@ class TestVVAURTLBackend:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -593,9 +593,9 @@ class TestVVAUComparison:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 
@@ -609,9 +609,9 @@ class TestVVAUComparison:
             Dim=[28, 28],
             Channels=16,
             Kernel=[3, 3],
-            input_dtype="INT8",
-            weight_dtype="INT8",
-            output_dtype="INT8",
+            input0Datatype="INT8",
+            input1Datatype="INT8",
+            output0Datatype="INT8",
             no_activation=1,
         )
 

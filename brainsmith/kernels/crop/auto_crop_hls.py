@@ -30,7 +30,7 @@ class Crop_hls(Crop, HLSBackend):
 
     Key differences from legacy LegacyCrop_hls:
     - Uses uppercase "SIMD" (KernelOp convention)
-    - Extracts shapes from kernel_instance (not nodeattrs)
+    - Extracts shapes from design_point (not nodeattrs)
     - Follows Arete principle: no shape storage
     """
 
@@ -71,7 +71,7 @@ class Crop_hls(Crop, HLSBackend):
     def defines(self, var):
         """Generate HLS constant definitions.
 
-        Extracts values from kernel_instance instead of nodeattrs (Arete principle).
+        Extracts values from design_point instead of nodeattrs (Arete principle).
         Uses uppercase "SIMD" for KernelOp convention.
         """
         # Get parallelization parameter (uppercase for KernelOp)
@@ -79,8 +79,8 @@ class Crop_hls(Crop, HLSBackend):
         dtype = self.get_input_datatype()
 
         # Extract shapes from cached kernel instance (Arete principle)
-        # kernel_instance property returns the cached KernelInstance
-        ki = self.kernel_instance
+        # design_point property returns the cached KernelDesignPoint
+        ki = self.design_point
         inp_cfg = ki.inputs["input"]
         height = inp_cfg.tensor_shape[1]
         width = inp_cfg.tensor_shape[2]

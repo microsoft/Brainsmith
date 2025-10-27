@@ -134,11 +134,11 @@ def test_configuration_rebuilt_on_param_change():
 
     # First configuration
     kernel_op.set_nodeattr("SIMD", 1)
-    configured1 = kernel_op.get_kernel_instance(model_w)
+    configured1 = kernel_op.get_design_point(model_w)
 
     # Change param
     kernel_op.set_nodeattr("SIMD", 2)
-    configured2 = kernel_op.get_kernel_instance(model_w)
+    configured2 = kernel_op.get_design_point(model_w)
 
     # Should be different instances (reconfigured)
     assert configured1 is not configured2, "Configured model should be rebuilt on param change"
@@ -153,10 +153,10 @@ def test_configuration_cached_when_params_unchanged():
     kernel_op = TestKernel(node)
 
     # First call
-    configured1 = kernel_op.get_kernel_instance(model_w)
+    configured1 = kernel_op.get_design_point(model_w)
 
     # Second call with same params
-    configured2 = kernel_op.get_kernel_instance(model_w)
+    configured2 = kernel_op.get_design_point(model_w)
 
     assert configured1 is configured2, "Configured model should be cached when params unchanged"
 
@@ -196,11 +196,11 @@ def test_get_design_space_returns_same_instance():
 
 
 # ====================================================================
-# Test 3: get_kernel_instance() Tests
+# Test 3: get_design_point() Tests
 # ====================================================================
 
-def test_get_kernel_instance_first_call_builds_both_models():
-    """Test that first get_kernel_instance() call builds both design_space and configured."""
+def test_get_design_point_first_call_builds_both_models():
+    """Test that first get_design_point() call builds both design_space and configured."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
@@ -208,36 +208,36 @@ def test_get_kernel_instance_first_call_builds_both_models():
     assert kernel_op._configuration is None
 
     # First call builds both
-    configured = kernel_op.get_kernel_instance(model_w)
+    configured = kernel_op.get_design_point(model_w)
 
     assert kernel_op._design_space is not None
     assert kernel_op._configuration is not None
     assert configured is kernel_op._configuration
 
 
-def test_get_kernel_instance_cache_hit_with_same_params():
-    """Test that get_kernel_instance() returns cached instance with unchanged params."""
+def test_get_design_point_cache_hit_with_same_params():
+    """Test that get_design_point() returns cached instance with unchanged params."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    configured1 = kernel_op.get_kernel_instance(model_w)
-    configured2 = kernel_op.get_kernel_instance(model_w)
+    configured1 = kernel_op.get_design_point(model_w)
+    configured2 = kernel_op.get_design_point(model_w)
 
     assert configured1 is configured2, "Should return cached model"
 
 
-def test_get_kernel_instance_reconfigures_with_new_params():
-    """Test that get_kernel_instance() reconfigures when params change."""
+def test_get_design_point_reconfigures_with_new_params():
+    """Test that get_design_point() reconfigures when params change."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Initial configuration
-    configured1 = kernel_op.get_kernel_instance(model_w)
+    configured1 = kernel_op.get_design_point(model_w)
     assert configured1.params["SIMD"] == 1
 
     # Change param
     kernel_op.set_nodeattr("SIMD", 2)
-    configured2 = kernel_op.get_kernel_instance(model_w)
+    configured2 = kernel_op.get_design_point(model_w)
 
     assert configured2.params["SIMD"] == 2
     assert configured1 is not configured2, "Should reconfigure"
@@ -288,7 +288,7 @@ def test_set_nodeattr_invalidates_configured_only():
     kernel_op = TestKernel(node)
 
     # Build both models
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
     invariant_before = kernel_op._design_space
     configured_before = kernel_op._configuration
 
@@ -309,7 +309,7 @@ def test_set_nodeattr_preserves_design_space():
     kernel_op = TestKernel(node)
 
     # Build models
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
     invariant_original = kernel_op._design_space
 
     # Change params multiple times
@@ -324,7 +324,7 @@ def test_set_nodeattr_no_op_when_value_unchanged():
     kernel_op = TestKernel(node)
 
     # Build models
-    configured = kernel_op.get_kernel_instance(model_w)
+    configured = kernel_op.get_design_point(model_w)
 
     # Set same value
     kernel_op.set_nodeattr("SIMD", 1)
@@ -348,7 +348,7 @@ def test_reconfiguration_performance_target_1ms():
     # Measure reconfiguration time
     kernel_op.set_nodeattr("SIMD", 2)
     start = time.time()
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
     elapsed = time.time() - start
 
     # Target: <1ms (0.001s), use generous 5ms for CI variability
@@ -371,7 +371,7 @@ def test_100_configurations_under_100ms():
     start = time.time()
     for simd in configs:
         kernel_op.set_nodeattr("SIMD", simd)
-        kernel_op.get_kernel_instance(model_w)
+        kernel_op.get_design_point(model_w)
     elapsed = time.time() - start
 
     # Target: <100ms, use generous 500ms for CI variability
@@ -386,12 +386,12 @@ def test_cache_hit_under_01ms():
     kernel_op = TestKernel(node)
 
     # Build initial model
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
 
     # Measure cache hit time (average over 100 calls to reduce timing noise)
     start = time.time()
     for _ in range(100):
-        kernel_op.get_kernel_instance(model_w)
+        kernel_op.get_design_point(model_w)
     elapsed = time.time() - start
 
     avg_time = elapsed / 100
@@ -404,25 +404,25 @@ def test_cache_hit_under_01ms():
 # Test 7: Backward Compatibility Tests
 # ====================================================================
 
-def test_legacy_kernel_instance_property_still_works():
-    """Test that legacy kernel_instance property still works."""
+def test_legacy_design_point_property_still_works():
+    """Test that legacy design_point property still works."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    # Build model via get_kernel_instance()
-    configured = kernel_op.get_kernel_instance(model_w)
+    # Build model via get_design_point()
+    configured = kernel_op.get_design_point(model_w)
 
     # Access via property should return same instance
-    assert kernel_op.kernel_instance is configured
+    assert kernel_op.design_point is configured
 
 
 def test_shape_queries_delegate_correctly():
-    """Test that shape queries work correctly with KernelInstance."""
+    """Test that shape queries work correctly with KernelDesignPoint."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Build model
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
 
     # Test shape queries
     tensor_shape = kernel_op.get_normal_input_shape(ind=0, model_w=model_w)
@@ -433,12 +433,12 @@ def test_shape_queries_delegate_correctly():
 
 
 def test_datatype_queries_delegate_correctly():
-    """Test that datatype queries work correctly with KernelInstance."""
+    """Test that datatype queries work correctly with KernelDesignPoint."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Build model
-    kernel_op.get_kernel_instance(model_w)
+    kernel_op.get_design_point(model_w)
 
     # Test datatype queries
     input_dt = kernel_op.get_input_datatype(ind=0)
@@ -463,15 +463,15 @@ def test_get_design_space_requires_model_wrapper():
     assert "ModelWrapper" in str(exc_info.value)
 
 
-def test_kernel_instance_property_requires_prior_build():
-    """Test that kernel_instance property raises error if not built."""
+def test_design_point_property_requires_prior_build():
+    """Test that design_point property raises error if not built."""
     _, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     with pytest.raises(RuntimeError) as exc_info:
-        _ = kernel_op.kernel_instance
+        _ = kernel_op.design_point
 
-    assert "get_kernel_instance" in str(exc_info.value) or "build_design_space" in str(exc_info.value)
+    assert "get_design_point" in str(exc_info.value) or "build_design_space" in str(exc_info.value)
 
 
 # ====================================================================
@@ -489,13 +489,13 @@ def test_design_space_property_before_build_raises():
     assert "build_design_space" in str(exc_info.value)
 
 
-def test_kernel_instance_property_before_build_raises():
-    """Test that kernel_instance property raises before build_design_space()."""
+def test_design_point_property_before_build_raises():
+    """Test that design_point property raises before build_design_space()."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     with pytest.raises(RuntimeError) as exc_info:
-        _ = kernel_op.kernel_instance
+        _ = kernel_op.design_point
 
     assert "build_design_space" in str(exc_info.value)
 
@@ -505,28 +505,28 @@ def test_build_design_space_enables_properties():
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
-    # Build
-    kernel_op.build_design_space(model_w)
+    # Initialize by calling a public API method
+    kernel_op.infer_node_datatype(model_w)
 
     # Properties should work
     assert kernel_op.design_space is not None
-    assert kernel_op.kernel_instance is not None
+    assert kernel_op.design_point is not None
     assert kernel_op.design_space.name == "TestKernel"
 
 
 def test_build_design_space_idempotent():
-    """Test that build_design_space() is idempotent."""
+    """Test that initialization is idempotent (doesn't rebuild when called multiple times)."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Build twice
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
-    km1 = kernel_op.kernel_instance
+    km1 = kernel_op.design_point
 
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds2 = kernel_op.design_space
-    km2 = kernel_op.kernel_instance
+    km2 = kernel_op.design_point
 
     # Should return same instances (no rebuild)
     assert ds1 is ds2
@@ -543,7 +543,7 @@ def test_structural_nodeattr_invalidates_design_space():
     kernel_op = TestKernel(node)
 
     # Build
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
 
     # Change structural nodeattr (datatype)
@@ -553,7 +553,7 @@ def test_structural_nodeattr_invalidates_design_space():
     assert kernel_op._design_space is None
 
     # Rebuild
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds2 = kernel_op.design_space
 
     # Should be different instance
@@ -566,9 +566,9 @@ def test_parametric_nodeattr_preserves_design_space():
     kernel_op = TestKernel(node)
 
     # Build
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
-    km1 = kernel_op.kernel_instance
+    km1 = kernel_op.design_point
 
     # Change parametric nodeattr (SIMD)
     kernel_op.set_nodeattr("SIMD", 2)
@@ -580,9 +580,9 @@ def test_parametric_nodeattr_preserves_design_space():
     assert kernel_op._configuration is None
 
     # Rebuild
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds2 = kernel_op.design_space
-    km2 = kernel_op.kernel_instance
+    km2 = kernel_op.design_point
 
     # Same design space, different configuration
     assert ds1 is ds2
@@ -598,7 +598,7 @@ def test_execution_nodeattr_invalidates_config_only():
     kernel_op.kernel_schema.kernel_params["epsilon"] = ("f", True, 1e-5)
 
     # Build
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
 
     # Change execution nodeattr
@@ -621,17 +621,17 @@ def test_explicit_invalidation_works():
     kernel_op = TestKernel(node)
 
     # Build
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
 
     # Explicitly invalidate
-    kernel_op.invalidate_design_space()
+    kernel_op.invalidate()
 
     # Should be invalidated
     assert kernel_op._design_space is None
 
     # Rebuild
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds2 = kernel_op.design_space
 
     # Different instance
@@ -644,25 +644,25 @@ def test_build_after_invalidation_rebuilds():
     kernel_op = TestKernel(node)
 
     # Build
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
     ds1 = kernel_op.design_space
-    km1 = kernel_op.kernel_instance
+    km1 = kernel_op.design_point
 
     # Invalidate
-    kernel_op.invalidate_design_space()
+    kernel_op.invalidate()
 
     # Properties should raise
     with pytest.raises(RuntimeError):
         _ = kernel_op.design_space
     with pytest.raises(RuntimeError):
-        _ = kernel_op.kernel_instance
+        _ = kernel_op.design_point
 
     # Rebuild
-    kernel_op.build_design_space(model_w)
+    kernel_op.infer_node_datatype(model_w)
 
     # Properties should work again
     ds2 = kernel_op.design_space
-    km2 = kernel_op.kernel_instance
+    km2 = kernel_op.design_point
     assert ds2 is not None
     assert km2 is not None
 
@@ -672,13 +672,13 @@ def test_build_after_invalidation_rebuilds():
 # ====================================================================
 
 def test_old_api_still_works():
-    """Test that old get_design_space() / get_kernel_instance() still work."""
+    """Test that old get_design_space() / get_design_point() still work."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Old API should still work
     ds = kernel_op.get_design_space(model_w)
-    km = kernel_op.get_kernel_instance(model_w)
+    km = kernel_op.get_design_point(model_w)
 
     assert ds is not None
     assert km is not None

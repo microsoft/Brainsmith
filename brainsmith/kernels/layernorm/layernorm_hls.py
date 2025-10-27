@@ -45,10 +45,10 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
     and HLSBackend (provides HLS code generation infrastructure).
 
     The key innovation is using kernel instance properties instead of nodeattrs for shape info:
-    - self.kernel_instance.inputs[0].stream_shape[-1] for SIMD (kernel_instance property returns KernelInstance)
-    - self.kernel_instance.inputs[0].tensor_shape[-1] for width
-    - self.kernel_instance.inputs[0].datatype for input type
-    - self.kernel_instance.outputs[0].datatype for output type
+    - self.design_point.inputs[0].stream_shape[-1] for SIMD (design_point property returns KernelDesignPoint)
+    - self.design_point.inputs[0].tensor_shape[-1] for width
+    - self.design_point.inputs[0].datatype for input type
+    - self.design_point.outputs[0].datatype for output type
 
     This ensures consistency with the declarative KernelSchema and automatic validation.
     """
@@ -95,15 +95,15 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         - TO: Output type from kernel instance outputs[0].datatype
         """
         # Use kernel instance for shape information (not nodeattrs)
-        input_cfg = self.kernel_instance.inputs[0]
-        output_cfg = self.kernel_instance.outputs[0]
+        input0 = self.design_point.inputs[0]
+        output0 = self.design_point.outputs[0]
 
-        simd = input_cfg.stream_shape[-1]
-        width = input_cfg.tensor_shape[-1]
+        simd = input0.stream_shape[-1]
+        width = input0.tensor_shape[-1]
         epsilon = self.get_nodeattr('epsilon')
 
-        idtype = input_cfg.datatype
-        odtype = output_cfg.datatype
+        idtype = input0.datatype
+        odtype = output0.datatype
 
         self.code_gen_dict["$DEFINES$"] = [
             f"constexpr unsigned SIMD = {simd};",

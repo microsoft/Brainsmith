@@ -8,12 +8,13 @@
 """Unified constraint system for dataflow modeling.
 
 Constraints are pure predicates that validate properties across different
-contexts (ONNX inference, kernel build-time). They work with the ValidationContext
-protocol to provide context-agnostic validation.
+kernel construction phases. They use duck typing to work with any validation
+context that provides the required methods (get_datatype, get_shape, etc.).
 
 Architecture:
     - Constraint(ABC): Base class with check(ctx) → Optional[str]
-    - ValidationContext: Protocol for accessing tensor/interface properties
+    - DesignSpaceValidationContext: Structural validation (tensor/block shapes, datatypes)
+    - ConfigurationValidationContext: Parametric validation (stream shapes, params)
     - Concrete constraints: Datatype, shape, ONNX-specific validations
 
 Example usage:
@@ -24,28 +25,28 @@ Example usage:
         IsDynamic(("input0", "input1")),
     ]
 
-    # Apply on ONNX (inference-time)
-    onnx_ctx = OnnxValidationContext(node, model)
+    # Apply during design space build (structural constraints)
+    ctx = DesignSpaceValidationContext(inputs, outputs, internal_datatypes, param_getter)
     for c in constraints:
-        if c.check(onnx_ctx):
-            return False  # Constraint violated
+        error = c.check(ctx)
+        if error:
+            raise ValueError(error)
 
-    # Apply on kernel (build-time)
-    kernel_ctx = KernelValidationContext(kernel_instance, get_nodeattr)
+    # Apply during configuration (optimization constraints)
+    ctx = ConfigurationValidationContext(configured_model, params)
     for c in constraints:
-        error = c.check(kernel_ctx)
+        error = c.check(ctx)
         if error:
             raise ValueError(error)
 """
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union, Protocol, runtime_checkable
 
 from qonnx.core.datatype import DataType
 
-from .validation import ValidationContext, ShapeHierarchy
+from .validation import ShapeHierarchy
 
 logger = logging.getLogger(__name__)
 
@@ -54,34 +55,34 @@ logger = logging.getLogger(__name__)
 # Base Constraint
 # =============================================================================
 
-@dataclass(frozen=True)
-class Constraint(ABC):
+@runtime_checkable
+class Constraint(Protocol):
     """A validation rule that can be checked in any context.
 
     Constraints are pure predicates - they describe what must be true.
-    They can be checked on ONNX nodes (inference) or kernel models (build).
+    They use duck typing to work with any validation context that provides
+    the required methods (get_datatype, get_shape, is_dynamic, get_param, etc.).
 
-    Subclasses must implement:
-    - check(ctx: ValidationContext) → Optional[str]
+    Implementations must provide:
+    - check(ctx) → Optional[str]  # ctx is any object with required methods
     - describe() → str
+    - evaluation_phase property → str (optional, default provided)
     """
 
-    @abstractmethod
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Check constraint in given context.
 
         Args:
-            ctx: ValidationContext (ONNX or Kernel)
+            ctx: Validation context (DesignSpaceValidationContext or ConfigurationValidationContext)
 
         Returns:
             None if satisfied, error message string if violated
         """
-        pass
+        ...
 
-    @abstractmethod
     def describe(self) -> str:
         """Human-readable description of constraint."""
-        pass
+        ...
 
     @property
     def evaluation_phase(self) -> str:
@@ -92,12 +93,12 @@ class Constraint(ABC):
                           Constraints that determine backend compatibility
                           (tensor shapes, block shapes, datatypes, etc.)
 
-            'parametric' - Evaluated per-configuration during configure() (Phase 2)
-                          Constraints that bound optimization space
-                          (stream shapes, parallelization parameters, etc.)
+            'optimization' - Evaluated per-configuration during configure() (Phase 2)
+                            Constraints that bound optimization space
+                            (stream shapes, parallelization parameters, etc.)
 
-        Default implementation uses heuristic for backward compatibility:
-        - Constraints with hierarchy == STREAM are parametric
+        Default implementation uses heuristic:
+        - Constraints with hierarchy == STREAM are optimization constraints
         - All other constraints are structural
 
         Subclasses can override this property for explicit classification.
@@ -106,13 +107,13 @@ class Constraint(ABC):
             DatatypeInteger: 'structural' (no hierarchy, datatype determines compatibility)
             ShapesEqual(hierarchy=TENSOR): 'structural' (tensor shape determines compatibility)
             ShapesEqual(hierarchy=BLOCK): 'structural' (block shape determines compatibility)
-            ShapesEqual(hierarchy=STREAM): 'parametric' (stream shape bounds optimization)
-            DimensionDivisible(hierarchy=STREAM): 'parametric' (stream dim bounds optimization)
+            ShapesEqual(hierarchy=STREAM): 'optimization' (stream shape bounds optimization)
+            DimensionDivisible(hierarchy=STREAM): 'optimization' (stream dim bounds optimization)
         """
-        # Heuristic: stream-level shape constraints are parametric
+        # Heuristic: stream-level shape constraints are optimization constraints
         if hasattr(self, 'hierarchy'):
             if self.hierarchy == ShapeHierarchy.STREAM:
-                return 'parametric'
+                return 'optimization'
 
         # All other constraints are structural by default
         # (datatype, layout, node attribute, custom, etc.)
@@ -124,7 +125,7 @@ class Constraint(ABC):
 # =============================================================================
 
 @dataclass(frozen=True)
-class DatatypeInteger(Constraint):
+class DatatypeInteger:
     """Specified interfaces must have integer datatypes.
 
     Example:
@@ -133,7 +134,7 @@ class DatatypeInteger(Constraint):
 
     interfaces: tuple[str, ...]
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are integer types."""
         for name in self.interfaces:
             try:
@@ -149,9 +150,13 @@ class DatatypeInteger(Constraint):
     def describe(self) -> str:
         return f"{self.interfaces} must be integer datatypes"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 @dataclass(frozen=True)
-class DatatypeFloat(Constraint):
+class DatatypeFloat:
     """Specified interfaces must have floating-point datatypes.
 
     Example:
@@ -160,7 +165,7 @@ class DatatypeFloat(Constraint):
 
     interfaces: tuple[str, ...]
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are float types."""
         for name in self.interfaces:
             try:
@@ -177,9 +182,13 @@ class DatatypeFloat(Constraint):
     def describe(self) -> str:
         return f"{self.interfaces} must be float datatypes"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 @dataclass(frozen=True)
-class DatatypeInRange(Constraint):
+class DatatypeInRange:
     """Interface datatype must match base type and bit width range.
 
     Examples:
@@ -204,7 +213,7 @@ class DatatypeInRange(Constraint):
         if self.base_type not in valid_types:
             raise ValueError(f"Invalid base_type '{self.base_type}'. Must be one of {valid_types}")
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate datatype matches base type and bit width range."""
         try:
             dt = ctx.get_datatype(self.interface)
@@ -245,9 +254,13 @@ class DatatypeInRange(Constraint):
     def describe(self) -> str:
         return f"{self.interface} ∈ {self.base_type}[{self.min_bits}..{self.max_bits}]"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 @dataclass(frozen=True)
-class DatatypesEqual(Constraint):
+class DatatypesEqual:
     """All specified interfaces must have identical datatypes.
 
     Example:
@@ -256,7 +269,7 @@ class DatatypesEqual(Constraint):
 
     interfaces: tuple[str, ...]
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces have identical datatypes."""
         if len(self.interfaces) < 2:
             return "DatatypesEqual requires at least 2 interfaces"
@@ -285,13 +298,17 @@ class DatatypesEqual(Constraint):
     def describe(self) -> str:
         return f"{self.interfaces} must have equal datatypes"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 # =============================================================================
 # Shape Constraints
 # =============================================================================
 
 @dataclass(frozen=True)
-class ShapesEqual(Constraint):
+class ShapesEqual:
     """Specified interfaces must have identical shapes.
 
     Examples:
@@ -309,7 +326,7 @@ class ShapesEqual(Constraint):
     hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
     dim_slice: Optional[slice] = None
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces have identical shapes."""
         if len(self.interfaces) < 2:
             return "ShapesEqual requires at least 2 interfaces"
@@ -343,9 +360,13 @@ class ShapesEqual(Constraint):
         dim_desc = f"[{self.dim_slice}]" if self.dim_slice else ""
         return f"{self.interfaces}{dim_desc} must have equal shapes ({self.hierarchy.value})"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'optimization' if self.hierarchy == ShapeHierarchy.STREAM else 'structural'
+
 
 @dataclass(frozen=True)
-class DimensionDivisible(Constraint):
+class DimensionDivisible:
     """Interface dimension must be divisible by value.
 
     Examples:
@@ -358,7 +379,7 @@ class DimensionDivisible(Constraint):
     divisor: Union[int, str]  # int literal or param name
     hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate dimension is divisible by divisor."""
         try:
             shape = ctx.get_shape(self.interface, self.hierarchy)
@@ -394,9 +415,13 @@ class DimensionDivisible(Constraint):
     def describe(self) -> str:
         return f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] % {self.divisor} == 0"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'optimization' if self.hierarchy == ShapeHierarchy.STREAM else 'structural'
+
 
 @dataclass(frozen=True)
-class DimensionInRange(Constraint):
+class DimensionInRange:
     """Interface dimension must be within range [min, max].
 
     Examples:
@@ -410,7 +435,7 @@ class DimensionInRange(Constraint):
     max_value: Union[int, str]
     hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate dimension is within range."""
         try:
             shape = ctx.get_shape(self.interface, self.hierarchy)
@@ -447,9 +472,13 @@ class DimensionInRange(Constraint):
             f"∈ [{self.min_value}, {self.max_value}]"
         )
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'optimization' if self.hierarchy == ShapeHierarchy.STREAM else 'structural'
+
 
 @dataclass(frozen=True)
-class DimensionEquals(Constraint):
+class DimensionEquals:
     """Interface dimension must equal specific value.
 
     Examples:
@@ -462,7 +491,7 @@ class DimensionEquals(Constraint):
     value: Union[int, str]
     hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate dimension equals value."""
         try:
             shape = ctx.get_shape(self.interface, self.hierarchy)
@@ -495,13 +524,197 @@ class DimensionEquals(Constraint):
     def describe(self) -> str:
         return f"{self.interface}.{self.hierarchy.value}[{self.dim_index}] == {self.value}"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'optimization' if self.hierarchy == ShapeHierarchy.STREAM else 'structural'
+
+
+@dataclass(frozen=True)
+class TensorDimMatches:
+    """Validate specific dimension of tensor matches one of allowed values.
+
+    Checks shape[dim_index] against specifications at TENSOR hierarchy level.
+    Use this for validating tensor structure (e.g., channel dimension must
+    match specific value or reference).
+
+    For BLOCK/STREAM hierarchy validation, use DimensionEquals or CustomConstraint.
+
+    Examples:
+        # Channel dimension must be 1 or match input channels
+        TensorDimMatches("parameters", -1, [1, ("input", -1)])
+
+        # Batch dimension must be 1, 2, or 4
+        TensorDimMatches("input", 0, [1, 2, 4])
+
+    Args:
+        interface: Name of interface to validate
+        dim_index: Which dimension to check (supports negative indexing)
+        allowed: List of allowed values (int literals or (interface, dim_index) tuples)
+    """
+
+    interface: str
+    dim_index: int
+    allowed: tuple[Union[int, str, tuple[str, int]], ...]
+
+    def __init__(self, interface: str, dim_index: int, allowed: list):
+        """Initialize with list that gets converted to tuple for frozen dataclass."""
+        object.__setattr__(self, 'interface', interface)
+        object.__setattr__(self, 'dim_index', dim_index)
+        object.__setattr__(self, 'allowed', tuple(allowed))
+
+    def check(self, ctx) -> Optional[str]:
+        """Validate dimension matches one of allowed values."""
+        try:
+            shape = ctx.get_shape(self.interface, ShapeHierarchy.TENSOR)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
+
+        # Handle negative indices
+        dim_idx = self.dim_index if self.dim_index >= 0 else len(shape) + self.dim_index
+
+        if not (0 <= dim_idx < len(shape)):
+            return f"{self.interface} dimension {self.dim_index} out of range for shape {shape}"
+
+        actual_value = shape[dim_idx]
+
+        # Check against all allowed values
+        for spec in self.allowed:
+            if isinstance(spec, int):
+                if actual_value == spec:
+                    return None  # Match found
+            elif isinstance(spec, str):
+                # Parameter reference
+                try:
+                    expected = ctx.get_param(spec)
+                    if actual_value == expected:
+                        return None
+                except (RuntimeError, KeyError):
+                    continue  # Skip this spec if param not available
+            elif isinstance(spec, tuple):
+                # (interface, dim_index) reference
+                ref_interface, ref_dim_idx = spec
+                try:
+                    ref_shape = ctx.get_shape(ref_interface, ShapeHierarchy.TENSOR)
+                    ref_dim_idx_resolved = ref_dim_idx if ref_dim_idx >= 0 else len(ref_shape) + ref_dim_idx
+                    if 0 <= ref_dim_idx_resolved < len(ref_shape):
+                        expected = ref_shape[ref_dim_idx_resolved]
+                        if actual_value == expected:
+                            return None
+                except KeyError:
+                    continue  # Skip this spec if interface not found
+            else:
+                return f"Invalid spec type {type(spec).__name__} in allowed list"
+
+        # No match found
+        allowed_desc = ", ".join(str(s) for s in self.allowed)
+        return (
+            f"{self.interface}.tensor[{self.dim_index}] = {actual_value}, "
+            f"expected one of: {allowed_desc}"
+        )
+
+    def describe(self) -> str:
+        allowed_desc = ", ".join(str(s) for s in self.allowed)
+        return f"{self.interface}.tensor[{self.dim_index}] ∈ {{{allowed_desc}}}"
+
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
+
+@dataclass(frozen=True)
+class TensorSizeMatches:
+    """Validate total element count matches one of allowed values.
+
+    Checks np.prod(shape) against specifications at TENSOR hierarchy level.
+    Use this for validating broadcast compatibility (e.g., parameters can be
+    scalar or per-channel).
+
+    Does NOT validate specific shape structure - any shape with matching
+    element count is valid. For dimension-specific validation, use TensorDimMatches.
+
+    For BLOCK/STREAM hierarchy validation, use CustomConstraint.
+
+    Examples:
+        # Parameters must be scalar (1) or per-channel
+        TensorSizeMatches("parameters", [1, ("input", -1)])
+
+        # Weight matrix must have 64*64 or 128*128 elements
+        TensorSizeMatches("weights", [4096, 16384])
+
+    Args:
+        interface: Name of interface to validate
+        allowed: List of allowed sizes (int literals, param names, or (interface, dim_index) tuples)
+    """
+
+    interface: str
+    allowed: tuple[Union[int, str, tuple[str, int]], ...]
+
+    def __init__(self, interface: str, allowed: list):
+        """Initialize with list that gets converted to tuple for frozen dataclass."""
+        object.__setattr__(self, 'interface', interface)
+        object.__setattr__(self, 'allowed', tuple(allowed))
+
+    def check(self, ctx) -> Optional[str]:
+        """Validate total element count matches one of allowed values."""
+        import numpy as np
+
+        try:
+            shape = ctx.get_shape(self.interface, ShapeHierarchy.TENSOR)
+        except KeyError as e:
+            return f"Interface '{self.interface}' not found: {e}"
+
+        actual_size = int(np.prod(shape))
+
+        # Check against all allowed values
+        for spec in self.allowed:
+            if isinstance(spec, int):
+                if actual_size == spec:
+                    return None  # Match found
+            elif isinstance(spec, str):
+                # Parameter reference
+                try:
+                    expected = ctx.get_param(spec)
+                    if actual_size == expected:
+                        return None
+                except (RuntimeError, KeyError):
+                    continue  # Skip this spec if param not available
+            elif isinstance(spec, tuple):
+                # (interface, dim_index) reference
+                ref_interface, ref_dim_idx = spec
+                try:
+                    ref_shape = ctx.get_shape(ref_interface, ShapeHierarchy.TENSOR)
+                    ref_dim_idx_resolved = ref_dim_idx if ref_dim_idx >= 0 else len(ref_shape) + ref_dim_idx
+                    if 0 <= ref_dim_idx_resolved < len(ref_shape):
+                        expected = ref_shape[ref_dim_idx_resolved]
+                        if actual_size == expected:
+                            return None
+                except KeyError:
+                    continue  # Skip this spec if interface not found
+            else:
+                return f"Invalid spec type {type(spec).__name__} in allowed list"
+
+        # No match found
+        allowed_desc = ", ".join(str(s) for s in self.allowed)
+        return (
+            f"{self.interface} tensor size {actual_size} (shape {shape}), "
+            f"expected one of: {allowed_desc}"
+        )
+
+    def describe(self) -> str:
+        allowed_desc = ", ".join(str(s) for s in self.allowed)
+        return f"np.prod({self.interface}.tensor) ∈ {{{allowed_desc}}}"
+
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 # =============================================================================
 # ONNX-Specific Constraints (gracefully degrade on kernel context)
 # =============================================================================
 
 @dataclass(frozen=True)
-class IsDynamic(Constraint):
+class IsDynamic:
     """Interfaces must be dynamic (no initializer).
 
     Only meaningful for ONNX contexts. Always passes on kernel contexts.
@@ -512,7 +725,7 @@ class IsDynamic(Constraint):
 
     interfaces: tuple[str, ...]
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are dynamic."""
         for name in self.interfaces:
             if not ctx.is_dynamic(name):
@@ -522,9 +735,13 @@ class IsDynamic(Constraint):
     def describe(self) -> str:
         return f"{self.interfaces} must be dynamic (no initializers)"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 @dataclass(frozen=True)
-class IsStatic(Constraint):
+class IsStatic:
     """Interfaces must be static (have initializer).
 
     Only meaningful for ONNX contexts. Always passes on kernel contexts.
@@ -535,7 +752,7 @@ class IsStatic(Constraint):
 
     interfaces: tuple[str, ...]
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are static."""
         for name in self.interfaces:
             if ctx.is_dynamic(name):
@@ -545,9 +762,13 @@ class IsStatic(Constraint):
     def describe(self) -> str:
         return f"{self.interfaces} must be static (have initializers)"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 @dataclass(frozen=True)
-class HasLayout(Constraint):
+class HasLayout:
     """Interface must have specified layout.
 
     Only meaningful for ONNX contexts. Always passes on kernel contexts.
@@ -559,7 +780,7 @@ class HasLayout(Constraint):
     interface: str
     layout: str  # "NHWC" or "NCHW"
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Validate interface has expected layout."""
         actual_layout = ctx.get_layout(self.interface)
 
@@ -579,13 +800,17 @@ class HasLayout(Constraint):
     def describe(self) -> str:
         return f"{self.interface} must have layout {self.layout}"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 # =============================================================================
 # Node Attribute Constraint
 # =============================================================================
 
 @dataclass(frozen=True)
-class NodeAttributeEquals(Constraint):
+class NodeAttributeEquals:
     """Validate ONNX node attribute equals expected value(s).
 
     Only applicable during ONNX inference validation (gracefully skips in kernel context).
@@ -615,26 +840,21 @@ class NodeAttributeEquals(Constraint):
         if not isinstance(self.expected_values, (list, tuple)):
             object.__setattr__(self, 'expected_values', [self.expected_values])
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Check if node attribute matches expected value(s).
 
         Gracefully skips in kernel context (returns None).
         """
-        # Use sentinel to distinguish "attribute not found" from "attribute is None"
-        _SENTINEL = object()
+        _SENTINEL = object()  # Distinguishes "not found" from "value is None"
 
         try:
             actual_value = ctx.get_node_attribute(self.attribute_name, default=_SENTINEL)
         except RuntimeError:
-            # Kernel context - node attributes not available
-            # This constraint only applies during ONNX inference, so skip gracefully
-            return None
+            return None  # Kernel context - gracefully skip
 
-        # If we got the sentinel, attribute doesn't exist
         if actual_value is _SENTINEL:
-            # Check if None is an acceptable value
             if None in self.expected_values:
-                return None
+                return None  # None is acceptable
             return (f"Node attribute '{self.attribute_name}' not found, "
                    f"expected one of {self.expected_values}")
 
@@ -650,16 +870,122 @@ class NodeAttributeEquals(Constraint):
             return f"Node attribute '{self.attribute_name}' must equal {self.expected_values[0]}"
         return f"Node attribute '{self.attribute_name}' must be one of {self.expected_values}"
 
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
+
+@dataclass(frozen=True)
+class AttrCompare:
+    """Validate ONNX node attribute against a comparison operator.
+
+    Only applicable during ONNX inference validation (gracefully skips in kernel context).
+    Supports standard comparison operators for numeric attributes.
+
+    Args:
+        attribute_name: ONNX node attribute to check
+        operator: Comparison operator ('==', '!=', '<', '<=', '>', '>=')
+        value: Value to compare against (int, float, or param name string)
+
+    Examples:
+        # Epsilon must be positive
+        AttrCompare("epsilon", ">", 0)
+
+        # Axis must be -1
+        AttrCompare("axis", "==", -1)
+
+        # Temperature must be at most 1.0
+        AttrCompare("temperature", "<=", 1.0)
+
+        # Compare against parameter
+        AttrCompare("channels", ">=", "MIN_CHANNELS")
+
+        # Not equal check
+        AttrCompare("mode", "!=", 0)
+    """
+
+    attribute_name: str
+    operator: str  # '==', '!=', '<', '<=', '>', '>='
+    value: Union[int, float, str]  # literal or param name
+
+    # Valid operators
+    _OPERATORS = {
+        '==': lambda a, b: a == b,
+        '!=': lambda a, b: a != b,
+        '<': lambda a, b: a < b,
+        '<=': lambda a, b: a <= b,
+        '>': lambda a, b: a > b,
+        '>=': lambda a, b: a >= b,
+    }
+
+    def __post_init__(self):
+        """Validate operator."""
+        if self.operator not in self._OPERATORS:
+            raise ValueError(
+                f"Invalid operator '{self.operator}'. "
+                f"Must be one of {list(self._OPERATORS.keys())}"
+            )
+
+    def check(self, ctx) -> Optional[str]:
+        """Check if node attribute satisfies comparison.
+
+        Gracefully skips in kernel context (returns None).
+        """
+        _SENTINEL = object()
+
+        try:
+            actual_value = ctx.get_node_attribute(self.attribute_name, default=_SENTINEL)
+        except RuntimeError:
+            return None  # Kernel context - gracefully skip
+
+        if actual_value is _SENTINEL:
+            return f"Node attribute '{self.attribute_name}' not found"
+
+        # Resolve comparison value (literal or param reference)
+        try:
+            compare_value = (
+                ctx.get_param(self.value)
+                if isinstance(self.value, str)
+                else self.value
+            )
+        except (RuntimeError, KeyError):
+            # Param not available - skip check
+            return None
+
+        # Type compatibility check for numeric comparisons
+        if not isinstance(actual_value, (int, float)) or not isinstance(compare_value, (int, float)):
+            return (
+                f"Node attribute '{self.attribute_name}' comparison requires numeric types, "
+                f"got {type(actual_value).__name__} {self.operator} {type(compare_value).__name__}"
+            )
+
+        # Perform comparison
+        comparison_fn = self._OPERATORS[self.operator]
+        if not comparison_fn(actual_value, compare_value):
+            return (
+                f"Node attribute '{self.attribute_name}' = {actual_value} "
+                f"fails constraint {self.operator} {compare_value}"
+            )
+
+        return None
+
+    def describe(self) -> str:
+        return f"Node attribute '{self.attribute_name}' {self.operator} {self.value}"
+
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
 
 # =============================================================================
-# Custom Constraint
+# CustomConstraint Constraint
 # =============================================================================
 
 @dataclass(frozen=True)
-class Custom(Constraint):
-    """Custom validation logic.
+class CustomConstraint:
+    """CustomConstraint validation logic.
 
-    The check function receives ValidationContext and returns Optional[str].
+    The check function receives a validation context and returns Optional[str].
 
     Example:
         def check_matmul_compat(ctx):
@@ -669,13 +995,13 @@ class Custom(Constraint):
                 return f"MatMul incompatible: {input_shape[-1]} vs {weight_shape[0]}"
             return None
 
-        Custom(check_matmul_compat, "MatMul dimension compatibility")
+        CustomConstraint(check_matmul_compat, "MatMul dimension compatibility")
     """
 
-    check_fn: Callable[[ValidationContext], Optional[str]]
+    check_fn: Callable[[Any], Optional[str]]
     description: str
 
-    def check(self, ctx: ValidationContext) -> Optional[str]:
+    def check(self, ctx) -> Optional[str]:
         """Call custom validation function."""
         try:
             return self.check_fn(ctx)
@@ -684,6 +1010,14 @@ class Custom(Constraint):
 
     def describe(self) -> str:
         return self.description
+
+    @property
+    def evaluation_phase(self) -> str:
+        return 'structural'
+
+
+# Alias for backward compatibility
+Custom = CustomConstraint
 
 
 __all__ = [
@@ -699,11 +1033,14 @@ __all__ = [
     'DimensionDivisible',
     'DimensionInRange',
     'DimensionEquals',
+    'TensorDimMatches',
+    'TensorSizeMatches',
     # ONNX-specific constraints
     'IsDynamic',
     'IsStatic',
     'HasLayout',
     'NodeAttributeEquals',
+    'AttrCompare',
     # Custom constraint
-    'Custom',
+    'CustomConstraint',
 ]

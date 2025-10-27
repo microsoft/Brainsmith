@@ -21,7 +21,7 @@ from qonnx.transformation.general import ApplyConfig
 from brainsmith.dataflow import KernelOp
 
 
-class RefreshKernelInstances(Transformation):
+class RefreshKernelDesignPoints(Transformation):
     """Refresh kernel instance cache for all KernelOp nodes.
 
     This transform should be called:
@@ -65,8 +65,8 @@ class RefreshKernelInstances(Transformation):
             # Check if it's a KernelOp
             if isinstance(inst, KernelOp):
                 # Invalidate and rebuild kernel instance
-                inst.invalidate_design_space()
-                inst.build_design_space(model)
+                inst.invalidate()
+                inst.infer_node_datatype(model)  # Initializes and validates
                 graph_modified = True
 
                 # Optionally update output shapes/types from kernel instance
@@ -83,14 +83,14 @@ class RefreshKernelInstances(Transformation):
     ) -> None:
         """Update tensor shapes and datatypes from kernel instance.
 
-        This allows RefreshKernelInstances to serve as a replacement for
+        This allows RefreshKernelDesignPoints to serve as a replacement for
         InferShapes and InferDataTypes for Brainsmith operators.
         """
         try:
-            kernel_instance = op.kernel_instance  # Returns KernelInstance
+            design_point = op.design_point  # Returns KernelDesignPoint
 
             # Update input tensor info
-            for i, inp in enumerate(kernel_instance.inputs):
+            for i, inp in enumerate(design_point.inputs):
                 if i < len(node.input):
                     tensor_name = node.input[i]
                     if tensor_name:  # Skip empty inputs
@@ -100,7 +100,7 @@ class RefreshKernelInstances(Transformation):
                         model.set_tensor_datatype(tensor_name, inp.datatype)
             
             # Update output tensor info
-            for i, out in enumerate(kernel_instance.outputs):
+            for i, out in enumerate(design_point.outputs):
                 if i < len(node.output):
                     tensor_name = node.output[i]
                     # Update shape
@@ -116,14 +116,14 @@ class RefreshKernelInstances(Transformation):
 class InferBrainsmithTypes(Transformation):
     """Infer datatypes for Brainsmith operators using kernel instances.
 
-    This is a more targeted version of RefreshKernelInstances that only
+    This is a more targeted version of RefreshKernelDesignPoints that only
     updates datatypes, similar to qonnx.transformation.infer_datatypes.
     """
 
     def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
         """Apply datatype inference."""
         # First refresh all kernel instances
-        model, _ = RefreshKernelInstances().apply(model)
+        model, _ = RefreshKernelDesignPoints().apply(model)
 
         graph_modified = False
 
@@ -131,10 +131,10 @@ class InferBrainsmithTypes(Transformation):
             try:
                 inst = getCustomOp(node, model=model.model)
                 if isinstance(inst, KernelOp):
-                    kernel_instance = inst.kernel_instance  # Returns KernelInstance
+                    design_point = inst.design_point  # Returns KernelDesignPoint
 
                     # Update output datatypes only
-                    for i, out in enumerate(kernel_instance.outputs):
+                    for i, out in enumerate(design_point.outputs):
                         if i < len(node.output):
                             old_dtype = model.get_tensor_datatype(node.output[i])
                             new_dtype = out.datatype
@@ -151,14 +151,14 @@ class InferBrainsmithTypes(Transformation):
 class InferBrainsmithShapes(Transformation):
     """Infer shapes for Brainsmith operators using kernel instances.
 
-    This is a more targeted version of RefreshKernelInstances that only
+    This is a more targeted version of RefreshKernelDesignPoints that only
     updates shapes, similar to qonnx.transformation.infer_shapes.
     """
 
     def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
         """Apply shape inference."""
         # First refresh all kernel instances
-        model, _ = RefreshKernelInstances().apply(model)
+        model, _ = RefreshKernelDesignPoints().apply(model)
 
         graph_modified = False
 
@@ -166,10 +166,10 @@ class InferBrainsmithShapes(Transformation):
             try:
                 inst = getCustomOp(node, model=model.model)
                 if isinstance(inst, KernelOp):
-                    kernel_instance = inst.kernel_instance  # Returns KernelInstance
+                    design_point = inst.design_point  # Returns KernelDesignPoint
 
                     # Update output shapes only
-                    for i, out in enumerate(kernel_instance.outputs):
+                    for i, out in enumerate(design_point.outputs):
                         if i < len(node.output):
                             old_shape = model.get_tensor_shape(node.output[i])
                             new_shape = list(out.tensor_dims)
@@ -197,7 +197,7 @@ def make_brainsmith_cleanup_pipeline():
 
     return [
         ApplyConfig(),           # Apply any pending config changes
-        RefreshKernelInstances(),   # Refresh all kernel instances
+        RefreshKernelDesignPoints(),   # Refresh all kernel instances
         FoldConstants(),         # Fold any constants
         RemoveUnusedTensors(),   # Clean up unused tensors
         RemoveStaticGraphInputs() # Remove static inputs

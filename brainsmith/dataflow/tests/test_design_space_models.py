@@ -10,7 +10,7 @@
 import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.models import (
+from brainsmith.dataflow.dse_models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
 )
@@ -109,8 +109,8 @@ def test_kernel_design_space_creation():
         inputs={"input": input_ds},
         outputs={"output": output_ds},
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
+        optimization_constraints=[],
+        dimensions={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
     )
 
     assert model.name == "TestKernel"
@@ -120,8 +120,8 @@ def test_kernel_design_space_creation():
     assert "output" in model.outputs
     assert model.inputs["input"] == input_ds
     assert model.outputs["output"] == output_ds
-    assert "SIMD" in model.parallelization_params
-    assert 8 in model.parallelization_params["SIMD"]
+    assert "SIMD" in model.dimensions
+    assert 8 in model.dimensions["SIMD"]
 
 
 def test_kernel_design_space_dict_access():
@@ -147,8 +147,8 @@ def test_kernel_design_space_dict_access():
         inputs={"input": input_ds},
         outputs={"output": output_ds},
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={"SIMD": {1, 2}, "PE": {1, 2}},
+        optimization_constraints=[],
+        dimensions={"SIMD": {1, 2}, "PE": {1, 2}},
     )
 
     # Dict access works
@@ -168,8 +168,8 @@ def test_kernel_design_space_immutable():
         inputs={},
         outputs={},
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={},
+        optimization_constraints=[],
+        dimensions={},
     )
 
     with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
@@ -194,15 +194,15 @@ def test_kernel_design_space_valid_ranges():
         inputs={"input": input_ds},
         outputs={},
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={"SIMD": valid_simd},
+        optimization_constraints=[],
+        dimensions={"SIMD": valid_simd},
     )
 
-    assert len(model.parallelization_params["SIMD"]) == 18
-    assert 64 in model.parallelization_params["SIMD"]
-    assert 128 in model.parallelization_params["SIMD"]
-    assert 768 in model.parallelization_params["SIMD"]
-    assert 1 in model.parallelization_params["SIMD"]
+    assert len(model.dimensions["SIMD"]) == 18
+    assert 64 in model.dimensions["SIMD"]
+    assert 128 in model.dimensions["SIMD"]
+    assert 768 in model.dimensions["SIMD"]
+    assert 1 in model.dimensions["SIMD"]
 
 
 if __name__ == "__main__":

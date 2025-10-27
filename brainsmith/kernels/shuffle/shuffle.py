@@ -47,11 +47,11 @@ from brainsmith.core.plugins import kernel
 
 
 # =============================================================================
-# Helper Functions for ComputedDim and Custom Constraints
+# Helper Functions for Dimension Computation and Custom Constraints
 # =============================================================================
 
 def _compute_output_dim_factory(dim_index: int) -> Callable:
-    """Factory for ComputedDim functions that apply permutation to input shape.
+    """Factory for dimension functions that apply permutation to input shape.
 
     Creates a function that computes output dimension by applying the
     permutation to the input shape at the specified dimension index.
@@ -60,7 +60,7 @@ def _compute_output_dim_factory(dim_index: int) -> Callable:
         dim_index: Which output dimension to compute (0-indexed)
 
     Returns:
-        Function compatible with ComputedDim signature
+        Function compatible with unified 4-param callback signature
 
     Example:
         # For perm=[0, 2, 1, 3] on input [1, 56, 56, 128]:
@@ -69,12 +69,19 @@ def _compute_output_dim_factory(dim_index: int) -> Callable:
         # dim 2: input[perm[2]] = input[1] = 56 (height)
         # dim 3: input[perm[3]] = input[3] = 128
     """
-    def _compute_output_dim(interfaces: Dict[str, Any], param_getter: Callable) -> int:
+    def _compute_output_dim(
+        interfaces: Dict[str, Any],
+        param_getter: Callable,
+        model: Any,
+        tensor_name: Optional[str]
+    ) -> int:
         """Compute output dimension by applying permutation.
 
         Args:
             interfaces: Dict mapping interface names to InterfaceDesignSpace/Configuration
             param_getter: Function to retrieve nodeattr values
+            model: ModelWrapper (unused but part of unified signature)
+            tensor_name: Output tensor name (unused but part of unified signature)
 
         Returns:
             Output dimension value at dim_index
@@ -152,7 +159,7 @@ def _innerloop_moves(shape: Tuple[int, ...], perm: Tuple[int, ...]) -> int:
     return 0 if new_position == len(perm) - 1 else 1
 
 
-def _validate_permutation(ctx: df.ValidationContext) -> Optional[str]:
+def _validate_permutation(ctx) -> Optional[str]:
     """Validate permutation is valid for input shape.
 
     Checks:
@@ -161,21 +168,14 @@ def _validate_permutation(ctx: df.ValidationContext) -> Optional[str]:
     - Permutation values are in range [0, n-1]
 
     Args:
-        ctx: Validation context (ONNX or kernel)
+        ctx: Validation context (DesignSpaceValidationContext or ConfigurationValidationContext)
 
     Returns:
         Error message if invalid, None if valid
-
-    Note:
-        Gracefully degrades in ONNX context (returns None if params unavailable)
     """
-    try:
-        perm = ctx.get_param("perm")
-        input_shape = ctx.get_shape("input", df.ShapeHierarchy.TENSOR)
-    except (KeyError, RuntimeError):
-        # ONNX context - params not available yet
-        # This is legitimate - perm set during transformation
-        return None
+    # Get parameters (always available in design space / configuration contexts)
+    perm = ctx.get_param("perm")
+    input_shape = ctx.get_shape("input", df.ShapeHierarchy.TENSOR)
 
     # Validate permutation length
     if len(perm) != len(input_shape):
@@ -204,18 +204,17 @@ def _validate_permutation(ctx: df.ValidationContext) -> Optional[str]:
 # =============================================================================
 
 # Dynamic output shape - each dimension computed by applying permutation
-# Note: We create 4 ComputedDim instances for common 4D case (NHWC)
+# Note: We create 4 dimension functions for common 4D case (NHWC)
 # For other dimensionalities, schema would need to be generalized
 _OUTPUT_BLOCK_TILING = [
-    df.ComputedDim(_compute_output_dim_factory(0), "permuted dim 0"),
-    df.ComputedDim(_compute_output_dim_factory(1), "permuted dim 1"),
-    df.ComputedDim(_compute_output_dim_factory(2), "permuted dim 2"),
-    df.ComputedDim(_compute_output_dim_factory(3), "permuted dim 3"),
+    _compute_output_dim_factory(0),  # Direct callable: permuted dim 0
+    _compute_output_dim_factory(1),  # Direct callable: permuted dim 1
+    _compute_output_dim_factory(2),  # Direct callable: permuted dim 2
+    _compute_output_dim_factory(3),  # Direct callable: permuted dim 3
 ]
 
 SHUFFLE_SCHEMA = df.KernelSchema(
     name="Shuffle",
-    domain="brainsmith.kernels",
 
     # ========== STRUCTURE ==========
     # Note: Shuffle supports transpose of 4D tensors (typical for vision models)
@@ -232,8 +231,8 @@ SHUFFLE_SCHEMA = df.KernelSchema(
             name="output",
             # Each output dimension is input[perm[i]]
             block_tiling=_OUTPUT_BLOCK_TILING,
-            stream_tiling=[1, 1, 1, df.DerivedDim("input", -1)],  # Match input SIMD
-            datatype=df.DerivedDatatype("input"),  # Pass-through datatype
+            stream_tiling=[1, 1, 1, ("input", -1)],  # Match input SIMD
+            datatype="input",  # Pass-through datatype
         )
     ],
 
@@ -258,11 +257,9 @@ SHUFFLE_SCHEMA = df.KernelSchema(
     ],
 
     # ========== TRANSFORMATION ==========
-    source_ops=["Transpose"],  # Matches Transpose nodes
     attribute_mapping={
         "perm": "perm",  # Direct mapping from Transpose.perm attribute
     },
-    initial_parallelization={"SIMD": 1},
 )
 
 
@@ -285,9 +282,13 @@ class Shuffle(KernelOp):
     Schema Auto-Generates:
     - "SIMD" from stream_tiling=["SIMD"]
     - "input0Datatype" from input interface
-    - "output0Datatype" from output interface (derived from input)
+    - "output0Datatype" from output interface (string shorthand: "input")
     - Permutation from kernel_params
     - Loop coefficients (computed during transformation)
+
+    Output Shape Computation:
+    - Each output dimension computed by factory functions applying perm
+    - Uses direct callables (no wrapper classes)
 
     Design Space Exploration:
     - SIMD: divisors of input last dimension
@@ -302,7 +303,7 @@ class Shuffle(KernelOp):
         op = Shuffle(result.nodes_to_insert[0])
         for config in df.iter_valid_configurations(op, model):
             op.set_nodeattr("SIMD", config["SIMD"])
-            ki = op.get_kernel_instance(model)  # Returns KernelInstance
+            ki = op.get_design_point(model)  # Returns KernelDesignPoint
             # Evaluate performance...
     """
 
@@ -353,16 +354,9 @@ class Shuffle(KernelOp):
         if len(node.output) != 1:
             return False
 
-        # Validate schema constraints
-        from brainsmith.dataflow.validation import OnnxValidationContext
-
-        schema = cls.build_schema(node, model)
-        ctx = OnnxValidationContext(node=node, model=model, schema=schema)
-
-        for constraint in schema.constraints:
-            error = constraint.check(ctx)
-            if error:
-                return False
+        # Note: Schema constraints (datatype, dynamic/static, etc.) will be validated
+        # during build() after transformation. can_infer_from() only checks ONNX
+        # pattern matching (op type, has perm attribute, output count).
 
         return True
 
@@ -383,6 +377,10 @@ class Shuffle(KernelOp):
 
         Computes loop_coeffs and inner_moves from the reshaped tensor shape
         and permutation (for HLS input_gen template).
+
+        NOTE: Shuffle works with any tensor layout (it permutes dimensions).
+        However, the global normalize_dataflow_layouts preprocessing pass ensures
+        inputs are in NHWC layout for consistency with other dataflow kernels.
 
         Schema constraints already validated this node is compatible via can_infer_from().
         This method focuses purely on transformation.
@@ -490,7 +488,7 @@ class Shuffle(KernelOp):
             "Shuffle",
             inputs=[new_in_tensor],
             outputs=[new_out_tensor],
-            domain=schema.domain,
+            domain="brainsmith.kernels",
             name=f"Shuffle_{node.name}",
 
             # Core parameters
@@ -501,7 +499,6 @@ class Shuffle(KernelOp):
             inner_moves=inner_moves,
 
             # Initial parallelization
-            SIMD=schema.initial_parallelization["SIMD"],
         )
 
         return df.TransformationResult(

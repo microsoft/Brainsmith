@@ -20,7 +20,7 @@ This schema does NOT describe HOW to find sources:
 """
 
 import brainsmith.dataflow as df
-from brainsmith.dataflow import DerivedDatatype, DerivedDim, FULL_DIM
+from brainsmith.dataflow import FULL_DIM
 from brainsmith.dataflow.constraints import Custom
 
 
@@ -30,7 +30,6 @@ from brainsmith.dataflow.constraints import Custom
 
 LAYERNORM_SCHEMA = df.KernelSchema(
     name="LayerNorm",
-    domain="brainsmith.kernels",
 
     # =========================================================================
     # STRUCTURE: What the product looks like
@@ -48,10 +47,10 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],                  # (1, 1, channels)
-            stream_tiling=[DerivedDim("input", -1)],  # Output streams at same rate as input
-            datatype=DerivedDatatype("input"),        # Output datatype same as input
-            required_layout="NHWC",                   # Hardware produces NHWC layout
+            block_tiling=[FULL_DIM],          # (1, 1, channels)
+            stream_tiling=[("input", -1)],    # Output streams at same rate as input
+            datatype="input",                 # Output datatype same as input
+            required_layout="NHWC",           # Hardware produces NHWC layout
         )
     ],
 
@@ -79,7 +78,6 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     # DSE: Initial design space exploration configuration
     # =========================================================================
 
-    initial_parallelization={"SIMD": 1},
 )
 
 

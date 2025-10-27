@@ -10,21 +10,21 @@
 import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.models import (
+from brainsmith.dataflow.dse_models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
-    InterfaceConfiguration,
-    KernelInstance,
+    InterfaceDesignPoint,
+    KernelDesignPoint,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 
 
 # =============================================================================
-# Test InterfaceConfiguration
+# Test InterfaceDesignPoint
 # =============================================================================
 
 def test_configured_interface_model_creation():
-    """Test InterfaceConfiguration can be created."""
+    """Test InterfaceDesignPoint can be created."""
     ds_interface = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 224, 224, 768),
@@ -34,7 +34,7 @@ def test_configured_interface_model_creation():
         is_weight=False,
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(64,),
     )
@@ -44,7 +44,7 @@ def test_configured_interface_model_creation():
 
 
 def test_configured_interface_model_property_delegation():
-    """Test InterfaceConfiguration properties delegate to design space."""
+    """Test InterfaceDesignPoint properties delegate to design space."""
     ds_interface = InterfaceDesignSpace(
         name="test_interface",
         tensor_shape=(1, 224, 224, 768),
@@ -54,7 +54,7 @@ def test_configured_interface_model_property_delegation():
         is_weight=True,
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(32,),
     )
@@ -68,7 +68,7 @@ def test_configured_interface_model_property_delegation():
 
 
 def test_configured_interface_model_get_shape():
-    """Test InterfaceConfiguration.get_shape() for all hierarchies."""
+    """Test InterfaceDesignPoint.get_shape() for all hierarchies."""
     ds_interface = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 224, 224, 768),
@@ -77,7 +77,7 @@ def test_configured_interface_model_get_shape():
         datatype=DataType["INT8"],
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(64,),
     )
@@ -94,7 +94,7 @@ def test_configured_interface_model_get_shape():
 
 
 def test_configured_interface_model_get_shape_invalid_hierarchy():
-    """Test InterfaceConfiguration.get_shape() with invalid hierarchy raises error."""
+    """Test InterfaceDesignPoint.get_shape() with invalid hierarchy raises error."""
     ds_interface = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
@@ -103,7 +103,7 @@ def test_configured_interface_model_get_shape_invalid_hierarchy():
         datatype=DataType["INT8"],
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(64,),
     )
@@ -114,7 +114,7 @@ def test_configured_interface_model_get_shape_invalid_hierarchy():
 
 
 def test_configured_interface_model_folding_factors():
-    """Test InterfaceConfiguration computed properties."""
+    """Test InterfaceDesignPoint computed properties."""
     ds_interface = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
@@ -123,20 +123,24 @@ def test_configured_interface_model_folding_factors():
         datatype=DataType["INT8"],
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(1, 64),  # Match dimensions with block_shape
     )
 
-    # Test computed properties
-    assert configured.tensor_folding_factor == 1  # tensor / block = (1,768) / (1,768)
-    assert configured.block_folding_factor == 12  # block / stream = (1,768) / (1,64)
+    # Test per-dimension folding shapes
+    assert configured.tensor_blocks_shape == (1, 1)  # ceil((1,768) / (1,768))
+    assert configured.stream_cycles_shape == (1, 12)  # ceil((1,768) / (1,64))
+
+    # Test computed properties (products of folding shapes)
+    assert configured.tensor_folding_factor == 1  # prod(tensor_blocks_shape)
+    assert configured.block_folding_factor == 12  # prod(stream_cycles_shape)
     assert configured.streaming_bandwidth == 64  # prod(stream_shape) = 1 * 64
     assert configured.stream_width_bits == 64 * 8  # bandwidth * bitwidth
 
 
 def test_configured_interface_model_immutable():
-    """Test InterfaceConfiguration is immutable."""
+    """Test InterfaceDesignPoint is immutable."""
     ds_interface = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
@@ -145,7 +149,7 @@ def test_configured_interface_model_immutable():
         datatype=DataType["INT8"],
     )
 
-    configured = InterfaceConfiguration(
+    configured = InterfaceDesignPoint(
         design_space=ds_interface,
         stream_shape=(64,),
     )
@@ -155,11 +159,11 @@ def test_configured_interface_model_immutable():
 
 
 # =============================================================================
-# Test KernelInstance
+# Test KernelDesignPoint
 # =============================================================================
 
-def test_kernel_instance_creation():
-    """Test KernelInstance can be created."""
+def test_design_point_creation():
+    """Test KernelDesignPoint can be created."""
     input_inv = InterfaceDesignSpace(
         name="input",
         tensor_shape=(1, 768),
@@ -181,42 +185,42 @@ def test_kernel_instance_creation():
         inputs=(input_inv,),
         outputs=(output_inv,),
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={"SIMD": {1, 2, 4, 8, 16}},
+        optimization_constraints=[],
+        dimensions={"SIMD": {1, 2, 4, 8, 16}},
     )
 
-    input_cfg = InterfaceConfiguration(design_space=input_inv, stream_shape=(64,))
-    output_cfg = InterfaceConfiguration(design_space=output_inv, stream_shape=(64,))
+    input_cfg = InterfaceDesignPoint(design_space=input_inv, stream_shape=(64,))
+    output_cfg = InterfaceDesignPoint(design_space=output_inv, stream_shape=(64,))
 
-    configured_model = KernelInstance(
+    configured_model = KernelDesignPoint(
         design_space=design_space_model,
         inputs=(input_cfg,),
         outputs=(output_cfg,),
-        params={"SIMD": 64},
+        config={"SIMD": 64},
     )
 
     assert configured_model.name == "TestKernel"
-    assert configured_model.params == {"SIMD": 64}
+    assert configured_model.config == {"SIMD": 64}
     assert len(configured_model.inputs) == 1
     assert len(configured_model.outputs) == 1
 
 
-def test_kernel_instance_property_delegation():
-    """Test KernelInstance properties delegate to design space."""
+def test_design_point_property_delegation():
+    """Test KernelDesignPoint properties delegate to design space."""
     design_space_model = KernelDesignSpace(
         name="LayerNorm",
         inputs=(),
         outputs=(),
         internal_datatypes={"accumulator": DataType["INT32"]},
-        parametric_constraints=[],
-        parallelization_params={},
+        optimization_constraints=[],
+        dimensions={},
     )
 
-    configured_model = KernelInstance(
+    configured_model = KernelDesignPoint(
         design_space=design_space_model,
         inputs=(),
         outputs=(),
-        params={},
+        config={},
     )
 
     # Properties should delegate to design space
@@ -224,22 +228,22 @@ def test_kernel_instance_property_delegation():
     assert configured_model.internal_datatypes == {"accumulator": DataType["INT32"]}
 
 
-def test_kernel_instance_immutable():
-    """Test KernelInstance is immutable."""
+def test_design_point_immutable():
+    """Test KernelDesignPoint is immutable."""
     design_space_model = KernelDesignSpace(
         name="TestKernel",
         inputs=(),
         outputs=(),
         internal_datatypes={},
-        parametric_constraints=[],
-        parallelization_params={},
+        optimization_constraints=[],
+        dimensions={},
     )
 
-    configured_model = KernelInstance(
+    configured_model = KernelDesignPoint(
         design_space=design_space_model,
         inputs=(),
         outputs=(),
-        params={},
+        config={},
     )
 
     with pytest.raises(Exception):  # dataclasses.FrozenInstanceError

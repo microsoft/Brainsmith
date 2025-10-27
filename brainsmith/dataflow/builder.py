@@ -16,11 +16,11 @@ Key Components:
 - DesignSpaceBuilder: Orchestrates two-phase model construction
 
 Architecture:
-    KernelOp (FINN adapter) → DesignSpaceBuilder → KernelDesignSpace → KernelInstance
+    KernelOp (FINN adapter) → DesignSpaceBuilder → KernelDesignSpace → KernelDesignPoint
 
 The builder follows a two-phase flow:
 1. build(): Build KernelDesignSpace (tensor shapes, block shapes, datatypes, valid ranges)
-2. design_space.configure(params): Build KernelInstance (stream shapes for specific params)
+2. design_space.configure(params): Build KernelDesignPoint (stream shapes for specific params)
 """
 
 import logging
@@ -35,10 +35,11 @@ from qonnx.core.modelwrapper import ModelWrapper
 from brainsmith.utils import divisors
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
-from .datatype_sources import DatatypeSource
+from .types import VALUE_OPTIMIZED, ShapeHierarchy
+from .spec_helpers import derive_datatype, value_optimized_datatype
 
 if TYPE_CHECKING:
-    from .models import InterfaceDesignSpace, KernelDesignSpace
+    from .dse_models import InterfaceDesignSpace, KernelDesignSpace
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class DesignSpaceBuilder:
        - Block shapes from block_tiling templates
        - Datatypes from ONNX graph or derivation
        - Valid parallelization parameter ranges
-    2. design_space.configure() creates KernelInstance many times (fast)
+    2. design_space.configure() creates KernelDesignPoint many times (fast)
        - Stream shapes from stream_tiling templates + parallelization params
        - Parametric constraint validation
 
@@ -99,14 +100,89 @@ class DesignSpaceBuilder:
         >>> config = design_space.configure({"SIMD": 64, "PE": 1})
     """
 
+    def _resolve_datatype_spec(
+        self,
+        spec: Any,
+        tensor_name: Optional[str] = None,
+        fallback_datatype: Optional[BaseDataType] = None
+    ) -> BaseDataType:
+        """Resolve DatatypeSpec union type to concrete datatype.
+
+        Handles all DatatypeSpec union variants:
+        - None: Use fallback_datatype (from graph)
+        - BaseDataType: Use as-is
+        - str: Shorthand for derive_datatype(interface_name)
+        - VALUE_OPTIMIZED: Optimize from tensor values
+        - Callable: Custom datatype function
+
+        Args:
+            spec: DatatypeSpec to resolve
+            tensor_name: ONNX tensor name for VALUE_OPTIMIZED (optional)
+            fallback_datatype: Datatype to use if spec is None
+
+        Returns:
+            Resolved BaseDataType
+
+        Raises:
+            ValueError: If resolution fails
+        """
+        # Strategy 1: None → use fallback
+        if spec is None:
+            if fallback_datatype is None:
+                raise ValueError("DatatypeSpec is None but no fallback_datatype provided")
+            return fallback_datatype
+
+        # Strategy 2: Concrete type → use as-is
+        if isinstance(spec, BaseDataType):
+            return spec
+
+        # Strategies 3-5: Resolver functions
+        try:
+            resolver = self._get_datatype_resolver(spec)
+            return resolver(
+                self._interfaces,
+                self._ctx.param_getter,
+                self._ctx.model_w,
+                tensor_name
+            )
+        except Exception as e:
+            spec_type = type(spec).__name__ if not isinstance(spec, str) else f"'{spec}'"
+            raise ValueError(f"Datatype resolution failed for {spec_type}: {e}") from e
+
+    def _get_datatype_resolver(self, spec: Any) -> Callable:
+        """Get resolver function for datatype spec.
+
+        Args:
+            spec: DatatypeSpec to get resolver for (str, VALUE_OPTIMIZED, or callable)
+
+        Returns:
+            Resolver function with signature (interfaces, param_getter, model, tensor_name) -> BaseDataType
+
+        Raises:
+            ValueError: If spec is not a valid resolver type
+        """
+        if isinstance(spec, str):
+            return derive_datatype(spec)
+
+        if spec is VALUE_OPTIMIZED:
+            return value_optimized_datatype()
+
+        if callable(spec):
+            return spec
+
+        raise ValueError(
+            f"Invalid DatatypeSpec: {spec} (type {type(spec).__name__}). "
+            f"Must be None, BaseDataType, str, VALUE_OPTIMIZED, or callable."
+        )
+
     def build(self, ctx: BuildContext) -> KernelDesignSpace:
         """Build kernel design space from ONNX context.
 
         Resolves all properties constant across parallelization configs:
         - Tensor shapes (from ONNX graph)
         - Block shapes (from block_tiling templates)
-        - Datatypes (from ONNX graph + DatatypeSource derivation)
-        - Internal datatypes (from DatatypeSource)
+        - Datatypes (from ONNX graph + union type derivation)
+        - Internal datatypes (from union type derivation)
         - Structural constraints (validated once)
         - Valid parallelization parameter ranges (divisor sets)
 
@@ -121,7 +197,7 @@ class DesignSpaceBuilder:
         Raises:
             ValueError: If structural constraints fail
         """
-        from .models import InterfaceDesignSpace, KernelDesignSpace
+        from .dse_models import InterfaceDesignSpace, KernelDesignSpace
         from .validation import DesignSpaceValidationContext
 
         self._ctx = ctx
@@ -130,7 +206,7 @@ class DesignSpaceBuilder:
         logger.debug(f"Building KernelDesignSpace for {ctx.node_name}")
 
         # Build input interfaces from ONNX graph
-        interfaces_input: Dict[str, InterfaceDesignSpace] = {}
+        inputs: Dict[str, InterfaceDesignSpace] = {}
 
         for i, inp_name in enumerate(ctx.node_inputs):
             if not inp_name:
@@ -151,7 +227,7 @@ class DesignSpaceBuilder:
                     tensor_name=inp_name,
                     schema=schema
                 )
-                interfaces_input[schema.name] = interface
+                inputs[schema.name] = interface
                 self._interfaces[schema.name] = interface
             except ValueError as e:
                 raise ValueError(f"Failed to build input '{schema.name}': {e}") from e
@@ -160,9 +236,14 @@ class DesignSpaceBuilder:
         internal_datatypes = {}
 
         if ctx.schema.internal_datatypes:
-            for internal_name, datatype_source in ctx.schema.internal_datatypes.items():
+            for internal_name, datatype_spec in ctx.schema.internal_datatypes.items():
                 try:
-                    datatype = datatype_source.resolve(self._interfaces, ctx.param_getter)
+                    # Use unified DatatypeSpec resolver (supports union types)
+                    datatype = self._resolve_datatype_spec(
+                        spec=datatype_spec,
+                        tensor_name=None,  # Internals have no ONNX tensor
+                        fallback_datatype=None  # Internal datatypes must be explicit
+                    )
                     ctx.param_setter(f"{internal_name}Datatype", datatype.name)
 
                     # Store datatype directly (no shapes for internal datatypes)
@@ -174,7 +255,7 @@ class DesignSpaceBuilder:
                     raise ValueError(f"Failed to resolve internal datatype '{internal_name}': {e}") from e
 
         # Build output interfaces (may derive datatypes from inputs)
-        interfaces_output: Dict[str, InterfaceDesignSpace] = {}
+        outputs: Dict[str, InterfaceDesignSpace] = {}
 
         for i, out_name in enumerate(ctx.node_outputs):
             if i >= len(ctx.schema.outputs):
@@ -192,59 +273,59 @@ class DesignSpaceBuilder:
                     tensor_name=out_name,
                     schema=schema
                 )
-                interfaces_output[schema.name] = interface
+                outputs[schema.name] = interface
                 self._interfaces[schema.name] = interface
             except ValueError as e:
                 raise ValueError(f"Failed to build output '{schema.name}': {e}") from e
 
-        # Separate constraints by evaluation phase (structural vs parametric)
+        # Separate constraints by evaluation phase (structural vs optimization)
         structural_constraints = [
             c for c in ctx.schema.constraints
             if c.evaluation_phase == 'structural'
         ]
-        parametric_constraints = [
+        optimization_constraints = [
             c for c in ctx.schema.constraints
             if c.evaluation_phase != 'structural'
         ]
 
         logger.debug(
             f"  Split {len(ctx.schema.constraints)} constraints: "
-            f"{len(structural_constraints)} structural, {len(parametric_constraints)} parametric"
+            f"{len(structural_constraints)} structural, {len(optimization_constraints)} optimization"
         )
 
         # Validate structural constraints against design space
         if structural_constraints:
             validation_ctx = DesignSpaceValidationContext(
-                inputs=interfaces_input,
-                outputs=interfaces_output,
+                inputs=inputs,
+                outputs=outputs,
                 internal_datatypes=internal_datatypes,
                 param_getter=ctx.param_getter
             )
 
-            errors = []
-            for constraint in structural_constraints:
-                error = constraint.check(validation_ctx)
-                if error is not None:
-                    errors.append(f"  - {constraint.describe()}: {error}")
-
-            if errors:
-                error_msg = f"Design space validation failed for {ctx.node_name}:\n" + "\n".join(errors)
-                raise ValueError(error_msg)
+            failed = [
+                f"{c.describe()}: {e}"
+                for c in structural_constraints
+                if (e := c.check(validation_ctx))
+            ]
+            if failed:
+                raise ValueError(
+                    f"{ctx.node_name} validation failed:\n" + "\n".join(failed)
+                )
 
             logger.debug(f"  All {len(structural_constraints)} structural constraints passed")
 
-        # Compute valid parameter values as divisors of block dimensions
-        valid_ranges = self._compute_parameter_ranges(interfaces_input, interfaces_output)
+        # Compute valid dimension values (tiling from divisors + DSE from schema)
+        all_dimensions = self._compute_dimension_ranges(inputs, outputs, ctx.schema)
 
         # Assemble immutable design space model
         # Note: structural_constraints validated above but not stored (never re-validated)
         design_space = KernelDesignSpace(
             name=ctx.schema.name,
-            inputs=interfaces_input,
-            outputs=interfaces_output,
+            inputs=inputs,
+            outputs=outputs,
             internal_datatypes=internal_datatypes,
-            parametric_constraints=parametric_constraints,
-            parallelization_params=valid_ranges,
+            optimization_constraints=optimization_constraints,
+            dimensions=all_dimensions,
         )
 
         logger.debug(f"KernelDesignSpace built successfully for {ctx.node_name}")
@@ -253,10 +334,12 @@ class DesignSpaceBuilder:
     def _resolve_output_datatype(self, schema: Any, out_name: str) -> BaseDataType:
         """Resolve output datatype from schema or graph.
 
-        Three cases:
-        1. schema.datatype is None: Use datatype from ONNX graph (pass-through)
-        2. schema.datatype is DatatypeSource: Derive from inputs/internals
-        3. schema.datatype is DataType: Use fixed datatype (rare)
+        Supports DatatypeSpec union type:
+        - None: Use ONNX graph datatype (pass-through)
+        - BaseDataType: Fixed datatype
+        - str: Shorthand for derive_datatype(interface)
+        - VALUE_OPTIMIZED: Optimize from tensor values
+        - Callable: Custom datatype function
 
         Args:
             schema: OutputSchema
@@ -268,25 +351,60 @@ class DesignSpaceBuilder:
         Raises:
             ValueError: If datatype resolution fails
         """
-        if schema.datatype is None:
-            # No schema derivation - use graph datatype (pass-through)
-            return self._ctx.model_w.get_tensor_datatype(out_name)
+        graph_dt = self._ctx.model_w.get_tensor_datatype(out_name)
 
-        if isinstance(schema.datatype, DatatypeSource):
-            # Derive from inputs or internal datatypes
-            derived_dt = schema.datatype.resolve(self._interfaces, self._ctx.param_getter)
-            graph_dt = self._ctx.model_w.get_tensor_datatype(out_name)
+        # Use unified DatatypeSpec resolver
+        derived_dt = self._resolve_datatype_spec(
+            spec=schema.datatype,
+            tensor_name=out_name,
+            fallback_datatype=graph_dt  # Use graph datatype if spec is None
+        )
 
-            if derived_dt != graph_dt:
-                logger.info(
-                    f"Output '{schema.name}' datatype: schema derived {derived_dt.name}, "
-                    f"graph has {graph_dt.name} - using schema"
-                )
+        # Log if schema overrides graph
+        if schema.datatype is not None and derived_dt != graph_dt:
+            logger.info(
+                f"Output '{schema.name}' datatype: schema derived {derived_dt.name}, "
+                f"graph has {graph_dt.name} - using schema"
+            )
 
-            return derived_dt
+        return derived_dt
 
-        # Fixed datatype specified in schema (rare case)
-        return schema.datatype
+    def _resolve_input_datatype(self, schema: Any, inp_name: str) -> BaseDataType:
+        """Resolve input datatype from schema or graph.
+
+        Supports DatatypeSpec union type:
+        - None: Use ONNX graph datatype (default)
+        - BaseDataType: Fixed datatype
+        - str: Shorthand for derive_datatype(interface)
+        - VALUE_OPTIMIZED: Optimize from tensor values
+        - Callable: Custom datatype function
+
+        Args:
+            schema: InputSchema
+            inp_name: ONNX input tensor name
+
+        Returns:
+            Resolved DataType
+
+        Raises:
+            ValueError: If datatype resolution fails
+        """
+        graph_dt = self._ctx.model_w.get_tensor_datatype(inp_name)
+
+        # Use unified DatatypeSpec resolver
+        derived_dt = self._resolve_datatype_spec(
+            spec=schema.datatype,
+            tensor_name=inp_name,
+            fallback_datatype=graph_dt  # Use graph datatype if spec is None
+        )
+
+        # Log if schema optimizes graph datatype
+        if schema.datatype is not None and derived_dt != graph_dt:
+            logger.info(
+                f"Input '{schema.name}': schema optimized {graph_dt.name} → {derived_dt.name}"
+            )
+
+        return derived_dt
 
     def _build_interface(
         self,
@@ -309,13 +427,13 @@ class DesignSpaceBuilder:
         Raises:
             ValueError: If building fails
         """
-        from .models import InterfaceDesignSpace
+        from .dse_models import InterfaceDesignSpace
 
         ctx = self._ctx
 
-        # Resolve datatype (differs for inputs vs outputs)
+        # Resolve datatype (both inputs and outputs can derive)
         if direction == 'input':
-            datatype = ctx.model_w.get_tensor_datatype(tensor_name)
+            datatype = self._resolve_input_datatype(schema, tensor_name)
         else:  # output
             datatype = self._resolve_output_datatype(schema, tensor_name)
 
@@ -331,7 +449,10 @@ class DesignSpaceBuilder:
                 schema.block_tiling,
                 tensor_shape,
                 ctx.param_getter,
-                self._interfaces
+                self._interfaces,
+                ctx.model_w,
+                tensor_name,
+                hierarchy=ShapeHierarchy.BLOCK  # Explicit: tuple shorthand uses BLOCK hierarchy
             )
         except ValueError as e:
             raise ValueError(
@@ -363,7 +484,8 @@ class DesignSpaceBuilder:
             block_shape=block_shape,
             stream_tiling=normalized_stream_tiling,
             datatype=datatype,
-            is_weight=is_weight
+            is_weight=is_weight,
+            tensor_name=tensor_name
         )
 
         logger.debug(
@@ -391,39 +513,42 @@ class DesignSpaceBuilder:
         """
         return divisors(n)
 
-    def _compute_parameter_ranges(
+    def _compute_dimension_ranges(
         self,
-        interfaces_input: Dict[str, InterfaceDesignSpace],
-        interfaces_output: Dict[str, InterfaceDesignSpace],
-    ) -> Dict[str, Set[int]]:
-        """Compute valid divisor sets for each parallelization parameter.
+        inputs: Dict[str, InterfaceDesignSpace],
+        outputs: Dict[str, InterfaceDesignSpace],
+        schema: 'KernelSchema',
+    ) -> Dict[str, Set[Union[int, str]]]:
+        """Compute valid values for all explorable dimensions (tiling + DSE).
 
-        A parallelization parameter is any string appearing in stream_tiling.
-        Valid values are divisors of the corresponding block dimension.
+        Combines:
+        1. Tiling dimensions (PE, SIMD) - computed as divisors of block dimensions
+        2. DSE dimensions (ram_style, res_type) - from schema.dse_dimensions
 
-        For multi-dimensional cases, if a parameter appears in multiple
-        dimensions or interfaces, valid values are divisors of GCD of all
-        block dimensions where the parameter appears.
+        Tiling dimension logic:
+        - A tiling parameter is any string appearing in stream_tiling
+        - Valid values are divisors of the corresponding block dimension
+        - For multi-dimensional cases, if a parameter appears in multiple
+          dimensions or interfaces, valid values are divisors of GCD of all
+          block dimensions where the parameter appears
 
-        Example (single appearance):
+        Example (tiling):
             stream_tiling=["SIMD"], block_shape=(768,)
             → SIMD must divide 768
             → valid SIMD = {1, 2, 3, 4, 6, 8, 12, 16, ..., 768}
 
-        Example (multiple appearances):
-            input: stream_tiling=["PE"], block_shape=(256,)
-            output: stream_tiling=["PE"], block_shape=(512,)
-            → PE must divide both 256 and 512
-            → PE must divide gcd(256, 512) = 256
-            → valid PE = {1, 2, 4, 8, 16, 32, 64, 128, 256}
+        Example (DSE):
+            dse_dimensions={"ram_style": DSEDimension("ram_style", {"distributed", "block"})}
+            → valid ram_style = {"distributed", "block"}
 
         Args:
-            interfaces_input: Input interfaces with resolved block shapes (dict or list)
-            interfaces_output: Output interfaces with resolved block shapes (dict or list)
+            inputs: Input interfaces with resolved block shapes (dict or list)
+            outputs: Output interfaces with resolved block shapes (dict or list)
+            schema: KernelSchema containing dse_dimensions
 
         Returns:
-            Dict mapping parameter name to set of valid divisors
-            Example: {"SIMD": {1, 2, 3, 4, 6, 8, ..., 768}, "PE": {1, 2, 4, 8}}
+            Dict mapping dimension name to set of valid values (int or str)
+            Example: {"SIMD": {1, 2, 3, 4, 6, 8}, "ram_style": {"distributed", "block"}}
 
         Raises:
             ValueError: If parameter appears in block_tiling (violates R1 from spec)
@@ -432,8 +557,8 @@ class DesignSpaceBuilder:
         param_constraints = {}  # param_name -> list of block dimensions
 
         # Handle both dict and list inputs (for tests)
-        inputs_iter = interfaces_input.values() if isinstance(interfaces_input, dict) else interfaces_input
-        outputs_iter = interfaces_output.values() if isinstance(interfaces_output, dict) else interfaces_output
+        inputs_iter = inputs.values() if isinstance(inputs, dict) else inputs
+        outputs_iter = outputs.values() if isinstance(outputs, dict) else outputs
         all_interfaces = (*inputs_iter, *outputs_iter)
 
         for interface in all_interfaces:
@@ -453,61 +578,40 @@ class DesignSpaceBuilder:
                 # DerivedDim doesn't introduce new parameters
                 # Literals (1, FULL_DIM) don't create parameters
 
-        # Each param must divide GCD of all block dims where it appears
-        valid_ranges = {}
+        # Each tiling param must divide GCD of all block dims where it appears
+        tiling_dimensions = {}
         for param_name, block_dims in param_constraints.items():
             gcd_value = reduce(gcd, block_dims)
-            valid_ranges[param_name] = divisors(gcd_value)
+            tiling_dimensions[param_name] = divisors(gcd_value)
 
         logger.debug(
-            f"Computed valid ranges for {len(valid_ranges)} parameters: "
-            + ", ".join(f"{k}={len(v)} values" for k, v in valid_ranges.items())
+            f"Computed {len(tiling_dimensions)} tiling dimensions: "
+            + ", ".join(f"{k}={len(v)} values" for k, v in tiling_dimensions.items())
         )
 
-        return valid_ranges
+        # Add DSE dimensions from schema
+        dse_dimensions = {}
+        for dim_name, dim_spec in schema.dse_dimensions.items():
+            if callable(dim_spec.values):
+                # Callable - evaluate with BuildContext
+                dse_dimensions[dim_name] = dim_spec.values(self._ctx)
+            else:
+                # Set - use directly
+                dse_dimensions[dim_name] = dim_spec.values
 
+        if dse_dimensions:
+            logger.debug(
+                f"Added {len(dse_dimensions)} DSE dimensions: "
+                + ", ".join(f"{k}={len(v)} values" for k, v in dse_dimensions.items())
+            )
 
-# =============================================================================
-# Module-Level Build Function (Recommended Entry Point)
-# =============================================================================
+        # Combine tiling + DSE dimensions
+        all_dimensions = {**tiling_dimensions, **dse_dimensions}
 
-def build_kernel_design_space(ctx: BuildContext) -> KernelDesignSpace:
-    """Build kernel design space from ONNX context.
-
-    This is the recommended way to build a design space. Creates a temporary
-    DesignSpaceBuilder instance for this one build operation, then discards it.
-
-    The builder is stateless - it only uses temporary state (_ctx, _interfaces)
-    during the build process. There's no benefit to caching builder instances.
-
-    Args:
-        ctx: Build context with schema, ONNX graph data, and accessors
-
-    Returns:
-        Immutable KernelDesignSpace ready for configuration exploration
-
-    Raises:
-        ValueError: If structural constraints fail or build cannot complete
-
-    Example:
-        >>> ctx = BuildContext(
-        ...     schema=kernel_schema,
-        ...     model_w=model_wrapper,
-        ...     node_inputs=list(node.input),
-        ...     node_outputs=list(node.output),
-        ...     param_getter=get_nodeattr,
-        ...     param_setter=set_nodeattr,
-        ...     node_name=node.name
-        ... )
-        >>> design_space = build_kernel_design_space(ctx)
-        >>> config = design_space.configure({"SIMD": 64, "PE": 1})
-    """
-    from .models import KernelDesignSpace
-    return DesignSpaceBuilder().build(ctx)
+        return all_dimensions
 
 
 __all__ = [
     'BuildContext',
     'DesignSpaceBuilder',
-    'build_kernel_design_space',
 ]

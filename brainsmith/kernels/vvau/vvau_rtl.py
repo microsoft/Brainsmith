@@ -41,7 +41,7 @@ class VectorVectorActivation_rtl(VectorVectorActivation, RTLBackend):
     - Versal-only (DSP58 requirement)
 
     Arete principles:
-    - Shapes from kernel_instance (not nodeattrs)
+    - Shapes from design_point (not nodeattrs)
     - Backend registration via decorator
     - Unified architecture with HLS variant
     """

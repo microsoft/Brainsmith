@@ -1,20 +1,49 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import torch
 import numpy as np
-import torch.nn.functional as F
-from onnx import NodeProto
-from onnx.helper import make_node
+from onnx import NodeProto, helper
 from typing import Optional
 
 from qonnx.core.modelwrapper import ModelWrapper
-from brainsmith.dataflow import KernelOp
+from qonnx.util.basic import get_by_name
+from brainsmith.dataflow import KernelOp, FULL_DIM
 import brainsmith.dataflow as df
 from brainsmith.core.plugins import kernel
 
-# Import clean schema (no ONNX knowledge)
-from .layernorm_schema import LAYERNORM_SCHEMA
+
+# =============================================================================
+# Clean Product Schema
+# =============================================================================
+
+LAYERNORM_SCHEMA = df.KernelSchema(
+    name="LayerNorm",
+    inputs=[
+        df.InputSchema(
+            name="input",
+            block_tiling=[FULL_DIM],         # (1, 1, channels) - process full spatial dims
+            stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
+            required_layout="NHWC",          # Hardware requires NHWC layout
+        )
+    ],
+
+    outputs=[
+        df.OutputSchema(
+            name="output",
+            block_tiling=[FULL_DIM],         # (1, 1, channels)
+            stream_tiling=[("input", -1)],   # Output streams at same rate as input
+            datatype="input",                # Output datatype same as input
+            required_layout="NHWC",          # Hardware produces NHWC layout
+        )
+    ],
+    kernel_params={
+        "epsilon": ("f", True, 1e-5),
+    },
+    constraints=[
+        # Product constraint: epsilon must be positive for numerical stability
+        df.AttrCompare("epsilon", ">", 0),
+    ],
+)
 
 
 @kernel(
@@ -32,6 +61,55 @@ class LayerNorm(KernelOp):
         """Build LayerNorm schema (constant for all instances)."""
         return LAYERNORM_SCHEMA
 
+    @classmethod
+    def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
+        """Check if ONNX node can be converted to LayerNorm kernel.
+
+        Only accepts FuncLayerNorm nodes operating on last axis (channel dimension).
+        """
+        if node.op_type != "FuncLayerNorm":
+            return False
+
+        # Check axis attribute (must be -1 or None for channel-wise normalization)
+        axis_attr = get_by_name(node.attribute, "axis")
+        return axis_attr is None or axis_attr.i == -1
+
+    @classmethod
+    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
+        """Create LayerNorm HW node from FuncLayerNorm node.
+
+        Args:
+            node: FuncLayerNorm node
+            model: ModelWrapper for graph access
+            insert_index: Where to insert new nodes (unused - no layout conversion)
+
+        Returns:
+            TransformationResult with LayerNorm node
+        """
+        schema = cls.build_schema(node, model)
+
+        # Extract epsilon from FuncLayerNorm
+        epsilon_attr = get_by_name(node.attribute, "epsilon")
+        # Pass along None case, handled by kernel schema default
+        epsilon = epsilon_attr if epsilon_attr is None else epsilon_attr.f
+
+        # Create HW node
+        hw_node = helper.make_node(
+            "LayerNorm",
+            inputs=list(node.input),
+            outputs=list(node.output),
+            domain="brainsmith.kernels",
+            backend="fpgadataflow",
+            name=f"LayerNorm_{node.name}",
+            epsilon=epsilon,
+        )
+
+        return df.TransformationResult(
+            nodes_to_insert=[hw_node],
+            nodes_to_remove=[node],
+            actual_layouts={"input": "NHWC", "output": "NHWC"}
+        )
+
     def execute_node(self, context, graph):
         node = self.onnx_node
         in_values = context[node.input[0]]
@@ -39,14 +117,13 @@ class LayerNorm(KernelOp):
         # Get epsilon from nodeattr
         epsilon = self.get_nodeattr("epsilon")
 
-        # PyTorch LayerNorm over last dimension
-        # normalized_shape must be the dimensions to normalize over
-        in_tensor = torch.from_numpy(in_values)
-        out_tensor = F.layer_norm(
-            in_tensor,
-            normalized_shape=[in_values.shape[-1]],  # Normalize over channels
-            eps=epsilon
-        )
+        # LayerNorm over last dimension (channels)
+        # Calculate mean and variance along channel axis
+        mean = np.mean(in_values, axis=-1, keepdims=True)
+        var = np.var(in_values, axis=-1, keepdims=True)
+
+        # Normalize: (x - mean) / sqrt(var + epsilon)
+        normalized = (in_values - mean) / np.sqrt(var + epsilon)
 
         # Store result
-        context[node.output[0]] = out_tensor.numpy().astype(np.float32)
+        context[node.output[0]] = normalized.astype(np.float32)

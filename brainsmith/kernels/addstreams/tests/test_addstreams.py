@@ -14,7 +14,6 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 
 from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA
 from brainsmith.transforms.infer_kernel_list import InferKernelList
-from brainsmith.dataflow import TransformationHelper
 
 
 def test_addstreams_schema():
@@ -38,7 +37,6 @@ def test_addstreams_schema():
 def test_addstreams_schema_transformation():
     """Test AddStreams unified schema with transformation fields."""
     # Schema includes transformation requirements
-    assert ADDSTREAMS_SCHEMA.source_ops == ["Add"]
     assert ADDSTREAMS_SCHEMA.initial_parallelization == {"PE": 1}
 
     # Layout requirements embedded in interfaces
@@ -172,8 +170,7 @@ def test_addstreams_infer_from():
     # Check attributes
     attrs = {attr.name: attr for attr in hw_node.attribute}
     assert "NumChannels" in attrs
-    assert "PE" in attrs
-    assert "inputDataTypes" in attrs
+    # PE is auto-populated during build_design_space(), not set in infer_from()
     assert "numInputVectors" in attrs
 
 

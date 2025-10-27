@@ -90,19 +90,6 @@ class InferKernel(Transformation):
         self.kernel_cls = kernel_cls
         self.kernel_name = kernel_cls.__name__
 
-        # Validate that kernel supports inference via schema.source_ops
-        try:
-            # Build schema with minimal context to check source_ops
-            schema = kernel_cls.build_schema(node=None, model=None)
-            if not schema.source_ops:
-                logger.warning(
-                    f"{self.kernel_name} has empty source_ops - no ONNX inference will occur"
-                )
-        except Exception as e:
-            raise NotImplementedError(
-                f"{self.kernel_name} failed to build schema or doesn't support inference: {e}"
-            )
-
     def apply(self, model: ModelWrapper):
         """Apply kernel inference to the model.
 
@@ -136,10 +123,28 @@ class InferKernel(Transformation):
                     f"Inferring {self.kernel_name} from {node.op_type} node {node.name}"
                 )
 
-                # Delegate to kernel-specific inference
+                # Delegate to kernel-specific inference (naive node creation)
                 result = self.kernel_cls.infer_from(node, model, node_ind + 1)
 
-                # Apply graph modifications
+                # VALIDATE new kernel nodes before applying transformation
+                # Try to create KernelOp instances and validate design space
+                for new_node in result.nodes_to_insert:
+                    # Only validate KernelOp nodes (skip layout conversion nodes, etc.)
+                    if new_node.domain == "brainsmith.kernels":
+                        try:
+                            # Attempt to create KernelOp and validate constraints
+                            from qonnx.custom_op.registry import getCustomOp
+                            kernel_op = getCustomOp(new_node)
+                            kernel_op.infer_node_datatype(model)  # Initializes and validates
+                        except Exception as e:
+                            # Validation failed - skip this transformation
+                            logger.debug(
+                                f"Skipping {self.kernel_name} inference from {node.name}: "
+                                f"validation failed: {e}"
+                            )
+                            raise  # Re-raise to outer catch block
+
+                # All validations passed - apply graph modifications
                 for i, new_node in enumerate(result.nodes_to_insert):
                     graph.node.insert(node_ind + 1 + i, new_node)
                     logger.debug(f"  Inserted {new_node.op_type} node {new_node.name}")

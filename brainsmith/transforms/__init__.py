@@ -12,7 +12,13 @@ from . import cleanup
 from . import kernel_opt
 from . import post_proc
 
-# Pattern-based transforms (Week 11)
-from .apply_patterns import ApplyPatterns
+# Import individual transforms
+from . import normalize_dataflow_layouts
+from . import specialize_kernels
 
-__all__ = ["ApplyPatterns"]
+# Register SpecializeKernels as "SpecializeLayers" to shadow FINN's version
+from brainsmith.core.plugins import get_registry
+from brainsmith.transforms.specialize_kernels import SpecializeKernels
+get_registry().register('transform', 'SpecializeLayers', SpecializeKernels)
+
+__all__ = []

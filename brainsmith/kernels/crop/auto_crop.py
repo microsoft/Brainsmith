@@ -29,7 +29,7 @@ Hardware Mapping:
 """
 
 import numpy as np
-from onnx import NodeProto
+from onnx import NodeProto, helper
 from typing import Optional, Dict, Any, Callable
 
 from qonnx.core.modelwrapper import ModelWrapper
@@ -42,10 +42,10 @@ from brainsmith.core.plugins import kernel
 
 
 # =============================================================================
-# Helper Functions for ComputedDim and Custom Constraints
+# Helper Functions for Custom Dimension Computation
 # =============================================================================
 
-def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable) -> int:
+def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
     """Compute cropped height from input and crop parameters.
 
     Output height = input height - crop_north - crop_south
@@ -53,6 +53,8 @@ def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable) -
     Args:
         interfaces: Dict mapping interface names to InterfaceDesignSpace/Configuration
         param_getter: Function to retrieve nodeattr values
+        model: ModelWrapper (unused - for unified signature)
+        tensor_name: Tensor name (unused - for unified signature)
 
     Returns:
         Cropped height dimension (positive integer)
@@ -75,7 +77,7 @@ def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable) -
     return output_h
 
 
-def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable) -> int:
+def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
     """Compute cropped width from input and crop parameters.
 
     Output width = input width - crop_east - crop_west
@@ -83,6 +85,8 @@ def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable) ->
     Args:
         interfaces: Dict mapping interface names to InterfaceDesignSpace/Configuration
         param_getter: Function to retrieve nodeattr values
+        model: ModelWrapper (unused - for unified signature)
+        tensor_name: Tensor name (unused - for unified signature)
 
     Returns:
         Cropped width dimension (positive integer)
@@ -105,7 +109,7 @@ def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable) ->
     return output_w
 
 
-def _validate_crop_bounds(ctx: df.ValidationContext) -> Optional[str]:
+def _validate_crop_bounds(ctx) -> Optional[str]:
     """Validate crop bounds are within input dimensions.
 
     Checks:
@@ -114,26 +118,19 @@ def _validate_crop_bounds(ctx: df.ValidationContext) -> Optional[str]:
     - crop_east + crop_west < input width
 
     Args:
-        ctx: Validation context (ONNX or kernel)
+        ctx: Validation context (DesignSpaceValidationContext or ConfigurationValidationContext)
 
     Returns:
         Error message if invalid, None if valid
-
-    Note:
-        Gracefully degrades in ONNX context (returns None if params unavailable)
     """
     input_shape = ctx.get_shape("input", df.ShapeHierarchy.TENSOR)
     h, w = input_shape[1], input_shape[2]  # NHWC
 
-    try:
-        crop_n = ctx.get_param("crop_north")
-        crop_s = ctx.get_param("crop_south")
-        crop_e = ctx.get_param("crop_east")
-        crop_w = ctx.get_param("crop_west")
-    except (KeyError, RuntimeError):
-        # ONNX context - params not available yet
-        # This is legitimate - crop params set during transformation
-        return None
+    # Get crop parameters (always available in design space / configuration contexts)
+    crop_n = ctx.get_param("crop_north")
+    crop_s = ctx.get_param("crop_south")
+    crop_e = ctx.get_param("crop_east")
+    crop_w = ctx.get_param("crop_west")
 
     # Validate non-negative
     if crop_n < 0 or crop_s < 0 or crop_e < 0 or crop_w < 0:
@@ -156,7 +153,6 @@ def _validate_crop_bounds(ctx: df.ValidationContext) -> Optional[str]:
 
 CROP_SCHEMA = df.KernelSchema(
     name="Crop",
-    domain="brainsmith.kernels",
 
     # ========== STRUCTURE ==========
     # Note: Crop hardware kernel has 1 input (data tensor).
@@ -173,15 +169,15 @@ CROP_SCHEMA = df.KernelSchema(
     outputs=[
         df.OutputSchema(
             name="output",
-            # Output shape depends on crop parameters - use ComputedDim
+            # Output shape depends on crop parameters - use custom dimension functions
             block_tiling=[
-                FULL_DIM,  # N dimension (unchanged)
-                df.ComputedDim(_compute_output_height, "cropped height"),
-                df.ComputedDim(_compute_output_width, "cropped width"),
-                FULL_DIM,  # C dimension (unchanged)
+                FULL_DIM,                    # N dimension (unchanged)
+                _compute_output_height,      # Cropped height
+                _compute_output_width,       # Cropped width
+                FULL_DIM,                    # C dimension (unchanged)
             ],
-            stream_tiling=[1, 1, 1, df.DerivedDim("input", -1)],  # Match input SIMD
-            datatype=df.DerivedDatatype("input"),  # Pass-through datatype
+            stream_tiling=[1, 1, 1, ("input", -1)],  # Match input SIMD
+            datatype="input",  # Pass-through datatype
             required_layout="NHWC",
         )
     ],
@@ -217,9 +213,7 @@ CROP_SCHEMA = df.KernelSchema(
     ],
 
     # ========== TRANSFORMATION ==========
-    source_ops=["Gather"],  # Matches Gather nodes
     attribute_mapping={},   # No direct ONNX attrs → kernel params (computed from indices)
-    initial_parallelization={"SIMD": 1},
 )
 
 
@@ -260,7 +254,7 @@ class Crop(KernelOp):
         op = Crop(result.nodes_to_insert[0])
         for config in df.iter_valid_configurations(op, model):
             op.set_nodeattr("SIMD", config["SIMD"])
-            ki = op.get_kernel_instance(model)  # Returns KernelInstance
+            ki = op.get_design_point(model)  # Returns KernelDesignPoint
             # Evaluate performance...
     """
 
@@ -313,18 +307,9 @@ class Crop(KernelOp):
         if indices is None:
             return False
 
-        # Validate schema constraints on the data input only
-        # (We can't use schema.can_transform because it expects 1 input,
-        #  but Gather has 2 inputs)
-        from brainsmith.dataflow.validation import OnnxValidationContext
-
-        schema = cls.build_schema(node, model)
-        ctx = OnnxValidationContext(node=node, model=model, schema=schema)
-
-        for constraint in schema.constraints:
-            error = constraint.check(ctx)
-            if error:
-                return False
+        # Note: Schema constraints (datatype, dynamic/static, etc.) will be validated
+        # during build() after transformation. can_infer_from() only checks ONNX
+        # pattern matching (op type, input count, indices are static).
 
         return True
 
@@ -341,13 +326,12 @@ class Crop(KernelOp):
         - Gather with consecutive indices on spatial axis (height or width)
         - Computes crop_north, crop_south, crop_east, crop_west from indices
 
-        Schema constraints already validated this node is compatible via can_infer_from().
-        This method focuses purely on transformation.
+        NOTE: Assumes input is already in NHWC layout (preprocessing required).
 
         Args:
             node: ONNX Gather node to convert
             model: ModelWrapper for graph access
-            insert_index: Where to insert new nodes
+            insert_index: Where to insert new nodes (unused - no layout conversion)
 
         Returns:
             TransformationResult with Crop node and removed Gather node
@@ -355,19 +339,9 @@ class Crop(KernelOp):
         Raises:
             ValueError: If Gather pattern is invalid for crop conversion
         """
-        from brainsmith.dataflow.inference import TransformationHelper
-
         schema = cls.build_schema(node, model)
-        helper = TransformationHelper(model, domain=schema.domain)
 
-        # Ensure NHWC layout (from schema.inputs[0].required_layout)
-        nhwc_input = helper.ensure_layout(
-            node.input[0],
-            schema.inputs[0].required_layout,
-            insert_index
-        )
-
-        # Extract input shape for crop computation
+        # Extract input shape for crop computation (assumes NHWC layout - preprocessing required)
         input_shape = model.get_tensor_shape(node.input[0])
 
         # Extract indices from Gather (must be initializer)
@@ -426,17 +400,16 @@ class Crop(KernelOp):
         # Create HW node with crop parameters
         hw_node = helper.make_node(
             "Crop",
-            inputs=[nhwc_input],
+            inputs=list(node.input[:1]),  # Only first input (data, not indices)
             outputs=list(node.output),
-            attributes={
-                "SIMD": schema.initial_parallelization["SIMD"],
-                "crop_north": crop_north,
-                "crop_south": crop_south,
-                "crop_east": crop_east,
-                "crop_west": crop_west,
-                "channel_fold": 1,
-            },
-            name_prefix=f"Crop_{node.name}"
+            domain="brainsmith.kernels",
+            backend="fpgadataflow",
+            name=f"Crop_{node.name}",
+            crop_north=int(crop_north),
+            crop_south=int(crop_south),
+            crop_east=int(crop_east),
+            crop_west=int(crop_west),
+            channel_fold=1,
         )
 
         return df.TransformationResult(

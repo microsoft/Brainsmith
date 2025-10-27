@@ -65,7 +65,14 @@ class TestThresholdingInference:
         assert can_infer, "Thresholding.can_infer_from() should return True for INT8→UINT4"
 
     def test_can_infer_rejects_float_output(self):
-        """Test that can_infer_from() rejects float output datatypes."""
+        """Test that transformation is rejected for float output datatypes.
+
+        Float outputs are rejected during validation (build_design_space()),
+        not during can_infer_from(). This test verifies the full transformation
+        fails gracefully via InferKernel's try-validate pattern.
+        """
+        from brainsmith.transforms.infer_kernel import InferKernel
+
         # Create MultiThreshold model with float output
         model_proto = create_multithreshold_model(
             input_shape=[1, 28, 28, 128],
@@ -83,16 +90,20 @@ class TestThresholdingInference:
         model.set_tensor_datatype("thresholds", DataType["INT8"])
         model.set_tensor_datatype("output", DataType["FLOAT32"])
 
-        # Find MultiThreshold node
+        # Apply InferKernel transform
+        transform = InferKernel(Thresholding)
+        model, modified = transform.apply(model)
+
+        # Transformation should be skipped (validation fails due to float output)
+        assert not modified, "Graph should not be modified (validation should reject float output)"
+
+        # Original MultiThreshold node should still be present
         mt_node = None
         for node in model.graph.node:
             if node.op_type == "MultiThreshold":
                 mt_node = node
                 break
-
-        # Test can_infer_from (should reject float output)
-        can_infer = Thresholding.can_infer_from(mt_node, model)
-        assert not can_infer, "Thresholding.can_infer_from() should return False for float output"
+        assert mt_node is not None, "MultiThreshold node should still exist (transformation rejected)"
 
     def test_infer_from_creates_thresholding_node(self):
         """Test that infer_from() creates a Thresholding node with correct attributes."""
@@ -209,17 +220,17 @@ class TestThresholdingShapes:
         """Test that get_normal_input_shape() returns correct shape."""
         op, model = thresholding_model
 
-        # Get shape via kernel_instance
-        ki = op.kernel_instance
-        expected_shape = tuple(ki.inputs["input"].tensor_shape)
+        # Get shape via design_point
+        ki = op.design_point
+        expected_shape = list(ki.inputs["input"].tensor_shape)
 
-        # Thresholding should extract shape from kernel_instance
+        # Thresholding should extract shape from design_point
         actual_shape = op.get_normal_input_shape()
 
-        assert actual_shape == expected_shape, (
+        assert list(actual_shape) == expected_shape, (
             f"Normal input shape mismatch: expected {expected_shape}, got {actual_shape}"
         )
-        assert actual_shape == (1, 28, 28, 128), "Should match input shape [1, 28, 28, 128]"
+        assert list(actual_shape) == [1, 28, 28, 128], "Should match input shape [1, 28, 28, 128]"
 
     def test_folded_input_shape(self, thresholding_model):
         """Test that get_folded_input_shape() returns correct folded shape."""
@@ -227,10 +238,10 @@ class TestThresholdingShapes:
 
         # Expected: [batch, height, width, fold, PE]
         # fold = num_channels // PE = 128 // 16 = 8
-        expected_shape = (1, 28, 28, 8, 16)
+        expected_shape = [1, 28, 28, 8, 16]
         actual_shape = op.get_folded_input_shape()
 
-        assert actual_shape == expected_shape, (
+        assert list(actual_shape) == expected_shape, (
             f"Folded input shape mismatch: expected {expected_shape}, got {actual_shape}"
         )
 
@@ -412,6 +423,7 @@ class TestThresholdingExecution:
                 break
 
         op = Thresholding(thresholding_node)
+        op.build_design_space(model)  # Initialize datatypes and design space
 
         # Create input data
         input_shape = (1, 4, 4, 8)

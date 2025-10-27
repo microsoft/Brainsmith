@@ -1,11 +1,12 @@
-# Copyright (c) Microsoft Corporation.
+# Portions derived from FINN project
+# Copyright (C) 2023, Advanced Micro Devices, Inc.
+# Licensed under BSD-3-Clause License
+#
+# Modifications and additions Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""AddStreams hardware kernel for element-wise addition of two streams.
-
-This kernel implements element-wise addition of two integer streams with
-identical shapes. It demonstrates the unified constraint system with
-declarative validation.
+"""AddStreams hardware kernel for element-wise addition of two integer streams
+with identical shapes.
 
 Example ONNX pattern:
     Add(input0: INT8[1,224,224,64], input1: INT8[1,224,224,64])
@@ -16,39 +17,38 @@ Hardware mapping:
 """
 
 import numpy as np
-from onnx import NodeProto
+from onnx import NodeProto, helper
 from typing import Optional
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow import KernelOp, FULL_SHAPE
 import brainsmith.dataflow as df
+from brainsmith.dataflow.spec_helpers import add_datatype
 from brainsmith.core.plugins import kernel
 from qonnx.core.modelwrapper import ModelWrapper
 
 
-# Module-level unified KernelSchema (structure + transformation)
 ADDSTREAMS_SCHEMA = df.KernelSchema(
     name="AddStreams",
-    domain="brainsmith.kernels",
     inputs=[
         df.InputSchema(
             name="input0",
-            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
-            stream_tiling=[1, 1, 1, "PE"],
+            block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
+            stream_tiling=["PE"],
             required_layout="NHWC",  # Embedded layout requirement
         ),
         df.InputSchema(
             name="input1",
-            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
-            stream_tiling=[1, 1, 1, "PE"],
+            block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
+            stream_tiling=["PE"],
             required_layout="NHWC",  # Embedded layout requirement
         ),
     ],
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
-            stream_tiling=[1, 1, 1, df.DerivedDim("input0", -1)],
-            datatype=df.DerivedDatatype("input0"),  # Output datatype same as input0
+            block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
+            stream_tiling=[("input0", -1)],  # Auto-pads to match rank
+            datatype=add_datatype("input0", "input1"),  # INT8 + INT8 → INT9 (prevents overflow)
             required_layout="NHWC",  # Embedded layout requirement
         )
     ],
@@ -61,40 +61,19 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         df.ShapesEqual(("input0", "input1")),
     ],
     kernel_params={
-        "PE": ("i", True, 1),
-        "NumChannels": ("i", True, 1),
+        "PE": ("i", False, 1),
+        "NumChannels": ("i", False, 1),
+        "numInputVectors": ("i", False, 1),
     },
-    # Transformation specification (unified)
-    source_ops=["Add"],
-    initial_parallelization={"PE": 1},
 )
 
 
 @kernel(
     description="Element-wise addition of two integer streams",
-    author="Thomas Keller"
+    author="FINN Team"
 )
 class AddStreams(KernelOp):
-    """Hardware kernel for element-wise addition of two streams.
-
-    Adds two integer streams element-wise with configurable parallelism.
-
-    Schema auto-generates:
-    - "PE" from stream_tiling=[1, 1, 1, "PE"]
-    - "input0Datatype" from input0 interface
-    - "input1Datatype" from input1 interface
-    - "output0Datatype" from output interface (derived from input0)
-    - "NumChannels" from kernel_params (set during inference)
-
-    Validation (unified constraints):
-    - IsDynamic("input0"), IsDynamic("input1"): Both inputs must be dynamic tensors
-    - DatatypeInteger(("input0", "input1")): Integer datatypes required
-    - ShapesEqual("input0", "input1"): Inputs must have identical shapes
-
-    Inference pattern:
-    - Matches ONNX Add nodes
-    - Automatically converts to NHWC layout if needed
-    """
+    """Hardware kernel for element-wise addition of two streams."""
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
@@ -107,6 +86,51 @@ class AddStreams(KernelOp):
     def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
         """Build AddStreams schema (constant for all instances)."""
         return ADDSTREAMS_SCHEMA
+
+    @classmethod
+    def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
+        """Check if ONNX node can be converted to AddStreams kernel.
+
+        Validates:
+        - Op type is Add
+        - Both inputs are dynamic (not initializers)
+        - Both inputs are integers
+        - Inputs have same shape
+        """
+        if node.op_type != "Add":
+            return False
+
+        # Check we have two inputs
+        if len(node.input) != 2:
+            return False
+
+        # Check both inputs are dynamic (not initializers)
+        initializer_names = [x.name for x in model.graph.initializer]
+        for inp in node.input:
+            if inp in initializer_names:
+                return False
+
+        # Check both inputs are integers
+        try:
+            dt0 = model.get_tensor_datatype(node.input[0])
+            dt1 = model.get_tensor_datatype(node.input[1])
+            if not (dt0.is_integer() and dt1.is_integer()):
+                return False
+        except:
+            # If datatypes not available, reject
+            return False
+
+        # Check inputs have same shape
+        try:
+            shape0 = model.get_tensor_shape(node.input[0])
+            shape1 = model.get_tensor_shape(node.input[1])
+            if shape0 != shape1:
+                return False
+        except:
+            # If shapes not available, reject
+            return False
+
+        return True
 
     # ====================================================================
     # Inference Implementation (Custom - needs NumChannels, etc.)
@@ -121,67 +145,46 @@ class AddStreams(KernelOp):
     ) -> df.TransformationResult:
         """Create AddStreams HW node from ONNX Add node.
 
-        Custom implementation needed for additional attributes
-        (NumChannels, inputDataTypes, numInputVectors).
-
-        Schema constraints already validated this node is compatible.
-        This method focuses purely on transformation.
+        NOTE: Assumes inputs are already in NHWC layout (preprocessing required).
 
         Args:
             node: ONNX Add node to convert
             model: ModelWrapper for graph access
-            insert_index: Where to insert new nodes
+            insert_index: Where to insert new nodes (unused - no layout conversion)
 
         Returns:
             TransformationResult with AddStreams node and removed Add node
         """
-        from brainsmith.dataflow.inference import TransformationHelper
-
         schema = cls.build_schema(node, model)
-        helper = TransformationHelper(model, domain=schema.domain)
-
-        # Handle layout conversion (from schema.inputs embedded requirements)
-        in0 = helper.ensure_layout(node.input[0], schema.inputs[0].required_layout, insert_index)
-        in1 = helper.ensure_layout(node.input[1], schema.inputs[1].required_layout, insert_index)
 
         # Extract parameters from ONNX graph
-        num_channels = helper.get_num_channels(in0)
-        num_input_vectors = helper.get_num_input_vectors(in0)
+        input_shape = model.get_tensor_shape(node.input[0])
 
-        # Get datatypes
-        idt0 = model.get_tensor_datatype(in0)
-        idt1 = model.get_tensor_datatype(in1)
+        # Calculate NumChannels (last dimension) and numInputVectors (product of all other dims)
+        num_channels = input_shape[-1]
+        num_input_vectors = int(np.prod(input_shape[:-1]))
 
         # Create AddStreams HW node
         hw_node = helper.make_node(
             "AddStreams",
-            inputs=[in0, in1],
+            inputs=list(node.input),
             outputs=list(node.output),
-            attributes={
-                **schema.initial_parallelization,
-                "NumChannels": num_channels,
-                "inputDataTypes": [idt0.name, idt1.name],
-                "numInputVectors": num_input_vectors,
-            },
-            name_prefix=f"AddStreams_{node.name}"
+            domain="brainsmith.kernels",
+            backend="fpgadataflow",
+            NumChannels=num_channels,
+            numInputVectors=num_input_vectors,
+            name=f"AddStreams_{node.name}"
         )
 
-        result = df.TransformationResult(
+        return df.TransformationResult(
             nodes_to_insert=[hw_node],
             nodes_to_remove=[node],
             actual_layouts={
-                "input0": schema.inputs[0].required_layout,
-                "input1": schema.inputs[1].required_layout,
-                "output": schema.outputs[0].required_layout,
-            },
-            metadata={
-                "num_channels": num_channels,
-                "input_vectors": num_input_vectors,
-                "layout_converted": in0 != node.input[0] or in1 != node.input[1]
+                "input0": "NHWC",
+                "input1": "NHWC",
+                "output": "NHWC",
             }
         )
-
-        return result
 
     # ====================================================================
     # Execution (CPU implementation for testing/validation)

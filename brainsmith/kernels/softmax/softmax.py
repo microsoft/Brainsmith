@@ -3,39 +3,33 @@
 
 import numpy as np
 from scipy.special import softmax
-from onnx import NodeProto
+from onnx import NodeProto, helper
 from typing import Optional
 
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.util.basic import get_by_name
 from brainsmith.dataflow import KernelOp
 import brainsmith.dataflow as df
-from brainsmith.dataflow import (
-    DerivedDatatype,
-    DerivedDim,
-    FULL_DIM
-)
+from brainsmith.dataflow import FULL_DIM
 from brainsmith.core.plugins import kernel
 
 
 # Module-level unified KernelSchema (structure + transformation)
 SOFTMAX_SCHEMA = df.KernelSchema(
     name="Softmax",
-    domain="brainsmith.kernels",
     inputs=[
         df.InputSchema(
             name="input",
             block_tiling=[FULL_DIM],       # One Softmax op: (1, 1, channels)
             stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
-            # No required_layout - Softmax works with any layout
         )
     ],
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],                   # Same as input: (1, 1, channels)
-            stream_tiling=[DerivedDim("input", -1)],   # Output streams at same rate as input
-            datatype=DerivedDatatype("input"),         # Derive FLOAT32 from input
-            # No required_layout - preserves input layout
+            block_tiling=[FULL_DIM],           # Same as input: (1, 1, channels)
+            stream_tiling=[("input", -1)],     # Output streams at same rate as input
+            datatype="input",                  # Derive FLOAT32 from input
         )
     ],
     constraints=[
@@ -43,19 +37,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
         df.DatatypeFloat(("input",)),
         # Input must be dynamic (no initializers)
         df.IsDynamic("input"),
-        # Must operate on last axis (channel dimension), or None (defaults to -1)
-        df.NodeAttributeEquals("axis", [None, -1]),
-        # Don't re-convert already-converted hardware nodes
-        # (ONNX Softmax has domain="", hardware Softmax has domain="brainsmith.kernels")
-        df.Custom(
-            lambda ctx: None if getattr(ctx.node, 'domain', '') != 'brainsmith.kernels'
-                       else "Already a hardware Softmax node",
-            "Node must be ONNX Softmax, not hardware Softmax"
-        ),
-    ],
-    # Transformation specification (unified)
-    source_ops=["Softmax"],
-    initial_parallelization={"SIMD": 1},
+    ]
 )
 
 
@@ -64,36 +46,59 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     author="Shane Fleming"
 )
 class Softmax(KernelOp):
-    """Abstraction layer for HW implementation of Softmax layers.
-
-    Schema auto-generates:
-    - "SIMD" from stream_tiling=["SIMD"]
-    - "input0Datatype" from input interface
-    - "output0Datatype" from output interface
-    """
+    """Abstraction layer for HW implementation of Softmax layers."""
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     @classmethod
     def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
-        """Build Softmax schema (constant for all instances)."""
         return SOFTMAX_SCHEMA
 
-    # No infer_from() override - default handles it!
-    # Default implementation:
-    # - Discovers Softmax nodes (from spec.source_ops)
-    # - Creates node with SIMD=1 (from spec.initial_parallelization)
-    # - No layout conversions needed (no layout requirements in spec)
-    # - Verifies automatically
+    @classmethod
+    def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
+        """Check if ONNX node can be converted to Softmax kernel.
+
+        Only accepts Softmax nodes operating on last axis (channel dimension).
+        """
+        if node.op_type != "Softmax":
+            return False
+
+        # Check axis attribute (must be None or -1 for channel-wise softmax)
+        axis_attr = get_by_name(node.attribute, "axis")
+        if axis_attr is None:
+            axis = -1  # Default value for Softmax
+        else:
+            axis = axis_attr.i
+
+        return axis == -1
+
+    @classmethod
+    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
+        """Create Softmax Kernel node from ONNX Softmax node.
+
+        NOTE: Softmax operates on the last dimension (axis=-1) and is layout-agnostic.
+        However, the global normalize_dataflow_layouts preprocessing pass ensures
+        inputs are in NHWC layout for consistency with other dataflow kernels.
+        """
+        schema = cls.build_schema(node, model)
+
+        # Create HW node
+        hw_node = helper.make_node(
+            "Softmax",
+            inputs=list(node.input),
+            outputs=list(node.output),
+            domain="brainsmith.kernels",
+            name=f"Softmax_{node.name}",
+        )
+
+        return df.TransformationResult(
+            nodes_to_insert=[hw_node],
+            nodes_to_remove=[node]
+        )
 
     def execute_node(self, context, graph):
         node = self.onnx_node
         input_data = context[node.input[0]]
-
-        # scipy.special.softmax with axis=-1 (last dimension)
-        # Handles numerical stability automatically
         output_data = softmax(input_data, axis=-1)
-
-        # Store result as float32
         context[node.output[0]] = output_data.astype(np.float32)
