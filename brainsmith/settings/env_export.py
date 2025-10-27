@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Dict
 if TYPE_CHECKING:
     from .schema import SystemConfig
 
+# System library paths
+_LIBUDEV_PATH = "/lib/x86_64-linux-gnu/libudev.so.1"
+
 
 class EnvironmentExporter:
     """Handles environment variable export for external tools.
@@ -24,9 +27,11 @@ class EnvironmentExporter:
     - FINN (FINN_ROOT, FINN_BUILD_DIR, etc.)
     - Xilinx tools (VIVADO_PATH, XILINX_VIVADO, etc.)
     - Visualization tools (NETRON_PORT)
+    - BSMITH_* variables (for YAML ${var} expansion in blueprints)
 
-    Does NOT export internal BSMITH_* variables by default to prevent
-    configuration feedback loops.
+    Internal BSMITH_* variables are exported by default in normal operation
+    to support blueprint YAML expansion (e.g., ${BSMITH_DIR}/examples/...).
+    The @lru_cache decorator on get_config() prevents feedback loops.
 
     Example:
         >>> config = SystemConfig()
@@ -47,57 +52,57 @@ class EnvironmentExporter:
         """Generate dict of external environment variables.
 
         Returns only variables consumed by external tools (FINN, Xilinx, etc).
-        Internal BSMITH_* variables are excluded to prevent configuration loops.
+        Internal BSMITH_* variables are excluded (use to_all_dict() for those).
 
         Returns:
             Dict of environment variable names to string values
         """
         env = {}
-        c = self.config
+        cfg = self.config
 
         # Xilinx tool paths (dual naming for FINN compatibility)
         # Both XILINX_* and *_PATH variants are exported for maximum FINN compatibility.
         # - XILINX_* variants: Used by FINN's Python runtime and internal scripts
         # - *_PATH variants: Used by FINN's TCL scripts during Vivado/Vitis integration
-        if c.vivado_path:
-            vivado_str = str(c.vivado_path)
-            env['XILINX_VIVADO'] = vivado_str
-            env['VIVADO_PATH'] = vivado_str
+        if cfg.vivado_path:
+            vivado_str = str(cfg.vivado_path)
+            env["XILINX_VIVADO"] = vivado_str
+            env["VIVADO_PATH"] = vivado_str
 
-            if c.vivado_ip_cache:
-                env['VIVADO_IP_CACHE'] = str(c.vivado_ip_cache)
+            if cfg.vivado_ip_cache:
+                env["VIVADO_IP_CACHE"] = str(cfg.vivado_ip_cache)
 
-        if c.vitis_path:
-            vitis_str = str(c.vitis_path)
-            env['XILINX_VITIS'] = vitis_str
-            env['VITIS_PATH'] = vitis_str
+        if cfg.vitis_path:
+            vitis_str = str(cfg.vitis_path)
+            env["XILINX_VITIS"] = vitis_str
+            env["VITIS_PATH"] = vitis_str
 
-        if c.vitis_hls_path:
-            hls_str = str(c.vitis_hls_path)
-            env['XILINX_HLS'] = hls_str
-            env['HLS_PATH'] = hls_str
+        if cfg.vitis_hls_path:
+            hls_str = str(cfg.vitis_hls_path)
+            env["XILINX_HLS"] = hls_str
+            env["HLS_PATH"] = hls_str
 
-        env['PLATFORM_REPO_PATHS'] = c.vendor_platform_paths
-        env['OHMYXILINX'] = str(c.deps_dir / "oh-my-xilinx")
+        env["PLATFORM_REPO_PATHS"] = cfg.vendor_platform_paths
+        env["OHMYXILINX"] = str(cfg.deps_dir / "oh-my-xilinx")
 
-        env['NETRON_PORT'] = str(c.netron_port)
+        env["NETRON_PORT"] = str(cfg.netron_port)
 
-        if c.finn_root:
-            env['FINN_ROOT'] = str(c.finn_root)
-        if c.finn_build_dir:
-            env['FINN_BUILD_DIR'] = str(c.finn_build_dir)
-        if c.finn_deps_dir:
-            env['FINN_DEPS_DIR'] = str(c.finn_deps_dir)
+        if cfg.finn_root:
+            env["FINN_ROOT"] = str(cfg.finn_root)
+        if cfg.finn_build_dir:
+            env["FINN_BUILD_DIR"] = str(cfg.finn_build_dir)
+        if cfg.finn_deps_dir:
+            env["FINN_DEPS_DIR"] = str(cfg.finn_deps_dir)
 
-        if c.default_workers:
-            env['NUM_DEFAULT_WORKERS'] = str(c.default_workers)
+        if cfg.default_workers:
+            env["NUM_DEFAULT_WORKERS"] = str(cfg.default_workers)
 
         return env
 
     def to_all_dict(self) -> Dict[str, str]:
         """Generate dict of ALL environment variables including internal ones.
 
-        WARNING: Includes internal BSMITH_* variables. Use only when needed.
+        Includes internal BSMITH_* variables needed for YAML expansion.
 
         Returns:
             Dict of all environment variables
@@ -125,7 +130,7 @@ class EnvironmentExporter:
 
         Args:
             include_internal: If True, also export internal BSMITH_* variables
-                            (WARNING: may cause configuration feedback loops)
+                            (needed for blueprint YAML ${var} expansion)
             verbose: Whether to print export information
             export: If False, only return dict without modifying os.environ
 
@@ -140,7 +145,8 @@ class EnvironmentExporter:
         path_components = os.environ.get("PATH", "").split(":")
 
         new_paths = [
-            str(p) for p in self._collect_path_additions()
+            str(p)
+            for p in self._collect_path_additions()
             if str(p) not in path_components
         ]
 
@@ -151,13 +157,12 @@ class EnvironmentExporter:
 
         ld_lib_components = os.environ.get("LD_LIBRARY_PATH", "").split(":")
 
-        libudev_path = "/lib/x86_64-linux-gnu/libudev.so.1"
-        if self.config.vivado_path and Path(libudev_path).exists():
-            env_dict["LD_PRELOAD"] = libudev_path
+        if self.config.vivado_path and Path(_LIBUDEV_PATH).exists():
+            env_dict["LD_PRELOAD"] = _LIBUDEV_PATH
 
         if self.config.vivado_path:
             arch = platform.machine()
-            if arch != 'x86_64':
+            if arch != "x86_64":
                 raise RuntimeError(
                     f"Brainsmith currently only supports x86_64 architecture.\n"
                     f"Detected architecture: {arch}\n"

@@ -11,7 +11,7 @@
 ############################################################################
 
 """
-BERT-Specific Custom Build Steps (Local Example Plugin)
+BERT-Specific Custom Build Steps (Runtime Component Registration Example)
 
 These steps are specific to this BERT example and register when custom_steps.py
 is imported by bert_demo.py. They are referenced in bert_demo.yaml and executed
@@ -28,7 +28,7 @@ Core brainsmith steps also used in bert_demo.yaml:
 
 These steps are highly specific to BERT model architecture and demonstrate
 how to create example-specific steps using the @step decorator without
-needing a full plugin package structure.
+needing a full package structure.
 """
 
 import os
@@ -46,11 +46,7 @@ from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensor
 logger = logging.getLogger(__name__)
 
 
-@step(
-    name="remove_head",
-    category="bert",
-    description="Head removal for models"
-)
+@step(name="remove_head", source="project")
 def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
     
@@ -105,11 +101,7 @@ def _recurse_model_tail_removal(model, to_remove, node):
     return
 
 
-@step(
-    name="remove_tail", 
-    category="bert",
-    description="BERT-specific tail removal for models"
-)
+@step(name="remove_tail", source="project")
 def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
     # Direct implementation from old custom_step_remove_tail
@@ -127,11 +119,7 @@ def remove_tail_step(model, cfg):
     return model
 
 
-@step(
-    name="generate_reference_io", 
-    category="bert",
-    description="Reference IO generation for BERT demo"
-)
+@step(name="generate_reference_io", source="project")
 def generate_reference_io_step(model, cfg):
     """
     This step is to generate a reference IO pair for the 

@@ -318,7 +318,7 @@ class SegmentRunner:
     def _resolve_steps(self, segment: DSESegment) -> List:
         """Resolve step names to callable functions.
 
-        Attempts to resolve step names from the plugin registry.
+        Attempts to resolve step names from the component registry.
         Falls back to passing strings for FINN's internal lookup.
 
         Args:
@@ -337,7 +337,7 @@ class SegmentRunner:
 
             step_name = step["name"]
             try:
-                # Try to get callable from plugin registry
+                # Try to get callable from registry
                 step_fn = get_step(step_name)
                 steps.append(step_fn)
             except KeyError:

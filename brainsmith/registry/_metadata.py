@@ -4,13 +4,58 @@
 """Component metadata structures for the registry system.
 
 Defines data structures used throughout the component registry:
+- ComponentType: Enum for component types (kernel, backend, step)
 - ImportSpec: Lazy import specification
 - ComponentMetadata: Metadata for registered components
 - Helper functions for metadata manipulation
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Literal, Optional, Type, Union
+from enum import Enum, auto
+from typing import Any, Dict, Optional, Type, Union
+
+
+class ComponentType(Enum):
+    """Component type enumeration.
+
+    Provides type-safe component type identifiers with string conversion
+    support for JSON serialization.
+    """
+    KERNEL = auto()
+    BACKEND = auto()
+    STEP = auto()
+
+    def __str__(self) -> str:
+        """String representation for display and serialization."""
+        return self.name.lower()
+
+    @classmethod
+    def from_string(cls, s: str) -> 'ComponentType':
+        """Parse component type from string.
+
+        Args:
+            s: Component type string ('kernel', 'backend', or 'step')
+
+        Returns:
+            Corresponding ComponentType enum value
+
+        Raises:
+            ValueError: If string doesn't match any component type
+
+        Example:
+            >>> ComponentType.from_string('kernel')
+            <ComponentType.KERNEL: 1>
+            >>> ComponentType.from_string('backend')
+            <ComponentType.BACKEND: 2>
+        """
+        try:
+            return cls[s.upper()]
+        except KeyError:
+            valid = ', '.join([t.name.lower() for t in cls])
+            raise ValueError(
+                f"Invalid component type: '{s}'. "
+                f"Must be one of: {valid}"
+            )
 
 
 @dataclass
@@ -24,6 +69,9 @@ class ImportSpec:
     """
     module: str
     attr: str
+    # DEPRECATED: This field is no longer used and will be removed in a future version.
+    # Type-specific metadata should be stored directly in ComponentMetadata fields
+    # (kernel_infer, kernel_domain, backend_target, backend_language) instead.
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -39,7 +87,7 @@ class ComponentMetadata:
     """
     name: str
     source: str
-    component_type: Literal['kernel', 'backend', 'step']
+    component_type: ComponentType
     import_spec: ImportSpec
     loaded_obj: Optional[Any] = None
 

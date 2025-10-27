@@ -22,7 +22,7 @@ This is the modern industry standard for Python projects, used by **FastAPI, Pyd
 - Automatic cross-references between API objects
 - Type annotation display
 - Inheritance diagrams
-- **Perfect for your plugin system, CLI, core modules**
+- **Perfect for your component registry system, CLI, core modules**
 
 ### 3. mike (Version Management)
 - Multiple documentation versions (v0.1.0-alpha.1, latest, stable)
@@ -36,7 +36,7 @@ This is the modern industry standard for Python projects, used by **FastAPI, Pyd
 - **Native Mermaid.js integration** for:
   - Architecture diagrams (DSE tree, segment execution)
   - Flowcharts (compilation pipeline)
-  - Sequence diagrams (plugin registry flow)
+  - Sequence diagrams (component registry flow)
   - State diagrams (build stages)
 - No external tools needed - diagrams in markdown code blocks
 
@@ -127,7 +127,7 @@ docs/
 │   └── examples.md              # Common workflows
 ├── architecture/
 │   ├── overview.md              # High-level architecture
-│   ├── plugin-system.md         # Registry & decorators
+│   ├── component-registry.md    # Registry & decorators
 │   ├── segment-execution.md     # DSE tree mechanics
 │   └── dataflow-pipeline.md     # ONNX→RTL flow
 ├── kernel-development/
@@ -136,7 +136,7 @@ docs/
 │   └── backend-development.md   # Adding backends
 ├── api-reference/
 │   ├── core.md                  # ::: brainsmith.core
-│   ├── plugins.md               # ::: brainsmith.registry
+│   ├── registry.md              # ::: brainsmith.registry
 │   ├── kernels.md               # ::: brainsmith.kernels
 │   └── transforms.md            # ::: brainsmith.transforms
 ├── tutorials/

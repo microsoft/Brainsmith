@@ -75,10 +75,10 @@ The example includes two blueprint configurations:
 - Lower performance target (1 FPS)
 - Skips time-intensive optimizations
 
-## Custom Steps (Local Plugin Pattern)
+## Custom Steps (Runtime Component Registration)
 
 This example demonstrates how to create custom steps using the `@step` decorator
-without needing a full plugin package structure. The steps in `custom_steps.py`
+without needing a full package structure. The steps in `custom_steps.py`
 are registered when imported by `bert_demo.py` and referenced by name in the
 blueprint YAML.
 

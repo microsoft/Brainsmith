@@ -82,27 +82,15 @@ _LAZY_MODULES = {
 }
 
 _lazy_loader = LazyModuleLoader(_LAZY_MODULES, package=__name__)
-_config_exported = False
 
 
 def __getattr__(name):
-    """Lazy import attributes on first access (PEP 562)."""
-    global _config_exported
+    """Lazy import attributes on first access (PEP 562).
 
-    # Get the attribute using the shared lazy loader
-    attr = _lazy_loader.get_attribute(name)
-
-    # Export config to environment on first settings access
-    # This is a special case for brainsmith's configuration system
-    if name == 'get_config' and not _config_exported:
-        try:
-            config = attr()
-            config.export_to_environment()
-            _config_exported = True
-        except Exception:
-            pass  # Config might not be available during initial setup
-
-    return attr
+    Note: Config export to environment (FINN_ROOT, etc.) happens automatically
+    in get_config() on first load, so no special handling needed here.
+    """
+    return _lazy_loader.get_attribute(name)
 
 
 def __dir__():

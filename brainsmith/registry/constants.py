@@ -5,15 +5,30 @@
 
 Eliminates magic strings and provides single source of truth for
 source names, component types, and default configurations.
+
+Source Types:
+    - Core namespace: 'brainsmith' - internal components loaded via direct import
+    - Entry points: 'finn', etc. - discovered via pip package entry points
+    - Filesystem: 'project', 'user', custom - loaded from configured directory paths
 """
 
-# Protected plugin source names (cannot be overridden by users)
+# Core namespace reserved for brainsmith internal components
+CORE_NAMESPACE = 'brainsmith'
+
+# Standard source names
 SOURCE_BRAINSMITH = 'brainsmith'
 SOURCE_FINN = 'finn'
 SOURCE_PROJECT = 'project'
 SOURCE_USER = 'user'
 
-# Protected sources set (immutable)
+# Known entry point sources (discovered at runtime, not filesystem-based)
+# These are discovered via importlib.metadata.entry_points but we list known ones
+# for validation purposes
+KNOWN_ENTRY_POINTS = frozenset([SOURCE_FINN])
+
+# Protected sources set - sources with special handling in source priority resolution
+# Note: This is about lookup priority, not about filesystem paths. Only project/user
+# have configurable filesystem paths.
 PROTECTED_SOURCES = frozenset([SOURCE_BRAINSMITH, SOURCE_FINN, SOURCE_PROJECT, SOURCE_USER])
 
 # Default source resolution priority (first match wins)

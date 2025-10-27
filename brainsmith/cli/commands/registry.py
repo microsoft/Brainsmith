@@ -33,7 +33,7 @@ def _validate_components(names: list, getter) -> dict:
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed component information")
-@click.option("--rebuild", is_flag=True, help="Rebuild cache and validate all components (slower)")
+@click.option("--rebuild", "-r", is_flag=True, help="Rebuild cache and validate all components (slower)")
 @click.pass_obj
 def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     """Shows all registered components (steps, kernels, backends) organized by source:
@@ -82,21 +82,48 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
         list(backends_by_source.keys())
     ))
 
-    # Show component sources from config
-    component_sources = config.component_sources
-    if component_sources:
-        sources_table = Table(title="Configured Component Sources")
-        sources_table.add_column("Source", style="cyan")
-        sources_table.add_column("Path", style="white")
-        sources_table.add_column("Exists", justify="center")
+    # Show all component sources (configured + discovered)
+    sources_table = Table(title="Component Sources")
+    sources_table.add_column("Source", style="cyan")
+    sources_table.add_column("Type", style="white")
+    sources_table.add_column("Path", style="white")
+    sources_table.add_column("Status", justify="center")
 
-        for source_name, path in sorted(component_sources.items()):
-            exists = "✓" if path.exists() else "✗"
-            exists_colored = f"[green]{exists}[/green]" if exists == "✓" else f"[red]{exists}[/red]"
-            sources_table.add_row(source_name, str(path), exists_colored)
+    # Add core namespace (brainsmith)
+    brainsmith_path = config.bsmith_dir / 'brainsmith'
+    sources_table.add_row(
+        "brainsmith",
+        "core",
+        str(brainsmith_path),
+        "[green]✓[/green]" if brainsmith_path.exists() else "[red]✗[/red]"
+    )
 
-        console.print(sources_table)
-        console.print()
+    # Add discovered entry points
+    try:
+        from importlib.metadata import entry_points
+        eps = entry_points(group='brainsmith.plugins')
+        for ep in eps:
+            # Entry point path is typically in deps_dir but could be anywhere
+            # Show "auto-discovered" instead of guessing path
+            ep_path = config.deps_dir / ep.name
+            if ep_path.exists():
+                status = "[green]✓[/green]"
+                path_display = str(ep_path)
+            else:
+                status = "[dim]auto[/dim]"
+                path_display = "(auto-discovered)"
+            sources_table.add_row(ep.name, "entry point", path_display, status)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not scan entry points: {e}[/yellow]")
+
+    # Add configured filesystem sources
+    for source_name, path in sorted(config.component_sources.items()):
+        exists = "✓" if path.exists() else "✗"
+        exists_colored = f"[green]{exists}[/green]" if exists == "✓" else f"[red]{exists}[/red]"
+        sources_table.add_row(source_name, "filesystem", str(path), exists_colored)
+
+    console.print(sources_table)
+    console.print()
 
     # Summary table by source
     summary_table = Table(title="Component Summary by Source")

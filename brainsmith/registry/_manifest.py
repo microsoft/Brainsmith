@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Dict, Any
 
 from ._state import _component_index
-from ._metadata import ComponentMetadata, ImportSpec
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec
 
 logger = logging.getLogger(__name__)
 
@@ -58,18 +58,18 @@ def _build_manifest_from_index() -> Dict[str, Any]:
 
         # Build component data with type-specific metadata
         components[full_name] = {
-            'type': meta.component_type,
+            'type': str(meta.component_type),  # Convert enum to string for JSON
             'module': meta.import_spec.module,
             'attr': meta.import_spec.attr,
             'metadata': meta.import_spec.extra,
             'file_path': file_path,
             'mtime': mtime,
             # Type-specific metadata (preserved for restoration)
-            'kernel_infer': meta.kernel_infer if meta.component_type == 'kernel' else None,
-            'kernel_domain': meta.kernel_domain if meta.component_type == 'kernel' else None,
-            'kernel_backends': meta.kernel_backends if meta.component_type == 'kernel' else None,
-            'backend_target': meta.backend_target if meta.component_type == 'backend' else None,
-            'backend_language': meta.backend_language if meta.component_type == 'backend' else None,
+            'kernel_infer': meta.kernel_infer if meta.component_type == ComponentType.KERNEL else None,
+            'kernel_domain': meta.kernel_domain if meta.component_type == ComponentType.KERNEL else None,
+            'kernel_backends': meta.kernel_backends if meta.component_type == ComponentType.KERNEL else None,
+            'backend_target': meta.backend_target if meta.component_type == ComponentType.BACKEND else None,
+            'backend_language': meta.backend_language if meta.component_type == ComponentType.BACKEND else None,
         }
 
     return {
@@ -186,7 +186,7 @@ def _populate_index_from_manifest(manifest: Dict[str, Any]) -> None:
         meta = ComponentMetadata(
             name=name,
             source=source,
-            component_type=component['type'],
+            component_type=ComponentType.from_string(component['type']),  # Convert string to enum
             import_spec=ImportSpec(
                 module=component['module'],
                 attr=component['attr'],

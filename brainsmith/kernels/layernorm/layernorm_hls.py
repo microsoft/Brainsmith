@@ -24,7 +24,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
     Generates HLS code for hardware synthesis of LayerNorm operations.
 
-    Metadata for registry (namespace-based plugin system):
+    Metadata for registry (namespace-based component registry):
     - target_kernel: Which kernel this backend implements
     - language: Backend language (hls/rtl/etc)
     """

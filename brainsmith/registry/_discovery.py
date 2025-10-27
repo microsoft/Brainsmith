@@ -30,8 +30,8 @@ from importlib.metadata import entry_points
 from typing import Dict, List, Any
 
 from ._state import _component_index, _components_discovered
-from ._decorators import _register_kernel, _register_backend, _register_step, source_context
-from ._metadata import ComponentMetadata, ImportSpec, resolve_lazy_class
+from ._decorators import _register_kernel, _register_backend, _register_step, source_context, _convert_lazy_import_spec
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
 from .constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
@@ -111,6 +111,9 @@ def _resolve_component_name(name_or_qualified: str, component_type: str = 'step'
     Returns:
         Fully-qualified name in 'source:name' format
     """
+    # Convert string to enum for comparison
+    component_type_enum = ComponentType.from_string(component_type)
+
     # Already qualified?
     if ':' in name_or_qualified:
         return name_or_qualified
@@ -128,7 +131,7 @@ def _resolve_component_name(name_or_qualified: str, component_type: str = 'step'
         for source in source_priority:
             full_name = f"{source}:{name_or_qualified}"
             meta = _component_index.get(full_name)
-            if meta and meta.component_type == component_type:
+            if meta and meta.component_type == component_type_enum:
                 return full_name
 
     # Not found - return default source (caller will raise KeyError if needed)
@@ -162,7 +165,10 @@ def _index_entry_point_components(
     """
     from .constants import DEFAULT_KERNEL_DOMAIN
 
-    attr_field = 'func_name' if component_type == 'step' else 'class_name'
+    # Convert string to enum
+    component_type_enum = ComponentType.from_string(component_type)
+
+    attr_field = 'func_name' if component_type_enum == ComponentType.STEP else 'class_name'
 
     for meta in metas:
         name = meta['name']
@@ -179,7 +185,7 @@ def _index_entry_point_components(
             metadata = ComponentMetadata(
                 name=name,
                 source=source,
-                component_type=component_type,
+                component_type=component_type_enum,
                 import_spec=ImportSpec(
                     module=module_name,
                     attr=class_name,
@@ -189,15 +195,11 @@ def _index_entry_point_components(
             )
 
             # Populate type-specific metadata fields (inline)
-            if component_type == 'kernel':
+            if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
-                if isinstance(infer_spec, str) and ':' in infer_spec:
-                    module_path, class_name = infer_spec.split(':', 1)
-                    metadata.kernel_infer = {'module': module_path, 'class_name': class_name}
-                else:
-                    metadata.kernel_infer = infer_spec
+                metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
                 metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
-            elif component_type == 'backend':
+            elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
 
@@ -209,7 +211,7 @@ def _index_entry_point_components(
             metadata = ComponentMetadata(
                 name=name,
                 source=source,
-                component_type=component_type,
+                component_type=component_type_enum,
                 import_spec=ImportSpec(
                     module=meta['module'],
                     attr=meta[attr_field],
@@ -218,15 +220,11 @@ def _index_entry_point_components(
             )
 
             # Populate type-specific metadata fields (inline)
-            if component_type == 'kernel':
+            if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
-                if isinstance(infer_spec, str) and ':' in infer_spec:
-                    module_path, class_name = infer_spec.split(':', 1)
-                    metadata.kernel_infer = {'module': module_path, 'class_name': class_name}
-                else:
-                    metadata.kernel_infer = infer_spec
+                metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
                 metadata.kernel_domain = meta.get('domain', DEFAULT_KERNEL_DOMAIN)
-            elif component_type == 'backend':
+            elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
 
@@ -244,7 +242,7 @@ def _link_backends_to_kernels() -> None:
     backend->kernel metadata, avoiding the need for a separate inverted index.
     """
     for full_name, meta in _component_index.items():
-        if meta.component_type != 'backend':
+        if meta.component_type != ComponentType.BACKEND:
             continue
 
         target = meta.backend_target
@@ -324,7 +322,7 @@ def _load_component(meta: ComponentMetadata) -> Any:
     except AttributeError:
         # For steps: decorator name might differ from function name
         # After import, check if decorator already registered it in component index
-        if meta.component_type == 'step':
+        if meta.component_type == ComponentType.STEP:
             # Check if decorator already populated loaded_obj
             if meta.loaded_obj is not None:
                 obj = meta.loaded_obj
@@ -362,14 +360,14 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
     """
     extra = meta.import_spec.extra if meta.import_spec else {}
 
-    if meta.component_type == 'kernel':
+    if meta.component_type == ComponentType.KERNEL:
         # Resolve lazy infer_transform if needed
         infer_transform = resolve_lazy_class(extra.get('infer_transform'))
 
         _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")
 
-    elif meta.component_type == 'backend':
+    elif meta.component_type == ComponentType.BACKEND:
         _register_backend(
             obj,
             name=meta.name,
@@ -378,7 +376,7 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
         )
         logger.debug(f"Registered backend: {meta.full_name}")
 
-    elif meta.component_type == 'step':
+    elif meta.component_type == ComponentType.STEP:
         _register_step(obj, name=meta.name)
         logger.debug(f"Registered step: {meta.full_name}")
 
@@ -478,7 +476,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Count components by type
         counts = {'step': 0, 'kernel': 0, 'backend': 0}
         for meta in _component_index.values():
-            counts[meta.component_type] += 1
+            counts[str(meta.component_type)] += 1
 
         logger.info(
             f"Component discovery complete: "

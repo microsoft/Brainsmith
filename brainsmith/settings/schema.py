@@ -45,11 +45,19 @@ import os
 import yaml
 from pathlib import Path
 from functools import cached_property
-from typing import Annotated, Optional, Dict, Any, List, Tuple, Type, Callable, Union
-from pydantic import BaseModel, Field, field_validator, ConfigDict, BeforeValidator
-from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
+from typing import (
+    Annotated, Optional, Dict, Any, List, Tuple, Type, Callable, Union
+)
+from pydantic import (
+    BaseModel, Field, field_validator, ConfigDict, BeforeValidator
+)
+from pydantic_settings import (
+    BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
+)
 from brainsmith._internal.io.yaml import deep_merge, expand_env_vars
 from brainsmith.registry.constants import (
+    CORE_NAMESPACE,
+    KNOWN_ENTRY_POINTS,
     PROTECTED_SOURCES,
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
@@ -235,16 +243,22 @@ class SystemConfig(BaseSettings):
     # It's set in model_post_init as a regular attribute
     component_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
-            SOURCE_BRAINSMITH: None,  # Resolved in model_post_init to bsmith_dir / 'brainsmith'
-            SOURCE_FINN: None,         # Resolved in model_post_init to deps_dir / 'finn'
-            SOURCE_PROJECT: None,      # Resolved in model_post_init to project_dir / 'plugins'
-            SOURCE_USER: None          # Resolved in model_post_init to ~/.brainsmith/plugins
+            SOURCE_PROJECT: None,  # Resolved to project_dir / "plugins"
+            SOURCE_USER: None      # Resolved to ~/.brainsmith/plugins
         },
-        description="Component source mappings. Built-in sources (brainsmith, finn, project, user) are protected and cannot be overridden."
+        description=(
+            "Filesystem-based component source paths. Maps source name to directory path. "
+            "Standard sources 'project' and 'user' have default paths. "
+            "Core namespace 'brainsmith' and entry point sources (e.g., 'finn') are "
+            "loaded automatically and cannot be configured here."
+        )
     )
     source_priority: List[str] = Field(
         default=list(DEFAULT_SOURCE_PRIORITY),
-        description="Component source resolution priority. First source with matching component wins. Custom sources are auto-appended if not explicitly listed."
+        description=(
+            "Component source resolution priority. First source with matching "
+            "component wins. Custom sources are auto-appended if not explicitly listed."
+        )
     )
 
     # Xilinx configuration (flattened)
@@ -281,7 +295,12 @@ class SystemConfig(BaseSettings):
 
     cache_components: bool = Field(
         default=True,
-        description="Enable manifest caching for component discovery. When True, generates and uses a manifest cache in .brainsmith/ to speed up startup. Cache auto-invalidates when component files are modified. Set to False to always perform eager discovery."
+        description=(
+            "Enable manifest caching for component discovery. When True, generates and "
+            "uses a manifest cache in .brainsmith/ to speed up startup. Cache "
+            "auto-invalidates when component files are modified. Set to False to always "
+            "perform eager discovery."
+        )
     )
 
     vivado_ip_cache: Path | None = Field(
@@ -296,7 +315,10 @@ class SystemConfig(BaseSettings):
 
     default_workers: int = Field(
         default=4,
-        description="Default number of workers for parallel operations (exports to NUM_DEFAULT_WORKERS for FINN)"
+        description=(
+            "Default number of workers for parallel operations "
+            "(exports to NUM_DEFAULT_WORKERS for FINN)"
+        )
     )
 
     finn_root: Path | None = Field(
@@ -313,8 +335,8 @@ class SystemConfig(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_prefix='BSMITH_',
-        env_nested_delimiter='__',
+        env_prefix="BSMITH_",
+        env_nested_delimiter="__",
         validate_assignment=True,
         extra="allow",
         case_sensitive=False,
@@ -372,7 +394,6 @@ class SystemConfig(BaseSettings):
         self._resolve_xilinx_tools()
         self._resolve_finn_paths()
         self._resolve_component_sources()
-        self._validate_component_sources()
         self._resolve_source_priority()
 
     def _resolve_core_paths(self) -> None:
@@ -423,38 +444,24 @@ class SystemConfig(BaseSettings):
             self.finn_deps_dir = self.deps_dir
 
     def _resolve_component_sources(self) -> None:
-        """Resolve component source paths."""
-        if self.component_sources.get(SOURCE_BRAINSMITH) is None:
-            self.component_sources[SOURCE_BRAINSMITH] = self.bsmith_dir / 'brainsmith'
+        """Resolve component source paths for filesystem-based sources.
 
-        if self.component_sources.get(SOURCE_FINN) is None:
-            self.component_sources[SOURCE_FINN] = self.deps_dir / 'finn'
-
+        Only project, user, and custom sources are filesystem-based and configurable.
+        Core namespace (brainsmith) and entry points (finn) are discovered automatically.
+        """
+        # Standard filesystem sources with default paths
         if self.component_sources.get(SOURCE_PROJECT) is None:
             self.component_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
 
         if self.component_sources.get(SOURCE_USER) is None:
             self.component_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
 
-        # Custom (non-protected) sources: resolve if relative
+        # Custom sources: resolve relative paths
+        # Standard sources (project, user) are resolved above
+        standard_sources = {SOURCE_PROJECT, SOURCE_USER}
         for name, path in list(self.component_sources.items()):
-            if name not in PROTECTED_SOURCES and path is not None:
+            if name not in standard_sources and path is not None:
                 self.component_sources[name] = self._resolve(path, self.project_dir)
-
-    def _validate_component_sources(self) -> None:
-        """Validate that protected sources are properly resolved."""
-        for source_name in PROTECTED_SOURCES:
-            if source_name in self.component_sources:
-                path = self.component_sources[source_name]
-                if path is None:
-                    raise ValueError(
-                        f"Protected component source '{source_name}' was not resolved. "
-                        f"This is a bug in Brainsmith."
-                    )
-                if not path.is_absolute():
-                    raise ValueError(
-                        f"Component source '{source_name}' must be absolute, got: {path}"
-                    )
 
     def _resolve_source_priority(self) -> None:
         """Auto-append custom component sources to source_priority if not already listed.
@@ -477,7 +484,9 @@ class SystemConfig(BaseSettings):
             bsmith_dir = Path(brainsmith.__file__).parent.parent
 
             if not (bsmith_dir / "pyproject.toml").exists():
-                raise ValueError(f"Auto-detected directory {bsmith_dir} does not contain pyproject.toml")
+                raise ValueError(
+                    f"Auto-detected directory {bsmith_dir} does not contain pyproject.toml"
+                )
 
             return bsmith_dir
         except ImportError:
@@ -514,11 +523,18 @@ class SystemConfig(BaseSettings):
     @field_validator('component_sources', mode='before')
     @classmethod
     def validate_component_sources(cls, v: Any) -> Dict[str, Path | None]:
-        """Validate component sources structure and prevent protected source overrides.
+        """Validate component sources and warn about reserved source names.
 
-        Protected sources (brainsmith, finn, project, user) are resolved in model_post_init.
-        Users can add custom sources but cannot override protected ones.
+        Reserved source names:
+        - Core namespace ('brainsmith'): Internal components loaded via direct import
+        - Entry points (e.g., 'finn'): Discovered via pip package entry points
+
+        Users can configure filesystem-based sources (project, user, custom) but
+        cannot override reserved names.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         default_sources = cls.model_fields['component_sources'].default_factory()
 
         if v is None or not isinstance(v, dict):
@@ -527,13 +543,25 @@ class SystemConfig(BaseSettings):
         result = default_sources.copy()
 
         for key, value in v.items():
-            # Allow protected sources if value is None (default resolution in model_post_init)
-            if key in PROTECTED_SOURCES and value is not None:
-                raise ValueError(
-                    f"Cannot override protected component source '{key}'. "
-                    f"Protected sources: {', '.join(sorted(PROTECTED_SOURCES))}"
+            # Warn if trying to override core namespace
+            if key == CORE_NAMESPACE and value is not None:
+                logger.warning(
+                    f"Component source '{key}' is a reserved core namespace and cannot be "
+                    f"configured. The core brainsmith components are loaded from the package "
+                    f"installation automatically. This configuration will be ignored."
                 )
+                continue  # Skip, don't add to result
 
+            # Warn if trying to override known entry point sources
+            if key in KNOWN_ENTRY_POINTS and value is not None:
+                logger.warning(
+                    f"Component source '{key}' is a registered entry point and cannot be "
+                    f"configured. Entry point sources are discovered automatically from "
+                    f"installed packages. This configuration will be ignored."
+                )
+                continue  # Skip, don't add to result
+
+            # Add custom or standard filesystem sources
             result[key] = Path(value) if isinstance(value, str) else value
 
         return result

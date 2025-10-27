@@ -429,8 +429,7 @@ temp/
 staging/
 
 # Output directories
-output/
-outputs/
+builds/
 results/
 !tests/expected_results/
 

@@ -18,7 +18,7 @@ from typing import Optional
 
 from brainsmith.dse._parser import parse_blueprint
 from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse.design_space import slice_steps
+from brainsmith.dse.design_space import _slice_steps
 from brainsmith.dse.tree import DSETree
 from brainsmith.dse.runner import SegmentRunner
 from brainsmith._internal.finn.adapter import FINNAdapter
@@ -63,9 +63,12 @@ def explore_design_space(
     if not blueprint_path_obj.exists():
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_path_obj}")
 
+    # Load config early to ensure BSMITH_* vars are exported for YAML expansion
+    from brainsmith.settings import get_config
+    get_config()  # Exports BSMITH_DIR and other env vars
+
     # Determine output directory
     if not output_dir:
-        from brainsmith.settings import get_config  # Lazy import
         build_dir = get_config().build_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = str(build_dir / f"dfc_{timestamp}")
@@ -88,7 +91,7 @@ def explore_design_space(
     # Slice steps if specified
     if start_step or stop_step:
         logger.info(f"Applying step range: start={start_step or 'beginning'}, stop={stop_step or 'end'}")
-        design_space.steps = slice_steps(design_space.steps, start_step, stop_step)
+        design_space.steps = _slice_steps(design_space.steps, start_step, stop_step)
     
     # Build DSE tree
     tree_builder = DSETreeBuilder()

@@ -27,25 +27,16 @@ Discovery and Lookup (for users):
 
     LayerNorm = get_kernel('LayerNorm')
     steps = list_steps()
-
-Lazy Loading (for plugin/package authors):
-    from brainsmith.registry import create_lazy_module
-
-    # In your __init__.py:
-    COMPONENTS = {
-        'kernels': {'MyKernel': '.my_kernel'},
-        'steps': {'my_step': '.my_step'},
-    }
-
-    __getattr__, __dir__ = create_lazy_module(COMPONENTS, __name__)
 """
 
 # Public constants
 from .constants import (
+    CORE_NAMESPACE,
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
     SOURCE_USER,
+    KNOWN_ENTRY_POINTS,
     PROTECTED_SOURCES,
     DEFAULT_SOURCE_PRIORITY,
     SOURCE_MODULE_PREFIXES,
@@ -53,7 +44,7 @@ from .constants import (
 )
 
 # Metadata structures and helpers
-from ._metadata import ComponentMetadata, ImportSpec, resolve_lazy_class
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
 
 # Registration decorators
 from ._decorators import (
@@ -63,12 +54,59 @@ from ._decorators import (
     source_context,
 )
 
-# Lazy loading helper
-from ._loading import create_lazy_module
-
 # Discovery and lookup - import from specialized modules
 from ._discovery import discover_components
 from ._state import _component_index
+
+
+# ============================================================================
+# Registry Lifecycle Management
+# ============================================================================
+
+def reset_registry() -> None:
+    """Reset registry to uninitialized state.
+
+    Clears all discovered components and resets discovery flag. Useful for
+    testing and when switching configurations.
+
+    Example:
+        >>> from brainsmith.registry import reset_registry
+        >>> reset_registry()  # Clear state
+        >>> # ... change configuration ...
+        >>> from brainsmith.registry import discover_components
+        >>> discover_components()  # Re-discover with new config
+
+    Note:
+        This is the recommended way to reset registry state in tests.
+        Do not directly manipulate private _component_index or
+        _components_discovered variables.
+    """
+    import brainsmith.registry._state as registry_state
+    import brainsmith.registry._discovery as discovery_module
+
+    _component_index.clear()
+    registry_state._components_discovered = False
+    discovery_module._components_discovered = False
+
+
+def is_initialized() -> bool:
+    """Check if registry has been initialized.
+
+    Returns:
+        True if component discovery has completed
+
+    Example:
+        >>> from brainsmith.registry import is_initialized
+        >>> is_initialized()
+        False
+        >>> from brainsmith.registry import discover_components
+        >>> discover_components()
+        >>> is_initialized()
+        True
+    """
+    from ._state import _components_discovered
+    return _components_discovered
+
 
 from ._lookup import (
     # Lookup - Steps
@@ -95,10 +133,12 @@ from ._lookup import (
 
 __all__ = [
     # Constants
+    'CORE_NAMESPACE',
     'SOURCE_BRAINSMITH',
     'SOURCE_FINN',
     'SOURCE_PROJECT',
     'SOURCE_USER',
+    'KNOWN_ENTRY_POINTS',
     'PROTECTED_SOURCES',
     'DEFAULT_SOURCE_PRIORITY',
     'SOURCE_MODULE_PREFIXES',
@@ -106,6 +146,7 @@ __all__ = [
 
     # Metadata
     'ComponentMetadata',
+    'ComponentType',
     'ImportSpec',
 
     # Registration
@@ -114,11 +155,10 @@ __all__ = [
     'step',
     'source_context',
 
-    # Lazy loading
-    'create_lazy_module',
-
-    # Discovery
+    # Discovery and Lifecycle
     'discover_components',
+    'reset_registry',
+    'is_initialized',
 
     # Lookup - Steps
     'get_step',

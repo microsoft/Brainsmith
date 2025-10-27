@@ -11,7 +11,7 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 
 # Python source files
-# Note: Black and Ruff handle formatting; this ensures editor consistency
+# Note: Ruff handles formatting and linting; this ensures editor consistency
 [*.py]
 indent_style = space
 indent_size = 4

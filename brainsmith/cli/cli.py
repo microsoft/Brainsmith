@@ -63,7 +63,9 @@ def _create_smith_subcommand() -> click.Command:
         """
         smith_cli = create_cli(CLI_NAME_SMITH, include_admin=False)
 
-        with smith_cli.make_context(CLI_NAME_SMITH, list(args), parent=ctx, obj=ctx.obj) as smith_ctx:
+        with smith_cli.make_context(
+            CLI_NAME_SMITH, list(args), parent=ctx, obj=ctx.obj
+        ) as smith_ctx:
             smith_cli.invoke(smith_ctx)
 
     return smith
@@ -104,21 +106,37 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         lazy_commands=lazy_commands
     )
 
-    cli.params.append(click.Option(["-b", "--build-dir"], type=click.Path(path_type=Path),
-                                    help="Override build directory"))
-    cli.params.append(click.Option(["-c", "--config"], type=click.Path(exists=True, path_type=Path),
-                                    help="Override configuration file"))
-    cli.params.append(click.Option(["-l", "--logs"],
-                                    type=click.Choice(["error", "warning", "info", "debug"]),
-                                    default="warning",
-                                    metavar="LEVEL",
-                                    help="Set log level (error|warning|info|debug)"))
-    cli.params.append(click.Option(["--no-progress"], is_flag=True,
-                                    help="Disable progress spinners and animations"))
+    cli.params.append(click.Option(
+        ["-b", "--build-dir"],
+        type=click.Path(path_type=Path),
+        help="Override build directory"
+    ))
+    cli.params.append(click.Option(
+        ["-c", "--config"],
+        type=click.Path(exists=True, path_type=Path),
+        help="Override configuration file"
+    ))
+    cli.params.append(click.Option(
+        ["-l", "--logs"],
+        type=click.Choice(["error", "warning", "info", "debug"]),
+        default="warning",
+        metavar="LEVEL",
+        help="Set log level (error|warning|info|debug)"
+    ))
+    cli.params.append(click.Option(
+        ["--no-progress"],
+        is_flag=True,
+        help="Disable progress spinners and animations"
+    ))
 
-    cli.params.append(click.Option(["--version"], is_flag=True, expose_value=False,
-                                    is_eager=True, callback=_version_callback,
-                                    help="Show the version and exit."))
+    cli.params.append(click.Option(
+        ["--version"],
+        is_flag=True,
+        expose_value=False,
+        is_eager=True,
+        callback=_version_callback,
+        help="Show the version and exit."
+    ))
 
     if name == CLI_NAME_SMITH:
         cli.help = """Smith - Create hardware designs and components.

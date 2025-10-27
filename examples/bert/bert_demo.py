@@ -26,8 +26,7 @@ import torch
 # Import brainsmith early to set up paths
 import brainsmith
 from brainsmith.settings import get_config
-# Export configuration to environment for FINN
-get_config().export_to_environment()
+# Note: Config export to environment (FINN_ROOT, etc.) happens automatically
 
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize

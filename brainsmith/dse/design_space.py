@@ -4,7 +4,7 @@
 """
 Clean Design Space Implementation
 
-This module defines the new GlobalDesignSpace that holds resolved plugin objects
+This module defines the new GlobalDesignSpace that holds resolved component objects
 from the blueprint, ready for tree construction.
 """
 
@@ -15,7 +15,7 @@ from brainsmith.dse._constants import SKIP_INDICATOR
 
 @dataclass
 class GlobalDesignSpace:
-    """Design space with resolved plugin objects."""
+    """Design space with resolved component objects."""
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
 
@@ -64,7 +64,7 @@ class GlobalDesignSpace:
         )
 
 
-def find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str) -> int:
+def _find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str) -> int:
     """Find index of step in steps list, checking inside branch points.
 
     Args:
@@ -94,7 +94,7 @@ def find_step_index(steps: List[Union[str, List[Optional[str]]]], step_name: str
     )
 
 
-def slice_steps(
+def _slice_steps(
     steps: List[Union[str, List[Optional[str]]]],
     start_step: Optional[str] = None,
     stop_step: Optional[str] = None
@@ -115,8 +115,8 @@ def slice_steps(
     Raises:
         ValueError: If start_step or stop_step not found
     """
-    start_idx = find_step_index(steps, start_step) if start_step else 0
-    stop_idx = find_step_index(steps, stop_step) if stop_step else len(steps) - 1
+    start_idx = _find_step_index(steps, start_step) if start_step else 0
+    stop_idx = _find_step_index(steps, stop_step) if stop_step else len(steps) - 1
 
     if start_idx > stop_idx:
         raise ValueError(

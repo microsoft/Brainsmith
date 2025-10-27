@@ -69,19 +69,58 @@ def expand_env_vars(data: Any) -> Any:
 def dump_yaml(
     data: dict[str, Any],
     file_path: str | Path,
+    add_copyright: bool = False,
     **kwargs
 ) -> None:
-    file_path = Path(file_path)
+    """Write YAML file with blueprint-compatible formatting.
 
+    Produces clean YAML suitable for blueprints and config files:
+    - 2-space indentation
+    - Block style (not inline)
+    - Preserved key ordering (Python 3.7+ dict order)
+    - None → 'null', empty lists → '[]'
+    - No document markers (---, ...)
+    - 80-character line width
+
+    Args:
+        data: Dictionary to write
+        file_path: Output file path
+        add_copyright: If True, prepend Microsoft copyright header
+        **kwargs: Additional arguments passed to yaml.safe_dump()
+
+    Note: Comments are not supported (PyYAML limitation).
+          For blueprints with inline comments, edit manually after generation.
+
+    Example:
+        >>> dump_yaml({
+        ...     'name': 'Test Blueprint',
+        ...     'clock_ns': 5.0,
+        ...     'design_space': {
+        ...         'kernels': [],
+        ...         'steps': ['qonnx_to_finn', 'tidy_up']
+        ...     }
+        ... }, 'blueprint.yaml', add_copyright=True)
+    """
+    file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Blueprint-compatible defaults
     default_kwargs = {
-        'default_flow_style': False,
-        'sort_keys': False,
-        'width': 80,
-        'indent': 2
+        'default_flow_style': False,  # Lists as '- item' not '[item1, item2]'
+        'sort_keys': False,            # Preserve dict insertion order
+        'allow_unicode': True,         # Support unicode characters
+        'width': 80,                   # Line wrap at 80 characters
+        'indent': 2,                   # 2-space indentation (YAML standard)
+        'explicit_start': False,       # No '---' document marker
+        'explicit_end': False,         # No '...' document marker
     }
     default_kwargs.update(kwargs)
 
     with open(file_path, 'w') as f:
-        yaml.dump(data, f, **default_kwargs)
+        # Add copyright header if requested
+        if add_copyright:
+            f.write("# Copyright (c) Microsoft Corporation.\n")
+            f.write("# Licensed under the MIT License.\n\n")
+
+        # Use safe_dump (safer than dump, prevents arbitrary code execution)
+        yaml.safe_dump(data, f, **default_kwargs)

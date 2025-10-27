@@ -17,11 +17,12 @@ from .messages import XILINX_NOT_CONFIGURED, XILINX_NOT_FOUND
 if TYPE_CHECKING:
     from brainsmith.settings import SystemConfig
 
+# Import config file constants from settings module
+from brainsmith.settings.schema import _PROJECT_CONFIG_DIR, _PROJECT_CONFIG_FILE
+
 # Source constants for configuration display
 _SOURCE_DERIVED = "derived"
 _SOURCE_DEFAULT = "default"
-
-_PROJECT_CONFIG_FILE = ".brainsmith/config.yaml"
 
 
 class ConfigFormatter:
@@ -60,10 +61,10 @@ class ConfigFormatter:
         table.add_row("  Source Priority", ", ".join(config.source_priority),
                       self._get_source("source_priority", "BSMITH_SOURCE_PRIORITY"))
 
-        # Component sources - show each source with its path (exclude brainsmith)
-        component_sources = {k: v for k, v in config.component_sources.items() if k != "brainsmith"}
+        # Component sources - show configured filesystem sources (project, user, custom)
+        # Core namespace (brainsmith) and entry points (finn) are not shown here as they're not configurable
         source = self._get_source("component_sources", "BSMITH_COMPONENT_SOURCES")
-        for i, (source_name, source_path) in enumerate(sorted(component_sources.items())):
+        for i, (source_name, source_path) in enumerate(sorted(config.component_sources.items())):
             label = "  Component Sources" if i == 0 else ""
             formatted_path = self._format_path(source_path, config.bsmith_dir)
             display_value = f"{source_name}: {formatted_path}"
@@ -174,7 +175,7 @@ class ConfigFormatter:
     
     def _check_yaml_files(self, setting_name: str) -> str | None:
         """Check if setting exists in project config file."""
-        filename = _PROJECT_CONFIG_FILE
+        filename = f"{_PROJECT_CONFIG_DIR}/{_PROJECT_CONFIG_FILE}"
 
         if filename not in self._yaml_cache:
             self._load_yaml_to_cache(filename)

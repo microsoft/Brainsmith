@@ -4,7 +4,7 @@
 """
 Expand Norms Transform
 
-Port of the ExpandNorms transform to the plugin system.
+Port of the ExpandNorms transform to the registry system.
 """
 
 import numpy as np

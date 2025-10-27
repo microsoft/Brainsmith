@@ -18,7 +18,7 @@ from brainsmith.registry import kernel
 class LayerNorm(HWCustomOp):
     """Abstraction layer for HW implementation of the LayerNorm layer.
 
-    Metadata for registry (namespace-based plugin system):
+    Metadata for registry (namespace-based component registry):
     - op_type: ONNX operation type
     - infer_transform: Associated shape inference transformation
     """

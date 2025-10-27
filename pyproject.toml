@@ -81,24 +81,18 @@ allow_incomplete_defs = true
 allow_untyped_calls = true
 no_implicit_optional = false
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | deps
-)/
-'''
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Auto-detect line endings
+line-ending = "auto"
 
 [tool.poetry.dependencies]
 python = ">=3.10"
@@ -188,7 +182,7 @@ optional = false
 pytest = "~=8.0"
 pytest-cov = "~=4.1.0"
 
-# Parallel execution and timeouts (critical for FINN/RTL builds)
+# Parallel execution and timeouts (critical for large builds)
 pytest-xdist = "~=3.5"       # Parallel test execution
 pytest-timeout = "~=2.2"     # Prevent hanging builds
 

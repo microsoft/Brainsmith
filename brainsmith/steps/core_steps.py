@@ -5,7 +5,7 @@
 Core FINN-compatible Build Steps
 
 Brainsmith implementations of core FINN dataflow compiler steps.
-These steps use the comprehensive plugin registration system to access
+These steps use the comprehensive component registry to access
 transforms from QONNX, FINN, and Brainsmith.
 """
 

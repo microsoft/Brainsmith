@@ -19,12 +19,6 @@ from brainsmith.dse.types import SegmentStatus
 
 
 @dataclass
-class ArtifactState:
-    source_dir: Optional[Path] = None
-    copied_to: List[Path] = field(default_factory=list)
-
-
-@dataclass
 class DSESegment:
     """
     A segment in the design space exploration tree.
@@ -46,9 +40,6 @@ class DSESegment:
     output_dir: Optional[Path] = None
     error: Optional[str] = None
     execution_time: Optional[float] = None
-
-    # Artifact management
-    artifacts: ArtifactState = field(default_factory=ArtifactState)
 
     # FINN configuration
     finn_config: Dict[str, Any] = field(default_factory=dict)

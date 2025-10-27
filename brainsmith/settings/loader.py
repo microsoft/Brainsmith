@@ -103,8 +103,21 @@ def get_config() -> SystemConfig:
 
     This loads the configuration once and caches it for the session.
     Call reset_config() to clear the cache.
+
+    Also exports configuration to environment variables (FINN_ROOT, etc.)
+    on first load to ensure FINN integration works correctly.
     """
-    return load_config()
+    config = load_config()
+
+    # Export to environment on first load (inside cache, so happens exactly once)
+    # Include internal BSMITH_* variables for YAML ${var} expansion in blueprints
+    try:
+        config.export_to_environment(include_internal=True)
+    except Exception:
+        # Silently continue if export fails (e.g., during initial setup)
+        pass
+
+    return config
 
 
 def reset_config() -> None:

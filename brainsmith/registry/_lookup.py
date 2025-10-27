@@ -22,9 +22,66 @@ from ._discovery import (
     _load_component,
     _measure_load,
 )
-from ._metadata import resolve_lazy_class
+from ._metadata import ComponentType, resolve_lazy_class
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Error Formatting Helpers
+# ============================================================================
+
+def _format_not_found_error(
+    component_type: str,
+    full_name: str,
+    available: List[str]
+) -> str:
+    """Format helpful error message with troubleshooting guide.
+
+    Args:
+        component_type: Component type string ('kernel', 'backend', 'step')
+        full_name: Fully-qualified component name that wasn't found
+        available: List of available components of this type
+
+    Returns:
+        Formatted error message with troubleshooting steps
+    """
+    # Extract requested name without source prefix
+    requested_name = full_name.split(':', 1)[1] if ':' in full_name else full_name
+
+    # Check if name exists in other sources
+    similar = [a for a in available if a.endswith(f':{requested_name}')]
+
+    type_str = component_type
+    msg = f"{type_str.title()} '{full_name}' not found.\n"
+
+    if similar:
+        # Name exists in different source - show alternatives
+        msg += f"\n💡 Found '{requested_name}' in other sources:\n"
+        for s in similar:
+            msg += f"   • {s}\n"
+
+        try:
+            from brainsmith.settings import get_config
+            source_priority = get_config().source_priority
+            msg += f"\nCurrent source priority: {source_priority}\n"
+        except:
+            pass
+
+        msg += f"\n→ Try: get_{type_str}('{similar[0]}')  # Use fully-qualified name\n"
+    else:
+        # Name doesn't exist anywhere - show troubleshooting
+        msg += f"\n❌ No {type_str} named '{requested_name}' found in any source.\n"
+        msg += f"\nTroubleshooting:\n"
+        msg += f"  1. List all: list_{type_str}s()\n"
+        msg += f"  2. Check decorator: @{type_str} applied?\n"
+        msg += f"  3. Check paths: Verify component_sources config\n"
+
+    msg += f"\nAvailable {type_str}s: {', '.join(available[:10])}"
+    if len(available) > 10:
+        msg += f" ... and {len(available) - 10} more"
+
+    return msg
 
 
 # ============================================================================
@@ -58,11 +115,7 @@ def _get_component(name: str, component_type: str):
         meta = _component_index.get(full_name)
         if not meta:
             available = _list_components(component_type)
-            raise KeyError(
-                f"{component_type.title()} '{full_name}' not found.\n"
-                f"Available: {', '.join(available[:10])}" +
-                (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
-            )
+            raise KeyError(_format_not_found_error(component_type, full_name, available))
 
         # Load component
         _load_component(meta)
@@ -105,9 +158,12 @@ def _list_components(component_type: str, source: Optional[str] = None) -> List[
     if not _components_discovered:
         discover_components()
 
+    # Convert string to enum for comparison
+    component_type_enum = ComponentType.from_string(component_type)
+
     components = [
         meta.full_name for meta in _component_index.values()
-        if meta.component_type == component_type and (source is None or meta.source == source)
+        if meta.component_type == component_type_enum and (source is None or meta.source == source)
     ]
     return sorted(components)
 
@@ -226,14 +282,19 @@ def get_kernel_infer(name: str) -> Type:
     # Lookup in unified component index
     meta = _component_index.get(full_name)
     if not meta:
-        raise KeyError(f"Kernel '{full_name}' not found")
+        available = list_kernels()
+        raise KeyError(_format_not_found_error('kernel', full_name, available))
 
     # Load component to ensure metadata is populated
     _load_component(meta)
 
     # Check metadata for infer transform
     if meta.kernel_infer is None:
-        raise KeyError(f"Kernel '{full_name}' has no InferTransform")
+        raise KeyError(
+            f"Kernel '{full_name}' has no InferTransform.\n"
+            f"\nThis kernel does not have an associated shape inference transform.\n"
+            f"Check that the kernel class defines 'infer_transform' attribute."
+        )
 
     # Resolve lazy import specs and cache
     infer = resolve_lazy_class(meta.kernel_infer)
@@ -315,11 +376,7 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     meta = _component_index.get(full_name)
     if not meta:
         available = list_backends()
-        raise KeyError(
-            f"Backend '{full_name}' not found.\n"
-            f"Available backends: {', '.join(available[:10])}" +
-            (f" ... and {len(available) - 10} more" if len(available) > 10 else "")
-        )
+        raise KeyError(_format_not_found_error('backend', full_name, available))
 
     # Load component to ensure metadata is populated
     _load_component(meta)
@@ -370,10 +427,8 @@ def list_backends_for_kernel(
     # Get kernel metadata
     kernel_meta = _component_index.get(kernel_full)
     if not kernel_meta:
-        raise KeyError(
-            f"Kernel '{kernel_full}' not found. "
-            f"Available kernels: {', '.join(list_kernels()[:10])}"
-        )
+        available = list_kernels()
+        raise KeyError(_format_not_found_error('kernel', kernel_full, available))
 
     # Get backends list from kernel metadata (populated during discovery)
     candidate_backends = kernel_meta.kernel_backends or []
@@ -445,7 +500,8 @@ def get_component_metadata(name: str, component_type: str):
     full_name = _resolve_component_name(name, component_type)
 
     if full_name not in _component_index:
-        raise KeyError(f"Component '{full_name}' not found")
+        available = _list_components(component_type)
+        raise KeyError(_format_not_found_error(component_type, full_name, available))
 
     return _component_index[full_name]
 

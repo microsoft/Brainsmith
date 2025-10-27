@@ -17,13 +17,28 @@ from contextvars import ContextVar
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from ._state import _component_index
-from ._metadata import ComponentMetadata, ImportSpec
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec
 
 logger = logging.getLogger(__name__)
 
 # Current source context (set during plugin discovery)
 # Using ContextVar for thread-safe source tracking
 _current_source: ContextVar[Optional[str]] = ContextVar('current_source', default=None)
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _convert_lazy_import_spec(spec: Optional[Union[str, Dict, Type]]) -> Optional[Union[Dict, Type]]:
+    """Convert 'module:ClassName' string to {'module': ..., 'class_name': ...}.
+
+    Passes through None, class references, or dicts unchanged.
+    """
+    if isinstance(spec, str) and ':' in spec:
+        module_path, class_name = spec.split(':', 1)
+        return {'module': module_path, 'class_name': class_name}
+    return spec
 
 
 # ============================================================================
@@ -59,7 +74,7 @@ def _register_step(
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
-        component_type='step',
+        component_type=ComponentType.STEP,
         import_spec=import_spec,
         loaded_obj=func_or_class  # Already loaded
     )
@@ -91,13 +106,12 @@ def _register_kernel(
 
     # Extract infer_transform (class attribute or parameter)
     # Supports both class references and string-based lazy import specs
+    # Note: infer_transform is optional - not all kernels need it (e.g., test kernels)
     if infer_transform is None:
         infer_transform = getattr(cls, 'infer_transform', None)
 
     # Handle string-based lazy import specs (format: 'module.path:ClassName')
-    if isinstance(infer_transform, str) and ':' in infer_transform:
-        module_path, class_name = infer_transform.split(':', 1)
-        infer_transform = {'module': module_path, 'class_name': class_name}
+    infer_transform = _convert_lazy_import_spec(infer_transform)
 
     # Create/update index entry for standalone decorator usage
     logger.debug(f"Registering kernel: {full_name}")
@@ -109,7 +123,7 @@ def _register_kernel(
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
-        component_type='kernel',
+        component_type=ComponentType.KERNEL,
         import_spec=import_spec,
         loaded_obj=cls  # Already loaded
     )
@@ -118,13 +132,8 @@ def _register_kernel(
     from .constants import DEFAULT_KERNEL_DOMAIN
 
     meta = _component_index[full_name]
-    # Kernel-specific metadata
-    infer_spec = infer_transform
-    if isinstance(infer_spec, str) and ':' in infer_spec:
-        module_path, class_name = infer_spec.split(':', 1)
-        meta.kernel_infer = {'module': module_path, 'class_name': class_name}
-    else:
-        meta.kernel_infer = infer_spec
+    # Kernel-specific metadata (infer_transform already converted above)
+    meta.kernel_infer = infer_transform
     meta.kernel_domain = domain or getattr(cls, 'domain', DEFAULT_KERNEL_DOMAIN)
 
     return cls
@@ -173,7 +182,7 @@ def _register_backend(
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
-        component_type='backend',
+        component_type=ComponentType.BACKEND,
         import_spec=import_spec,
         loaded_obj=cls  # Already loaded
     )

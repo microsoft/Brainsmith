@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Module-level flag to ensure FINN environment is initialized exactly once
+_finn_env_initialized = False
+
 
 class FINNAdapter:
     """Adapter for FINN build system.
@@ -31,6 +34,18 @@ class FINNAdapter:
     """
 
     def __init__(self):
+        global _finn_env_initialized
+
+        # Ensure FINN environment is configured before any FINN operations
+        if not _finn_env_initialized:
+            from brainsmith.settings import get_config
+            try:
+                get_config().export_to_environment()
+                _finn_env_initialized = True
+            except Exception:
+                # Config export might fail during setup - will be handled by build()
+                pass
+
         self._check_finn_dependencies()
 
     def _check_finn_dependencies(self) -> None:
@@ -69,14 +84,8 @@ class FINNAdapter:
         Raises:
             RuntimeError: If build fails
         """
-        # WORKAROUND: FINN requires environment variables (FINN_ROOT, FINN_BUILD_DIR)
-        # instead of accepting them as parameters. This pollutes the process environment
-        # and prevents concurrent builds in the same process.
-        from brainsmith.settings import load_config
-        config = load_config()
-        config.export_to_environment()  # Mutates os.environ - not thread-safe
-
         # Import FINN lazily to avoid circular dependencies
+        # Note: FINN environment (FINN_ROOT, etc.) configured in __init__()
         from finn.builder.build_dataflow import build_dataflow_cfg
         from finn.builder.build_dataflow_config import DataflowBuildConfig
 
@@ -107,6 +116,9 @@ class FINNAdapter:
             # which conflicts with Rich console logging, causing hangs
             finn_config["no_stdout_redirect"] = True
             finn_config["verbose"] = True
+
+            # Disable pdb debugger for automated builds (pytest captures stdin/stdout)
+            finn_config["enable_build_pdb_debug"] = False
 
             # Convert dict to DataflowBuildConfig
             logger.debug("Creating DataflowBuildConfig with: %s", finn_config)

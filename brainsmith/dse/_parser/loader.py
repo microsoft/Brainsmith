@@ -128,5 +128,8 @@ def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any]
     # Load the full merged data with inheritance support (uses local _load_with_inheritance)
     merged_data = _load_with_inheritance(Path(blueprint_path), context_vars)
 
+    # Expand environment variables in the merged data (e.g., ${BSMITH_DIR})
+    merged_data = _expand_env_vars_with_context(merged_data, context_vars)
+
     return raw_data, merged_data, parent_path
 

@@ -26,7 +26,9 @@ from .constants import ENV_QUIET, ExitCode
 console = Console()
 
 
-def error_exit(message: str, details: list[str] | None = None, code: int = ExitCode.USAGE) -> NoReturn:
+def error_exit(
+    message: str, details: list[str] | None = None, code: int = ExitCode.USAGE
+) -> NoReturn:
     """Print error message and exit (defaults to EX_USAGE per BSD sysexits.h)."""
     console.print(f"[red]Error:[/red] {message}")
 
@@ -39,7 +41,9 @@ def error_exit(message: str, details: list[str] | None = None, code: int = ExitC
 
 
 @contextmanager
-def progress_spinner(description: str, transient: bool = True, no_progress: bool = False) -> Iterator[TaskID | None]:
+def progress_spinner(
+    description: str, transient: bool = True, no_progress: bool = False
+) -> Iterator[TaskID | None]:
     """Display a progress spinner during long-running operations.
 
     Args:

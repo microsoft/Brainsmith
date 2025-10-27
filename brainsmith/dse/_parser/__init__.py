@@ -5,7 +5,7 @@
 Blueprint Parser - YAML to GlobalDesignSpace
 
 This module parses blueprint YAML files and creates GlobalDesignSpace objects
-with all plugins resolved from the registry.
+with all components resolved from the registry.
 """
 
 import os

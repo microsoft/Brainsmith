@@ -30,7 +30,9 @@ class ApplicationContext:
     config: "SystemConfig | None" = None
 
     # User config path (~/.brainsmith/config.yaml)
-    user_config_path: Path = field(default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml")
+    user_config_path: Path = field(
+        default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml"
+    )
 
     @classmethod
     def from_cli_args(
