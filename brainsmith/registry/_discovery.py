@@ -188,8 +188,7 @@ def _index_entry_point_components(
                 component_type=component_type_enum,
                 import_spec=ImportSpec(
                     module=module_name,
-                    attr=class_name,
-                    extra={}
+                    attr=class_name
                 ),
                 loaded_obj=existing
             )
@@ -214,8 +213,7 @@ def _index_entry_point_components(
                 component_type=component_type_enum,
                 import_spec=ImportSpec(
                     module=meta['module'],
-                    attr=meta[attr_field],
-                    extra={}
+                    attr=meta[attr_field]
                 )
             )
 
@@ -358,11 +356,9 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
     Side effects:
         Registers component with global registry using @kernel/@backend/@step logic
     """
-    extra = meta.import_spec.extra if meta.import_spec else {}
-
     if meta.component_type == ComponentType.KERNEL:
         # Resolve lazy infer_transform if needed
-        infer_transform = resolve_lazy_class(extra.get('infer_transform'))
+        infer_transform = resolve_lazy_class(meta.kernel_infer)
 
         _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")

@@ -7,7 +7,7 @@ Brainsmith automates the creation of dataflow core accelerators and implementati
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
 ### Pre-release features:
-- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Component registry** - Extensible architecture for registering custom kernels, transforms, and build steps
 - **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
 - **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
 - **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)

@@ -61,7 +61,6 @@ def _build_manifest_from_index() -> Dict[str, Any]:
             'type': str(meta.component_type),  # Convert enum to string for JSON
             'module': meta.import_spec.module,
             'attr': meta.import_spec.attr,
-            'metadata': meta.import_spec.extra,
             'file_path': file_path,
             'mtime': mtime,
             # Type-specific metadata (preserved for restoration)
@@ -189,8 +188,7 @@ def _populate_index_from_manifest(manifest: Dict[str, Any]) -> None:
             component_type=ComponentType.from_string(component['type']),  # Convert string to enum
             import_spec=ImportSpec(
                 module=component['module'],
-                attr=component['attr'],
-                extra=component.get('metadata', {})
+                attr=component['attr']
             ),
             # Restore type-specific metadata from manifest
             kernel_infer=component.get('kernel_infer'),

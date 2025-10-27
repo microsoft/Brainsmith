@@ -131,6 +131,38 @@ brainsmith --logs error smith dfc model.onnx blueprint.yaml
 - DSE execution tests refactored for new runner
 - Plugin system tests validate deferred registration
 
+## CI/CD Testing Infrastructure
+
+**Added pytest test suite validation to PR workflow** for fast fail-fast feedback before expensive BERT quicktest runs.
+
+**Modified `.github/workflows/pr-validation.yml`:**
+- Added new `pytest-validation` job that runs **before** `bert-quicktest`
+- Executes full test suite (120 tests: unit + fast integration + FINN integration)
+- Generates coverage reports and JUnit test results
+- Uploads artifacts on failure for debugging
+- Added `needs: pytest-validation` to `bert-quicktest` (only runs if pytest passes)
+
+**New CI/CD Flow:**
+```
+Before: PR created → BERT quicktest (5 hours) → Pass/Fail
+
+After:  PR created → Pytest (~3 min) → Pass → BERT quicktest (5 hours) → Pass/Fail
+                                      ↓
+                                    Fail (fast feedback)
+```
+
+**Benefits:**
+- Fast feedback: See test failures in ~3 minutes instead of ~5 hours
+- Fail-fast: BERT quicktest only runs if pytest passes
+- Coverage tracking: Every PR generates coverage report (79% DSE coverage)
+- Minimal overhead: Only ~3 minutes added to total PR time
+- Reuses infrastructure: Same Docker setup, modular actions
+
+**Artifacts generated:**
+- `coverage-report-{run_id}` - XML coverage report (always)
+- `test-results-{run_id}` - JUnit XML for GitHub test reporting (always)
+- `pytest-failure-artifacts-{run_id}` - Failure diagnostics (on failure only)
+
 ## Migration Impact
 
 **Breaking changes:**
@@ -176,6 +208,8 @@ brainsmith --logs error smith dfc model.onnx blueprint.yaml
 - `prerelease-docs/cli_api_reference.md`: Updated command reference
 - `prerelease-docs/plugin_registry.md`: Updated for new plugin system
 - `examples/bert/`: Updated example to use new CLI commands
+- `.github/CI_README.md`: Updated with pytest validation workflow
+- `_artifacts/pytest_ci_implementation.md`: CI/CD implementation details
 
 ## Future Work
 

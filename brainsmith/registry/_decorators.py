@@ -68,8 +68,7 @@ def _register_step(
     logger.debug(f"Registering step: {full_name}")
     import_spec = ImportSpec(
         module=func_or_class.__module__,
-        attr=func_or_class.__name__,
-        extra={}
+        attr=func_or_class.__name__
     )
     _component_index[full_name] = ComponentMetadata(
         name=name,
@@ -117,8 +116,7 @@ def _register_kernel(
     logger.debug(f"Registering kernel: {full_name}")
     import_spec = ImportSpec(
         module=cls.__module__,
-        attr=cls.__name__,
-        extra={}
+        attr=cls.__name__
     )
     _component_index[full_name] = ComponentMetadata(
         name=name,
@@ -176,8 +174,7 @@ def _register_backend(
     logger.debug(f"Registering backend: {full_name} (target={target}, lang={lang})")
     import_spec = ImportSpec(
         module=cls.__module__,
-        attr=cls.__name__,
-        extra={}
+        attr=cls.__name__
     )
     _component_index[full_name] = ComponentMetadata(
         name=name,

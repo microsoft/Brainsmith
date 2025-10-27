@@ -60,19 +60,14 @@ class ComponentType(Enum):
 
 @dataclass
 class ImportSpec:
-    """Lazy import specification: module + attr + metadata.
+    """Lazy import specification: module + attr.
 
     Stores the information needed to lazy-load a component:
     - module: Python module path (e.g., 'brainsmith.kernels.layernorm')
     - attr: Attribute name in module (e.g., 'LayerNorm')
-    - extra: Type-specific metadata (e.g., infer_transform, language)
     """
     module: str
     attr: str
-    # DEPRECATED: This field is no longer used and will be removed in a future version.
-    # Type-specific metadata should be stored directly in ComponentMetadata fields
-    # (kernel_infer, kernel_domain, backend_target, backend_language) instead.
-    extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
