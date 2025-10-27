@@ -3,50 +3,47 @@
 
 """Kernel inference step for hardware mapping."""
 import logging
-from brainsmith.core.plugins import step, get_transforms_by_metadata, get_transform
+import os
+from typing import Any
+
+from brainsmith.registry import get_kernel_infer
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
-@step(
-    name="infer_kernels",
-    category="hardware",
-    description="Infer hardware kernels based on blueprint selections"
-)
-def infer_kernels_step(model, cfg):
-    """Infer kernels using transforms with matching kernel metadata.
-    
-    Finds inference transforms by their 'kernel' metadata attribute,
-    avoiding any name-based guessing.
+
+@step(name='infer_kernels')
+def infer_kernels_step(model: Any, cfg: Any) -> Any:
+    """Infer kernels using transforms stored in kernel metadata.
+
+    Retrieves InferTransforms from kernel metadata via get_kernel_infer().
+    The backend class is used only for logging/metadata display.
     """
-    if not hasattr(cfg, 'kernel_selections'):
-        logger.warning("No kernel_selections in config, skipping kernel inference")
-        logger.warning(f"Config attributes: {[attr for attr in dir(cfg) if not attr.startswith('_')]}")
+    kernel_selections = getattr(cfg, 'kernel_selections', None)
+    if not kernel_selections:
+        logger.debug("No kernel selections configured, skipping inference")
         return model
-    
-    if cfg.kernel_selections is None:
-        logger.warning("kernel_selections is None, skipping kernel inference")
-        return model
-    
-    logger.info(f"Inferring {len(cfg.kernel_selections)} kernels...")
-    
+
+    logger.info(f"Inferring {len(kernel_selections)} kernels...")
+
     # Apply inference for each selected kernel
-    for kernel_name, backend in cfg.kernel_selections:
-        # Find transforms that infer this kernel
-        inference_transforms = get_transforms_by_metadata(kernel=kernel_name)
-        
-        if inference_transforms:
-            # Use the first matching transform name
-            transform_name = inference_transforms[0]
-            Transform = get_transform(transform_name)
-            logger.info(f"  {kernel_name} ({backend}) using {transform_name}")
-            model = model.transform(Transform())
-        else:
+    for kernel_name, backend_class in kernel_selections:
+        try:
+            # Get InferTransform from kernel metadata (by kernel name only)
+            InferTransform = get_kernel_infer(kernel_name)
+
+            # Log with full backend metadata
+            backend_name = backend_class.__name__
+            backend_language = getattr(backend_class, 'language', 'unknown')
+            logger.info(
+                f"  {kernel_name} "
+                f"backend={backend_name} "
+                f"language={backend_language} "
+                f"using {InferTransform.__name__}"
+            )
+
+            model = model.transform(InferTransform())
+        except KeyError:
             logger.warning(f"  No inference transform found for kernel: {kernel_name}")
-    
-    # Save model for debugging
-    import os
-    debug_path = os.path.join(cfg.output_dir, "debug_infer_kernels_output.onnx")
-    model.save(debug_path)
-    logger.info(f"Saved infer_kernels output to {debug_path}")
 
     return model

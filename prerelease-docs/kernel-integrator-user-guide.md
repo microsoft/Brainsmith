@@ -169,4 +169,4 @@ node = helper.make_node(
 
 - See the [Pragma Reference](kernel-integrator-pragma-reference.md) for detailed pragma documentation
 - Check the [Quick Start Guide](kernel-integrator-quickstart.md) for a step-by-step tutorial
-- Explore examples in `examples/kernel_integrator/` directory
+- Explore examples in `examples/tools/kernel_integrator/` directory

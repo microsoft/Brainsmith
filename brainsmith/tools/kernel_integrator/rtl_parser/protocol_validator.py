@@ -18,7 +18,7 @@ import re
 import logging
 from typing import Dict, Set, List, Tuple, Optional
 
-from brainsmith.core.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.dataflow.types import Direction, ProtocolType, InterfaceType
 from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata
 from .types import Port, PortGroup
 

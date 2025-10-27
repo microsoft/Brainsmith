@@ -17,7 +17,7 @@ from typing import Optional, List, Dict
 from collections import defaultdict
 from tree_sitter import Tree
 
-from brainsmith.core.dataflow.types import ProtocolType, InterfaceType
+from brainsmith.dataflow.types import ProtocolType, InterfaceType
 from brainsmith.tools.kernel_integrator.metadata import (
     KernelMetadata, InterfaceMetadata, AXIStreamMetadata, 
     AXILiteMetadata, ControlMetadata

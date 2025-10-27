@@ -15,16 +15,24 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
-@backend(
-    name="LayerNormHLS", 
-    kernel="LayerNorm",
-    language="hls",
-    description="HLS backend for LayerNorm kernel",
-    author="Shane Fleming",
-)
+
+@backend(name='LayerNorm_hls', target_kernel='brainsmith:LayerNorm', language='hls')
 class LayerNorm_hls(LayerNorm, HLSBackend):
+    """HLS backend implementation for LayerNorm kernel.
+
+    Generates HLS code for hardware synthesis of LayerNorm operations.
+
+    Metadata for registry (namespace-based component registry):
+    - target_kernel: Which kernel this backend implements
+    - language: Backend language (hls/rtl/etc)
+    """
+
+    # Metadata for namespace-based registry
+    target_kernel = 'brainsmith:LayerNorm'
+    language = 'hls'
+
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 

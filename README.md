@@ -1,13 +1,13 @@
 ## Brainsmith
 
-Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
+Brainsmith automates the creation of dataflow core accelerators and implementation of neural networks on FPGA, from PyTorch to RTL.
 
 ## Pre-Release
 
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
 ### Pre-release features:
-- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Component registry** - Extensible architecture for registering custom kernels, transforms, and build steps
 - **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
 - **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
 - **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
@@ -75,10 +75,10 @@ brainsmith config show
 ./examples/bert/quicktest.sh
 ```
 
-### 4. Run Design Space Exploration on your own model
+### 4. Create your own Dataflow Core accelerator
 
 ```bash
-# Run DSE with default command
+# Create dataflow core with default command
 smith model.onnx blueprint.yaml
 
 # Or specify output directory
@@ -90,7 +90,7 @@ smith model.onnx blueprint.yaml --output-dir ./results
 Brainsmith provides two complementary CLI commands:
 
 - **`brainsmith`** - Application configuration, setup, and environment management
-- **`smith`** - Operational commands for DSE and kernel generation
+- **`smith`** - Operational commands for dataflow core creation and kernel generation
 
 For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
 
@@ -102,7 +102,7 @@ brainsmith setup all              # Install all dependencies
 eval $(brainsmith config export)  # Export environment for Xilinx tools
 
 # Operations
-smith model.onnx blueprint.yaml   # Run design space exploration
+smith model.onnx blueprint.yaml   # Create dataflow core accelerator
 smith kernel accelerator.sv       # Generate hardware kernel from RTL
 ```
 

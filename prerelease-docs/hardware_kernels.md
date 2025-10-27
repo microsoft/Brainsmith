@@ -63,7 +63,7 @@ Detection and conversion logic to identify compatible ONNX operations in a graph
 2. **Validation** - Ensure operations meet hardware requirements (like integer datatypes and compatible shapes)
 3. **Conversion** - Instantiate configured HWCustomOp instances with extracted parameters
 
-Some kernels may require additional pre-processing transforms to prepare the graph for conversion. For example, [`ExpandNorms`](../brainsmith/transforms/cleanup/expand_norms.py) breaks the standard ONNX operator `LayerNormalization` into `FuncLayerNorm`, `Add`, and `Mul` ops so that each component can be lowered to a separate kernel.
+Some kernels may require additional pre-processing transforms to prepare the graph for conversion. For example, [`ExpandNorms`](../brainsmith/primitives/transforms/cleanup/expand_norms.py) breaks the standard ONNX operator `LayerNormalization` into `FuncLayerNorm`, `Add`, and `Mul` ops so that each component can be lowered to a separate kernel.
 
 - Example: [`brainsmith/kernels/layernorm/infer_layernorm.py`](../brainsmith/kernels/layernorm/infer_layernorm.py)
 

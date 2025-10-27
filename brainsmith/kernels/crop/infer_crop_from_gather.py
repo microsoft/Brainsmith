@@ -13,7 +13,6 @@ from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import get_by_name
-from brainsmith.core.plugins import transform
 
 
 def elements_are_consecutive(indices):
@@ -24,11 +23,6 @@ def elements_are_consecutive(indices):
         return np.all(np.diff(indices) == 1)
 
 
-@transform(
-    kernel="Crop",
-    description="Convert Gather operations to Crop hardware operations",
-    author="Shane Fleming"
-)
 class InferCropFromGather(Transformation):
     """
     Find gather layers that can be converted into a Crop layer

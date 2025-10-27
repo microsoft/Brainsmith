@@ -198,30 +198,30 @@ def format_file_info(files: List[Path]) -> str:
     lines = []
     for path in files:
         size = path.stat().st_size
-        lines.append(f"  📄 {path.name} ({size:,} bytes)")
+        lines.append(f"  {path.name} ({size:,} bytes)")
     return '\n'.join(lines)
 
 
 def display_kernel_info(metadata: 'KernelMetadata') -> None:
     """Display parsed kernel metadata in a readable format."""
-    print(f"\n🔍 Kernel Metadata for '{metadata.name}'")
+    print(f"\nKernel Metadata for '{metadata.name}'")
     print(f"{'='*50}")
-    
+
     # Basic info
-    print(f"\n📦 Module: {metadata.name}")
-    print(f"📄 Source: {metadata.source_file}")
-    
+    print(f"\nModule: {metadata.name}")
+    print(f"Source: {metadata.source_file}")
+
     # Parameters
     if metadata.parameters:
-        print(f"\n⚙️  Parameters ({len(metadata.parameters)}):")
+        print(f"\nParameters ({len(metadata.parameters)}):")
         for param in metadata.parameters:
             default = f" = {param.default_value}" if param.default_value else ""
             print(f"  - {param.name}: {param.rtl_type or 'unknown'}{default}")
-    
+
     # Interfaces
     interfaces = metadata.interfaces
     if interfaces:
-        print(f"\n🔌 Interfaces ({len(interfaces)}):")
+        print(f"\nInterfaces ({len(interfaces)}):")
         for iface in interfaces:
             # Determine interface type
             if hasattr(iface, 'interface_type'):
@@ -231,27 +231,27 @@ def display_kernel_info(metadata: 'KernelMetadata') -> None:
                     interface_type = str(iface.interface_type)
             else:
                 interface_type = type(iface).__name__.replace('Metadata', '')
-            
+
             # Add direction for AXI-Stream
             extra_info = ""
             if hasattr(iface, 'direction'):
                 extra_info = f" ({iface.direction.value})"
-            
+
             print(f"  - {iface.name}: {interface_type}{extra_info}")
-            
+
             # Show ports if available
             if hasattr(iface, 'ports') and iface.ports:
                 for port_name, port in iface.ports.items():
                     width_str = f"[{port.width}]" if port.width else ""
                     print(f"    • {port.name}{width_str}")
-    
+
     # Linked parameters
     if metadata.linked_parameters:
-        print(f"\n🔗 Linked Parameters: {len(metadata.linked_parameters)}")
-    
+        print(f"\nLinked Parameters: {len(metadata.linked_parameters)}")
+
     # Included RTL files
     if hasattr(metadata, 'included_rtl_files') and metadata.included_rtl_files:
-        print(f"\n📁 Included RTL Files ({len(metadata.included_rtl_files)}):")
+        print(f"\nIncluded RTL Files ({len(metadata.included_rtl_files)}):")
         for rtl_file in metadata.included_rtl_files:
             print(f"  - {rtl_file}")
     
@@ -267,10 +267,10 @@ def validate_only(rtl_file: Path, strict: bool = True) -> int:
     try:
         parser = RTLParser(strict=strict)
         parser.parse_file(str(rtl_file))
-        print(f"✅ RTL file '{rtl_file}' is valid")
+        print(f"✓ RTL file '{rtl_file}' is valid")
         return 0
     except Exception as e:
-        print(f"❌ Validation failed: {e}")
+        print(f"✗ Validation failed: {e}")
         return 1
 
 
@@ -299,7 +299,7 @@ def main(argv=None) -> int:
     
     # Validate input file
     if not args.rtl_file.exists():
-        print(f"❌ Error: RTL file not found: {args.rtl_file}", file=sys.stderr)
+        print(f"✗ Error: RTL file not found: {args.rtl_file}", file=sys.stderr)
         return 1
     
     try:
@@ -351,12 +351,12 @@ def main(argv=None) -> int:
         )
         
         # Report success
-        print(f"✅ Successfully generated HWCustomOp for {metadata.name}")
-        print(f"📁 Output directory: {output_dir}")
+        print(f"✓ Successfully generated HWCustomOp for {metadata.name}")
+        print(f"Output directory: {output_dir}")
         if artifacts:
-            print(f"⚡ Generated {len(files)} selected files in {elapsed_ms:.1f}ms")
+            print(f"Generated {len(files)} selected files in {elapsed_ms:.1f}ms")
         else:
-            print(f"⚡ Generated {len(files)} files in {elapsed_ms:.1f}ms")
+            print(f"Generated {len(files)} files in {elapsed_ms:.1f}ms")
         
         if args.verbose:
             print("\nGenerated files:")
@@ -365,7 +365,7 @@ def main(argv=None) -> int:
         return 0
         
     except Exception as e:
-        print(f"❌ Error: {e}", file=sys.stderr)
+        print(f"✗ Error: {e}", file=sys.stderr)
         if args.verbose:
             import traceback
             print("\nTraceback:", file=sys.stderr)
