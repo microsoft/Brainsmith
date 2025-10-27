@@ -22,6 +22,7 @@ import os
 import pytest
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Type
 
@@ -185,12 +186,17 @@ component_sources: {}
         # Manifest should be created
         assert manifest_path.exists()
 
-        # Manifest should contain components (at least brainsmith core components)
+        # Manifest should contain type-stratified components (v2.0 format)
         with open(manifest_path, 'r') as f:
             data = json.load(f)
 
-        assert 'components' in data
-        assert len(data['components']) > 0
+        assert data['version'] == '2.0'
+        assert 'kernels' in data
+        assert 'backends' in data
+        assert 'steps' in data
+        # Should have at least some core components
+        total = len(data['kernels']) + len(data['backends']) + len(data['steps'])
+        assert total > 0
 
     def test_load_from_valid_manifest(self, empty_env):
         """Valid cached manifest - should load from cache without imports."""
@@ -204,25 +210,22 @@ component_sources: {}
 
         manifest_path = empty_env / '.brainsmith' / 'component_manifest.json'
 
-        # Create a valid manifest manually
+        # Create valid v2.0 manifest (type-stratified, no per-component mtimes)
         manifest = {
-            'version': '1.0',
-            'generated_at': '2025-01-01T00:00:00',
-            'components': {
+            'version': '2.0',
+            'generated_at': datetime.now().isoformat(),
+            'kernels': {
                 'test:CachedKernel': {
-                    'type': 'kernel',
                     'module': 'test.kernels.cached',
                     'attr': 'CachedKernel',
-                    'metadata': {},
                     'file_path': None,
-                    'mtime': None,
-                    'kernel_infer': None,
-                    'kernel_domain': 'finn.custom',
-                    'kernel_backends': [],
-                    'backend_target': None,
-                    'backend_language': None,
+                    'infer': None,
+                    'domain': 'finn.custom',
+                    'backends': []
                 }
-            }
+            },
+            'backends': {},
+            'steps': {}
         }
 
         _save_manifest(manifest, manifest_path)
@@ -237,48 +240,41 @@ component_sources: {}
         assert meta.loaded_obj is None  # Not imported yet (lazy)
 
     def test_stale_manifest_triggers_rediscovery(self, isolated_env):
-        """Stale manifest (modified mtime) - should ignore cache and rediscover."""
+        """Stale manifest (file newer than manifest timestamp) - should rediscover."""
         # isolated_env has cache_components: true and real test plugins
         manifest_path = isolated_env / '.brainsmith' / 'component_manifest.json'
 
-        # Create a fake Python file in plugins that will be in the manifest
+        # Create a Python file
         plugins_dir = isolated_env / 'plugins'
-        fake_file = plugins_dir / 'fake_module.py'
-        fake_file.write_text('# test')
+        test_file = plugins_dir / 'test_module.py'
+        test_file.write_text('# test')
 
-        current_mtime = os.path.getmtime(fake_file)
-        old_mtime = current_mtime - 1000  # Pretend cached version is old
+        # Create manifest with OLD timestamp (1 hour ago)
+        from datetime import timedelta
+        old_timestamp = datetime.now() - timedelta(hours=1)
 
-        # Create manifest with old mtime
         manifest = {
-            'version': '1.0',
-            'generated_at': '2025-01-01T00:00:00',
-            'components': {
+            'version': '2.0',
+            'generated_at': old_timestamp.isoformat(),
+            'kernels': {},
+            'backends': {},
+            'steps': {
                 'test:StaleComponent': {
-                    'type': 'step',
                     'module': 'test.steps.stale',
                     'attr': 'StaleStep',
-                    'metadata': {},
-                    'file_path': str(fake_file),
-                    'mtime': old_mtime,  # Old mtime
-                    'kernel_infer': None,
-                    'kernel_domain': None,
-                    'kernel_backends': None,
-                    'backend_target': None,
-                    'backend_language': None,
+                    'file_path': str(test_file),
                 }
             }
         }
 
         _save_manifest(manifest, manifest_path)
 
+        # File mtime will be newer than manifest timestamp
         discover_components(use_cache=True)
 
-        # Should have done full discovery (not loaded from stale cache)
-        # The stale component won't exist since we did full discovery
-        # But real test plugins should be discovered
+        # Should have done full discovery (cache was stale)
+        # The fake component won't exist after fresh discovery
         assert len(_component_index) > 0
-        # Should have real test components, not the fake stale one
         assert 'test:StaleComponent' not in _component_index
 
     def test_cache_disabled_setting(self, empty_env, caplog):
@@ -286,23 +282,17 @@ component_sources: {}
         # empty_env already has cache_components: false
         manifest_path = empty_env / '.brainsmith' / 'component_manifest.json'
 
-        # Create valid manifest
+        # Create valid v2.0 manifest
         manifest = {
-            'version': '1.0',
-            'generated_at': '2025-01-01T00:00:00',
-            'components': {
+            'version': '2.0',
+            'generated_at': datetime.now().isoformat(),
+            'kernels': {},
+            'backends': {},
+            'steps': {
                 'test:ShouldNotLoad': {
-                    'type': 'step',
                     'module': 'test.steps.nope',
                     'attr': 'NopeStep',
-                    'metadata': {},
                     'file_path': None,
-                    'mtime': None,
-                    'kernel_infer': None,
-                    'kernel_domain': None,
-                    'kernel_backends': None,
-                    'backend_target': None,
-                    'backend_language': None,
                 }
             }
         }
