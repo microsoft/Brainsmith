@@ -7,10 +7,10 @@ Real GlobalDesignSpace objects for integration testing.
 import pytest
 from brainsmith.dse import GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
-from tests.utils.constants import (
-    DEFAULT_CLOCK_PERIOD_NS,
-    DEFAULT_PARALLEL_BUILDS,
-    DEFAULT_MAX_COMBINATIONS
+from tests.common.constants import (
+    DSE_DEFAULT_CLOCK_PERIOD_NS,
+    DSE_DEFAULT_PARALLEL_BUILDS,
+    DSE_DEFAULT_MAX_COMBINATIONS
 )
 
 
@@ -24,11 +24,11 @@ def blueprint_config() -> DSEConfig:
         DSEConfig with test defaults
     """
     return DSEConfig(
-        clock_ns=DEFAULT_CLOCK_PERIOD_NS,
+        clock_ns=DSE_DEFAULT_CLOCK_PERIOD_NS,
         output=OutputType.ESTIMATES,
         board="test_board",
         verify=False,
-        parallel_builds=DEFAULT_PARALLEL_BUILDS,
+        parallel_builds=DSE_DEFAULT_PARALLEL_BUILDS,
         debug=False,
         save_intermediate_models=False
     )
@@ -43,7 +43,7 @@ def base_finn_config() -> dict:
     """
     return {
         "output_dir": "output/test",
-        "synth_clk_period_ns": DEFAULT_CLOCK_PERIOD_NS,
+        "synth_clk_period_ns": DSE_DEFAULT_CLOCK_PERIOD_NS,
         "board": "test_board",
         "shell_flow_type": "test_flow",
         "generate_outputs": ["estimates"],
@@ -71,7 +71,7 @@ def simple_design_space(simple_onnx_model) -> GlobalDesignSpace:
             "test_step1",
             "test_step2"
         ],
-        max_combinations=DEFAULT_MAX_COMBINATIONS
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
     )
 
 
@@ -93,7 +93,7 @@ def branching_design_space(simple_onnx_model) -> GlobalDesignSpace:
             ["test_step1", "test_step2"],  # Branch point
             "test_step3"
         ],
-        max_combinations=DEFAULT_MAX_COMBINATIONS
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
     )
 
 
@@ -120,5 +120,5 @@ def multi_branch_design_space(simple_onnx_model) -> GlobalDesignSpace:
             ["~", "test_step"],  # Second branch with skip option
             "test_step2"
         ],
-        max_combinations=DEFAULT_MAX_COMBINATIONS
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
     )

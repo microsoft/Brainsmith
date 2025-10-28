@@ -24,6 +24,11 @@ import numpy as np
 from typing import Dict, Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from tests.common.constants import (
+    UNSIGNED_TEST_DATA_CAP,
+    SIGNED_TEST_DATA_MIN,
+    SIGNED_TEST_DATA_MAX,
+)
 
 
 def make_execution_context(
@@ -83,16 +88,24 @@ def make_execution_context(
             # Generate data in datatype's valid range
             if dtype.min() >= 0:
                 # Unsigned type (e.g., UINT8)
+                # Cap at UNSIGNED_TEST_DATA_CAP to prevent extreme values from wide
+                # datatypes (e.g., UINT32 max is 4,294,967,295). This ensures:
+                # - Numerical stability: Prevents overflow in fixed-point arithmetic
+                # - Test practicality: Human-readable values (0-255) aid debugging
+                # - Representative sampling: Real-world data rarely uses full range
                 data = np.random.randint(
                     max(dtype.min(), 0),  # Ensure non-negative
-                    min(dtype.max() + 1, 256),  # Cap at reasonable value
+                    min(dtype.max() + 1, UNSIGNED_TEST_DATA_CAP),
                     size=shape
                 ).astype(np.float32)
             else:
                 # Signed type (e.g., INT8)
+                # Cap at INT8 range (-128 to 127) for consistency and stability.
+                # Same benefits as unsigned: prevents overflow, aids debugging,
+                # and represents typical real-world value distributions.
                 data = np.random.randint(
-                    max(dtype.min(), -128),
-                    min(dtype.max() + 1, 128),
+                    max(dtype.min(), SIGNED_TEST_DATA_MIN),
+                    min(dtype.max() + 1, SIGNED_TEST_DATA_MAX),
                     size=shape
                 ).astype(np.float32)
 

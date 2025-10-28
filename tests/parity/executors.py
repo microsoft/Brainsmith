@@ -31,6 +31,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Any
 from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from brainsmith.settings import load_config
+from tests.common.constants import PARITY_DEFAULT_FPGA_PART_HLS, PARITY_DEFAULT_CLOCK_PERIOD_NS
 
 # Use absolute imports for compatibility with sys.path-based imports
 try:
@@ -274,8 +276,10 @@ class CppSimExecutor(BackendExecutor):
         """
         backend_name = "manual" if is_manual else "auto"
 
-        # Set BSMITH_DIR for compilation (needed by Brainsmith kernels)
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
+        # Export all Brainsmith configuration to environment
+        # Exports BSMITH_DIR and other internal variables needed for kernel compilation
+        settings = load_config()
+        settings.export_to_environment()
 
         try:
             # Create temp directory for code generation
@@ -400,12 +404,14 @@ class RTLSimExecutor(BackendExecutor):
         """
         backend_name = "manual" if is_manual else "auto"
 
-        # Set BSMITH_DIR for compilation
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
+        # Export all Brainsmith configuration to environment
+        # Exports BSMITH_DIR and other internal variables needed for kernel compilation
+        settings = load_config()
+        settings.export_to_environment()
 
-        # Get FPGA part and clock period (could be parameters)
-        fpgapart = "xcvu9p-flgb2104-2-i"
-        clk_ns = 3.0
+        # Get FPGA part and clock period from test constants
+        fpgapart = PARITY_DEFAULT_FPGA_PART_HLS
+        clk_ns = PARITY_DEFAULT_CLOCK_PERIOD_NS
 
         # Detect backend type
         from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend

@@ -29,6 +29,8 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.custom_op.registry import getCustomOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from brainsmith.settings import load_config
+from tests.common.constants import PARITY_DEFAULT_FPGA_PART_HLS
 
 # Parity test helpers
 # Use absolute imports for compatibility with sys.path-based imports
@@ -954,7 +956,8 @@ class ParityTestBase(ABC):
         import tempfile
         import os
 
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
+        settings = load_config()
+        settings.export_to_environment()
 
         try:
             manual_tmpdir = tempfile.mkdtemp(prefix="rtl_filelist_manual_")
@@ -1015,7 +1018,8 @@ class ParityTestBase(ABC):
         import tempfile
         import os
 
-        os.environ["BSMITH_DIR"] = "/home/tafk/dev/brainsmith-1"
+        settings = load_config()
+        settings.export_to_environment()
 
         # Test manual backend IPI generation
         try:
@@ -1088,7 +1092,7 @@ class ParityTestBase(ABC):
         self,
         base_op: HWCustomOp,
         base_model: ModelWrapper,
-        fpgapart: str = "xcvu9p-flgb2104-2-i"
+        fpgapart: str = PARITY_DEFAULT_FPGA_PART_HLS
     ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Setup HLS backend by applying SpecializeLayers transform.
 

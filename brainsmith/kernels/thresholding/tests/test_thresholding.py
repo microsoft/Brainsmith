@@ -23,7 +23,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from tests.fixtures.model_utils import create_multithreshold_model
+from tests.fixtures.kernel_test_helpers import make_multithreshold_model as create_multithreshold_model
 from brainsmith.kernels.thresholding import Thresholding, Thresholding_hls, Thresholding_rtl
 
 
@@ -32,19 +32,15 @@ class TestThresholdingInference:
 
     def test_can_infer_from_multithreshold(self):
         """Test that Thresholding.can_infer_from() correctly identifies MultiThreshold nodes."""
-        # Create MultiThreshold model
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 28, 28, 128],
+        # Create MultiThreshold model (already a ModelWrapper with shapes/datatypes inferred)
+        model, _ = create_multithreshold_model(
+            shape=[1, 28, 28, 128],
             num_thresholds=7,
             input_dtype="INT8",
             threshold_dtype="INT8",
             output_dtype="UINT4",
             out_scale=1.0
         )
-
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
 
         # Set tensor datatypes
         model.set_tensor_datatype("input", DataType["INT8"])
@@ -73,17 +69,14 @@ class TestThresholdingInference:
         """
         from brainsmith.transforms.infer_kernel import InferKernel
 
-        # Create MultiThreshold model with float output
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 28, 28, 128],
+        # Create MultiThreshold model with float output (already a ModelWrapper)
+        model, _ = create_multithreshold_model(
+            shape=[1, 28, 28, 128],
             num_thresholds=7,
             input_dtype="INT8",
             output_dtype="FLOAT32",  # Float output should be rejected
             out_scale=1.0
         )
-
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
 
         # Set tensor datatypes
         model.set_tensor_datatype("input", DataType["INT8"])
@@ -107,9 +100,9 @@ class TestThresholdingInference:
 
     def test_infer_from_creates_thresholding_node(self):
         """Test that infer_from() creates a Thresholding node with correct attributes."""
-        # Create MultiThreshold model
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 28, 28, 128],
+        # Create MultiThreshold model (already a ModelWrapper with shapes/datatypes inferred)
+        model, _ = create_multithreshold_model(
+            shape=[1, 28, 28, 128],
             num_thresholds=7,
             input_dtype="INT8",
             threshold_dtype="INT8",
@@ -117,10 +110,6 @@ class TestThresholdingInference:
             out_scale=1.0,
             out_bias=0
         )
-
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
 
         # Set tensor datatypes
         model.set_tensor_datatype("input", DataType["INT8"])
@@ -165,18 +154,14 @@ class TestThresholdingShapes:
     @pytest.fixture
     def thresholding_model(self):
         """Create a Thresholding model for testing."""
-        # Create MultiThreshold model
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 28, 28, 128],
+        # Create MultiThreshold model (already a ModelWrapper with shapes/datatypes inferred)
+        model, _ = create_multithreshold_model(
+            shape=[1, 28, 28, 128],
             num_thresholds=7,
             input_dtype="INT8",
             threshold_dtype="INT8",
             output_dtype="UINT4"
         )
-
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
 
         # Set tensor datatypes
         model.set_tensor_datatype("input", DataType["INT8"])
@@ -272,17 +257,14 @@ class TestThresholdingStreamWidths:
     @pytest.fixture
     def thresholding_model(self):
         """Create a Thresholding model for testing."""
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 28, 28, 128],
+        # Create MultiThreshold model (already a ModelWrapper with shapes/datatypes inferred)
+        model, _ = create_multithreshold_model(
+            shape=[1, 28, 28, 128],
             num_thresholds=7,
             input_dtype="INT8",
             threshold_dtype="INT8",
             output_dtype="UINT4"
         )
-
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
 
         model.set_tensor_datatype("input", DataType["INT8"])
         model.set_tensor_datatype("thresholds", DataType["INT8"])
@@ -390,9 +372,9 @@ class TestThresholdingExecution:
 
     def test_execute_node_basic(self):
         """Test that execute_node() produces expected output shape and datatype."""
-        # Create and transform model
-        model_proto = create_multithreshold_model(
-            input_shape=[1, 4, 4, 8],  # Small size for fast test
+        # Create and transform model (already a ModelWrapper with shapes/datatypes inferred)
+        model, _ = create_multithreshold_model(
+            shape=[1, 4, 4, 8],  # Small size for fast test
             num_thresholds=3,  # 2-bit output (4 levels)
             input_dtype="INT8",
             threshold_dtype="INT8",
@@ -400,13 +382,10 @@ class TestThresholdingExecution:
             out_bias=0
         )
 
-        model = ModelWrapper(model_proto)
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
-
-        model.set_tensor_datatype("input", DataType["INT8"])
-        model.set_tensor_datatype("thresholds", DataType["INT8"])
-        model.set_tensor_datatype("output", DataType["UINT2"])
+        # Helper uses names: "inp", "thresh", "outp"
+        model.set_tensor_datatype("inp", DataType["INT8"])
+        model.set_tensor_datatype("thresh", DataType["INT8"])
+        model.set_tensor_datatype("outp", DataType["UINT2"])
 
         # Transform to Thresholding
         mt_node = model.graph.node[0]
@@ -430,15 +409,15 @@ class TestThresholdingExecution:
         input_data = np.random.randint(-128, 127, input_shape, dtype=np.int8).astype(np.float32)
 
         # Get thresholds from model initializer
-        thresholds = model.get_initializer("thresholds")
+        thresholds = model.get_initializer("thresh")
 
         # Execute node
-        context = {"input": input_data, "thresholds": thresholds}
+        context = {"inp": input_data, "thresh": thresholds}
         op.execute_node(context, model.graph)
 
         # Check output exists and has correct shape
-        assert "output" in context, "Output should be in context after execution"
-        output_data = context["output"]
+        assert "outp" in context, "Output should be in context after execution"
+        output_data = context["outp"]
         assert output_data.shape == input_shape, "Output shape should match input shape"
 
         # Output values should be in range [0, 3] for UINT2 with 3 thresholds

@@ -110,9 +110,9 @@ def get_config() -> SystemConfig:
     config = load_config()
 
     # Export to environment on first load (inside cache, so happens exactly once)
-    # Include internal BSMITH_* variables for YAML ${var} expansion in blueprints
+    # Exports all variables including BSMITH_* for YAML ${var} expansion in blueprints
     try:
-        config.export_to_environment(include_internal=True)
+        config.export_to_environment()
     except Exception:
         # Silently continue if export fails (e.g., during initial setup)
         pass

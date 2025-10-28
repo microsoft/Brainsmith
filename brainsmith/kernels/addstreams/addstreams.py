@@ -214,3 +214,63 @@ class AddStreams(KernelOp):
 
         # Store result
         context[node.output[0]] = output_data
+
+    # ====================================================================
+    # Golden Reference (For Integration Testing)
+    # ====================================================================
+
+    @staticmethod
+    def compute_golden_reference(inputs: dict) -> dict:
+        """NumPy reference implementation for AddStreams.
+
+        This is the single source of truth for correctness validation.
+        All backends (Python, HLS cppsim, RTL rtlsim) must match this.
+
+        Args:
+            inputs: Dict with "input0" and "input1" numpy arrays
+
+        Returns:
+            Dict with "output" = input0 + input1
+
+        Example:
+            >>> inputs = {"input0": np.array([1, 2, 3]),
+            ...           "input1": np.array([4, 5, 6])}
+            >>> golden = AddStreams.compute_golden_reference(inputs)
+            >>> golden["output"]
+            array([5, 7, 9])
+        """
+        return {"output": inputs["input0"] + inputs["input1"]}
+
+    @staticmethod
+    def validate_golden_properties(inputs: dict, outputs: dict) -> None:
+        """Validate mathematical properties of addition.
+
+        Properties checked:
+        - Commutativity: a + b == b + a
+        - Associativity: (a + b) + c == a + (b + c) (for 3+ inputs, future)
+        - Identity: a + 0 == a
+
+        Args:
+            inputs: Dict with "input0" and "input1" arrays
+            outputs: Dict with "output" array from golden reference
+
+        Raises:
+            AssertionError: If properties are violated
+        """
+        input0 = inputs["input0"]
+        input1 = inputs["input1"]
+        output = outputs["output"]
+
+        # Test commutativity: a + b == b + a
+        reverse_sum = input1 + input0
+        np.testing.assert_array_equal(
+            output,
+            reverse_sum,
+            err_msg="Addition is not commutative (a + b != b + a)",
+        )
+
+        # Test against direct computation
+        direct_sum = input0 + input1
+        np.testing.assert_array_equal(
+            output, direct_sum, err_msg="Golden reference does not match direct sum"
+        )

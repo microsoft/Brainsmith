@@ -17,15 +17,18 @@ Usage:
     assert_datatypes_match(manual_dt, auto_dt, index=0, direction="Input")
 """
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple
 import numpy as np
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
+from tests.common.assertions import AssertionHelper
 
 
-class ParityAssertion:
-    """Base class for parity assertion helpers.
+class ParityAssertion(AssertionHelper):
+    """Parity-specific assertion helper.
 
-    Provides consistent error message formatting across all parity tests.
+    Extends AssertionHelper with "Manual vs Auto" comparison semantics.
+    Provides consistent error message formatting for parity tests.
     """
 
     @staticmethod
@@ -35,7 +38,7 @@ class ParityAssertion:
         auto_value: Any,
         formatter: Optional[Callable[[Any], str]] = None
     ) -> str:
-        """Format standard mismatch error message.
+        """Format parity mismatch error message (Manual vs Auto).
 
         Args:
             description: What is being compared (e.g., "Input 0 normal shape")
@@ -55,15 +58,10 @@ class ParityAssertion:
               Manual: (1, 768)
               Auto:   (1, 769)
         """
-        fmt = formatter if formatter else str
-
-        lines = [
-            f"{description} mismatch:",
-            f"  Manual: {fmt(manual_value)}",
-            f"  Auto:   {fmt(auto_value)}"
-        ]
-
-        return "\n".join(lines)
+        return AssertionHelper.format_comparison(
+            description, manual_value, auto_value,
+            label_a="Manual", label_b="Auto", formatter=formatter
+        )
 
     @staticmethod
     def assert_equal(
@@ -72,7 +70,7 @@ class ParityAssertion:
         description: str,
         formatter: Optional[Callable[[Any], str]] = None
     ) -> None:
-        """Assert values are equal with consistent error formatting.
+        """Assert parity between manual and auto implementations.
 
         Args:
             manual_value: Value from manual implementation
@@ -83,11 +81,10 @@ class ParityAssertion:
         Raises:
             AssertionError: If values differ
         """
-        if manual_value != auto_value:
-            msg = ParityAssertion.format_mismatch(
-                description, manual_value, auto_value, formatter
-            )
-            raise AssertionError(msg)
+        AssertionHelper.assert_comparison(
+            manual_value, auto_value, description,
+            label_a="Manual", label_b="Auto", formatter=formatter
+        )
 
 
 # =============================================================================
@@ -95,8 +92,8 @@ class ParityAssertion:
 # =============================================================================
 
 def assert_shapes_match(
-    manual_shape: tuple,
-    auto_shape: tuple,
+    manual_shape: Tuple[int, ...],
+    auto_shape: Tuple[int, ...],
     index: int,
     kind: str
 ) -> None:
@@ -315,8 +312,8 @@ def assert_arrays_close(
 
 
 def assert_model_tensors_match(
-    manual_model,
-    auto_model,
+    manual_model: ModelWrapper,
+    auto_model: ModelWrapper,
     tensor_name: str,
     description: str
 ) -> None:

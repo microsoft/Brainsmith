@@ -67,13 +67,13 @@ class TestGetBufferDeclaration:
     """Tests for _get_buffer_declaration() method."""
 
     def test_static_input_no_buffer(self):
-        """Static inputs should return (None, None)."""
+        """Static inputs should return None."""
         mock_kernel = Mock(spec=ElementwiseBinaryOp_hls)
         mock_kernel._needs_streaming_interface = Mock(return_value=False)
 
         result = ElementwiseBinaryOp_hls._get_buffer_declaration(mock_kernel, "rhs", pe=64)
 
-        assert result == (None, None)
+        assert result is None
 
     def test_streaming_no_broadcast_simple_buffer(self):
         """Streaming without broadcast should use simple output-shaped buffer."""
@@ -87,11 +87,12 @@ class TestGetBufferDeclaration:
         mock_kernel.design_point = Mock()
         mock_kernel.design_point.outputs = {"output": mock_output}
 
-        decl, pragma = ElementwiseBinaryOp_hls._get_buffer_declaration(mock_kernel, "lhs", pe=64)
+        result = ElementwiseBinaryOp_hls._get_buffer_declaration(mock_kernel, "lhs", pe=64)
 
         # Should create buffer shaped [1][64][64][2] (128/64=2)
-        assert "LhsType lhs[1][64][64][2];" in decl
-        assert "#pragma HLS ARRAY_PARTITION variable=lhs complete dim=4" == pragma
+        assert result is not None
+        assert "LhsType lhs[1][64][64][2];" in result.declaration
+        assert "#pragma HLS ARRAY_PARTITION variable=lhs complete dim=4" == result.partition_pragma
 
     def test_streaming_with_broadcast_uses_broadcast_info(self):
         """Streaming with broadcast should use BroadcastInfo.get_buffer_shape()."""
@@ -104,11 +105,12 @@ class TestGetBufferDeclaration:
         mock_bcast_info.get_buffer_shape = Mock(return_value=(1, 1, 1, 2))  # Broadcast shape
         mock_kernel._get_broadcast_info = Mock(return_value=mock_bcast_info)
 
-        decl, pragma = ElementwiseBinaryOp_hls._get_buffer_declaration(mock_kernel, "rhs", pe=64)
+        result = ElementwiseBinaryOp_hls._get_buffer_declaration(mock_kernel, "rhs", pe=64)
 
         # Should use broadcast buffer shape
-        assert "RhsType rhs[1][1][1][2];" in decl
-        assert "#pragma HLS ARRAY_PARTITION variable=rhs complete dim=4" == pragma
+        assert result is not None
+        assert "RhsType rhs[1][1][1][2];" in result.declaration
+        assert "#pragma HLS ARRAY_PARTITION variable=rhs complete dim=4" == result.partition_pragma
         mock_bcast_info.get_buffer_shape.assert_called_once_with("rhs", 64)
 
 

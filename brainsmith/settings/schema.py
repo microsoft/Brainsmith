@@ -589,7 +589,7 @@ class SystemConfig(BaseSettings):
 
         Args:
             **kwargs: Passed to EnvironmentExporter.export_to_environment()
-                     (include_internal, verbose, export)
+                     (include_internal: bool = True)
 
         Returns:
             Dict of exported environment variables

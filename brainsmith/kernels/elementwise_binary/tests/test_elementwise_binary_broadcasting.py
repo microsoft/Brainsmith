@@ -12,19 +12,15 @@ Tests various broadcasting patterns in HLS code generation and execution:
 """
 
 import pytest
-import numpy as np
-from onnx import helper, TensorProto
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.util.basic import qonnx_make_model, gen_finn_dt_tensor
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.core.datatype import DataType
 from finn.util.basic import getHWCustomOp
 
 from brainsmith.transforms.infer_kernel_list import InferKernelList
 from brainsmith.kernels.elementwise_binary.tests.test_elementwise_binary_parity import (
     SpecializeElementwiseBinaryToHLS
 )
+from tests.fixtures.kernel_test_helpers import make_broadcast_model
 
 
 class TestElementwiseBinaryBroadcasting:
@@ -37,57 +33,8 @@ class TestElementwiseBinaryBroadcasting:
     """
 
     # =========================================================================
-    # Test Model Creation Helpers
+    # Test Transformation Helpers
     # =========================================================================
-
-    def make_broadcast_test_model(
-        self,
-        lhs_shape,
-        rhs_shape,
-        operation="Add",
-        idt=DataType["INT8"]
-    ):
-        """Create ONNX model with broadcasting inputs.
-
-        Args:
-            lhs_shape: Shape of left-hand side input (dynamic)
-            rhs_shape: Shape of right-hand side input (dynamic with broadcast)
-            operation: ONNX operation name (Add, Mul, etc.)
-            idt: Input/output datatype
-
-        Returns:
-            Tuple of (ModelWrapper, node_name)
-        """
-        node_name = f"{operation}_broadcast_test"
-
-        # Compute output shape (numpy broadcast semantics)
-        output_shape = tuple(np.broadcast_shapes(lhs_shape, rhs_shape))
-
-        # Create input tensor infos
-        lhs_input = helper.make_tensor_value_info("lhs", TensorProto.FLOAT, lhs_shape)
-        rhs_input = helper.make_tensor_value_info("rhs", TensorProto.FLOAT, rhs_shape)
-        output = helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)
-
-        # Create ONNX node
-        node = helper.make_node(
-            operation, ["lhs", "rhs"], ["output"], name=node_name
-        )
-
-        # Build graph and model
-        graph = helper.make_graph(
-            nodes=[node],
-            name="broadcast_test",
-            inputs=[lhs_input, rhs_input],
-            outputs=[output],
-        )
-        model = ModelWrapper(qonnx_make_model(graph, producer_name="broadcast-test"))
-
-        # Set datatypes
-        model.set_tensor_datatype("lhs", idt)
-        model.set_tensor_datatype("rhs", idt)
-        model.set_tensor_datatype("output", idt)
-
-        return model, node_name
 
     def infer_to_hls_backend(self, model):
         """Apply transformations to get ElementwiseBinaryOp_hls instance.
@@ -128,7 +75,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (1,)
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify pattern detection
@@ -147,7 +94,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (128,)
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify pattern detection
@@ -165,7 +112,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (1, 1, 1, 128)
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify pattern detection
@@ -182,7 +129,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 1, 128)
         rhs_shape = (1, 1, 64, 1)
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify pattern detection
@@ -209,7 +156,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (1, 64, 64, 128)
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify pattern detection
@@ -232,7 +179,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (1, 1, 1, 128)  # Spatial broadcast
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         loop_counters = ("i0", "i1", "i2")
@@ -252,7 +199,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (128,)  # Channel broadcast
 
-        model, node_name = self.make_broadcast_test_model(lhs_shape, rhs_shape)
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape)
         op, model = self.infer_to_hls_backend(model)
 
         loop_counters = ("i0", "i1", "i2")
@@ -276,9 +223,7 @@ class TestElementwiseBinaryBroadcasting:
         lhs_shape = (1, 64, 64, 128)
         rhs_shape = (128,)
 
-        model, node_name = self.make_broadcast_test_model(
-            lhs_shape, rhs_shape, operation=operation
-        )
+        model, _ = make_broadcast_model(lhs_shape, rhs_shape, operation=operation)
         op, model = self.infer_to_hls_backend(model)
 
         # Verify correct operation and pattern

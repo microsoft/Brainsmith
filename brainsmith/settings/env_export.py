@@ -118,21 +118,17 @@ class EnvironmentExporter:
 
     def export_to_environment(
         self,
-        include_internal: bool = False,
-        verbose: bool = False,
-        export: bool = True
+        include_internal: bool = True
     ) -> Dict[str, str]:
         """Export configuration to environment variables.
 
-        This is the unified method for exporting configuration to the environment.
-        By default, exports only external tool configuration values (FINN_*, XILINX_*, etc)
-        and sets up PATH, PYTHONPATH, and LD_LIBRARY_PATH for tool compatibility.
+        By default, exports all configuration including internal BSMITH_* variables
+        (needed for blueprint YAML ${var} expansion and kernel compilation).
 
         Args:
-            include_internal: If True, also export internal BSMITH_* variables
-                            (needed for blueprint YAML ${var} expansion)
-            verbose: Whether to print export information
-            export: If False, only return dict without modifying os.environ
+            include_internal: If True (default), export internal BSMITH_* variables.
+                            Set to False to export only external tool variables
+                            (FINN_*, XILINX_*, etc).
 
         Returns:
             Dict of exported environment variables
@@ -187,20 +183,10 @@ class EnvironmentExporter:
             # Ensure XILINX_LOCAL_USER_DATA is set to prevent network operations
             env_dict["XILINX_LOCAL_USER_DATA"] = "no"
 
-        if export:
-            console = None
-            if verbose:
-                from rich.console import Console
-                console = Console()
-
-            for key, value in env_dict.items():
-                if value is not None:
-                    os.environ[key] = str(value)
-                    if console and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
-                        console.print(f"[dim]Export {key}={value}[/dim]")
-
-            if console:
-                console.print("[green]✓ Configuration exported to environment[/green]")
+        # Always export to os.environ
+        for key, value in env_dict.items():
+            if value is not None:
+                os.environ[key] = str(value)
 
         return env_dict
 

@@ -32,6 +32,11 @@ from tests.fixtures.kernel_test_helpers import (
     make_binary_op_model,
     make_parametric_op_model,
     make_unary_op_model,
+    make_multithreshold_model,
+    make_funclayernorm_model,
+    make_vvau_model,
+    make_broadcast_model,
+    make_duplicate_streams_model,
 )
 
 
@@ -129,6 +134,36 @@ component_sources: {}
     # Cleanup using public API
     reset_registry()
     reset_config()
+
+
+@pytest.fixture(scope="session")
+def setup_parity_imports():
+    """Setup imports for parity test modules.
+
+    Adds tests/parity/ to sys.path to enable clean imports of parity test
+    helpers in kernel parity tests.
+
+    Usage in kernel parity tests:
+        def test_something(setup_parity_imports):
+            from base_parity_test import ParityTestBase
+            ...
+
+    This eliminates brittle sys.path manipulation in individual test files.
+    """
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).parent.parent
+    tests_parity_dir = repo_root / "tests" / "parity"
+
+    if str(tests_parity_dir) not in sys.path:
+        sys.path.insert(0, str(tests_parity_dir))
+
+    yield
+
+    # Cleanup: remove from sys.path
+    if str(tests_parity_dir) in sys.path:
+        sys.path.remove(str(tests_parity_dir))
 
 
 def pytest_collection_modifyitems(config, items):

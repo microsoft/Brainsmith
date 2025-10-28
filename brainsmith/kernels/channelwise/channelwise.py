@@ -28,10 +28,7 @@ from brainsmith.registry import kernel
 
 
 def _channelwise_output_datatype():
-    """Polymorphic datatype resolver for ChannelwiseOp.
-
-    Dispatches to appropriate builder based on 'func' nodeattr.
-    """
+    """Polymorphic datatype resolver for ChannelwiseOp based on 'func' nodeattr."""
     def resolver(interfaces, param_getter, model, tensor_name):
         func = param_getter("func")
 
@@ -40,7 +37,6 @@ def _channelwise_output_datatype():
         elif func == "Mul":
             return mul_datatype("input", "parameters")(interfaces, param_getter, model, tensor_name)
         elif func in ("LessOrEqual", "GreaterOrEqual"):
-            # Comparison operations produce boolean (0 or 1)
             return smallest_datatype_for_range(0, 1)
         else:
             raise ValueError(f"Unsupported func '{func}' in ChannelwiseOp")

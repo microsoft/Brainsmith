@@ -60,19 +60,10 @@ from finn.transformation.fpgadataflow.convert_to_hw_layers import InferElementwi
 
 from brainsmith.transforms.infer_kernel_list import InferKernelList
 
-# Import test framework
-import sys
-from pathlib import Path
-
-# Add tests/parity to path for imports
-repo_root = Path(__file__).resolve().parents[4]  # Go up to brainsmith-1/
-tests_parity_dir = repo_root / "tests" / "parity"
-if str(tests_parity_dir) not in sys.path:
-    sys.path.insert(0, str(tests_parity_dir))
-
-from base_parity_test import ParityTestBase
-from assertions import assert_shapes_match
-from hls_codegen_parity import HLSCodegenParityMixin
+# Import parity test framework
+from tests.parity.base_parity_test import ParityTestBase
+from tests.parity.assertions import assert_shapes_match
+from tests.parity.hls_codegen_parity import HLSCodegenParityMixin
 
 
 # =============================================================================

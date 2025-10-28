@@ -25,5 +25,22 @@ Usage (Computational Kernel):
 
 from .base_parity_test import ParityTestBase
 from .computational_parity_test import ComputationalParityMixin
+from tests.common.constants import (
+    PARITY_DEFAULT_FPGA_PART_HLS as DEFAULT_FPGA_PART_HLS,
+    PARITY_DEFAULT_FPGA_PART_RTL as DEFAULT_FPGA_PART_RTL,
+    PARITY_DEFAULT_CLOCK_PERIOD_NS as DEFAULT_CLOCK_PERIOD_NS,
+    UNSIGNED_TEST_DATA_CAP,
+    SIGNED_TEST_DATA_MIN,
+    SIGNED_TEST_DATA_MAX,
+)
 
-__all__ = ["ParityTestBase", "ComputationalParityMixin"]
+__all__ = [
+    "ParityTestBase",
+    "ComputationalParityMixin",
+    "DEFAULT_FPGA_PART_HLS",
+    "DEFAULT_FPGA_PART_RTL",
+    "DEFAULT_CLOCK_PERIOD_NS",
+    "UNSIGNED_TEST_DATA_CAP",
+    "SIGNED_TEST_DATA_MIN",
+    "SIGNED_TEST_DATA_MAX",
+]

@@ -16,12 +16,13 @@ from brainsmith.dse.tree import DSETree
 from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig
 from brainsmith.dse.types import TreeExecutionResult, SegmentStatus, OutputType
-from tests.utils.constants import (
+from tests.common.constants import (
     MIN_CHILDREN_FOR_BRANCH,
     NO_EFFICIENCY,
     EFFICIENCY_DECIMAL_PLACES,
     EFFICIENCY_PERCENTAGE_MULTIPLIER
 )
+from tests.common.assertions import AssertionHelper
 
 
 # ============================================================================
@@ -59,11 +60,12 @@ class ExpectedExecutionStats:
 # TreeAssertions - DSE Tree Structure Validation
 # ============================================================================
 
-class TreeAssertions:
+class TreeAssertions(AssertionHelper):
     """Helper class for DSE tree assertions.
 
     Ported from OLD_FOR_REFERENCE_ONLY/utils/tree_assertions.py
     Validates tree structure, relationships, and execution order.
+    Extends AssertionHelper for consistent error formatting.
     """
 
     @staticmethod
@@ -203,10 +205,11 @@ class TreeAssertions:
 # ExecutionAssertions - DSE Execution Result Validation
 # ============================================================================
 
-class ExecutionAssertions:
+class ExecutionAssertions(AssertionHelper):
     """Helper class for DSE execution result assertions.
 
     Validates execution results, segment statuses, and statistics.
+    Extends AssertionHelper for consistent error formatting.
     """
 
     @staticmethod
@@ -360,10 +363,11 @@ class ExecutionAssertions:
 # BlueprintAssertions - Blueprint Parsing Validation
 # ============================================================================
 
-class BlueprintAssertions:
+class BlueprintAssertions(AssertionHelper):
     """Helper class for blueprint parsing assertions.
 
     Validates design space structure, configuration values, and inheritance.
+    Extends AssertionHelper for consistent error formatting.
     """
 
     @staticmethod

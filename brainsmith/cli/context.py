@@ -69,7 +69,7 @@ class ApplicationContext:
         logger.debug(f"{cli_name} CLI initialized with logs={log_level}, no_progress={no_progress}")
 
         context.load_configuration()
-        context.get_effective_config().export_to_environment(verbose=False)
+        context.get_effective_config().export_to_environment()
 
         return context
 

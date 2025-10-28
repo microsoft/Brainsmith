@@ -18,6 +18,7 @@ from brainsmith.transforms.infer_kernel_list import InferKernelList
 from brainsmith.kernels.elementwise_binary.tests.test_elementwise_binary_parity import (
     SpecializeElementwiseBinaryToHLS
 )
+from tests.fixtures.kernel_test_helpers import make_broadcast_model
 
 
 # =============================================================================
@@ -34,7 +35,8 @@ def setup_cppsim_environment():
     try:
         from brainsmith.config import get_config
         config = get_config()
-        config.export_to_environment(include_internal=False, verbose=False)
+        # Export only external tool vars (VIVADO_PATH, etc), not internal BSMITH_* vars
+        config.export_to_environment(include_internal=False)
     except Exception:
         # If config fails, tests will skip appropriately
         pass
@@ -578,18 +580,19 @@ def create_elementwise_binary_model(operation="Add"):
     Returns:
         Tuple of (hw_op, model)
     """
-    in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 4, 4, 8])
-    in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [8])
-    out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 4, 4, 8])
+    # Create model using make_broadcast_model (supports dynamic + dynamic with broadcasting)
+    model, _ = make_broadcast_model(
+        lhs_shape=[1, 4, 4, 8],
+        rhs_shape=[8],
+        operation=operation,
+        datatype="INT8",
+        lhs_name="in0",
+        rhs_name="in1",
+        output_name="output"
+    )
 
-    node = helper.make_node(operation, ["in0", "in1"], ["out"], name=f"test_{operation.lower()}")
-    graph = helper.make_graph([node], "test", [in0, in1], [out])
-    model = helper.make_model(graph)
-    model = ModelWrapper(model)
-
-    model.set_tensor_datatype("in0", DataType["INT8"])
-    model.set_tensor_datatype("in1", DataType["INT8"])
-    model.set_tensor_datatype("out", DataType["INT16"])
+    # Update output datatype
+    model.set_tensor_datatype("output", DataType["INT16"])
 
     hw_op, model = infer_to_hls_backend(model)
     return hw_op, model

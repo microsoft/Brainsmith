@@ -21,15 +21,44 @@ Phase 2/3 (Future):
 - Layout optimizations
 """
 
+import logging
 import os
 import numpy as np
+from dataclasses import dataclass
 from math import ceil
+from typing import Optional
 from qonnx.core.datatype import DataType
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
 from brainsmith.kernels.elementwise_binary.elementwise_binary import ElementwiseBinaryOp
 from brainsmith.registry import backend
+from brainsmith.codegen import HLSCodeBuilder
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BufferDeclaration:
+    """HLS buffer declaration with partition pragma.
+
+    Represents a buffer array declaration and its associated HLS pragma
+    for array partitioning. Provides type-safe alternative to tuple returns.
+
+    Attributes:
+        declaration: C++ array declaration (e.g., "LhsType lhs[1][64][2];")
+        partition_pragma: HLS pragma for array partitioning
+    """
+    declaration: str
+    partition_pragma: str
+
+    def emit(self) -> list[str]:
+        """Emit buffer declaration as code lines.
+
+        Returns:
+            List containing declaration and pragma as separate lines
+        """
+        return [self.declaration, self.partition_pragma]
 
 
 @backend(
@@ -66,8 +95,12 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
     # Resource Estimation (Uses design_point)
     # ================================================================
 
-    def bram_estimation(self):
-        """Calculates BRAM cost if resource set to BRAM."""
+    def _calculate_bram_usage(self) -> int:
+        """Calculate BRAM usage (extracted for clarity and testing).
+
+        Returns:
+            Number of BRAM blocks required
+        """
         style = self.get_nodeattr("ram_style")
         lhs_iface = self.design_point.inputs["lhs"]
         pe = lhs_iface.stream_shape[-1]  # PE from stream tiling
@@ -83,8 +116,42 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         else:
             return 0
 
-    def lut_estimation(self):
-        """Calculates LUT cost, taking memory resource type into account."""
+    def bram_estimation(self):
+        """Calculates BRAM cost with validation against target device capacity.
+
+        Returns:
+            Number of BRAM blocks required
+
+        Warnings:
+            Logs warning if estimated usage exceeds device capacity
+            Logs info if using >80% of device capacity
+        """
+        bram_blocks = self._calculate_bram_usage()
+
+        # Validate against target device (if known)
+        target_device = getattr(self, 'target_device', None)
+        if target_device is not None and hasattr(target_device, 'bram_count'):
+            max_bram = target_device.bram_count
+            if bram_blocks > max_bram:
+                logger.warning(
+                    f"{self.onnx_node.name}: BRAM estimate ({bram_blocks}) "
+                    f"exceeds device capacity ({max_bram}). "
+                    f"Consider reducing PE or using distributed RAM (ram_style='distributed')."
+                )
+            elif bram_blocks > max_bram * 0.8 and bram_blocks > 0:
+                logger.info(
+                    f"{self.onnx_node.name}: BRAM estimate ({bram_blocks}) "
+                    f"uses {bram_blocks/max_bram:.0%} of device capacity."
+                )
+
+        return bram_blocks
+
+    def _calculate_lut_usage(self) -> int:
+        """Calculate LUT usage (extracted for clarity and testing).
+
+        Returns:
+            Number of LUTs required
+        """
         style = self.get_nodeattr("ram_style")
         lhs_iface = self.design_point.inputs["lhs"]
         pe = lhs_iface.stream_shape[-1]  # PE from stream tiling
@@ -108,6 +175,36 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             lutram_cost = 0
 
         return operation_cost + lutram_cost
+
+    def lut_estimation(self):
+        """Calculates LUT cost with validation against target device capacity.
+
+        Returns:
+            Number of LUTs required
+
+        Warnings:
+            Logs warning if estimated usage exceeds device capacity
+            Logs info if using >80% of device capacity
+        """
+        lut_count = self._calculate_lut_usage()
+
+        # Validate against target device (if known)
+        target_device = getattr(self, 'target_device', None)
+        if target_device is not None and hasattr(target_device, 'lut_count'):
+            max_luts = target_device.lut_count
+            if lut_count > max_luts:
+                logger.warning(
+                    f"{self.onnx_node.name}: LUT estimate ({lut_count}) "
+                    f"exceeds device capacity ({max_luts}). "
+                    f"Consider reducing PE or operation bitwidth."
+                )
+            elif lut_count > max_luts * 0.8 and lut_count > 0:
+                logger.info(
+                    f"{self.onnx_node.name}: LUT estimate ({lut_count}) "
+                    f"uses {lut_count/max_luts:.0%} of device capacity."
+                )
+
+        return lut_count
 
     def dsp_estimation(self):
         """DSP usage - only Mul might use DSP blocks."""
@@ -182,7 +279,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         else:
             raise ValueError(f"Unknown input_pattern: {input_pattern}")
 
-    def _get_buffer_declaration(self, input_name, pe):
+    def _get_buffer_declaration(self, input_name: str, pe: int) -> Optional[BufferDeclaration]:
         """Generate buffer array declaration for an input.
 
         Args:
@@ -190,12 +287,11 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             pe: PE parallelism factor
 
         Returns:
-            Tuple of (declaration_string, partition_pragma_string)
-            Returns (None, None) for static inputs that don't need buffers
+            BufferDeclaration with declaration and pragma, or None for static inputs
         """
         if not self._needs_streaming_interface(input_name):
             # Static inputs don't need runtime buffers (loaded from params.hpp)
-            return None, None
+            return None
 
         broadcast_info = self._get_broadcast_info(input_name)
         if not broadcast_info or not broadcast_info.has_broadcast:
@@ -222,7 +318,10 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         ndim = len(buffer_shape)
         partition_pragma = f"#pragma HLS ARRAY_PARTITION variable={input_name} complete dim={ndim}"
 
-        return declaration, partition_pragma
+        return BufferDeclaration(
+            declaration=declaration,
+            partition_pragma=partition_pragma
+        )
 
     def _get_read_condition(self, input_name, loop_counters):
         """Generate C++ condition for when to read from input stream.
@@ -588,19 +687,19 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for header section
         """
-        code = []
+        builder = HLSCodeBuilder()
 
         # Header comment
         input_pattern = self.get_nodeattr("input_pattern")
         func = self.get_nodeattr("func")
-        code.append(f"// Elementwise binary operation: {func} ({input_pattern})")
+        builder.comment(f"Elementwise binary operation: {func} ({input_pattern})")
 
-        # Output buffer declaration
-        code.append(f"{tmpl_args['OutType']} out[PE];")
-        code.append("#pragma HLS ARRAY_PARTITION variable=out complete dim=1")
-        code.append("")
+        # Output buffer declaration (PE is template parameter, use raw)
+        builder.raw(f"{tmpl_args['OutType']} out[PE];")
+        builder.pragma("ARRAY_PARTITION variable=out complete dim=1")
+        builder.blank_line()
 
-        return code
+        return builder.generate()
 
     def _generate_buffer_declarations(self, pe: int, lhs_is_streaming: bool, rhs_is_streaming: bool) -> list[str]:
         """Generate input buffer declarations for broadcasting.
@@ -616,29 +715,29 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for buffer declarations
         """
-        code = []
+        builder = HLSCodeBuilder()
         has_buffers = False
 
         # LHS buffer declaration (if streaming with broadcasting)
         if lhs_is_streaming:
-            lhs_buf_decl, lhs_pragma = self._get_buffer_declaration("lhs", pe)
-            if lhs_buf_decl:  # Only if broadcasting requires buffer
-                code.append(lhs_buf_decl)
-                code.append(lhs_pragma)
+            lhs_buffer = self._get_buffer_declaration("lhs", pe)
+            if lhs_buffer:  # Only if broadcasting requires buffer
+                builder.raw(lhs_buffer.declaration)
+                builder.pragma(lhs_buffer.partition_pragma[13:])  # Strip "#pragma HLS "
                 has_buffers = True
 
         # RHS buffer declaration (if streaming with broadcasting)
         if rhs_is_streaming:
-            rhs_buf_decl, rhs_pragma = self._get_buffer_declaration("rhs", pe)
-            if rhs_buf_decl:  # Only if broadcasting requires buffer
-                code.append(rhs_buf_decl)
-                code.append(rhs_pragma)
+            rhs_buffer = self._get_buffer_declaration("rhs", pe)
+            if rhs_buffer:  # Only if broadcasting requires buffer
+                builder.raw(rhs_buffer.declaration)
+                builder.pragma(rhs_buffer.partition_pragma[13:])  # Strip "#pragma HLS "
                 has_buffers = True
 
         if has_buffers:
-            code.append("")  # Blank line after buffer declarations
+            builder.blank_line()
 
-        return code
+        return builder.generate()
 
     def _generate_loop_headers(self, output_shape: tuple, ndim: int) -> list[str]:
         """Generate nested loop opening statements and pipeline pragma.
@@ -650,18 +749,18 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ for loop headers with pipeline pragma
         """
-        code = []
+        builder = HLSCodeBuilder()
 
         # Generate loop nest over output shape dimensions
         for d, size in enumerate(output_shape[:-1]):  # Exclude last (PE) dimension
             indent = "    " * d
-            code.append(f"{indent}for(unsigned int i{d} = 0; i{d} < {size}; i{d}++) {{")
+            builder.raw(f"{indent}for(unsigned int i{d} = 0; i{d} < {size}; i{d}++) {{")
 
         # Pipeline pragma at innermost loop level
         indent = "    " * ndim
-        code.append(f"{indent}#pragma HLS pipeline II=1 style=flp")
+        builder.raw(f"{indent}#pragma HLS pipeline II=1 style=flp")
 
-        return code
+        return builder.generate()
 
     def _generate_lhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, lhs_is_streaming: bool) -> list[str]:
         """Generate LHS stream read with unpacking.
@@ -678,30 +777,30 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         if not lhs_is_streaming:
             return []
 
-        code = []
+        builder = HLSCodeBuilder()
         indent = "    " * ndim
 
         lhs_read_cond = self._get_read_condition("lhs", loop_counters)
         lhs_index = self._get_indexing_expression("lhs", loop_counters, "pe")
 
-        code.append(f"{indent}// Read LHS from stream")
+        builder.raw(f"{indent}// Read LHS from stream")
         if lhs_read_cond != "true":
-            code.append(f"{indent}if({lhs_read_cond}) {{")
+            builder.raw(f"{indent}if({lhs_read_cond}) {{")
             inner_indent = indent + "    "
         else:
             inner_indent = indent
 
-        code.append(f"{inner_indent}const auto lhs_packed = in0_V.read();")
-        code.append(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
-        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        code.append(f"{inner_indent}#pragma HLS unroll")
-        code.append(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
-        code.append(f"{inner_indent}}}")
+        builder.raw(f"{inner_indent}const auto lhs_packed = in0_V.read();")
+        builder.raw(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
+        builder.raw(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        builder.raw(f"{inner_indent}#pragma HLS unroll")
+        builder.raw(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
+        builder.raw(f"{inner_indent}}}")
 
         if lhs_read_cond != "true":
-            code.append(f"{indent}}}")
+            builder.raw(f"{indent}}}")
 
-        return code
+        return builder.generate()
 
     def _generate_rhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, rhs_is_streaming: bool) -> list[str]:
         """Generate RHS stream read with broadcast-aware conditional.
@@ -718,30 +817,30 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         if not rhs_is_streaming:
             return []
 
-        code = []
+        builder = HLSCodeBuilder()
         indent = "    " * ndim
 
         rhs_read_cond = self._get_read_condition("rhs", loop_counters)
         rhs_index = self._get_indexing_expression("rhs", loop_counters, "pe")
 
-        code.append(f"{indent}// Read RHS from stream")
+        builder.raw(f"{indent}// Read RHS from stream")
         if rhs_read_cond != "true":
-            code.append(f"{indent}if({rhs_read_cond}) {{")
+            builder.raw(f"{indent}if({rhs_read_cond}) {{")
             inner_indent = indent + "    "
         else:
             inner_indent = indent
 
-        code.append(f"{inner_indent}const auto rhs_packed = in1_V.read();")
-        code.append(f"{inner_indent}const auto rhs_slice = {tmpl_args['RhsSlice']}(rhs_packed);")
-        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        code.append(f"{inner_indent}#pragma HLS unroll")
-        code.append(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
-        code.append(f"{inner_indent}}}")
+        builder.raw(f"{inner_indent}const auto rhs_packed = in1_V.read();")
+        builder.raw(f"{inner_indent}const auto rhs_slice = {tmpl_args['RhsSlice']}(rhs_packed);")
+        builder.raw(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        builder.raw(f"{inner_indent}#pragma HLS unroll")
+        builder.raw(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
+        builder.raw(f"{inner_indent}}}")
 
         if rhs_read_cond != "true":
-            code.append(f"{indent}}}")
+            builder.raw(f"{indent}}}")
 
-        return code
+        return builder.generate()
 
     def _generate_pe_operations(self, op_str: str, loop_counters: tuple, ndim: int) -> list[str]:
         """Generate PE-parallel computation and output write.
@@ -754,29 +853,29 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for PE operations
         """
-        code = []
+        builder = HLSCodeBuilder()
         indent = "    " * ndim
 
         # PE-parallel operations
-        code.append(f"{indent}// PE-parallel operations")
-        code.append(f"{indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        code.append(f"{indent}#pragma HLS unroll")
+        builder.raw(f"{indent}// PE-parallel operations")
+        builder.raw(f"{indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        builder.raw(f"{indent}#pragma HLS unroll")
 
         # Get values from buffers (streaming) or params.hpp (static)
         lhs_index_expr = self._get_indexing_expression("lhs", loop_counters, "pe")
-        code.append(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
+        builder.raw(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
 
         rhs_index_expr = self._get_indexing_expression("rhs", loop_counters, "pe")
-        code.append(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
+        builder.raw(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
 
-        code.append(f"{indent}    out[pe] = {op_str.format('lhs_val', 'rhs_val')};")
-        code.append(f"{indent}}}")
+        builder.raw(f"{indent}    out[pe] = {op_str.format('lhs_val', 'rhs_val')};")
+        builder.raw(f"{indent}}}")
 
         # Write output
-        code.append(f"{indent}// Write output")
-        code.append(f"{indent}out0_V.write(flatten(out));")
+        builder.raw(f"{indent}// Write output")
+        builder.raw(f"{indent}out0_V.write(flatten(out));")
 
-        return code
+        return builder.generate()
 
     def _generate_loop_closings(self, ndim: int) -> list[str]:
         """Generate nested loop closing braces.
@@ -787,11 +886,11 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of closing brace lines
         """
-        code = []
+        builder = HLSCodeBuilder()
         for d in range(ndim - 1, -1, -1):
             indent = "    " * d
-            code.append(f"{indent}}}")
-        return code
+            builder.raw(f"{indent}}}")
+        return builder.generate()
 
     def dataoutstrm(self):
         """Write output stream to numpy file for C++ simulation."""
