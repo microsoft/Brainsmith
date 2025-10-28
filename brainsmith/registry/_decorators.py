@@ -49,7 +49,8 @@ def _register_step(
     func_or_class: Union[Callable, Type],
     *,
     source: Optional[str] = None,
-    name: Optional[str] = None
+    name: Optional[str] = None,
+    **kwargs  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
 ) -> Union[Callable, Type]:
     """Register step in global component index."""
     source = source or _current_source.get() or 'custom'
@@ -77,6 +78,9 @@ def _register_step(
         import_spec=import_spec,
         loaded_obj=func_or_class  # Already loaded
     )
+
+    # Attach registry name to function/class for O(1) reverse lookup
+    func_or_class.__registry_name__ = full_name
 
     return func_or_class
 
@@ -130,6 +134,9 @@ def _register_kernel(
     # Kernel-specific metadata (infer_transform already converted above)
     meta.kernel_infer = infer_transform
 
+    # Attach registry name to class for O(1) reverse lookup
+    cls.__registry_name__ = full_name
+
     return cls
 
 
@@ -140,7 +147,8 @@ def _register_backend(
     name: Optional[str] = None,
     target_kernel: Optional[str] = None,
     language: Optional[str] = None,
-    variant: Optional[str] = None
+    variant: Optional[str] = None,
+    **kwargs  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
 ) -> Type:
     """Register backend in global component index."""
     source = source or _current_source.get() or 'custom'
@@ -192,6 +200,9 @@ def _register_backend(
             kernel_meta.kernel_backends = []
         if full_name not in kernel_meta.kernel_backends:
             kernel_meta.kernel_backends.append(full_name)
+
+    # Attach registry name to class for O(1) reverse lookup
+    cls.__registry_name__ = full_name
 
     return cls
 

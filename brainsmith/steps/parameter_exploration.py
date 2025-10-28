@@ -10,18 +10,14 @@ from typing import Dict, List, Any
 
 from qonnx.custom_op.registry import getCustomOp
 
-from brainsmith.core.plugins import step
+from brainsmith.registry import step
 from brainsmith.dataflow.utils import iter_valid_configurations
 from brainsmith.dataflow.kernel_op import KernelOp
 
 logger = logging.getLogger(__name__)
 
 
-@step(
-    name="explore_kernel_params",
-    category="dse",
-    description="Explore kernel parallelization parameter configurations for DSE"
-)
+@step(name="explore_kernel_params")
 def explore_kernel_params_step(model, cfg):
     """Explore parallelization parameters for all KernelOp nodes.
 

@@ -29,7 +29,7 @@ import qonnx.core.data_layout as DataLayout
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
 from brainsmith.dataflow.types import VALUE_OPTIMIZED
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 import brainsmith.dataflow as df
 from typing import Optional
 from onnx import NodeProto

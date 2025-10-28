@@ -17,7 +17,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
 @kernel(

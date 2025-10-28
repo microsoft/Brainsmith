@@ -23,12 +23,12 @@ from finn.util.data_packing import (
     pack_innermost_dim_as_hex_string,
     rtlsim_output_to_npy,
 )
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="ThresholdingHLS",
-    kernel="Thresholding",
+    target_kernel="brainsmith:Thresholding",
     language="hls",
     description="HLS implementation of Thresholding",
     author="Microsoft Corporation"

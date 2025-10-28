@@ -759,7 +759,7 @@ def rtl_blueprint(tmp_path, quantized_onnx_model) -> Path:
     - RTL simulation tools (QuestaSim/Verilator)
     - Execution time: 30 minutes to hours
 
-    Use @pytest.mark.rtl_sim marker for tests using this fixture.
+    Use @pytest.mark.rtlsim marker for tests using this fixture.
 
     This is a STUB for Phase 4 - creates valid YAML but not meant
     to be executed. Real RTL tests come in later phases.

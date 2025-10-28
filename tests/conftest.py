@@ -6,8 +6,12 @@ This conftest.py is the root configuration for the DSE integration test suite.
 import pytest
 import shutil
 from pathlib import Path
-from brainsmith.settings import reset_config
+from brainsmith.settings import reset_config, get_config
 from brainsmith.registry import reset_registry
+
+# Initialize configuration early (before FINN/QONNX imports)
+# This exports FINN_DEPS_DIR and other env vars to prevent warnings
+_config = get_config()
 
 # Import test components - these register @step, @kernel, @backend decorators
 # Available for tests that need globally-registered test components
@@ -29,44 +33,6 @@ from tests.fixtures.kernel_test_helpers import (
     make_parametric_op_model,
     make_unary_op_model,
 )
-
-
-def pytest_configure(config):
-    """Configure pytest with custom settings."""
-<<<<<<< HEAD
-    # Add custom markers
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "parity: marks tests comparing manual vs auto HWCustomOp implementations"
-    )
-    config.addinivalue_line(
-        "markers", "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS"
-    )
-    config.addinivalue_line(
-        "markers", "hls: marks tests requiring HLS code generation"
-    )
-    config.addinivalue_line(
-        "markers", "rtl: marks tests requiring RTL synthesis"
-    )
-    config.addinivalue_line(
-        "markers", "rtlsim: marks tests requiring RTL simulation"
-    )
-||||||| 545cbf2
-    # Add custom markers
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-=======
-    # Markers already defined in pytest.ini
-    pass
 
 
 @pytest.fixture(scope="session")
@@ -171,7 +137,7 @@ def pytest_collection_modifyitems(config, items):
     Tests are automatically marked based on their directory:
     - integration/fast/ -> @pytest.mark.fast
     - integration/finn/ -> @pytest.mark.finn_build
-    - integration/rtl/ -> @pytest.mark.rtl_sim, @pytest.mark.slow
+    - integration/rtl/ -> @pytest.mark.rtlsim, @pytest.mark.slow
     - integration/hardware/ -> @pytest.mark.bitfile, @pytest.mark.hardware
     """
     for item in items:
@@ -181,9 +147,8 @@ def pytest_collection_modifyitems(config, items):
         elif "integration/finn" in str(item.fspath):
             item.add_marker(pytest.mark.finn_build)
         elif "integration/rtl" in str(item.fspath):
-            item.add_marker(pytest.mark.rtl_sim)
+            item.add_marker(pytest.mark.rtlsim)
             item.add_marker(pytest.mark.slow)
         elif "integration/hardware" in str(item.fspath):
             item.add_marker(pytest.mark.bitfile)
             item.add_marker(pytest.mark.hardware)
->>>>>>> origin/develop

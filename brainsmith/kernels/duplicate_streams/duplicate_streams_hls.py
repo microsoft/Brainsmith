@@ -11,12 +11,12 @@
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.duplicate_streams.duplicate_streams import DuplicateStreams
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="DuplicateStreamsHLS",
-    kernel="DuplicateStreams",
+    target_kernel="brainsmith:DuplicateStreams",
     language="hls",
     author="Migrated from AMD FINN"
 )

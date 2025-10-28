@@ -12,15 +12,7 @@ from qonnx.transformation.general import SortGraph
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.core.plugins import transform
 
-
-@transform(
-    name="InsertDuplicateStreams",
-    stage="dataflow",
-    description="Insert DuplicateStreams for tensor fanout >= 2",
-    author="Migrated from AMD FINN"
-)
 class InsertDuplicateStreams(Transformation):
     """Insert DuplicateStreams HW layer for any tensor with fanout >= 2.
 

@@ -31,6 +31,12 @@ from brainsmith.steps.bert_custom_steps import (
 # Kernel inference
 from brainsmith.steps.kernel_inference import infer_kernels_step
 
+# Layout normalization
+from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
+
+# Parameter exploration
+from brainsmith.steps.parameter_exploration import explore_kernel_params_step
+
 __all__ = [
     'qonnx_to_finn_step',
     'specialize_layers_step',
@@ -39,4 +45,6 @@ __all__ = [
     'bert_cleanup_step',
     'bert_streamlining_step',
     'infer_kernels_step',
+    'normalize_dataflow_layouts_step',
+    'explore_kernel_params_step',
 ]

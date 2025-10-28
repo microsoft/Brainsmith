@@ -17,15 +17,7 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.onnx import nchw_to_nhwc
 
-from brainsmith.core.plugins import transform
 
-
-@transform(
-    name="NormalizeDataflowLayouts",
-    stage="preprocessing",
-    description="Convert all NCHW tensors to NHWC (channel-last) for dataflow acceleration",
-    author="Claude"
-)
 class NormalizeDataflowLayouts(Transformation):
     """
     Global preprocessing transformation that normalizes all tensor layouts to NHWC.

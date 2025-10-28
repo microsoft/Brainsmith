@@ -38,7 +38,7 @@ from qonnx.util.basic import get_by_name
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
 import brainsmith.dataflow as df
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
 # =============================================================================

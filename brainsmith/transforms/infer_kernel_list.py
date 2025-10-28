@@ -97,7 +97,7 @@ class InferKernelList(Transformation):
         Returns:
             Tuple of (transformed_model, graph_modified_flag)
         """
-        from brainsmith.core.plugins import list_kernels, get_kernel, get_transform_for_kernel_class
+        from brainsmith.registry import list_kernels, get_kernel, get_kernel_infer
         from brainsmith.dataflow import KernelOp
 
         graph_modified = False
@@ -137,13 +137,16 @@ class InferKernelList(Transformation):
                 else:
                     # Legacy style: lookup registered transform via metadata
                     logger.info(f"Inferring {kernel_name} (legacy) via metadata lookup")
-                    transform_cls = get_transform_for_kernel_class(kernel_cls)
 
-                    if transform_cls is None:
+                    # Use attached registry name (fallback to __name__ for non-registered classes)
+                    registry_name = getattr(kernel_cls, '__registry_name__', kernel_cls.__name__)
+
+                    try:
+                        transform_cls = get_kernel_infer(registry_name)
+                    except KeyError:
                         logger.warning(
                             f"No inference transform found for {kernel_name}. "
-                            f"Ensure the transform is registered with kernel_inference=True "
-                            f"and kernel='{kernel_name}' metadata."
+                            f"Ensure the kernel is registered with an infer_transform attribute."
                         )
                         continue
 

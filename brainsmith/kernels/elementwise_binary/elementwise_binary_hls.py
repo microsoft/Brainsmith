@@ -29,12 +29,12 @@ from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
 from brainsmith.kernels.elementwise_binary.elementwise_binary import ElementwiseBinaryOp
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="ElementwiseBinaryOpHLS",
-    kernel="ElementwiseBinaryOp",
+    target_kernel="brainsmith:ElementwiseBinaryOp",
     language="hls",
     author="Migrated from AMD FINN by Thomas Keller"
 )
@@ -278,6 +278,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         ret["RhsType"] = rhs_hls_str
         ret["OutType"] = out_hls_str
         ret["LhsSlice"] = f"Slice<{lhs_hls_str}>"
+        ret["RhsSlice"] = f"Slice<{rhs_hls_str}>"
         ret["OutSlice"] = f"Slice<{out_hls_str}>"
         return ret
 
@@ -543,34 +544,80 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         )
 
     def docompute(self):
-        """Generate main computation logic with broadcasting support."""
+        """Generate main computation with broadcasting support.
+
+        Orchestrates code generation for:
+        1. Header and output buffer declaration
+        2. Input buffer declarations for broadcasting
+        3. Nested loops with stream I/O and PE-parallel operations
+
+        Generated code is assigned to self.code_gen_dict["$DOCOMPUTE$"].
+        """
+        # Get template parameters and configuration
         tmpl_args = self.get_template_param_values()
         op_str = self.cpp_op
-
-        # Get pattern and determine which inputs are streaming
-        input_pattern = self.get_nodeattr("input_pattern")
         lhs_is_streaming = self._needs_streaming_interface("lhs")
         rhs_is_streaming = self._needs_streaming_interface("rhs")
 
-        # Get PE and output shape
+        # Get shape information
         lhs_iface = self.design_point.inputs["lhs"]
         pe = lhs_iface.stream_shape[-1]
         output_shape = self.design_point.outputs["output"].tensor_shape
-
-        # Generate loop structure over output shape
         ndim = len(output_shape) - 1  # Exclude PE dimension
         loop_counters = tuple(f"i{d}" for d in range(ndim))
 
-        # Build code generation list
+        # Generate each section
+        code = []
+        code.extend(self._generate_header(tmpl_args))
+        code.extend(self._generate_buffer_declarations(pe, lhs_is_streaming, rhs_is_streaming))
+        code.extend(self._generate_loop_headers(output_shape, ndim))
+        code.extend(self._generate_lhs_stream_read(tmpl_args, loop_counters, ndim, lhs_is_streaming))
+        code.extend(self._generate_rhs_stream_read(tmpl_args, loop_counters, ndim, rhs_is_streaming))
+        code.extend(self._generate_pe_operations(op_str, loop_counters, ndim))
+        code.extend(self._generate_loop_closings(ndim))
+
+        # Assign to template placeholder
+        self.code_gen_dict["$DOCOMPUTE$"] = code
+
+    def _generate_header(self, tmpl_args: dict) -> list[str]:
+        """Generate computation header and output buffer declaration.
+
+        Args:
+            tmpl_args: Template parameter values from get_template_param_values()
+
+        Returns:
+            List of C++ code lines for header section
+        """
         code = []
 
         # Header comment
-        code.append(f"// Elementwise binary operation: {self.get_nodeattr('func')} ({input_pattern})")
+        input_pattern = self.get_nodeattr("input_pattern")
+        func = self.get_nodeattr("func")
+        code.append(f"// Elementwise binary operation: {func} ({input_pattern})")
 
         # Output buffer declaration
         code.append(f"{tmpl_args['OutType']} out[PE];")
         code.append("#pragma HLS ARRAY_PARTITION variable=out complete dim=1")
         code.append("")
+
+        return code
+
+    def _generate_buffer_declarations(self, pe: int, lhs_is_streaming: bool, rhs_is_streaming: bool) -> list[str]:
+        """Generate input buffer declarations for broadcasting.
+
+        Declares LHS and RHS buffers with appropriate shapes based on
+        broadcast pattern. Static inputs use empty declarations.
+
+        Args:
+            pe: Parallelism factor
+            lhs_is_streaming: Whether LHS input is streaming
+            rhs_is_streaming: Whether RHS input is streaming
+
+        Returns:
+            List of C++ code lines for buffer declarations
+        """
+        code = []
+        has_buffers = False
 
         # LHS buffer declaration (if streaming with broadcasting)
         if lhs_is_streaming:
@@ -578,6 +625,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             if lhs_buf_decl:  # Only if broadcasting requires buffer
                 code.append(lhs_buf_decl)
                 code.append(lhs_pragma)
+                has_buffers = True
 
         # RHS buffer declaration (if streaming with broadcasting)
         if rhs_is_streaming:
@@ -585,9 +633,24 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             if rhs_buf_decl:  # Only if broadcasting requires buffer
                 code.append(rhs_buf_decl)
                 code.append(rhs_pragma)
+                has_buffers = True
 
-        if lhs_buf_decl or rhs_buf_decl:
+        if has_buffers:
             code.append("")  # Blank line after buffer declarations
+
+        return code
+
+    def _generate_loop_headers(self, output_shape: tuple, ndim: int) -> list[str]:
+        """Generate nested loop opening statements and pipeline pragma.
+
+        Args:
+            output_shape: Output tensor shape (excluding PE dimension)
+            ndim: Number of dimensions to loop over
+
+        Returns:
+            List of C++ for loop headers with pipeline pragma
+        """
+        code = []
 
         # Generate loop nest over output shape dimensions
         for d, size in enumerate(output_shape[:-1]):  # Exclude last (PE) dimension
@@ -598,71 +661,113 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         indent = "    " * ndim
         code.append(f"{indent}#pragma HLS pipeline II=1 style=flp")
 
-        # Conditional LHS stream read
-        if lhs_is_streaming:
-            lhs_read_cond = self._get_read_condition("lhs", loop_counters)
-            lhs_index = self._get_indexing_expression("lhs", loop_counters, "pe")
+        return code
 
-            code.append(f"{indent}// Read LHS from stream")
-            if lhs_read_cond != "true":
-                code.append(f"{indent}if({lhs_read_cond}) {{")
-                inner_indent = indent + "    "
-            else:
-                inner_indent = indent
+    def _generate_lhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, lhs_is_streaming: bool) -> list[str]:
+        """Generate LHS stream read with unpacking.
 
-            code.append(f"{inner_indent}const auto lhs_packed = in0_V.read();")
-            code.append(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
-            code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-            code.append(f"{inner_indent}#pragma HLS unroll")
-            code.append(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
-            code.append(f"{inner_indent}}}")
+        Args:
+            tmpl_args: Template parameter values
+            loop_counters: Loop variable names
+            ndim: Number of dimensions
+            lhs_is_streaming: Whether LHS is streaming
 
-            if lhs_read_cond != "true":
-                code.append(f"{indent}}}")
+        Returns:
+            List of C++ code lines for LHS read
+        """
+        if not lhs_is_streaming:
+            return []
 
-        # Conditional RHS stream read
-        if rhs_is_streaming:
-            rhs_read_cond = self._get_read_condition("rhs", loop_counters)
-            rhs_index = self._get_indexing_expression("rhs", loop_counters, "pe")
+        code = []
+        indent = "    " * ndim
 
-            code.append(f"{indent}// Read RHS from stream")
-            if rhs_read_cond != "true":
-                code.append(f"{indent}if({rhs_read_cond}) {{")
-                inner_indent = indent + "    "
-            else:
-                inner_indent = indent
+        lhs_read_cond = self._get_read_condition("lhs", loop_counters)
+        lhs_index = self._get_indexing_expression("lhs", loop_counters, "pe")
 
-            code.append(f"{inner_indent}const auto rhs_packed = in1_V.read();")
-            code.append(f"{inner_indent}const auto rhs_slice = {tmpl_args['LhsSlice']}(rhs_packed);")  # Note: uses LhsSlice type
-            code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-            code.append(f"{inner_indent}#pragma HLS unroll")
-            code.append(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
-            code.append(f"{inner_indent}}}")
+        code.append(f"{indent}// Read LHS from stream")
+        if lhs_read_cond != "true":
+            code.append(f"{indent}if({lhs_read_cond}) {{")
+            inner_indent = indent + "    "
+        else:
+            inner_indent = indent
 
-            if rhs_read_cond != "true":
-                code.append(f"{indent}}}")
+        code.append(f"{inner_indent}const auto lhs_packed = in0_V.read();")
+        code.append(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
+        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        code.append(f"{inner_indent}#pragma HLS unroll")
+        code.append(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
+        code.append(f"{inner_indent}}}")
+
+        if lhs_read_cond != "true":
+            code.append(f"{indent}}}")
+
+        return code
+
+    def _generate_rhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, rhs_is_streaming: bool) -> list[str]:
+        """Generate RHS stream read with broadcast-aware conditional.
+
+        Args:
+            tmpl_args: Template parameter values
+            loop_counters: Loop variable names
+            ndim: Number of dimensions
+            rhs_is_streaming: Whether RHS is streaming
+
+        Returns:
+            List of C++ code lines for RHS read
+        """
+        if not rhs_is_streaming:
+            return []
+
+        code = []
+        indent = "    " * ndim
+
+        rhs_read_cond = self._get_read_condition("rhs", loop_counters)
+        rhs_index = self._get_indexing_expression("rhs", loop_counters, "pe")
+
+        code.append(f"{indent}// Read RHS from stream")
+        if rhs_read_cond != "true":
+            code.append(f"{indent}if({rhs_read_cond}) {{")
+            inner_indent = indent + "    "
+        else:
+            inner_indent = indent
+
+        code.append(f"{inner_indent}const auto rhs_packed = in1_V.read();")
+        code.append(f"{inner_indent}const auto rhs_slice = {tmpl_args['RhsSlice']}(rhs_packed);")
+        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        code.append(f"{inner_indent}#pragma HLS unroll")
+        code.append(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
+        code.append(f"{inner_indent}}}")
+
+        if rhs_read_cond != "true":
+            code.append(f"{indent}}}")
+
+        return code
+
+    def _generate_pe_operations(self, op_str: str, loop_counters: tuple, ndim: int) -> list[str]:
+        """Generate PE-parallel computation and output write.
+
+        Args:
+            op_str: C++ operation template string
+            loop_counters: Loop variable names
+            ndim: Number of dimensions
+
+        Returns:
+            List of C++ code lines for PE operations
+        """
+        code = []
+        indent = "    " * ndim
 
         # PE-parallel operations
         code.append(f"{indent}// PE-parallel operations")
         code.append(f"{indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
         code.append(f"{indent}#pragma HLS unroll")
 
-        # Get values from buffers or direct stream access
-        if lhs_is_streaming:
-            lhs_index_expr = self._get_indexing_expression("lhs", loop_counters, "pe")
-            code.append(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
-        else:
-            # Static input from params.hpp
-            lhs_index_expr = self._get_indexing_expression("lhs", loop_counters, "pe")
-            code.append(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
+        # Get values from buffers (streaming) or params.hpp (static)
+        lhs_index_expr = self._get_indexing_expression("lhs", loop_counters, "pe")
+        code.append(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
 
-        if rhs_is_streaming:
-            rhs_index_expr = self._get_indexing_expression("rhs", loop_counters, "pe")
-            code.append(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
-        else:
-            # Static input from params.hpp
-            rhs_index_expr = self._get_indexing_expression("rhs", loop_counters, "pe")
-            code.append(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
+        rhs_index_expr = self._get_indexing_expression("rhs", loop_counters, "pe")
+        code.append(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
 
         code.append(f"{indent}    out[pe] = {op_str.format('lhs_val', 'rhs_val')};")
         code.append(f"{indent}}}")
@@ -671,12 +776,22 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         code.append(f"{indent}// Write output")
         code.append(f"{indent}out0_V.write(flatten(out));")
 
-        # Close loop nest
+        return code
+
+    def _generate_loop_closings(self, ndim: int) -> list[str]:
+        """Generate nested loop closing braces.
+
+        Args:
+            ndim: Number of dimensions
+
+        Returns:
+            List of closing brace lines
+        """
+        code = []
         for d in range(ndim - 1, -1, -1):
             indent = "    " * d
             code.append(f"{indent}}}")
-
-        self.code_gen_dict["$DOCOMPUTE$"] = code
+        return code
 
     def dataoutstrm(self):
         """Write output stream to numpy file for C++ simulation."""

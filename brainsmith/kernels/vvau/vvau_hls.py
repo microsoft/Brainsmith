@@ -24,13 +24,13 @@ from finn.util.data_packing import (
 import textwrap
 
 from brainsmith.kernels.vvau.vvau import VectorVectorActivation
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="VectorVectorActivationHLS",
-    kernel="VectorVectorActivation",
-    style="hls"
+    target_kernel="brainsmith:VectorVectorActivation",
+    language="hls"
 )
 class VectorVectorActivation_hls(VectorVectorActivation, HLSBackend):
     """HLS backend for VectorVectorActivation (inherits schema from VectorVectorActivation).

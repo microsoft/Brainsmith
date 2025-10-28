@@ -16,13 +16,13 @@ from finn.util.basic import is_versal
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 
 from brainsmith.kernels.vvau.vvau import VectorVectorActivation
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="VectorVectorActivationRTL",
-    kernel="VectorVectorActivation",
-    style="rtl",
+    target_kernel="brainsmith:VectorVectorActivation",
+    language="rtl",
     description="RTL implementation of VectorVectorActivation using DSP58-based MVU",
     author="Microsoft Corporation"
 )

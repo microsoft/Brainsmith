@@ -13,16 +13,13 @@ throughout the dataflow region.
 import logging
 from typing import Any
 
-from brainsmith.core.plugins import step, get_transform
+from brainsmith.registry import step
+from brainsmith.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
 
 logger = logging.getLogger(__name__)
 
 
-@step(
-    name="normalize_dataflow_layouts",
-    category="preprocessing",
-    description="Convert all NCHW tensors to NHWC (channel-last) for dataflow acceleration"
-)
+@step(name="normalize_dataflow_layouts")
 def normalize_dataflow_layouts_step(model: Any, cfg: Any) -> Any:
     """
     Normalize all tensor layouts to NHWC (channel-last).
@@ -50,10 +47,7 @@ def normalize_dataflow_layouts_step(model: Any, cfg: Any) -> Any:
     """
     logger.info("Normalizing dataflow layouts to NHWC (channel-last)")
 
-    # Get the transformation from the plugin registry
-    NormalizeDataflowLayouts = get_transform('NormalizeDataflowLayouts')
-
-    # Apply the transformation
+    # Apply the transformation (transforms are primitives, use direct import)
     model = model.transform(NormalizeDataflowLayouts())
 
     logger.info("Layout normalization complete")

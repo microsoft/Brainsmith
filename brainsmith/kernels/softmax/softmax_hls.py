@@ -28,12 +28,12 @@ from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
 from brainsmith.kernels.softmax.softmax import Softmax
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="SoftmaxHLS",
-    kernel="Softmax",
+    target_kernel="brainsmith:Softmax",
     language="hls",
     description="HLS backend for Softmax kernel using Dataflow Modeling",
     author="Thomas Keller",

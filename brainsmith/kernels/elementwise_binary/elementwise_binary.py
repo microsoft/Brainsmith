@@ -36,7 +36,8 @@ from brainsmith.dataflow.spec_helpers import (
     add_datatype, sub_datatype, mul_datatype, smallest_datatype_for_range
 )
 import brainsmith.dataflow as df
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
+from .operations import BinaryOperations
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def _elementwise_binary_output_datatype():
     """Polymorphic datatype resolver for ElementwiseBinaryOp.
 
     Dispatches to appropriate builder based on 'func' nodeattr.
-    Supports all 15+ binary operations with operation-specific datatype rules.
+    Supports all 17 binary operations with operation-specific datatype rules.
 
     Returns:
         Callable resolver function with unified signature
@@ -230,21 +231,10 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
 
     # STRUCTURAL (fixed at inference)
     kernel_params={
-        # Operation type: matches ONNX op_type
+        # Operation type: matches ONNX op_type (from operations registry)
         "func": (
             "s", True, "Add",
-            {
-                # Arithmetic
-                "Add", "Sub", "Mul", "Div",
-                # Logical
-                "And", "Or", "Xor",
-                # Comparison
-                "Equal", "Less", "LessOrEqual", "Greater", "GreaterOrEqual",
-                # Bitwise
-                "BitwiseAnd", "BitwiseOr", "BitwiseXor",
-                # BitShift (direction specified separately)
-                "BitShiftLeft", "BitShiftRight",
-            }
+            BinaryOperations.all_operation_names()
         ),
         # Input pattern: determines which inputs are streaming
         "input_pattern": (
@@ -296,7 +286,7 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
 class ElementwiseBinaryOp(KernelOp):
     """Hardware kernel for elementwise binary operations.
 
-    Implements a polymorphic kernel supporting 15+ binary operations:
+    Implements a polymorphic kernel supporting 17 binary operations:
     - Arithmetic: Add, Sub, Mul, Div
     - Logical: And, Or, Xor
     - Comparison: Equal, Less, LessOrEqual, Greater, GreaterOrEqual
@@ -469,32 +459,9 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             NumPy ufunc for the operation
         """
-        op_map = {
-            # Arithmetic
-            "Add": np.add,
-            "Sub": np.subtract,
-            "Mul": np.multiply,
-            "Div": np.divide,
-            # Logical
-            "And": np.logical_and,
-            "Or": np.logical_or,
-            "Xor": np.logical_xor,
-            # Comparison
-            "Equal": np.equal,
-            "Less": np.less,
-            "LessOrEqual": np.less_equal,
-            "Greater": np.greater,
-            "GreaterOrEqual": np.greater_equal,
-            # Bitwise
-            "BitwiseAnd": np.bitwise_and,
-            "BitwiseOr": np.bitwise_or,
-            "BitwiseXor": np.bitwise_xor,
-            # BitShift
-            "BitShiftLeft": np.left_shift,
-            "BitShiftRight": np.right_shift,
-        }
+        from .operations import BinaryOperations
         func = self.get_nodeattr("func")
-        return op_map[func]
+        return BinaryOperations.get_npy_op(func)
 
     @property
     def cpp_op(self):
@@ -506,32 +473,9 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             C++ expression template string
         """
-        op_map = {
-            # Arithmetic
-            "Add": "({0} + {1})",
-            "Sub": "({0} - {1})",
-            "Mul": "({0} * {1})",
-            "Div": "({0} / {1})",
-            # Logical
-            "And": "({0} && {1})",
-            "Or": "({0} || {1})",
-            "Xor": "(bool({0}) != bool({1}))",
-            # Comparison
-            "Equal": "({0} == {1})",
-            "Less": "({0} < {1})",
-            "LessOrEqual": "({0} <= {1})",
-            "Greater": "({0} > {1})",
-            "GreaterOrEqual": "({0} >= {1})",
-            # Bitwise
-            "BitwiseAnd": "({0} & {1})",
-            "BitwiseOr": "({0} | {1})",
-            "BitwiseXor": "({0} ^ {1})",
-            # BitShift
-            "BitShiftLeft": "({0} << {1})",
-            "BitShiftRight": "({0} >> {1})",
-        }
+        from .operations import BinaryOperations
         func = self.get_nodeattr("func")
-        return op_map[func]
+        return BinaryOperations.get_cpp_template(func)
 
     # ================================================================
     # Configuration Validation (Phase 3c)
@@ -565,8 +509,8 @@ class ElementwiseBinaryOp(KernelOp):
         # Validate operation support
         self._validate_operation_support()
 
-        # Validate datatype compatibility
-        self._validate_datatype_compatibility()
+        # Note: Datatype compatibility is enforced by schema's DatatypeInteger
+        # constraint, so no runtime validation needed here.
 
         # Check edge cases (warnings, not errors)
         self._handle_zero_division(model)
@@ -667,27 +611,6 @@ class ElementwiseBinaryOp(KernelOp):
                 f"{self.onnx_node.name}: Unsupported operation '{operation}'.\n"
                 f"  Supported operations: {', '.join(supported_list)}\n"
                 f"  Note: This check is redundant with schema validation."
-            )
-
-    def _validate_datatype_compatibility(self):
-        """Validate input/output datatypes are compatible.
-
-        Raises:
-            ValueError: If non-integer datatypes used
-        """
-        if not hasattr(self, 'design_point') or self.design_point is None:
-            # Skip if design_point not initialized yet
-            return
-
-        lhs_dt = self.design_point.inputs["lhs"].datatype
-        rhs_dt = self.design_point.inputs["rhs"].datatype
-
-        if not (lhs_dt.is_integer() and rhs_dt.is_integer()):
-            raise ValueError(
-                f"{self.onnx_node.name}: Only integer datatypes supported.\n"
-                f"  LHS datatype: {lhs_dt}\n"
-                f"  RHS datatype: {rhs_dt}\n"
-                f"  For floating-point operations, apply quantization first."
             )
 
     def _handle_zero_division(self, model=None):

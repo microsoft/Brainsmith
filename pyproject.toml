@@ -66,6 +66,20 @@ known-first-party = ["brainsmith"]
 minversion = "6.0"
 addopts = ["-ra"]  # Show all test outcomes
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "parity: marks tests comparing manual vs auto HWCustomOp implementations",
+    "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS",
+    "hls: marks tests requiring HLS code generation",
+    "rtl: marks tests requiring RTL synthesis",
+    "rtlsim: marks tests requiring RTL simulation",
+    "fast: marks tests that run quickly",
+    "finn_build: marks tests that perform FINN builds",
+    "rtl_sim: marks tests that require RTL simulation",
+    "bitfile: marks tests that generate bitfiles",
+    "hardware: marks tests that require actual hardware",
+]
 
 # Coverage configuration - optional for alpha (pre-release) stage
 [tool.coverage.run]

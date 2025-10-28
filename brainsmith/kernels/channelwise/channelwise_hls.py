@@ -36,12 +36,12 @@ from qonnx.core.datatype import DataType
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
 from brainsmith.kernels.channelwise.channelwise import ChannelwiseOp
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="ChannelwiseOpHLS",
-    kernel="ChannelwiseOp",
+    target_kernel="brainsmith:ChannelwiseOp",
     language="hls",
     author="FINN Team"
 )

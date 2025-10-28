@@ -28,12 +28,12 @@ from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 
 @backend(
     name="LayerNormHLS",
-    kernel="LayerNorm",
+    target_kernel="brainsmith:LayerNorm",
     language="hls",
     description="HLS backend for LayerNorm kernel using Dataflow Modeling",
     author="Shane Fleming",

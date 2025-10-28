@@ -15,11 +15,11 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from brainsmith.kernels.shuffle.legacy_shuffle import LegacyShuffle
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
 @backend(
     name="LegacyShuffleHLS",
-    kernel="LegacyShuffle",
+    target_kernel="brainsmith:LegacyShuffle",
     language="hls",
     description="HLS implementation of Shuffle - LEGACY",
     author="Shane Fleming"

@@ -16,7 +16,7 @@ from brainsmith.kernels.channelwise.channelwise import (
     CHANNELWISE_SCHEMA,
 )
 from brainsmith.transforms.infer_kernel_list import InferKernelList
-from brainsmith.core.plugins import get_kernel
+from brainsmith.registry import get_kernel
 from brainsmith.dataflow import KernelOp
 
 # Import global test helpers

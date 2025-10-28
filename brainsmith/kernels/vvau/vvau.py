@@ -24,7 +24,7 @@ from qonnx.util.basic import (
 import qonnx.core.data_layout as DataLayout
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 import brainsmith.dataflow as df
 
 

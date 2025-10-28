@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tupl
 from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-from brainsmith.utils import divisors
+from brainsmith._internal.math import divisors
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .types import VALUE_OPTIMIZED, ShapeHierarchy

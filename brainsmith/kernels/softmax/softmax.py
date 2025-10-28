@@ -11,7 +11,7 @@ from qonnx.util.basic import get_by_name
 from brainsmith.dataflow import KernelOp
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
 # Module-level unified KernelSchema (structure + transformation)

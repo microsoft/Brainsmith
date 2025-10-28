@@ -33,8 +33,15 @@
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 
 from .addstreams import AddStreams
+from brainsmith.registry import backend
 
 
+@backend(
+    name="AddStreamsHLS",
+    target_kernel="brainsmith:AddStreams",
+    language="hls",
+    author="AMD FINN Team"
+)
 class AddStreams_hls(AddStreams, HLSBackend):
     """Class that corresponds to finn-hlslib AddStreams_Batch function."""
 

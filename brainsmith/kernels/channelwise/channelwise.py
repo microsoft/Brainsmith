@@ -24,7 +24,7 @@ from brainsmith.dataflow.inference_helpers import (
     find_static_dynamic_pair,
     expand_scalar_to_channels,
 )
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
 def _channelwise_output_datatype():

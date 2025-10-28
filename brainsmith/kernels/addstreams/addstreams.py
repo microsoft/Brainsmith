@@ -23,7 +23,7 @@ from typing import Optional
 from brainsmith.dataflow import KernelOp, FULL_SHAPE
 import brainsmith.dataflow as df
 from brainsmith.dataflow.spec_helpers import add_datatype
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 from qonnx.core.modelwrapper import ModelWrapper
 
 
