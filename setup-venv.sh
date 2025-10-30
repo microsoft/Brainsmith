@@ -222,22 +222,23 @@ else
     exit 1
 fi
 
-# Step 5: Initialize config if needed
+# Step 4.5: Initialize default project config if needed
 if [ ! -f ".brainsmith/config.yaml" ]; then
     echo ""
-    echo "No config found at .brainsmith/config.yaml, generating default"
-    poetry run brainsmith config init
+    echo -e "\033[36mInitializing default project configuration...\033[0m"
+    poetry run brainsmith project init > /dev/null 2>&1
     if [ $? -eq 0 ]; then
-        echo -e "\033[32m✓\033[0m Config initialized successfully"
+        echo -e "\033[32m✓\033[0m Default config created in .brainsmith/"
+        echo "   Edit .brainsmith/config.yaml to set your Xilinx paths"
     else
-        echo "✗ Config initialization failed"
-        exit 1
+        echo "⚠️  Could not create default config (non-fatal)"
     fi
 else
-    echo -e "\033[32m.brainsmith/config.yaml\033[0m"
+    echo ""
+    echo -e "\033[32m✓\033[0m Using existing .brainsmith/config.yaml"
 fi
 
-# Step 6: Run brainsmith setup based on skip flags
+# Step 5: Run brainsmith setup based on skip flags
 echo ""
 echo -e "\033[36mRunning brainsmith setup...\033[0m"
 
@@ -273,11 +274,26 @@ if [ $? -eq 0 ]; then
     fi
 
     echo ""
-    echo "To activate the virtual environment, run:"
-    echo "  source .venv/bin/activate"
+    echo "To use Brainsmith:"
     echo ""
-    echo "Or prefix commands with poetry:"
-    echo "  poetry run smith --help"
+    echo "  1. Configure Xilinx tools for your system (required for tests/operations)"
+    echo "     vim .brainsmith/config.yaml"
+    echo ""
+    echo "  2. Enable environment (choose one):"
+    echo ""
+    echo "     Recommended: Enable direnv for automatic environment switching"
+    echo "       brainsmith project allow-direnv"
+    echo "       cd .  # Trigger direnv to load environment"
+    echo ""
+    echo "     Alternative: Manual activation per session"
+    echo "       source .brainsmith/env.sh"
+    echo ""
+    echo "  3. Run tests or create designs"
+    echo "     pytest tests/"
+    echo "     smith model.onnx blueprint.yaml"
+    echo ""
+    echo "To create additional projects elsewhere:"
+    echo "  brainsmith project init ~/my-project"
 else
     echo ""
     echo "⚠️ Setup completed with warnings. Check the output above."

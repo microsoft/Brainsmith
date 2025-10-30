@@ -30,8 +30,7 @@ Settings are loaded from multiple sources with the following priority (highest t
 1. CLI arguments (passed to SystemConfig constructor)
 2. Environment variables (BSMITH_* prefix)
 3. Project config file (.brainsmith/config.yaml)
-4. User config file (~/.brainsmith/config.yaml)
-5. Built-in defaults (Field defaults in SystemConfig)
+4. Built-in defaults (Field defaults in SystemConfig)
 
 Path Resolution Flow
 --------------------
@@ -62,14 +61,12 @@ from brainsmith.registry.constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
-    SOURCE_USER,
     DEFAULT_SOURCE_PRIORITY,
 )
 
 
 # Private constants for config file discovery
 # These are internal implementation details - CLI tools should inline values as needed
-_USER_CONFIG_PATH = Path.home() / ".brainsmith" / "config.yaml"
 _PROJECT_CONFIG_DIR = ".brainsmith"
 _PROJECT_CONFIG_FILE = "config.yaml"
 
@@ -105,11 +102,6 @@ def _find_project_config() -> Optional[Path]:
     while current != current.parent:
         candidate = current / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
 
-        # Skip if this is the user config location (not a project config)
-        if candidate.resolve() == _USER_CONFIG_PATH.resolve():
-            current = current.parent
-            continue
-
         if candidate.exists():
             return candidate
 
@@ -120,29 +112,18 @@ def _find_project_config() -> Optional[Path]:
 
 
 class YamlSettingsSource(PydanticBaseSettingsSource):
-    """Custom settings source for YAML files with support for user and project configs."""
+    """Custom settings source for YAML files with support for project configs."""
 
     def __init__(
         self,
         settings_cls: Type[BaseSettings],
-        user_file: Optional[Path] = None,
         project_file: Optional[Path] = None
     ):
         super().__init__(settings_cls)
         self.yaml_files = []
         self.project_file_used = None  # Track which project file was actually loaded
 
-        # Load user file first (lower priority)
-        if user_file and user_file.exists():
-            # Explicit user file provided and exists
-            self.yaml_files.append(user_file)
-        elif not user_file:
-            # Check default user config location only if no explicit file provided
-            default_user_file = _USER_CONFIG_PATH
-            if default_user_file.exists():
-                self.yaml_files.append(default_user_file)
-
-        # Load project file second (higher priority - will override user config)
+        # Load project file
         if project_file and project_file.exists():
             # Explicit project file provided and exists
             self.yaml_files.append(project_file)
@@ -158,11 +139,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         self._data = self._load_and_merge_yaml_files()
 
     def _load_and_merge_yaml_files(self) -> Dict[str, Any]:
-        """Load and merge multiple YAML files with proper priority.
-
-        Files are loaded in order with later files having higher priority.
-        Since we load user config first and project config second,
-        project config will override user config values.
+        """Load and merge YAML configuration files.
 
         Raises:
             yaml.YAMLError: If any config file has syntax errors
@@ -223,8 +200,7 @@ class SystemConfig(BaseSettings):
     1. CLI arguments (passed to constructor) - HIGHEST
     2. Environment variables (BSMITH_* prefix)
     3. Project config (.brainsmith/config.yaml)
-    4. User config (~/.brainsmith/config.yaml)
-    5. Built-in defaults (Field defaults) - LOWEST
+    4. Built-in defaults (Field defaults) - LOWEST
 
     Note: We only read BSMITH_* env vars, and only export FINN_* vars
     to avoid configuration feedback loops.
@@ -244,11 +220,10 @@ class SystemConfig(BaseSettings):
     component_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
             SOURCE_PROJECT: None,  # Resolved to project_dir / "plugins"
-            SOURCE_USER: None      # Resolved to ~/.brainsmith/plugins
         },
         description=(
             "Filesystem-based component source paths. Maps source name to directory path. "
-            "Standard sources 'project' and 'user' have default paths. "
+            "'project' source defaults to project_dir/plugins. "
             "Core namespace 'brainsmith' and entry point sources (e.g., 'finn') are "
             "loaded automatically and cannot be configured here."
         )
@@ -366,13 +341,12 @@ class SystemConfig(BaseSettings):
         """
         # Extract file paths from init_settings if provided
         init_dict = init_settings()
-        user_file = init_dict.get('_user_file')
         project_file = init_dict.get('_project_file')
 
         return (
             init_settings,  # CLI args (already resolved to CWD in load_config)
             env_settings,   # Env vars (stay relative, resolved in model_post_init)
-            YamlSettingsSource(settings_cls, user_file=user_file, project_file=project_file),
+            YamlSettingsSource(settings_cls, project_file=project_file),
         )
 
     def model_post_init(self, __context: Any) -> None:
@@ -446,19 +420,16 @@ class SystemConfig(BaseSettings):
     def _resolve_component_sources(self) -> None:
         """Resolve component source paths for filesystem-based sources.
 
-        Only project, user, and custom sources are filesystem-based and configurable.
+        Only project and custom sources are filesystem-based and configurable.
         Core namespace (brainsmith) and entry points (finn) are discovered automatically.
         """
-        # Standard filesystem sources with default paths
+        # Standard filesystem source with default path
         if self.component_sources.get(SOURCE_PROJECT) is None:
             self.component_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
 
-        if self.component_sources.get(SOURCE_USER) is None:
-            self.component_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
-
         # Custom sources: resolve relative paths
-        # Standard sources (project, user) are resolved above
-        standard_sources = {SOURCE_PROJECT, SOURCE_USER}
+        # Standard source (project) is resolved above
+        standard_sources = {SOURCE_PROJECT}
         for name, path in list(self.component_sources.items()):
             if name not in standard_sources and path is not None:
                 self.component_sources[name] = self._resolve(path, self.project_dir)
@@ -596,3 +567,290 @@ class SystemConfig(BaseSettings):
         """
         from .env_export import EnvironmentExporter
         return EnvironmentExporter(self).export_to_environment(**kwargs)
+
+    # Activation Script Generation
+
+    def generate_activation_script(self, output_path: Path) -> Path:
+        """Generate idempotent bash activation script from current configuration.
+
+        The generated script:
+        - Is safe to source multiple times (idempotent)
+        - Cleans up old Xilinx/brainsmith paths before adding new ones
+        - Can be re-sourced after config changes (no deactivate needed)
+
+        This is the inverse of environment variable loading:
+        - Pydantic READS env vars to build config
+        - This method WRITES env vars from config
+
+        Args:
+            output_path: Where to write the activation script
+
+        Returns:
+            Path to generated script
+
+        Example:
+            >>> config = get_config()
+            >>> config.generate_activation_script(Path("~/.brainsmith/env.sh"))
+            >>> # User runs: source ~/.brainsmith/env.sh
+        """
+        env_dict = self.export_to_environment()
+
+        script_lines = [
+            "#!/bin/bash",
+            "# Auto-generated by brainsmith",
+            "# Source this file to set up environment:",
+            "#   source .brainsmith/env.sh",
+            "",
+            "# This script is idempotent - safe to source multiple times",
+            "",
+            self._generate_cleanup_code(),
+            "",
+            "# Export fresh environment variables",
+        ]
+
+        for key, value in sorted(env_dict.items()):
+            # Skip internal markers
+            if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
+                continue
+
+            # Skip PATH - user should activate venv separately
+            # PATH management is complex and best left to venv/direnv
+            if key == "PATH":
+                continue
+
+            # Properly escape quotes in values
+            escaped_value = str(value).replace('"', '\\"')
+            script_lines.append(f'export {key}="{escaped_value}"')
+
+        output_path = Path(output_path).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("\n".join(script_lines))
+        output_path.chmod(0o755)
+
+        return output_path
+
+    def generate_deactivation_script(self, output_path: Path) -> Path:
+        """Generate deactivation script (conda-style).
+
+        Restores original environment by clearing brainsmith-specific variables.
+
+        Args:
+            output_path: Where to write the deactivation script
+
+        Returns:
+            Path to generated script
+        """
+        env_dict = self.export_to_environment()
+
+        script_lines = [
+            "#!/bin/bash",
+            "# Auto-generated by brainsmith",
+            "# Source to deactivate brainsmith environment",
+            "",
+            "# Clear brainsmith environment variables",
+        ]
+
+        for key in sorted(env_dict.keys()):
+            if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
+                continue
+            script_lines.append(f'unset {key}')
+
+        script_lines.extend([
+            "",
+            "echo 'Brainsmith environment deactivated'",
+        ])
+
+        output_path = Path(output_path).expanduser()
+        output_path.write_text("\n".join(script_lines))
+        output_path.chmod(0o755)
+
+        return output_path
+
+    def generate_dotenv_file(self, output_path: Path) -> Path:
+        """Generate .env file for poetry-dotenv-plugin and direnv.
+
+        This is simpler than shell scripts - just KEY=VALUE pairs.
+        Compatible with:
+        - poetry-dotenv-plugin
+        - direnv (.envrc can source this)
+        - Docker (ENV file)
+
+        Args:
+            output_path: Where to write the .env file
+
+        Returns:
+            Path to generated file
+        """
+        env_dict = self.export_to_environment()
+
+        lines = [
+            "# Auto-generated by brainsmith",
+            "# Compatible with poetry-dotenv-plugin, direnv, and Docker",
+            "",
+        ]
+
+        for key, value in sorted(env_dict.items()):
+            # Skip internal markers
+            if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
+                continue
+
+            # Skip PATH - direnv's layout python handles this correctly
+            # Including PATH in .env breaks system commands
+            if key == "PATH":
+                continue
+
+            # Properly escape quotes in values
+            escaped_value = str(value).replace('"', '\\"')
+            lines.append(f'{key}="{escaped_value}"')
+
+        output_path = Path(output_path).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("\n".join(lines))
+
+        return output_path
+
+    def generate_direnv_file(self, output_path: Path) -> Path:
+        """Generate .envrc file for direnv integration.
+
+        Creates a direnv configuration that:
+        - Watches .brainsmith/config.yaml for changes
+        - Auto-regenerates environment when config changes
+        - Loads environment variables from .brainsmith/.env
+        - Activates virtualenv using direnv's layout python
+
+        User must run 'direnv allow' to trust the file.
+
+        Args:
+            output_path: Where to write the .envrc file (typically project root)
+
+        Returns:
+            Path to generated .envrc file
+
+        Example:
+            >>> config = get_config()
+            >>> config.generate_direnv_file(Path(".envrc"))
+            >>> # User runs: direnv allow
+        """
+        brainsmith_dir = output_path.parent / ".brainsmith"
+
+        envrc_content = '''#!/usr/bin/env bash
+# Auto-generated by brainsmith
+# Enable with: direnv allow
+
+# Watch config file - direnv will reload when it changes
+watch_file .brainsmith/config.yaml
+
+# Auto-regenerate environment if config is newer than .env
+if [ .brainsmith/config.yaml -nt .brainsmith/.env ]; then
+    echo "Config changed, regenerating environment..."
+    if command -v brainsmith &> /dev/null; then
+        brainsmith project init > /dev/null 2>&1 || {
+            echo -e "\033[33mFailed to regenerate. Run: brainsmith project init\033[0m"
+        }
+    else
+        echo -e "\033[33mbrainsmith command not found. Activate venv first.\033[0m"
+    fi
+fi
+
+# Activate virtualenv (use existing .venv, not create new one)
+if [ -d .venv ]; then
+    export VIRTUAL_ENV="$PWD/.venv"
+    PATH_add "$VIRTUAL_ENV/bin"
+fi
+
+# Load Brainsmith environment variables
+dotenv .brainsmith/.env
+'''
+
+        output_path = Path(output_path).expanduser()
+        output_path.write_text(envrc_content)
+        output_path.chmod(0o644)  # Readable but not executable (direnv sources it)
+
+        return output_path
+
+    def _generate_cleanup_code(self) -> str:
+        """Generate bash code to remove old Xilinx/brainsmith paths.
+
+        This ensures idempotency - old paths are removed before new ones
+        are added, preventing duplicates when re-sourcing.
+
+        Returns:
+            Bash code as string
+        """
+        return '''# Cleanup function - removes paths matching pattern from PATH-like variable
+_cleanup_path_var() {
+    local var_name=$1
+    local pattern=$2
+    # Use eval for shell-agnostic indirect variable expansion (works in bash and zsh)
+    eval "local current_value=\\${$var_name}"
+
+    # Remove matching paths, preserving order
+    local new_value=$(echo "$current_value" | tr ':' '\\n' | grep -v "$pattern" | tr '\\n' ':' | sed 's/:$//')
+
+    eval "export $var_name=\"$new_value\""
+}
+
+# Remove old Xilinx/Brainsmith paths to avoid duplicates
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    _cleanup_path_var "LD_LIBRARY_PATH" "/tools/Xilinx"
+    _cleanup_path_var "LD_LIBRARY_PATH" "brainsmith"
+fi
+
+if [ -n "${PATH:-}" ]; then
+    _cleanup_path_var "PATH" "/.brainsmith/"
+fi
+
+# Clean up the helper function
+unset -f _cleanup_path_var'''
+
+
+# CLI helper for Poe task
+def generate_activation_scripts():
+    """CLI helper for Poe task to generate activation scripts.
+
+    Called by: poetry run poe generate-activation-scripts
+    or automatically via post_install hook
+    """
+    import os
+    from brainsmith.settings import get_config, reset_config
+    from pathlib import Path
+
+    # Clear any cached config and polluted environment to ensure clean generation
+    reset_config()
+
+    # Temporarily unset LD_LIBRARY_PATH to prevent accumulation from previous runs
+    old_ld_path = os.environ.pop("LD_LIBRARY_PATH", None)
+    old_path = os.environ.pop("PATH", None)
+
+    try:
+        config = get_config()
+
+        project_dir = config.project_dir
+        brainsmith_dir = project_dir / ".brainsmith"
+        brainsmith_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate all script formats
+        config.generate_activation_script(brainsmith_dir / "env.sh")
+        config.generate_deactivation_script(brainsmith_dir / "deactivate.sh")
+        config.generate_dotenv_file(brainsmith_dir / ".env")
+
+        # Generate direnv integration file
+        config.generate_direnv_file(project_dir / ".envrc")
+    finally:
+        # Restore original environment
+        if old_ld_path:
+            os.environ["LD_LIBRARY_PATH"] = old_ld_path
+        if old_path:
+            os.environ["PATH"] = old_path
+
+    print(f"✅ Generated activation scripts in {brainsmith_dir}")
+    print(f"   - env.sh (manual activation)")
+    print(f"   - deactivate.sh (deactivation)")
+    print(f"   - .env (environment variables)")
+    print(f"   - ../.envrc (direnv integration)")
+    print()
+    print("To enable direnv (recommended):")
+    print("  direnv allow")
+    print()
+    print("Or use manual activation:")
+    print(f"  source {brainsmith_dir / 'env.sh'}")

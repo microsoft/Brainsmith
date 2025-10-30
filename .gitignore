@@ -3,6 +3,7 @@
 
 # Brainsmith specific
 .brainsmith
+.envrc
 plugins/
 examples/*/output/
 examples/*/results/

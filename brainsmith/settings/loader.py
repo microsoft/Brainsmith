@@ -54,7 +54,6 @@ def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
 
 def load_config(
     project_file: Optional[Path] = None,
-    user_file: Optional[Path] = None,
     **cli_overrides
 ) -> SystemConfig:
     """Load configuration with pydantic-settings priority resolution.
@@ -63,8 +62,7 @@ def load_config(
     1. CLI arguments (passed as kwargs) - resolve paths to CWD
     2. Environment variables (BSMITH_* prefix) - resolve paths to project_dir
     3. Project config file (.brainsmith/config.yaml) - resolve paths to project_dir
-    4. User config file (~/.brainsmith/config.yaml) - resolve paths to project_dir
-    5. Built-in defaults (from schema Field defaults)
+    4. Built-in defaults (from schema Field defaults)
 
     Path Resolution Rules:
     - Full paths: Always used as-is
@@ -73,7 +71,6 @@ def load_config(
 
     Args:
         project_file: Path to project config file (for non-standard locations)
-        user_file: Path to user config file (defaults to ~/.brainsmith/config.yaml)
         **cli_overrides: CLI argument overrides
 
     Returns:
@@ -84,8 +81,6 @@ def load_config(
 
         if project_file:
             cli_overrides['_project_file'] = project_file
-        if user_file:
-            cli_overrides['_user_file'] = user_file
 
         return SystemConfig(**cli_overrides)
 
@@ -136,6 +131,5 @@ def get_default_config() -> SystemConfig:
         # Prevent loading config files
         from pathlib import Path
         return load_config(
-            project_file=Path('/dev/null'),
-            user_file=Path('/dev/null')
+            project_file=Path('/dev/null')
         )

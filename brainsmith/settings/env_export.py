@@ -166,10 +166,15 @@ class EnvironmentExporter:
                     f"If you need ARM support, please open an issue."
                 )
 
-            ld_lib_components.append("/lib/x86_64-linux-gnu/")
+            # Add system library path (avoid duplicates)
+            libc_lib = "/lib/x86_64-linux-gnu/"
+            if libc_lib not in ld_lib_components:
+                ld_lib_components.append(libc_lib)
 
+            # Add Vivado library path (avoid duplicates)
             vivado_lib = str(self.config.vivado_path / "lib" / "lnx64.o")
-            ld_lib_components.append(vivado_lib)
+            if vivado_lib not in ld_lib_components:
+                ld_lib_components.append(vivado_lib)
 
         if self.config.vitis_path:
             vitis_fpo_lib = str(self.config.vitis_path / "lnx64" / "tools" / "fpo_v7_1")

@@ -31,7 +31,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.core.onnx_exec import execute_onnx
 
-from brainsmith.transforms.insert_duplicate_streams import InsertDuplicateStreams
+from brainsmith.primitives.transforms.insert_duplicate_streams import InsertDuplicateStreams
 
 
 # ================================================================

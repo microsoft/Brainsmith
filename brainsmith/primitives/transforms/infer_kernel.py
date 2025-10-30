@@ -12,7 +12,7 @@ hardware kernel from ONNX nodes. It delegates to the kernel's declarative
 inference methods (can_infer_from, infer_from).
 
 Example usage:
-    from brainsmith.transforms.infer_kernel import InferKernel
+    from brainsmith.primitives.transforms.infer_kernel import InferKernel
     from brainsmith.kernels.addstreams import AddStreams
 
     # Infer a specific kernel

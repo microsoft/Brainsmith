@@ -42,13 +42,51 @@ pytest tests/pipeline/ -v -m golden
 ```
 
 ### Run Slow Tests (HLS/RTL Simulation)
-```bash
-# Run with cppsim (requires VITIS_PATH)
-pytest tests/pipeline/ -v --run-slow -m cppsim
 
-# Run all slow tests
+Slow tests require environment variables (LD_LIBRARY_PATH, XILINX_VIVADO, etc.) to be set before Python starts.
+
+#### Recommended: Use direnv (Automatic)
+
+```bash
+# Setup once
+brainsmith project allow-direnv
+
+# Daily use - automatic environment loading
+cd ~/work/project     # direnv auto-loads on cd
 pytest tests/pipeline/ -v --run-slow
+pytest tests/pipeline/ -v -m rtlsim
+
+# Config changes - automatic
+vim .brainsmith/config.yaml
+cd .  # Auto-regenerates and reloads
 ```
+
+**How it works:**
+- direnv detects when you cd into the project directory
+- Automatically activates virtualenv and loads environment variables
+- Uses `watch_file` to detect config changes and auto-regenerate
+- Automatically cleans up when you cd out
+
+#### Alternative: Manual Activation
+
+```bash
+# Activate environment (once per session)
+source .brainsmith/env.sh
+
+# Run tests
+pytest tests/pipeline/ -v --run-slow
+pytest tests/pipeline/ -v -m rtlsim
+
+# Config changes - manual regeneration
+vim .brainsmith/config.yaml
+brainsmith project init  # Regenerate scripts (won't overwrite config.yaml)
+source .brainsmith/env.sh     # Reload environment
+```
+
+**How it works:**
+- Shell script sets all environment variables
+- Must be re-sourced after config changes
+- Use `source .brainsmith/deactivate.sh` to clean up when done
 
 ### Run Phase-Specific Tests
 ```bash
@@ -346,7 +384,7 @@ class TestMyKernelIntegration(IntegratedPipelineTest):
 
     def get_kernel_inference_transform(self):
         """Return transform that creates HW node."""
-        from brainsmith.transforms.infer_kernel_list import InferKernelList
+        from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
         return InferKernelList
 
     def get_kernel_class(self):

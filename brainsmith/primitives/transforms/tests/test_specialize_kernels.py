@@ -12,8 +12,8 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 
 from finn.util.basic import getHWCustomOp
-from brainsmith.transforms.specialize_kernels import SpecializeKernels
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
 
 def make_channelwise_model():

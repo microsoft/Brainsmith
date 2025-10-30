@@ -138,7 +138,7 @@ docs/
 │   ├── core.md                  # ::: brainsmith.core
 │   ├── registry.md              # ::: brainsmith.registry
 │   ├── kernels.md               # ::: brainsmith.kernels
-│   └── transforms.md            # ::: brainsmith.transforms
+│   └── transforms.md            # ::: brainsmith.primitives.transforms
 ├── tutorials/
 │   ├── first-accelerator.md     # End-to-end example
 │   ├── custom-kernel.md         # Adding new kernel

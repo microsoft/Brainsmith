@@ -58,7 +58,7 @@ from qonnx.transformation.base import Transformation
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from finn.transformation.fpgadataflow.convert_to_hw_layers import InferElementwiseBinaryOperation
 
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
 # Import parity test framework
 from tests.parity.base_parity_test import ParityTestBase

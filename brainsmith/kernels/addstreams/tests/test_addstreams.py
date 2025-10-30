@@ -13,7 +13,7 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
 from brainsmith.kernels.addstreams import AddStreams, ADDSTREAMS_SCHEMA
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
 
 def test_addstreams_schema():

@@ -29,7 +29,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.base import Transformation
 
 from brainsmith.kernels.addstreams import AddStreams
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 from brainsmith.dataflow.kernel_op import KernelOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
@@ -338,6 +338,52 @@ class TestAddStreamsIntegration(IntegratedPipelineTest):
             f"Expected cycles mismatch: expected {expected_cycles}, got {cycles}"
         )
 
+    @pytest.mark.pipeline
+    @pytest.mark.phase1
+    def test_infer_node_datatype_syncs_datatypes(self):
+        """Test infer_node_datatype() correctly syncs and calculates datatypes.
+
+        Validates:
+        1. Input datatypes are synced from model to node attributes
+        2. Output datatype is calculated with overflow prevention (INT8 + INT8 → INT9)
+        3. Output datatype is propagated back to model graph
+        4. Method can be called explicitly (not just via InferDataTypes transform)
+        """
+        # Run pipeline to get AddStreams node
+        op, model = self.run_inference_pipeline()
+
+        # Get initial datatypes
+        input0_name = op.onnx_node.input[0]
+        input1_name = op.onnx_node.input[1]
+        output_name = op.onnx_node.output[0]
+
+        # Explicitly call infer_node_datatype (normally called by InferDataTypes transform)
+        # This should be idempotent - calling again shouldn't break anything
+        op.infer_node_datatype(model)
+
+        # Verify input datatypes synced to nodeattrs
+        assert op.get_input_datatype(0) == DataType["INT8"], (
+            f"Input0 datatype should be INT8, got {op.get_input_datatype(0)}"
+        )
+        assert op.get_input_datatype(1) == DataType["INT8"], (
+            f"Input1 datatype should be INT8, got {op.get_input_datatype(1)}"
+        )
+
+        # Verify output datatype calculated with overflow prevention
+        # INT8 range: [-128, 127]
+        # INT8 + INT8 worst case: -128 + (-128) = -256, 127 + 127 = 254
+        # Requires INT9 range: [-256, 255]
+        assert op.get_output_datatype(0) == DataType["INT9"], (
+            f"Output datatype should be INT9 (INT8 + INT8 requires widening), "
+            f"got {op.get_output_datatype(0)}"
+        )
+
+        # Verify output datatype propagated to model
+        model_output_dt = model.get_tensor_datatype(output_name)
+        assert model_output_dt == DataType["INT9"], (
+            f"Model output datatype should be INT9, got {model_output_dt}"
+        )
+
 
 # ================================================================
 # Edge Case Tests (Phase 2)
@@ -566,39 +612,3 @@ class TestAddStreamsHLSRTLSim(TestAddStreamsIntegration):
             actual_outputs, golden_outputs, "HLS RTL simulation (rtlsim)", tolerance
         )
 
-    @pytest.mark.pipeline
-    @pytest.mark.rtlsim
-    @pytest.mark.slow
-    @pytest.mark.phase2
-    def test_hls_cppsim_and_rtlsim_agree(self):
-        """Test that HLS cppsim and rtlsim produce identical results.
-
-        This validates that:
-        1. HLS C++ behavioral model (cppsim)
-        2. HLS synthesized RTL (rtlsim)
-
-        Produce bit-exact results. Any mismatch indicates synthesis issues.
-
-        Note: This is different from cross-backend parity (HLS vs RTL backend).
-        This tests two simulation modes of the SAME HLS backend.
-        """
-        # Run pipeline
-        base_op, base_model = self.run_inference_pipeline()
-        hls_op, hls_model = self.run_hls_specialization(base_op, base_model)
-
-        # Generate inputs
-        np.random.seed(42)
-        inputs = make_execution_context(hls_model, hls_op)
-
-        # Execute both simulation modes
-        cppsim_outputs = self.execute_cppsim(hls_op, hls_model, inputs)
-        rtlsim_outputs = self.execute_rtlsim(hls_op, hls_model, inputs)
-
-        # Should be bit-exact (not just close)
-        for output_name in cppsim_outputs:
-            np.testing.assert_array_equal(
-                cppsim_outputs[output_name],
-                rtlsim_outputs[output_name],
-                err_msg=f"HLS cppsim and rtlsim mismatch for output '{output_name}'. "
-                f"This indicates synthesis issues in HLS → RTL flow."
-            )

@@ -36,7 +36,6 @@ from .constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
-    SOURCE_USER,
     DEFAULT_SOURCE_PRIORITY,
 )
 from ._manifest import (

@@ -12,7 +12,7 @@ new KernelOp kernels and legacy HWCustomOp kernels with their inference
 transforms.
 
 Example usage:
-    from brainsmith.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
     from brainsmith.kernels.addstreams import AddStreams
     from brainsmith.kernels.softmax import Softmax
     from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU

@@ -12,7 +12,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
 
 def make_mixed_model():

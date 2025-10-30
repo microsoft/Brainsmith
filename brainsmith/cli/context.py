@@ -29,11 +29,6 @@ class ApplicationContext:
     # Loaded configuration
     config: "SystemConfig | None" = None
 
-    # User config path (~/.brainsmith/config.yaml)
-    user_config_path: Path = field(
-        default_factory=lambda: Path.home() / ".brainsmith" / "config.yaml"
-    )
-
     @classmethod
     def from_cli_args(
         cls,
@@ -76,11 +71,10 @@ class ApplicationContext:
     def load_configuration(self) -> None:
         from brainsmith.settings import load_config
 
-        # Load with user config support and CLI overrides
+        # Load config with CLI overrides
         # Pydantic handles validation and priority (CLI overrides > env > file > defaults)
         self.config = load_config(
             project_file=self.config_file,
-            user_file=self.user_config_path if self.user_config_path.exists() else None,
             **self.overrides  # Pass overrides directly to Pydantic
         )
 

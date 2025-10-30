@@ -29,7 +29,7 @@ from finn.transformation.fpgadataflow.convert_to_hw_layers import (
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.util.basic import getCustomOp, getHWCustomOp
 
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 from tests.parity.base_parity_test import ParityTestBase
 from tests.parity.hls_codegen_parity import HLSCodegenParityMixin
 

@@ -14,7 +14,7 @@ import logging
 from typing import Any
 
 from brainsmith.registry import step
-from brainsmith.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
+from brainsmith.primitives.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
 
 logger = logging.getLogger(__name__)
 

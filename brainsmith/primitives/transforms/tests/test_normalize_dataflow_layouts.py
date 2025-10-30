@@ -13,7 +13,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
 
-from brainsmith.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
+from brainsmith.primitives.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
 
 
 def make_nchw_model():

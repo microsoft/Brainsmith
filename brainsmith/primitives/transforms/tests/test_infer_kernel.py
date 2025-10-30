@@ -13,7 +13,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
 
-from brainsmith.transforms.infer_kernel import InferKernel
+from brainsmith.primitives.transforms.infer_kernel import InferKernel
 
 
 def make_simple_add_model():

@@ -67,7 +67,7 @@ class TestThresholdingInference:
         not during can_infer_from(). This test verifies the full transformation
         fails gracefully via InferKernel's try-validate pattern.
         """
-        from brainsmith.transforms.infer_kernel import InferKernel
+        from brainsmith.primitives.transforms.infer_kernel import InferKernel
 
         # Create MultiThreshold model with float output (already a ModelWrapper)
         model, _ = create_multithreshold_model(

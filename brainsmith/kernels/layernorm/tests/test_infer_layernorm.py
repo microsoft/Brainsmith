@@ -29,7 +29,7 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
 
 

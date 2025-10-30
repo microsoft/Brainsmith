@@ -127,7 +127,7 @@ class IntegratedPipelineTest(ABC):
 
         Example:
             def get_kernel_inference_transform(self):
-                from brainsmith.transforms.infer_kernel_list import InferKernelList
+                from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
                 return InferKernelList
         """
         pass

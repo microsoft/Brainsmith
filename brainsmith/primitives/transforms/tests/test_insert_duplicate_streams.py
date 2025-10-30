@@ -12,7 +12,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 
-from brainsmith.transforms.insert_duplicate_streams import InsertDuplicateStreams
+from brainsmith.primitives.transforms.insert_duplicate_streams import InsertDuplicateStreams
 
 
 def make_fanout_model(fanout=2):

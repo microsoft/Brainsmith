@@ -51,18 +51,49 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 #### Option B: Local Development with Poetry
 
 ```bash
-# Run automated setup script
+# 1. Run automated setup (creates .venv + .brainsmith/config.yaml)
 ./setup-venv.sh
 
-# Activate the virtual environment
-source .venv/bin/activate
+# 2. Configure settings & tools for your system
+vim .brainsmith/config.yaml
 
-# Initialize configuration file
-brainsmith config init
-# Edit ~/.brainsmith/config.yaml to set xilinx_path and xilinx_version as needed
+# 3. Choose environment activation method (see below)
+```
 
-# View current configuration
-brainsmith config show
+**Choose your environment method:**
+
+**Option 1: direnv (Recommended)**
+```bash
+# One-time setup
+sudo apt install direnv
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+source ~/.bashrc
+
+# Enable for brainsmith repo (applies to CWD)
+brainsmith project allow-direnv
+
+# Daily use - automatic on cd
+cd ~/brainsmith  # Environment auto-loads
+pytest tests/
+```
+
+**Option 2: Manual activation**
+```bash
+# Each shell session - two commands
+source .venv/bin/activate       # Python packages
+source .brainsmith/env.sh       # Xilinx environment
+
+# Daily use
+pytest tests/
+smith model.onnx blueprint.yaml
+```
+
+**Note:** The brainsmith repository itself becomes a project during development. To create additional projects for your designs:
+
+```bash
+brainsmith project init ~/my-fpga-project
+cd ~/my-fpga-project
+brainsmith project allow-direnv  # or manual activation
 ```
 
 ### 3. Validate installation with simple example
@@ -85,6 +116,77 @@ smith model.onnx blueprint.yaml
 smith model.onnx blueprint.yaml --output-dir ./results
 ```
 
+## Environment Management
+
+Brainsmith requires Xilinx tools (Vivado, Vitis HLS) to be available before Python starts. We provide two approaches:
+
+### Option 1: direnv (Recommended)
+
+Automatic environment switching when you cd between projects:
+
+```bash
+# One-time setup
+sudo apt install direnv  # or: brew install direnv (macOS)
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+source ~/.bashrc
+
+# Enable for this project
+brainsmith project allow-direnv
+
+# Daily use - just cd
+cd ~/work/project        # Auto-loads environment
+smith model.onnx blueprint.yaml
+pytest tests/
+
+# Multi-project support
+cd ~/work/project-vivado-2024-1   # Auto-loads Vivado 2024.1
+cd ~/work/project-vivado-2024-2   # Auto-switches to Vivado 2024.2
+```
+
+**Benefits:**
+- Automatic activation on cd
+- Auto-regenerates when config changes
+- Supports multiple projects with different configs
+- Clean unloading when leaving directory
+
+### Option 2: Manual Activation
+
+Simple, explicit control with two-step activation:
+
+```bash
+# Activate once per session (two commands)
+source .venv/bin/activate       # 1. Python packages (pytest, brainsmith CLI, etc.)
+source .brainsmith/env.sh       # 2. Brainsmith config (paths, Xilinx tools, build settings)
+
+# Work normally
+smith model.onnx blueprint.yaml
+pytest tests/
+
+# Deactivate when done
+source .brainsmith/deactivate.sh  # Clear Brainsmith environment
+deactivate                         # Deactivate Python venv
+```
+
+**Benefits:**
+- No additional tools required
+- Explicit, predictable
+- Works in any shell
+- Clear separation: Python packages vs project configuration
+
+### Common Commands
+
+```bash
+# Initialize a new project (creates config + env scripts)
+brainsmith project init
+brainsmith project init new-project  # Create in new directory
+
+# Regenerate environment scripts after config changes
+brainsmith project init  # Won't overwrite config.yaml
+
+# View current configuration
+brainsmith project show
+```
+
 ## CLI Overview
 
 Brainsmith provides two complementary CLI commands:
@@ -99,11 +201,13 @@ For detailed command reference, see the [CLI API documentation](docs/cli_api_ref
 ```bash
 # Setup and configuration
 brainsmith setup all              # Install all dependencies
-eval $(brainsmith config export)  # Export environment for Xilinx tools
+brainsmith project init           # Initialize project configuration
+brainsmith project allow-direnv   # Enable automatic environment
 
-# Operations
+# Operations (after environment is loaded)
 smith model.onnx blueprint.yaml   # Create dataflow core accelerator
 smith kernel accelerator.sv       # Generate hardware kernel from RTL
+pytest tests/                     # Run tests
 ```
 
 ## Documentation

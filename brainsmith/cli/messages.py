@@ -17,8 +17,6 @@ PACKAGE_NAME = "brainsmith"
 # ============================================================================
 
 CONFIG_EDIT_HINT = "\nEdit the file to customize settings for your environment."
-CONFIG_CREATED_PROJECT = "These settings apply to this project only."
-CONFIG_CREATED_USER = "These settings apply to all Brainsmith projects."
 
 # ============================================================================
 # Tool Status Messages

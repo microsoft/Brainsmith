@@ -39,7 +39,7 @@ from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.transformation.fpgadataflow.convert_to_hw_layers import InferAddStreamsLayer
 
 # Import Brainsmith transform
-from brainsmith.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
 # Import parity test framework
 from tests.parity.base_parity_test import ParityTestBase
