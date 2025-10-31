@@ -15,7 +15,7 @@ Key Features:
 - Type-safe with clear error messages
 
 Usage:
-    from tests.common.tensor_mapping import map_onnx_to_golden_names
+    from tests.support.tensor_mapping import map_onnx_to_golden_names
 
     # ONNX model has arbitrary names
     onnx_context = {"inp1": arr1, "inp2": arr2, "outp": arr3}

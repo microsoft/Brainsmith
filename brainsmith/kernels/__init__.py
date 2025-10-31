@@ -14,6 +14,8 @@ from .crop import *
 from .duplicate_streams import *
 from .elementwise_binary import *
 from .layernorm import *
+from .mvau import *
+
 from .shuffle import *
 from .softmax import *
 from .thresholding import *

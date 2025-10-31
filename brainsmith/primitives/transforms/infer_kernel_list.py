@@ -28,6 +28,7 @@ Example usage:
     model = model.transform(InferKernelList())
 """
 
+import inspect
 import logging
 from typing import List, Optional, Type
 
@@ -110,6 +111,14 @@ class InferKernelList(Transformation):
             kernels_to_process = []
             for name in all_kernel_names:
                 cls = get_kernel(name)
+                # Guard: skip if cls is None or not a class
+                if cls is None:
+                    logger.debug(f"Skipping {name}: get_kernel() returned None")
+                    continue
+                if not inspect.isclass(cls):
+                    logger.debug(f"Skipping {name}: not a class (type={type(cls)})")
+                    continue
+                # Check if it's a KernelOp subclass
                 if issubclass(cls, KernelOp):
                     # Include all KernelOp subclasses
                     # can_infer_from() will determine if transformation applies

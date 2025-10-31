@@ -1,8 +1,8 @@
-"""Test fixture generation for parity testing.
+"""Test execution context generation.
 
 This module provides utilities for generating test data (execution contexts)
-for parity tests. It eliminates duplication between base_parity_test.py and
-executors.py by providing a single source of truth for test data generation.
+for kernel testing. Provides a single source of truth for test data generation
+used by executors and test frameworks.
 
 Key Features:
 - Deterministic random data generation with seed support
@@ -11,7 +11,7 @@ Key Features:
 - Pre-allocates output tensors
 
 Usage:
-    from tests.parity.test_fixtures import make_execution_context
+    from tests.support.context import make_execution_context
 
     # Generate test context with random seed
     context = make_execution_context(model, op, seed=42)
@@ -24,7 +24,7 @@ import numpy as np
 from typing import Dict, Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from tests.common.constants import (
+from tests.support.constants import (
     UNSIGNED_TEST_DATA_CAP,
     SIGNED_TEST_DATA_MIN,
     SIGNED_TEST_DATA_MAX,

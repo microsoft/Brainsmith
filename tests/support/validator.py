@@ -34,7 +34,7 @@ Usage:
 from typing import Dict, Optional
 import numpy as np
 
-from tests.parity.assertions import assert_arrays_close
+from tests.support.assertions import assert_arrays_close
 
 
 class GoldenValidator:

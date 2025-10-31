@@ -9,12 +9,18 @@ Design Philosophy:
 - No diamond inheritance: single clean inheritance chain
 - Dual testing: manual (FINN) vs auto (Brainsmith) parity + both vs golden
 - Single configure_kernel_node: unified signature, no is_manual parameter confusion
+- Backend specialization: supports 3-stage pipeline (ONNX → Base Kernel → Backend)
 
 Replaces:
 - CoreParityTest (411 lines) - structural parity
 - HWEstimationParityTest (333 lines) - HW estimation parity
 - DualPipelineParityTest (321 lines) - execution parity
 - Total: 1065 lines → ~400 lines
+
+Pipeline Architecture (3 stages):
+- Stage 1: ONNX Node (e.g., Add, Mul)
+- Stage 2: Base Kernel (e.g., AddStreams) - tested with Python execution
+- Stage 3: Backend (e.g., AddStreams_hls) - tested with cppsim/rtlsim execution
 
 Usage:
     from tests.frameworks.dual_kernel_test import DualKernelTest
@@ -40,10 +46,18 @@ Usage:
         def get_num_outputs(self):
             return 1
 
+        # Optional: Enable backend testing (Stage 3)
+        def get_backend_fpgapart(self):
+            return "xc7z020clg400-1"
+
 Inherited Tests (20):
-- 7 core parity tests (shapes, widths, datatypes)
-- 5 HW estimation tests (cycles, resources)
-- 8 golden execution tests (manual/auto vs golden + parity)
+- 7 core parity tests (shapes, widths, datatypes at Stage 2)
+- 5 HW estimation tests (cycles, resources at Stage 2)
+- 8 golden execution tests:
+  * 2 Python tests (Stage 2: manual/auto vs golden)
+  * 3 cppsim tests (Stage 3: manual/auto vs golden + parity)
+  * 2 rtlsim tests (Stage 3: manual/auto vs golden)
+  * 1 Python parity test (Stage 2: manual vs auto)
 """
 
 import pytest
@@ -56,13 +70,16 @@ from qonnx.transformation.base import Transformation
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 # Import Phase 1 utilities
-from tests.common.pipeline import PipelineRunner
-from tests.common.validator import GoldenValidator, TolerancePresets
-from tests.common.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+from tests.support.pipeline import PipelineRunner
+from tests.support.validator import GoldenValidator, TolerancePresets
+from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+
+# Import backend specialization utilities
+from tests.support.backend_utils import specialize_to_backend
 
 # Import test fixtures and assertions
-from tests.parity.test_fixtures import make_execution_context
-from tests.parity.assertions import (
+from tests.support.context import make_execution_context
+from tests.support.assertions import (
     assert_shapes_match,
     assert_widths_match,
     assert_values_match,
@@ -84,10 +101,23 @@ class DualKernelTest(KernelTestConfig):
     - get_auto_transform(): Returns Brainsmith transform class
     - compute_golden_reference(): Test-owned golden reference
 
+    Optional backend configuration:
+    - get_backend_fpgapart(): Enable backend testing (Stage 3)
+    - get_backend_type(): Backend type ("hls" or "rtl")
+
+    Pipeline Architecture (3 stages):
+    - Stage 1: ONNX Node (e.g., Add, Mul)
+    - Stage 2: Base Kernel (e.g., AddStreams) - Python execution
+    - Stage 3: Backend (e.g., AddStreams_hls) - cppsim/rtlsim execution
+
     Provides 20 inherited tests:
-    - 7 core parity tests (structural comparison)
-    - 5 HW estimation tests (cycles, resources)
-    - 8 golden execution tests (manual/auto vs golden + parity)
+    - 7 core parity tests (structural comparison at Stage 2)
+    - 5 HW estimation tests (cycles, resources at Stage 2)
+    - 8 golden execution tests:
+      * 2 Python tests (Stage 2: base kernel)
+      * 3 cppsim tests (Stage 3: backend)
+      * 2 rtlsim tests (Stage 3: backend)
+      * 1 Python parity test (Stage 2: manual vs auto)
     """
 
     # ========================================================================
@@ -147,39 +177,107 @@ class DualKernelTest(KernelTestConfig):
     # Pipeline Execution (uses Phase 1 PipelineRunner)
     # ========================================================================
 
-    def run_manual_pipeline(self) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Run manual (FINN) pipeline: ONNX → HW node.
+    def run_manual_pipeline(self, to_backend: bool = False) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Run manual (FINN) pipeline: ONNX → Base Kernel → Backend (optional).
 
         Uses PipelineRunner (Phase 1) instead of duplicating pipeline logic.
 
+        Args:
+            to_backend: If True, specialize to backend (Stage 3).
+                       If False, return base kernel (Stage 2).
+                       Default: False
+
         Returns:
             (op, model): Manual operator and model
-        """
-        runner = PipelineRunner()
+                        - Stage 2: Base kernel (e.g., AddStreams)
+                        - Stage 3: Backend (e.g., AddStreams_hls)
 
+        Raises:
+            RuntimeError: If pipeline fails to create HW node
+            pytest.skip: If to_backend=True but backend not configured
+
+        Example:
+            # Stage 2: Base kernel (Python execution)
+            op, model = self.run_manual_pipeline(to_backend=False)
+            executor = PythonExecutor()
+            outputs = executor.execute(op, model, inputs)
+
+            # Stage 3: Backend (cppsim execution)
+            op, model = self.run_manual_pipeline(to_backend=True)
+            executor = CppSimExecutor()
+            outputs = executor.execute(op, model, inputs)
+        """
+        # Stage 1 → Stage 2: ONNX → Base Kernel
+        runner = PipelineRunner()
         op, model = runner.run(
             model_factory=self.make_test_model,
             transform=self.get_manual_transform(),
             configure_fn=lambda op, model: self.configure_kernel_node(op, model)
         )
 
+        # Stage 2 → Stage 3: Base Kernel → Backend (optional)
+        if to_backend:
+            fpgapart = self.get_backend_fpgapart()
+            if fpgapart is None:
+                pytest.skip(
+                    "Backend specialization not configured. "
+                    "Override get_backend_fpgapart() to enable backend testing."
+                )
+
+            backend_type = self.get_backend_type()
+            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
+
         return op, model
 
-    def run_auto_pipeline(self) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Run auto (Brainsmith) pipeline: ONNX → HW node.
+    def run_auto_pipeline(self, to_backend: bool = False) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Run auto (Brainsmith) pipeline: ONNX → Base Kernel → Backend (optional).
 
         Uses PipelineRunner (Phase 1) instead of duplicating pipeline logic.
 
+        Args:
+            to_backend: If True, specialize to backend (Stage 3).
+                       If False, return base kernel (Stage 2).
+                       Default: False
+
         Returns:
             (op, model): Auto operator and model
-        """
-        runner = PipelineRunner()
+                        - Stage 2: Base kernel (e.g., AddStreams)
+                        - Stage 3: Backend (e.g., AddStreams_hls)
 
+        Raises:
+            RuntimeError: If pipeline fails to create HW node
+            pytest.skip: If to_backend=True but backend not configured
+
+        Example:
+            # Stage 2: Base kernel (Python execution)
+            op, model = self.run_auto_pipeline(to_backend=False)
+            executor = PythonExecutor()
+            outputs = executor.execute(op, model, inputs)
+
+            # Stage 3: Backend (cppsim execution)
+            op, model = self.run_auto_pipeline(to_backend=True)
+            executor = CppSimExecutor()
+            outputs = executor.execute(op, model, inputs)
+        """
+        # Stage 1 → Stage 2: ONNX → Base Kernel
+        runner = PipelineRunner()
         op, model = runner.run(
             model_factory=self.make_test_model,
             transform=self.get_auto_transform(),
             configure_fn=lambda op, model: self.configure_kernel_node(op, model)
         )
+
+        # Stage 2 → Stage 3: Base Kernel → Backend (optional)
+        if to_backend:
+            fpgapart = self.get_backend_fpgapart()
+            if fpgapart is None:
+                pytest.skip(
+                    "Backend specialization not configured. "
+                    "Override get_backend_fpgapart() to enable backend testing."
+                )
+
+            backend_type = self.get_backend_type()
+            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
 
         return op, model
 
@@ -454,7 +552,7 @@ class DualKernelTest(KernelTestConfig):
         # DSP estimation (requires fpgapart parameter per FINN API)
         if hasattr(manual_op, "dsp_estimation") and hasattr(auto_op, "dsp_estimation"):
             # Use default fpgapart for estimation comparison
-            from tests.common.constants import PARITY_DEFAULT_FPGA_PART_HLS
+            from tests.support.constants import PARITY_DEFAULT_FPGA_PART_HLS
             fpgapart = PARITY_DEFAULT_FPGA_PART_HLS
             manual_dsps = manual_op.dsp_estimation(fpgapart)
             auto_dsps = auto_op.dsp_estimation(fpgapart)
@@ -577,7 +675,7 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.dual_kernel
     def test_manual_cppsim_vs_golden(self):
         """Test manual (FINN) cppsim execution matches golden reference."""
-        manual_op, manual_model = self.run_manual_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -602,7 +700,7 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.dual_kernel
     def test_auto_cppsim_vs_golden(self):
         """Test auto (Brainsmith) cppsim execution matches golden reference."""
-        auto_op, auto_model = self.run_auto_pipeline()
+        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -627,7 +725,7 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.dual_kernel
     def test_manual_rtlsim_vs_golden(self):
         """Test manual (FINN) rtlsim execution matches golden reference."""
-        manual_op, manual_model = self.run_manual_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -652,7 +750,7 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.dual_kernel
     def test_auto_rtlsim_vs_golden(self):
         """Test auto (Brainsmith) rtlsim execution matches golden reference."""
-        auto_op, auto_model = self.run_auto_pipeline()
+        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -704,8 +802,8 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.dual_kernel
     def test_manual_auto_parity_cppsim(self):
         """Test manual vs auto cppsim execution produces identical results."""
-        manual_op, manual_model = self.run_manual_pipeline()
-        auto_op, auto_model = self.run_auto_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
+        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
 
         # Generate test inputs (same seed for both)
         np.random.seed(42)

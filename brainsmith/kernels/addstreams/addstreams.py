@@ -127,11 +127,6 @@ class AddStreams(KernelOp):
         return df.TransformationResult(
             nodes_to_insert=[hw_node],
             nodes_to_remove=[node],
-            actual_layouts={
-                "input0": "NHWC",
-                "input1": "NHWC",
-                "output": "NHWC",
-            }
         )
 
     # ====================================================================
@@ -162,10 +157,3 @@ class AddStreams(KernelOp):
 
         # Store result
         context[node.output[0]] = output_data
-
-    # NOTE: Golden reference removed - tests own the golden reference!
-    # See tests/dual_pipeline/test_addstreams_dual_parity.py for the
-    # test-owned golden reference implementation.
-    #
-    # Design principle: Kernel contains production code, tests contain test logic.
-    # Golden reference is test logic that defines what "correct" means.

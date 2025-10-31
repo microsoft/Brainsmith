@@ -15,8 +15,8 @@ Design Philosophy:
 - Clear errors: Detailed failure messages for each step
 
 Usage:
-    from tests.common.executors import CppSimExecutor, RTLSimExecutor
-    from tests.common.validator import GoldenValidator
+    from tests.support.executors import CppSimExecutor, RTLSimExecutor
+    from tests.support.validator import GoldenValidator
 
     # Execute
     executor = CppSimExecutor()
@@ -40,7 +40,7 @@ from brainsmith.settings import load_config
 from brainsmith.dataflow.kernel_op import KernelOp
 
 # Import test constants
-from tests.common.constants import (
+from tests.support.constants import (
     PARITY_DEFAULT_FPGA_PART_HLS,
     PARITY_DEFAULT_CLOCK_PERIOD_NS
 )

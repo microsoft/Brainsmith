@@ -7,7 +7,7 @@ Real GlobalDesignSpace objects for integration testing.
 import pytest
 from brainsmith.dse import GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
-from tests.common.constants import (
+from tests.support.constants import (
     DSE_DEFAULT_CLOCK_PERIOD_NS,
     DSE_DEFAULT_PARALLEL_BUILDS,
     DSE_DEFAULT_MAX_COMBINATIONS

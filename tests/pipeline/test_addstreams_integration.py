@@ -34,7 +34,7 @@ from brainsmith.dataflow.kernel_op import KernelOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 from tests.frameworks.single_kernel_test import SingleKernelTest
-from tests.parity.test_fixtures import make_execution_context
+from tests.support.context import make_execution_context
 
 
 class TestAddStreamsIntegration(SingleKernelTest):

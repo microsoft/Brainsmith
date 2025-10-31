@@ -40,7 +40,7 @@ from brainsmith.registry import backend
     name="AddStreamsHLS",
     target_kernel="brainsmith:AddStreams",
     language="hls",
-    author="AMD FINN Team"
+    author="FINN Team"
 )
 class AddStreams_hls(AddStreams, HLSBackend):
     """Class that corresponds to finn-hlslib AddStreams_Batch function."""

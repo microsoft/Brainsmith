@@ -439,11 +439,6 @@ class ElementwiseBinaryOp(KernelOp):
         return TransformationResult(
             nodes_to_remove=[node],
             nodes_to_insert=[hw_node],
-            actual_layouts={
-                "lhs": None,    # No layout requirement
-                "rhs": None,    # No layout requirement
-                "output": None, # No layout requirement
-            },
         )
 
     # ================================================================

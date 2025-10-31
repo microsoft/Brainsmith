@@ -32,12 +32,6 @@ class TransformationResult:
     nodes_to_remove: List[NodeProto]
     """ONNX nodes to remove from graph."""
 
-    actual_layouts: Dict[str, str]
-    """Actual layouts produced (interface_name -> layout).
-
-    Example: {"input": "NHWC", "output": "NHWC"}
-    """
-
     metadata: Dict[str, Any] = field(default_factory=dict)
     """Optional metadata about transformation.
 

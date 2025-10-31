@@ -47,19 +47,22 @@ Inherited Tests (6):
 import pytest
 import numpy as np
 from abc import abstractmethod
-from typing import Dict, Type, Tuple
+from typing import Dict, Type, Tuple, Optional
 
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.base import Transformation
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 # Import Phase 1 utilities
-from tests.common.pipeline import PipelineRunner
-from tests.common.validator import GoldenValidator, TolerancePresets
-from tests.common.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+from tests.support.pipeline import PipelineRunner
+from tests.support.validator import GoldenValidator, TolerancePresets
+from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+
+# Import backend specialization utilities
+from tests.support.backend_utils import specialize_to_backend
 
 # Import test fixtures
-from tests.parity.test_fixtures import make_execution_context
+from tests.support.context import make_execution_context
 
 # Import base config
 from tests.frameworks.kernel_test_base import KernelTestConfig
@@ -129,24 +132,66 @@ class SingleKernelTest(KernelTestConfig):
     # Pipeline Execution (uses Phase 1 PipelineRunner)
     # ========================================================================
 
-    def run_inference_pipeline(self) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Run complete inference pipeline (ONNX → Hardware node).
+    def run_inference_pipeline(
+        self, to_backend: bool = False
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Run inference pipeline to Stage 2 (base kernel) or Stage 3 (backend).
 
-        Uses PipelineRunner (Phase 1) instead of duplicating pipeline logic.
+        Pipeline stages:
+            Stage 1: ONNX Node (Add, Mul, etc.)
+            Stage 2: Base Kernel (AddStreams, no backend) ← to_backend=False
+            Stage 3: Backend (AddStreams_hls, with HLSBackend) ← to_backend=True
+
+        This method mirrors the complete production transformation flow:
+            ONNX → InferKernel → HWCustomOp → SpecializeLayers → Backend
+
+        Uses PipelineRunner (Phase 1) for Stage 1 → Stage 2.
+        Uses specialize_to_backend() for Stage 2 → Stage 3.
+
+        Args:
+            to_backend: If True, specialize to backend (Stage 3).
+                       If False, return base kernel (Stage 2).
+                       Default: False
 
         Returns:
             (op, model): Hardware op instance and model
+                        - Stage 2: Base kernel (e.g., AddStreams)
+                        - Stage 3: Backend (e.g., AddStreams_hls)
 
         Raises:
             RuntimeError: If pipeline fails to create HW node
-        """
-        runner = PipelineRunner()
+            pytest.skip: If to_backend=True but backend not configured
 
+        Example:
+            # Stage 2: Base kernel (Python execution)
+            op, model = self.run_inference_pipeline(to_backend=False)
+            executor = PythonExecutor()
+            outputs = executor.execute(op, model, inputs)
+
+            # Stage 3: Backend (cppsim execution)
+            op, model = self.run_inference_pipeline(to_backend=True)
+            executor = CppSimExecutor()
+            outputs = executor.execute(op, model, inputs)
+        """
+        # Stage 1 → Stage 2: ONNX → Base Kernel
+        runner = PipelineRunner()
         op, model = runner.run(
             model_factory=self.make_test_model,
             transform=self.get_kernel_inference_transform(),
             configure_fn=lambda op, model: self.configure_kernel_node(op, model)
         )
+
+        # Stage 2 → Stage 3: Base Kernel → Backend (optional)
+        if to_backend:
+            fpgapart = self.get_backend_fpgapart()
+            if fpgapart is None:
+                pytest.skip(
+                    "Backend specialization not configured. "
+                    "Override get_backend_fpgapart() to enable backend testing."
+                )
+
+            backend_type = self.get_backend_type()
+            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
 
         return op, model
 
@@ -325,19 +370,31 @@ class SingleKernelTest(KernelTestConfig):
     def test_cppsim_execution_vs_golden(self):
         """Test HLS C++ simulation matches golden reference.
 
-        Validates complete code generation pipeline:
-        1. Kernel inference creates HW node
-        2. C++ code generation succeeds
-        3. Compilation succeeds
-        4. Simulation produces correct results
-        5. Results match golden reference within tolerance
+        Validates complete code generation pipeline (3 stages):
+        1. ONNX → Base Kernel (Stage 1 → 2)
+        2. Base Kernel → HLS Backend (Stage 2 → 3)
+        3. HLS Backend → C++ code → Compilation → Simulation
+
+        Pipeline:
+            Stage 1: ONNX Node (Add, Mul, etc.)
+            Stage 2: Base Kernel (AddStreams)
+            Stage 3: HLS Backend (AddStreams_hls) ← This test
+                     ↓
+                  cppsim execution
+
+        Results must match golden reference within tolerance.
 
         Requires:
             - VITIS_PATH environment variable
-            - HLS backend (op inherits from HLSBackend)
+            - Backend configured (get_backend_fpgapart() returns FPGA part)
+            - HLS backend available for kernel
+
+        Skips:
+            - If backend not configured (get_backend_fpgapart() returns None)
+            - If VITIS_PATH not set (handled by CppSimExecutor)
         """
-        # Run pipeline
-        op, model = self.run_inference_pipeline()
+        # Run pipeline to Stage 3 (backend)
+        op, model = self.run_inference_pipeline(to_backend=True)
 
         # Generate test inputs (deterministic)
         np.random.seed(42)
@@ -364,22 +421,38 @@ class SingleKernelTest(KernelTestConfig):
     def test_rtlsim_execution_vs_golden(self):
         """Test RTL simulation matches golden reference.
 
-        Validates complete HDL generation pipeline:
-        1. Kernel inference creates HW node
-        2. HDL generation succeeds (Verilog/VHDL)
-        3. XSim compilation succeeds
-        4. Simulation produces correct results
-        5. Results match golden reference within tolerance
+        Validates complete HDL generation pipeline (3 stages):
+        1. ONNX → Base Kernel (Stage 1 → 2)
+        2. Base Kernel → Backend (Stage 2 → 3, HLS or RTL)
+        3. Backend → HDL → Synthesis → Simulation
+
+        Pipeline:
+            Stage 1: ONNX Node (Add, Mul, etc.)
+            Stage 2: Base Kernel (AddStreams)
+            Stage 3: Backend (AddStreams_hls or AddStreams_rtl) ← This test
+                     ↓
+                  HLS → RTL (if HLS backend)
+                  OR
+                  RTL directly (if RTL backend)
+                     ↓
+                  rtlsim execution
+
+        Results must match golden reference within tolerance.
 
         For HLS backends: Synthesizes HLS → RTL using Vitis HLS first
         For RTL backends: Uses generated HDL directly
 
         Requires:
             - Vivado installation with XSim
-            - RTL or HLS backend
+            - Backend configured (get_backend_fpgapart() returns FPGA part)
+            - Backend available for kernel (HLS or RTL)
+
+        Skips:
+            - If backend not configured (get_backend_fpgapart() returns None)
+            - If Vivado not found (handled by RTLSimExecutor)
         """
-        # Run pipeline
-        op, model = self.run_inference_pipeline()
+        # Run pipeline to Stage 3 (backend)
+        op, model = self.run_inference_pipeline(to_backend=True)
 
         # Generate test inputs (deterministic)
         np.random.seed(42)

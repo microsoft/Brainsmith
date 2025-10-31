@@ -1,33 +1,526 @@
-"""Assertion helpers for DSE integration tests.
+"""Test assertion utilities for all test suites.
 
-Provides three assertion classes:
-- TreeAssertions: Validate DSE tree structure and relationships
-- ExecutionAssertions: Validate execution results and statistics
-- BlueprintAssertions: Validate blueprint parsing results
+This module consolidates assertion helpers from tests/common/, tests/parity/,
+and tests/utils/ into a single organized file.
 
-Ported from OLD_FOR_REFERENCE_ONLY/utils/tree_assertions.py
-Extended with execution and blueprint assertions for comprehensive test coverage.
+Provides:
+- AssertionHelper: Base class with consistent error formatting
+- ParityAssertion: Kernel parity testing (Manual vs Auto)
+- TreeAssertions: DSE tree structure validation
+- ExecutionAssertions: DSE execution result validation
+- BlueprintAssertions: DSE blueprint parsing validation
+- Specialized helpers: assert_shapes_match, assert_arrays_close, etc.
+
+Organization:
+1. Base assertion helper (common to all tests)
+2. Kernel testing assertions (parity/manual vs auto)
+3. DSE testing assertions (tree, execution, blueprints)
 """
 
-from typing import List, Dict, Any, Optional, Union
+from typing import Any, Callable, Optional, Tuple, List, Dict, Union
+import numpy as np
 from dataclasses import dataclass
-
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 from brainsmith.dse.tree import DSETree
 from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig
 from brainsmith.dse.types import TreeExecutionResult, SegmentStatus, OutputType
-from tests.common.constants import (
+from tests.support.constants import (
     MIN_CHILDREN_FOR_BRANCH,
     NO_EFFICIENCY,
     EFFICIENCY_DECIMAL_PLACES,
     EFFICIENCY_PERCENTAGE_MULTIPLIER
 )
-from tests.common.assertions import AssertionHelper
 
 
-# ============================================================================
+# =============================================================================
+# Base Assertion Helper (from tests/common/assertions.py)
+# =============================================================================
+
+class AssertionHelper:
+    """Base class for all test assertion helpers.
+
+    Provides consistent error message formatting across all test suites.
+    Subclasses can use these utilities for domain-specific assertions.
+    """
+
+    @staticmethod
+    def format_mismatch(
+        description: str,
+        expected: Any,
+        actual: Any,
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> str:
+        """Format standard mismatch error message.
+
+        Args:
+            description: What is being compared (e.g., "Node count", "Input shape")
+            expected: Expected value
+            actual: Actual value
+            formatter: Optional function to format values (default: str())
+
+        Returns:
+            Formatted error message string
+
+        Example:
+            >>> msg = AssertionHelper.format_mismatch(
+            ...     "Total nodes", 5, 7
+            ... )
+            >>> print(msg)
+            Total nodes mismatch:
+              Expected: 5
+              Actual:   7
+        """
+        fmt = formatter if formatter else str
+
+        lines = [
+            f"{description} mismatch:",
+            f"  Expected: {fmt(expected)}",
+            f"  Actual:   {fmt(actual)}"
+        ]
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_comparison(
+        description: str,
+        value_a: Any,
+        value_b: Any,
+        label_a: str = "A",
+        label_b: str = "B",
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> str:
+        """Format comparison error message (for parity testing).
+
+        Args:
+            description: What is being compared
+            value_a: First value (e.g., manual implementation)
+            value_b: Second value (e.g., auto implementation)
+            label_a: Label for first value (default: "A")
+            label_b: Label for second value (default: "B")
+            formatter: Optional function to format values
+
+        Returns:
+            Formatted error message string
+
+        Example:
+            >>> msg = AssertionHelper.format_comparison(
+            ...     "Output shape", (1, 768), (1, 769),
+            ...     label_a="Manual", label_b="Auto"
+            ... )
+            >>> print(msg)
+            Output shape mismatch:
+              Manual: (1, 768)
+              Auto:   (1, 769)
+        """
+        fmt = formatter if formatter else str
+
+        lines = [
+            f"{description} mismatch:",
+            f"  {label_a}: {fmt(value_a)}",
+            f"  {label_b}: {fmt(value_b)}"
+        ]
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def assert_equal(
+        expected: Any,
+        actual: Any,
+        description: str,
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> None:
+        """Assert values are equal with consistent error formatting.
+
+        Args:
+            expected: Expected value
+            actual: Actual value
+            description: What is being compared
+            formatter: Optional function to format values
+
+        Raises:
+            AssertionError: If values differ
+
+        Example:
+            >>> AssertionHelper.assert_equal(5, 5, "Node count")
+            # Passes silently
+
+            >>> AssertionHelper.assert_equal(5, 7, "Node count")
+            AssertionError: Node count mismatch:
+              Expected: 5
+              Actual:   7
+        """
+        if expected != actual:
+            msg = AssertionHelper.format_mismatch(
+                description, expected, actual, formatter
+            )
+            raise AssertionError(msg)
+
+    @staticmethod
+    def assert_comparison(
+        value_a: Any,
+        value_b: Any,
+        description: str,
+        label_a: str = "A",
+        label_b: str = "B",
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> None:
+        """Assert two values match (for parity testing).
+
+        Args:
+            value_a: First value to compare
+            value_b: Second value to compare
+            description: What is being compared
+            label_a: Label for first value
+            label_b: Label for second value
+            formatter: Optional function to format values
+
+        Raises:
+            AssertionError: If values differ
+        """
+        if value_a != value_b:
+            msg = AssertionHelper.format_comparison(
+                description, value_a, value_b, label_a, label_b, formatter
+            )
+            raise AssertionError(msg)
+
+
+# =============================================================================
+# Kernel Testing Assertions (from tests/parity/assertions.py)
+# Parity Testing: Manual vs Auto Implementation Comparison
+# =============================================================================
+
+class ParityAssertion(AssertionHelper):
+    """Parity-specific assertion helper.
+
+    Extends AssertionHelper with "Manual vs Auto" comparison semantics.
+    Provides consistent error message formatting for parity tests.
+    """
+
+    @staticmethod
+    def format_mismatch(
+        description: str,
+        manual_value: Any,
+        auto_value: Any,
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> str:
+        """Format parity mismatch error message (Manual vs Auto).
+
+        Args:
+            description: What is being compared (e.g., "Input 0 normal shape")
+            manual_value: Value from manual implementation
+            auto_value: Value from auto implementation
+            formatter: Optional function to format values (default: str())
+
+        Returns:
+            Formatted error message string
+
+        Example:
+            >>> msg = ParityAssertion.format_mismatch(
+            ...     "Input 0 shape", (1, 768), (1, 769)
+            ... )
+            >>> print(msg)
+            Input 0 shape mismatch:
+              Manual: (1, 768)
+              Auto:   (1, 769)
+        """
+        return AssertionHelper.format_comparison(
+            description, manual_value, auto_value,
+            label_a="Manual", label_b="Auto", formatter=formatter
+        )
+
+    @staticmethod
+    def assert_equal(
+        manual_value: Any,
+        auto_value: Any,
+        description: str,
+        formatter: Optional[Callable[[Any], str]] = None
+    ) -> None:
+        """Assert parity between manual and auto implementations.
+
+        Args:
+            manual_value: Value from manual implementation
+            auto_value: Value from auto implementation
+            description: What is being compared
+            formatter: Optional function to format values
+
+        Raises:
+            AssertionError: If values differ
+        """
+        AssertionHelper.assert_comparison(
+            manual_value, auto_value, description,
+            label_a="Manual", label_b="Auto", formatter=formatter
+        )
+
+
+# -----------------------------------------------------------------------------
+# Specialized Assertion Helpers for Kernel Testing
+# -----------------------------------------------------------------------------
+
+def assert_shapes_match(
+    manual_shape: Tuple[int, ...],
+    auto_shape: Tuple[int, ...],
+    index: int,
+    kind: str
+) -> None:
+    """Assert tensor shapes match between implementations.
+
+    Args:
+        manual_shape: Shape from manual implementation
+        auto_shape: Shape from auto implementation
+        index: Input/output index
+        kind: Description (e.g., "normal input", "folded output")
+
+    Raises:
+        AssertionError: If shapes differ
+
+    Example:
+        >>> assert_shapes_match((1, 768), (1, 768), index=0, kind="normal input")
+        # Passes silently
+
+        >>> assert_shapes_match((1, 768), (1, 769), index=0, kind="normal input")
+        AssertionError: Input 0 normal input shape mismatch:
+          Manual: (1, 768)
+          Auto:   (1, 769)
+    """
+    if manual_shape != auto_shape:
+        # Capitalize first letter if kind starts with direction
+        if kind.lower().startswith(('input', 'output')):
+            description = f"{kind.capitalize()} {index} shape"
+        else:
+            description = f"Index {index} {kind} shape"
+
+        msg = ParityAssertion.format_mismatch(
+            description, manual_shape, auto_shape
+        )
+        raise AssertionError(msg)
+
+
+def assert_datatypes_match(
+    manual_datatype: DataType,
+    auto_datatype: DataType,
+    index: int,
+    direction: str
+) -> None:
+    """Assert datatypes match between implementations.
+
+    Formats datatypes as "name (bitwidth bits)" for clarity.
+
+    Args:
+        manual_datatype: DataType from manual implementation
+        auto_datatype: DataType from auto implementation
+        index: Input/output index
+        direction: "Input" or "Output"
+
+    Raises:
+        AssertionError: If datatypes differ
+
+    Example:
+        >>> from qonnx.core.datatype import DataType
+        >>> dt1 = DataType['INT8']
+        >>> dt2 = DataType['INT8']
+        >>> assert_datatypes_match(dt1, dt2, index=0, direction="Input")
+        # Passes silently
+
+        >>> dt3 = DataType['INT16']
+        >>> assert_datatypes_match(dt1, dt3, index=0, direction="Input")
+        AssertionError: Input 0 datatype mismatch:
+          Manual: INT8 (8 bits)
+          Auto:   INT16 (16 bits)
+    """
+    if manual_datatype != auto_datatype:
+        def format_dt(dt: DataType) -> str:
+            if dt is None:
+                return "None"
+            return f"{dt.name} ({dt.bitwidth()} bits)"
+
+        description = f"{direction} {index} datatype"
+        msg = ParityAssertion.format_mismatch(
+            description, manual_datatype, auto_datatype, format_dt
+        )
+        raise AssertionError(msg)
+
+
+def assert_widths_match(
+    manual_width: int,
+    auto_width: int,
+    index: int,
+    direction: str,
+    unit: str = "bits"
+) -> None:
+    """Assert stream widths match between implementations.
+
+    Args:
+        manual_width: Width from manual implementation
+        auto_width: Width from auto implementation
+        index: Input/output index
+        direction: "Input" or "Output"
+        unit: Unit string (default: "bits")
+
+    Raises:
+        AssertionError: If widths differ
+
+    Example:
+        >>> assert_widths_match(16, 16, index=0, direction="Input")
+        # Passes silently
+
+        >>> assert_widths_match(16, 32, index=0, direction="Input", unit="bits")
+        AssertionError: Input 0 stream width mismatch:
+          Manual: 16 bits
+          Auto:   32 bits
+    """
+    if manual_width != auto_width:
+        def format_width(width: int) -> str:
+            return f"{width} {unit}"
+
+        description = f"{direction} {index} stream width"
+        msg = ParityAssertion.format_mismatch(
+            description, manual_width, auto_width, format_width
+        )
+        raise AssertionError(msg)
+
+
+def assert_values_match(
+    manual_value: Any,
+    auto_value: Any,
+    description: str,
+    formatter: Optional[Callable[[Any], str]] = None
+) -> None:
+    """Generic assertion for any value comparison.
+
+    Args:
+        manual_value: Value from manual implementation
+        auto_value: Value from auto implementation
+        description: What is being compared
+        formatter: Optional function to format values for display
+
+    Raises:
+        AssertionError: If values differ
+
+    Example:
+        >>> assert_values_match(42, 42, "expected cycles")
+        # Passes silently
+
+        >>> assert_values_match(42, 43, "expected cycles")
+        AssertionError: expected cycles mismatch:
+          Manual: 42
+          Auto:   43
+    """
+    ParityAssertion.assert_equal(
+        manual_value, auto_value, description, formatter
+    )
+
+
+def assert_arrays_close(
+    manual_array: np.ndarray,
+    auto_array: np.ndarray,
+    description: str,
+    rtol: float = 1e-5,
+    atol: float = 1e-6
+) -> None:
+    """Assert numpy arrays are numerically close.
+
+    Provides detailed error messages showing shapes and value differences.
+
+    Args:
+        manual_array: Array from manual implementation
+        auto_array: Array from auto implementation
+        description: What is being compared (e.g., "Output 0 (out_V)")
+        rtol: Relative tolerance for np.allclose
+        atol: Absolute tolerance for np.allclose
+
+    Raises:
+        AssertionError: If arrays differ
+
+    Example:
+        >>> a1 = np.array([1.0, 2.0, 3.0])
+        >>> a2 = np.array([1.0, 2.0, 3.0])
+        >>> assert_arrays_close(a1, a2, "output tensor")
+        # Passes silently
+
+        >>> a3 = np.array([1.0, 2.1, 3.0])
+        >>> assert_arrays_close(a1, a3, "output tensor")
+        AssertionError: output tensor differs between backends
+        ...
+    """
+    # First check shapes
+    if manual_array.shape != auto_array.shape:
+        msg = (
+            f"{description} shape mismatch:\n"
+            f"  Manual: {manual_array.shape}\n"
+            f"  Auto:   {auto_array.shape}"
+        )
+        raise AssertionError(msg)
+
+    # Then check numerical equivalence
+    np.testing.assert_allclose(
+        manual_array,
+        auto_array,
+        rtol=rtol,
+        atol=atol,
+        err_msg=(
+            f"\n"
+            f"{'='*70}\n"
+            f"{description} differs between backends\n"
+            f"{'='*70}\n"
+            f"Manual shape: {manual_array.shape}\n"
+            f"Auto shape:   {auto_array.shape}\n"
+            f"Tolerance: rtol={rtol}, atol={atol}\n"
+            f"{'='*70}\n"
+            f"\n"
+            f"This indicates a numerical difference in outputs.\n"
+            f"Check:\n"
+            f"1. Datatype handling (accumulator precision, rounding)\n"
+            f"2. Algorithm implementation (order of operations)\n"
+            f"3. Parallelization effects (SIMD/PE folding)\n"
+        )
+    )
+
+
+def assert_model_tensors_match(
+    manual_model: ModelWrapper,
+    auto_model: ModelWrapper,
+    tensor_name: str,
+    description: str
+) -> None:
+    """Assert tensors in model graphs match.
+
+    Checks if tensor exists and has matching datatype in both models.
+
+    Args:
+        manual_model: ModelWrapper from manual implementation
+        auto_model: ModelWrapper from auto implementation
+        tensor_name: Name of tensor to compare
+        description: What is being compared
+
+    Raises:
+        AssertionError: If tensor datatypes differ
+    """
+    manual_dt = manual_model.get_tensor_datatype(tensor_name)
+    auto_dt = auto_model.get_tensor_datatype(tensor_name)
+
+    if manual_dt != auto_dt:
+        def format_dt(dt):
+            return f"{dt.name if dt else 'None'}"
+
+        msg = ParityAssertion.format_mismatch(
+            f"{description} ({tensor_name}) datatype in model",
+            manual_dt,
+            auto_dt,
+            format_dt
+        )
+        raise AssertionError(msg)
+
+
+# =============================================================================
+# DSE Testing Assertions (from tests/utils/assertions.py)
+# Design Space Exploration: Tree, Execution, and Blueprint Validation
+# =============================================================================
+
+# -----------------------------------------------------------------------------
 # Data Classes for Expected Values
-# ============================================================================
+# -----------------------------------------------------------------------------
 
 @dataclass
 class ExpectedTreeStructure:
@@ -56,14 +549,13 @@ class ExpectedExecutionStats:
     skipped: int = 0
 
 
-# ============================================================================
+# -----------------------------------------------------------------------------
 # TreeAssertions - DSE Tree Structure Validation
-# ============================================================================
+# -----------------------------------------------------------------------------
 
 class TreeAssertions(AssertionHelper):
     """Helper class for DSE tree assertions.
 
-    Ported from OLD_FOR_REFERENCE_ONLY/utils/tree_assertions.py
     Validates tree structure, relationships, and execution order.
     Extends AssertionHelper for consistent error formatting.
     """
@@ -201,9 +693,9 @@ class TreeAssertions(AssertionHelper):
         TreeAssertions.assert_execution_order_structure(execution_order, tree)
 
 
-# ============================================================================
+# -----------------------------------------------------------------------------
 # ExecutionAssertions - DSE Execution Result Validation
-# ============================================================================
+# -----------------------------------------------------------------------------
 
 class ExecutionAssertions(AssertionHelper):
     """Helper class for DSE execution result assertions.
@@ -359,9 +851,9 @@ class ExecutionAssertions(AssertionHelper):
             f"less than minimum {min_time}s"
 
 
-# ============================================================================
+# -----------------------------------------------------------------------------
 # BlueprintAssertions - Blueprint Parsing Validation
-# ============================================================================
+# -----------------------------------------------------------------------------
 
 class BlueprintAssertions(AssertionHelper):
     """Helper class for blueprint parsing assertions.
@@ -571,9 +1063,9 @@ class BlueprintAssertions(AssertionHelper):
                 f"Expected stop_step '{expected_stop}', got '{config.stop_step}'"
 
 
-# ============================================================================
+# -----------------------------------------------------------------------------
 # Helper Functions
-# ============================================================================
+# -----------------------------------------------------------------------------
 
 def calculate_segment_efficiency(
     total_steps_with_segments: int,

@@ -203,3 +203,51 @@ class KernelTestConfig(ABC):
                 return {"rtol": 1e-4, "atol": 1e-5}
         """
         return self.get_tolerance_cppsim()
+
+    # ========================================================================
+    # Backend Configuration Hooks (Optional)
+    # ========================================================================
+
+    def get_backend_fpgapart(self) -> str:
+        """FPGA part for backend specialization (optional).
+
+        Override to enable backend specialization (Stage 2 → Stage 3).
+        When specified, tests can specialize base kernels (e.g., AddStreams)
+        to backend variants (e.g., AddStreams_hls) for cppsim/rtlsim execution.
+
+        Returns:
+            str: FPGA part string (e.g., "xc7z020clg400-1")
+            None: Backend specialization disabled (default)
+
+        Pipeline stages:
+            Stage 1: ONNX Node (Add, Mul, etc.)
+            Stage 2: Base Kernel (AddStreams, no backend)
+            Stage 3: Backend (AddStreams_hls, with HLSBackend) ← Enabled by this hook
+
+        Default:
+            None (backend specialization disabled)
+
+        Override to enable backend testing:
+            def get_backend_fpgapart(self):
+                return "xc7z020clg400-1"  # Enable HLS backend
+
+        Note:
+            When None, cppsim/rtlsim tests will be skipped (base kernels
+            don't have backend inheritance).
+        """
+        return None
+
+    def get_backend_type(self) -> str:
+        """Backend type for specialization.
+
+        Returns:
+            str: "hls" or "rtl"
+
+        Default:
+            "hls" (HLS backend)
+
+        Override for RTL backends:
+            def get_backend_type(self):
+                return "rtl"
+        """
+        return "hls"
