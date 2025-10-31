@@ -1,33 +1,28 @@
-"""Dual pipeline parity tests for AddStreams kernel.
+"""Test new DualPipelineParityTest architecture with AddStreams.
 
-This demonstrates the new DualPipelineParityTest framework, combining:
-1. Golden reference validation (NumPy ground truth)
-2. Hardware parity validation (manual vs auto equivalence)
+This demonstrates the new modular architecture where:
+- DualPipelineParityTest inherits from CoreParityTest + HWEstimationParityTest
+- Total: 14 inherited tests + 2 AddStreams-specific tests = 16 tests
 
 Test Coverage:
---------------
-Automatically inherits ~20 tests:
-- 4 golden reference tests (manual Python, auto Python, manual cppsim, auto cppsim)
-- 12 hardware parity tests (shapes, widths, datatypes, cycles, resources)
-- 4 integration tests (pipeline validation, specialization)
-
-Plus AddStreams-specific tests:
-- Overflow prevention (INT8 + INT8 → INT9)
-- Mathematical properties (commutativity)
+- 7 core parity tests (shapes, widths, datatypes)
+- 5 HW estimation tests (resources, cycles)
+- 2 golden execution tests (Python: manual/auto)
+- 2 AddStreams-specific tests (overflow prevention, commutativity)
 
 Usage:
 ------
     # Run all tests
-    pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v
-
-    # Run only golden reference tests
-    pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m golden
+    pytest tests/dual_pipeline/test_addstreams_v2.py -v
 
     # Run only parity tests
-    pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m parity
+    pytest tests/dual_pipeline/test_addstreams_v2.py -v -m parity
+
+    # Run only golden tests
+    pytest tests/dual_pipeline/test_addstreams_v2.py -v -m golden
 
     # Run fast tests (skip slow cppsim)
-    pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m "not slow"
+    pytest tests/dual_pipeline/test_addstreams_v2.py -v -m "not slow"
 """
 
 import pytest
@@ -40,28 +35,22 @@ from qonnx.core.datatype import DataType
 from qonnx.transformation.base import Transformation
 from qonnx.util.basic import qonnx_make_model
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.dataflow.kernel_op import KernelOp
 
 # Import transforms
 from finn.transformation.fpgadataflow.convert_to_hw_layers import InferAddStreamsLayer
 from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 
-# Import kernel for golden reference
-from brainsmith.kernels.addstreams import AddStreams
-
-# Import dual pipeline framework
-from tests.dual_pipeline import DualPipelineParityTest
+# Import NEW dual pipeline framework
+from tests.dual_pipeline.dual_pipeline_parity_test_v2 import DualPipelineParityTest
 
 
-class TestAddStreamsDualParity(DualPipelineParityTest):
-    """Comprehensive dual pipeline parity testing for AddStreams.
+class TestAddStreamsV2(DualPipelineParityTest):
+    """Test AddStreams using new modular architecture.
 
-    This single test class provides:
-    - Manual (FINN) vs NumPy golden reference validation
-    - Auto (Brainsmith) vs NumPy golden reference validation
-    - Manual vs Auto hardware parity validation
-
-    Total: ~22 tests automatically inherited + 2 AddStreams-specific
+    Inherits 16 tests:
+    - 7 core parity tests (shapes, widths, datatypes)
+    - 5 HW estimation tests (resources, cycles)
+    - 4 golden execution tests (manual/auto × Python/cppsim)
     """
 
     # =========================================================================
@@ -69,14 +58,7 @@ class TestAddStreamsDualParity(DualPipelineParityTest):
     # =========================================================================
 
     def make_test_model(self) -> Tuple[ModelWrapper, str]:
-        """Create ONNX Add node for AddStreams inference.
-
-        Creates standard ONNX Add node (not AddStreams).
-        Both manual and auto pipelines will transform it.
-
-        Returns:
-            (model, node_name): Model with Add node and its name
-        """
+        """Create ONNX Add node for AddStreams inference."""
         # Test configuration: 4D NHWC layout
         ch = 64  # Channels (must be divisible by PE)
         h = w = 56  # Spatial dimensions
@@ -102,12 +84,12 @@ class TestAddStreamsDualParity(DualPipelineParityTest):
 
         graph = helper.make_graph(
             nodes=[add_node],
-            name="addstreams_dual_test",
+            name="addstreams_v2_test",
             inputs=[inp1, inp2],
             outputs=[outp]
         )
 
-        model = qonnx_make_model(graph, producer_name="addstreams-dual-parity-test")
+        model = qonnx_make_model(graph, producer_name="addstreams-v2-test")
         model = ModelWrapper(model)
 
         # Set integer datatypes (required for AddStreams)
@@ -125,10 +107,6 @@ class TestAddStreamsDualParity(DualPipelineParityTest):
         """Return Brainsmith's unified InferKernelList transform."""
         return InferKernelList
 
-    def get_kernel_class(self) -> Type[KernelOp]:
-        """Return AddStreams class for golden reference."""
-        return AddStreams
-
     def get_num_inputs(self) -> int:
         """AddStreams has 2 inputs."""
         return 2
@@ -140,16 +118,33 @@ class TestAddStreamsDualParity(DualPipelineParityTest):
     def configure_kernel_node(
         self, op: HWCustomOp, model: ModelWrapper, is_manual: bool
     ) -> None:
-        """Configure AddStreams node identically for both implementations.
+        """Configure AddStreams node identically for both implementations."""
+        from brainsmith.dataflow.kernel_op import KernelOp
+
+        # Set PE for testing (64 channels / 8 = 8-way folding)
+        op.set_nodeattr("PE", 8)
+
+        # Reset design space after configuration (PE changed)
+        if isinstance(op, KernelOp):
+            op._ensure_ready(model)
+
+    # =========================================================================
+    # Test-Owned Golden Reference
+    # =========================================================================
+
+    def compute_golden_reference(self, inputs: dict) -> dict:
+        """NumPy golden reference for AddStreams - test-owned!
+
+        This is test logic, not kernel logic. The test defines what "correct"
+        means for element-wise addition.
 
         Args:
-            op: AddStreams operator instance
-            model: ModelWrapper containing the op
-            is_manual: True if manual FINN implementation
+            inputs: Dict with "input0" and "input1" numpy arrays
+
+        Returns:
+            Dict with "output" = input0 + input1
         """
-        # Set PE for testing (64 channels / 8 = 8-way folding)
-        # Configure BOTH implementations identically for fair comparison
-        op.set_nodeattr("PE", 8)
+        return {"output": inputs["input0"] + inputs["input1"]}
 
     # =========================================================================
     # AddStreams-Specific Tests

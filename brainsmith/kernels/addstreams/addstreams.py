@@ -53,18 +53,10 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         )
     ],
     constraints=[
-        # Both inputs must be dynamic (not initializers/weights)
         df.IsDynamic(("input0", "input1")),
-        # Both inputs must be integers
         df.DatatypeInteger(("input0", "input1")),
-        # Inputs must have same shape
         df.ShapesEqual(("input0", "input1")),
-    ],
-    kernel_params={
-        "PE": ("i", False, 1),
-        "NumChannels": ("i", False, 1),
-        "numInputVectors": ("i", False, 1),
-    },
+    ]
 )
 
 
@@ -89,45 +81,12 @@ class AddStreams(KernelOp):
 
     @classmethod
     def can_infer_from(cls, node: NodeProto, model: ModelWrapper) -> bool:
-        """Check if ONNX node can be converted to AddStreams kernel.
-
-        Validates:
-        - Op type is Add
-        - Both inputs are dynamic (not initializers)
-        - Both inputs are integers
-        - Inputs have same shape
-        """
+        """Check if ONNX node can be converted to AddStreams kernel."""
         if node.op_type != "Add":
             return False
 
         # Check we have two inputs
         if len(node.input) != 2:
-            return False
-
-        # Check both inputs are dynamic (not initializers)
-        initializer_names = [x.name for x in model.graph.initializer]
-        for inp in node.input:
-            if inp in initializer_names:
-                return False
-
-        # Check both inputs are integers
-        try:
-            dt0 = model.get_tensor_datatype(node.input[0])
-            dt1 = model.get_tensor_datatype(node.input[1])
-            if not (dt0.is_integer() and dt1.is_integer()):
-                return False
-        except:
-            # If datatypes not available, reject
-            return False
-
-        # Check inputs have same shape
-        try:
-            shape0 = model.get_tensor_shape(node.input[0])
-            shape1 = model.get_tensor_shape(node.input[1])
-            if shape0 != shape1:
-                return False
-        except:
-            # If shapes not available, reject
             return False
 
         return True
@@ -155,15 +114,6 @@ class AddStreams(KernelOp):
         Returns:
             TransformationResult with AddStreams node and removed Add node
         """
-        schema = cls.build_schema(node, model)
-
-        # Extract parameters from ONNX graph
-        input_shape = model.get_tensor_shape(node.input[0])
-
-        # Calculate NumChannels (last dimension) and numInputVectors (product of all other dims)
-        num_channels = input_shape[-1]
-        num_input_vectors = int(np.prod(input_shape[:-1]))
-
         # Create AddStreams HW node
         hw_node = helper.make_node(
             "AddStreams",
@@ -171,8 +121,6 @@ class AddStreams(KernelOp):
             outputs=list(node.output),
             domain="brainsmith.kernels",
             backend="fpgadataflow",
-            NumChannels=num_channels,
-            numInputVectors=num_input_vectors,
             name=f"AddStreams_{node.name}"
         )
 
@@ -215,62 +163,9 @@ class AddStreams(KernelOp):
         # Store result
         context[node.output[0]] = output_data
 
-    # ====================================================================
-    # Golden Reference (For Integration Testing)
-    # ====================================================================
-
-    @staticmethod
-    def compute_golden_reference(inputs: dict) -> dict:
-        """NumPy reference implementation for AddStreams.
-
-        This is the single source of truth for correctness validation.
-        All backends (Python, HLS cppsim, RTL rtlsim) must match this.
-
-        Args:
-            inputs: Dict with "input0" and "input1" numpy arrays
-
-        Returns:
-            Dict with "output" = input0 + input1
-
-        Example:
-            >>> inputs = {"input0": np.array([1, 2, 3]),
-            ...           "input1": np.array([4, 5, 6])}
-            >>> golden = AddStreams.compute_golden_reference(inputs)
-            >>> golden["output"]
-            array([5, 7, 9])
-        """
-        return {"output": inputs["input0"] + inputs["input1"]}
-
-    @staticmethod
-    def validate_golden_properties(inputs: dict, outputs: dict) -> None:
-        """Validate mathematical properties of addition.
-
-        Properties checked:
-        - Commutativity: a + b == b + a
-        - Associativity: (a + b) + c == a + (b + c) (for 3+ inputs, future)
-        - Identity: a + 0 == a
-
-        Args:
-            inputs: Dict with "input0" and "input1" arrays
-            outputs: Dict with "output" array from golden reference
-
-        Raises:
-            AssertionError: If properties are violated
-        """
-        input0 = inputs["input0"]
-        input1 = inputs["input1"]
-        output = outputs["output"]
-
-        # Test commutativity: a + b == b + a
-        reverse_sum = input1 + input0
-        np.testing.assert_array_equal(
-            output,
-            reverse_sum,
-            err_msg="Addition is not commutative (a + b != b + a)",
-        )
-
-        # Test against direct computation
-        direct_sum = input0 + input1
-        np.testing.assert_array_equal(
-            output, direct_sum, err_msg="Golden reference does not match direct sum"
-        )
+    # NOTE: Golden reference removed - tests own the golden reference!
+    # See tests/dual_pipeline/test_addstreams_dual_parity.py for the
+    # test-owned golden reference implementation.
+    #
+    # Design principle: Kernel contains production code, tests contain test logic.
+    # Golden reference is test logic that defines what "correct" means.

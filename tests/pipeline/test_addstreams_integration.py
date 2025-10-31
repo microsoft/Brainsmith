@@ -22,7 +22,7 @@ Example Usage:
 import numpy as np
 import pytest
 from onnx import helper, TensorProto
-from typing import Tuple, Type
+from typing import Dict, Tuple, Type
 
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
@@ -143,9 +143,26 @@ class TestAddStreamsIntegration(IntegratedPipelineTest):
         """
         return InferKernelList
 
-    def get_kernel_class(self) -> Type[KernelOp]:
-        """Return AddStreams class for golden reference."""
-        return AddStreams
+    def compute_golden_reference(
+        self, inputs: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
+        """Test-owned golden reference for AddStreams.
+
+        Implements element-wise addition: output = input0 + input1
+
+        This is TEST LOGIC that defines what "correct" means for AddStreams.
+        The test owns this definition, not the production kernel code.
+
+        Args:
+            inputs: {"input0": array, "input1": array}
+
+        Returns:
+            {"output": sum_array}
+        """
+        input0 = inputs["input0"]
+        input1 = inputs["input1"]
+        output = input0 + input1
+        return {"output": output}
 
     # ================================================================
     # Optional Configuration
@@ -185,13 +202,26 @@ class TestAddStreamsIntegration(IntegratedPipelineTest):
         input0 = np.random.randint(-128, 128, shape).astype(np.float32)
         input1 = np.random.randint(-128, 128, shape).astype(np.float32)
 
-        inputs = {"input0": input0, "input1": input1}
+        # Test commutativity: a + b == b + a
+        forward_inputs = {"input0": input0, "input1": input1}
+        reverse_inputs = {"input0": input1, "input1": input0}
 
-        # Compute golden reference
-        golden_outputs = self.compute_golden_reference(inputs)
+        forward_output = self.compute_golden_reference(forward_inputs)["output"]
+        reverse_output = self.compute_golden_reference(reverse_inputs)["output"]
 
-        # Validate properties
-        AddStreams.validate_golden_properties(inputs, golden_outputs)
+        np.testing.assert_array_equal(
+            forward_output,
+            reverse_output,
+            err_msg="Golden reference should be commutative (a+b == b+a)",
+        )
+
+        # Test correctness: matches direct NumPy addition
+        expected_output = input0 + input1
+        np.testing.assert_array_equal(
+            forward_output,
+            expected_output,
+            err_msg="Golden reference should match direct NumPy addition",
+        )
 
     @pytest.mark.pipeline
     @pytest.mark.phase1

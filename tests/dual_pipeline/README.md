@@ -179,19 +179,16 @@ def test_both_specializations_succeed(self):
 
 ```bash
 # Run all dual pipeline tests
-pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v
+pytest tests/dual_pipeline/test_addstreams_v2.py -v
 
 # Run only golden reference tests (correctness)
-pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m golden
+pytest tests/dual_pipeline/test_addstreams_v2.py -v -m golden
 
 # Run only parity tests (equivalence)
-pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m parity
+pytest tests/dual_pipeline/test_addstreams_v2.py -v -m parity
 
 # Run fast tests only (skip slow cppsim)
-pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m "not slow"
-
-# Run integration tests
-pytest tests/dual_pipeline/test_addstreams_dual_parity.py -v -m integration
+pytest tests/dual_pipeline/test_addstreams_v2.py -v -m "not slow"
 
 # Run all dual pipeline tests across all kernels
 pytest tests/dual_pipeline/ -v
@@ -414,8 +411,9 @@ class TestAddStreamsDualParity(DualPipelineParityTest):
 ## Examples
 
 See:
-- `tests/dual_pipeline/test_addstreams_dual_parity.py` - Complete AddStreams example
-- `brainsmith/kernels/addstreams/addstreams.py` - Golden reference implementation
+- `tests/dual_pipeline/test_addstreams_v2.py` - Complete AddStreams example with test-owned golden reference
+- `tests/parity/core_parity_test.py` - Core parity testing (shapes, widths, datatypes)
+- `tests/parity/hw_estimation_parity_test.py` - HW estimation parity testing (resources, cycles)
 
 ## FAQ
 

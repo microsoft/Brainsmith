@@ -77,9 +77,9 @@ class IntegratedPipelineTest(ABC):
                 # Return transform that creates hardware node
                 return InferKernelList
 
-            def get_kernel_class(self):
-                # Return kernel class for golden reference
-                return MyKernel
+            def compute_golden_reference(self, inputs):
+                # Test-owned golden reference (test logic, not production code)
+                return {"output": inputs["input0"] + inputs["input1"]}
 
     Phase 1 Tests (Inherited):
     - test_pipeline_creates_hw_node()
@@ -133,16 +133,26 @@ class IntegratedPipelineTest(ABC):
         pass
 
     @abstractmethod
-    def get_kernel_class(self) -> Type[KernelOp]:
-        """Return kernel class for golden reference access.
+    def compute_golden_reference(
+        self, inputs: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
+        """Compute test-owned golden reference.
+
+        Each test defines what "correct" means for its specific test case.
+        This is TEST LOGIC, not production code!
+
+        Args:
+            inputs: Dict mapping input names → numpy arrays
+                   Example: {"input0": arr1, "input1": arr2}
 
         Returns:
-            KernelOp class (e.g., AddStreams, ElementwiseBinaryOp)
+            Dict mapping output names → expected numpy arrays
+            Example: {"output": expected_arr}
 
         Example:
-            def get_kernel_class(self):
-                from brainsmith.kernels.addstreams import AddStreams
-                return AddStreams
+            def compute_golden_reference(self, inputs):
+                '''Element-wise addition.'''
+                return {"output": inputs["input0"] + inputs["input1"]}
         """
         pass
 
@@ -320,38 +330,8 @@ class IntegratedPipelineTest(ABC):
         return None
 
     # ================================================================
-    # Golden Reference Helpers
+    # Golden Reference Validation
     # ================================================================
-
-    def compute_golden_reference(
-        self, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using kernel's reference implementation.
-
-        Delegates to kernel class's compute_golden_reference() method.
-
-        Args:
-            inputs: Dict mapping input names → numpy arrays
-
-        Returns:
-            Dict mapping output names → expected numpy arrays
-
-        Example:
-            inputs = {"input0": np.array([...]), "input1": np.array([...])}
-            golden = self.compute_golden_reference(inputs)
-            # → {"output": np.array([...])}
-        """
-        kernel_class = self.get_kernel_class()
-        if not hasattr(kernel_class, "compute_golden_reference"):
-            raise NotImplementedError(
-                f"{kernel_class.__name__} does not implement compute_golden_reference(). "
-                f"Add static method: "
-                f"@staticmethod\\n"
-                f"def compute_golden_reference(inputs: Dict) -> Dict:\\n"
-                f"    ..."
-            )
-
-        return kernel_class.compute_golden_reference(inputs)
 
     def validate_against_golden(
         self,

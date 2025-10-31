@@ -1,13 +1,16 @@
-"""Dual Pipeline Parity Testing Framework.
+"""Dual Pipeline Parity Testing Framework - V2 Modular Architecture.
 
-This module provides DualPipelineParityTest, a unified testing framework that
-combines golden reference validation with hardware parity validation.
+This module provides DualPipelineParityTest, a convenience wrapper combining:
+1. Core parity testing (CoreParityTest) - shapes, widths, datatypes
+2. HW estimation parity (HWEstimationParityTest) - resources, cycles
+3. Golden reference validation (GoldenReferenceMixin) - execution correctness
 
 Philosophy:
 -----------
 Run complete pipeline for BOTH manual (FINN) and auto (Brainsmith) implementations:
-- Each validates against NumPy golden reference (absolute correctness)
+- Each validates against test-owned golden reference (absolute correctness)
 - Hardware specs compared between implementations (migration safety)
+- Structural properties validated (shapes, widths, datatypes)
 
 Best of both worlds for compiler teams migrating from FINN to Brainsmith.
 
@@ -25,16 +28,23 @@ Usage:
         def get_auto_transform(self):
             return InferKernelList  # Brainsmith
 
-        def get_kernel_class(self):
-            return MyKernel  # For golden reference
+        def compute_golden_reference(self, inputs):
+            # Test-owned golden reference
+            return {"output": inputs["input0"] + inputs["input1"]}
 
-Inherited Tests (~20 automatic):
+        def get_num_inputs(self):
+            return 2
+
+        def get_num_outputs(self):
+            return 1
+
+Inherited Tests (16 automatic):
 --------------------------------
-- Golden reference validation (4 tests)
-- Hardware parity validation (12 tests)
-- Integration validation (4 tests)
+- Core parity (7 tests): shapes, widths, datatypes
+- HW estimation (5 tests): resources, cycles
+- Golden execution (4 tests): manual/auto × Python/cppsim
 """
 
-from .base_dual_pipeline_test import DualPipelineParityTest
+from .dual_pipeline_parity_test_v2 import DualPipelineParityTest
 
 __all__ = ["DualPipelineParityTest"]
