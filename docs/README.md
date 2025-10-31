@@ -20,7 +20,7 @@ The Brainsmith compiler relies on a rich library of kernels, graph transforms, a
 
 ### Multilayer Offload (MLO)
 
-For large neural networks that exceed on-chip memory capacity, Brainsmith supports **Multilayer Offload** - a technique that implements a single repeating layer (like a transformer encoder) in hardware and cycles weights through external high-bandwidth memory. This enables acceleration of much larger models by trading some throughput for the ability to handle models with dozens or hundreds of layers.
+For large neural networks that exceed on-chip memory capacity, Brainsmith supports **Multilayer Offload** - a technique that implements a single repeating layer (like a transformer encoder) in hardware and cycles weights through external high-bandwidth memory. This enables acceleration of much larger models.
 
 MLO is particularly effective for transformer-based models (BERT, GPT, etc.) where the same layer structure repeats many times. Instead of implementing all layers in hardware, MLO implements just one layer and reuses it sequentially with different weights streamed from DRAM/HBM.
 
