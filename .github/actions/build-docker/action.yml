@@ -10,17 +10,17 @@ runs:
         chmod +x ctl-docker.sh
         echo "=== Building Docker image ==="
         ./ctl-docker.sh build
-        
+
         echo "=== Verifying image was built ==="
         echo "Expected image tag: $BSMITH_DOCKER_TAG"
-        
+
         # Wait a moment for Docker to register the image
         sleep 2
-        
+
         # Show all docker images for debugging
         echo "All Docker images:"
         docker images
-        
+
         # Check for the specific tag
         if docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "microsoft/brainsmith:"; then
             echo "✓ Docker image built and verified successfully"

@@ -1,0 +1,54 @@
+
+name: "DLRM Demo"
+description: "FaceBook PyTorch DLRM model"
+
+#extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
+
+# Configuration overrides
+clock_ns: 5.0                       # Target clock period in nanoseconds
+output: "bitfile"                   # estimates | rtl | bitfile
+board: "V80"                        # Target FPGA board
+save_intermediate_models: true      # Save intermediate ONNX models
+
+# Direct override FINN configuration options
+finn_config:
+  enable_build_pdb_debug: true
+#   standalone_thresholds: true
+#   target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
+#   folding_config_file: null         # Path to manual folding config JSON (optional)
+#   split_large_fifos: true
+
+design_space:
+  # Inherit kernels from parent blueprint
+  kernels:
+    - LayerNorm
+    - DuplicateStreams
+    - ElementwiseBinaryOperation
+    - Shuffle
+    - Softmax
+    - Thresholding
+    - MVAU
+    - StreamingConcat
+    - Lookup
+
+  # Add pre/post-processing steps to standard BERT blueprint
+  steps:
+    - bert_cleanup           # brainsmith.steps.bert_custom_steps
+    - split_sparse_processing
+    - dense_cleanup
+    - qonnx_to_finn  # custom_step_qonnx2finn
+    # Topology optimization
+    - streamline
+    # Core FINN steps
+    - infer_kernels # Brainsmith dynamic kernel inference
+    # - create_dataflow_partition
+    - specialize_layers
+    - target_fps_parallelization
+    - apply_folding_config
+    - minimize_bit_width
+    - generate_estimate_reports
+    - hw_codegen
+    - hw_ipgen
+    - set_fifo_depths
+    - create_stitched_ip
+    - measure_rtlsim_performance

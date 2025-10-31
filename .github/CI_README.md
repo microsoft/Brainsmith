@@ -44,8 +44,8 @@ Fast validation for pull requests and develop branch pushes.
 ### Biweekly Tests (`biweekly-tests.yml`)
 Comprehensive testing for large model validation.
 
-**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)  
-**Runtime**: ~24 hours  
+**Triggers**: Biweekly schedule (Monday/Thursday 00:00 UTC)
+**Runtime**: ~24 hours
 **Job**: `bert-large-comprehensive-test` (BERT Large Model Comprehensive Test)
 
 **Steps**:
@@ -95,7 +95,7 @@ Complete test lifecycle with conditional artifact collection.
 - `docker-cleanup` - Cleans containers AND persistent build directories
 - `collect-artifacts` - Collects system info, container logs, and test artifacts
 
-#### Docker Actions  
+#### Docker Actions
 - `build-docker` - Builds image with verification and timing fixes
 - `docker-exec` - Executes commands with container lifecycle management
 

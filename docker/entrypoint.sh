@@ -29,7 +29,7 @@ fi
 # Run one-stop setup (unless explicitly skipped)
 if [ "$BSMITH_SKIP_SETUP" != "1" ]; then
     log "Running setup..."
-    
+
     # Build setup flags
     SETUP_FLAGS="--docker"  # Always use docker mode
     [ -n "$BSMITH_FORCE_SETUP" ] && SETUP_FLAGS="$SETUP_FLAGS --force"
@@ -39,7 +39,7 @@ if [ "$BSMITH_SKIP_SETUP" != "1" ]; then
     if [ -n "$BSMITH_SKIP_COMPONENTS" ]; then
         SETUP_FLAGS="$SETUP_FLAGS --skip $BSMITH_SKIP_COMPONENTS"
     fi
-    
+
     # Run setup
     if ./setup-venv.sh $SETUP_FLAGS; then
         log "✓ Setup completed successfully"

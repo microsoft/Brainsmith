@@ -13,32 +13,32 @@ runs:
       shell: bash
       run: |
         ARTIFACT_DIR="${{ inputs.artifact-directory }}"
-        
+
         # Validate directory name
         if [[ ! "$ARTIFACT_DIR" =~ ^[a-zA-Z0-9_\-]+$ ]]; then
             echo "ERROR: Artifact directory contains invalid characters"
             echo "Allowed: alphanumeric, underscore, hyphen"
             exit 1
         fi
-        
+
         # Prevent path traversal
         if [[ "$ARTIFACT_DIR" =~ \.\./|^/ ]]; then
             echo "ERROR: Invalid artifact directory path (path traversal detected)"
             exit 1
         fi
-        
+
         echo "✓ Artifact directory validated: $ARTIFACT_DIR"
-    
+
     - name: Collect artifacts
       shell: bash
       run: |
         ARTIFACT_DIR="${{ inputs.artifact-directory }}"
         mkdir -p "$ARTIFACT_DIR"
-        
+
         echo "=== Collecting system info ==="
         df -h > "$ARTIFACT_DIR/disk_usage.txt" 2>/dev/null || true
         free -h > "$ARTIFACT_DIR/memory_usage.txt" 2>/dev/null || true
-        
+
         echo "=== Collecting container info ==="
         if [ -x ./ctl-docker.sh ]; then
             ./ctl-docker.sh status > "$ARTIFACT_DIR/container_status.txt" 2>&1 || echo "Status failed" > "$ARTIFACT_DIR/container_status.txt"
