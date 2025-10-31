@@ -34,9 +34,12 @@ Usage:
 
 See Also:
     tests/pipeline/README.md - Complete usage guide
-    tests/pipeline/base_integration_test.py - Framework base class
+    tests/frameworks/single_kernel_test.py - New composition-based framework
+    tests/IMPLEMENTATION_STATUS.md - Migration status and history
 """
 
-from .base_integration_test import IntegratedPipelineTest
+# NOTE: IntegratedPipelineTest was replaced by SingleKernelTest (tests/frameworks/)
+# All pipeline tests have been migrated to the new composition-based framework.
+# See tests/IMPLEMENTATION_STATUS.md for migration details.
 
-__all__ = ["IntegratedPipelineTest"]
+__all__ = []

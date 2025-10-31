@@ -140,13 +140,16 @@ component_sources: {}
 def setup_parity_imports():
     """Setup imports for parity test modules.
 
-    Adds tests/parity/ to sys.path to enable clean imports of parity test
-    helpers in kernel parity tests.
+    NOTE: Old parity frameworks (ParityTestBase) have been replaced.
+    Use new frameworks from tests/frameworks/ instead.
 
-    Usage in kernel parity tests:
-        def test_something(setup_parity_imports):
-            from base_parity_test import ParityTestBase
-            ...
+    Adds tests/parity/ to sys.path for remaining parity utilities:
+    - assertions.py (parity-specific assertions)
+    - test_fixtures.py (make_execution_context)
+
+    New framework usage:
+        from tests.frameworks.single_kernel_test import SingleKernelTest
+        from tests.frameworks.dual_kernel_test import DualKernelTest
 
     This eliminates brittle sys.path manipulation in individual test files.
     """

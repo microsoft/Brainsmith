@@ -33,11 +33,11 @@ from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
 from brainsmith.dataflow.kernel_op import KernelOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
-from tests.pipeline.base_integration_test import IntegratedPipelineTest
+from tests.frameworks.single_kernel_test import SingleKernelTest
 from tests.parity.test_fixtures import make_execution_context
 
 
-class TestAddStreamsIntegration(IntegratedPipelineTest):
+class TestAddStreamsIntegration(SingleKernelTest):
     """Complete pipeline integration test for AddStreams kernel.
 
     Validates:
