@@ -469,15 +469,17 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         Environment Requirements (cppsim/rtlsim):
             - VITIS_PATH or HLS_PATH environment variable must be set
-            - Set via: `config.export_to_environment()` from brainsmith.config
+            - Environment must be sourced BEFORE running Python:
+                source .brainsmith/env.sh
+              or:
+                direnv allow
             - Compilation may take 2-10 minutes on first run
             - Subsequent runs use cached executable
 
         Example:
-            >>> from brainsmith.config import get_config
-            >>> config = get_config()
-            >>> config.export_to_environment()  # Setup Vivado environment
-            >>>
+            # Ensure environment is sourced before running:
+            #   $ source .brainsmith/env.sh
+            #
             >>> hw_op.set_nodeattr("exec_mode", "cppsim")
             >>> result = hw_op.execute_node(context, model.graph)
         """

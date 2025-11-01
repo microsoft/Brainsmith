@@ -90,6 +90,10 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         logs: str,
         no_progress: bool
     ) -> None:
+        # Validate environment is sourced before proceeding
+        from brainsmith.settings.validation import ensure_environment_sourced
+        ensure_environment_sourced()
+
         ctx.obj = ApplicationContext.from_cli_args(
             config_file=config,
             build_dir_override=build_dir,

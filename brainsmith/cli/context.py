@@ -40,6 +40,11 @@ class ApplicationContext:
     ) -> "ApplicationContext":
         """Create context from CLI arguments and perform all initialization.
 
+        IMPORTANT: Expects environment to be sourced before running CLI:
+            source .brainsmith/env.sh
+        or:
+            direnv allow
+
         Args:
             config_file: Path to config file override
             build_dir_override: Path to build directory override
@@ -64,7 +69,6 @@ class ApplicationContext:
         logger.debug(f"{cli_name} CLI initialized with logs={log_level}, no_progress={no_progress}")
 
         context.load_configuration()
-        context.get_effective_config().export_to_environment()
 
         return context
 

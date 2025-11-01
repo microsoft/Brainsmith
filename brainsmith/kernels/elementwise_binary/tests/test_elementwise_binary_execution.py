@@ -25,23 +25,6 @@ from tests.fixtures.kernel_test_helpers import make_broadcast_model
 # Test Helpers
 # =============================================================================
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_cppsim_environment():
-    """Setup environment for cppsim tests.
-
-    Exports necessary environment variables for Vivado/Vitis tools.
-    Uses brainsmith config system to properly configure paths.
-    """
-    try:
-        from brainsmith.config import get_config
-        config = get_config()
-        # Export only external tool vars (VIVADO_PATH, etc), not internal BSMITH_* vars
-        config.export_to_environment(include_internal=False)
-    except Exception:
-        # If config fails, tests will skip appropriately
-        pass
-
-
 def infer_to_hls_backend(model):
     """Apply transformations to get ElementwiseBinaryOp_hls instance.
 

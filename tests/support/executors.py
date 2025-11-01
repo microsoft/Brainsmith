@@ -36,7 +36,6 @@ from typing import Dict, Protocol, runtime_checkable
 
 from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.settings import load_config
 from brainsmith.dataflow.kernel_op import KernelOp
 
 # Import test constants
@@ -151,6 +150,7 @@ class CppSimExecutor:
     Validates code generation, compilation, and execution.
 
     Requires:
+    - Environment sourced before running tests (source .brainsmith/env.sh)
     - VITIS_PATH environment variable set
     - HLSBackend inheritance on operator
     """
@@ -189,10 +189,6 @@ class CppSimExecutor:
                 )
         except ImportError:
             pytest.skip("HLSBackend not available")
-
-        # Export Brainsmith configuration to environment
-        settings = load_config()
-        settings.export_to_environment()
 
         try:
             # Create temp directory for code generation
@@ -275,6 +271,7 @@ class RTLSimExecutor:
     - RTL backends: Uses HDL directly
 
     Requires:
+    - Environment sourced before running tests (source .brainsmith/env.sh)
     - XSI (Xilinx Simulator) available via finn.xsi
     - RTLBackend or HLSBackend inheritance on operator
     """
@@ -340,10 +337,6 @@ class RTLSimExecutor:
 
         except ImportError:
             pytest.skip("RTLBackend/HLSBackend not available")
-
-        # Export Brainsmith configuration to environment
-        settings = load_config()
-        settings.export_to_environment()
 
         try:
             # Ensure node has a name (required for HLS synthesis)
