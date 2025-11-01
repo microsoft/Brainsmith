@@ -48,14 +48,20 @@ class LegacyShuffle(HWCustomOp):
 
 
     def get_normal_input_shape(self, ind=0):
-        return self.get_nodeattr("in_reshaped")
+        return tuple(self.get_nodeattr("in_reshaped"))
 
     def get_normal_output_shape(self, ind=0):
-        return self.get_nodeattr("out_reshaped")
+        return tuple(self.get_nodeattr("out_reshaped"))
 
     def get_number_output_values(self):
         folded_oshape = self.get_folded_output_shape()
         return np.prod(folded_oshape[:-1]) # [STF] Not sure this is correct...
+
+    def get_exp_cycles(self):
+        """Expected cycles for execution (based on output size and SIMD)."""
+        out_shape = self.get_nodeattr("out_shape")
+        simd = self.get_nodeattr("SIMD")
+        return int(np.prod(out_shape) / simd)
 
     def execute_node(self, context, graph):
         node = self.onnx_node

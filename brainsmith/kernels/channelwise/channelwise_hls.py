@@ -160,9 +160,8 @@ class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
             )
             f.write(parameters_hls_code)
 
-    def execute_node(self, context, graph):
-        """Execute using HLSBackend."""
-        HLSBackend.execute_node(self, context, graph)
+    # NOTE: get_rtlsim() and execute_node() inherited from HWCustomOp/HLSBackend
+    # No overrides needed - FINN's implementation works correctly!
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = ['#include "activations.hpp"']
@@ -176,10 +175,11 @@ class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
         numReps = tensor_shape[0]  # First dimension is batch
         pe = input_iface.stream_shape[-1]  # PE from stream tiling
 
+        # Use multi-line string with actual newlines (not escaped \n)
         self.code_gen_dict["$DEFINES$"] = [
-            f"#define NumChannels1 {num_channels}\\n"
-            f"#define PE1 {pe}\\n"
-            f"#define numReps {numReps}"
+            f"""#define NumChannels1 {num_channels}
+#define PE1 {pe}
+#define numReps {numReps}"""
         ]
 
     def read_npy_data(self):

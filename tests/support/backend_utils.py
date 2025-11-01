@@ -9,6 +9,7 @@ Pattern validated by: tests/spike_backend_specialization.py
 
 from typing import Tuple
 
+from brainsmith.primitives.transforms import SpecializeKernels
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
 from finn.util.basic import getHWCustomOp
 from qonnx.core.modelwrapper import ModelWrapper

@@ -1,4 +1,4 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests for DuplicateStreams kernel."""
+"""Parity tests comparing FINN and Brainsmith implementations."""

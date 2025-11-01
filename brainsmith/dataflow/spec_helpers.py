@@ -297,6 +297,9 @@ def smallest_datatype_for_range(min_val: float, max_val: float) -> 'BaseDataType
     Consolidates the logic used throughout the codebase for selecting
     optimal datatypes based on value ranges.
 
+    Uses array-based checking to correctly handle signed/unsigned detection,
+    matching FINN's proven approach.
+
     Args:
         min_val: Minimum value to represent
         max_val: Maximum value to represent
@@ -307,12 +310,36 @@ def smallest_datatype_for_range(min_val: float, max_val: float) -> 'BaseDataType
     Example:
         dt = smallest_datatype_for_range(-100, 127)  # Returns DataType["INT8"]
         dt = smallest_datatype_for_range(0, 255)     # Returns DataType["UINT8"]
+        dt = smallest_datatype_for_range(-1016, 1024)  # Returns DataType["INT12"]
     """
     from qonnx.core.datatype import DataType
+    import numpy as np
 
-    # Pick the most extreme value
-    extreme = min_val if abs(min_val) > abs(max_val) else max_val
-    return DataType.get_smallest_possible(extreme)
+    # Create array with both bounds (matches FINN's approach)
+    # This ensures we correctly detect when range includes negative values
+    vals = np.array([min_val, max_val], dtype=np.float64)
+
+    # Verify values are integers
+    for v in vals:
+        assert int(v) == v, f"Non-integer value in range: {v}"
+
+    # Iterate through accumulator candidates (sorted by size, prefers unsigned)
+    for k in DataType.get_accumulator_dt_cands():
+        dt = DataType[k]
+
+        # Skip unsupported types
+        if dt in [DataType["BIPOLAR"], DataType["TERNARY"], DataType["FLOAT32"]]:
+            continue
+
+        # Check if datatype can represent BOTH bounds
+        if (dt.min() <= vals).all() and (vals <= dt.max()).all():
+            return dt
+
+    # Fallback for extreme ranges
+    if min_val >= 0:
+        return DataType["UINT64"]
+    else:
+        return DataType["INT64"]
 
 
 # =============================================================================

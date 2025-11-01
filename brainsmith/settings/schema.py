@@ -613,14 +613,30 @@ class SystemConfig(BaseSettings):
             if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
                 continue
 
-            # Skip PATH - user should activate venv separately
-            # PATH management is complex and best left to venv/direnv
+            # Skip PATH - we'll add Xilinx tool paths separately
             if key == "PATH":
                 continue
 
             # Properly escape quotes in values
             escaped_value = str(value).replace('"', '\\"')
             script_lines.append(f'export {key}="{escaped_value}"')
+
+        # Add Xilinx tool paths to PATH
+        script_lines.extend([
+            "",
+            "# Add Xilinx tools to PATH",
+            'if [ -n "$VIVADO_PATH" ]; then',
+            '    export PATH="$VIVADO_PATH/bin:$PATH"',
+            'fi',
+            "",
+            'if [ -n "$VITIS_PATH" ]; then',
+            '    export PATH="$VITIS_PATH/bin:$PATH"',
+            'fi',
+            "",
+            'if [ -n "$HLS_PATH" ]; then',
+            '    export PATH="$HLS_PATH/bin:$PATH"',
+            'fi',
+        ])
 
         output_path = Path(output_path).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -717,6 +733,7 @@ class SystemConfig(BaseSettings):
         - Auto-regenerates environment when config changes
         - Loads environment variables from .brainsmith/.env
         - Activates virtualenv using direnv's layout python
+        - Adds Xilinx tool paths (VIVADO_PATH/bin, VITIS_PATH/bin, HLS_PATH/bin) to PATH
 
         User must run 'direnv allow' to trust the file.
 
@@ -760,6 +777,19 @@ fi
 
 # Load Brainsmith environment variables
 dotenv .brainsmith/.env
+
+# Add Xilinx tools to PATH
+if [ -n "$VIVADO_PATH" ]; then
+    PATH_add "$VIVADO_PATH/bin"
+fi
+
+if [ -n "$VITIS_PATH" ]; then
+    PATH_add "$VITIS_PATH/bin"
+fi
+
+if [ -n "$HLS_PATH" ]; then
+    PATH_add "$HLS_PATH/bin"
+fi
 '''
 
         output_path = Path(output_path).expanduser()

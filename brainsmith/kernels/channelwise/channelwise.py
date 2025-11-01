@@ -15,7 +15,7 @@ from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import get_by_name
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow import KernelOp, FULL_SHAPE
 from brainsmith.dataflow.types import VALUE_OPTIMIZED
 from brainsmith.dataflow.transformation import TransformationResult
 from brainsmith.dataflow.spec_helpers import add_datatype, mul_datatype, smallest_datatype_for_range
@@ -49,7 +49,7 @@ CHANNELWISE_SCHEMA = df.KernelSchema(
         inputs=[
             df.InputSchema(
                 name="input",
-                block_tiling=[FULL_DIM],       # Process full spatial dimensions
+                block_tiling=FULL_SHAPE,       # Process full tensor shape
                 stream_tiling=["PE"],          # Channel parallelism with PE
                 required_layout="NHWC",        # Hardware requires NHWC
             ),
@@ -63,7 +63,7 @@ CHANNELWISE_SCHEMA = df.KernelSchema(
         outputs=[
             df.OutputSchema(
                 name="output",
-                block_tiling=[FULL_DIM],                      # Same as input
+                block_tiling=FULL_SHAPE,                      # Same as input
                 stream_tiling=[("input", -1)],                # Match input PE
                 datatype=_channelwise_output_datatype(),      # Dispatches based on func nodeattr
                 required_layout="NHWC",
@@ -175,14 +175,11 @@ class ChannelwiseOp(KernelOp):
             func=node.op_type,
         )
 
-        # Return transformation result with layout information
+        # Return transformation result
+        # Layout requirements are enforced by schema, not transformation
         return TransformationResult(
             nodes_to_remove=[node],
             nodes_to_insert=[hw_node],
-            actual_layouts={
-                "input": "NHWC",
-                "output": "NHWC",
-            },
         )
 
     # ================================================================

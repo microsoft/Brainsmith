@@ -504,10 +504,6 @@ class Shuffle(KernelOp):
         return df.TransformationResult(
             nodes_to_insert=[hw_node],
             nodes_to_remove=nodes_to_remove,
-            actual_layouts={
-                "input": None,  # Shuffle doesn't require specific layout
-                "output": None,
-            },
             metadata={
                 "schema_name": schema.name,
                 "source_pattern": "Transpose+Reshape",
@@ -575,8 +571,11 @@ class Shuffle(KernelOp):
         """
         from onnx import helper
 
-        in_shape = self.get_normal_input_shape(model_w=model_w)
-        out_shape = self.get_normal_output_shape(model_w=model_w)
+        # Ensure design_point is initialized before accessing shapes
+        self._ensure_ready(model_w)
+
+        in_shape = self.get_normal_input_shape()
+        out_shape = self.get_normal_output_shape()
 
         return helper.make_node(
             "Shuffle",

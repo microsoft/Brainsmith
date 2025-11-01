@@ -28,3 +28,4 @@ from brainsmith.kernels.shuffle.shuffle_hls import Shuffle_hls
 from brainsmith.kernels.softmax.softmax_hls import Softmax_hls
 from brainsmith.kernels.thresholding.thresholding_hls import Thresholding_hls
 from brainsmith.kernels.vvau.vvau_hls import VectorVectorActivation_hls
+from brainsmith.kernels.mvau.mvau_hls import MVAU_hls

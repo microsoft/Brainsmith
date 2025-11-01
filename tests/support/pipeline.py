@@ -34,6 +34,8 @@ from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from finn.util.basic import getHWCustomOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from finn.transformation.fpgadataflow.minimize_accumulator_width import MinimizeAccumulatorWidth
+from finn.transformation.fpgadataflow.minimize_weight_bit_width import MinimizeWeightBitWidth
 
 
 class PipelineRunner:
@@ -47,13 +49,19 @@ class PipelineRunner:
     2. Infer shapes (QONNX)
     3. Infer datatypes (QONNX)
     4. Apply kernel transform (FINN/Brainsmith)
-    5. Find hardware node (by name or default to first node)
-    6. Get HWCustomOp wrapper
-    7. Configure node (optional)
-    8. Initialize node (optional, if init_fn provided)
+    5. Minimize weight bit width (FINN optimization, no-op if not supported)
+    6. Minimize accumulator width (FINN optimization, no-op if not supported)
+    7. Find hardware node (by name or default to first node)
+    8. Get HWCustomOp wrapper
+    9. Configure node (optional)
+    10. Initialize node (optional, if init_fn provided)
 
     This sequence is consistent across all test frameworks, with only the
     model creation, transform type, and optional configuration varying.
+
+    Note: Steps 5-6 match FINN's standard workflow. If a kernel doesn't implement
+    minimize_weight_bit_width() or minimize_accumulator_width(), these transforms
+    have no effect and are safely skipped.
     """
 
     def run(
@@ -101,6 +109,11 @@ class PipelineRunner:
 
         # Apply kernel transform
         model = model.transform(transform())
+
+        # Apply standard FINN optimizations
+        # These are no-ops if the kernel doesn't support them
+        model = model.transform(MinimizeWeightBitWidth())
+        model = model.transform(MinimizeAccumulatorWidth())
 
         # Find hardware node
         hw_node = None

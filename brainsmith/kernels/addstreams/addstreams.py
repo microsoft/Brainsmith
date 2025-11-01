@@ -70,10 +70,6 @@ class AddStreams(KernelOp):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
-    # ====================================================================
-    # Schema (Required by KernelOp)
-    # ====================================================================
-
     @classmethod
     def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
         """Build AddStreams schema (constant for all instances)."""
@@ -90,10 +86,6 @@ class AddStreams(KernelOp):
             return False
 
         return True
-
-    # ====================================================================
-    # Inference Implementation (Custom - needs NumChannels, etc.)
-    # ====================================================================
 
     @classmethod
     def infer_from(
@@ -128,10 +120,6 @@ class AddStreams(KernelOp):
             nodes_to_insert=[hw_node],
             nodes_to_remove=[node],
         )
-
-    # ====================================================================
-    # Execution (CPU implementation for testing/validation)
-    # ====================================================================
 
     def execute_node(self, context, graph):
         """Execute AddStreams on CPU for testing/validation.

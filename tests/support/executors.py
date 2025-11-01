@@ -355,32 +355,37 @@ class RTLSimExecutor:
             hw_node = model.graph.node[0]
             op = getHWCustomOp(hw_node, model)
 
-            # Create temp directory
-            tmpdir = tempfile.mkdtemp(prefix=f"rtlsim_{op.__class__.__name__}_")
-            op.set_nodeattr("code_gen_dir_ipgen", tmpdir)
-
-            # Save model
-            model.save(os.path.join(tmpdir, "node_model.onnx"))
-
             # Ensure kernel instance is available
             self._ensure_kernel_ready(op, model)
 
-            # Generate RTL (either directly or via HLS synthesis)
+            # Use FINN's transformation-based approach (like FINN's own tests)
+            # This is the recommended way instead of calling methods directly
+            # Note: PrepareIP will create code_gen_dir_ipgen automatically
+            from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
+            from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
+            from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
+            from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
+
             if is_hls_backend:
-                # HLS backend: Synthesize HLS → RTL using Vitis HLS
-                op.code_generation_ipgen(model, self.fpgapart, self.clk_ns)
-                op.ipgen_singlenode_code()  # Runs Vitis HLS synthesis
+                # HLS backend: Use FINN's transformation pipeline
+                model = model.transform(PrepareIP(self.fpgapart, self.clk_ns))
+                model = model.transform(HLSSynthIP())
             elif is_rtl_backend:
-                # RTL backend: Generate HDL directly
+                # RTL backend: Generate HDL directly (no HLS synthesis needed)
+                # For RTL, we still need to set code_gen_dir_ipgen
+                tmpdir = tempfile.mkdtemp(prefix=f"rtlsim_{op.__class__.__name__}_")
+                op.set_nodeattr("code_gen_dir_ipgen", tmpdir)
                 op.generate_hdl(model, fpgapart=self.fpgapart)
             else:
                 raise RuntimeError(f"Unknown backend type for {op.__class__.__name__}")
 
-            # Prepare RTL simulation (compile Verilog with XSI/xsim)
-            op.prepare_rtlsim()
+            # Prepare RTL simulation and set exec mode (same for both HLS/RTL)
+            model = model.transform(PrepareRTLSim())
+            model = model.transform(SetExecMode("rtlsim"))
 
-            # Set execution mode
-            op.set_nodeattr("exec_mode", "rtlsim")
+            # Refresh op reference after transformations
+            hw_node = model.graph.node[0]
+            op = getHWCustomOp(hw_node, model)
 
         except Exception as e:
             pytest.fail(

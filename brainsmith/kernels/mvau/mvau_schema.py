@@ -172,12 +172,12 @@ MVAU_SCHEMA = df.KernelSchema(
     },
 
     constraints=[
-        df.IsDynamic("input"),
-        df.IsStatic("weights"),
+        df.IsDynamic(("input",)),
+        df.IsStatic(("weights",)),
         df.DatatypeInteger(("input", "weights")),
 
         # Matrix dimensions: input[-1] must match weights[0] (MW)
-        df.TensorDimMatches("input", -1, ("weights", 0)),
+        df.TensorDimMatches("input", -1, [("weights", 0)]),
 
         # Note: Threshold constraints are not included here since thresholds
         # input is conditional (only present when noActivation=0).

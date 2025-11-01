@@ -40,7 +40,8 @@ class MVAU_hls(MVAU, HLSBackend):
         HLSBackend.execute_node(self, context, graph)
 
     # ================================================================
-    # HLS Code Generation (Phase 2: MV and MVTU modes, internal_embedded)
+    # HLS Code Generation (Phase 3: All memory modes)
+    # Supports: internal_embedded, internal_decoupled, external
     # ================================================================
 
     def get_template_param_values(self):
@@ -92,8 +93,17 @@ class MVAU_hls(MVAU, HLSBackend):
 #define numReps {numReps}"""
         ]
 
+        # For decoupled/external: add weight precision
+        mem_mode = self.get_nodeattr("mem_mode")
+        if mem_mode in ["internal_decoupled", "external"]:
+            wdt = self.get_input_datatype(1)
+            self.code_gen_dict["$DEFINES$"].append(f"#define WP1 {wdt.bitwidth()}")
+
+
     def strm_decl(self):
         """Generate HLS stream declarations."""
+        mem_mode = self.get_nodeattr("mem_mode")
+
         self.code_gen_dict["$STREAMDECLARATIONS$"] = []
         self.code_gen_dict["$STREAMDECLARATIONS$"].append(
             f'hls::stream<ap_uint<{self.get_instream_width(0)}>> in0_V ("in0_V");'
@@ -102,12 +112,24 @@ class MVAU_hls(MVAU, HLSBackend):
             f'hls::stream<ap_uint<{self.get_outstream_width()}>> out0_V ("out0_V");'
         )
 
+        # For decoupled/external: add weight stream
+        if mem_mode in ["internal_decoupled", "external"]:
+            wwidth = self.get_instream_width(1)
+            self.code_gen_dict["$STREAMDECLARATIONS$"].append(
+                f'hls::stream<ap_uint<{wwidth}>> in1_V ("in1_V");'
+            )
+
     def docompute(self):
         """Generate HLS compute function call.
 
-        Handles both modes:
+        Handles activation modes:
         - noActivation=1: PassThroughActivation (MV mode)
         - noActivation=0: ThresholdsActivation (MVTU mode)
+
+        Handles memory modes:
+        - internal_embedded: Weights compiled into header
+        - internal_decoupled: Weights streamed from in1_V
+        - external: Weights read from external memory
         """
         tmpl_args = self.get_template_param_values()
         map_to_hls_mult_style = {
@@ -130,26 +152,85 @@ class MVAU_hls(MVAU, HLSBackend):
             n_thres_steps = (1 << act_val) - 1 if act_val > 0 else 0
             threshs = f"ThresholdsActivation<{acc_dtype_hls_str}, {odtype_hls_str}, {n_thres_steps}>(thresholds)"
 
-        self.code_gen_dict["$DOCOMPUTE$"] = [
-            f"""Matrix_Vector_Activate_Batch<MW1, MH1, SIMD1, PE1, 1, {tmpl_args["TSrcI"]}, {tmpl_args["TDstI"]}, {tmpl_args["TWeightI"]}>
-            (in0_V, out0_V, weights, {threshs}, numReps, {map_to_hls_mult_style[self.get_nodeattr("resType")]});"""
-        ]
+        mem_mode = self.get_nodeattr("mem_mode")
+
+        if mem_mode == "internal_embedded":
+            # Embedded mode: weights compiled into C++ header
+            self.code_gen_dict["$DOCOMPUTE$"] = [
+                f"""Matrix_Vector_Activate_Batch<MW1, MH1, SIMD1, PE1, 1, {tmpl_args["TSrcI"]}, {tmpl_args["TDstI"]}, {tmpl_args["TWeightI"]}>
+                (in0_V, out0_V, weights, {threshs}, numReps, {map_to_hls_mult_style[self.get_nodeattr("resType")]});"""
+            ]
+        elif mem_mode in ["internal_decoupled", "external"]:
+            # Decoupled/external mode: weights streamed from in1_V
+            # Get weight datatype for template arg
+            wdt = self.get_input_datatype(1)
+            if wdt == DataType["BIPOLAR"]:
+                # Bipolar exported as binary
+                export_wdt = DataType["BINARY"]
+            else:
+                export_wdt = wdt
+
+            export_wdt_hls_str = export_wdt.get_hls_datatype_str()
+
+            self.code_gen_dict["$DOCOMPUTE$"] = [
+                f"""Matrix_Vector_Activate_Batch_ext<MW1, MH1, SIMD1, PE1, 1, {tmpl_args["TSrcI"]}, {tmpl_args["TDstI"]}, {export_wdt_hls_str}>
+                (in0_V, in1_V, out0_V, {threshs}, numReps, {map_to_hls_mult_style[self.get_nodeattr("resType")]});"""
+            ]
+        else:
+            raise Exception(
+                f'Please set mem_mode to "internal_embedded", "internal_decoupled", or "external", '
+                f'currently "{mem_mode}" is not supported!'
+            )
 
     def blackboxfunction(self):
         """Generate HLS top-level function signature."""
-        self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
-            f"""void {self.onnx_node.name}(
-                hls::stream<ap_uint<{self.get_instream_width(0)}>> &in0_V,
-                hls::stream<ap_uint<{self.get_outstream_width()}>> &out0_V
-            )"""
-        ]
+        mem_mode = self.get_nodeattr("mem_mode")
+
+        if mem_mode == "internal_embedded":
+            # Embedded: only input and output streams
+            self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
+                f"""void {self.onnx_node.name}(
+                    hls::stream<ap_uint<{self.get_instream_width(0)}>> &in0_V,
+                    hls::stream<ap_uint<{self.get_outstream_width()}>> &out0_V
+                )"""
+            ]
+        elif mem_mode in ["internal_decoupled", "external"]:
+            # Decoupled/external: add weight stream
+            wwidth = self.get_instream_width(1)
+            self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
+                f"""void {self.onnx_node.name}(
+                    hls::stream<ap_uint<{self.get_instream_width(0)}>> &in0_V,
+                    hls::stream<ap_uint<{wwidth}>> &in1_V,
+                    hls::stream<ap_uint<{self.get_outstream_width()}>> &out0_V
+                )"""
+            ]
+        else:
+            raise Exception(
+                f'Please set mem_mode to "internal_embedded", "internal_decoupled", or "external", '
+                f'currently "{mem_mode}" is not supported!'
+            )
 
     def pragmas(self):
         """Generate HLS pragmas."""
+        mem_mode = self.get_nodeattr("mem_mode")
+
         self.code_gen_dict["$PRAGMAS$"] = [
             "#pragma HLS INTERFACE axis port=in0_V",
             "#pragma HLS INTERFACE axis port=out0_V",
             "#pragma HLS INTERFACE ap_ctrl_none port=return",
-            '#include "params.h"',
-            "#pragma HLS ARRAY_PARTITION variable=weights.m_weights complete dim=1",
         ]
+
+        if mem_mode == "internal_embedded":
+            # Embedded mode: include params.h and partition weights array
+            self.code_gen_dict["$PRAGMAS$"].append('#include "params.h"')
+            self.code_gen_dict["$PRAGMAS$"].append(
+                "#pragma HLS ARRAY_PARTITION variable=weights.m_weights complete dim=1"
+            )
+        elif mem_mode in ["internal_decoupled", "external"]:
+            # Decoupled/external mode: add axis interface for weight stream
+            self.code_gen_dict["$PRAGMAS$"].append("#pragma HLS INTERFACE axis port=in1_V")
+        else:
+            raise Exception(
+                f'Please set mem_mode to "internal_embedded", "internal_decoupled", or "external", '
+                f'currently "{mem_mode}" is not supported!'
+            )

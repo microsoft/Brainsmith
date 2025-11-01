@@ -324,3 +324,20 @@ class MVAU(KernelOp):
             nodes_to_insert=[hw_node],
             nodes_to_remove=nodes_to_remove,
         )
+
+    # ====================================================================
+    # Shape Inference Support
+    # ====================================================================
+
+    def make_shape_compatible_op(self, model):
+        """Create shape-compatible ONNX node for shape inference.
+
+        MVAU behaves like MatMul for shape purposes, so return a MatMul node.
+        """
+        node = self.onnx_node
+        return helper.make_node(
+            "MatMul",
+            inputs=[node.input[0], node.input[1]],
+            outputs=node.output,
+            name=f"{node.name}_shape_compat"
+        )
