@@ -49,11 +49,6 @@ source .venv/bin/activate
 # Edit configuration for your Xilinx installation
 vim .brainsmith/config.yaml  # Set xilinx_path, xilinx_version
 
-# [Optional] Enable direnv for automatic environment activation
-brainsmith project allow-direnv
-# Otherwise, activate project environment
-source .brainsmith/env.sh
-
 # Verify setup
 brainsmith project show
 ```
@@ -70,12 +65,11 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 
 # Open interactive shell
 ./ctl-docker.sh shell
-
 # Verify setup
 brainsmith project show
 
 # OR run commands directly
-./ctl-docker.sh "smith model.onnx blueprint.yaml"
+./ctl-docker.sh "brainsmith project show"
 ```
 
 ### 2. Working with Multiple Projects
@@ -95,7 +89,7 @@ vim .brainsmith/config.yaml
 
 # [Optional] Enable direnv for automatic environment activation
 brainsmith project allow-direnv
-# Otherwise, activate project environment
+# Otherwise, manually activate project environment
 source .brainsmith/env.sh
 ```
 
@@ -124,21 +118,9 @@ Brainsmith provides two complementary CLI commands:
 
 For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
 
-### Quick Examples
-
-```bash
-# Setup and configuration
-brainsmith setup all               # Install all dependencies
-source .brainsmith/env.sh          # Skip if using direnv
-
-# Operations
-smith model.onnx blueprint.yaml    # Create dataflow core accelerator
-smith kernel accelerator.sv        # Generate hardware kernel from RTL
-```
-
 ## Documentation
 
-For detailed documentation and guides, see the [documentation overview](docs/README.md).
+For detailed documentation and guides, see the `prerelease-docs` directory.
 
 ## License
 
