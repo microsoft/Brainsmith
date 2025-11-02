@@ -115,21 +115,6 @@ smith model.onnx blueprint.yaml
 smith model.onnx blueprint.yaml --output-dir ./results
 ```
 
-**Advanced Docker Integration:** After running `brainsmith project init`, the generated `.brainsmith/.env` file can be used with Docker:
-
-```bash
-# Use .env file for Docker environment variables
-docker run --env-file .brainsmith/.env microsoft/brainsmith:latest smith model.onnx blueprint.yaml
-
-# Or with docker-compose (add to docker-compose.yml):
-services:
-  brainsmith:
-    env_file: .brainsmith/.env
-```
-
-This provides unified environment management across local development and containerized builds.
-
-
 ## CLI Overview
 
 Brainsmith provides two complementary CLI commands:

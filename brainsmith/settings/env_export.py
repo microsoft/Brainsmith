@@ -4,7 +4,7 @@
 """Environment variable dictionary generation for shell script creation.
 
 This module provides the EnvironmentExporter class which builds environment
-variable dictionaries for shell script generation (env.sh, .env, .envrc).
+variable dictionaries for shell script generation (env.sh, .envrc).
 
 The generated dictionaries are used to create activation scripts, but do NOT
 directly mutate os.environ. Python runtime expects environment to be sourced
@@ -127,7 +127,7 @@ class EnvironmentExporter:
 
         This method builds a complete environment dictionary but does NOT mutate
         os.environ. It is used ONLY for generating activation scripts (env.sh,
-        .env, .envrc).
+        .envrc).
 
         Python runtime expects environment to be set externally via sourced shell
         scripts before Python starts, ensuring consistent environment across Python
