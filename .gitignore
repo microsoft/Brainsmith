@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-.brainsmith
 plugins/
 examples/*/output/
 examples/*/results/
@@ -10,6 +9,11 @@ examples/*/checkpoints/
 examples/*/logs/
 examples/*/configs/
 *.onnx
+
+# Brainsmith project management
+.brainsmith
+.envrc
+.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -12,9 +12,6 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Module-level flag to ensure FINN environment is initialized exactly once
-_finn_env_initialized = False
-
 
 class FINNAdapter:
     """Adapter for FINN build system.
@@ -28,23 +25,22 @@ class FINNAdapter:
     - Model discovery in intermediate_models directory
     - Dynamic import handling
     - Configuration format conversion
-    - Environment variable management
 
     For concurrent builds, use separate processes instead of threads.
+
+    IMPORTANT: Expects environment to be sourced before running:
+        source .brainsmith/env.sh
+    or:
+        direnv allow
+
+    FINN environment variables (FINN_ROOT, VIVADO_PATH, etc.) must be set
+    externally before Python starts to ensure subprocesses inherit them.
     """
 
     def __init__(self):
-        global _finn_env_initialized
-
-        # Ensure FINN environment is configured before any FINN operations
-        if not _finn_env_initialized:
-            from brainsmith.settings import get_config
-            try:
-                get_config().export_to_environment()
-                _finn_env_initialized = True
-            except Exception:
-                # Config export might fail during setup - will be handled by build()
-                pass
+        # Warn if environment not sourced (soft validation - let FINN errors surface naturally)
+        from brainsmith.settings.validation import warn_if_environment_not_sourced
+        warn_if_environment_not_sourced()
 
         self._check_finn_dependencies()
 

@@ -226,7 +226,7 @@ fi
 if [ ! -f ".brainsmith/config.yaml" ]; then
     echo ""
     echo "No config found at .brainsmith/config.yaml, generating default"
-    poetry run brainsmith config init
+    poetry run brainsmith project init
     if [ $? -eq 0 ]; then
         echo -e "\033[32m✓\033[0m Config initialized successfully"
     else
