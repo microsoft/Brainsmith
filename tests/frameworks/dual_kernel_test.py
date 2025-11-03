@@ -510,7 +510,12 @@ class DualKernelTest(KernelTestConfig):
     @pytest.mark.core
     @pytest.mark.dual_kernel
     def test_datatype_inference_parity(self):
-        """Test datatype inference produces matching results in models."""
+        """Test datatype inference produces matching results.
+
+        Note: This test compares datatypes only, not tensor names.
+        Some kernels (e.g., DuplicateStreams) may rename tensors during
+        infer_node_datatype(), so we compare datatypes by position, not name.
+        """
         # Setup ops with fresh models
         manual_op, manual_model = self.run_manual_pipeline()
         auto_op, auto_model = self.run_auto_pipeline()
@@ -525,24 +530,37 @@ class DualKernelTest(KernelTestConfig):
         if auto_model_out is not None:
             auto_model = auto_model_out
 
-        # Verify input datatypes in model
+        # Verify input datatypes (compare by position, not name)
         for i in range(self.get_num_inputs()):
-            input_name = manual_op.onnx_node.input[i]
-            if not input_name:
+            manual_input_name = manual_op.onnx_node.input[i]
+            auto_input_name = auto_op.onnx_node.input[i]
+
+            if not manual_input_name or not auto_input_name:
                 continue
 
-            assert_model_tensors_match(
-                manual_model, auto_model, input_name,
-                f"After infer_node_datatype, input {i}"
+            # Get datatypes from each model using its own tensor names
+            manual_dt = manual_model.get_tensor_datatype(manual_input_name)
+            auto_dt = auto_model.get_tensor_datatype(auto_input_name)
+
+            # Compare datatypes (names may differ)
+            assert_datatypes_match(
+                manual_dt, auto_dt, i,
+                f"After infer_node_datatype, input"
             )
 
-        # Verify output datatypes in model
+        # Verify output datatypes (compare by position, not name)
         for i in range(self.get_num_outputs()):
-            output_name = manual_op.onnx_node.output[i]
+            manual_output_name = manual_op.onnx_node.output[i]
+            auto_output_name = auto_op.onnx_node.output[i]
 
-            assert_model_tensors_match(
-                manual_model, auto_model, output_name,
-                f"After infer_node_datatype, output {i}"
+            # Get datatypes from each model using its own tensor names
+            manual_dt = manual_model.get_tensor_datatype(manual_output_name)
+            auto_dt = auto_model.get_tensor_datatype(auto_output_name)
+
+            # Compare datatypes (names may differ)
+            assert_datatypes_match(
+                manual_dt, auto_dt, i,
+                f"After infer_node_datatype, output"
             )
 
     @pytest.mark.parity
