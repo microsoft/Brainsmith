@@ -23,8 +23,7 @@ name: {name}
 description: {description}
 clock_ns: {clock_ns}
 output: {output}
-board: {board}
-save_intermediate_models: {save_intermediate_models}{target_fps}
+board: {board}{target_fps}
 design_space:
   steps: {steps}
 """
@@ -198,7 +197,6 @@ def create_full_blueprint(
     description: str = "Test blueprint",
     output: str = "bitfile",
     board: str = "V80",
-    save_intermediate_models: bool = True,
     target_fps: Optional[int] = None,
     **kwargs
 ) -> Path:
@@ -210,7 +208,6 @@ def create_full_blueprint(
         description: Blueprint description
         output: Output type
         board: Target FPGA board
-        save_intermediate_models: Whether to save intermediate models
         target_fps: Target frames per second (optional, for FINN parallelization)
         **kwargs: Additional template variables
 
@@ -227,7 +224,6 @@ def create_full_blueprint(
         description=description,
         output=output,
         board=board,
-        save_intermediate_models=save_intermediate_models,
         target_fps=target_fps_yaml,
         **kwargs
     )
@@ -695,7 +691,6 @@ def create_finn_blueprint(
         target_fps=target_fps,
         output="estimates",
         board="Pynq-Z1",  # Required for FINN
-        save_intermediate_models=True,
         **kwargs
     )
 
@@ -778,8 +773,7 @@ def rtl_blueprint(tmp_path, quantized_onnx_model) -> Path:
         output="rtl",
         board="Pynq-Z1",  # Common FINN development board
         clock_ns=10.0,    # Slower clock for RTL
-        steps=["test_step1", "test_step2"],  # Simplified for stub
-        save_intermediate_models=True
+        steps=["test_step1", "test_step2"]  # Simplified for stub
     )
 
 
@@ -818,7 +812,5 @@ def bitfile_blueprint(tmp_path, quantized_onnx_model) -> Path:
         output="bitfile",
         board="Pynq-Z1",  # Common FINN deployment board
         clock_ns=5.0,     # Target 200MHz
-        steps=["test_step1", "test_step2"],  # Simplified for stub
-        save_intermediate_models=True,
-        verify=False  # Skip verification for stub
+        steps=["test_step1", "test_step2"]  # Simplified for stub
     )

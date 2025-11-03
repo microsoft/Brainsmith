@@ -74,6 +74,14 @@ class DuplicateStreams(KernelOp):
         Returns:
             KernelSchema with N outputs matching node.output
         """
+        inputs=[
+            df.InputSchema(
+                name="input",
+                block_tiling=[FULL_DIM],      # Process full dimensions
+                stream_tiling=["PE"],          # Channel parallelism
+            ),
+        ]
+
         num_outputs = len(node.output)
 
         # Build output schemas dynamically (all identical to input)
@@ -89,30 +97,12 @@ class DuplicateStreams(KernelOp):
 
         return df.KernelSchema(
             name="DuplicateStreams",
-            inputs=[
-                df.InputSchema(
-                    name="input",
-                    block_tiling=[FULL_DIM],      # Process full dimensions
-                    stream_tiling=["PE"],          # Channel parallelism
-                ),
-            ],
-            outputs=outputs,  # Variable count!
+            inputs=inputs,
+            outputs=outputs,
             constraints=[
                 # No special constraints - pure routing
             ],
         )
-
-    # ================================================================
-    # Public API: Additional Methods
-    # ================================================================
-
-    def get_num_output_streams(self) -> int:
-        """Get number of output streams (from node structure).
-
-        Returns:
-            Number of outputs (2+)
-        """
-        return len(self.onnx_node.output)
 
     # ================================================================
     # ONNX Shape Compatibility

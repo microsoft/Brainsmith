@@ -11,12 +11,12 @@ board: "V80"                        # Target FPGA board
 design_space:
   kernels:
     - LayerNorm
-    - DuplicateStreams
-    - ElementwiseBinaryOperation
-    - Shuffle
+    - finn:DuplicateStreams
+    - finn:ElementwiseBinaryOperation
+    - LegacyShuffle
     - Softmax
-    - Thresholding
-    - MVAU
+    - finn:Thresholding
+    - finn:MVAU
 
   steps:
     - "qonnx_to_finn"  # custom_step_qonnx2finn

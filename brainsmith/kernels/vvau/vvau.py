@@ -331,8 +331,7 @@ class VectorVectorActivation(KernelOp):
 
         return df.TransformationResult(
             nodes_to_insert=[new_node],
-            nodes_to_remove=nodes_to_remove,
-            actual_layouts={}
+            nodes_to_remove=nodes_to_remove
         )
 
     # ================================================================

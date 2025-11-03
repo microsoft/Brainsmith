@@ -318,6 +318,11 @@ class DesignSpaceBuilder:
         # Compute valid dimension values (tiling from divisors + DSE from schema)
         all_dimensions = self._compute_dimension_ranges(inputs, outputs, ctx.schema)
 
+        # Link parallelism metadata to interfaces (shared dimension references)
+        # Must happen AFTER dimension computation so dimensions dict is available
+        inputs = self._link_parallelism_metadata(inputs, all_dimensions)
+        outputs = self._link_parallelism_metadata(outputs, all_dimensions)
+
         # Assemble immutable design space model
         # Note: structural_constraints validated above but not stored (never re-validated)
         design_space = KernelDesignSpace(
@@ -513,6 +518,112 @@ class DesignSpaceBuilder:
             ValueError: If n is non-positive
         """
         return divisors(n)
+
+    def _extract_stream_params(self, stream_tiling: Optional[Any]) -> List[str]:
+        """Extract string parameters from stream_tiling template.
+
+        Extracts parallelization parameter names (strings) from stream_tiling,
+        ignoring literals (1, FULL_DIM) and derived dimensions.
+
+        Args:
+            stream_tiling: Stream tiling template (e.g., ["SIMD"], [1, 1, 1, "PE"])
+
+        Returns:
+            List of parameter names in order of appearance
+
+        Examples:
+            >>> self._extract_stream_params(["SIMD"])
+            ['SIMD']
+            >>> self._extract_stream_params([1, 1, 1, "PE"])
+            ['PE']
+            >>> self._extract_stream_params(["MW", "MH"])
+            ['MW', 'MH']
+            >>> self._extract_stream_params(None)
+            []
+        """
+        if stream_tiling is None:
+            return []
+
+        params = []
+        for elem in stream_tiling:
+            if isinstance(elem, str):
+                params.append(elem)
+        return params
+
+    def _link_parallelism_metadata(
+        self,
+        interfaces: Dict[str, Any],  # InterfaceDesignSpace
+        dimensions: Dict[str, Union[OrderedDimension, FrozenSet]]
+    ) -> Dict[str, Any]:  # InterfaceDesignSpace
+        """Link parallelism dimensions to interfaces.
+
+        For each interface, extract params from stream_tiling and link to
+        the corresponding dimension from dimensions dict (shared reference).
+
+        Validates single-param only (errors for multi-param with clear message).
+        Future: will flatten multi-param to synthetic 1D dimension.
+
+        Args:
+            interfaces: Dict of InterfaceDesignSpace instances
+            dimensions: Dict of OrderedDimension/frozenset from kernel
+
+        Returns:
+            Dict of InterfaceDesignSpace with parallelism metadata linked
+
+        Raises:
+            NotImplementedError: If interface has multiple stream params
+            ValueError: If param not found in dimensions
+            TypeError: If param is discrete (not OrderedDimension)
+        """
+        import dataclasses
+
+        result = {}
+        for name, interface in interfaces.items():
+            # Extract params from stream_tiling
+            param_names = self._extract_stream_params(interface.stream_tiling)
+
+            if len(param_names) == 0:
+                # No parallelism - keep interface as-is
+                result[name] = interface
+            elif len(param_names) == 1:
+                # Single param - link dimension (shared reference)
+                param = param_names[0]
+                dim = dimensions.get(param)
+
+                # Validate dimension exists
+                if dim is None:
+                    raise ValueError(
+                        f"Interface '{name}' references stream param '{param}' "
+                        f"not found in dimensions dict. Available: {list(dimensions.keys())}"
+                    )
+
+                # Validate it's an OrderedDimension (not discrete)
+                if not isinstance(dim, OrderedDimension):
+                    raise TypeError(
+                        f"Interface '{name}' stream param '{param}' is discrete (frozenset), not ordered. "
+                        f"Stream parallelism must be OrderedDimension (tiling params are always ordered)."
+                    )
+
+                # Create new interface with metadata (shared reference to same object!)
+                result[name] = dataclasses.replace(
+                    interface,
+                    parallelism_dimension=dim,  # Same object as dimensions[param]
+                    parallelism_param=param
+                )
+
+                logger.debug(
+                    f"  Linked interface '{name}' parallelism to '{param}' "
+                    f"(range: {dim.min()}-{dim.max()}, {len(dim)} values)"
+                )
+            else:
+                # Multi-param - not yet supported
+                raise NotImplementedError(
+                    f"Interface '{name}' has {len(param_names)} stream params: {param_names}. "
+                    f"Multi-param parallelism not yet supported. "
+                    f"Future: will flatten to synthetic 1D dimension with defined tiling order."
+                )
+
+        return result
 
     def _compute_dimension_ranges(
         self,

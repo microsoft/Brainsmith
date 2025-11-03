@@ -212,13 +212,26 @@ class ChannelwiseParityBase(ParityTestBase, HLSCodegenParityMixin):
 
         Sets PE parallelization for testing. Base class handles specialization separately.
 
+        - Auto implementation uses interface-agnostic parallelism API
+        - Manual FINN implementation uses direct nodeattr setting
+
         Args:
             op: ChannelwiseOp operator instance
             model: ModelWrapper containing the op
             is_auto: True if auto implementation
         """
         # Set PE for testing (64 channels / 8 = 8-way folding)
-        op.set_nodeattr("PE", 8)
+        if is_auto:
+            # Brainsmith auto: Demonstrate interface-agnostic parallelism API
+            # Input interface has PE dimension for channelwise operations
+            op.build_design_space(model)
+            point = op.design_point.input[0].with_parallelism(8)
+            # Apply configuration from design point to nodeattrs
+            for param_name, param_value in point.config.items():
+                op.set_nodeattr(param_name, param_value)
+        else:
+            # FINN manual: Direct nodeattr setting
+            op.set_nodeattr("PE", 8)
 
     def _specialize_and_get_op(self, model: ModelWrapper, node_name_prefix: str) -> Tuple[HWCustomOp, ModelWrapper]:
         """Specialize model and return HLS operator instance.

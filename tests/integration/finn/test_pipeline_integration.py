@@ -74,15 +74,19 @@ class TestPipelineIntegration:
     @pytest.mark.finn_build
     @pytest.mark.timeout(900)
     def test_pipeline_with_intermediate_models(self, tmp_path, brevitas_fc_model, test_workspace):
-        """Verify intermediate models saved when configured.
+        """Verify intermediate models are always saved.
 
-        Tests save_intermediate_models=True configuration:
+        Intermediate models are always saved (hardcoded in FINNAdapter)
+        because FINN doesn't return the output path - we discover it from
+        the intermediate_models/ directory.
+
+        Tests:
         - Model saved after each transformation step
         - Intermediate models loadable and valid
         """
         from tests.fixtures.blueprints import create_finn_blueprint
 
-        # Create blueprint with intermediate model saving enabled
+        # Create blueprint for testing intermediate model saving
         blueprint_path = create_finn_blueprint(
             tmp_path,
             name="intermediate",
@@ -90,14 +94,11 @@ class TestPipelineIntegration:
             clock_ns=10.0
         )
 
-        # Parse to verify config
+        # Parse blueprint
         design_space, config = parse_blueprint(
             str(blueprint_path),
             str(brevitas_fc_model)
         )
-
-        # Should have intermediate model saving enabled (from create_finn_blueprint default)
-        assert config.save_intermediate_models is True, "Should save intermediate models"
 
         # Execute pipeline
         tree = build_tree(design_space, config)
@@ -136,21 +137,19 @@ class TestPipelineIntegration:
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)
     def test_pipeline_with_step_ranges(self, tmp_path, brevitas_fc_model, test_workspace):
-        """Test start_step/stop_step execution control.
+        """Test stop_step execution control.
 
-        Tests selective execution of step ranges:
+        Tests selective execution with stop_step:
         - Blueprint with 3+ steps
-        - Execute only middle steps (start_step → stop_step)
+        - Execute from beginning to stop_step (inclusive)
         - Verify only specified steps executed
         """
-        # Create blueprint with multiple steps
+        # Create blueprint with multiple steps, stopping at tidy_up
         blueprint_yaml = f"""
 name: step_range
 clock_ns: 10.0
 output: estimates
 board: Pynq-Z1
-save_intermediate_models: true
-start_step: finn:tidy_up
 stop_step: finn:tidy_up
 design_space:
   steps:
@@ -161,17 +160,23 @@ design_space:
         blueprint_path = tmp_path / "step_range.yaml"
         blueprint_path.write_text(blueprint_yaml)
 
-        # Parse blueprint
+        # Parse blueprint (steps preserved, range controls passed to config)
         design_space, config = parse_blueprint(
             str(blueprint_path),
             str(brevitas_fc_model)
         )
 
-        # Verify step range configuration
-        assert config.start_step == "finn:tidy_up", "Should have start_step set"
-        assert config.stop_step == "finn:tidy_up", "Should have stop_step set"
+        # Verify all steps are preserved (no slicing)
+        assert len(design_space.steps) == 3, "Should preserve all steps"
+        assert design_space.steps[0] == "finn:streamline"
+        assert design_space.steps[1] == "finn:tidy_up"
+        assert design_space.steps[2] == "finn:convert_to_hw"
 
-        # Execute with step range
+        # Verify stop_step is in config (start_step should be None)
+        assert config.start_step is None, "Config should not have start_step"
+        assert config.stop_step == "finn:tidy_up", "Config should have stop_step"
+
+        # Execute with step range (FINN will execute up to stop_step)
         tree = build_tree(design_space, config)
         output_dir = test_workspace / "step_range"
         result = execute_tree(
@@ -182,11 +187,19 @@ design_space:
         )
 
         # Verify execution occurred
-        assert result.segment_results, "Should have segment results"
+        assert result.total_time > 0, "Execution should have taken time"
 
-        # Note: Step range execution behavior depends on implementation
-        # This test validates the configuration is respected
-        # Detailed validation would require inspecting which steps actually ran
+        # Verify that only steps up to stop_step were executed
+        # The final model should be from step_tidy_up, not step_convert_to_hw
+        segment_dir = output_dir / "root"
+        intermediate_dir = segment_dir / "intermediate_models"
+
+        # Should have models from streamline and tidy_up
+        assert (intermediate_dir / "step_streamline.onnx").exists()
+        assert (intermediate_dir / "step_tidy_up.onnx").exists()
+
+        # Should NOT have model from convert_to_hw (it was after stop_step)
+        assert not (intermediate_dir / "step_convert_to_hw.onnx").exists()
 
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)

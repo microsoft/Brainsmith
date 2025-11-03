@@ -106,8 +106,7 @@ class LayerNorm(KernelOp):
 
         return df.TransformationResult(
             nodes_to_insert=[hw_node],
-            nodes_to_remove=[node],
-            actual_layouts={"input": "NHWC", "output": "NHWC"}
+            nodes_to_remove=[node]
         )
 
     def execute_node(self, context, graph):

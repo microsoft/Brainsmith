@@ -98,6 +98,19 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - User Guide:
+    - Overview: user-guide/index.md
+    - Blueprints: user-guide/blueprints.md
+    - CLI Reference: user-guide/cli.md
+    - Design Space Exploration: user-guide/design-space.md
+
+extra_css:
+  - stylesheets/extra.css
 
 extra:
   social:

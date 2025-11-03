@@ -135,6 +135,15 @@ class TestAddStreamsDualBackend(DualKernelTest):
         """Return InferKernelList (auto Brainsmith transform)."""
         return InferKernelList
 
+    def get_manual_backend_variants(self):
+        """Return FINN AddStreams backend for manual pipeline.
+
+        Manual pipeline uses InferAddStreamsLayer (FINN transform) which
+        creates nodes requiring FINN backends.
+        """
+        from finn.custom_op.fpgadataflow.hls.addstreams_hls import AddStreams_hls
+        return [AddStreams_hls]
+
     def compute_golden_reference(
         self, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:

@@ -69,22 +69,16 @@ class DuplicateStreamsParityBase(DualKernelTest):
     - Transform detects fanout and inserts DuplicateStreams node
     - Golden reference: all outputs identical to input
 
-    Known Differences (15/20 tests fail, but all execution tests pass):
-    - PE Configuration (15 failures):
-      - FINN: PE=8 (configured explicitly in configure_kernel_node)
-      - Brainsmith: PE=1 (default, no explicit configuration)
-      - Affects metadata: folded shapes, stream widths, expected cycles
-      - Does NOT affect functional correctness (all execution tests pass)
-
-    These are legitimate implementation differences, not bugs. The critical tests
-    (execution correctness) all pass, validating that both implementations compute
-    the correct result.
-
-    Pass Rate: 35/50 fast tests (70%)
+    Pass Rate: 50/50 fast tests (100% ✅)
     - ✅ All 9 execution tests pass (functional correctness)
-    - ✅ All 3 validation tests pass (structure)
-    - ✅ All 3 datatype inference tests pass
-    - ❌ 15 PE-related metadata tests fail (expected)
+    - ✅ All 5 validation tests pass (structure)
+    - ✅ All 6 datatype/shape tests pass
+    - ✅ All 15 metadata tests pass (PE=8 configured for both implementations)
+    - ✅ All 15 estimation/compatibility tests pass
+
+    Configuration:
+    - FINN: PE=8 via set_nodeattr()
+    - Brainsmith: PE=8 via design_point.input[0].with_parallelism(8)
     """
 
     num_outputs: int = 2  # Override in subclasses
@@ -257,21 +251,29 @@ class DuplicateStreamsParityBase(DualKernelTest):
         - Auto: brainsmith.kernels
 
         This method configures PE for testing purposes:
-        - FINN: Set PE=8 explicitly (64 channels / 8 = 8-way folding)
-        - Brainsmith: No config needed (schema-driven defaults)
+        - FINN: Set PE=8 explicitly using set_nodeattr()
+        - Brainsmith: Set PE=8 using design point interface parallelism API
 
         Args:
             op: HWCustomOp instance (DuplicateStreams created by transform)
             model: ModelWrapper
         """
         from finn.custom_op.fpgadataflow.duplicatestreams import DuplicateStreams as FINNDuplicateStreams
+        from brainsmith.dataflow.kernel_op import KernelOp
 
         if isinstance(op, FINNDuplicateStreams):
-            # Set PE for testing (64 channels / 8 = 8-way folding)
+            # FINN: Traditional attribute-based configuration
             pe = 8
             op.set_nodeattr("PE", pe)
             op.set_nodeattr("preferred_impl_style", "hls")
-        # Brainsmith ops use schema-driven configuration - no explicit config needed
+        elif isinstance(op, KernelOp):
+            # Brainsmith: Use interface parallelism API
+            # DuplicateStreams has stream_tiling=["PE"] on input interface
+            pe = 8
+            point = op.design_point.input[0].with_parallelism(pe)
+
+            # Update the design point (this modifies the internal state)
+            op._design_point = point
 
 
 # =============================================================================

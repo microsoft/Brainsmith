@@ -18,14 +18,6 @@ output: "estimates"                    # Output type: estimates | rtl | bitfile
                                       # Default: "estimates"
 board: "Pynq-Z1"                      # Target FPGA board (required for rtl/bitfile)
 
-# Optional: Additional configuration
-save_intermediate_models: false       # Save intermediate models (default: false)
-parallel_builds: 4                    # Concurrent FINN builds during DSE (default: 4)
-
-# Optional: Step range control (for testing/debugging)
-start_step: "streamline"              # Start execution from this step (inclusive)
-stop_step: "specialize_layers"        # Stop execution at this step (inclusive)
-
 # Optional: Direct FINN parameter overrides
 finn_config:                          # Maps internally to finn_overrides
   minimize_bit_width: false
@@ -37,8 +29,8 @@ finn_config:                          # Maps internally to finn_overrides
 design_space:
   # Kernel definitions (for hardware mapping)
   kernels:
-    - KernelName                      # Use all available backends
-    - KernelName: BackendName         # Specific backend only
+    - KernelName                       # Use all available backends
+    - KernelName: BackendName          # Specific backend only
     - KernelName: [Backend1, Backend2] # Multiple specific backends
 
   # Build pipeline steps
@@ -89,34 +81,6 @@ Common boards include:
 - `"VCK190"` - Xilinx Versal board
 - `"V80"` - AMD Versal V80
 
-### Optional Configuration
-
-#### debug
-Enable debug logging and additional diagnostics (**not currently implemented**).
-
-#### save_intermediate_models
-Save model state after each transformation step (useful for debugging).
-
-#### parallel_builds
-Number of concurrent FINN builds to run during design space exploration. Higher values can speed up exploration but require more memory.
-```yaml
-parallel_builds: 4  # Default: 4
-```
-
-#### start_step & stop_step
-Control the execution range of steps for testing and debugging. Both parameters are optional and specify step boundaries (inclusive).
-
-```yaml
-start_step: "streamline"        # Start from this step (inclusive)
-stop_step: "specialize_layers"  # Stop at this step (inclusive)
-```
-
-**Use Cases:**
-- **Testing individual steps**: Set both to the same value to run only that step
-- **Creating checkpoints**: Use `stop_step` to build up to a certain point
-- **Resuming from intermediate**: Use `start_step` with a previously saved intermediate model
-- **Debugging failures**: Isolate problematic steps for investigation
-
 **CLI Overrides:**
 CLI flags `--start-step` and `--stop-step` override blueprint values:
 ```bash
@@ -149,8 +113,6 @@ finn_config:
 ### Kernels
 
 Kernels define the hardware implementations available for neural network layers. When the `infer_kernels` step is executed, Brainsmith automatically maps layers to these kernels.
-
-**Pre-Release Note**: Backend specifications are validated and stored in the design space, but backend selection is not yet implemented. Currently, the build will use the default backend based on the `preferred_impl_style` nodeattr in the HWCustomOp. Full backend selection support is planned for a future release.
 
 ```yaml
 kernels:
@@ -216,52 +178,13 @@ steps:
 - Nested lists are not allowed within branch points
 - To insert a branch point via step operations, use double brackets: `with: [["option1", "option2"]]`
 
-**Skip Values**: The following values all indicate a step should be skipped:
-- `~` (recommended)
-- `null` or `None`
-- Empty string `""`
-
-All skip values are normalized to `~` internally.
+**Skip Value**: The following value indicates a step should be skipped:
+- `~`
 
 ### Step Operations
 
 Step operations allow you to modify the step list when inheriting from parent blueprints or organizing complex pipelines.
 
-#### Operation Types
-
-**after** - Insert steps after a target step:
-```yaml
-- after: "tidy_up"
-  insert: "custom_cleanup"          # Insert single step
-
-- after: "streamline"
-  insert: ["verify", "log_stats"]   # Insert multiple steps
-```
-
-**before** - Insert steps before a target step:
-```yaml
-- before: "generate_reports"
-  insert: ["save_checkpoint", "validate_results"]
-```
-
-**replace** - Replace a step with alternatives:
-```yaml
-- replace: "minimize_bit_width"
-  with: ["quantize_weights", "quantize_activations"]
-```
-
-**remove** - Remove unwanted steps:
-```yaml
-- remove: "debug_step"              # Remove single step
-```
-
-**at_start/at_end** - Insert at list boundaries:
-```yaml
-- at_start:
-    insert: "initialize_environment"
-- at_end:
-    insert: ["cleanup", "generate_summary"]
-```
 
 ### Inheritance
 
@@ -343,17 +266,3 @@ To optimize performance, Brainsmith groups sequential steps into segments:
 - Artifacts are shared at branch points to avoid redundant computation
 
 **Pre-Release Note**: Segment-based execution is functional but requires further testing and refinement for large design spaces.
-
-## Environment Variables
-
-### BRAINSMITH_MAX_COMBINATIONS
-
-Controls the maximum number of design space combinations (execution paths) allowed:
-
-```bash
-export BRAINSMITH_MAX_COMBINATIONS=100000  # Default: 100000
-```
-
-This limit prevents accidentally creating design spaces that are too large to explore. If your blueprint generates more paths than this limit, you'll receive an error with the actual count. You can then either:
-- Reduce the design space by removing some branch points
-- Increase the limit if you have sufficient computational resources

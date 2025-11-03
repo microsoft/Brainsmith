@@ -894,10 +894,7 @@ class BlueprintAssertions(AssertionHelper):
         config: DSEConfig,
         expected_clock_ns: Optional[float] = None,
         expected_board: Optional[str] = None,
-        expected_output: Optional[OutputType] = None,
-        expected_save_intermediate: Optional[bool] = None,
-        expected_verify: Optional[bool] = None,
-        expected_parallel_builds: Optional[int] = None
+        expected_output: Optional[OutputType] = None
     ):
         """Assert DSEConfig has expected values.
 
@@ -906,9 +903,6 @@ class BlueprintAssertions(AssertionHelper):
             expected_clock_ns: Expected clock period
             expected_board: Expected board name
             expected_output: Expected output type
-            expected_save_intermediate: Expected save_intermediate_models flag
-            expected_verify: Expected verify flag
-            expected_parallel_builds: Expected parallel builds count
         """
         if expected_clock_ns is not None:
             assert config.clock_ns == expected_clock_ns, \
@@ -921,20 +915,6 @@ class BlueprintAssertions(AssertionHelper):
         if expected_output is not None:
             assert config.output == expected_output, \
                 f"Expected output {expected_output.value}, got {config.output.value}"
-
-        if expected_save_intermediate is not None:
-            assert config.save_intermediate_models == expected_save_intermediate, \
-                f"Expected save_intermediate_models {expected_save_intermediate}, " \
-                f"got {config.save_intermediate_models}"
-
-        if expected_verify is not None:
-            assert config.verify == expected_verify, \
-                f"Expected verify {expected_verify}, got {config.verify}"
-
-        if expected_parallel_builds is not None:
-            assert config.parallel_builds == expected_parallel_builds, \
-                f"Expected parallel_builds {expected_parallel_builds}, " \
-                f"got {config.parallel_builds}"
 
     @staticmethod
     def assert_step_sequence(

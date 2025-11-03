@@ -12,7 +12,7 @@ import os
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from brainsmith.dse.design_space import GlobalDesignSpace, _slice_steps
+from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig, extract_config
 
 from .loader import load_blueprint_with_inheritance
@@ -40,8 +40,8 @@ def parse_blueprint(
     Args:
         blueprint_path: Path to blueprint YAML file
         model_path: Path to model file
-        start_step: Optional start step for slicing (overrides YAML default)
-        stop_step: Optional stop step for slicing (overrides YAML default)
+        start_step: Optional start step override (overrides YAML default)
+        stop_step: Optional stop step override (overrides YAML default)
 
     Returns:
         Tuple of (GlobalDesignSpace, DSEConfig)
@@ -60,20 +60,23 @@ def parse_blueprint(
     # Extract config from merged data
     blueprint_config = extract_config(merged_data)
 
+    # Override start_step/stop_step from parameters if provided
+    if start_step is not None:
+        blueprint_config.start_step = start_step
+    if stop_step is not None:
+        blueprint_config.stop_step = stop_step
+
+    # Log step range if specified
+    if blueprint_config.start_step or blueprint_config.stop_step:
+        logger.info(
+            f"Step range: start={blueprint_config.start_step or 'beginning'}, "
+            f"stop={blueprint_config.stop_step or 'end'}"
+        )
+
     # Parse steps from THIS blueprint only (not inherited steps)
     # Use raw_data to get only the steps defined in this file
     steps_data = raw_data.get('design_space', {}).get('steps', [])
     steps = parse_steps(steps_data, parent_steps=parent_steps)
-
-    # Apply step slicing if requested (parameters override YAML defaults)
-    yaml_start = merged_data.get('start_step')
-    yaml_stop = merged_data.get('stop_step')
-    effective_start = start_step if start_step is not None else yaml_start
-    effective_stop = stop_step if stop_step is not None else yaml_stop
-
-    if effective_start or effective_stop:
-        logger.info(f"Slicing steps: start={effective_start or 'beginning'}, stop={effective_stop or 'end'}")
-        steps = _slice_steps(steps, effective_start, effective_stop)
 
     # Parse kernels (use merged data to inherit kernels)
     kernel_backends = parse_kernels(merged_data.get('design_space', {}).get('kernels', []))

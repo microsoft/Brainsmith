@@ -103,8 +103,10 @@ class FINNAdapter:
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
 
-            # WORKAROUND: FINN doesn't return output path, so we discover it from
-            # intermediate_models/ directory (requires save_intermediate_models=True)
+            # REQUIRED: Always save intermediate models for output discovery.
+            # FINN's API doesn't return the output model path, so we must discover
+            # it from the intermediate_models/ directory (see _discover_output_model).
+            # This is not user-configurable - it's a required workaround.
             finn_config["save_intermediate_models"] = True
 
             # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr

@@ -45,10 +45,10 @@ class Softmax_hls(Softmax, HLSBackend):
     and HLSBackend (provides HLS code generation infrastructure).
 
     The key innovation is using kernel instance properties instead of nodeattrs for shape info:
-    - self.design_point.inputs[0].stream_shape[-1] for SIMD (design_point property returns KernelDesignPoint)
-    - self.design_point.inputs[0].tensor_shape[-1] for width
-    - self.design_point.inputs[0].datatype for input type
-    - self.design_point.outputs[0].datatype for output type
+    - self.design_point.inputs["input"].stream_shape[-1] for SIMD (design_point property returns KernelDesignPoint)
+    - self.design_point.inputs["input"].tensor_shape[-1] for width
+    - self.design_point.inputs["input"].datatype for input type
+    - self.design_point.outputs["output"].datatype for output type
 
     This ensures consistency with the declarative KernelSchema and automatic validation.
     """
@@ -88,14 +88,14 @@ class Softmax_hls(Softmax, HLSBackend):
             var: Variable name (cppsim/ipgen) - unused but required by interface
 
         Sets code_gen_dict["$DEFINES$"] with:
-        - SIMD: Stream parallelism from kernel instance inputs[0].stream_shape[-1]
-        - W: Total channels from kernel instance inputs[0].tensor_shape[-1]
-        - TI: Input type from kernel instance inputs[0].datatype
-        - TO: Output type from kernel instance outputs[0].datatype
+        - SIMD: Stream parallelism from kernel instance inputs["input"].stream_shape[-1]
+        - W: Total channels from kernel instance inputs["input"].tensor_shape[-1]
+        - TI: Input type from kernel instance inputs["input"].datatype
+        - TO: Output type from kernel instance outputs["output"].datatype
         """
         # Use kernel instance for shape information (not nodeattrs)
-        input_cfg = self.design_point.inputs[0]
-        output_cfg = self.design_point.outputs[0]
+        input_cfg = self.design_point.inputs["input"]
+        output_cfg = self.design_point.outputs["output"]
 
         simd = input_cfg.stream_shape[-1]
         width = input_cfg.tensor_shape[-1]

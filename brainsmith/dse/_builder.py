@@ -51,8 +51,9 @@ class DSETreeBuilder:
                 current_segments = self._create_branches(current_segments, step_i, step_spec)
                 pending_steps = []
             else:
-                # Linear step - accumulate
-                pending_steps.append(self._create_step_dict(step_spec, space))
+                # Linear step - accumulate (skip SKIP_INDICATOR placeholders)
+                if step_spec != SKIP_INDICATOR:
+                    pending_steps.append(self._create_step_dict(step_spec, space))
 
         # Append final accumulated steps
         self._append_steps_to_segments(current_segments, pending_steps)
@@ -88,13 +89,22 @@ class DSETreeBuilder:
 
         Returns:
             Dictionary of FINN configuration values
+
+        Note:
+            save_intermediate_models is not included here - it's always set to True
+            by FINNAdapter as a workaround for FINN not returning output paths.
         """
         finn_config = {
             'output_products': blueprint_config.output.to_finn_products(),
             'board': blueprint_config.board,
             'synth_clk_period_ns': blueprint_config.clock_ns,
-            'save_intermediate_models': blueprint_config.save_intermediate_models
         }
+
+        # Add start_step/stop_step if specified
+        if blueprint_config.start_step:
+            finn_config['start_step'] = blueprint_config.start_step
+        if blueprint_config.stop_step:
+            finn_config['stop_step'] = blueprint_config.stop_step
 
         # Apply any finn_config overrides from blueprint
         finn_config.update(blueprint_config.finn_overrides)

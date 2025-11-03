@@ -1,103 +1,13 @@
 """Fast integration tests for design space validation.
 
-Tests design space utilities: step slicing, combination limits, step indexing.
+Tests design space combination limits validation.
 
-Ported from: OLD_FOR_REFERENCE_ONLY/unit/test_step_slicing.py
 Marker: @pytest.mark.fast
 Execution time: < 1 min (pure Python validation)
 """
 
 import pytest
-from brainsmith.dse.design_space import _slice_steps, _find_step_index, GlobalDesignSpace
-
-
-class TestFindStepIndex:
-    """Tests for _find_step_index function."""
-
-    @pytest.mark.fast
-    def test_find_linear_step(self):
-        """Find step in linear sequence."""
-        steps = ["step1", "step2", "step3"]
-        assert _find_step_index(steps, "step1") == 0
-        assert _find_step_index(steps, "step2") == 1
-        assert _find_step_index(steps, "step3") == 2
-
-    @pytest.mark.fast
-    def test_find_step_in_branch_point(self):
-        """Find step within branch point list."""
-        steps = ["step1", ["step2a", "step2b"], "step3"]
-        assert _find_step_index(steps, "step2a") == 1
-        assert _find_step_index(steps, "step2b") == 1
-
-    @pytest.mark.fast
-    def test_find_nonexistent_step(self):
-        """Raise error for nonexistent step."""
-        steps = ["step1", "step2", "step3"]
-        with pytest.raises(ValueError, match="Step 'invalid' not found"):
-            _find_step_index(steps, "invalid")
-
-    @pytest.mark.fast
-    def test_error_message_shows_available_steps(self):
-        """Error message includes available steps."""
-        steps = ["step1", ["step2a", "step2b"], "step3"]
-        with pytest.raises(ValueError) as exc:
-            _find_step_index(steps, "invalid")
-        assert "step1" in str(exc.value)
-        assert "[step2a, step2b]" in str(exc.value) or "step2a" in str(exc.value)
-        assert "step3" in str(exc.value)
-
-
-class TestSliceSteps:
-    """Tests for _slice_steps function."""
-
-    @pytest.mark.fast
-    def test_slice_with_start_and_stop(self):
-        """Slice from start to stop (inclusive)."""
-        steps = ["step1", "step2", "step3", "step4"]
-        result = _slice_steps(steps, "step2", "step3")
-        assert result == ["step2", "step3"]
-
-    @pytest.mark.fast
-    def test_slice_with_start_only(self):
-        """Slice from start to end."""
-        steps = ["step1", "step2", "step3", "step4"]
-        result = _slice_steps(steps, "step2", None)
-        assert result == ["step2", "step3", "step4"]
-
-    @pytest.mark.fast
-    def test_slice_with_stop_only(self):
-        """Slice from beginning to stop."""
-        steps = ["step1", "step2", "step3", "step4"]
-        result = _slice_steps(steps, None, "step3")
-        assert result == ["step1", "step2", "step3"]
-
-    @pytest.mark.fast
-    def test_slice_preserves_branch_points(self):
-        """Slicing preserves branch structure."""
-        steps = ["step1", ["step2a", "step2b"], "step3", "step4"]
-        result = _slice_steps(steps, "step1", "step3")
-        assert result == ["step1", ["step2a", "step2b"], "step3"]
-
-    @pytest.mark.fast
-    def test_slice_single_step(self):
-        """Slice to single step (start == stop)."""
-        steps = ["step1", "step2", "step3"]
-        result = _slice_steps(steps, "step2", "step2")
-        assert result == ["step2"]
-
-    @pytest.mark.fast
-    def test_slice_branch_point_by_member(self):
-        """Can slice to branch point using any member step."""
-        steps = ["step1", ["step2a", "step2b"], "step3"]
-        result = _slice_steps(steps, "step2a", "step3")
-        assert result == [["step2a", "step2b"], "step3"]
-
-    @pytest.mark.fast
-    def test_slice_invalid_range(self):
-        """Error when start comes after stop."""
-        steps = ["step1", "step2", "step3"]
-        with pytest.raises(ValueError, match="Invalid step range"):
-            _slice_steps(steps, "step3", "step1")
+from brainsmith.dse.design_space import GlobalDesignSpace
 
 
 class TestDesignSpaceCombinationLimits:

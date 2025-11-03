@@ -315,11 +315,33 @@ class SegmentRunner:
                         kernel_selections.append((kernel_name, backend_classes[0]))
         return kernel_selections
 
+    def _resolve_step_name(self, step_name: str) -> str:
+        """Resolve brainsmith qualified step name to FINN function name.
+
+        Converts brainsmith step names (e.g., "finn:tidy_up") to their actual
+        FINN function names (e.g., "step_tidy_up") for use in start_step/stop_step.
+
+        Args:
+            step_name: Brainsmith qualified step name
+
+        Returns:
+            FINN function name (e.g., "step_tidy_up")
+        """
+        try:
+            # Get step function from registry
+            step_fn = get_step(step_name)
+            # Return the function's __name__ attribute (e.g., "step_tidy_up")
+            return step_fn.__name__
+        except KeyError:
+            # Not in registry, return as-is (may be FINN internal step)
+            return step_name
+
     def _resolve_steps(self, segment: DSESegment) -> List:
         """Resolve step names to callable functions.
 
         Attempts to resolve step names from the component registry.
         Falls back to passing strings for FINN's internal lookup.
+        Filters out skip indicators ("~") which are placeholder values.
 
         Args:
             segment: Segment containing steps to resolve
@@ -330,12 +352,19 @@ class SegmentRunner:
         Raises:
             ValueError: If step is missing name field
         """
+        from brainsmith.dse._constants import SKIP_INDICATOR
+
         steps = []
         for step in segment.steps:
             if "name" not in step:
                 raise ValueError(f"Step missing name: {step}")
 
             step_name = step["name"]
+
+            # Skip placeholder indicators (used in branch points)
+            if step_name == SKIP_INDICATOR:
+                continue
+
             try:
                 # Try to get callable from registry
                 step_fn = get_step(step_name)
@@ -368,6 +397,12 @@ class SegmentRunner:
 
         # Resolve steps to callables
         config["steps"] = self._resolve_steps(segment)
+
+        # Resolve start_step/stop_step to FINN function names if present
+        if "start_step" in config and config["start_step"]:
+            config["start_step"] = self._resolve_step_name(config["start_step"])
+        if "stop_step" in config and config["stop_step"]:
+            config["stop_step"] = self._resolve_step_name(config["stop_step"])
 
         return config
     

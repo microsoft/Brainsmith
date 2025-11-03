@@ -95,7 +95,6 @@ name: branching_test
 clock_ns: 10.0
 output: estimates
 board: Pynq-Z1
-save_intermediate_models: true
 design_space:
   steps:
     - finn:streamline
@@ -150,7 +149,6 @@ name: artifact_sharing
 clock_ns: 10.0
 output: estimates
 board: Pynq-Z1
-save_intermediate_models: true
 design_space:
   steps:
     - finn:streamline

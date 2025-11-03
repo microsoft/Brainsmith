@@ -18,6 +18,10 @@ from brainsmith.registry import kernel
 
 @kernel(
     description="Hardware shuffle (rearrange and transpose) operation - LEGACY",
+    infer_transform= {
+                "module": "brainsmith.kernels.shuffle.infer_shuffle",
+                "class_name": "InferShuffle",
+                },
     author="Shane Fleming"
 )
 class LegacyShuffle(HWCustomOp):
@@ -37,11 +41,11 @@ class LegacyShuffle(HWCustomOp):
                 "in_shape" : ("ints", True, []),
                 "out_reshaped" : ("ints", True, []),
                 "out_shape" : ("ints", True, []),
-                "loop_coeffs" : ("ints", True, []), 
+                "loop_coeffs" : ("ints", True, []),
                 "perm" : ("ints", True, []),
                 "SIMD": ("i", False, 1),
                 "inner_moves" : ("i", True, 0),
-                "NumChannels": ("i", False, 128) 
+                "NumChannels": ("i", False, 128)
         }
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
@@ -66,7 +70,7 @@ class LegacyShuffle(HWCustomOp):
     def execute_node(self, context, graph):
         node = self.onnx_node
         input_data = context[node.input[0]]
-        input_reshaped = input_data.reshape(self.get_nodeattr("in_reshaped")) 
+        input_reshaped = input_data.reshape(self.get_nodeattr("in_reshaped"))
         transposed = np.transpose(input_reshaped, axes=self.get_nodeattr("perm"))
         output_reshaped = transposed.reshape(self.get_nodeattr("out_reshaped"))
         context[node.output[0]] = output_reshaped

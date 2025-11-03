@@ -26,11 +26,7 @@ def blueprint_config() -> DSEConfig:
     return DSEConfig(
         clock_ns=DSE_DEFAULT_CLOCK_PERIOD_NS,
         output=OutputType.ESTIMATES,
-        board="test_board",
-        verify=False,
-        parallel_builds=DSE_DEFAULT_PARALLEL_BUILDS,
-        debug=False,
-        save_intermediate_models=False
+        board="test_board"
     )
 
 

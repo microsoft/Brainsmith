@@ -14,6 +14,7 @@ from typing import Any
 
 from brainsmith.registry import get_kernel, step
 from brainsmith.primitives.transforms import InferKernelList
+from qonnx.transformation.general import GiveUniqueNodeNames
 
 logger = logging.getLogger(__name__)
 
@@ -58,5 +59,11 @@ def infer_kernels_step(model: Any, cfg: Any) -> Any:
 
     # Delegate to InferKernelList (single source of truth for inference logic)
     model = model.transform(InferKernelList(kernel_classes))
+
+    # Ensure all nodes have unique names after inference
+    # Some legacy FINN transforms (e.g., InferElementwiseBinaryOperation) create
+    # nodes without names, which causes issues in downstream steps like partitioning
+    model = model.transform(GiveUniqueNodeNames())
+    logger.debug("Assigned unique names to all nodes after kernel inference")
 
     return model

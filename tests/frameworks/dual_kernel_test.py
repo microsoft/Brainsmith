@@ -152,33 +152,35 @@ class DualKernelTest(KernelTestConfig):
         """
         pass
 
+    @abstractmethod
     def get_manual_backend_variants(self):
         """Backend variants for manual (FINN) pipeline.
 
-        Override to specify FINN backends explicitly. This ensures the manual
-        pipeline (FINN transform) uses FINN backends instead of auto-detecting
-        Brainsmith backends from the registry.
+        REQUIRED: Must override for all DualKernelTest subclasses.
+
+        Manual pipeline uses FINN transforms which create nodes with FINN
+        attributes. These MUST use FINN backends, not Brainsmith backends.
+
+        Auto-detection is NOT possible because op.onnx_node.op_type lacks
+        source context, causing registry to return Brainsmith backends
+        (due to source priority: [project, brainsmith, finn]).
 
         IMPORTANT: FINN and Brainsmith pipelines must remain independent.
         - Manual pipeline: FINN transform → FINN backend (uses "Func" attribute)
         - Auto pipeline: Brainsmith transform → Brainsmith backend (uses "func" attribute)
 
         Returns:
-            List of backend classes to try in priority order, or None.
-            None = auto-detect from registry (WARNING: finds Brainsmith backends!)
-
-        Default:
-            None (auto-detect, but this will likely fail for FINN nodes!)
+            List[Type]: Backend classes in priority order
 
         Example (FINN ChannelwiseOp):
             def get_manual_backend_variants(self):
                 from finn.custom_op.fpgadataflow.hls.channelwise_op_hls import ChannelwiseOp_hls
                 return [ChannelwiseOp_hls]
 
-        WARNING: Auto-detection uses Brainsmith registry, which won't find FINN
-        backends. Strongly recommend overriding this for FINN pipelines.
+        Raises:
+            NotImplementedError: If not overridden (abstract method)
         """
-        return None
+        pass
 
     def get_auto_backend_variants(self):
         """Backend variants for auto (Brainsmith) pipeline.

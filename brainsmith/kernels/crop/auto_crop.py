@@ -415,10 +415,6 @@ class Crop(KernelOp):
         return df.TransformationResult(
             nodes_to_insert=[hw_node],
             nodes_to_remove=[node],
-            actual_layouts={
-                "input": "NHWC",
-                "output": "NHWC",
-            },
             metadata={
                 "schema_name": schema.name,
                 "source_pattern": "Gather",

@@ -67,6 +67,15 @@ class MVAUParityBase(DualKernelTest):
         """Brainsmith's unified inference transform."""
         return InferKernelList
 
+    def get_manual_backend_variants(self):
+        """Return FINN MVAU backend for manual pipeline.
+
+        Manual pipeline uses InferQuantizedMatrixVectorActivation (FINN transform)
+        which creates FINN MVAU nodes requiring FINN backends.
+        """
+        from finn.custom_op.fpgadataflow.hls.matrixvectoractivation_hls import MVAU_hls
+        return [MVAU_hls]
+
     def get_num_inputs(self) -> int:
         """Return 2 for MV, 3 for MVTU."""
         config = self.get_mvau_config()

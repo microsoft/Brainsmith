@@ -263,6 +263,29 @@ class DesignSpaceValidationContext:
         except (AttributeError, KeyError) as e:
             raise KeyError(f"Parameter '{name}' not found in nodeattrs") from e
 
+    def get_node_attribute(self, name: str, default=None) -> Any:
+        """Get node attribute value (alias for get_param for constraint compatibility).
+
+        This method provides a unified interface for constraints like AttrCompare
+        that need to access node attributes/parameters during validation.
+
+        Args:
+            name: Attribute name
+            default: Default value if not found
+
+        Returns:
+            Attribute value or default
+
+        Raises:
+            KeyError: If parameter not found and no default provided
+        """
+        try:
+            return self.get_param(name)
+        except (RuntimeError, KeyError):
+            if default is not None:
+                return default
+            raise
+
 
 # =============================================================================
 # Configuration Validation Context (Parametric Constraints)

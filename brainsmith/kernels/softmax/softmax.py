@@ -61,7 +61,7 @@ class Softmax(KernelOp):
 
         Only accepts Softmax nodes operating on last axis (channel dimension).
         """
-        if node.op_type != "Softmax":
+        if node.op_type != "Softmax" or node.domain=="brainsmith.kernels":
             return False
 
         # Check axis attribute (must be None or -1 for channel-wise softmax)
@@ -89,6 +89,7 @@ class Softmax(KernelOp):
             inputs=list(node.input),
             outputs=list(node.output),
             domain="brainsmith.kernels",
+            backend="fpgadataflow",
             name=f"Softmax_{node.name}",
         )
 

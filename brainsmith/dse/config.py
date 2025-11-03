@@ -27,8 +27,9 @@ class DSEConfig:
     # Target (required for rtl/bitfile)
     board: Optional[str] = None
 
-    # Everything else has sensible defaults
-    save_intermediate_models: bool = False
+    # Step range control (optional overrides)
+    start_step: Optional[str] = None
+    stop_step: Optional[str] = None
 
     # Direct FINN parameter overrides
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
@@ -73,7 +74,8 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
         clock_ns=float(data['clock_ns']),
         output=_parse_output_type(data.get('output', 'estimates')),
         board=data.get('board'),
-        save_intermediate_models=data.get('save_intermediate_models', False),
+        start_step=data.get('start_step'),
+        stop_step=data.get('stop_step'),
         finn_overrides=data.get('finn_config', {})
     )
 

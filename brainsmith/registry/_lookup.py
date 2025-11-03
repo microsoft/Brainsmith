@@ -117,11 +117,11 @@ def _get_component(name: str, component_type: str):
             available = _list_components(component_type)
             raise KeyError(_format_not_found_error(component_type, full_name, available))
 
-        # Load component
-        _load_component(meta)
-
-        # Return loaded object from component index
-        return meta.loaded_obj
+        # Load component and return it directly
+        # Note: Must return _load_component() result, not meta.loaded_obj, because
+        # the decorator may replace ComponentMetadata in _component_index during import,
+        # making our 'meta' reference stale (loaded_obj=None even after successful load).
+        return _load_component(meta)
 
 
 def _has_component(name: str, component_type: str) -> bool:

@@ -60,24 +60,28 @@ class DuplicateStreams_hls(DuplicateStreams, HLSBackend):
 
     def generate_params(self, model, path):
         """Generate HLS implementation code with variable output count."""
-        n_outputs = self.get_num_output_streams()
-        i_stream_w = self.get_instream_width()
-        o_stream_w = self.get_outstream_width()
+        self._ensure_ready(model)
+
+        inp = self.design_point.input_list[0]
+        i_stream_w = inp.stream_width_bits
 
         # Build function signature (variable arity)
         inp_streams = [f"hls::stream<ap_uint<{i_stream_w}>> &in0_V"]
-        for i in range(n_outputs):
+        for i, output in enumerate(self.design_point.output_list):
+            o_stream_w = output.stream_width_bits
             inp_streams.append(f"hls::stream<ap_uint<{o_stream_w}>> &out{i}_V")
 
         # Build loop body (read once, write N times)
         commands = [f"ap_uint<{i_stream_w}> e = in0_V.read();"]
-        for i in range(n_outputs):
+        for i in range(len(self.design_point.output_list)):
             commands.append(f"out{i}_V.write(e);")
 
         # Compute iteration count
         # get_number_output_values() returns dict for multi-output kernels (FINN API)
         output_vals = self.get_number_output_values()
         iters = output_vals["out0"] if isinstance(output_vals, dict) else output_vals
+
+        n_outputs = len(self.design_point.output_list)
 
         # Generate implementation
         impl_hls_code = f"""#pragma once
@@ -120,36 +124,35 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
 
     def strm_decl(self):
         """Declare input and N output streams."""
-        n_outputs = self.get_num_output_streams()
         self.code_gen_dict["$STREAMDECLARATIONS$"] = []
 
         # Input stream
+        inp = self.design_point.input_list[0]
         self.code_gen_dict["$STREAMDECLARATIONS$"].append(
-            f'hls::stream<ap_uint<{self.get_instream_width()}>> in0_V ("in0_V");'
+            f'hls::stream<ap_uint<{inp.stream_width_bits}>> in0_V ("in0_V");'
         )
 
         # Output streams (variable count)
-        for i in range(n_outputs):
+        for i, output in enumerate(self.design_point.output_list):
             out_name = f"out{i}_V"
             self.code_gen_dict["$STREAMDECLARATIONS$"].append(
-                f'hls::stream<ap_uint<{self.get_outstream_width()}>> {out_name} ("{out_name}");'
+                f'hls::stream<ap_uint<{output.stream_width_bits}>> {out_name} ("{out_name}");'
             )
 
     def docompute(self):
         """Generate function call with N outputs."""
-        n_outputs = self.get_num_output_streams()
-        ostreams = [f"out{i}_V" for i in range(n_outputs)]
+        ostreams = [f"out{i}_V" for i in range(len(self.design_point.output_list))]
         dc = f"DuplicateStreamsCustom(in0_V, {', '.join(ostreams)});"
         self.code_gen_dict["$DOCOMPUTE$"] = [dc]
 
     def blackboxfunction(self):
         """Generate blackbox function signature (variable arity)."""
-        n_outputs = self.get_num_output_streams()
-        i_stream_w = self.get_instream_width()
-        o_stream_w = self.get_outstream_width()
+        inp = self.design_point.input_list[0]
+        i_stream_w = inp.stream_width_bits
 
         inp_streams = [f"hls::stream<ap_uint<{i_stream_w}>> &in0_V"]
-        for i in range(n_outputs):
+        for i, output in enumerate(self.design_point.output_list):
+            o_stream_w = output.stream_width_bits
             inp_streams.append(f"hls::stream<ap_uint<{o_stream_w}>> &out{i}_V")
 
         self.code_gen_dict["$BLACKBOXFUNCTION$"] = [
@@ -158,10 +161,9 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
 
     def pragmas(self):
         """Generate interface pragmas for all streams."""
-        n_outputs = self.get_num_output_streams()
         self.code_gen_dict["$PRAGMAS$"] = ["#pragma HLS INTERFACE axis port=in0_V"]
 
-        for i in range(n_outputs):
+        for i in range(len(self.design_point.output_list)):
             self.code_gen_dict["$PRAGMAS$"].append(
                 f"#pragma HLS INTERFACE axis port=out{i}_V"
             )
@@ -203,8 +205,7 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
         self.code_gen_dict["$DATAOUTSTREAM$"] = []
 
         # Generate write for each output stream
-        n_outputs = self.get_num_output_streams()
-        for i in range(n_outputs):
+        for i in range(len(self.design_point.output_list)):
             npy_out = f"{code_gen_dir}/output_{i}.npy"
             self.code_gen_dict["$DATAOUTSTREAM$"].append(
                 f'apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
@@ -214,7 +215,6 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
     def save_as_npy(self):
         """Save output as NPY (all outputs)."""
         self.code_gen_dict["$SAVEASCNPY$"] = []
-        n_outputs = self.get_num_output_streams()
 
-        for i in range(n_outputs):
+        for i in range(len(self.design_point.output_list)):
             self.code_gen_dict["$SAVEASCNPY$"].append(f'saveAsNpy<{i}>(out{i}_V, "{i}");')

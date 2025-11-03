@@ -233,7 +233,10 @@ class SystemConfig(BaseSettings):
         default=list(DEFAULT_SOURCE_PRIORITY),
         description=(
             "Component source resolution priority. First source with matching "
-            "component wins. Custom sources are auto-appended if not explicitly listed."
+            "component wins. Custom filesystem sources from component_sources are "
+            "auto-appended if not explicitly listed. The 'custom' source (ephemeral "
+            "runtime components) is always included at the end by default but can be "
+            "repositioned by users."
         )
     )
     source_module_prefixes: Dict[str, str] = Field(
@@ -450,10 +453,20 @@ class SystemConfig(BaseSettings):
 
         This ensures custom sources work automatically while allowing users to
         explicitly position them in the priority list if desired.
+
+        Also ensures 'custom' source (ephemeral runtime components) is present
+        at the end by default, but users can reorder it if needed.
         """
+        from brainsmith.registry.constants import SOURCE_CUSTOM
+
+        # Auto-append filesystem sources from component_sources
         for source_name in self.component_sources.keys():
             if source_name not in self.source_priority:
                 self.source_priority.append(source_name)
+
+        # Ensure 'custom' source is present (append at end if not explicitly configured)
+        if SOURCE_CUSTOM not in self.source_priority:
+            self.source_priority.append(SOURCE_CUSTOM)
 
     @cached_property
     def bsmith_dir(self) -> Path:
@@ -705,6 +718,12 @@ class SystemConfig(BaseSettings):
 # Watch config file - direnv will reload when it changes
 watch_file .brainsmith/config.yaml
 
+# Activate virtualenv first (required for brainsmith command)
+if [ -d .venv ]; then
+    export VIRTUAL_ENV="$PWD/.venv"
+    PATH_add "$VIRTUAL_ENV/bin"
+fi
+
 # Auto-regenerate environment if config is newer than env.sh
 if [ .brainsmith/config.yaml -nt .brainsmith/env.sh ]; then
     echo "Config changed, regenerating environment..."
@@ -713,14 +732,8 @@ if [ .brainsmith/config.yaml -nt .brainsmith/env.sh ]; then
             echo -e "\033[33mFailed to regenerate. Run: brainsmith project init\033[0m"
         }
     else
-        echo -e "\033[33mbrainsmith command not found. Activate venv first.\033[0m"
+        echo -e "\033[33mbrainsmith command not found. Check venv activation.\033[0m"
     fi
-fi
-
-# Activate virtualenv (use existing .venv, not create new one)
-if [ -d .venv ]; then
-    export VIRTUAL_ENV="$PWD/.venv"
-    PATH_add "$VIRTUAL_ENV/bin"
 fi
 
 # Source Brainsmith environment (sets all variables, sources Xilinx settings64.sh)

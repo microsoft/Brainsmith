@@ -50,6 +50,12 @@ class InterfaceDesignSpace:
 
     Built once from ONNX context, reused across all parallelization configs during DSE.
     Stream tiling preserved as template for later resolution with specific parameters.
+
+    Parallelism metadata (linked during build):
+    - parallelism_dimension: Shared reference to OrderedDimension from kernel dimensions dict
+    - parallelism_param: Parameter name (e.g., "SIMD") for navigation
+
+    Single-param only for now (multi-param will flatten to synthetic 1D in future).
     """
     name: str
     tensor_shape: Shape
@@ -58,6 +64,10 @@ class InterfaceDesignSpace:
     datatype: BaseDataType
     is_weight: bool = False
     tensor_name: Optional[str] = None  # ONNX tensor name for initializer lookups
+
+    # Parallelism metadata (None if no stream parameters)
+    parallelism_dimension: Optional[OrderedDimension] = None
+    parallelism_param: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -172,6 +182,323 @@ class InterfaceDesignPoint:
     def stream_width_bits(self) -> int:
         """Stream width in bits."""
         return self.streaming_bandwidth * self.datatype.bitwidth()
+
+
+class NavigableInterface:
+    """Navigable interface view with parallelism control.
+
+    Lightweight wrapper that combines InterfaceDesignPoint (structure)
+    with KernelDesignPoint (configuration) to enable interface-agnostic
+    parallelism navigation.
+
+    Provides ergonomic API for controlling parallelism without knowing
+    kernel-specific parameter names:
+    - Query: `parallelism`, `parallelism_dimension`, `has_parallelism`
+    - Navigate: `with_parallelism()`, `increase/decrease_parallelism()`, min/max
+    - Explore: `sweep_parallelism()`, `sweep_parallelism_percentage()`
+
+    All navigation methods return new KernelDesignPoint instances (immutable).
+
+    Example:
+        >>> # Interface-agnostic access (don't need to know param name)
+        >>> point.input[0].parallelism  # Current value
+        64
+        >>> point.input[0].parallelism_dimension  # Dimension spec
+        OrderedDimension(name='SIMD', values=(1, 2, 4, 8, 16, 32, 64, 128))
+
+        >>> # Navigation (returns new kernel points)
+        >>> point2 = point.input[0].with_parallelism(16)
+        >>> point3 = point.input[0].increase_parallelism(2)
+
+        >>> # Exploration
+        >>> for p in point.input[0].sweep_parallelism():
+        ...     print(p.input[0].parallelism)
+        1
+        2
+        4
+        ...
+    """
+
+    def __init__(self, interface_point: InterfaceDesignPoint, kernel_point: 'KernelDesignPoint'):
+        """Create navigable interface wrapper.
+
+        Args:
+            interface_point: Interface structure (shape hierarchy, datatype)
+            kernel_point: Kernel configuration (for navigation context)
+        """
+        self._point = interface_point
+        self._kernel = kernel_point
+
+    # =========================================================================
+    # Structural Properties (delegated to InterfaceDesignPoint)
+    # =========================================================================
+
+    @property
+    def name(self) -> str:
+        """Interface name."""
+        return self._point.name
+
+    @property
+    def tensor_shape(self) -> Shape:
+        """Tensor shape (full unfolded shape)."""
+        return self._point.tensor_shape
+
+    @property
+    def block_shape(self) -> Shape:
+        """Block shape (spatial tile size)."""
+        return self._point.block_shape
+
+    @property
+    def stream_shape(self) -> Shape:
+        """Stream shape (parallelized bandwidth per cycle)."""
+        return self._point.stream_shape
+
+    @property
+    def datatype(self) -> BaseDataType:
+        """Interface datatype."""
+        return self._point.datatype
+
+    @property
+    def is_weight(self) -> bool:
+        """Whether interface is weight (constant tensor)."""
+        return self._point.is_weight
+
+    def get_shape(self, hierarchy: ShapeHierarchy) -> Shape:
+        """Get shape at specified hierarchy level."""
+        return self._point.get_shape(hierarchy)
+
+    @property
+    def tensor_blocks_shape(self) -> Shape:
+        """Per-dimension blocks needed to tile tensor."""
+        return self._point.tensor_blocks_shape
+
+    @property
+    def stream_cycles_shape(self) -> Shape:
+        """Per-dimension cycles needed to stream one block."""
+        return self._point.stream_cycles_shape
+
+    @property
+    def tensor_folding_factor(self) -> int:
+        """Number of blocks needed to cover full tensor."""
+        return self._point.tensor_folding_factor
+
+    @property
+    def block_folding_factor(self) -> int:
+        """Cycles to stream one block."""
+        return self._point.block_folding_factor
+
+    @property
+    def streaming_bandwidth(self) -> int:
+        """Elements streamed per cycle."""
+        return self._point.streaming_bandwidth
+
+    @property
+    def stream_width_bits(self) -> int:
+        """Stream width in bits."""
+        return self._point.stream_width_bits
+
+    # =========================================================================
+    # Parallelism Query Properties
+    # =========================================================================
+
+    @property
+    def has_parallelism(self) -> bool:
+        """Check if interface has parallelism dimension.
+
+        Returns:
+            True if interface has stream parallelism parameter, False otherwise
+        """
+        return self._point.design_space.parallelism_dimension is not None
+
+    @property
+    def parallelism(self) -> Optional[int]:
+        """Current parallelism value.
+
+        Returns:
+            Current parallelism parameter value, or None if no parallelism
+        """
+        if self._point.design_space.parallelism_param is None:
+            return None
+        return self._kernel.config[self._point.design_space.parallelism_param]
+
+    @property
+    def parallelism_dimension(self) -> Optional[OrderedDimension]:
+        """Parallelism dimension specification.
+
+        Returns:
+            OrderedDimension with valid values and navigation methods,
+            or None if interface has no parallelism
+        """
+        return self._point.design_space.parallelism_dimension
+
+    # =========================================================================
+    # Navigation Methods (return new KernelDesignPoint)
+    # =========================================================================
+
+    def with_parallelism(self, value: int) -> 'KernelDesignPoint':
+        """Set parallelism to specific value.
+
+        Args:
+            value: Target parallelism value (must be in dimension's valid values)
+
+        Returns:
+            New KernelDesignPoint with updated parallelism
+
+        Raises:
+            ValueError: If interface has no parallelism or value is invalid
+        """
+        self._require_parallelism()
+        param = self._point.design_space.parallelism_param
+        return self._kernel.with_dimension(param, value)
+
+    def with_min_parallelism(self) -> 'KernelDesignPoint':
+        """Set parallelism to minimum value.
+
+        Returns:
+            New KernelDesignPoint with minimum parallelism
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        param = self._point.design_space.parallelism_param
+        return self._kernel.with_min(param)
+
+    def with_max_parallelism(self) -> 'KernelDesignPoint':
+        """Set parallelism to maximum value.
+
+        Returns:
+            New KernelDesignPoint with maximum parallelism
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        param = self._point.design_space.parallelism_param
+        return self._kernel.with_max(param)
+
+    def increase_parallelism(self, n: int = 1) -> 'KernelDesignPoint':
+        """Increase parallelism by n steps.
+
+        Args:
+            n: Number of steps to increase (default 1)
+
+        Returns:
+            New KernelDesignPoint with increased parallelism
+            (clamped to maximum if beyond range)
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        dim = self.parallelism_dimension
+        new_val = dim.step_up(self.parallelism, n)
+        return self.with_parallelism(new_val)
+
+    def decrease_parallelism(self, n: int = 1) -> 'KernelDesignPoint':
+        """Decrease parallelism by n steps.
+
+        Args:
+            n: Number of steps to decrease (default 1)
+
+        Returns:
+            New KernelDesignPoint with decreased parallelism
+            (clamped to minimum if beyond range)
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        dim = self.parallelism_dimension
+        new_val = dim.step_down(self.parallelism, n)
+        return self.with_parallelism(new_val)
+
+    def with_parallelism_percentage(
+        self,
+        percentage: float,
+        rounding: Literal['natural', 'down', 'up'] = 'natural'
+    ) -> 'KernelDesignPoint':
+        """Set parallelism to percentage of range.
+
+        Args:
+            percentage: Value from 0.0 to 1.0 (0.0=min, 1.0=max)
+            rounding: How to round fractional indices
+                - 'natural': round() to nearest (default)
+                - 'down': floor() to lower value
+                - 'up': ceil() to higher value
+
+        Returns:
+            New KernelDesignPoint with parallelism at percentage
+
+        Raises:
+            ValueError: If interface has no parallelism or percentage invalid
+        """
+        self._require_parallelism()
+        dim = self.parallelism_dimension
+        value = dim.at_percentage(percentage, rounding)
+        return self.with_parallelism(value)
+
+    # =========================================================================
+    # Exploration Methods (yield KernelDesignPoint)
+    # =========================================================================
+
+    def sweep_parallelism(
+        self,
+        start: Optional[int] = None,
+        stop: Optional[int] = None
+    ) -> Iterator['KernelDesignPoint']:
+        """Sweep parallelism dimension.
+
+        Args:
+            start: Starting value (default: minimum)
+            stop: Ending value inclusive (default: maximum)
+
+        Yields:
+            KernelDesignPoint for each parallelism value in range
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        param = self._point.design_space.parallelism_param
+        yield from self._kernel.sweep_dimension(param, start, stop)
+
+    def sweep_parallelism_percentage(
+        self,
+        percentages: List[float],
+        rounding: Literal['natural', 'down', 'up'] = 'natural'
+    ) -> Iterator['KernelDesignPoint']:
+        """Sweep parallelism at percentage points.
+
+        Args:
+            percentages: List of percentage values (0.0 to 1.0)
+            rounding: How to round fractional indices
+
+        Yields:
+            KernelDesignPoint for each percentage
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        self._require_parallelism()
+        param = self._point.design_space.parallelism_param
+        yield from self._kernel.sweep_percentage(param, percentages, rounding)
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def _require_parallelism(self) -> None:
+        """Validate that interface has parallelism dimension.
+
+        Raises:
+            ValueError: If interface has no parallelism
+        """
+        if not self.has_parallelism:
+            raise ValueError(
+                f"Interface '{self.name}' has no parallelism dimension. "
+                f"Cannot navigate parallelism for interfaces without stream parameters."
+            )
 
 
 # =============================================================================
@@ -507,6 +834,52 @@ class KernelDesignPoint:
     def output_list(self) -> List[InterfaceDesignPoint]:
         """Outputs in declaration order (for ONNX positional mapping)."""
         return list(self.outputs.values())
+
+    @property
+    def input(self) -> List[NavigableInterface]:
+        """Navigable input interfaces with parallelism control.
+
+        Returns list of NavigableInterface wrappers that combine structure
+        (from InterfaceDesignPoint) with configuration (from KernelDesignPoint)
+        to enable interface-agnostic parallelism navigation.
+
+        Use this property when you want to control parallelism without knowing
+        kernel-specific parameter names (SIMD, PE, MW, MH, etc.).
+
+        Examples:
+            >>> # Query parallelism (interface-agnostic)
+            >>> point.input[0].parallelism  # Current value
+            64
+            >>> point.input[0].parallelism_dimension  # Dimension spec
+            OrderedDimension(name='SIMD', values=(1, 2, 4, 8, 16, 32, 64, 128))
+
+            >>> # Navigate parallelism (don't need to know param name!)
+            >>> point2 = point.input[0].with_parallelism(16)  # Set to 16
+            >>> point3 = point.input[0].increase_parallelism()  # Step up
+            >>> point4 = point.input[0].with_min_parallelism()  # Minimum
+
+            >>> # Explore parallelism
+            >>> for p in point.input[0].sweep_parallelism():
+            ...     print(p.input[0].parallelism)  # All valid values
+
+        Note:
+            Use `input_list` for backward compatibility or when you don't need
+            parallelism navigation (e.g., just reading shapes/datatypes).
+        """
+        return [NavigableInterface(iface, self) for iface in self.input_list]
+
+    @property
+    def output(self) -> List[NavigableInterface]:
+        """Navigable output interfaces with parallelism control.
+
+        Returns list of NavigableInterface wrappers. See `input` property
+        documentation for usage examples.
+
+        Note:
+            Output parallelism is less common than input parallelism, but
+            available for kernels that do parallelize outputs (e.g., Split).
+        """
+        return [NavigableInterface(iface, self) for iface in self.output_list]
 
     # Convenience properties (delegate to design space)
     @property

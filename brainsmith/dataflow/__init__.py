@@ -117,6 +117,7 @@ from .dse_models import (
     KernelDesignSpace,
     InterfaceDesignPoint,
     KernelDesignPoint,
+    NavigableInterface,
 )
 
 # Builder (constructs models from schemas + context)
@@ -160,6 +161,7 @@ __all__ = [
     'KernelDesignPoint',
     'InterfaceDesignSpace',
     'InterfaceDesignPoint',
+    'NavigableInterface',  # For interface-agnostic parallelism control
     'OrderedDimension',  # For ordered dimension navigation
 
     # Validation

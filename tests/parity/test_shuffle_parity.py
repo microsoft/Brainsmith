@@ -158,6 +158,15 @@ class TestShuffleParity(DualKernelTest):
         """
         return InferKernelList
 
+    def get_manual_backend_variants(self):
+        """Return LegacyShuffle backend for manual pipeline.
+
+        Manual pipeline uses InferShuffle (legacy transform) which creates
+        LegacyShuffle nodes requiring LegacyShuffleHLS backend.
+        """
+        from brainsmith.kernels.shuffle.legacy_shuffle_hls import LegacyShuffleHLS
+        return [LegacyShuffleHLS]
+
     def compute_golden_reference(
         self, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:

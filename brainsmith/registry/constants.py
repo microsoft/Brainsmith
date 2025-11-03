@@ -19,6 +19,7 @@ CORE_NAMESPACE = 'brainsmith'
 SOURCE_BRAINSMITH = 'brainsmith'
 SOURCE_FINN = 'finn'
 SOURCE_PROJECT = 'project'
+SOURCE_CUSTOM = 'custom'  # Ephemeral runtime components (not cached to manifest)
 
 # Known entry point sources (discovered at runtime, not filesystem-based)
 # These are discovered via importlib.metadata.entry_points but we list known ones
@@ -31,7 +32,8 @@ KNOWN_ENTRY_POINTS = frozenset([SOURCE_FINN])
 PROTECTED_SOURCES = frozenset([SOURCE_BRAINSMITH, SOURCE_FINN, SOURCE_PROJECT])
 
 # Default source resolution priority (first match wins)
-DEFAULT_SOURCE_PRIORITY = [SOURCE_PROJECT, SOURCE_BRAINSMITH, SOURCE_FINN]
+# 'custom' at end provides safe fallback for runtime-registered components
+DEFAULT_SOURCE_PRIORITY = [SOURCE_PROJECT, SOURCE_BRAINSMITH, SOURCE_FINN, SOURCE_CUSTOM]
 
 # Source module prefixes for auto-detection
 # Maps module prefix -> source name

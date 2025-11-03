@@ -719,11 +719,22 @@ class IsDynamic:
 
     Only meaningful for ONNX contexts. Always passes on kernel contexts.
 
-    Example:
-        IsDynamic(("input0", "input1"))
+    Examples:
+        IsDynamic("input")                # Single interface (ergonomic)
+        IsDynamic(("input0", "input1"))   # Multiple interfaces
     """
 
     interfaces: tuple[str, ...]
+
+    def __init__(self, interfaces: Union[str, tuple[str, ...]]):
+        """Initialize with automatic normalization of string to tuple.
+
+        Args:
+            interfaces: Single interface name (string) or tuple of interface names
+        """
+        if isinstance(interfaces, str):
+            interfaces = (interfaces,)
+        object.__setattr__(self, 'interfaces', interfaces)
 
     def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are dynamic."""
@@ -746,11 +757,22 @@ class IsStatic:
 
     Only meaningful for ONNX contexts. Always passes on kernel contexts.
 
-    Example:
-        IsStatic(("weight",))
+    Examples:
+        IsStatic("weights")               # Single interface (ergonomic)
+        IsStatic(("weights", "biases"))   # Multiple interfaces
     """
 
     interfaces: tuple[str, ...]
+
+    def __init__(self, interfaces: Union[str, tuple[str, ...]]):
+        """Initialize with automatic normalization of string to tuple.
+
+        Args:
+            interfaces: Single interface name (string) or tuple of interface names
+        """
+        if isinstance(interfaces, str):
+            interfaces = (interfaces,)
+        object.__setattr__(self, 'interfaces', interfaces)
 
     def check(self, ctx) -> Optional[str]:
         """Validate all interfaces are static."""
