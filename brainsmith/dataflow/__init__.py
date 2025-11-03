@@ -108,6 +108,9 @@ from .schemas import (
     KernelSchema,
 )
 
+# DSE navigation
+from .ordered_dimension import OrderedDimension
+
 # Immutable models (design space exploration)
 from .dse_models import (
     InterfaceDesignSpace,
@@ -157,6 +160,7 @@ __all__ = [
     'KernelDesignPoint',
     'InterfaceDesignSpace',
     'InterfaceDesignPoint',
+    'OrderedDimension',  # For ordered dimension navigation
 
     # Validation
     'Constraint',

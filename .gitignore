@@ -4,13 +4,15 @@
 # Brainsmith specific
 .brainsmith
 .envrc
-plugins/
+.python-version
+*.onnx
+
+# Brainsmith examples
 examples/*/output/
 examples/*/results/
 examples/*/checkpoints/
 examples/*/logs/
 examples/*/configs/
-*.onnx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

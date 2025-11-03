@@ -37,11 +37,13 @@ cd brainsmith
 # Run automated setup (creates .venv, initializes project, configures direnv if installed)
 ./setup-venv.sh
 
-# Edit configuration for your system as needed
-vim .brainsmith/config.yaml
+# Edit configuration for your Xilinx installation
+vim .brainsmith/config.yaml  # Set xilinx_path, xilinx_version
 
 # Activate environment
-cd . # For direnv users
+# Option 1: For direnv users
+cd .
+# Option 2: Manual (must be run from brainsmith root)
 source .venv/bin/activate && source .brainsmith/env.sh
 
 # Verify setup
@@ -58,12 +60,11 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 # Start container with automatic setup
 ./ctl-docker.sh start
 
-# Open interactive shell
+# Open interactive shell and verify setup
 ./ctl-docker.sh shell
-# Verify setup
 brainsmith project show
 
-# OR run commands directly
+# OR run one-off command
 ./ctl-docker.sh "brainsmith project show"
 ```
 

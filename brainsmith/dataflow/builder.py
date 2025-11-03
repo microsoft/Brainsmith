@@ -27,12 +27,13 @@ import logging
 from dataclasses import dataclass
 from functools import reduce
 from math import gcd
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List, Optional, Set, Tuple, Union
 
 from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith._internal.math import divisors
+from .ordered_dimension import OrderedDimension
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .types import VALUE_OPTIMIZED, ShapeHierarchy
@@ -518,12 +519,12 @@ class DesignSpaceBuilder:
         inputs: Dict[str, InterfaceDesignSpace],
         outputs: Dict[str, InterfaceDesignSpace],
         schema: 'KernelSchema',
-    ) -> Dict[str, Set[Union[int, str]]]:
+    ) -> Dict[str, Union[OrderedDimension, FrozenSet]]:
         """Compute valid values for all explorable dimensions (tiling + DSE).
 
         Combines:
-        1. Tiling dimensions (PE, SIMD) - computed as divisors of block dimensions
-        2. DSE dimensions (ram_style, res_type) - from schema.dse_dimensions
+        1. Tiling dimensions (PE, SIMD) - computed as divisors, wrapped in OrderedDimension
+        2. DSE dimensions - from schema.dse_dimensions, auto-detected as ordered or discrete
 
         Tiling dimension logic:
         - A tiling parameter is any string appearing in stream_tiling
@@ -531,15 +532,24 @@ class DesignSpaceBuilder:
         - For multi-dimensional cases, if a parameter appears in multiple
           dimensions or interfaces, valid values are divisors of GCD of all
           block dimensions where the parameter appears
+        - Always wrapped in OrderedDimension (ordered sequences)
+
+        DSE dimension auto-detection:
+        - list/tuple → OrderedDimension (ordered sequences with navigation)
+        - set/frozenset → frozenset (discrete categories)
 
         Example (tiling):
             stream_tiling=["SIMD"], block_shape=(768,)
             → SIMD must divide 768
-            → valid SIMD = {1, 2, 3, 4, 6, 8, 12, 16, ..., 768}
+            → OrderedDimension("SIMD", (1, 2, 3, 4, 6, 8, 12, 16, ..., 768))
 
-        Example (DSE):
+        Example (ordered DSE):
+            dse_dimensions={"depth": DSEDimension("depth", [128, 256, 512, 1024])}
+            → OrderedDimension("depth", (128, 256, 512, 1024))
+
+        Example (discrete DSE):
             dse_dimensions={"ram_style": DSEDimension("ram_style", {"distributed", "block"})}
-            → valid ram_style = {"distributed", "block"}
+            → frozenset({"distributed", "block"})
 
         Args:
             inputs: Input interfaces with resolved block shapes (dict or list)
@@ -547,8 +557,11 @@ class DesignSpaceBuilder:
             schema: KernelSchema containing dse_dimensions
 
         Returns:
-            Dict mapping dimension name to set of valid values (int or str)
-            Example: {"SIMD": {1, 2, 3, 4, 6, 8}, "ram_style": {"distributed", "block"}}
+            Dict mapping dimension name to OrderedDimension or frozenset
+            Example: {
+                "SIMD": OrderedDimension("SIMD", (1, 2, 3, 4, 6, 8)),
+                "ram_style": frozenset({"distributed", "block"})
+            }
 
         Raises:
             ValueError: If parameter appears in block_tiling (violates R1 from spec)
@@ -579,30 +592,56 @@ class DesignSpaceBuilder:
                 # Literals (1, FULL_DIM) don't create parameters
 
         # Each tiling param must divide GCD of all block dims where it appears
+        # Wrap in OrderedDimension (always ordered sequences)
         tiling_dimensions = {}
         for param_name, block_dims in param_constraints.items():
             gcd_value = reduce(gcd, block_dims)
-            tiling_dimensions[param_name] = divisors(gcd_value)
+            divisor_list = sorted(divisors(gcd_value))
+            tiling_dimensions[param_name] = OrderedDimension(
+                name=param_name,
+                values=tuple(divisor_list),
+                default=None  # Will use minimum (first value)
+            )
 
         logger.debug(
             f"Computed {len(tiling_dimensions)} tiling dimensions: "
             + ", ".join(f"{k}={len(v)} values" for k, v in tiling_dimensions.items())
         )
 
-        # Add DSE dimensions from schema
+        # Add DSE dimensions from schema (auto-detect ordered vs discrete)
         dse_dimensions = {}
         for dim_name, dim_spec in schema.dse_dimensions.items():
+            # Evaluate values (callable or direct)
             if callable(dim_spec.values):
-                # Callable - evaluate with BuildContext
-                dse_dimensions[dim_name] = dim_spec.values(self._ctx)
+                values = dim_spec.values(self._ctx)
             else:
-                # Set - use directly
-                dse_dimensions[dim_name] = dim_spec.values
+                values = dim_spec.values
+
+            # Auto-detect type based on container type
+            if isinstance(values, (list, tuple)):
+                # Ordered sequence → OrderedDimension
+                dse_dimensions[dim_name] = OrderedDimension(
+                    name=dim_name,
+                    values=tuple(sorted(values)),  # Ensure sorted
+                    default=dim_spec.default if hasattr(dim_spec, 'default') else None
+                )
+            elif isinstance(values, (set, frozenset)):
+                # Discrete set → frozenset
+                dse_dimensions[dim_name] = frozenset(values)
+            else:
+                # Fallback: treat as discrete
+                logger.warning(
+                    f"DSE dimension '{dim_name}' has unexpected type {type(values)}. "
+                    f"Treating as discrete (frozenset)."
+                )
+                dse_dimensions[dim_name] = frozenset(values)
 
         if dse_dimensions:
+            ordered_count = sum(1 for v in dse_dimensions.values() if isinstance(v, OrderedDimension))
+            discrete_count = sum(1 for v in dse_dimensions.values() if isinstance(v, frozenset))
             logger.debug(
                 f"Added {len(dse_dimensions)} DSE dimensions: "
-                + ", ".join(f"{k}={len(v)} values" for k, v in dse_dimensions.items())
+                f"{ordered_count} ordered, {discrete_count} discrete"
             )
 
         # Combine tiling + DSE dimensions

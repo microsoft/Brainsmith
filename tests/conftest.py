@@ -41,6 +41,23 @@ from tests.fixtures.kernel_test_helpers import (
 )
 
 
+def pytest_configure(config):
+    """Configure pytest with custom settings.
+
+    Validates that brainsmith environment is sourced before running tests.
+    Environment must be activated via:
+        source .brainsmith/env.sh
+    or:
+        direnv allow
+    """
+    # Validate environment is sourced before running tests
+    from brainsmith.settings.validation import ensure_environment_sourced
+    ensure_environment_sourced()
+
+    # Markers already defined in pytest.ini
+    pass
+
+
 @pytest.fixture(scope="session")
 def test_workspace(tmp_path_factory):
     """Session-scoped workspace for FINN builds.

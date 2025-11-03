@@ -57,22 +57,44 @@ class DSEDimension:
     Does NOT include tiling dimensions (PE, SIMD) - those are auto-extracted
     from stream_tiling templates with valid values computed from factoring.
 
+    **Container Type Convention (Ordered vs Discrete):**
+
+    The container type determines how the dimension is treated during DSE:
+
+    - **list/tuple → OrderedDimension** (ordered sequences with navigation)
+        - Supports min/max access, step_up/step_down, percentage-based indexing
+        - Values are sorted automatically
+        - Examples: depth=[128, 256, 512], num_layers=[1, 2, 4, 8]
+
+    - **set/frozenset → Discrete** (unordered categories)
+        - Membership testing only, no navigation
+        - Order doesn't matter
+        - Examples: ram_style={"distributed", "block"}, res_type={"lut", "dsp"}
+
     Attributes:
-        name: Dimension name (e.g., "ram_style", "res_type")
+        name: Dimension name (e.g., "ram_style", "depth")
         values: Valid values for this dimension
-            - Set: Explicit values like {1, 2, 4, 8} or {"distributed", "block"}
+            - list/tuple: Ordered sequence (enables navigation methods)
+            - set/frozenset: Discrete categories (membership only)
             - Callable: Computed from BuildContext (for context-dependent values)
-        default: Default value (None = auto-select smallest/first from values)
+        default: Default value (None = auto-select: min for ordered, first for discrete)
 
     Examples:
-        >>> # Explicit integer values
-        >>> DSEDimension("mem_depth", {128, 256, 512, 1024}, default=256)
+        >>> # Ordered dimension (list/tuple → OrderedDimension with navigation)
+        >>> DSEDimension("depth", [128, 256, 512, 1024], default=256)
+        >>> # Enables: .with_min("depth"), .with_step_up("depth"), .sweep_percentage("depth", [...])
 
-        >>> # Explicit string values
+        >>> # Discrete dimension (set/frozenset → frozenset, membership only)
         >>> DSEDimension("ram_style", {"distributed", "block"}, default="distributed")
+        >>> # Enables: .sweep_dimension("ram_style") - iterates all values
 
-        >>> # Auto-default (will use min for numeric, alphabetical first for string)
-        >>> DSEDimension("res_type", {"lut", "dsp"})
+        >>> # Auto-default (will use min for ordered, first for discrete)
+        >>> DSEDimension("num_layers", [1, 2, 4, 8])  # Uses min (1)
+        >>> DSEDimension("res_type", {"lut", "dsp"})  # Uses sorted first
+
+    Note:
+        Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedDimension)
+        since they're computed as divisors (naturally ordered sequences).
     """
     name: str
     values: Union[

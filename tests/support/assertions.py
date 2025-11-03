@@ -1041,27 +1041,6 @@ class BlueprintAssertions(AssertionHelper):
             f"Step operation '{operation_type}' failed. " \
             f"Expected {expected_result}, got {actual_steps}"
 
-    @staticmethod
-    def assert_step_range(
-        config: DSEConfig,
-        expected_start: Optional[str] = None,
-        expected_stop: Optional[str] = None
-    ):
-        """Assert step range control has expected values.
-
-        Args:
-            config: The parsed configuration
-            expected_start: Expected start_step value
-            expected_stop: Expected stop_step value
-        """
-        if expected_start is not None:
-            assert config.start_step == expected_start, \
-                f"Expected start_step '{expected_start}', got '{config.start_step}'"
-
-        if expected_stop is not None:
-            assert config.stop_step == expected_stop, \
-                f"Expected stop_step '{expected_stop}', got '{config.stop_step}'"
-
 
 # -----------------------------------------------------------------------------
 # Helper Functions

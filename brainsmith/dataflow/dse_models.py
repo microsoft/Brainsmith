@@ -22,11 +22,12 @@ Key principles:
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional, Union, Any, Set, Sequence, TYPE_CHECKING
+from typing import Iterator, List, Dict, Tuple, Optional, Union, Any, Set, Sequence, TYPE_CHECKING, FrozenSet, Literal
 from abc import ABC
 import math
 
 from .types import Shape, ShapeHierarchy, prod
+from .ordered_dimension import OrderedDimension
 from qonnx.core.datatype import BaseDataType
 
 if TYPE_CHECKING:
@@ -191,7 +192,7 @@ class KernelDesignSpace:
     outputs: Dict[str, InterfaceDesignSpace]
     internal_datatypes: Dict[str, BaseDataType]
     optimization_constraints: List['Constraint']
-    dimensions: Dict[str, Set[Union[int, str]]]  # Unified: tiling + resource dimensions
+    dimensions: Dict[str, Union[OrderedDimension, FrozenSet]]  # OrderedDimension for ordered, frozenset for discrete
 
     @property
     def input_list(self) -> List[InterfaceDesignSpace]:
@@ -210,6 +211,147 @@ class KernelDesignSpace:
         Useful when mapping to ONNX node.output[i] positions.
         """
         return list(self.outputs.values())
+
+    # =========================================================================
+    # Dimension Query Methods
+    # =========================================================================
+
+    def get_dimension(self, name: str) -> Union[OrderedDimension, FrozenSet]:
+        """Get dimension by name.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            OrderedDimension for ordered dimensions, frozenset for discrete
+
+        Raises:
+            KeyError: If dimension not found
+        """
+        return self.dimensions[name]
+
+    def get_ordered(self, name: str) -> OrderedDimension:
+        """Get ordered dimension by name.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            OrderedDimension instance
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+        """
+        dim = self.dimensions[name]
+        if not isinstance(dim, OrderedDimension):
+            raise TypeError(
+                f"Dimension '{name}' is discrete (frozenset), not ordered. "
+                f"Use get_dimension() for type-agnostic access."
+            )
+        return dim
+
+    def is_ordered(self, name: str) -> bool:
+        """Check if dimension is ordered.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            True if dimension is OrderedDimension, False if discrete (frozenset)
+
+        Raises:
+            KeyError: If dimension not found
+        """
+        return isinstance(self.dimensions[name], OrderedDimension)
+
+    def is_discrete(self, name: str) -> bool:
+        """Check if dimension is discrete.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            True if dimension is discrete (frozenset), False if ordered
+
+        Raises:
+            KeyError: If dimension not found
+        """
+        return isinstance(self.dimensions[name], frozenset)
+
+    # =========================================================================
+    # Delegation Methods (for OrderedDimension navigation)
+    # =========================================================================
+
+    def dim_min(self, name: str) -> int:
+        """Get minimum value of ordered dimension.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            Minimum value
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete
+        """
+        return self.get_ordered(name).min()
+
+    def dim_max(self, name: str) -> int:
+        """Get maximum value of ordered dimension.
+
+        Args:
+            name: Dimension name
+
+        Returns:
+            Maximum value
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete
+        """
+        return self.get_ordered(name).max()
+
+    def dim_at_percentage(
+        self,
+        name: str,
+        percentage: float,
+        rounding: str = 'natural'
+    ) -> int:
+        """Get value at percentage position in ordered dimension.
+
+        Args:
+            name: Dimension name
+            percentage: Position in range [0.0, 1.0]
+            rounding: 'natural', 'down', or 'up'
+
+        Returns:
+            Value at percentage position
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete
+            ValueError: If percentage out of range or invalid rounding
+        """
+        return self.get_ordered(name).at_percentage(percentage, rounding)
+
+    def dim_at_index(self, name: str, idx: int) -> int:
+        """Get value at index in ordered dimension.
+
+        Args:
+            name: Dimension name
+            idx: Index position (supports negative indexing)
+
+        Returns:
+            Value at index
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete
+            IndexError: If index out of range
+        """
+        return self.get_ordered(name).at_index(idx)
 
     def configure(self, config: Dict[str, Union[int, str]]) -> 'KernelDesignPoint':
         """Instantiate kernel at specified point in design space.
@@ -251,9 +393,28 @@ class KernelDesignSpace:
                     f"Unknown dimension: {param_name}. "
                     f"Known: {list(self.dimensions.keys())}"
                 )
-            if value not in self.dimensions[param_name]:
-                valid = sorted(self.dimensions[param_name]) if all(isinstance(v, int) for v in self.dimensions[param_name]) else sorted(self.dimensions[param_name])
-                raise ValueError(f"Invalid {param_name}={value}. Valid: {valid}")
+
+            dim = self.dimensions[param_name]
+
+            # Handle OrderedDimension
+            if isinstance(dim, OrderedDimension):
+                if value not in dim.values:
+                    raise ValueError(
+                        f"Invalid {param_name}={value}. "
+                        f"Valid range: [{dim.min()}, {dim.max()}], "
+                        f"values: {dim.values}"
+                    )
+            # Handle discrete (frozenset)
+            elif isinstance(dim, frozenset):
+                if value not in dim:
+                    raise ValueError(
+                        f"Invalid {param_name}={value}. "
+                        f"Valid: {sorted(dim)}"
+                    )
+            else:
+                # Fallback for backward compatibility (shouldn't happen)
+                if value not in dim:
+                    raise ValueError(f"Invalid {param_name}={value}. Valid: {dim}")
 
         missing = set(self.dimensions.keys()) - set(params.keys())
         if missing:
@@ -399,3 +560,251 @@ class KernelDesignPoint:
         Returns the output's stream_shape attribute (resolved during configure).
         """
         return self.output_list[output_idx].stream_shape
+
+    # =========================================================================
+    # Navigation Methods (Immutable - Return New Instances)
+    # =========================================================================
+
+    def with_dimension(self, name: str, value: Union[int, str]) -> 'KernelDesignPoint':
+        """Create new design point with specified dimension value.
+
+        Works for both ordered and discrete dimensions.
+
+        Args:
+            name: Dimension name
+            value: New value for dimension
+
+        Returns:
+            New KernelDesignPoint with updated dimension
+
+        Raises:
+            KeyError: If dimension not found
+            ValueError: If value not valid for dimension
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 4, "PE": 1})
+            >>> point2 = point.with_dimension("SIMD", 8)
+            >>> point2.config["SIMD"]
+            8
+        """
+        new_config = {**self.config, name: value}
+        return self.design_space.configure(new_config)
+
+    def with_min(self, name: str) -> 'KernelDesignPoint':
+        """Create new design point with ordered dimension at minimum.
+
+        Args:
+            name: Dimension name (must be ordered)
+
+        Returns:
+            New KernelDesignPoint with dimension at minimum
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 8, "PE": 4})
+            >>> point2 = point.with_min("SIMD")
+            >>> point2.config["SIMD"]
+            1
+        """
+        min_val = self.design_space.dim_min(name)
+        return self.with_dimension(name, min_val)
+
+    def with_max(self, name: str) -> 'KernelDesignPoint':
+        """Create new design point with ordered dimension at maximum.
+
+        Args:
+            name: Dimension name (must be ordered)
+
+        Returns:
+            New KernelDesignPoint with dimension at maximum
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 8, "PE": 4})
+            >>> point2 = point.with_max("SIMD")
+            >>> point2.config["SIMD"]
+            64
+        """
+        max_val = self.design_space.dim_max(name)
+        return self.with_dimension(name, max_val)
+
+    def with_percentage(
+        self,
+        name: str,
+        percentage: float,
+        rounding: str = 'natural'
+    ) -> 'KernelDesignPoint':
+        """Create new design point with ordered dimension at percentage.
+
+        Args:
+            name: Dimension name (must be ordered)
+            percentage: Position in range [0.0, 1.0]
+            rounding: 'natural', 'down', or 'up'
+
+        Returns:
+            New KernelDesignPoint with dimension at percentage
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+            ValueError: If percentage out of range
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 4, "PE": 1})
+            >>> point2 = point.with_percentage("SIMD", 0.5)
+            >>> point2.config["SIMD"]
+            8
+        """
+        value = self.design_space.dim_at_percentage(name, percentage, rounding)
+        return self.with_dimension(name, value)
+
+    def with_step_up(self, name: str, n: int = 1) -> 'KernelDesignPoint':
+        """Create new design point with ordered dimension stepped up.
+
+        Clamps at maximum if n steps would exceed bounds.
+
+        Args:
+            name: Dimension name (must be ordered)
+            n: Number of steps to move up (default 1)
+
+        Returns:
+            New KernelDesignPoint with dimension stepped up
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+            ValueError: If current value not in dimension or n < 0
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 4, "PE": 1})
+            >>> point2 = point.with_step_up("SIMD", 2)
+            >>> point2.config["SIMD"]
+            16
+        """
+        dim = self.design_space.get_ordered(name)
+        current = self.config[name]
+        new_val = dim.step_up(current, n)
+        return self.with_dimension(name, new_val)
+
+    def with_step_down(self, name: str, n: int = 1) -> 'KernelDesignPoint':
+        """Create new design point with ordered dimension stepped down.
+
+        Clamps at minimum if n steps would go below bounds.
+
+        Args:
+            name: Dimension name (must be ordered)
+            n: Number of steps to move down (default 1)
+
+        Returns:
+            New KernelDesignPoint with dimension stepped down
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+            ValueError: If current value not in dimension or n < 0
+
+        Examples:
+            >>> point = design_space.configure({"SIMD": 16, "PE": 4})
+            >>> point2 = point.with_step_down("SIMD", 1)
+            >>> point2.config["SIMD"]
+            8
+        """
+        dim = self.design_space.get_ordered(name)
+        current = self.config[name]
+        new_val = dim.step_down(current, n)
+        return self.with_dimension(name, new_val)
+
+    # =========================================================================
+    # Exploration Methods (Iterators)
+    # =========================================================================
+
+    def sweep_dimension(
+        self,
+        name: str,
+        start: Optional[Union[int, str]] = None,
+        stop: Optional[Union[int, str]] = None
+    ) -> Iterator['KernelDesignPoint']:
+        """Sweep through all valid values for a dimension.
+
+        For ordered dimensions, iterates in order from start to stop.
+        For discrete dimensions, iterates in sorted order (ignores start/stop).
+
+        Args:
+            name: Dimension to sweep
+            start: Start value (None = use min/first), ordered dims only
+            stop: Stop value (None = use max/last), ordered dims only
+
+        Yields:
+            KernelDesignPoint for each value in range
+
+        Raises:
+            KeyError: If dimension not found
+
+        Examples:
+            >>> # Full sweep (ordered)
+            >>> for point in base.sweep_dimension("PE"):
+            ...     evaluate(point)
+
+            >>> # Partial sweep (ordered)
+            >>> for point in base.sweep_dimension("SIMD", start=8, stop=64):
+            ...     evaluate(point)
+
+            >>> # Discrete sweep (ignores start/stop)
+            >>> for point in base.sweep_dimension("ram_style"):
+            ...     evaluate(point)
+        """
+        dim = self.design_space.get_dimension(name)
+
+        if isinstance(dim, OrderedDimension):
+            # Ordered: sweep in order from start to stop
+            start_idx = 0 if start is None else dim.index_of(start)
+            stop_idx = len(dim) - 1 if stop is None else dim.index_of(stop)
+
+            for idx in range(start_idx, stop_idx + 1):
+                value = dim.at_index(idx)
+                yield self.with_dimension(name, value)
+        else:  # frozenset
+            # Discrete: iterate in sorted order
+            for value in sorted(dim):
+                yield self.with_dimension(name, value)
+
+    def sweep_percentage(
+        self,
+        name: str,
+        percentages: List[float],
+        rounding: Literal['natural', 'down', 'up'] = 'natural'
+    ) -> Iterator['KernelDesignPoint']:
+        """Sweep through ordered dimension at specified percentage points.
+
+        Only valid for ordered dimensions.
+
+        Args:
+            name: Ordered dimension to sweep
+            percentages: List of percentage points (0.0-1.0)
+            rounding: Rounding mode for fractional indices
+
+        Yields:
+            KernelDesignPoint for each percentage
+
+        Raises:
+            KeyError: If dimension not found
+            TypeError: If dimension is discrete (not ordered)
+
+        Examples:
+            >>> # Quartile sweep
+            >>> for point in base.sweep_percentage("PE", [0.0, 0.25, 0.5, 0.75, 1.0]):
+            ...     evaluate(point)
+
+            >>> # Decile sweep
+            >>> deciles = [i/10 for i in range(11)]
+            >>> for point in base.sweep_percentage("SIMD", deciles):
+            ...     evaluate(point)
+        """
+        for pct in percentages:
+            yield self.with_percentage(name, pct, rounding)

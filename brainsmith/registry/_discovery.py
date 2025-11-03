@@ -558,7 +558,7 @@ def _load_component_package(source_name: str, source_path: Path):
     """
     init_file = source_path / '__init__.py'
     if not init_file.exists():
-        logger.warning(
+        logger.info(
             f"Component source '{source_name}' has no __init__.py, skipping. "
             f"Component packages must have __init__.py that registers components. "
             f"Path: {source_path}"

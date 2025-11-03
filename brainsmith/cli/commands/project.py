@@ -92,7 +92,7 @@ def init(path: str, force: bool) -> None:
     """Initialize a Brainsmith project with configuration and environment scripts.
 
     Creates .brainsmith/config.yaml and generates environment activation scripts
-    (env.sh, .env, .envrc, deactivate.sh).
+    (env.sh, .envrc).
 
     PATH defaults to current directory. If PATH doesn't exist, it will be created.
 
@@ -147,8 +147,6 @@ def init(path: str, force: bool) -> None:
 
         # Generate all scripts in the target project's .brainsmith/ directory
         config.generate_activation_script(brainsmith_dir / "env.sh")
-        config.generate_deactivation_script(brainsmith_dir / "deactivate.sh")
-        config.generate_dotenv_file(brainsmith_dir / ".env")
         config.generate_direnv_file(project_path / ".envrc")
 
         success("Environment scripts generated")

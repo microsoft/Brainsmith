@@ -18,7 +18,6 @@ from typing import Optional
 
 from brainsmith.dse._parser import parse_blueprint
 from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse.design_space import _slice_steps
 from brainsmith.dse.tree import DSETree
 from brainsmith.dse.runner import SegmentRunner
 from brainsmith._internal.finn.adapter import FINNAdapter
@@ -81,17 +80,13 @@ def explore_design_space(
     logger.info(f"  Blueprint: {blueprint_path}")
     logger.info(f"  Output: {output_dir}")
 
-    # Parse blueprint
-    design_space, blueprint_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
-
-    # Apply CLI overrides (CLI > blueprint)
-    start_step = start_step_override or blueprint_config.start_step
-    stop_step = stop_step_override or blueprint_config.stop_step
-
-    # Slice steps if specified
-    if start_step or stop_step:
-        logger.info(f"Applying step range: start={start_step or 'beginning'}, stop={stop_step or 'end'}")
-        design_space.steps = _slice_steps(design_space.steps, start_step, stop_step)
+    # Parse blueprint (with optional step slicing)
+    design_space, blueprint_config = parse_blueprint(
+        blueprint_path,
+        str(Path(model_path).absolute()),
+        start_step=start_step_override,
+        stop_step=stop_step_override
+    )
     
     # Build DSE tree
     tree_builder = DSETreeBuilder()

@@ -225,8 +225,8 @@ fi
 # Step 4.5: Initialize default project config if needed
 if [ ! -f ".brainsmith/config.yaml" ]; then
     echo ""
-    echo -e "\033[36mInitializing default project configuration...\033[0m"
-    poetry run brainsmith project init > /dev/null 2>&1
+    echo "No config found at .brainsmith/config.yaml, generating default"
+    poetry run brainsmith project init
     if [ $? -eq 0 ]; then
         echo -e "\033[32m✓\033[0m Default config created in .brainsmith/"
         echo "   Edit .brainsmith/config.yaml to set your Xilinx paths"
@@ -238,7 +238,28 @@ else
     echo -e "\033[32m✓\033[0m Using existing .brainsmith/config.yaml"
 fi
 
-# Step 5: Run brainsmith setup based on skip flags
+# Step 5.5: Activate environment and optionally configure direnv
+echo ""
+echo -e "\033[36mActivating brainsmith environment...\033[0m"
+
+# Check if direnv is installed and allow .envrc if present
+if command -v direnv &> /dev/null && [ -f ".envrc" ]; then
+    echo "  Configuring direnv for automatic environment loading..."
+    direnv allow
+    echo -e "\033[32m✓\033[0m direnv configured (environment will auto-load on cd)"
+fi
+
+# Source environment for this script's execution
+if [ -f ".brainsmith/env.sh" ]; then
+    source .brainsmith/env.sh
+    echo -e "\033[32m✓\033[0m Environment activated for setup"
+else
+    echo "✗ Environment file not found at .brainsmith/env.sh"
+    echo "  This should have been created during config initialization"
+    exit 1
+fi
+
+# Step 6: Run brainsmith setup based on skip flags
 echo ""
 echo -e "\033[36mRunning brainsmith setup...\033[0m"
 
@@ -274,26 +295,19 @@ if [ $? -eq 0 ]; then
     fi
 
     echo ""
-    echo "To use Brainsmith:"
+    echo -e "\033[1;32mSetup complete!\033[0m"
     echo ""
-    echo "  1. Configure Xilinx tools for your system (required for tests/operations)"
-    echo "     vim .brainsmith/config.yaml"
+    if command -v direnv &> /dev/null; then
+        echo "To activate the environment (direnv users):"
+        echo "  cd .  # Reload directory to activate"
+    else
+        echo "To activate the environment:"
+        echo "  source .venv/bin/activate && source .brainsmith/env.sh"
+    fi
     echo ""
-    echo "  2. Enable environment (choose one):"
-    echo ""
-    echo "     Recommended: Enable direnv for automatic environment switching"
-    echo "       brainsmith project allow-direnv"
-    echo "       cd .  # Trigger direnv to load environment"
-    echo ""
-    echo "     Alternative: Manual activation per session"
-    echo "       source .brainsmith/env.sh"
-    echo ""
-    echo "  3. Run tests or create designs"
-    echo "     pytest tests/"
-    echo "     smith model.onnx blueprint.yaml"
-    echo ""
-    echo "To create additional projects elsewhere:"
-    echo "  brainsmith project init ~/my-project"
+    echo "Then verify setup:"
+    echo "  brainsmith project show"
+
 else
     echo ""
     echo "⚠️ Setup completed with warnings. Check the output above."

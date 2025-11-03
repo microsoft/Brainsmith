@@ -9,7 +9,7 @@
 import logging
 import math
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple, Union, TYPE_CHECKING
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
@@ -20,6 +20,7 @@ from .schemas import KernelSchema
 from .dse_models import KernelDesignSpace, KernelDesignPoint
 from .builder import BuildContext, DesignSpaceBuilder
 from .transformation import TransformationResult
+from .ordered_dimension import OrderedDimension
 
 logger = logging.getLogger(__name__)
 
@@ -230,14 +231,17 @@ class KernelOp(HWCustomOp, ABC):
 
             # Auto-populate missing dimension parameters from auto-computed defaults
             from qonnx.util.basic import get_by_name
-            for dim_name, valid_values in self._design_space.dimensions.items():
+            for dim_name, dim in self._design_space.dimensions.items():
                 # Check if attribute is actually set in ONNX node (not just has a default)
                 if get_by_name(self.onnx_node.attribute, dim_name) is None:
-                    # Dimension not set - use smallest/first valid value
-                    if all(isinstance(v, int) for v in valid_values):
-                        initial_value = min(valid_values)
-                    else:
-                        initial_value = sorted(valid_values)[0]
+                    # Dimension not set - use default/minimum value
+                    if isinstance(dim, OrderedDimension):
+                        # OrderedDimension: use get_default() (explicit default or minimum)
+                        initial_value = dim.get_default()
+                    else:  # frozenset
+                        # Discrete: use sorted first value
+                        initial_value = sorted(dim)[0]
+
                     self.set_nodeattr(dim_name, initial_value)
                     logger.debug(
                         f"{self.onnx_node.name}: Auto-populated {dim_name}={initial_value}"
@@ -269,8 +273,13 @@ class KernelOp(HWCustomOp, ABC):
         # Delegate to existing lazy initialization
         self._ensure_ready(model_w)
 
-    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, set]:
-        """Valid dimension values for DSE (tiling + resource)."""
+    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, Union[OrderedDimension, FrozenSet]]:
+        """Valid dimension values for DSE (tiling + resource).
+
+        Returns:
+            Dict mapping dimension names to OrderedDimension (ordered sequences)
+            or frozenset (discrete categories).
+        """
         self._ensure_ready(model_w)
         return self.design_space.dimensions
 

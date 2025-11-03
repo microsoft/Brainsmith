@@ -29,6 +29,26 @@ def _version_callback(ctx, param, value):
     ctx.exit()
 
 
+def _should_skip_environment_validation() -> bool:
+    """Detect if current command should skip environment validation.
+
+    Commands that create or bootstrap the environment don't need it sourced yet.
+
+    Returns:
+        True if validation should be skipped, False otherwise
+    """
+    args = sys.argv[1:]  # Skip program name
+
+    # project init - creates environment files
+    if len(args) >= 2 and args[0] == 'project' and args[1] == 'init':
+        return True
+
+    # Future: add other bootstrap commands here if needed
+    # e.g., setup commands, environment generation, etc.
+
+    return False
+
+
 class LazyGroup(click.Group):
     def __init__(self, *args, lazy_commands=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,17 +110,22 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         logs: str,
         no_progress: bool
     ) -> None:
-        # Validate environment is sourced before proceeding
-        from brainsmith.settings.validation import ensure_environment_sourced
-        ensure_environment_sourced()
+        # Bootstrap commands (like project init) don't need environment or config
+        skip_bootstrap = _should_skip_environment_validation()
 
-        ctx.obj = ApplicationContext.from_cli_args(
-            config_file=config,
-            build_dir_override=build_dir,
-            log_level=logs,
-            no_progress=no_progress,
-            cli_name=name
-        )
+        if not skip_bootstrap:
+            # Validate environment is sourced
+            from brainsmith.settings.validation import ensure_environment_sourced
+            ensure_environment_sourced()
+
+            # Create ApplicationContext (loads config)
+            ctx.obj = ApplicationContext.from_cli_args(
+                config_file=config,
+                build_dir_override=build_dir,
+                log_level=logs,
+                no_progress=no_progress,
+                cli_name=name
+            )
 
     # Create the lazy group
     cli = LazyGroup(

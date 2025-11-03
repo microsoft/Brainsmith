@@ -478,29 +478,46 @@ class SystemConfig(BaseSettings):
         """Detect user project root with upward walk from CWD.
 
         Project root detection priority:
-        1. BSMITH_PROJECT_DIR env var (explicit override, no config check)
-        2. Custom project file location (from load_config project_file param)
+        1. Custom project file location (from load_config project_file param) - HIGHEST
+        2. BSMITH_PROJECT_DIR env var (explicit override for runtime)
         3. Walk up from CWD to find config file, return its parent directory
-        4. Fallback to CWD
+
+        Priority 1 ensures that when project init explicitly creates a config file,
+        that file's location determines the project root, regardless of any sourced
+        environment variables from other projects.
 
         Returns the same project_dir regardless of which subdirectory you're in,
         providing stable path resolution.
 
         Returns:
             Absolute path to detected project root
-        """
-        if 'BSMITH_PROJECT_DIR' in os.environ:
-            return Path(os.environ['BSMITH_PROJECT_DIR']).resolve()
 
+        Raises:
+            ValueError: If no project can be detected
+        """
+        # Check for explicit project file first (e.g., from project init)
         project_file_used = getattr(self, '_project_file_used', None)
         if project_file_used:
             return Path(project_file_used).parent.parent.resolve()
 
+        # Then check environment variable override
+        if 'BSMITH_PROJECT_DIR' in os.environ:
+            return Path(os.environ['BSMITH_PROJECT_DIR']).resolve()
+
+        # Walk up from CWD to find config
         config_file = _find_project_config()
         if config_file:
             return config_file.parent.parent
 
-        return self.bsmith_dir
+        # No project found - fail with helpful error
+        raise ValueError(
+            "No Brainsmith project detected.\n\n"
+            "To fix this, either:\n"
+            "  1. Run 'brainsmith project init' to create a new project\n"
+            "  2. Navigate to an existing project directory (containing .brainsmith/)\n"
+            "  3. Source the project environment: source .brainsmith/env.sh\n"
+            f"\nCurrent directory: {Path.cwd()}"
+        )
 
     @field_validator('component_sources', mode='before')
     @classmethod
@@ -561,33 +578,6 @@ class SystemConfig(BaseSettings):
         tool_path = self.xilinx_path / tool_name / self.xilinx_version
         return tool_path if tool_path.exists() else None
 
-    # Environment Export (delegated to EnvironmentExporter for separation of concerns)
-
-    def export_to_environment(self, **kwargs) -> Dict[str, str]:
-        """DEPRECATED: Generate environment dict (does NOT mutate os.environ).
-
-        This method is deprecated and will be removed. It was previously used
-        to export configuration to os.environ, but this pattern is unreliable
-        for subprocess environments.
-
-        Instead, source the environment BEFORE running Python:
-            source .brainsmith/env.sh
-        or:
-            direnv allow
-
-        Currently only used for script generation. All runtime calls will be
-        removed in favor of requiring pre-sourced environment.
-
-        Args:
-            **kwargs: Passed to EnvironmentExporter.to_env_dict()
-                     (include_internal: bool = True)
-
-        Returns:
-            Dict of environment variables (read-only, does NOT mutate os.environ)
-        """
-        from .env_export import EnvironmentExporter
-        return EnvironmentExporter(self).to_env_dict(**kwargs)
-
     # Activation Script Generation
 
     def generate_activation_script(self, output_path: Path) -> Path:
@@ -596,6 +586,7 @@ class SystemConfig(BaseSettings):
         The generated script:
         - Is safe to source multiple times (idempotent)
         - Cleans up old Xilinx/brainsmith paths before adding new ones
+        - Sources Xilinx settings64.sh files for complete tool environment
         - Can be re-sourced after config changes (no deactivate needed)
 
         This is the inverse of environment variable loading:
@@ -659,92 +650,27 @@ class SystemConfig(BaseSettings):
             'fi',
         ])
 
-        output_path = Path(output_path).expanduser()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("\n".join(script_lines))
-        output_path.chmod(0o755)
-
-        return output_path
-
-    def generate_deactivation_script(self, output_path: Path) -> Path:
-        """Generate deactivation script (conda-style).
-
-        Restores original environment by clearing brainsmith-specific variables.
-
-        Args:
-            output_path: Where to write the deactivation script
-
-        Returns:
-            Path to generated script
-        """
-        from .env_export import EnvironmentExporter
-        env_dict = EnvironmentExporter(self).to_env_dict()
-
-        script_lines = [
-            "#!/bin/bash",
-            "# Auto-generated by brainsmith",
-            "# Source to deactivate brainsmith environment",
-            "",
-            "# Clear brainsmith environment variables",
-        ]
-
-        for key in sorted(env_dict.keys()):
-            if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
-                continue
-            script_lines.append(f'unset {key}')
-
+        # Source Xilinx settings64.sh for complete environment
         script_lines.extend([
             "",
-            "echo 'Brainsmith environment deactivated'",
+            "# Source Xilinx tool settings for full environment",
+            "# Vitis includes Vivado, so check it first",
+            'if [ -n "$VITIS_PATH" ] && [ -f "$VITIS_PATH/settings64.sh" ]; then',
+            '    source "$VITIS_PATH/settings64.sh" 2>/dev/null',
+            'elif [ -n "$VIVADO_PATH" ] && [ -f "$VIVADO_PATH/settings64.sh" ]; then',
+            '    source "$VIVADO_PATH/settings64.sh" 2>/dev/null',
+            'fi',
+            "",
+            "# Source HLS separately (not included in Vitis)",
+            'if [ -n "$HLS_PATH" ] && [ -f "$HLS_PATH/settings64.sh" ]; then',
+            '    source "$HLS_PATH/settings64.sh" 2>/dev/null',
+            'fi',
         ])
 
         output_path = Path(output_path).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("\n".join(script_lines))
         output_path.chmod(0o755)
-
-        return output_path
-
-    def generate_dotenv_file(self, output_path: Path) -> Path:
-        """Generate .env file for poetry-dotenv-plugin and direnv.
-
-        This is simpler than shell scripts - just KEY=VALUE pairs.
-        Compatible with:
-        - poetry-dotenv-plugin
-        - direnv (.envrc can source this)
-        - Docker (ENV file)
-
-        Args:
-            output_path: Where to write the .env file
-
-        Returns:
-            Path to generated file
-        """
-        from .env_export import EnvironmentExporter
-        env_dict = EnvironmentExporter(self).to_env_dict()
-
-        lines = [
-            "# Auto-generated by brainsmith",
-            "# Compatible with poetry-dotenv-plugin, direnv, and Docker",
-            "",
-        ]
-
-        for key, value in sorted(env_dict.items()):
-            # Skip internal markers
-            if key.startswith("_BRAINSMITH") or key.startswith("_OLD_"):
-                continue
-
-            # Skip PATH - direnv's layout python handles this correctly
-            # Including PATH in .env breaks system commands
-            if key == "PATH":
-                continue
-
-            # Properly escape quotes in values
-            escaped_value = str(value).replace('"', '\\"')
-            lines.append(f'{key}="{escaped_value}"')
-
-        output_path = Path(output_path).expanduser()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("\n".join(lines))
 
         return output_path
 
@@ -754,9 +680,8 @@ class SystemConfig(BaseSettings):
         Creates a direnv configuration that:
         - Watches .brainsmith/config.yaml for changes
         - Auto-regenerates environment when config changes
-        - Loads environment variables from .brainsmith/.env
+        - Sources .brainsmith/env.sh for all environment variables
         - Activates virtualenv using direnv's layout python
-        - Adds Xilinx tool paths (VIVADO_PATH/bin, VITIS_PATH/bin, HLS_PATH/bin) to PATH
 
         User must run 'direnv allow' to trust the file.
 
@@ -780,8 +705,8 @@ class SystemConfig(BaseSettings):
 # Watch config file - direnv will reload when it changes
 watch_file .brainsmith/config.yaml
 
-# Auto-regenerate environment if config is newer than .env
-if [ .brainsmith/config.yaml -nt .brainsmith/.env ]; then
+# Auto-regenerate environment if config is newer than env.sh
+if [ .brainsmith/config.yaml -nt .brainsmith/env.sh ]; then
     echo "Config changed, regenerating environment..."
     if command -v brainsmith &> /dev/null; then
         brainsmith project init > /dev/null 2>&1 || {
@@ -798,21 +723,8 @@ if [ -d .venv ]; then
     PATH_add "$VIRTUAL_ENV/bin"
 fi
 
-# Load Brainsmith environment variables
-dotenv .brainsmith/.env
-
-# Add Xilinx tools to PATH
-if [ -n "$VIVADO_PATH" ]; then
-    PATH_add "$VIVADO_PATH/bin"
-fi
-
-if [ -n "$VITIS_PATH" ]; then
-    PATH_add "$VITIS_PATH/bin"
-fi
-
-if [ -n "$HLS_PATH" ]; then
-    PATH_add "$HLS_PATH/bin"
-fi
+# Source Brainsmith environment (sets all variables, sources Xilinx settings64.sh)
+source_env .brainsmith/env.sh
 '''
 
         output_path = Path(output_path).expanduser()
@@ -882,10 +794,9 @@ def generate_activation_scripts():
         brainsmith_dir = project_dir / ".brainsmith"
         brainsmith_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate all script formats
+        # Generate activation scripts
         config.generate_activation_script(brainsmith_dir / "env.sh")
         config.generate_deactivation_script(brainsmith_dir / "deactivate.sh")
-        config.generate_dotenv_file(brainsmith_dir / ".env")
 
         # Generate direnv integration file
         config.generate_direnv_file(project_dir / ".envrc")
@@ -899,7 +810,6 @@ def generate_activation_scripts():
     print(f"✅ Generated activation scripts in {brainsmith_dir}")
     print(f"   - env.sh (manual activation)")
     print(f"   - deactivate.sh (deactivation)")
-    print(f"   - .env (environment variables)")
     print(f"   - ../.envrc (direnv integration)")
     print()
     print("To enable direnv (recommended):")

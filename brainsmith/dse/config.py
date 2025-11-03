@@ -28,15 +28,7 @@ class DSEConfig:
     board: Optional[str] = None
 
     # Everything else has sensible defaults
-    verify: bool = False
-    verify_data: Optional[Path] = None
-    parallel_builds: int = 4
-    debug: bool = False
     save_intermediate_models: bool = False
-
-    # Step range control for testing/debugging
-    start_step: Optional[str] = None
-    stop_step: Optional[str] = None
 
     # Direct FINN parameter overrides
     finn_overrides: Dict[str, Any] = field(default_factory=dict)
@@ -50,10 +42,6 @@ class DSEConfig:
         # Validate output type dependencies
         if self.output != OutputType.ESTIMATES and not self.board:
             raise ValueError(f"{self.output.value} requires board specification")
-
-        # Validate verify dependencies
-        if self.verify and not self.verify_data:
-            raise ValueError("verify=True requires verify_data to be specified")
 
 
 def _parse_output_type(output_str: str) -> OutputType:
@@ -85,13 +73,7 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
         clock_ns=float(data['clock_ns']),
         output=_parse_output_type(data.get('output', 'estimates')),
         board=data.get('board'),
-        verify=data.get('verify', False),
-        verify_data=Path(data['verify_data']) if 'verify_data' in data else None,
-        parallel_builds=data.get('parallel_builds', 4),
-        debug=data.get('debug', False),
         save_intermediate_models=data.get('save_intermediate_models', False),
-        start_step=data.get('start_step'),
-        stop_step=data.get('stop_step'),
         finn_overrides=data.get('finn_config', {})
     )
 

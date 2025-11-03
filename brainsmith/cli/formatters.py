@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
 from rich.table import Table
 from rich.panel import Panel
 from rich.console import Console as RichConsole
@@ -17,9 +16,6 @@ from .messages import XILINX_NOT_CONFIGURED, XILINX_NOT_FOUND
 # Lazy import settings
 if TYPE_CHECKING:
     from brainsmith.settings import SystemConfig
-
-# Import config file constants from settings module
-from brainsmith.settings.schema import _PROJECT_CONFIG_DIR, _PROJECT_CONFIG_FILE
 
 # Source constants for configuration display
 _SOURCE_DERIVED = "derived"
@@ -31,7 +27,6 @@ class ConfigFormatter:
 
     def __init__(self, console: RichConsole | None = None):
         self.console = console or RichConsole()
-        self._yaml_cache: dict[str, dict] = {}  # Cache parsed YAML files
 
     def _format_metadata_section(self, config: SystemConfig) -> Panel:
         """Format configuration metadata as Rich panel.
@@ -183,7 +178,7 @@ class ConfigFormatter:
                 display = f"[yellow]{XILINX_NOT_FOUND}[/yellow]"
                 source = "—"
             table.add_row(f"  {tool_name}", display, source)
-    
+
     def _add_finn_section(self, table: Table, config: SystemConfig) -> None:
         table.add_row("", "", "")
         table.add_row("FINN Configuration", "", "")
@@ -230,25 +225,28 @@ class ConfigFormatter:
 
         # Show as: base/tool/version
         return f"[green]{base}[/green][dim]/{tool}/[/dim][green]{version}[/green]"
-    
+
     def _get_source(self, setting_name: str, env_var: str, config: SystemConfig | None = None) -> str:
         """Get simplified source string for a configuration setting.
+
+        Uses Pydantic's model_fields_set to detect if a field was explicitly configured,
+        combined with environment variable checking to distinguish env from yaml sources.
 
         Args:
             setting_name: Name of the setting (e.g., 'vivado_path')
             env_var: Environment variable name (e.g., 'BSMITH_VIVADO_PATH')
-            config: System configuration (needed to detect derived values)
+            config: System configuration (needed to detect derived values and field metadata)
 
         Returns:
             Source string: "env", "yaml", "derived", or "default"
         """
-        # Check environment variable
+        # Check environment variable first (highest priority)
         if os.environ.get(env_var):
             return "env"
 
-        # Check YAML file
-        yaml_file = self._check_yaml_files(setting_name)
-        if yaml_file:
+        # Use Pydantic's model_fields_set to detect explicit configuration
+        # If field was set (and not from env), it came from yaml file
+        if config and setting_name in config.model_fields_set:
             return "yaml"
 
         # Check if this is an auto-derived Xilinx tool path
@@ -259,40 +257,7 @@ class ConfigFormatter:
                 return _SOURCE_DERIVED
 
         return _SOURCE_DEFAULT
-    
-    def _check_yaml_files(self, setting_name: str) -> str | None:
-        """Check if setting exists in project config file."""
-        filename = f"{_PROJECT_CONFIG_DIR}/{_PROJECT_CONFIG_FILE}"
 
-        if filename not in self._yaml_cache:
-            self._load_yaml_to_cache(filename)
-
-        data = self._yaml_cache[filename]
-        return filename if self._nested_key_exists(data, setting_name) else None
-
-    def _load_yaml_to_cache(self, filename: str) -> None:
-        """Load YAML file into cache."""
-        yaml_path = Path(filename)
-        if not yaml_path.exists():
-            self._yaml_cache[filename] = {}
-            return
-
-        try:
-            with open(yaml_path) as f:
-                self._yaml_cache[filename] = yaml.safe_load(f) or {}
-        except (OSError, yaml.YAMLError):
-            self._yaml_cache[filename] = {}
-
-    def _nested_key_exists(self, data: dict, key: str) -> bool:
-        """Supports nested notation (e.g., 'finn.finn_root')."""
-        parts = key.split(".")
-        current = data
-        for part in parts:
-            if not isinstance(current, dict) or part not in current:
-                return False
-            current = current[part]
-        return True
-    
     def show_validation_warnings(self, config: SystemConfig) -> None:
         """Display configuration validation warnings."""
         from brainsmith.settings.validation import get_config_warnings
