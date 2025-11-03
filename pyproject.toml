@@ -57,10 +57,25 @@ ignore = [
 ]
 
 [tool.ruff.per-file-ignores]
-"tests/*" = ["F401", "F841"]  # Allow unused imports and variables in tests
+"tests/**/*.py" = ["E402", "UP009"]
 
 [tool.ruff.isort]
 known-first-party = ["brainsmith"]
+
+[tool.ruff.lint]
+# Make all Python 3.10+ typing upgrades auto-fixable without --unsafe-fixes
+extend-safe-fixes = [
+    "UP006",  # Use PEP 585 annotation (list instead of typing.List)
+    "UP007",  # Use X | Y for type annotations (PEP 604)
+    "UP008",  # Use super() instead of super(__class__, self)
+    "UP009",  # UTF-8 encoding declaration is unnecessary
+    "UP010",  # Unnecessary __future__ import for Python 3.10+
+    "UP032",  # Use f-string instead of format call
+    "UP034",  # Avoid extraneous parentheses
+    "UP035",  # Import replacements (typing.Dict -> dict, etc.)
+    "UP037",  # Remove quotes from type annotations
+    "UP038",  # Use X | Y in isinstance instead of (X, Y)
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
