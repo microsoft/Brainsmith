@@ -50,14 +50,13 @@ Usage:
         def get_backend_fpgapart(self):
             return "xc7z020clg400-1"
 
-Inherited Tests (20):
+Inherited Tests (18):
 - 7 core parity tests (shapes, widths, datatypes at Stage 2)
 - 5 HW estimation tests (cycles, resources at Stage 2)
-- 8 golden execution tests:
+- 6 golden execution tests:
   * 2 Python tests (Stage 2: manual/auto vs golden)
-  * 3 cppsim tests (Stage 3: manual/auto vs golden + parity)
+  * 2 cppsim tests (Stage 3: manual/auto vs golden)
   * 2 rtlsim tests (Stage 3: manual/auto vs golden)
-  * 1 Python parity test (Stage 2: manual vs auto)
 """
 
 import pytest
@@ -110,14 +109,13 @@ class DualKernelTest(KernelTestConfig):
     - Stage 2: Base Kernel (e.g., AddStreams) - Python execution
     - Stage 3: Backend (e.g., AddStreams_hls) - cppsim/rtlsim execution
 
-    Provides 20 inherited tests:
+    Provides 18 inherited tests:
     - 7 core parity tests (structural comparison at Stage 2)
     - 5 HW estimation tests (cycles, resources at Stage 2)
-    - 8 golden execution tests:
-      * 2 Python tests (Stage 2: base kernel)
-      * 3 cppsim tests (Stage 3: backend)
-      * 2 rtlsim tests (Stage 3: backend)
-      * 1 Python parity test (Stage 2: manual vs auto)
+    - 6 golden execution tests:
+      * 2 Python tests (Stage 2: base kernel vs golden)
+      * 2 cppsim tests (Stage 3: backend vs golden)
+      * 2 rtlsim tests (Stage 3: backend vs golden)
     """
 
     # ========================================================================
@@ -718,7 +716,7 @@ class DualKernelTest(KernelTestConfig):
             assert_values_match(manual_counts, auto_counts, "Operation and parameter counts")
 
     # ========================================================================
-    # Golden Execution Tests (8 tests)
+    # Golden Execution Tests (6 tests)
     # ========================================================================
 
     @pytest.mark.golden
@@ -867,56 +865,15 @@ class DualKernelTest(KernelTestConfig):
             actual_outputs, golden_outputs, "Auto RTL rtlsim", tolerance
         )
 
-    @pytest.mark.parity
-    @pytest.mark.execution
-    @pytest.mark.dual_kernel
-    def test_manual_auto_parity_python(self):
-        """Test manual vs auto Python execution produces identical results."""
-        manual_op, manual_model = self.run_manual_pipeline()
-        auto_op, auto_model = self.run_auto_pipeline()
-
-        # Generate test inputs (same seed for both)
-        np.random.seed(42)
-        manual_inputs = make_execution_context(manual_model, manual_op)
-
-        np.random.seed(42)
-        auto_inputs = make_execution_context(auto_model, auto_op)
-
-        # Execute both
-        executor = PythonExecutor()
-        manual_outputs = executor.execute(manual_op, manual_model, manual_inputs)
-        auto_outputs = executor.execute(auto_op, auto_model, auto_inputs)
-
-        # Compare manual vs auto
-        tolerance = self.get_tolerance_python()
-        self.validate_against_golden(
-            auto_outputs, manual_outputs, "Auto vs Manual (Python)", tolerance
-        )
-
-    @pytest.mark.parity
-    @pytest.mark.execution
-    @pytest.mark.cppsim
-    @pytest.mark.slow
-    @pytest.mark.dual_kernel
-    def test_manual_auto_parity_cppsim(self):
-        """Test manual vs auto cppsim execution produces identical results."""
-        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
-        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
-
-        # Generate test inputs (same seed for both)
-        np.random.seed(42)
-        manual_inputs = make_execution_context(manual_model, manual_op)
-
-        np.random.seed(42)
-        auto_inputs = make_execution_context(auto_model, auto_op)
-
-        # Execute both
-        executor = CppSimExecutor()
-        manual_outputs = executor.execute(manual_op, manual_model, manual_inputs)
-        auto_outputs = executor.execute(auto_op, auto_model, auto_inputs)
-
-        # Compare manual vs auto
-        tolerance = self.get_tolerance_cppsim()
-        self.validate_against_golden(
-            auto_outputs, manual_outputs, "Auto vs Manual (cppsim)", tolerance
-        )
+    # Removed redundant parity tests that violate the golden reference principle:
+    # - test_manual_auto_parity_python
+    # - test_manual_auto_parity_cppsim
+    #
+    # Rationale: These tests are mathematically redundant via transitive property:
+    #   If: manual == golden (validated by test_manual_python_vs_golden, test_manual_cppsim_vs_golden)
+    #   And: auto == golden (validated by test_auto_python_vs_golden, test_auto_cppsim_vs_golden)
+    #   Then: manual == auto (by transitivity)
+    #
+    # The principle: Use independent golden reference tests to validate correctness.
+    # Only use direct manual vs auto comparison for HW concerns with no ONNX/NumPy
+    # equivalent (e.g., folding shapes, stream widths, resource estimates).

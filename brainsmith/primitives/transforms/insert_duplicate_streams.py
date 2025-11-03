@@ -122,6 +122,12 @@ class InsertDuplicateStreams(Transformation):
             domain="brainsmith.kernels",
         )
 
+        # Set backend attribute to enable specialization
+        # Required by FINN's SpecializeKernel transform (line 68-76)
+        dup_node.attribute.append(
+            helper.make_attribute("backend", "fpgadataflow")
+        )
+
         # Insert node into graph
         graph.node.insert(insert_index, dup_node)
 

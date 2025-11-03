@@ -18,7 +18,7 @@ from brainsmith.registry import backend
     name="DuplicateStreamsHLS",
     target_kernel="brainsmith:DuplicateStreams",
     language="hls",
-    author="Migrated from AMD FINN"
+    author="AMD FINN team"
 )
 class DuplicateStreams_hls(DuplicateStreams, HLSBackend):
     """HLS backend for DuplicateStreams.
@@ -36,23 +36,9 @@ class DuplicateStreams_hls(DuplicateStreams, HLSBackend):
         my_attrs.update(HLSBackend.get_nodeattr_types(self))
         return my_attrs
 
-    # ================================================================
-    # Resource Estimation
-    # ================================================================
-
-    def lut_estimation(self):
-        """Estimate LUT usage (minimal for simple fanout)."""
-        # DuplicateStreams is just wire splitting - minimal cost
-        # Small overhead for stream read/write logic
-        return 100
-
-    def bram_estimation(self):
-        """Estimate BRAM usage (none needed)."""
-        return 0
-
-    def dsp_estimation(self):
-        """Estimate DSP usage (none needed)."""
-        return 0
+    def execute_node(self, context, graph):
+        """Execute via HLS simulation."""
+        HLSBackend.execute_node(self, context, graph)
 
     # ================================================================
     # HLS Code Generation
@@ -105,10 +91,6 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
         impl_filename = f"{path}/duplicate_impl.hpp"
         with open(impl_filename, "w") as f:
             f.write(impl_hls_code)
-
-    def execute_node(self, context, graph):
-        """Execute via HLS simulation."""
-        HLSBackend.execute_node(self, context, graph)
 
     # ================================================================
     # HLS Code Generation (Template Filling)
@@ -171,50 +153,3 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
         self.code_gen_dict["$PRAGMAS$"].append(
             "#pragma HLS INTERFACE ap_ctrl_none port=return"
         )
-
-    def read_npy_data(self):
-        """Read NPY data for simulation."""
-        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-        dtype = self.get_input_datatype()
-        elem_bits = dtype.bitwidth()
-        packed_bits = self.get_instream_width()
-        packed_hls_type = f"ap_uint<{packed_bits}>"
-        elem_hls_type = dtype.get_hls_datatype_str()
-        npy_type = "float"
-        npy_in = f"{code_gen_dir}/input_0.npy"
-
-        self.code_gen_dict["$READNPYDATA$"] = [
-            f'npy2apintstream<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
-            f'{npy_type}>("{npy_in}", in0_V, false);'
-        ]
-
-    def dataoutstrm(self):
-        """Write NPY data for simulation (all outputs)."""
-        code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-        dtype = self.get_output_datatype()
-        elem_bits = dtype.bitwidth()
-        packed_bits = self.get_outstream_width()
-        packed_hls_type = f"ap_uint<{packed_bits}>"
-        elem_hls_type = dtype.get_hls_datatype_str()
-        npy_type = "float"
-
-        # Folded shape for HLS I/O (FINN-specific format)
-        shape = self.get_folded_output_shape()
-        shape_cpp_str = str(shape).replace("(", "{").replace(")", "}")
-
-        self.code_gen_dict["$DATAOUTSTREAM$"] = []
-
-        # Generate write for each output stream
-        for i in range(len(self.design_point.output_list)):
-            npy_out = f"{code_gen_dir}/output_{i}.npy"
-            self.code_gen_dict["$DATAOUTSTREAM$"].append(
-                f'apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
-                f'{npy_type}>(out{i}_V, {shape_cpp_str}, "{npy_out}", false);'
-            )
-
-    def save_as_npy(self):
-        """Save output as NPY (all outputs)."""
-        self.code_gen_dict["$SAVEASCNPY$"] = []
-
-        for i in range(len(self.design_point.output_list)):
-            self.code_gen_dict["$SAVEASCNPY$"].append(f'saveAsNpy<{i}>(out{i}_V, "{i}");')

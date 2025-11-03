@@ -3,7 +3,6 @@
 # Licensed under the MIT License.
 #
 # @author       Josh Monson <joshmonson@microsoft.com>
-# @author       Thomas Keller <thomaskeller@microsoft.com> (AutoCrop adaptation)
 ############################################################################
 
 import numpy as np
@@ -11,52 +10,23 @@ import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.kernels.crop.auto_crop import Crop
+from brainsmith.kernels.crop.crop import LegacyCrop
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 @backend(
-    name="CropHLS",
-    target_kernel="brainsmith:Crop",
+    name="LegacyCropHLS",
+    target_kernel="brainsmith:LegacyCrop",
     language="hls",
     author="Josh Monson"
 )
-class Crop_hls(Crop, HLSBackend):
-    """HLS backend for Crop kernel (KernelOp-based).
-
-    This backend adapts the modern schema-driven Crop implementation
-    to work with FINN's HLS code generation system.
-
-    Key differences from legacy LegacyCrop_hls:
-    - Uses uppercase "SIMD" (KernelOp convention)
-    - Extracts shapes from design_point (not nodeattrs)
-    - Follows Arete principle: no shape storage
-    """
-
+class LegacyCrop_hls(LegacyCrop, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        """Define nodeattrs for Crop_hls backend.
-
-        Combines:
-        - Crop's schema-derived nodeattrs (interface datatypes, kernel params)
-        - HLSBackend's execution nodeattrs
-        - Manual overrides for HLS-specific parameters
-
-        We override SIMD here to ensure it's uppercase (KernelOp convention).
-        """
-        # Get Crop's schema-derived nodeattrs (includes dynamic interface datatypes)
-        my_attrs = Crop.get_nodeattr_types(self)
-
-        # Add HLSBackend nodeattrs
-        my_attrs.update(HLSBackend.get_nodeattr_types(self))
-
-        # Override SIMD to ensure uppercase (KernelOp convention vs legacy lowercase)
-        my_attrs["SIMD"] = ("i", False, 1)
-
-        return my_attrs
+        return LegacyCrop.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
@@ -69,29 +39,14 @@ class Crop_hls(Crop, HLSBackend):
         ]
 
     def defines(self, var):
-        """Generate HLS constant definitions.
-
-        Extracts values from design_point instead of nodeattrs (Arete principle).
-        Uses uppercase "SIMD" for KernelOp convention.
-        """
-        # Get parallelization parameter (uppercase for KernelOp)
-        simd = self.get_nodeattr("SIMD")
+        simd = self.get_nodeattr("simd")
         dtype = self.get_input_datatype()
-
-        # Extract shapes from cached kernel instance (Arete principle)
-        # design_point property returns the cached KernelDesignPoint
-        ki = self.design_point
-        inp_cfg = ki.inputs["input"]
-        height = inp_cfg.tensor_shape[1]
-        width = inp_cfg.tensor_shape[2]
-        channel_fold = inp_cfg.tensor_shape[-1] // inp_cfg.stream_shape[-1]
-
         self.code_gen_dict["$DEFINES$"] = [
             f"""
             constexpr unsigned  SIMD   = {simd};
-            constexpr unsigned  H      = {height};
-            constexpr unsigned  W      = {width // simd};
-            constexpr unsigned  CF     = {channel_fold};
+            constexpr unsigned  H      = {self.get_nodeattr("height")};
+            constexpr unsigned  W      = {self.get_nodeattr("width")/simd};
+            constexpr unsigned  CF     = {self.get_nodeattr("channel_fold")};
             constexpr unsigned  CROP_N = {self.get_nodeattr("crop_north")};
             constexpr unsigned  CROP_E = {self.get_nodeattr("crop_east")};
             constexpr unsigned  CROP_S = {self.get_nodeattr("crop_south")};
@@ -237,8 +192,7 @@ class Crop_hls(Crop, HLSBackend):
         oshape = self.get_folded_output_shape()
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
-        # Use uppercase SIMD for KernelOp
-        simd = self.get_nodeattr("SIMD")
+        simd = self.get_nodeattr("simd")
 
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
@@ -270,7 +224,8 @@ class Crop_hls(Crop, HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-
+        #raise NotImplementedError("This function is not yet immplemented.")
+    
     def ipgen_extra_includes(self):
         """Add kernel-specific include paths."""
         import os
