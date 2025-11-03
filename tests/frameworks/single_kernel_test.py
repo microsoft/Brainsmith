@@ -44,28 +44,28 @@ Inherited Tests (6):
 - test_rtlsim_execution_vs_golden
 """
 
-import pytest
-import numpy as np
 from abc import abstractmethod
-from typing import Dict, Type, Tuple, Optional
+from typing import Dict, Optional, Tuple, Type
 
+import numpy as np
+import pytest
+from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.base import Transformation
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
-# Import Phase 1 utilities
-from tests.support.pipeline import PipelineRunner
-from tests.support.validator import GoldenValidator, TolerancePresets
-from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+# Import base config
+from tests.frameworks.kernel_test_base import KernelTestConfig
 
 # Import backend specialization utilities
 from tests.support.backend_utils import specialize_to_backend
 
 # Import test fixtures
 from tests.support.context import make_execution_context
+from tests.support.executors import CppSimExecutor, PythonExecutor, RTLSimExecutor
 
-# Import base config
-from tests.frameworks.kernel_test_base import KernelTestConfig
+# Import Phase 1 utilities
+from tests.support.pipeline import PipelineRunner
+from tests.support.validator import GoldenValidator, TolerancePresets
 
 
 class SingleKernelTest(KernelTestConfig):
@@ -190,10 +190,32 @@ class SingleKernelTest(KernelTestConfig):
                     "Override get_backend_fpgapart() to enable backend testing."
                 )
 
-            backend_type = self.get_backend_type()
-            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
+            backend_variants = self.get_backend_variants()
+            if backend_variants is None:
+                # Auto-detect from registry
+                backend_variants = self._auto_detect_backends(op)
+
+            op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
 
         return op, model
+
+    def _auto_detect_backends(self, op):
+        """Auto-detect backend variants from Brainsmith registry.
+
+        Args:
+            op: HWCustomOp instance to find backends for
+
+        Returns:
+            List of backend classes
+
+        Raises:
+            pytest.skip: If no backends found
+        """
+        from brainsmith.registry import list_backends_for_kernel, get_backend
+        backend_names = list_backends_for_kernel(op.onnx_node.op_type, language='hls')
+        if not backend_names:
+            pytest.skip(f"No HLS backend found for {op.onnx_node.op_type}")
+        return [get_backend(name) for name in backend_names]
 
     # ========================================================================
     # Validation (uses Phase 1 GoldenValidator)

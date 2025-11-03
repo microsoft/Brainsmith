@@ -430,6 +430,7 @@ class ElementwiseBinaryOp(KernelOp):
             outputs=node.output,
             name=node.name,
             domain="brainsmith.kernels",
+            backend="fpgadataflow",
             # Kernel parameters
             func=node.op_type,
             input_pattern=input_pattern,  # NEW: Track which pattern is active

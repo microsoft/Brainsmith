@@ -445,6 +445,9 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Full discovery
         logger.info("Discovering components from all sources...")
 
+        # Get config for component sources
+        config = get_config()
+
         # 1. Core brainsmith components (eager imports with source_context)
         # Decorators fire during import and auto-populate registry + index
         with source_context(SOURCE_BRAINSMITH):
@@ -453,11 +456,14 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
 
         logger.info(f"Loaded core brainsmith components")
 
-        # 2. User/project components (filesystem)
-        _load_component_sources()
-
-        # 3. Entry point components (FINN, etc.)
+        # 2. Entry point components (FINN, etc.)
         _load_entry_point_components()
+
+        # 3. Active project components (SOURCE_PROJECT at project root)
+        _load_project_components(config)
+
+        # 4. Other filesystem-based component sources (custom sources)
+        _load_other_component_sources(config)
 
         _components_discovered = True
 
@@ -488,29 +494,47 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
             logger.debug("Skipping manifest save (caching disabled)")
 
 
-def _load_component_sources():
-    """Load component packages from configured component sources.
+def _load_project_components(config):
+    """Load active project components from SOURCE_PROJECT.
 
-    Scans component_sources from config, imports each package that has
-    an __init__.py file. The __init__.py must import and register
-    its components.
+    Loads components from the active project (project_dir/__init__.py).
+    This is phase 3 of discovery, after brainsmith core and entry points.
+
+    Args:
+        config: SystemConfig instance with component_sources configured
     """
-    try:
-        from brainsmith.settings import get_config
-        component_sources = get_config().component_sources
-    except Exception as e:
-        logger.warning(f"Could not load component sources config: {e}")
+    source_path = config.component_sources.get(SOURCE_PROJECT)
+
+    if not source_path:
+        logger.debug("No SOURCE_PROJECT configured, skipping project components")
         return
 
-    for source_name, source_path in component_sources.items():
-        # Skip protected sources:
-        # - brainsmith: loaded via direct import
-        # - finn: loaded via entry points
-        # - project, user: optional __init__.py-based component packages
-        if source_name in (SOURCE_BRAINSMITH, SOURCE_FINN):
+    if not source_path.exists():
+        logger.debug(f"Project component source does not exist: {source_path}")
+        return
+
+    _load_component_package(SOURCE_PROJECT, source_path)
+
+
+def _load_other_component_sources(config):
+    """Load custom filesystem-based component sources.
+
+    Loads components from component_sources, excluding protected sources
+    (brainsmith, finn) and SOURCE_PROJECT (loaded separately).
+    This is phase 4 of discovery, after project components.
+
+    Args:
+        config: SystemConfig instance with component_sources configured
+    """
+    for source_name, source_path in config.component_sources.items():
+        # Skip protected sources (loaded separately):
+        # - brainsmith: loaded via direct import in phase 1
+        # - finn: loaded via entry points in phase 2
+        # - project: loaded in phase 3
+        if source_name in (SOURCE_BRAINSMITH, SOURCE_FINN, SOURCE_PROJECT):
             continue
 
-        if not source_path.exists():
+        if not source_path or not source_path.exists():
             logger.debug(f"Component source '{source_name}' does not exist: {source_path}")
             continue
 

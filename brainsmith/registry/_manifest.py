@@ -41,12 +41,18 @@ def _build_manifest_from_index() -> Dict[str, Any]:
     per-component mtimes. Eliminates null fields by storing only relevant
     metadata for each component type.
 
+    Excludes 'custom' source components (ephemeral, not cached).
+
     Returns:
         Manifest dict with version, timestamp, and type-stratified components
     """
     kernels, backends, steps = {}, {}, {}
 
     for full_name, meta in _component_index.items():
+        # Skip 'custom' source - these are ephemeral and must be reimported each run
+        if meta.source == 'custom':
+            logger.debug(f"Skipping custom component in manifest: {full_name}")
+            continue
         # Resolve module to file path (needed for staleness detection)
         file_path = None
         try:

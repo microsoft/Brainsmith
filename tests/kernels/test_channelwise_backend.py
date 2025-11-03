@@ -244,6 +244,19 @@ class ChannelwiseParityBase(DualKernelTest):
         """
         return "xc7z020clg400-1"
 
+    def get_manual_backend_variants(self):
+        """Return FINN backend for manual (FINN) pipeline.
+
+        Manual pipeline uses FINN's InferChannelwiseLinearLayer which creates
+        nodes with "Func" attribute. Must use FINN's ChannelwiseOp_hls backend
+        which expects "Func", not Brainsmith's which expects "func".
+
+        Returns:
+            List containing FINN's ChannelwiseOp_hls backend class
+        """
+        from finn.custom_op.fpgadataflow.hls.channelwise_op_hls import ChannelwiseOp_hls
+        return [ChannelwiseOp_hls]
+
     # ========================================================================
     # Optional Configuration
     # ========================================================================

@@ -103,7 +103,7 @@ class DualKernelTest(KernelTestConfig):
 
     Optional backend configuration:
     - get_backend_fpgapart(): Enable backend testing (Stage 3)
-    - get_backend_type(): Backend type ("hls" or "rtl")
+    - get_backend_variants(): Backend classes to try in priority order
 
     Pipeline Architecture (3 stages):
     - Stage 1: ONNX Node (e.g., Add, Mul)
@@ -151,6 +151,54 @@ class DualKernelTest(KernelTestConfig):
                 return InferKernelList
         """
         pass
+
+    def get_manual_backend_variants(self):
+        """Backend variants for manual (FINN) pipeline.
+
+        Override to specify FINN backends explicitly. This ensures the manual
+        pipeline (FINN transform) uses FINN backends instead of auto-detecting
+        Brainsmith backends from the registry.
+
+        IMPORTANT: FINN and Brainsmith pipelines must remain independent.
+        - Manual pipeline: FINN transform → FINN backend (uses "Func" attribute)
+        - Auto pipeline: Brainsmith transform → Brainsmith backend (uses "func" attribute)
+
+        Returns:
+            List of backend classes to try in priority order, or None.
+            None = auto-detect from registry (WARNING: finds Brainsmith backends!)
+
+        Default:
+            None (auto-detect, but this will likely fail for FINN nodes!)
+
+        Example (FINN ChannelwiseOp):
+            def get_manual_backend_variants(self):
+                from finn.custom_op.fpgadataflow.hls.channelwise_op_hls import ChannelwiseOp_hls
+                return [ChannelwiseOp_hls]
+
+        WARNING: Auto-detection uses Brainsmith registry, which won't find FINN
+        backends. Strongly recommend overriding this for FINN pipelines.
+        """
+        return None
+
+    def get_auto_backend_variants(self):
+        """Backend variants for auto (Brainsmith) pipeline.
+
+        Override to specify Brainsmith backends explicitly, or leave as None
+        to auto-detect from the registry (recommended for Brainsmith).
+
+        Returns:
+            List of backend classes to try in priority order, or None.
+            None = auto-detect from Brainsmith registry (default, works well)
+
+        Default:
+            None (auto-detect from registry, recommended for Brainsmith)
+
+        Example (explicit Brainsmith backend):
+            def get_auto_backend_variants(self):
+                from brainsmith.kernels.channelwise import ChannelwiseOp_hls
+                return [ChannelwiseOp_hls]
+        """
+        return None
 
     @abstractmethod
     def compute_golden_reference(
@@ -224,8 +272,12 @@ class DualKernelTest(KernelTestConfig):
                     "Override get_backend_fpgapart() to enable backend testing."
                 )
 
-            backend_type = self.get_backend_type()
-            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
+            backend_variants = self.get_manual_backend_variants()
+            if backend_variants is None:
+                # Auto-detect from registry (works for Brainsmith, may fail for FINN)
+                backend_variants = self._auto_detect_backends(op)
+
+            op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
 
         return op, model
 
@@ -276,10 +328,36 @@ class DualKernelTest(KernelTestConfig):
                     "Override get_backend_fpgapart() to enable backend testing."
                 )
 
-            backend_type = self.get_backend_type()
-            op, model = specialize_to_backend(op, model, fpgapart, backend_type)
+            backend_variants = self.get_auto_backend_variants()
+            if backend_variants is None:
+                # Auto-detect from registry (works well for Brainsmith)
+                backend_variants = self._auto_detect_backends(op)
+
+            op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
 
         return op, model
+
+    def _auto_detect_backends(self, op):
+        """Auto-detect backend variants from Brainsmith registry.
+
+        Args:
+            op: HWCustomOp instance to find backends for
+
+        Returns:
+            List of backend classes
+
+        Raises:
+            pytest.skip: If no backends found
+
+        Note:
+            This uses Brainsmith's registry. FINN backends are not registered,
+            so this will only find Brainsmith backends.
+        """
+        from brainsmith.registry import list_backends_for_kernel, get_backend
+        backend_names = list_backends_for_kernel(op.onnx_node.op_type, language='hls')
+        if not backend_names:
+            pytest.skip(f"No HLS backend found for {op.onnx_node.op_type}")
+        return [get_backend(name) for name in backend_names]
 
     # ========================================================================
     # Validation (uses Phase 1 GoldenValidator)

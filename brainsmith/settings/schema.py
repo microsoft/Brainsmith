@@ -62,6 +62,7 @@ from brainsmith.registry.constants import (
     SOURCE_FINN,
     SOURCE_PROJECT,
     DEFAULT_SOURCE_PRIORITY,
+    SOURCE_MODULE_PREFIXES,
 )
 
 
@@ -233,6 +234,16 @@ class SystemConfig(BaseSettings):
         description=(
             "Component source resolution priority. First source with matching "
             "component wins. Custom sources are auto-appended if not explicitly listed."
+        )
+    )
+    source_module_prefixes: Dict[str, str] = Field(
+        default_factory=lambda: SOURCE_MODULE_PREFIXES.copy(),
+        description=(
+            "Module prefix → source name mapping for component classification. "
+            "Components are classified by their module path during registration. "
+            "Any component not matching a registered prefix will be classified as "
+            "'custom' (ephemeral, not cached). Users can extend this for custom "
+            "namespaces."
         )
     )
 
@@ -423,9 +434,9 @@ class SystemConfig(BaseSettings):
         Only project and custom sources are filesystem-based and configurable.
         Core namespace (brainsmith) and entry points (finn) are discovered automatically.
         """
-        # Standard filesystem source with default path
+        # Standard filesystem source with default path (project root __init__.py)
         if self.component_sources.get(SOURCE_PROJECT) is None:
-            self.component_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
+            self.component_sources[SOURCE_PROJECT] = self.project_dir
 
         # Custom sources: resolve relative paths
         # Standard source (project) is resolved above

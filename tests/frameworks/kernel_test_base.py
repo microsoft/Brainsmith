@@ -237,17 +237,24 @@ class KernelTestConfig(ABC):
         """
         return None
 
-    def get_backend_type(self) -> str:
-        """Backend type for specialization.
+    def get_backend_variants(self) -> list:
+        """Backend variant classes for specialization in priority order.
 
         Returns:
-            str: "hls" or "rtl"
+            List of backend classes to try in priority order.
+            Default: None (auto-detect HLS backend based on kernel op_type)
+
+        Override to specify explicit backend classes:
+            def get_backend_variants(self):
+                from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp_hls
+                return [ElementwiseBinaryOp_hls]
+
+        Override for priority ordering (e.g., prefer RTL, fallback to HLS):
+            def get_backend_variants(self):
+                from brainsmith.kernels.mvau import MVAU_rtl, MVAU_hls
+                return [MVAU_rtl, MVAU_hls]
 
         Default:
-            "hls" (HLS backend)
-
-        Override for RTL backends:
-            def get_backend_type(self):
-                return "rtl"
+            None (automatically looks up HLS backend from registry)
         """
-        return "hls"
+        return None

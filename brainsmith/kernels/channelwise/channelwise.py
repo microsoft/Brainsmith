@@ -30,7 +30,11 @@ from brainsmith.registry import kernel
 def _channelwise_output_datatype():
     """Polymorphic datatype resolver for ChannelwiseOp based on 'func' nodeattr."""
     def resolver(interfaces, param_getter, model, tensor_name):
-        func = param_getter("func")
+        # Handle FINN's uppercase "Func" attribute for compatibility
+        try:
+            func = param_getter("func")
+        except Exception:
+            func = param_getter("Func")
 
         if func == "Add":
             return add_datatype("input", "parameters")(interfaces, param_getter, model, tensor_name)
@@ -171,6 +175,7 @@ class ChannelwiseOp(KernelOp):
             outputs=node.output,
             name=node.name,
             domain="brainsmith.kernels",
+            backend="fpgadataflow",
             # Kernel parameters (use ONNX op type directly)
             func=node.op_type,
         )

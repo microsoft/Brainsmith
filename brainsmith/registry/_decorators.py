@@ -18,12 +18,77 @@ from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from ._state import _component_index
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec
+from .constants import SOURCE_MODULE_PREFIXES
 
 logger = logging.getLogger(__name__)
 
 # Current source context (set during plugin discovery)
 # Using ContextVar for thread-safe source tracking
 _current_source: ContextVar[Optional[str]] = ContextVar('current_source', default=None)
+
+
+# ============================================================================
+# Source Detection
+# ============================================================================
+
+def _detect_source(obj: Any) -> str:
+    """Detect component source with priority: context > module prefix > custom.
+
+    Priority order:
+    1. Active source_context (import location - highest priority)
+       - Used during discovery to classify components by where they're imported
+       - Example: importing third-party kernel into brainsmith/kernels/__init__.py
+
+    2. Module prefix matching (definition location - fallback)
+       - Used for direct imports before/after discovery
+       - Matches obj.__module__ against configured prefixes from settings
+       - Example: 'brainsmith.kernels.mvau.mvau' → 'brainsmith'
+       - Always uses fresh config (single source of truth)
+
+    3. 'custom' (unknown/unregistered - lowest priority)
+       - Components not matching any registered source
+       - Not cached to manifest (ephemeral, must be reimported each run)
+
+    Args:
+        obj: Component being registered (class or function)
+
+    Returns:
+        Source name ('brainsmith', 'finn', 'project', 'custom', or custom source name)
+
+    Examples:
+        >>> # During discovery with source_context
+        >>> with source_context('brainsmith'):
+        ...     _detect_source(SomeKernel)  # Returns 'brainsmith'
+
+        >>> # Direct import (uses module prefix from config)
+        >>> from brainsmith.kernels.mvau import MVAU
+        >>> _detect_source(MVAU)  # Returns 'brainsmith' (via config.source_module_prefixes)
+
+        >>> # Unknown module
+        >>> _detect_source(UnknownKernel)  # Returns 'custom'
+    """
+    # 1. Active source_context (import location)
+    if ctx_source := _current_source.get():
+        return ctx_source
+
+    # 2. Module prefix detection (from settings - single source of truth)
+    module_name = obj.__module__
+    try:
+        from brainsmith.settings import get_config
+        prefixes = get_config().source_module_prefixes
+    except Exception:
+        # Fallback if settings not available (shouldn't happen in normal use)
+        prefixes = SOURCE_MODULE_PREFIXES
+        logger.debug(f"Using default source prefixes (settings unavailable)")
+
+    for prefix, source in prefixes.items():
+        if module_name.startswith(prefix):
+            logger.debug(f"Detected source '{source}' for {obj.__name__} via module prefix '{prefix}'")
+            return source
+
+    # 3. Unknown/custom (ephemeral)
+    logger.debug(f"No source match for {obj.__name__} (module={module_name}), defaulting to 'custom'")
+    return 'custom'
 
 
 # ============================================================================
@@ -48,22 +113,22 @@ def _convert_lazy_import_spec(spec: Optional[Union[str, Dict, Type]]) -> Optiona
 def _register_step(
     func_or_class: Union[Callable, Type],
     *,
-    source: Optional[str] = None,
     name: Optional[str] = None,
     **kwargs  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
 ) -> Union[Callable, Type]:
     """Register step in global component index."""
-    source = source or _current_source.get() or 'custom'
+    source = _detect_source(func_or_class)
     name = name or getattr(func_or_class, 'name', None) or func_or_class.__name__
 
     full_name = f"{source}:{name}"
 
-    # Check if we're overriding an existing step
-    # Don't warn if we're just loading a cached entry (loaded_obj is None)
+    # Skip if already registered with loaded object (avoid redundant work)
     if full_name in _component_index:
         existing = _component_index[full_name]
         if existing.loaded_obj is not None:
-            logger.warning(f"Overriding existing step: {full_name}")
+            # Already registered and loaded - skip re-registration
+            logger.debug(f"Step {full_name} already registered, skipping")
+            return func_or_class
 
     # Create/update index entry for standalone decorator usage
     logger.debug(f"Registering step: {full_name}")
@@ -88,23 +153,23 @@ def _register_step(
 def _register_kernel(
     cls: Type,
     *,
-    source: Optional[str] = None,
     name: Optional[str] = None,
     infer_transform: Optional[Type] = None,
     **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
 ) -> Type:
     """Register kernel in global component index."""
-    source = source or _current_source.get() or 'custom'
+    source = _detect_source(cls)
     name = name or getattr(cls, 'op_type', None) or cls.__name__
 
     full_name = f"{source}:{name}"
 
-    # Check if we're overriding an existing kernel
-    # Don't warn if we're just loading a cached entry (loaded_obj is None)
+    # Skip if already registered with loaded object (avoid redundant work)
     if full_name in _component_index:
         existing = _component_index[full_name]
         if existing.loaded_obj is not None:
-            logger.warning(f"Overriding existing kernel: {full_name}")
+            # Already registered and loaded - skip re-registration
+            logger.debug(f"Kernel {full_name} already registered, skipping")
+            return cls
 
     # Extract infer_transform (class attribute or parameter)
     # Supports both class references and string-based lazy import specs
@@ -143,7 +208,6 @@ def _register_kernel(
 def _register_backend(
     cls: Type,
     *,
-    source: Optional[str] = None,
     name: Optional[str] = None,
     target_kernel: Optional[str] = None,
     language: Optional[str] = None,
@@ -151,18 +215,18 @@ def _register_backend(
     **kwargs  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
 ) -> Type:
     """Register backend in global component index."""
-    source = source or _current_source.get() or 'custom'
+    source = _detect_source(cls)
     name = name or cls.__name__
 
     full_name = f"{source}:{name}"
 
-    # Check if we're overriding an existing backend
-    # Don't warn if we're just loading a cached entry (loaded_obj is None)
+    # Skip if already registered with loaded object (avoid redundant work)
     if full_name in _component_index:
         existing = _component_index[full_name]
         if existing.loaded_obj is not None:
-            # Actually overriding a loaded backend - this is unusual
-            logger.warning(f"Overriding existing backend: {full_name}")
+            # Already registered and loaded - skip re-registration
+            logger.debug(f"Backend {full_name} already registered, skipping")
+            return cls
 
     # Extract metadata - parameters override class attributes
     target = target_kernel or getattr(cls, 'target_kernel', None)
@@ -173,6 +237,10 @@ def _register_backend(
         raise ValueError(f"Backend {full_name} missing 'target_kernel' attribute")
     if not lang:
         raise ValueError(f"Backend {full_name} missing 'language' attribute")
+
+    # Normalize unqualified target to backend's source
+    if ':' not in target:
+        target = f"{source}:{target}"
 
     # Create/update index entry for standalone decorator usage
     logger.debug(f"Registering backend: {full_name} (target={target}, lang={lang})")
