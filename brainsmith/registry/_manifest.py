@@ -165,9 +165,13 @@ def _load_manifest(path: Path) -> Dict[str, Any]:
 def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
     """Check if manifest is stale by comparing file mtimes to manifest timestamp.
 
-    A manifest is stale if any component file has been modified after the
-    manifest was generated. Uses a single manifest timestamp instead of
-    per-component mtimes for efficient staleness detection.
+    A manifest is stale if any component file OR package __init__.py has been
+    modified after the manifest was generated. Uses a single manifest timestamp
+    instead of per-component mtimes for efficient staleness detection.
+
+    Checks two types of files:
+    1. Package __init__.py files (control which components are discovered)
+    2. Component implementation files (actual kernel/backend/step code)
 
     Note: This only detects file modifications, not new files. Users must
     manually refresh (--refresh) when adding new component files.
@@ -191,28 +195,53 @@ def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
         logger.info(f"Cache stale: invalid generated_at timestamp: {e}")
         return True
 
-    # Check all component types
+    # Helper function for DRY mtime checking
+    def _check_file(file_path: Path | str, description: str) -> bool:
+        """Check if file is newer than manifest. Returns True if stale."""
+        try:
+            current_mtime = os.path.getmtime(file_path)
+            if current_mtime > generated_at:
+                logger.info(
+                    f"Cache stale: {description} modified after manifest generation "
+                    f"(file: {current_mtime}, manifest: {generated_at})"
+                )
+                return True
+        except OSError as e:
+            logger.info(f"Cache stale: cannot access {description}: {e}")
+            return True
+        return False
+
+    # Check package __init__.py files that control component discovery
+    try:
+        from brainsmith.settings import get_config
+        from brainsmith.registry.constants import SOURCE_PROJECT
+        config = get_config()
+
+        # Core brainsmith packages (always checked)
+        for package_name in ['kernels', 'steps']:
+            init_file = config.bsmith_dir / 'brainsmith' / package_name / '__init__.py'
+            if init_file.exists() and _check_file(init_file, f'brainsmith.{package_name}.__init__.py'):
+                return True
+
+        # Project source packages (structured layout)
+        project_path = config.component_sources.get(SOURCE_PROJECT)
+        if project_path and project_path.exists():
+            # Check structured layout: project_dir/kernels/__init__.py, project_dir/steps/__init__.py
+            for package_name in ['kernels', 'steps']:
+                init_file = project_path / package_name / '__init__.py'
+                if init_file.exists() and _check_file(init_file, f'project.{package_name}.__init__.py'):
+                    return True
+
+    except Exception as e:
+        # If we can't check __init__.py files, treat as stale to be safe
+        logger.warning(f"Could not check __init__.py files, treating cache as stale: {e}")
+        return True
+
+    # Check all component implementation files
     for section in ['kernels', 'backends', 'steps']:
         for full_name, comp_data in manifest.get(section, {}).items():
             file_path = comp_data.get('file_path')
-
-            # Skip if we don't have file path
-            if file_path is None:
-                continue
-
-            try:
-                current_mtime = os.path.getmtime(file_path)
-
-                # Compare file mtime against manifest generation time
-                if current_mtime > generated_at:
-                    logger.info(
-                        f"Cache stale: {full_name} modified after manifest generation "
-                        f"(file: {current_mtime}, manifest: {generated_at})"
-                    )
-                    return True
-            except OSError as e:
-                # File doesn't exist or can't be accessed - treat as stale
-                logger.info(f"Cache stale: cannot access {file_path}: {e}")
+            if file_path and _check_file(file_path, full_name):
                 return True
 
     return False

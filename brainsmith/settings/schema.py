@@ -220,11 +220,11 @@ class SystemConfig(BaseSettings):
     # It's set in model_post_init as a regular attribute
     component_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
-            SOURCE_PROJECT: None,  # Resolved to project_dir / "plugins"
+            SOURCE_PROJECT: None,  # Resolved to project_dir (supports kernels/ and steps/ subdirectories)
         },
         description=(
             "Filesystem-based component source paths. Maps source name to directory path. "
-            "'project' source defaults to project_dir/plugins. "
+            "'project' source defaults to project_dir (supports kernels/ and steps/ subdirectories). "
             "Core namespace 'brainsmith' and entry point sources (e.g., 'finn') are "
             "loaded automatically and cannot be configured here."
         )
@@ -437,7 +437,7 @@ class SystemConfig(BaseSettings):
         Only project and custom sources are filesystem-based and configurable.
         Core namespace (brainsmith) and entry points (finn) are discovered automatically.
         """
-        # Standard filesystem source with default path (project root __init__.py)
+        # Standard filesystem source with default path (project root with optional kernels/steps subdirs)
         if self.component_sources.get(SOURCE_PROJECT) is None:
             self.component_sources[SOURCE_PROJECT] = self.project_dir
 

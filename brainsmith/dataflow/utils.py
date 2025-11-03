@@ -45,9 +45,12 @@ def iter_valid_configurations(
     Example:
         >>> kernel_op = LayerNorm(node)
         >>> for config in iter_valid_configurations(kernel_op, model_w):
-        ...     kernel_op.set_nodeattr("SIMD", config["SIMD"])
-        ...     design_point = kernel_op.get_design_point(model_w)
-        ...     # Profile or analyze design_point
+        ...     # Navigate design space to create candidate point
+        ...     point = kernel_op.design_point
+        ...     for param, value in config.items():
+        ...         point = point.with_dimension(param, value)
+        ...     # Profile or analyze design point
+        ...     cycles = point.estimate_cycles()
 
     Example with filtering:
         >>> # Only explore SIMD values >= 4

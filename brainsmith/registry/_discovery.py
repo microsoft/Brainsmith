@@ -451,8 +451,8 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # 1. Core brainsmith components (eager imports with source_context)
         # Decorators fire during import and auto-populate registry + index
         with source_context(SOURCE_BRAINSMITH):
-            import brainsmith.kernels
-            import brainsmith.steps
+            import brainsmith.kernels  # noqa: E402
+            import brainsmith.steps    # noqa: E402
 
         logger.info(f"Loaded core brainsmith components")
 
@@ -497,7 +497,10 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
 def _load_project_components(config):
     """Load active project components from SOURCE_PROJECT.
 
-    Loads components from the active project (project_dir/__init__.py).
+    Project components use structured layout:
+        project_dir/kernels/__init__.py → project kernels
+        project_dir/steps/__init__.py → project steps
+
     This is phase 3 of discovery, after brainsmith core and entry points.
 
     Args:
@@ -513,7 +516,16 @@ def _load_project_components(config):
         logger.debug(f"Project component source does not exist: {source_path}")
         return
 
-    _load_component_package(SOURCE_PROJECT, source_path)
+    # Load structured layout (project_dir/kernels/, project_dir/steps/)
+    for component_type in ['kernels', 'steps']:
+        type_dir = source_path / component_type
+        init_file = type_dir / '__init__.py'
+
+        if init_file.exists():
+            _load_component_package(SOURCE_PROJECT, type_dir)
+            logger.info(f"Loaded project {component_type} from {type_dir}")
+        else:
+            logger.debug(f"No project {component_type} at {type_dir}")
 
 
 def _load_other_component_sources(config):
@@ -579,7 +591,7 @@ def _load_component_package(source_name: str, source_path: Path):
 
     try:
         # Handle module name collisions using spec-based import
-        # Multiple plugin sources may have the same directory name (e.g., 'plugins')
+        # Multiple component sources may have the same directory name (e.g., 'kernels', 'steps')
         # Use importlib.util to import from specific file path to avoid sys.path ambiguity
 
         # Create a unique module name to avoid cache collisions
@@ -613,10 +625,12 @@ def _load_component_package(source_name: str, source_path: Path):
 def _load_entry_point_components():
     """Load components from pip package entry points.
 
-    Scans entry points in group 'brainsmith.plugins'. Each entry point
+    Scans entry points in group 'brainsmith.plugins' (a Python packaging
+    entry point group, not a filesystem directory). Each entry point
     should return a dict of component metadata that we register.
 
-    Entry points are registered with their entry point name as source.
+    Entry points are registered with their entry point name as source
+    (e.g., 'finn' from the finn package).
     """
     logger.debug("Scanning entry points")
 

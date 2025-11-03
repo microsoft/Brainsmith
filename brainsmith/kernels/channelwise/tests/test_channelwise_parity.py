@@ -222,13 +222,12 @@ class ChannelwiseParityBase(ParityTestBase, HLSCodegenParityMixin):
         """
         # Set PE for testing (64 channels / 8 = 8-way folding)
         if is_auto:
-            # Brainsmith auto: Demonstrate interface-agnostic parallelism API
+            # Brainsmith auto: Use index-based interface navigation API
             # Input interface has PE dimension for channelwise operations
             op.build_design_space(model)
-            point = op.design_point.input[0].with_parallelism(8)
+            point = op.design_point.with_input_stream(0, 8)
             # Apply configuration from design point to nodeattrs
-            for param_name, param_value in point.config.items():
-                op.set_nodeattr(param_name, param_value)
+            op.apply_design_point(point)
         else:
             # FINN manual: Direct nodeattr setting
             op.set_nodeattr("PE", 8)

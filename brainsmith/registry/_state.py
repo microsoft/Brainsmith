@@ -16,7 +16,7 @@ from ._metadata import ComponentMetadata
 
 # Global component index - single source of truth for component metadata
 # Maps "source:name" -> ComponentMetadata
-# Unified index for all components from all sources (core, user, plugins)
+# Unified index for all components from all sources (core, project, custom)
 _component_index: Dict[str, ComponentMetadata] = {}
 
 # Discovery state flag - tracks whether component discovery has completed

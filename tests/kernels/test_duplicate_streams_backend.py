@@ -78,7 +78,7 @@ class DuplicateStreamsParityBase(DualKernelTest):
 
     Configuration:
     - FINN: PE=8 via set_nodeattr()
-    - Brainsmith: PE=8 via design_point.input[0].with_parallelism(8)
+    - Brainsmith: PE=8 via design_point.with_input_stream(0, 8)
     """
 
     num_outputs: int = 2  # Override in subclasses
@@ -267,13 +267,13 @@ class DuplicateStreamsParityBase(DualKernelTest):
             op.set_nodeattr("PE", pe)
             op.set_nodeattr("preferred_impl_style", "hls")
         elif isinstance(op, KernelOp):
-            # Brainsmith: Use interface parallelism API
+            # Brainsmith: Use index-based interface navigation API
             # DuplicateStreams has stream_tiling=["PE"] on input interface
             pe = 8
-            point = op.design_point.input[0].with_parallelism(pe)
+            point = op.design_point.with_input_stream(0, pe)
 
-            # Update the design point (this modifies the internal state)
-            op._design_point = point
+            # Apply the design point (commits to nodeattrs)
+            op.apply_design_point(point)
 
 
 # =============================================================================

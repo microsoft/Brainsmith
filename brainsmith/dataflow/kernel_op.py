@@ -422,3 +422,47 @@ class KernelOp(HWCustomOp, ABC):
                 # Dimension changes (PE, SIMD, etc.) only invalidate design_point
                 self._design_point = None
             # else: Runtime attributes (exec_mode, code_gen_dir_*) don't invalidate
+
+    def apply_design_point(self, point: 'KernelDesignPoint') -> None:
+        """Apply chosen design point to nodeattrs (persist to ONNX).
+
+        Syncs design point configuration back to node attributes without
+        invalidating cache. Use this after DSE to commit the chosen configuration.
+
+        Args:
+            point: Design point to apply
+
+        Raises:
+            ValueError: If point from different design space
+            RuntimeError: If design space not initialized
+
+        Example:
+            >>> # DSE exploration
+            >>> best_point = None
+            >>> best_cycles = float('inf')
+            >>> for point in op.design_space.sweep_dimension("SIMD"):
+            ...     if point.initiation_interval < best_cycles:
+            ...         best_cycles = point.initiation_interval
+            ...         best_point = point
+            >>>
+            >>> # Apply winner to node
+            >>> op.apply_design_point(best_point)
+        """
+        if self._design_space is None:
+            raise RuntimeError(
+                f"{self.onnx_node.name}: Design space not initialized. "
+                f"Call a method with model_w parameter first."
+            )
+
+        if point.design_space is not self._design_space:
+            raise ValueError(
+                f"{self.onnx_node.name}: DesignPoint from different DesignSpace. "
+                f"Cannot apply to this node."
+            )
+
+        # Sync config → nodeattrs (bypass set_nodeattr to avoid invalidation)
+        for dim_name, value in point.config.items():
+            super(KernelOp, self).set_nodeattr(dim_name, value)
+
+        # Update cache (no rebuild needed, we know it's valid)
+        self._design_point = point
