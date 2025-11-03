@@ -226,7 +226,7 @@ fi
 if [ ! -f ".brainsmith/config.yaml" ]; then
     echo ""
     echo "No config found at .brainsmith/config.yaml, generating default"
-    poetry run brainsmith config init
+    poetry run brainsmith project init
     if [ $? -eq 0 ]; then
         echo -e "\033[32m✓\033[0m Config initialized successfully"
     else
@@ -235,6 +235,27 @@ if [ ! -f ".brainsmith/config.yaml" ]; then
     fi
 else
     echo -e "\033[32m.brainsmith/config.yaml\033[0m"
+fi
+
+# Step 5.5: Activate environment and optionally configure direnv
+echo ""
+echo -e "\033[36mActivating brainsmith environment...\033[0m"
+
+# Check if direnv is installed and allow .envrc if present
+if command -v direnv &> /dev/null && [ -f ".envrc" ]; then
+    echo "  Configuring direnv for automatic environment loading..."
+    direnv allow
+    echo -e "\033[32m✓\033[0m direnv configured (environment will auto-load on cd)"
+fi
+
+# Source environment for this script's execution
+if [ -f ".brainsmith/env.sh" ]; then
+    source .brainsmith/env.sh
+    echo -e "\033[32m✓\033[0m Environment activated for setup"
+else
+    echo "✗ Environment file not found at .brainsmith/env.sh"
+    echo "  This should have been created during config initialization"
+    exit 1
 fi
 
 # Step 6: Run brainsmith setup based on skip flags

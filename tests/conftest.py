@@ -24,7 +24,18 @@ from tests.fixtures.blueprints import *
 
 
 def pytest_configure(config):
-    """Configure pytest with custom settings."""
+    """Configure pytest with custom settings.
+
+    Validates that brainsmith environment is sourced before running tests.
+    Environment must be activated via:
+        source .brainsmith/env.sh
+    or:
+        direnv allow
+    """
+    # Validate environment is sourced before running tests
+    from brainsmith.settings.validation import ensure_environment_sourced
+    ensure_environment_sourced()
+
     # Markers already defined in pytest.ini
     pass
 

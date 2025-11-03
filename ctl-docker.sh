@@ -6,7 +6,7 @@
 #
 # Key commands:
 #   start  - Start container and run complete setup automatically
-#   shell  - Open interactive shell in running container  
+#   shell  - Open interactive shell in running container
 #   clean  - Stop container and clean artifacts (use --deep for full reset)
 #   [cmd]  - Execute any command in container (e.g., "brainsmith setup all")
 #
@@ -19,6 +19,8 @@
 #   ./ctl-docker.sh clean --deep           # Full cleanup when needed
 #
 # Environment variables:
+#   BSMITH_XILINX_PATH=/path/to/Xilinx    # Xilinx installation path (required for Xilinx tools)
+#   BSMITH_XILINX_VERSION=2024.2          # Xilinx version (default: 2024.2)
 #   BSMITH_DOCKER_GPU=1                    # Enable GPU support
 #   BSMITH_DOCKER_RUN_AS_ROOT=1            # Run container as root (default: run as current user)
 #   BSMITH_DOCKER_PREBUILT=1               # Use pre-built image instead of building locally
@@ -26,7 +28,12 @@
 #   BSMITH_DOCKER_EXTRA="..."              # Additional Docker run flags
 #   BSMITH_DEBUG=1                         # Enable debug output
 #
-# Note: Container HOME is set to /tmp/brainsmith_dev_* for permission isolation
+# Environment Setup:
+#   Container sources .brainsmith/env.sh for unified local + Docker environment.
+#   Edit .brainsmith/config.yaml to configure Xilinx paths and build directories.
+#
+# Note: Container HOME is set to /tmp/brainsmith_dev_* for permission isolation.
+#       Each project directory gets its own container for complete isolation.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

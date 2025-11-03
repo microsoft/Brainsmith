@@ -1,11 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Environment variable export for external tool integration.
+"""Environment variable dictionary generation for shell script creation.
 
-This module provides the EnvironmentExporter class which handles all environment
-variable export logic that was previously in SystemConfig.export_to_environment().
-This improves testability and separates infrastructure concerns from configuration.
+This module provides the EnvironmentExporter class which builds environment
+variable dictionaries for shell script generation (env.sh, .envrc).
+
+The generated dictionaries are used to create activation scripts, but do NOT
+directly mutate os.environ. Python runtime expects environment to be sourced
+via shell scripts before Python starts.
 """
 
 import os
@@ -116,26 +119,30 @@ class EnvironmentExporter:
 
         return env_dict
 
-    def export_to_environment(
+    def to_env_dict(
         self,
-        include_internal: bool = False,
-        verbose: bool = False,
-        export: bool = True
+        include_internal: bool = True
     ) -> Dict[str, str]:
-        """Export configuration to environment variables.
+        """Generate environment variable dictionary for shell script generation.
 
-        This is the unified method for exporting configuration to the environment.
-        By default, exports only external tool configuration values (FINN_*, XILINX_*, etc)
-        and sets up PATH, PYTHONPATH, and LD_LIBRARY_PATH for tool compatibility.
+        This method builds a complete environment dictionary but does NOT mutate
+        os.environ. It is used ONLY for generating activation scripts (env.sh,
+        .envrc).
+
+        Python runtime expects environment to be set externally via sourced shell
+        scripts before Python starts, ensuring consistent environment across Python
+        processes and all subprocesses (including FINN's shell invocations).
+
+        By default, includes all configuration including internal BSMITH_* variables
+        (needed for blueprint YAML ${var} expansion and kernel compilation).
 
         Args:
-            include_internal: If True, also export internal BSMITH_* variables
-                            (needed for blueprint YAML ${var} expansion)
-            verbose: Whether to print export information
-            export: If False, only return dict without modifying os.environ
+            include_internal: If True (default), include internal BSMITH_* variables.
+                            Set to False to include only external tool variables
+                            (FINN_*, XILINX_*, etc).
 
         Returns:
-            Dict of exported environment variables
+            Dict of environment variable names to string values (read-only)
         """
         if include_internal:
             env_dict = self.to_all_dict()
@@ -186,21 +193,6 @@ class EnvironmentExporter:
         if self.config.vivado_path:
             # Ensure XILINX_LOCAL_USER_DATA is set to prevent network operations
             env_dict["XILINX_LOCAL_USER_DATA"] = "no"
-
-        if export:
-            console = None
-            if verbose:
-                from rich.console import Console
-                console = Console()
-
-            for key, value in env_dict.items():
-                if value is not None:
-                    os.environ[key] = str(value)
-                    if console and key not in ["PATH", "PYTHONPATH", "LD_LIBRARY_PATH"]:
-                        console.print(f"[dim]Export {key}={value}[/dim]")
-
-            if console:
-                console.print("[green]✓ Configuration exported to environment[/green]")
 
         return env_dict
 
