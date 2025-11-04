@@ -32,7 +32,7 @@ from brainsmith.registry import backend
 
 
 @backend(
-    name="SoftmaxHLS",
+    name="Softmax_hls",
     target_kernel="brainsmith:Softmax",
     language="hls",
     description="HLS backend for Softmax kernel using Dataflow Modeling",

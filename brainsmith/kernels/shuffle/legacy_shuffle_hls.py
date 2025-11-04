@@ -18,7 +18,7 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 @backend(
-    name="LegacyShuffleHLS",
+    name="LegacyShuffle_hls",
     target_kernel="brainsmith:LegacyShuffle",
     language="hls",
     description="HLS implementation of Shuffle - LEGACY",
@@ -45,7 +45,7 @@ class LegacyShuffle_hls(LegacyShuffle, HLSBackend):
         dtype = self.get_input_datatype()
         self.code_gen_dict["$DEFINES$"] = [
             f"""
-            constexpr unsigned  SIMD = {simd}; 
+            constexpr unsigned  SIMD = {simd};
             using  TE = {dtype.get_hls_datatype_str()};
             using  TV = hls::vector<TE, SIMD>;
             """
@@ -54,14 +54,14 @@ class LegacyShuffle_hls(LegacyShuffle, HLSBackend):
     def get_exp_cycles(self):
         out_shape = self.get_nodeattr("out_shape")
         simd = self.get_nodeattr("SIMD")
-        return int(np.prod(out_shape)/simd) 
+        return int(np.prod(out_shape)/simd)
 
     def docompute(self):
         simd = self.get_nodeattr("SIMD")
         out_shape = self.get_nodeattr("out_shape")
         out_shape[-1] = int(out_shape[-1]/simd)
-        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
-        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair] 
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]
+        interleaved = [int(item) for pair in zip(out_shape, loop_coeffs) for item in pair]
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             hls::stream<TV>  src0;
@@ -150,7 +150,7 @@ class LegacyShuffle_hls(LegacyShuffle, HLSBackend):
         simd = self.get_nodeattr("SIMD")
         out_shape = self.get_nodeattr("out_shape")
         out_shape[-1] = int(out_shape[-1]/simd)
-        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]  
+        loop_coeffs = [1 if x == 1 else int(x/simd) for x in self.get_nodeattr("loop_coeffs")]
         interleaved = [int(item) for pair in zip(out_shape,loop_coeffs) for item in pair]
 
         self.code_gen_dict["$DOCOMPUTE$"] = [

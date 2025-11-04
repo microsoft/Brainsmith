@@ -28,8 +28,8 @@ from brainsmith.steps.bert_custom_steps import (
     bert_streamlining_step,
 )
 
-# Kernel inference
-from brainsmith.steps.kernel_inference import infer_kernels_step
+# Dataflow graph construction
+from brainsmith.steps.build_dataflow_graph import build_dataflow_graph
 
 # Layout normalization
 from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
@@ -50,7 +50,7 @@ __all__ = [
     'shell_metadata_handover_step',
     'bert_cleanup_step',
     'bert_streamlining_step',
-    'infer_kernels_step',
+    'build_dataflow_graph',
     'normalize_dataflow_layouts_step',
     'explore_kernel_params_step',
     'apply_parallelization_config_step',

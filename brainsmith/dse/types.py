@@ -92,6 +92,14 @@ class SegmentResult:
 
 @dataclass
 class TreeExecutionResult:
+    """Results from design space exploration execution.
+
+    Attributes:
+        segment_results: Execution results for each DSE segment
+        total_time: Total execution time in seconds
+        design_space: Original design space (if available)
+        dse_tree: Execution tree structure (if available)
+    """
     segment_results: Dict[str, SegmentResult]
     total_time: float
     design_space: Optional[GlobalDesignSpace] = None

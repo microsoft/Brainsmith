@@ -75,7 +75,7 @@ def test_infer_kernel_basic():
     assert modified, "Graph should be modified"
     assert len(model.graph.node) == 1, "Should have one node (AddStreams)"
     assert model.graph.node[0].op_type == "AddStreams", "Should be AddStreams node"
-    assert model.graph.node[0].domain == "finn.custom_op.fpgadataflow"
+    assert model.graph.node[0].domain == "brainsmith.kernels"
 
 
 def test_infer_kernel_invalid_class():
@@ -137,7 +137,7 @@ def test_infer_kernel_statistics():
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Capture logs
-    logger = logging.getLogger("brainsmith.transforms.infer_kernel")
+    logger = logging.getLogger("brainsmith.primitives.transforms.infer_kernel")
     stream = StringIO()
     handler = logging.StreamHandler(stream)
     handler.setLevel(logging.INFO)

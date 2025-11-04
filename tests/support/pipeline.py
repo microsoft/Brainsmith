@@ -22,7 +22,7 @@ Usage:
     # Auto (Brainsmith) pipeline
     op, model = runner.run(
         model_factory=lambda: make_test_model(),
-        transform=InferKernelList()
+        transform=InferKernels()
     )
 """
 
@@ -96,7 +96,7 @@ class PipelineRunner:
             # Auto Brainsmith pipeline with cppsim initialization
             op, model = runner.run(
                 model_factory=lambda: make_addstreams_model(),
-                transform=InferKernelList(),
+                transform=InferKernels(),
                 init_fn=lambda op, model: op.prepare_cppsim(model)
             )
         """
@@ -204,7 +204,7 @@ def make_auto_pipeline_runner(
                 op._ensure_ready(model) if isinstance(op, KernelOp) else None
             )
         )
-        op, model = run_auto(make_test_model, InferKernelList())
+        op, model = run_auto(make_test_model, InferKernels())
     """
     runner = PipelineRunner()
     return lambda model_factory, transform: runner.run(

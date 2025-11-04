@@ -194,6 +194,7 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
+                metadata.is_infrastructure = meta.get('is_infrastructure', False)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -217,6 +218,7 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
+                metadata.is_infrastructure = meta.get('is_infrastructure', False)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -487,7 +489,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
             try:
                 manifest = _build_manifest_from_index()
                 _save_manifest(manifest, manifest_path)
-                logger.info(f"Saved manifest cache to {manifest_path}")
+                logger.info(f"Regenerated and saved manifest cache to {manifest_path}")
             except Exception as e:
                 logger.warning(f"Failed to save manifest cache: {e}")
         else:

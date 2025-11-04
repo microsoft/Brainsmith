@@ -17,7 +17,16 @@ from brainsmith.dse.types import OutputType
 
 @dataclass
 class DSEConfig:
-    """Configuration for Design Space Exploration."""
+    """Configuration for Design Space Exploration.
+
+    Attributes:
+        clock_ns: Target clock period in nanoseconds
+        output: Output type (estimates, rtl, or bitfile)
+        board: Target board (required for rtl/bitfile)
+        start_step: Optional pipeline starting step
+        stop_step: Optional pipeline ending step
+        finn_overrides: Direct FINN configuration overrides
+    """
     # Always required
     clock_ns: float  # Required field, mapped to synth_clk_period_ns in FINN config
 

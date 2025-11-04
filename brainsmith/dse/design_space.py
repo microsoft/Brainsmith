@@ -15,7 +15,16 @@ from brainsmith.dse._constants import SKIP_INDICATOR
 
 @dataclass
 class GlobalDesignSpace:
-    """Design space with resolved component objects."""
+    """Design space ready for DSE tree construction.
+
+    Attributes:
+        model_path: Path to ONNX model file
+        steps: Pipeline steps with optional variations (list = branch point)
+        kernel_backends: Kernel names mapped to backend classes
+        max_combinations: Maximum allowed design space size (default: 100,000)
+
+    Validates size on initialization and provides kernel summary formatting.
+    """
     model_path: str
     steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
 

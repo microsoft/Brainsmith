@@ -129,21 +129,16 @@ def _extract_tiling_params(block_tiling: Optional[TilingSpec], stream_tiling: Op
 
 @dataclass(frozen=True)
 class InputSchema:
-    """Self-contained input specification with embedded requirements.
+    """Input interface specification.
 
-    Complete schema for an input interface including both structure (tiling)
-    and transformation requirements (layout).
+    Defines input structure (tiling) and requirements (layout, datatype).
 
     Attributes:
         name: Interface name (e.g., "input", "input0")
         block_tiling: Block tiling specification (e.g., [FULL_DIM, FULL_DIM])
         stream_tiling: Stream tiling specification (e.g., ["SIMD"], [1, 1, 1, "PE"])
         datatype: Datatype spec (None to use from ONNX, or DatatypeSpec union type to derive/optimize)
-        required_layout: DECLARATIVE layout requirement (e.g., "NHWC", "NCHW")
-                        Documents what layout the kernel expects. Actual enforcement
-                        is handled by the normalize_dataflow_layouts preprocessing
-                        step which must run before kernel inference.
-                        None means no layout requirement.
+        required_layout: Expected input layout (e.g., "NHWC", "NCHW"), None if no requirement
     """
 
     # Identity
@@ -173,22 +168,17 @@ class InputSchema:
 
 @dataclass(frozen=True)
 class OutputSchema:
-    """Self-contained output specification with embedded requirements.
+    """Output interface specification.
 
-    Complete schema for an output interface including both structure (tiling),
-    datatype derivation, and transformation requirements (layout).
+    Defines output structure (tiling), datatype derivation, and layout requirements.
 
     Attributes:
         name: Interface name (e.g., "output", "output0")
         block_tiling: Block tiling specification
         stream_tiling: Stream tiling specification
         datatype: Datatype spec (None to use from ONNX, or DatatypeSpec union type to derive)
-        required_layout: DECLARATIVE output layout requirement (e.g., "NHWC")
-                        Documents what layout the kernel produces. Most kernels
-                        preserve input layout (NHWC in, NHWC out). Actual enforcement
-                        is handled by the normalize_dataflow_layouts preprocessing step.
-        preserves_input_layout: Whether this output preserves the layout of the first input
-                               (default True, common for element-wise operations)
+        required_layout: Expected output layout (e.g., "NHWC"), None if no requirement
+        preserves_input_layout: Whether output preserves first input's layout (default True)
     """
 
     # Identity
@@ -219,33 +209,21 @@ class OutputSchema:
 
 @dataclass
 class KernelSchema:
-    """Complete kernel specification - structure and validation.
+    """Kernel specification defining structure and validation.
 
-    Unified schema that combines interface definitions, validation constraints,
-    and parallelization parameters in one place.
+    Combines interface definitions, validation constraints, and design space
+    parameters. Defines structure only - shapes come from ONNX context,
+    execution logic lives in KernelOp.
 
-    Defines kernel STRUCTURE:
-    - Input/output interfaces with tiling templates and layout requirements
-    - Unified validation constraints (datatype, shape, cross-interface)
-    - Internal datatype derivation patterns
-    - Kernel-specific parameters (algorithm, hardware, features)
-    - Transformation metadata (attribute_mapping)
-    - DSE dimensions (explorable parameters: tiling + resource)
-
-    Does NOT define STORAGE:
-    - Shapes are extracted from ModelWrapper or computed from templates
-    - Only datatypes and user parameters persist in nodeattrs
-    - KernelOp handles storage implementation
-
-    Does NOT define BEHAVIOR:
-    - Execution logic is in KernelOp.execute_node()
-    - Resource estimation is in KernelOp methods
-
-    The constraints field uses the unified Constraint system for all validation:
-    - Single-interface constraints (datatype, dimension ranges)
-    - Cross-interface constraints (shape equality, datatype equality)
-    - ONNX-specific constraints (dynamic/static inputs, layouts)
-    - Custom validation logic
+    Attributes:
+        name: Kernel name
+        inputs: Input interface schemas
+        outputs: Output interface schemas
+        internal_datatypes: Internal datatype derivation specs (e.g., accumulator)
+        kernel_params: Kernel-specific parameters (e.g., epsilon, algorithm)
+        dse_dimensions: Explorable resource/implementation dimensions (e.g., ram_style)
+        constraints: Validation constraints (datatype, shape, ONNX requirements)
+        attribute_mapping: Map ONNX attributes to kernel parameters
     """
 
     # ============= IDENTITY =============

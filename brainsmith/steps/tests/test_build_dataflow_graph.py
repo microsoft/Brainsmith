@@ -3,7 +3,7 @@
 # Licensed under the MIT License.
 ############################################################################
 
-"""Tests for kernel inference step."""
+"""Tests for build_dataflow_graph step."""
 
 import pytest
 import tempfile
@@ -15,7 +15,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
 
-from brainsmith.steps.kernel_inference import infer_kernels_step
+from brainsmith.steps.build_dataflow_graph import build_dataflow_graph
 
 
 def create_add_model():
@@ -40,7 +40,7 @@ def create_add_model():
     return model
 
 
-def test_infer_kernels_step_basic():
+def test_build_dataflow_graph_basic():
     """Test infer_kernels step with single kernel (AddStreams)."""
     model = create_add_model()
 
@@ -52,19 +52,15 @@ def test_infer_kernels_step_basic():
         )
 
         # Run step
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # Verify Add node was converted to AddStreams
         node_types = [n.op_type for n in result_model.graph.node]
         assert "Add" not in node_types, "Add node should be removed"
         assert "AddStreams" in node_types, "AddStreams node should be created"
 
-        # Verify debug output was saved
-        debug_file = os.path.join(tmpdir, "debug_infer_kernels_output.onnx")
-        assert os.path.exists(debug_file), "Debug ONNX file should be saved"
 
-
-def test_infer_kernels_step_multiple_kernels():
+def test_build_dataflow_graph_multiple_kernels():
     """Test infer_kernels step with multiple kernel selections."""
     model = create_add_model()
 
@@ -77,14 +73,14 @@ def test_infer_kernels_step_multiple_kernels():
             output_dir=tmpdir
         )
 
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # AddStreams should be applied
         node_types = [n.op_type for n in result_model.graph.node]
         assert "AddStreams" in node_types
 
 
-def test_infer_kernels_step_no_selections():
+def test_build_dataflow_graph_no_selections():
     """Test infer_kernels step with kernel_selections = None."""
     model = create_add_model()
 
@@ -95,14 +91,14 @@ def test_infer_kernels_step_no_selections():
         )
 
         # Should return model unchanged
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # Model should be unchanged (Add node still present)
         node_types = [n.op_type for n in result_model.graph.node]
         assert "Add" in node_types
 
 
-def test_infer_kernels_step_missing_attribute():
+def test_build_dataflow_graph_missing_attribute():
     """Test infer_kernels step with missing kernel_selections attribute."""
     model = create_add_model()
 
@@ -113,14 +109,14 @@ def test_infer_kernels_step_missing_attribute():
         )
 
         # Should handle gracefully and return unchanged model
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # Model should be unchanged
         node_types = [n.op_type for n in result_model.graph.node]
         assert "Add" in node_types
 
 
-def test_infer_kernels_step_invalid_kernel_name():
+def test_build_dataflow_graph_invalid_kernel_name():
     """Test infer_kernels step with non-existent kernel name."""
     model = create_add_model()
 
@@ -134,14 +130,14 @@ def test_infer_kernels_step_invalid_kernel_name():
         )
 
         # Should continue without crashing
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # AddStreams should still be applied despite invalid kernel
         node_types = [n.op_type for n in result_model.graph.node]
         assert "AddStreams" in node_types
 
 
-def test_infer_kernels_step_empty_selections():
+def test_build_dataflow_graph_empty_selections():
     """Test infer_kernels step with empty kernel_selections list."""
     model = create_add_model()
 
@@ -152,15 +148,16 @@ def test_infer_kernels_step_empty_selections():
         )
 
         # Should return model unchanged
-        result_model = infer_kernels_step(model, cfg)
+        result_model = build_dataflow_graph(model, cfg)
 
         # Model should be unchanged
         node_types = [n.op_type for n in result_model.graph.node]
         assert "Add" in node_types
 
 
-def test_infer_kernels_step_saves_debug_output():
-    """Test that debug ONNX output is saved correctly."""
+
+def test_build_dataflow_graph_uses_infer_kernels():
+    """Test that step uses InferKernels transform internally."""
     model = create_add_model()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -169,38 +166,16 @@ def test_infer_kernels_step_saves_debug_output():
             output_dir=tmpdir
         )
 
-        infer_kernels_step(model, cfg)
+        # This should use InferKernels internally
+        result_model = build_dataflow_graph(model, cfg)
 
-        # Verify debug file exists
-        debug_file = os.path.join(tmpdir, "debug_infer_kernels_output.onnx")
-        assert os.path.exists(debug_file), "Debug ONNX file should exist"
-
-        # Verify it's a valid ONNX model
-        debug_model = ModelWrapper(debug_file)
-        assert debug_model is not None
-        assert len(debug_model.graph.node) > 0
-
-
-def test_infer_kernels_step_uses_infer_kernel_list():
-    """Test that step uses InferKernelList (not individual transforms)."""
-    model = create_add_model()
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        cfg = SimpleNamespace(
-            kernel_selections=[("AddStreams", "hls")],
-            output_dir=tmpdir
-        )
-
-        # This should use InferKernelList internally
-        result_model = infer_kernels_step(model, cfg)
-
-        # Verify conversion happened (proving InferKernelList worked)
+        # Verify conversion happened (proving InferKernels worked)
         node_types = [n.op_type for n in result_model.graph.node]
         assert "AddStreams" in node_types
 
-        # Verify the node has correct domain (added by InferKernelList/InferKernel)
+        # Verify the node has correct domain (added by InferKernels/InferKernel)
         addstreams_node = [n for n in result_model.graph.node if n.op_type == "AddStreams"][0]
-        assert addstreams_node.domain == "finn.custom_op.fpgadataflow"
+        assert addstreams_node.domain == "brainsmith.kernels"
 
 
 if __name__ == "__main__":

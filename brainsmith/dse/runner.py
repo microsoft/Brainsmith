@@ -56,23 +56,20 @@ class SegmentRunner:
     Handles both tree traversal and individual segment execution
     using FINNAdapter for all FINN interactions.
     """
-    
+
     def __init__(
         self,
         finn_adapter: FINNAdapter,
-        base_config: Dict[str, Any],
-        kernel_selections: list = None
+        base_config: Dict[str, Any]
     ) -> None:
         """Initialize runner.
 
         Args:
             finn_adapter: Adapter for FINN-specific operations
             base_config: FINN configuration from blueprint
-            kernel_selections: Optional list of (kernel, backend) tuples
         """
         self.finn_adapter = finn_adapter
         self.base_config = base_config
-        self.kernel_selections = kernel_selections or []
 
         # Extract settings from FINN config
         self.fail_fast = False  # TODO: Add more robust tree exit options
@@ -81,7 +78,7 @@ class SegmentRunner:
         self.output_type = OutputType.from_finn_product(output_product)
 
         # Note: synth_clk_period_ns and board already validated by DSEConfig
-    
+
     def _add_segment_context(self, segment_id: str, error: Exception) -> ExecutionError:
         """Add segment context to error if not already present.
 
@@ -110,12 +107,12 @@ class SegmentRunner:
         output_dir: Path
     ) -> TreeExecutionResult:
         """Run all segments in the DSE tree.
-        
+
         Args:
             tree: DSE tree to execute
             initial_model: Path to initial ONNX model
             output_dir: Base output directory
-            
+
         Returns:
             TreeExecutionResult with all segment results
         """
@@ -124,18 +121,18 @@ class SegmentRunner:
 
         logger.info(f"Executing tree with fail_fast={self.fail_fast}")
         logger.info(f"Output directory: {output_dir}")
-        
+
         results = {}
         skipped = set()
         start_time = time.time()
-        
+
         # Use a stack for cleaner iteration
         stack = [(tree.root, initial_model, 0)]
-        
+
         while stack:
             segment, input_model, depth = stack.pop()
             indent = "  " * depth
-            
+
             # Skip if parent failed
             if segment.segment_id in skipped:
                 logger.warning(f"{indent}Skipped: {segment.segment_id}")
@@ -164,7 +161,7 @@ class SegmentRunner:
                 for child in reversed(list(segment.children.values())):
                     stack.append((child, input_model, depth + 1))
                 continue
-            
+
             try:
                 result = self.run_segment(segment, input_model, output_dir)
                 results[segment.segment_id] = result
@@ -193,22 +190,22 @@ class SegmentRunner:
                 for child in reversed(list(segment.children.values())):
                     stack.append((child, None, depth + 1))
                 continue
-            
+
             # Share artifacts at branch points
             if segment.is_branch_point:
                 _share_artifacts_at_branch(result, list(segment.children.values()), output_dir)
-            
+
             # Add children to stack (reversed for correct order)
             for child in reversed(list(segment.children.values())):
                 stack.append((child, result.output_model, depth + 1))
-        
+
         # Create result and print summary
         total_time = time.time() - start_time
         result = TreeExecutionResult(results, total_time)
         self._print_summary(result)
-        
+
         return result
-    
+
     def run_segment(
         self,
         segment: DSESegment,
@@ -216,18 +213,18 @@ class SegmentRunner:
         base_output_dir: Path
     ) -> SegmentResult:
         """Run a single DSE segment.
-        
+
         Args:
             segment: Segment to execute
             input_model: Input ONNX model path
             base_output_dir: Base output directory
-            
+
         Returns:
             SegmentResult with execution details
         """
         segment_dir = base_output_dir / segment.segment_id
         output_model = segment_dir / "output.onnx"
-        
+
         # Check cache validity
         if output_model.exists():
             try:
@@ -252,22 +249,22 @@ class SegmentRunner:
 
         # Cache miss or invalid - execute build
         logger.info(f"Building segment: {segment.segment_id}")
-        
+
         # Create FINN config
         finn_config = self._make_finn_config(segment, segment_dir)
-        
+
         # Prepare directory and model
         segment_dir.mkdir(parents=True, exist_ok=True)
         segment_input = segment_dir / "input.onnx"
         self.finn_adapter.prepare_model(input_model, segment_input)
-        
+
         # Execute build
         start_time = time.time()
-        
+
         try:
             # Use adapter for clean FINN interaction
             final_model = self.finn_adapter.build(segment_input, finn_config, segment_dir)
-            
+
             if final_model:
                 # Copy to expected location
                 self.finn_adapter.prepare_model(final_model, output_model)
@@ -288,32 +285,6 @@ class SegmentRunner:
             if not isinstance(e, ExecutionError):
                 logger.exception("Unexpected error details:")
             raise contextualized_error
-    
-    def _extract_kernel_selections(self, segment: DSESegment) -> List[tuple]:
-        """Extract kernel selections from segment steps.
-
-        Searches for 'infer_kernels' steps that contain kernel_backends
-        and extracts backend classes for inference.
-
-        Args:
-            segment: Segment to extract kernel selections from
-
-        Returns:
-            List of (kernel_name, backend_class) tuples
-
-        Note:
-            Currently uses first backend per kernel. Future enhancement
-            will support selecting specific backends from the list.
-        """
-        kernel_selections = []
-        for step in segment.steps:
-            if step.get("name") == "infer_kernels" and "kernel_backends" in step:
-                for kernel_name, backend_classes in step["kernel_backends"]:
-                    if backend_classes:
-                        # TODO: Future - support selecting specific backends
-                        # For now, use first registered backend per kernel
-                        kernel_selections.append((kernel_name, backend_classes[0]))
-        return kernel_selections
 
     def _resolve_step_name(self, step_name: str) -> str:
         """Resolve brainsmith qualified step name to FINN function name.
@@ -388,13 +359,6 @@ class SegmentRunner:
         config["output_dir"] = str(output_dir)
         config["generate_outputs"] = self.output_type.to_finn_outputs()
 
-        # Extract and set kernel selections
-        kernel_selections = self._extract_kernel_selections(segment)
-        if kernel_selections:
-            config["kernel_selections"] = kernel_selections
-        elif "kernel_selections" in self.base_config:
-            config["kernel_selections"] = self.base_config["kernel_selections"]
-
         # Resolve steps to callables
         config["steps"] = self._resolve_steps(segment)
 
@@ -405,13 +369,13 @@ class SegmentRunner:
             config["stop_step"] = self._resolve_step_name(config["stop_step"])
 
         return config
-    
+
     def _mark_descendants_skipped(self, segment: DSESegment, skipped: Set[str]) -> None:
         """Mark all descendants as skipped."""
         for child in segment.children.values():
             skipped.add(child.segment_id)
             self._mark_descendants_skipped(child, skipped)
-    
+
     def _print_summary(self, result: TreeExecutionResult) -> None:
         """Print execution summary."""
         stats = result.compute_stats()

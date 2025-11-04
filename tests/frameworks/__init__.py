@@ -14,7 +14,7 @@ Utilities (from tests.common):
 
 Example (SingleKernelTest):
     from tests.frameworks.single_kernel_test import SingleKernelTest
-    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
     class TestMyKernel(SingleKernelTest):
         def make_test_model(self):
@@ -22,7 +22,7 @@ Example (SingleKernelTest):
             return model, "Add_0"
 
         def get_kernel_inference_transform(self):
-            return InferKernelList
+            return InferKernels
 
         def compute_golden_reference(self, inputs):
             return {"output": inputs["input0"] + inputs["input1"]}
@@ -36,7 +36,7 @@ Example (SingleKernelTest):
 Example (DualKernelTest):
     from tests.frameworks.dual_kernel_test import DualKernelTest
     from finn.transformation.fpgadataflow.convert_to_hw_layers import InferAddStreamsLayer
-    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
     class TestAddStreamsParity(DualKernelTest):
         # Same make_test_model, get_num_inputs, get_num_outputs as above
@@ -45,7 +45,7 @@ Example (DualKernelTest):
             return InferAddStreamsLayer  # FINN
 
         def get_auto_transform(self):
-            return InferKernelList  # Brainsmith
+            return InferKernels  # Brainsmith
 
         def compute_golden_reference(self, inputs):
             return {"output": inputs["input0"] + inputs["input1"]}

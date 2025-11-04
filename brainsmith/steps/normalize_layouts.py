@@ -42,7 +42,7 @@ def normalize_dataflow_layouts_step(model: Any, cfg: Any) -> Any:
     Usage in blueprint:
         steps:
           - "normalize_dataflow_layouts"  # Add before kernel inference
-          - "infer_kernels"
+          - "build_dataflow_graph"
           - ...
     """
     logger.info("Normalizing dataflow layouts to NHWC (channel-last)")

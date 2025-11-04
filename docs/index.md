@@ -12,7 +12,7 @@ Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently ex
 ## Why Brainsmith?
 
 **From Hours to Minutes**
-Traditional FPGA development requires iterative manual configuration. Brainsmith's segment-based design space exploration (DSE) reuses computation across similar configurations, letting you explore hundreds of design points in the time it used to take to build one.
+Traditional FPGA development requires iterative manual configuration. Brainsmith's segment-based design space exploration (DSE) reuses computation across similar configurations.
 
 **Extensible by Design**
 Add custom hardware kernels, optimization transforms, or build steps through a component registry. Your accelerator isn't limited to built-in operations.

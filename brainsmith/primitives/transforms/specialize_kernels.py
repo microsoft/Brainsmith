@@ -1,68 +1,219 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""SpecializeKernels: Brainsmith implementation of layer specialization.
+"""SpecializeKernels: Registry-based backend specialization transform.
 
-Replaces FINN's SpecializeLayers with Brainsmith-aware version that:
-- For Brainsmith nodes: Sets implementation attribute, keeps domain stable
-- For FINN nodes: Mutates domain (backward compatibility)
+Replaces generic kernel nodes with specialized backend nodes based on kernel_selections
+configuration. Uses registry metadata for source-to-domain mapping.
 
-This eliminates brittle import structure (brainsmith/kernels/hls/__init__.py)
-and enables co-located kernel files.
+Architecture:
+- kernel_selections provides priority lists: [(kernel_name, [backend1, backend2, ...])]
+- Try backends left-to-right, select first that passes constraint checks
+- Replace kernel node with backend node (mutate op_type, domain, backend attribute)
+- Domain determined by backend's source via get_domain_for_backend()
 """
 
+import numpy as np
 import warnings
 from onnx import helper
-from qonnx.custom_op.registry import hasCustomOp
 from qonnx.transformation.base import Transformation
 
-from finn.util.basic import getHWCustomOp
+from finn.util.basic import getHWCustomOp, get_dsp_block, is_versal
+from brainsmith.registry import get_domain_for_backend, get_component_metadata
 
+
+# ============================================================================
+# Constraint Checking Functions (ported from FINN)
+# ============================================================================
+
+def _dwc_rtl_possible(node, model=None):
+    """Check if StreamingDataWidthConverter can use RTL variant.
+
+    RTL variant requires integer width ratios (one width divides the other).
+    """
+    dwc = getHWCustomOp(node, model)
+    dwc_in_width = dwc.get_nodeattr("inWidth")
+    dwc_out_width = dwc.get_nodeattr("outWidth")
+    # Check if rtl variant can be used
+    iwidth_d = dwc_in_width % dwc_out_width == 0
+    owidth_d = dwc_out_width % dwc_in_width == 0
+    return iwidth_d or owidth_d
+
+
+def _mvu_rtl_possible(node, fpgapart, model):
+    """Check whether RTL-based MVAU is supported.
+
+    Constraints:
+    - No embedded thresholding (noActivation == 1)
+    - No binaryXnorMode (binaryXnorMode == 0)
+    - Signed weights required
+    - DSP48E1: narrow weights only
+    - Bitwidth limits: 2-8 bits for weights, 2-8 (or 9-bit signed) for inputs
+    """
+    node_inst = getHWCustomOp(node, model)
+
+    # Check for embedded thresholding and binary xnor mode
+    no_activation = node_inst.get_nodeattr("noActivation") == 0
+    not_binaryxnor_mode = node_inst.get_nodeattr("binaryXnorMode") == 1
+    if no_activation or not_binaryxnor_mode:
+        return False
+
+    # Check if weights are signed
+    wdt = node_inst.get_input_datatype(1)
+
+    # Check which DSP block is available on FPGA
+    dsp_block = get_dsp_block(fpgapart)
+
+    # Check if weights are narrow
+    weights = model.get_initializer(node.input[1])
+    if weights is None:
+        weights_min = wdt.min()
+    else:
+        weights_min = np.min(weights)
+    narrow_weights = False if weights_min == wdt.min() else True
+
+    # If non-narrow weights and only DSP48E1 available, RTL not possible
+    if not narrow_weights and dsp_block == "DSP48E1":
+        return False
+
+    # Check if input and weight data types are in range
+    idt = node_inst.get_input_datatype()
+    inp_width_in_range = (2 <= idt.bitwidth() <= 8) or (idt.bitwidth() == 9 and idt.signed())
+    weight_width_in_range = 2 <= wdt.bitwidth() <= 8
+
+    return inp_width_in_range and weight_width_in_range
+
+
+def _vvu_rtl_possible(node, fpgapart, model=None):
+    """Check whether RTL-based VVU is supported.
+
+    Constraints:
+    - Versal-only (DSP58)
+    - No embedded thresholding (noActivation == 1)
+    - Signed weights required
+    - Bitwidth limits: ≤8 bits for weights, ≤8 (or 9-bit signed) for inputs
+    """
+    node_inst = getHWCustomOp(node, model)
+
+    # Check for embedded thresholding
+    if not node_inst.get_nodeattr("noActivation"):
+        return False
+
+    # Versal-only
+    if not is_versal(fpgapart):
+        return False
+
+    # Check bitwidth constraints
+    idt = node_inst.get_input_datatype(0)
+    wdt = node_inst.get_input_datatype(1)
+    in_width_in_range = (idt.bitwidth() <= 8) or (idt.bitwidth() == 9 and idt.min() < 0)
+    weight_width_in_range = wdt.bitwidth() <= 8
+    signed_weights = wdt.min() < 0
+
+    return in_width_in_range and weight_width_in_range and signed_weights
+
+
+# ============================================================================
+# SpecializeKernels Transform
+# ============================================================================
 
 class SpecializeKernels(Transformation):
-    """Specialize hardware nodes to implementation backends.
+    """Specialize hardware kernel nodes to backend implementations.
 
-    Brainsmith behavior (stable domain):
-        - Domain: brainsmith.kernels (unchanged)
-        - Op type: ChannelwiseOp (unchanged)
-        - Attributes: implementation="vitis_hls", backend="fpgadataflow"
+    Uses kernel_selections config to determine backend priorities, validates
+    constraints, and replaces nodes with specialized backends.
 
-    FINN behavior (domain mutation, backward compat):
-        - Domain: finn.custom_op.fpgadataflow → finn.custom_op.fpgadataflow.hls
-        - Op type: ChannelwiseOp → ChannelwiseOp_hls
-        - Attributes: backend="fpgadataflow" (existing)
+    Backend selection:
+    - Try backends in priority order (left-to-right in list)
+    - First backend passing constraint checks is selected
+    - Falls back to warnings if no viable backend found
+
+    Node transformation:
+    - op_type: kernel name → backend class name (e.g., "MVAU" → "MVAU_hls")
+    - domain: from backend's source via get_domain_for_backend()
+    - backend: language attribute ("hls" or "rtl")
     """
 
-    def __init__(self, fpgapart):
+    def __init__(self, cfg):
         super().__init__()
-        self.fpgapart = fpgapart
+        self.cfg = cfg
+        self.fpgapart = cfg._resolve_fpga_part()
 
     def apply(self, model):
         graph = model.graph
         node_ind = 0
         graph_modified = False
 
+        # Build backend map from kernel_selections
+        # Format: {kernel_name: [backend1, backend2, ...]}
+        backend_map = self._build_backend_map(model)
+
         for node in graph.node:
             # Skip nodes that are not hardware layers
             if not self._is_hw_node(node):
+                node_ind += 1
                 continue
+
+            # Get backend priority list for this kernel
+            backend_list = backend_map.get(node.op_type, [])
+            if not backend_list:
+                # No backends configured for this kernel, skip
+                node_ind += 1
+                continue
+
+            # Try backends in priority order
+            selected_backend = self._select_viable_backend(node, backend_list, model)
+
+            if selected_backend is None:
+                warnings.warn(
+                    f"No viable backend found for node {node.name} ({node.op_type}). "
+                    f"Tried: {backend_list}. Skipping specialization."
+                )
+                node_ind += 1
+                continue
+
+            # Create specialized node
+            new_node = self._create_specialized_node(node, selected_backend)
+
+            # Replace node in graph
+            graph.node.insert(node_ind, new_node)
+            graph.node.remove(node)
+            graph_modified = True
 
             node_ind += 1
 
-            if self._is_brainsmith_node(node):
-                # Brainsmith: stable domain, implementation attribute
-                self._specialize_brainsmith_node(node, model)
-            else:
-                # FINN: domain mutation (backward compatibility)
-                new_node = self._specialize_finn_node(node, model)
-                graph.node.insert(node_ind, new_node)
-                graph.node.remove(node)
-                graph_modified = True
-
         return (model, graph_modified)
 
+    def _build_backend_map(self, model):
+        """Build map of kernel name to backend priority list.
+
+        Extracts backend lists from kernel_selections attribute on cfg.
+        Format: [("source:kernel", ["source:backend1", "source:backend2", ...])]
+
+        Returns:
+            Dict[str, List[str]]: {short_kernel_name: [backend_name1, backend_name2, ...]}
+        """
+        kernel_selections = getattr(self.cfg, 'kernel_selections', None)
+
+        if not kernel_selections:
+            return {}
+
+        backend_map = {}
+        for kernel_name, backend_list in kernel_selections:
+            # Strip source prefix to get short name for matching node.op_type
+            # "source:KernelName" → "KernelName"
+            short_name = kernel_name.split(':', 1)[1] if ':' in kernel_name else kernel_name
+
+            # Ensure backend_list is a list (should always be list now)
+            if not isinstance(backend_list, list):
+                backend_list = [backend_list]
+
+            backend_map[short_name] = backend_list
+
+        return backend_map
+
     def _is_hw_node(self, node):
-        """Check if node is a hardware layer."""
+        """Check if node is a hardware layer (unspecialized)."""
         return (
             node.domain.endswith(".custom_op.fpgadataflow") or
             (
@@ -71,74 +222,101 @@ class SpecializeKernels(Transformation):
             )
         )
 
-    def _is_brainsmith_node(self, node):
-        """Check if node is a Brainsmith kernel."""
-        return node.domain.startswith("brainsmith.kernels")
+    def _select_viable_backend(self, node, backend_list, model):
+        """Select first viable backend from priority list.
 
-    def _specialize_brainsmith_node(self, node, model):
-        """Specialize Brainsmith node: stable domain, implementation attribute.
-
-        Sets:
-        - implementation attribute (e.g., "vitis_hls")
-        - backend="fpgadataflow" (FINN compatibility)
-
-        Does NOT mutate domain or op_type.
-        """
-        op = getHWCustomOp(node, model)
-
-        # Determine implementation
-        impl = self._select_brainsmith_implementation(node, model)
-
-        # Set attributes (NO domain mutation)
-        op.set_nodeattr("implementation", impl)
-        op.set_nodeattr("backend", "fpgadataflow")  # FINN compatibility
-
-    def _select_brainsmith_implementation(self, node, model):
-        """Select implementation for Brainsmith node.
-
-        Simple heuristic for now:
-        1. Check preferred_impl_style
-        2. Default to "vitis_hls" (most common)
-
-        Future: Check available backends, backend viability, scoring, etc.
-        """
-        op = getHWCustomOp(node, model)
-        preferred = op.get_nodeattr("preferred_impl_style")
-
-        if preferred == "hls":
-            return "vitis_hls"
-        elif preferred == "rtl":
-            return "verilog"
-        else:
-            # Default to HLS
-            return "vitis_hls"
-
-    def _specialize_finn_node(self, node, model):
-        """Specialize FINN node: domain mutation (backward compatibility).
-
-        Delegates to FINN's _determine_impl_style() logic, then creates
-        new node with mutated domain and op_type.
+        Args:
+            node: ONNX node to specialize
+            backend_list: List of backend names in priority order
+            model: ModelWrapper
 
         Returns:
-            New ONNX node with mutated domain/op_type
+            Backend name if viable backend found, None otherwise
         """
-        # Import FINN's helpers here to avoid circular imports
-        from finn.transformation.fpgadataflow.specialize_layers import _determine_impl_style
+        for backend_name in backend_list:
+            try:
+                # Get backend metadata
+                meta = get_component_metadata(backend_name, 'backend')
+                language = meta.backend_language
 
-        impl_style = _determine_impl_style(node, self.fpgapart, model)
-        optype = node.op_type + "_" + impl_style
+                # Check if backend is viable
+                if self._check_backend_viable(node, language, model):
+                    return backend_name
 
-        # Create new node with mutated domain
+            except KeyError:
+                warnings.warn(f"Backend not found in registry: {backend_name}")
+                continue
+
+        return None
+
+    def _check_backend_viable(self, node, language, model):
+        """Check if backend language is viable for this node.
+
+        Applies constraint checking for RTL backends.
+
+        Args:
+            node: ONNX node
+            language: Backend language ("hls" or "rtl")
+            model: ModelWrapper
+
+        Returns:
+            bool: True if backend is viable
+        """
+        # HLS always viable (fewest constraints)
+        if language == "hls":
+            return True
+
+        # RTL requires constraint checking
+        optype = node.op_type
+
+        if optype == "StreamingDataWidthConverter":
+            return _dwc_rtl_possible(node, model)
+        elif optype == "MVAU":
+            return _mvu_rtl_possible(node, self.fpgapart, model)
+        elif optype == "VectorVectorActivation":
+            return _vvu_rtl_possible(node, self.fpgapart, model)
+        else:
+            # For other ops, assume RTL is viable if it exists
+            return True
+
+    def _create_specialized_node(self, node, backend_name):
+        """Create specialized backend node.
+
+        Args:
+            node: Original kernel node
+            backend_name: Selected backend name (e.g., 'brainsmith:LayerNorm_hls')
+
+        Returns:
+            New ONNX node with specialized backend
+        """
+        # Get backend metadata
+        meta = get_component_metadata(backend_name, 'backend')
+        language = meta.backend_language
+
+        # Extract backend class name from full name
+        # E.g., 'brainsmith:LayerNorm_hls' → 'LayerNorm_hls'
+        backend_class_name = backend_name.split(':', 1)[1] if ':' in backend_name else backend_name
+
+        # Get domain for backend
+        domain = get_domain_for_backend(backend_name)
+
+        # Create new node
         new_node = helper.make_node(
-            optype,
+            backend_class_name,
             node.input,
             node.output,
-            domain=f"{node.domain}.{impl_style}",
+            domain=domain,
+            name=node.name,
         )
 
-        # Copy all attributes except preferred_impl_style
+        # Copy all attributes except backend
         for attribute in node.attribute:
-            if attribute.name != "preferred_impl_style":
+            if attribute.name != "backend":
                 new_node.attribute.append(attribute)
+
+        # Set backend attribute
+        new_node.attribute.append(
+            helper.make_attribute("backend", language)
+        )
 
         return new_node

@@ -11,11 +11,7 @@
 from .softmax import Softmax
 from .softmax_hls import Softmax_hls
 
-# Friendly alias for external use
-SoftmaxHLS = Softmax_hls
-
 __all__ = [
     "Softmax",
-    "Softmax_hls",  # Actual class name (for QONNX/FINN discovery)
-    "SoftmaxHLS",   # Friendly alias
+    "Softmax_hls",
 ]

@@ -25,7 +25,7 @@ Pipeline Architecture (3 stages):
 Usage:
     from tests.frameworks.dual_kernel_test import DualKernelTest
     from finn.transformation.fpgadataflow.convert_to_hw_layers import InferAddStreamsLayer
-    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
     class TestAddStreamsParity(DualKernelTest):
         def make_test_model(self):
@@ -35,7 +35,7 @@ Usage:
             return InferAddStreamsLayer  # FINN
 
         def get_auto_transform(self):
-            return InferKernelList  # Brainsmith
+            return InferKernels  # Brainsmith
 
         def compute_golden_reference(self, inputs):
             return {"output": inputs["input0"] + inputs["input1"]}
@@ -141,12 +141,12 @@ class DualKernelTest(KernelTestConfig):
         """Return Brainsmith's unified transform.
 
         Returns:
-            Transform class (typically InferKernelList)
+            Transform class (typically InferKernels)
 
         Example:
             def get_auto_transform(self):
-                from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
-                return InferKernelList
+                from brainsmith.primitives.transforms.infer_kernels import InferKernels
+                return InferKernels
         """
         pass
 

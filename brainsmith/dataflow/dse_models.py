@@ -46,16 +46,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class InterfaceDesignSpace:
-    """Interface definition for kernel design space.
+    """Interface design space built once, configured many times.
 
-    Built once from ONNX context, reused across all parallelization configs during DSE.
-    Stream tiling preserved as template for later resolution with specific parameters.
+    Defines interface structure constant during DSE. Stream tiling preserved
+    as template for resolution with specific parallelization parameters.
 
-    Parallelism metadata (linked during build):
-    - parallelism_dimension: Shared reference to OrderedDimension from kernel dimensions dict
-    - parallelism_param: Parameter name (e.g., "SIMD") for navigation
-
-    Single-param only for now (multi-param will flatten to synthetic 1D in future).
+    Attributes:
+        name: Interface name
+        tensor_shape: Full tensor dimensions
+        block_shape: Block dimensions (per-operation tile size)
+        stream_tiling: Stream tiling template (e.g., ["SIMD"] or [1, 1, 1, "PE"])
+        datatype: Interface datatype
+        is_weight: Whether this is a weight tensor (constant)
+        tensor_name: ONNX tensor name for initializer lookups
+        parallelism_dimension: OrderedDimension for stream parameter (None if no parallelism)
+        parallelism_param: Parameter name for stream dimension (e.g., "SIMD", "PE")
     """
     name: str
     tensor_shape: Shape
@@ -72,10 +77,15 @@ class InterfaceDesignSpace:
 
 @dataclass(frozen=True)
 class InterfaceDesignPoint:
-    """Interface with specific parallelization configuration.
+    """Interface instance with resolved parallelization.
 
-    Flyweight pattern: references parent design space, stores only stream_shape.
-    Ensures minimal memory overhead when exploring multiple configurations.
+    Flyweight pattern: references parent design space, stores only configuration-
+    specific stream_shape. Delegates tensor_shape, block_shape, and datatype
+    to design space for minimal memory overhead.
+
+    Attributes:
+        design_space: Parent InterfaceDesignSpace
+        stream_shape: Resolved stream dimensions for this configuration
     """
     design_space: InterfaceDesignSpace
     stream_shape: Shape
@@ -190,12 +200,20 @@ class InterfaceDesignPoint:
 
 @dataclass(frozen=True)
 class KernelDesignSpace:
-    """Defines kernel design space for parallelization exploration.
+    """Kernel design space built once, configured many times.
 
-    Built once from ONNX context, acts as factory for KernelDesignPoint via configure().
-    Contains properties constant during DSE plus valid ranges for all explorable dimensions.
+    Built by DesignSpaceBuilder from ONNX context, acts as factory for
+    KernelDesignPoint via configure(). Contains structure constant during
+    DSE plus valid ranges for all explorable dimensions.
 
-    Construction: build() once (expensive), configure() many times (fast).
+    Attributes:
+        name: Kernel name
+        inputs: Input interface design spaces (by name)
+        outputs: Output interface design spaces (by name)
+        internal_datatypes: Internal datatypes (e.g., accumulator)
+        optimization_constraints: Parametric constraints validated at configure()
+        dimensions: Explorable dimensions - OrderedDimension (with navigation) or
+                   frozenset (discrete categories like ram_style)
     """
     name: str
     inputs: Dict[str, InterfaceDesignSpace]
@@ -498,10 +516,20 @@ class KernelDesignSpace:
 
 @dataclass(frozen=True)
 class KernelDesignPoint:
-    """Specific kernel instance with resolved configuration.
+    """Immutable kernel instance at specific design point.
 
-    Flyweight pattern: references parent design space, stores only configuration-specific data.
-    Created by KernelDesignSpace.configure() with specific dimension values (tiling + resource).
+    Created by KernelDesignSpace.configure() with specific dimension values.
+    Flyweight pattern minimizes memory - references parent design space,
+    stores only configuration-specific data.
+
+    Navigation methods return new instances - the design point itself is immutable.
+    Use with_dimension(), with_step_up(), sweep_dimension() to explore the space.
+
+    Attributes:
+        design_space: Parent KernelDesignSpace
+        inputs: Configured input interfaces (by name)
+        outputs: Configured output interfaces (by name)
+        config: Dimension values defining this point (e.g., {"SIMD": 16, "PE": 4})
     """
     design_space: KernelDesignSpace
     inputs: Dict[str, InterfaceDesignPoint]

@@ -17,7 +17,7 @@ design_space:
     # This step converts any NCHW tensors to NHWC globally, eliminating the
     # need for per-kernel layout checking and ensuring uniform dataflow behavior.
     - "normalize_dataflow_layouts"
-    - "infer_kernels" # Brainsmith dynamic kernel inference (assumes NHWC)
+    - "build_dataflow_graph" # Build complete dataflow graph (infrastructure + computational kernels)
     - "create_dataflow_partition"
     - "specialize_layers"
     - "target_fps_parallelization"

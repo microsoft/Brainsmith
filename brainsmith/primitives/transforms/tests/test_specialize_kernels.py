@@ -13,7 +13,7 @@ from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 
 from finn.util.basic import getHWCustomOp
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
-from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
 
 def make_channelwise_model():
@@ -59,7 +59,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp (Brainsmith kernel)
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
         node = model.graph.node[0]
 
         assert node.domain == "brainsmith.kernels", \
@@ -78,7 +78,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
         node = model.graph.node[0]
 
         assert node.op_type == "ChannelwiseOp", \
@@ -97,7 +97,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
         # Specialize
         model = model.transform(SpecializeKernels("xc7z020clg400-1"))
@@ -115,7 +115,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
         # Specialize
         model = model.transform(SpecializeKernels("xc7z020clg400-1"))
@@ -133,7 +133,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
         node = model.graph.node[0]
         op = getHWCustomOp(node, model)
@@ -154,7 +154,7 @@ class TestBrainsmithNodeStableDomain:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
         node = model.graph.node[0]
         op = getHWCustomOp(node, model)
@@ -197,7 +197,7 @@ class TestEdgeCases:
         model = make_channelwise_model()
 
         # Infer to ChannelwiseOp
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
         # Specialize once
         model = model.transform(SpecializeKernels("xc7z020clg400-1"))

@@ -34,17 +34,14 @@ def explore_design_space(
     stop_step_override: Optional[str] = None
 ) -> TreeExecutionResult:
     """
-    Explore the design space for an FPGA accelerator.
-
-    Transforms a neural network model into an FPGA accelerator through
-    blueprint-driven design space exploration and synthesis.
+    Explore design space and synthesize FPGA accelerator from neural network model.
 
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
         output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/dfc_YYYYMMDD_HHMMSS)
-        start_step_override: Override blueprint start_step (CLI takes precedence)
-        stop_step_override: Override blueprint stop_step (CLI takes precedence)
+        start_step_override: Override blueprint start_step
+        stop_step_override: Override blueprint stop_step
 
     Returns:
         TreeExecutionResult containing build artifacts and statistics
@@ -52,7 +49,7 @@ def explore_design_space(
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
-        RuntimeError: If no successful builds were produced
+        ExecutionError: If no successful builds were produced
     """
     # Verify files exist
     model_path_obj = Path(model_path)

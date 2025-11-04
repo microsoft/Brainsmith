@@ -227,7 +227,7 @@ def list_steps(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of step names (with source prefixes)
 
-    Example:
+    Examples:
         >>> steps = list_steps()  # All steps
         >>> user_steps = list_steps(source='user')  # Only user steps
     """
@@ -247,6 +247,9 @@ def get_kernel(name: str) -> Type:
 
     Returns:
         Kernel class
+
+    Raises:
+        KeyError: If kernel not found in any source
 
     Examples:
         >>> LayerNorm = get_kernel('LayerNorm')  # Short name, uses source priority
@@ -326,7 +329,7 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of kernel names (with source prefixes)
 
-    Example:
+    Examples:
         >>> kernels = list_kernels()  # All kernels
         >>> user_kernels = list_kernels(source='user')  # Only user kernels
     """
@@ -336,7 +339,7 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
 # === Backends ===
 
 def get_backend(name: str) -> Type:
-    """Get independent backend by name.
+    """Get backend class by name.
 
     Accepts both short names ('LayerNorm_HLS') and qualified names ('user:LayerNorm_HLS_Fast').
     Short names are resolved using source priority from settings.
@@ -346,6 +349,9 @@ def get_backend(name: str) -> Type:
 
     Returns:
         Backend class
+
+    Raises:
+        KeyError: If backend not found in any source
 
     Examples:
         >>> backend = get_backend('LayerNorm_HLS')  # Short name, uses source priority
@@ -462,7 +468,7 @@ def list_backends(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of backend names (with source prefixes)
 
-    Example:
+    Examples:
         >>> backends = list_backends()  # All backends
         >>> user_backends = list_backends(source='user')  # Only user backends
     """
@@ -523,3 +529,58 @@ def get_all_component_metadata() -> Dict[str, Any]:
         discover_components()
 
     return dict(_component_index)
+
+
+# ============================================================================
+# Domain Resolution
+# ============================================================================
+
+def get_domain_for_backend(backend_name: str) -> str:
+    """Get ONNX domain for a backend based on its source.
+
+    Domain resolution rules:
+    - FINN: finn.custom_op.fpgadataflow.{language} (e.g., .hls or .rtl suffix)
+    - Other sources: {module}.kernels (e.g., brainsmith.kernels, mycompany.kernels)
+
+    Args:
+        backend_name: Backend name (e.g., 'brainsmith:LayerNorm_hls', 'finn:MVAU_hls')
+
+    Returns:
+        ONNX domain string
+
+    Examples:
+        >>> get_domain_for_backend('brainsmith:LayerNorm_hls')
+        'brainsmith.kernels'
+        >>> get_domain_for_backend('finn:MVAU_hls')
+        'finn.custom_op.fpgadataflow.hls'
+        >>> get_domain_for_backend('mycompany:CustomKernel_rtl')
+        'mycompany.kernels'
+    """
+    from brainsmith.settings import get_config
+
+    # Get backend metadata
+    meta = get_component_metadata(backend_name, 'backend')
+    source = meta.source
+    language = meta.backend_language
+
+    # FINN special case: domain mutation with language suffix
+    if source == 'finn':
+        return f"finn.custom_op.fpgadataflow.{language}"
+
+    # General case: find module prefix for source
+    config = get_config()
+
+    # Reverse lookup: find module for this source
+    # source_module_prefixes maps 'brainsmith.' → 'brainsmith'
+    # We want the reverse: 'brainsmith' → 'brainsmith.'
+    module = None
+    for module_prefix, mapped_source in config.source_module_prefixes.items():
+        if mapped_source == source:
+            module = module_prefix.rstrip('.')  # Remove trailing dot
+            break
+
+    # Fallback: if no module prefix configured, use source name as module
+    if module is None:
+        module = source
+
+    return f"{module}.kernels"

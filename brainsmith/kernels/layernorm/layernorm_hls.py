@@ -32,7 +32,7 @@ from brainsmith.registry import backend
 
 
 @backend(
-    name="LayerNormHLS",
+    name="LayerNorm_hls",
     target_kernel="brainsmith:LayerNorm",
     language="hls",
     description="HLS backend for LayerNorm kernel using Dataflow Modeling",

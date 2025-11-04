@@ -7,7 +7,7 @@
 
 """Meta-transform for inferring multiple hardware kernels via pattern matching.
 
-This module provides InferKernelList, a smart dispatcher that handles both
+This module provides InferKernels, a smart dispatcher that handles both
 new KernelOp kernels and legacy HWCustomOp kernels with their inference
 transforms.
 
@@ -15,20 +15,20 @@ Automatically filters out infrastructure kernels (is_infrastructure=True)
 since they're inserted by topology transforms, not pattern matching.
 
 Example usage:
-    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernels import InferKernels
     from brainsmith.kernels.addstreams import AddStreams
     from brainsmith.kernels.softmax import Softmax
     from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU
 
     # Infer specific kernels (mix of new and legacy)
-    model = model.transform(InferKernelList([
+    model = model.transform(InferKernels([
         AddStreams,  # New KernelOp → uses InferKernel
         Softmax,     # New KernelOp → uses InferKernel
         MVAU,        # Legacy HWCustomOp → uses InferQuantizedMatrixVectorActivation
     ]))
 
     # Infer all registered kernels (backward compatible)
-    model = model.transform(InferKernelList())
+    model = model.transform(InferKernels())
 """
 
 import inspect
@@ -43,7 +43,7 @@ from .infer_kernel import InferKernel
 logger = logging.getLogger(__name__)
 
 
-class InferKernelList(Transformation):
+class InferKernels(Transformation):
     """Meta-transform for inferring multiple hardware kernels.
 
     Accepts a list of kernel classes (KernelOp or HWCustomOp) and dispatches
@@ -64,14 +64,14 @@ class InferKernelList(Transformation):
         from brainsmith.kernels.softmax import Softmax
         from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU
 
-        model = model.transform(InferKernelList([
+        model = model.transform(InferKernels([
             AddStreams,  # New KernelOp
             Softmax,     # New KernelOp
             MVAU,        # Legacy FINN kernel
         ]))
 
         # Backward compatible: infer all registered kernels
-        model = model.transform(InferKernelList())
+        model = model.transform(InferKernels())
 
     Implementation Notes:
         - Type-based dispatch: checks issubclass(cls, KernelOp)

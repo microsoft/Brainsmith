@@ -38,7 +38,7 @@ class DSETreeBuilder:
         """
         root = DSESegment(
             steps=[],
-            finn_config=self._extract_finn_config(blueprint_config)
+            finn_config=self._extract_finn_config(space, blueprint_config)
         )
         
         current_segments = [root]
@@ -74,17 +74,13 @@ class DSETreeBuilder:
         Returns:
             Dictionary with step configuration
         """
-        if step_spec == "infer_kernels" and space.kernel_backends:
-            return {
-                "name": step_spec,
-                "kernel_backends": space.kernel_backends
-            }
         return {"name": step_spec}
     
-    def _extract_finn_config(self, blueprint_config: DSEConfig) -> Dict[str, Any]:
+    def _extract_finn_config(self, space: GlobalDesignSpace, blueprint_config: DSEConfig) -> Dict[str, Any]:
         """Extract FINN-relevant configuration from DSEConfig.
 
         Args:
+            space: GlobalDesignSpace containing kernel backends
             blueprint_config: DSEConfig containing FINN parameters
 
         Returns:
@@ -105,6 +101,39 @@ class DSETreeBuilder:
             finn_config['start_step'] = blueprint_config.start_step
         if blueprint_config.stop_step:
             finn_config['stop_step'] = blueprint_config.stop_step
+
+        # Convert kernel_backends to kernel_selections format
+        # Format: [("source:kernel", ["source:backend1", "source:backend2", ...])]
+        # Fully qualify all names to source:name format for registry lookups
+        kernel_selections = []
+        for kernel_name, backend_classes in space.kernel_backends:
+            if not backend_classes:
+                continue
+
+            # Get fully qualified kernel name from first backend's target_kernel
+            # All backends for a kernel should target the same kernel
+            first_backend = backend_classes[0]
+            if hasattr(first_backend, '__registry_name__'):
+                from brainsmith.registry import get_component_metadata
+                backend_meta = get_component_metadata(first_backend.__registry_name__, 'backend')
+                qualified_kernel_name = backend_meta.backend_target
+            else:
+                # Fallback: assume kernel_name is already qualified or use as-is
+                qualified_kernel_name = kernel_name if ':' in kernel_name else f"brainsmith:{kernel_name}"
+
+            # Convert backend classes to fully qualified names
+            backend_names = []
+            for backend_class in backend_classes:
+                if hasattr(backend_class, '__registry_name__'):
+                    backend_names.append(backend_class.__registry_name__)
+                else:
+                    # Fallback: use class name (not ideal but better than failing)
+                    backend_names.append(backend_class.__name__)
+
+            kernel_selections.append((qualified_kernel_name, backend_names))
+
+        if kernel_selections:
+            finn_config['kernel_selections'] = kernel_selections
 
         # Apply any finn_config overrides from blueprint
         finn_config.update(blueprint_config.finn_overrides)

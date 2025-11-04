@@ -16,7 +16,7 @@ Replaces:
 
 Usage:
     from tests.frameworks.single_kernel_test import SingleKernelTest
-    from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+    from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
     class TestMyKernel(SingleKernelTest):
         def make_test_model(self):
@@ -24,7 +24,7 @@ Usage:
             return model, "Add_0"
 
         def get_kernel_inference_transform(self):
-            return InferKernelList
+            return InferKernels
 
         def compute_golden_reference(self, inputs):
             return {"output": inputs["input0"] + inputs["input1"]}
@@ -74,7 +74,7 @@ class SingleKernelTest(KernelTestConfig):
     Subclasses implement:
     - make_test_model(): Create ONNX model (from KernelTestConfig)
     - get_num_inputs/outputs(): I/O counts (from KernelTestConfig)
-    - get_kernel_inference_transform(): Returns transform class (e.g., InferKernelList)
+    - get_kernel_inference_transform(): Returns transform class (e.g., InferKernels)
     - compute_golden_reference(): Test-owned golden reference
 
     Provides 6 inherited tests:
@@ -95,12 +95,12 @@ class SingleKernelTest(KernelTestConfig):
         """Return transform that converts ONNX node to hardware kernel.
 
         Returns:
-            Transformation class (e.g., InferKernelList, InferLayerNorm)
+            Transformation class (e.g., InferKernels, InferLayerNorm)
 
         Example:
             def get_kernel_inference_transform(self):
-                from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
-                return InferKernelList
+                from brainsmith.primitives.transforms.infer_kernels import InferKernels
+                return InferKernels
         """
         pass
 

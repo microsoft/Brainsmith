@@ -12,7 +12,8 @@ design_space:
   kernels:
     - LayerNorm
     - finn:DuplicateStreams
-    - finn:ElementwiseBinaryOperation
+    - ElementwiseBinaryOp
+    # - ElementwiseBinaryOperation
     - LegacyShuffle
     - Softmax
     - finn:Thresholding
@@ -27,10 +28,12 @@ design_space:
     # All kernels listed above (LayerNorm, Softmax, etc.) assume NHWC layout.
     - "normalize_dataflow_layouts"
     # Core FINN steps
-    - "infer_kernels" # Brainsmith dynamic kernel inference (assumes NHWC)
+    - "build_dataflow_graph" # Build complete dataflow graph (infrastructure + computational kernels)
+    # - "infer_kernels" # Brainsmith dynamic kernel inference (assumes NHWC)
     - "create_dataflow_partition"
     - "specialize_layers"
-    # - "target_fps_parallelization"
+    # - "brainsmith:target_fps_parallelization"
+    # - "apply_parallelization_config"
     - "apply_folding_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"

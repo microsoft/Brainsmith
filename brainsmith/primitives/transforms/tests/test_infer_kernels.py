@@ -3,7 +3,7 @@
 # Licensed under the MIT License.
 ############################################################################
 
-"""Tests for InferKernelList meta-transform."""
+"""Tests for InferKernels meta-transform."""
 
 import pytest
 import numpy as np
@@ -12,7 +12,7 @@ from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 
-from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
 
 def make_mixed_model():
@@ -61,7 +61,7 @@ def make_mixed_model():
 
 
 def test_infer_kernels_single_kernelop():
-    """Test InferKernelList with single KernelOp class."""
+    """Test InferKernels with single KernelOp class."""
     from brainsmith.kernels.addstreams import AddStreams
 
     # Create simple Add model
@@ -79,8 +79,8 @@ def test_infer_kernels_single_kernelop():
         import qonnx.core.data_layout as DataLayout
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
-    # Apply InferKernelList with single kernel
-    transform = InferKernelList([AddStreams])
+    # Apply InferKernels with single kernel
+    transform = InferKernels([AddStreams])
     model, modified = transform.apply(model)
 
     assert modified, "Graph should be modified"
@@ -88,7 +88,7 @@ def test_infer_kernels_single_kernelop():
 
 
 def test_infer_kernels_backward_compatible():
-    """Test InferKernelList with None (backward compatible mode)."""
+    """Test InferKernels with None (backward compatible mode)."""
     # Create simple Add model
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 64])
@@ -104,8 +104,8 @@ def test_infer_kernels_backward_compatible():
         import qonnx.core.data_layout as DataLayout
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
-    # Apply InferKernelList with None (should infer all registered KernelOp kernels)
-    transform = InferKernelList()
+    # Apply InferKernels with None (should infer all registered KernelOp kernels)
+    transform = InferKernels()
     model, modified = transform.apply(model)
 
     # Should convert Add to AddStreams (if AddStreams is registered)
@@ -113,7 +113,7 @@ def test_infer_kernels_backward_compatible():
 
 
 def test_infer_kernels_filters_infrastructure():
-    """Test that InferKernelList skips infrastructure kernels in backward compatible mode."""
+    """Test that InferKernels skips infrastructure kernels in backward compatible mode."""
     from brainsmith.registry import kernel, reset_registry, discover_components
     from brainsmith.registry import get_component_metadata
     from brainsmith.dataflow import KernelOp
@@ -138,19 +138,19 @@ def test_infer_kernels_filters_infrastructure():
     onnx_model = helper.make_model(graph, producer_name="test")
     model = ModelWrapper(onnx_model)
 
-    # Apply InferKernelList in backward compatible mode (kernel_classes=None)
-    transform = InferKernelList()
+    # Apply InferKernels in backward compatible mode (kernel_classes=None)
+    transform = InferKernels()
     model, modified = transform.apply(model)
 
     # Infrastructure kernel should be skipped, so node should remain as TestOp
     assert model.graph.node[0].op_type == "TestOp", \
-        "Infrastructure kernel should be skipped by InferKernelList"
+        "Infrastructure kernel should be skipped by InferKernels"
     # Since no computational kernel matches TestOp, modified should be False
     assert modified is False
 
 
 def test_infer_kernels_legacy_transform():
-    """Test InferKernelList with legacy HWCustomOp class."""
+    """Test InferKernels with legacy HWCustomOp class."""
     # This test requires FINN transforms to be registered
     try:
         from finn.custom_op.fpgadataflow.addstreams import AddStreams as FinnAddStreams
@@ -172,9 +172,9 @@ def test_infer_kernels_legacy_transform():
         import qonnx.core.data_layout as DataLayout
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
-    # Apply InferKernelList with FINN HWCustomOp class
+    # Apply InferKernels with FINN HWCustomOp class
     # Should lookup InferAddStreamsLayer via metadata
-    transform = InferKernelList([FinnAddStreams])
+    transform = InferKernels([FinnAddStreams])
     model, modified = transform.apply(model)
 
     # Might be modified (depends on whether transform is registered)
@@ -183,7 +183,7 @@ def test_infer_kernels_legacy_transform():
 
 
 def test_infer_kernels_mixed_types():
-    """Test InferKernelList with mix of KernelOp and HWCustomOp classes."""
+    """Test InferKernels with mix of KernelOp and HWCustomOp classes."""
     from brainsmith.kernels.addstreams import AddStreams
 
     # Try to import FINN MVAU
@@ -195,9 +195,9 @@ def test_infer_kernels_mixed_types():
     # Create model with both Add and MatMul
     model = make_mixed_model()
 
-    # Apply InferKernelList with mixed list
+    # Apply InferKernels with mixed list
     # AddStreams is KernelOp, MVAU is HWCustomOp
-    transform = InferKernelList([AddStreams, MVAU])
+    transform = InferKernels([AddStreams, MVAU])
     model, modified = transform.apply(model)
 
     # At least one should be converted
@@ -205,7 +205,7 @@ def test_infer_kernels_mixed_types():
 
 
 def test_infer_kernels_empty_list():
-    """Test InferKernelList with empty list."""
+    """Test InferKernels with empty list."""
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 64])
 
@@ -214,7 +214,7 @@ def test_infer_kernels_empty_list():
     model = ModelWrapper(helper.make_model(graph))
 
     # Apply with empty list
-    transform = InferKernelList([])
+    transform = InferKernels([])
     model, modified = transform.apply(model)
 
     assert not modified, "Should not modify with empty list"
@@ -222,7 +222,7 @@ def test_infer_kernels_empty_list():
 
 
 def test_infer_kernels_error_handling():
-    """Test that InferKernelList handles errors gracefully."""
+    """Test that InferKernels handles errors gracefully."""
     from brainsmith.kernels.addstreams import AddStreams
 
     # Create model with malformed Add node (missing datatype)
@@ -236,14 +236,14 @@ def test_infer_kernels_error_handling():
 
     # Apply transform without setting datatypes
     # Should handle gracefully (warn but not crash)
-    transform = InferKernelList([AddStreams])
+    transform = InferKernels([AddStreams])
     model, modified = transform.apply(model)
 
     assert model is not None
 
 
 def test_infer_kernels_logging():
-    """Test that InferKernelList logs appropriately."""
+    """Test that InferKernels logs appropriately."""
     from brainsmith.kernels.addstreams import AddStreams
     import logging
     from io import StringIO
@@ -264,7 +264,7 @@ def test_infer_kernels_logging():
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Capture logs
-    logger = logging.getLogger("brainsmith.transforms.infer_kernel_list")
+    logger = logging.getLogger("brainsmith.primitives.transforms.infer_kernels")
     stream = StringIO()
     handler = logging.StreamHandler(stream)
     handler.setLevel(logging.INFO)
@@ -272,7 +272,7 @@ def test_infer_kernels_logging():
     logger.setLevel(logging.INFO)
 
     # Apply transform
-    transform = InferKernelList([AddStreams])
+    transform = InferKernels([AddStreams])
     model, modified = transform.apply(model)
 
     # Check logs mention the kernel

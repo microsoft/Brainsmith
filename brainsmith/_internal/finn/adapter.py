@@ -6,6 +6,7 @@
 import importlib.util
 import logging
 import os
+import pprint
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -120,6 +121,7 @@ class FINNAdapter:
             # Convert dict to DataflowBuildConfig
             logger.debug("Creating DataflowBuildConfig with: %s", finn_config)
             config = DataflowBuildConfig(**finn_config)
+            logger.debug("DataflowBuildConfig created:\n%s", pprint.pformat(vars(config), width=80))
 
             # FINN output goes directly to console (controlled by no_stdout_redirect flag)
             steps_count = len(config.steps) if config.steps else 0

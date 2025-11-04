@@ -282,9 +282,30 @@ def _register_backend(
 # Direct decorator implementations (no factory needed)
 
 def step(obj=None, **kwargs):
-    """Register a step function or class.
+    """Register a pipeline transformation step.
 
-    Supports both @step and @step(name='custom_name') syntax.
+    Decorator for model transformation functions. Steps are discovered automatically
+    and can be used in pipeline workflows.
+
+    Args:
+        obj: Function or class being decorated (automatic when using @step without parens)
+        **kwargs: Optional configuration:
+            name: Step name (default: function/class __name__)
+
+    Returns:
+        The decorated callable, unchanged but registered in component index
+
+    Examples:
+        >>> from brainsmith.registry import step
+        >>>
+        >>> @step
+        ... def my_optimization(model, config):
+        ...     # Transform model
+        ...     return model
+        ...
+        >>> @step(name="CustomStepName")
+        ... def complex_transform(model, config):
+        ...     return model
     """
     def register(func_or_class):
         kwargs.setdefault('name', func_or_class.__name__)
@@ -296,14 +317,30 @@ def step(obj=None, **kwargs):
 def kernel(obj=None, **kwargs):
     """Register a kernel class.
 
-    Supports both @kernel and @kernel(name='custom_name') syntax.
+    Decorator for hardware kernel implementations. Supports both `@kernel` and
+    `@kernel(name='CustomName')` syntax.
 
     Args:
-        obj: Class being decorated (when used as @kernel without parens)
-        **kwargs: Decorator parameters:
+        obj: Class being decorated (automatic when using @kernel without parens)
+        **kwargs: Optional configuration:
             name: Kernel name (default: cls.op_type or cls.__name__)
-            infer_transform: Legacy FINN inference transform
-            is_infrastructure: True for topology-based kernels (default: False)
+            infer_transform: Transform class for ONNX → kernel inference
+            is_infrastructure: Mark as topology kernel like FIFO (default: False)
+
+    Returns:
+        The decorated class, unchanged but registered in component index
+
+    Examples:
+        >>> from brainsmith.registry import kernel
+        >>> from brainsmith.dataflow import KernelOp
+        >>>
+        >>> @kernel
+        ... class MyKernel(KernelOp):
+        ...     op_type = "MyKernel"
+        ...
+        >>> @kernel(name="CustomName", is_infrastructure=True)
+        ... class FIFO(HWCustomOp):
+        ...     pass
     """
     def register(cls):
         kwargs.setdefault('name', getattr(cls, 'op_type', cls.__name__))
@@ -313,9 +350,37 @@ def kernel(obj=None, **kwargs):
 
 
 def backend(obj=None, **kwargs):
-    """Register a backend class.
+    """Register a backend implementation.
 
-    Supports both @backend and @backend(...) syntax.
+    Decorator for HLS or RTL backend implementations. Backends must specify their
+    target kernel and implementation language.
+
+    Args:
+        obj: Class being decorated (automatic when using @backend without parens)
+        **kwargs: Backend configuration:
+            target_kernel (required): Kernel name this backend implements
+            language (required): Implementation language ('hls' or 'rtl')
+            name: Backend class name (default: cls.__name__)
+            variant: Optional variant identifier
+
+    Returns:
+        The decorated class, unchanged but registered in component index
+
+    Raises:
+        ValueError: If target_kernel or language missing
+
+    Examples:
+        >>> from brainsmith.registry import backend
+        >>>
+        >>> @backend(target_kernel='MVAU', language='hls')
+        ... class MVAU_hls:
+        ...     @staticmethod
+        ...     def get_nodeattr_types():
+        ...         return {...}
+        ...
+        >>> @backend(target_kernel='MVAU', language='rtl', variant='fast')
+        ... class MVAU_rtl_fast:
+        ...     pass
     """
     def register(cls):
         kwargs.setdefault('name', cls.__name__)

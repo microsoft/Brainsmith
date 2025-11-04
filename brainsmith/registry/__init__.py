@@ -128,6 +128,9 @@ from ._lookup import (
     # Metadata Access (for CLI and inspection)
     get_component_metadata,
     get_all_component_metadata,
+
+    # Domain Resolution
+    get_domain_for_backend,
 )
 
 __all__ = [
@@ -178,4 +181,7 @@ __all__ = [
     # Metadata Access
     'get_component_metadata',
     'get_all_component_metadata',
+
+    # Domain Resolution
+    'get_domain_for_backend',
 ]
