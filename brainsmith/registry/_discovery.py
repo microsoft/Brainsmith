@@ -382,20 +382,19 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
 # ============================================================================
 
 def discover_components(use_cache: bool = True, force_refresh: bool = False):
-    """Discover and load all components from configured sources.
+    """Discover components from all configured sources.
 
-    This loads:
-    1. Core brainsmith components (kernels, steps) via direct imports
-    2. Component packages from component_sources (must have __init__.py)
-    3. Entry points from pip-installed packages (e.g., FINN)
+    Discovers kernels, backends, and steps from:
+    - Core brainsmith components
+    - Project components (if configured)
+    - Entry points from installed packages (e.g., FINN)
+    - Custom component sources
 
-    Components self-register during import using the global registry.
-
-    This is called automatically on first component lookup.
+    Called automatically on first component lookup.
 
     Args:
-        use_cache: If True, try to load from cached manifest
-        force_refresh: If True, ignore cache and regenerate manifest
+        use_cache: Use cached manifest if available
+        force_refresh: Ignore cache and regenerate manifest
     """
     global _components_discovered
 

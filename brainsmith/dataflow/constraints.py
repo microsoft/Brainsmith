@@ -57,16 +57,14 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class Constraint(Protocol):
-    """A validation rule that can be checked in any context.
+    """Validation rule for kernel constraints.
 
-    Constraints are pure predicates - they describe what must be true.
-    They use duck typing to work with any validation context that provides
-    the required methods (get_datatype, get_shape, is_dynamic, get_param, etc.).
+    Pure predicate that validates kernel properties during construction.
+    Uses duck typing to work with any validation context providing required methods.
 
-    Implementations must provide:
-    - check(ctx) → Optional[str]  # ctx is any object with required methods
+    Required methods:
+    - check(ctx) → Optional[str]
     - describe() → str
-    - evaluation_phase property → str (optional, default provided)
     """
 
     def check(self, ctx) -> Optional[str]:

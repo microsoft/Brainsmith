@@ -195,16 +195,13 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
 
 
 class SystemConfig(BaseSettings):
-    """The complete truth about Brainsmith configuration.
+    """Configuration schema with hierarchical priority.
 
-    Configuration priority (following pydantic-settings convention):
-    1. CLI arguments (passed to constructor) - HIGHEST
+    Priority order (highest to lowest):
+    1. CLI arguments (passed to constructor)
     2. Environment variables (BSMITH_* prefix)
     3. Project config (.brainsmith/config.yaml)
-    4. Built-in defaults (Field defaults) - LOWEST
-
-    Note: We only read BSMITH_* env vars, and only export FINN_* vars
-    to avoid configuration feedback loops.
+    4. Built-in defaults
     """
 
     # NOTE: bsmith_dir is now a cached property, not a configurable field
@@ -594,17 +591,11 @@ class SystemConfig(BaseSettings):
     # Activation Script Generation
 
     def generate_activation_script(self, output_path: Path) -> Path:
-        """Generate idempotent bash activation script from current configuration.
+        """Generate bash activation script from current configuration.
 
-        The generated script:
-        - Is safe to source multiple times (idempotent)
+        The script can be sourced multiple times safely:
         - Cleans up old Xilinx/brainsmith paths before adding new ones
         - Sources Xilinx settings64.sh files for complete tool environment
-        - Can be re-sourced after config changes (no deactivate needed)
-
-        This is the inverse of environment variable loading:
-        - Pydantic READS env vars to build config
-        - This method WRITES env vars from config
 
         Args:
             output_path: Where to write the activation script
@@ -694,7 +685,7 @@ class SystemConfig(BaseSettings):
         - Watches .brainsmith/config.yaml for changes
         - Auto-regenerates environment when config changes
         - Sources .brainsmith/env.sh for all environment variables
-        - Activates virtualenv using direnv's layout python
+        - Activates virtualenv automatically
 
         User must run 'direnv allow' to trust the file.
 

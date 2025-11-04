@@ -47,19 +47,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BuildContext:
-    """Context for building a KernelDesignSpace.
+    """Build context for kernel design space construction.
 
     Encapsulates all data needed to build a KernelDesignSpace from a schema.
-    Makes dependencies explicit and enables testing without FINN infrastructure.
 
     Attributes:
         schema: KernelSchema defining structure
         model_w: ModelWrapper for ONNX graph access
         node_inputs: ONNX node input tensor names
         node_outputs: ONNX node output tensor names
-        param_getter: Function to retrieve nodeattr values (e.g., get_nodeattr)
-        param_setter: Function to store nodeattr values (e.g., set_nodeattr)
-        node_name: Node name for error messages (optional)
+        param_getter: Function to retrieve nodeattr values
+        param_setter: Function to store nodeattr values
+        node_name: Node name for error messages
     """
     schema: KernelSchema
     model_w: ModelWrapper
@@ -71,20 +70,11 @@ class BuildContext:
 
 
 class DesignSpaceBuilder:
-    """Builds kernel design space from schema + ONNX context.
+    """Builds kernel design space from schema and ONNX context.
 
-    Separates model construction logic from KernelOp (FINN integration).
-    Can be used independently for testing, tooling, or non-FINN contexts.
-
-    Design space exploration (DSE) workflow:
-    1. build() creates KernelDesignSpace once (properties that don't vary)
-       - Tensor shapes from ONNX graph
-       - Block shapes from block_tiling templates
-       - Datatypes from ONNX graph or derivation
-       - Valid parallelization parameter ranges
-    2. design_space.configure() creates KernelDesignPoint many times (fast)
-       - Stream shapes from stream_tiling templates + parallelization params
-       - Parametric constraint validation
+    Two-phase construction:
+    1. build() creates KernelDesignSpace once (tensor/block shapes, datatypes, valid ranges)
+    2. design_space.configure() creates KernelDesignPoint many times (stream shapes for specific params)
 
     Example:
         >>> builder = DesignSpaceBuilder()
@@ -98,7 +88,7 @@ class DesignSpaceBuilder:
         ...     node_name=node.name
         ... )
         >>> design_space = builder.build(context)
-        >>> config = design_space.configure({"SIMD": 64, "PE": 1})
+        >>> point = design_space.configure({"SIMD": 64, "PE": 1})
     """
 
     def _resolve_datatype_spec(

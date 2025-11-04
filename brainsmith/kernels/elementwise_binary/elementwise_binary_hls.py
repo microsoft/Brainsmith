@@ -62,7 +62,6 @@ class BufferDeclaration:
 
 
 @backend(
-    name="ElementwiseBinaryOpHLS",
     target_kernel="brainsmith:ElementwiseBinaryOp",
     language="hls",
     author="Migrated from AMD FINN by Thomas Keller"

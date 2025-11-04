@@ -18,8 +18,10 @@ from typing import Any, Dict, Optional, Type, Union
 class ComponentType(Enum):
     """Component type enumeration.
 
-    Provides type-safe component type identifiers with string conversion
-    support for JSON serialization.
+    Attributes:
+        KERNEL: Hardware kernel operation
+        BACKEND: HLS or RTL backend implementation
+        STEP: Pipeline transformation step
     """
     KERNEL = auto()
     BACKEND = auto()
@@ -60,11 +62,11 @@ class ComponentType(Enum):
 
 @dataclass
 class ImportSpec:
-    """Lazy import specification: module + attr.
+    """Import specification for lazy component loading.
 
-    Stores the information needed to lazy-load a component:
-    - module: Python module path (e.g., 'brainsmith.kernels.layernorm')
-    - attr: Attribute name in module (e.g., 'LayerNorm')
+    Attributes:
+        module: Python module path (e.g., 'brainsmith.kernels.layernorm')
+        attr: Attribute name in module (e.g., 'LayerNorm')
     """
     module: str
     attr: str
@@ -72,13 +74,21 @@ class ImportSpec:
 
 @dataclass
 class ComponentMetadata:
-    """Component metadata for unified lazy loading.
+    """Metadata for registered component.
 
-    Represents a discovered component with all information needed to:
-    - Identify it (name, source, type)
-    - Load it on demand (import_spec)
-    - Track its state (loaded_obj)
-    - Store type-specific metadata (kernel/backend fields)
+    Contains all information needed to identify, load, and inspect a component.
+
+    Attributes:
+        name: Component name (without source prefix)
+        source: Source identifier (e.g., 'brainsmith', 'finn', 'project')
+        component_type: Component type (kernel, backend, or step)
+        import_spec: Import specification for lazy loading
+        loaded_obj: Loaded component instance (None if not yet loaded)
+        kernel_infer: InferTransform class (kernels only)
+        kernel_backends: List of backend names targeting this kernel (kernels only)
+        is_infrastructure: True for topology kernels like FIFO (kernels only)
+        backend_target: Target kernel name (backends only)
+        backend_language: Implementation language 'hls' or 'rtl' (backends only)
     """
     name: str
     source: str

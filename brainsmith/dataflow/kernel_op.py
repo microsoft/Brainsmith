@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 class KernelOpError(Exception):
-    """Kernel operator exception with node context."""
+    """Exception raised by kernel operators with node context.
+
+    Attributes:
+        node: ONNX node that caused the error
+        message: Error message
+    """
     def __init__(self, node, message):
         self.node = node
         super().__init__(f"{node.name}: {message}")

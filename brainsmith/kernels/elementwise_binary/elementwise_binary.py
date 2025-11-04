@@ -33,7 +33,7 @@ from brainsmith.dataflow import KernelOp, FULL_DIM
 from brainsmith.dataflow.types import VALUE_OPTIMIZED
 from brainsmith.dataflow.transformation import TransformationResult
 from brainsmith.dataflow.spec_helpers import (
-    add_datatype, sub_datatype, mul_datatype, smallest_datatype_for_range
+    add_datatype, sub_datatype, smallest_datatype_for_range
 )
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
@@ -117,7 +117,15 @@ def _elementwise_binary_output_datatype():
         elif func == "Sub":
             return sub_datatype("lhs", "rhs")(interfaces, param_getter, model, tensor_name)
         elif func == "Mul":
-            return mul_datatype("lhs", "rhs")(interfaces, param_getter, model, tensor_name)
+            # Use FINN's formula: output_width = lhs_width + rhs_width (Vivado HLS UG1399)
+            # This follows hardware synthesis rules for multiplication
+            lhs_dt = interfaces["lhs"].datatype
+            rhs_dt = interfaces["rhs"].datatype
+            lhs_width = lhs_dt.bitwidth()
+            rhs_width = rhs_dt.bitwidth()
+            signed = lhs_dt.signed() or rhs_dt.signed()
+            output_width = lhs_width + rhs_width
+            return DataType[f"INT{output_width}" if signed else f"UINT{output_width}"]
         elif func == "Div":
             return _derive_div_datatype(interfaces, param_getter, model, tensor_name)
 
@@ -134,7 +142,8 @@ def _elementwise_binary_output_datatype():
             return _derive_bitwise_datatype(interfaces, param_getter, model, tensor_name)
 
         # BitShift operations → use LHS datatype (shift doesn't change type)
-        elif func in ("BitShiftLeft", "BitShiftRight"):
+        # Note: "BitShift" is the standard ONNX operation (direction in attribute)
+        elif func == "BitShift":
             return interfaces["lhs"].datatype
 
         else:
@@ -240,6 +249,11 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
         "input_pattern": (
             "s", True, "dynamic_static",
             {"dynamic_static", "dynamic_dynamic"}
+        ),
+        # Direction for BitShift operations (optional, only used when func="BitShift")
+        "direction": (
+            "s", False, "",  # Optional parameter
+            {"LEFT", "RIGHT", ""}
         ),
     },
 
@@ -436,6 +450,23 @@ class ElementwiseBinaryOp(KernelOp):
             input_pattern=input_pattern,  # NEW: Track which pattern is active
         )
 
+        # Copy direction attribute for BitShift operations
+        if node.op_type == "BitShift":
+            from onnx import helper as onnx_helper
+            direction_attr = None
+            for attr in node.attribute:
+                if attr.name == "direction":
+                    direction_attr = onnx_helper.get_attribute_value(attr)
+                    break
+            if direction_attr:
+                hw_node.attribute.append(
+                    onnx_helper.make_attribute("direction", direction_attr)
+                )
+            else:
+                raise ValueError(
+                    f"BitShift node {node.name} missing required 'direction' attribute"
+                )
+
         # Return transformation result
         return TransformationResult(
             nodes_to_remove=[node],
@@ -451,12 +482,26 @@ class ElementwiseBinaryOp(KernelOp):
         """NumPy operation for execute_node() simulation.
 
         Maps 'func' parameter to corresponding NumPy ufunc.
+        For BitShift operations, also considers 'direction' attribute.
 
         Returns:
             NumPy ufunc for the operation
         """
         from .operations import BinaryOperations
+        import numpy as np
+
         func = self.get_nodeattr("func")
+
+        # Special handling for BitShift with direction attribute
+        if func == "BitShift":
+            direction = self.get_nodeattr("direction")
+            if direction == "LEFT":
+                return np.left_shift
+            elif direction == "RIGHT":
+                return np.right_shift
+            else:
+                raise ValueError(f"Invalid BitShift direction: {direction} (must be LEFT or RIGHT)")
+
         return BinaryOperations.get_npy_op(func)
 
     @property
@@ -465,12 +510,25 @@ class ElementwiseBinaryOp(KernelOp):
 
         Maps 'func' parameter to C++ expression template.
         Templates use {0} for LHS and {1} for RHS.
+        For BitShift operations, also considers 'direction' attribute.
 
         Returns:
             C++ expression template string
         """
         from .operations import BinaryOperations
+
         func = self.get_nodeattr("func")
+
+        # Special handling for BitShift with direction attribute
+        if func == "BitShift":
+            direction = self.get_nodeattr("direction")
+            if direction == "LEFT":
+                return "({0} << {1})"
+            elif direction == "RIGHT":
+                return "({0} >> {1})"
+            else:
+                raise ValueError(f"Invalid BitShift direction: {direction} (must be LEFT or RIGHT)")
+
         return BinaryOperations.get_cpp_template(func)
 
     # ================================================================

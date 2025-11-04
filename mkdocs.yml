@@ -99,18 +99,19 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quickstart.md
     - Configuration: getting-started/configuration.md
-  - Architecture:
-    - Overview: architecture/index.md
-    - Understanding Kernels: architecture/understanding-kernels.md
-    - Dataflow Accelerators: architecture/dataflow.md
-    - Kernel Modeling: architecture/kernel-modeling.md
-    - Design Space Exploration: architecture/dse.md
-    - Kernels: architecture/kernels.md
-    - Component Registry: architecture/registry.md
-  - User Guide:
-    - Overview: user-guide/index.md
-    - Blueprints: user-guide/blueprints.md
-    - CLI Reference: user-guide/cli.md
+  - Developer Guide:
+    - Overview: developer-guide/index.md
+    - 1. Foundations:
+      - Understanding Kernels: developer-guide/1-foundations/understanding-kernels.md
+      - Dataflow Accelerators: developer-guide/1-foundations/dataflow-accelerators.md
+    - 2. Core Systems:
+      - Design Space Exploration: developer-guide/2-core-systems/design-space-exploration.md
+      - Kernel Modeling: developer-guide/2-core-systems/kernel-modeling.md
+      - Component Registry: developer-guide/2-core-systems/component-registry.md
+    - 3. Reference:
+      - Kernels: developer-guide/3-reference/kernels.md
+      - Blueprints: developer-guide/3-reference/blueprints.md
+      - CLI Reference: developer-guide/3-reference/cli.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md

@@ -102,7 +102,7 @@ source = ["brainsmith"]
 omit = ["*/tests/*"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 # Relaxed settings for alpha (pre-release) stage
 ignore_missing_imports = true
 allow_untyped_defs = true
@@ -124,7 +124,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 
 # Core dependencies - critical for basic functionality
 click = "~=8.1.7"
@@ -136,18 +136,20 @@ packaging = "~=25.0"
 typing-extensions = "~=4.10"
 
 # Scientific computing
-numpy = "~=1.24.1"
+numpy = "~=2.3.0"
 scipy = "~=1.15.0"
 
-# Deep learning frameworks
+# Deep learning frameworks & utilities
+ml-dtypes = "~=0.5.3"
 torch = "~=2.7.0"
 torchvision = "~=0.22.0"  # Required by finn/brevitas
-transformers = "~=4.46.3"
+transformers = "~=4.48.3"
 
 # ONNX ecosystem
 onnx = "~=1.17.0"
 onnxoptimizer = "~=0.3.13"
-onnxruntime = "~=1.18.1"
+onnxruntime = "~=1.23.2"
+onnxscript = "~=0.5.4"
 onnxsim = "~=0.4.36"
 
 # Visualization and debugging
@@ -192,10 +194,9 @@ dependencies = "~=2.0.1"  # Required by brevitas
 # PRE-RELEASE NOTE: Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
 # The repositories are cloned to ./deps/ and installed as editable local packages
 # For open source release, these will be converted to proper git dependencies in pyproject.toml
-brevitas = {path = "deps/brevitas", develop = true}
+brevitas = {path = "deps/brevitas", develop = true, python = ">=3.11,<3.13"}
 qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}
-onnxscript = {path = "deps/onnxscript", develop = true}
 finn-experimental = {path = "deps/finn-experimental", develop = true}
 # dataset-loading = {path = "deps/dataset-loading", develop = true}  # Temporarily commented - missing
 

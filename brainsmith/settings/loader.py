@@ -56,25 +56,25 @@ def load_config(
     project_file: Optional[Path] = None,
     **cli_overrides
 ) -> SystemConfig:
-    """Load configuration with pydantic-settings priority resolution.
+    """Load configuration with hierarchical priority.
 
     Priority order (highest to lowest):
-    1. CLI arguments (passed as kwargs) - resolve paths to CWD
-    2. Environment variables (BSMITH_* prefix) - resolve paths to project_dir
-    3. Project config file (.brainsmith/config.yaml) - resolve paths to project_dir
-    4. Built-in defaults (from schema Field defaults)
+    1. CLI arguments (passed as kwargs)
+    2. Environment variables (BSMITH_* prefix)
+    3. Project config file (.brainsmith/config.yaml)
+    4. Built-in defaults
 
-    Path Resolution Rules:
-    - Full paths: Always used as-is
-    - Relative paths from CLI: Resolve to current working directory
-    - Relative paths from YAML/env/defaults: Resolve to project directory
+    Path Resolution:
+    - Absolute paths: Used as-is
+    - Relative CLI paths: Resolve to current working directory
+    - Relative paths (YAML/env/defaults): Resolve to project directory
 
     Args:
         project_file: Path to project config file (for non-standard locations)
         **cli_overrides: CLI argument overrides
 
     Returns:
-        Validated SystemConfig object
+        SystemConfig object
     """
     try:
         cli_overrides = _resolve_cli_paths(cli_overrides)
@@ -94,19 +94,10 @@ def load_config(
 
 @lru_cache(maxsize=1)
 def get_config() -> SystemConfig:
-    """Get singleton configuration instance (cached).
+    """Get cached configuration instance.
 
-    This loads the configuration once and caches it for the session.
-    Call reset_config() to clear the cache.
-
-    IMPORTANT: Expects environment to be sourced before running Python:
-        source .brainsmith/env.sh
-    or:
-        direnv allow
-
-    Environment variables (FINN_ROOT, VIVADO_PATH, etc.) must be set
-    externally to ensure consistent environment across Python and all
-    subprocesses.
+    Environment must be sourced first:
+        source .brainsmith/env.sh  # or: direnv allow
     """
     config = load_config()
     return config

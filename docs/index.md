@@ -55,11 +55,11 @@ Get performance estimates across all configurations in 30-60 minutes. Choose you
 
 **Ready to build your own?**
 → [Installation](getting-started/installation.md) - Set up your development environment
-→ [Blueprints](user-guide/blueprints.md) - Learn the configuration format
+→ [Blueprints](developer-guide/3-reference/blueprints.md) - Learn the configuration format
 
 **Extending Brainsmith?**
-→ [Component Registry](architecture/registry.md) - Add custom kernels and transforms
-→ [Kernels](architecture/kernels.md) - Understand kernel architecture and create custom operations
+→ [Component Registry](developer-guide/2-core-systems/component-registry.md) - Add custom kernels and transforms
+→ [Kernels](developer-guide/3-reference/kernels.md) - Understand kernel architecture and create custom operations
 
 ---
 

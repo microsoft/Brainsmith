@@ -21,17 +21,13 @@ _LIBUDEV_PATH = "/lib/x86_64-linux-gnu/libudev.so.1"
 
 
 class EnvironmentExporter:
-    """Handles environment variable export for external tools.
+    """Export configuration as environment variables for shell scripts.
 
-    Exports configuration to environment variables consumed by:
+    Generates environment variable dictionaries for:
     - FINN (FINN_ROOT, FINN_BUILD_DIR, etc.)
     - Xilinx tools (VIVADO_PATH, XILINX_VIVADO, etc.)
     - Visualization tools (NETRON_PORT)
     - BSMITH_* variables (for YAML ${var} expansion in blueprints)
-
-    Internal BSMITH_* variables are exported by default in normal operation
-    to support blueprint YAML expansion (e.g., ${BSMITH_DIR}/examples/...).
-    The @lru_cache decorator on get_config() prevents feedback loops.
 
     Example:
         >>> config = SystemConfig()
@@ -41,18 +37,14 @@ class EnvironmentExporter:
     """
 
     def __init__(self, config: 'SystemConfig'):
-        """Initialize environment exporter with configuration.
-
-        Args:
-            config: SystemConfig instance to export from
-        """
+        """Initialize with system configuration."""
         self.config = config
 
     def to_external_dict(self) -> Dict[str, str]:
-        """Generate dict of external environment variables.
+        """Generate dict of external tool environment variables.
 
-        Returns only variables consumed by external tools (FINN, Xilinx, etc).
-        Internal BSMITH_* variables are excluded (use to_all_dict() for those).
+        Returns variables for external tools (FINN, Xilinx, etc.).
+        Excludes internal BSMITH_* variables.
 
         Returns:
             Dict of environment variable names to string values
@@ -100,9 +92,9 @@ class EnvironmentExporter:
         return env
 
     def to_all_dict(self) -> Dict[str, str]:
-        """Generate dict of ALL environment variables including internal ones.
+        """Generate dict of all environment variables.
 
-        Includes internal BSMITH_* variables needed for YAML expansion.
+        Includes both external tool variables and internal BSMITH_* variables.
 
         Returns:
             Dict of all environment variables
@@ -120,26 +112,16 @@ class EnvironmentExporter:
         self,
         include_internal: bool = True
     ) -> Dict[str, str]:
-        """Generate environment variable dictionary for shell script generation.
+        """Generate complete environment for shell script generation.
 
-        This method builds a complete environment dictionary but does NOT mutate
-        os.environ. It is used ONLY for generating activation scripts (env.sh,
-        .envrc).
-
-        Python runtime expects environment to be set externally via sourced shell
-        scripts before Python starts, ensuring consistent environment across Python
-        processes and all subprocesses (including FINN's shell invocations).
-
-        By default, includes all configuration including internal BSMITH_* variables
-        (needed for blueprint YAML ${var} expansion and kernel compilation).
+        Includes PATH, LD_LIBRARY_PATH, and all configuration variables.
+        Used by generate_activation_script() and generate_direnv_file().
 
         Args:
-            include_internal: If True (default), include internal BSMITH_* variables.
-                            Set to False to include only external tool variables
-                            (FINN_*, XILINX_*, etc).
+            include_internal: Include internal BSMITH_* variables (default: True)
 
         Returns:
-            Dict of environment variable names to string values (read-only)
+            Dict of environment variable names to string values
         """
         if include_internal:
             env_dict = self.to_all_dict()

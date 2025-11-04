@@ -137,6 +137,13 @@ def build_tree(
 
     Separates tree construction from execution for inspection and validation.
 
+    Args:
+        design_space: GlobalDesignSpace with steps and kernel backends
+        config: DSEConfig with FINN configuration
+
+    Returns:
+        DSETree ready for execution
+
     Raises:
         ValueError: If tree exceeds max_combinations limit
     """
@@ -156,10 +163,17 @@ def execute_tree(
     Separates execution from tree construction for custom execution strategies.
 
     Args:
-        runner: Custom segment runner (optional, uses default if None)
+        tree: Pre-built DSETree to execute
+        model_path: Path to initial ONNX model
+        config: DSEConfig (used for validation)
+        output_dir: Base output directory
+        runner: Custom segment runner (uses default if None)
+
+    Returns:
+        TreeExecutionResult with segment results
 
     Raises:
-        RuntimeError: If no successful builds were produced
+        ExecutionError: If no successful builds were produced
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

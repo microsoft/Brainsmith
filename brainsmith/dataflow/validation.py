@@ -85,20 +85,16 @@ def _find_interface_in_dicts(name: str, inputs: Dict, outputs: Dict) -> Any:
 # =============================================================================
 
 class ValidationError(ValueError):
-    """Validation error with optional context and suggestions.
-
-    Can be raised with just a message string (like standard exceptions),
-    or with additional context for detailed error reporting.
+    """Validation error with context and suggestions.
 
     Args:
         message: Error message
-        location: Optional context (e.g., "input.stream[1]", "output.block[0]")
-        suggestions: Optional list of suggestions for fixing the error
+        location: Optional context (e.g., "input.stream[1]")
+        suggestions: Optional list of suggestions
 
     Examples:
         >>> raise ValidationError("Invalid parameter")
         >>> raise ValidationError("PE must divide 768", location="output.stream[1]")
-        >>> raise ValidationError("Bad value", suggestions=["Try PE=16", "Try PE=32"])
     """
 
     def __init__(self, message: str, location: str = "", suggestions: list = None):
@@ -131,19 +127,16 @@ class ValidationError(ValueError):
 
 @dataclass
 class DesignSpaceValidationContext:
-    """Validation context for design space structural constraints.
+    """Validation context for structural constraints during design space build.
 
-    Used during KernelDesignSpace.build() to validate constraints that
-    determine backend compatibility (tensor shapes, block shapes, datatypes).
+    Used during KernelDesignSpace construction to validate tensor shapes,
+    block shapes, and datatypes. Stream shapes not available until configure().
 
-    Stream shapes are NOT available yet - those are optimization parameters and validated
-    during configure().
-
-    Args:
-        inputs: Dict[str, InterfaceDesignSpace] - input interfaces
-        outputs: Dict[str, InterfaceDesignSpace] - output interfaces
-        internal_datatypes: Dict[str, DataType] - internal datatype storage
-        param_getter: Optional callable to retrieve nodeattr values (for rare block_tiling params)
+    Attributes:
+        inputs: Input interfaces (InterfaceDesignSpace)
+        outputs: Output interfaces (InterfaceDesignSpace)
+        internal_datatypes: Internal datatypes
+        param_getter: Optional nodeattr getter
 
     Example:
         ctx = DesignSpaceValidationContext(
@@ -293,16 +286,14 @@ class DesignSpaceValidationContext:
 
 @dataclass
 class ConfigurationValidationContext:
-    """Validation context for configuration optimization constraints.
+    """Validation context for optimization constraints during configure().
 
-    Used during KernelDesignSpace.configure() to validate constraints that
-    bound the optimization space (stream shapes, parallelization parameters).
+    Used during KernelDesignSpace.configure() to validate constraints on
+    stream shapes and parallelization parameters.
 
-    All shape hierarchies are available (tensor, block, stream).
-
-    Args:
+    Attributes:
         configured_model: KernelDesignPoint with configured interfaces
-        params: Dict[str, int] - parallelization parameters
+        params: Parallelization parameters
 
     Example:
         ctx = ConfigurationValidationContext(

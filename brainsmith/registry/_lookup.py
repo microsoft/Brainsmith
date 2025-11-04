@@ -260,18 +260,16 @@ def get_kernel(name: str) -> Type:
 
 
 def get_kernel_infer(name: str) -> Type:
-    """Get kernel's InferTransform class.
-
-    Accepts both short names (uses default_source) and fully-qualified names (source:name).
+    """Get kernel's inference transform class.
 
     Args:
-        name: Kernel name (e.g., 'LayerNorm' or 'user:LayerNorm')
+        name: Kernel name (short or qualified)
 
     Returns:
-        InferTransform class
+        InferTransform class for ONNX → kernel conversion
 
     Raises:
-        KeyError: If kernel has no InferTransform
+        KeyError: If kernel not found or has no InferTransform
 
     Examples:
         >>> InferLayerNorm = get_kernel_infer('LayerNorm')
@@ -480,17 +478,14 @@ def list_backends(source: Optional[str] = None) -> List[str]:
 # ============================================================================
 
 def get_component_metadata(name: str, component_type: str):
-    """Get metadata for a component without loading it.
-
-    Useful for inspection and CLI commands that need component information
-    without triggering imports.
+    """Get component metadata without loading.
 
     Args:
-        name: Component name (with or without source prefix)
-        component_type: Type of component ('step', 'kernel', 'backend')
+        name: Component name (short or qualified)
+        component_type: Component type ('step', 'kernel', 'backend')
 
     Returns:
-        ComponentMetadata object
+        ComponentMetadata with source, import spec, and type-specific fields
 
     Raises:
         KeyError: If component not found
@@ -498,7 +493,7 @@ def get_component_metadata(name: str, component_type: str):
     Examples:
         >>> meta = get_component_metadata('LayerNorm', 'kernel')
         >>> print(meta.source, meta.import_spec.module)
-        brainsmith brainsmith.kernels.layernorm.layernorm
+        brainsmith brainsmith.kernels.layernorm
     """
     if not _components_discovered:
         discover_components()
@@ -513,9 +508,7 @@ def get_component_metadata(name: str, component_type: str):
 
 
 def get_all_component_metadata() -> Dict[str, Any]:
-    """Get all component metadata (for CLI/inspection).
-
-    Returns a copy of the component index for safe iteration and inspection.
+    """Get all component metadata.
 
     Returns:
         Dict mapping full_name (source:name) to ComponentMetadata
@@ -536,14 +529,10 @@ def get_all_component_metadata() -> Dict[str, Any]:
 # ============================================================================
 
 def get_domain_for_backend(backend_name: str) -> str:
-    """Get ONNX domain for a backend based on its source.
-
-    Domain resolution rules:
-    - FINN: finn.custom_op.fpgadataflow.{language} (e.g., .hls or .rtl suffix)
-    - Other sources: {module}.kernels (e.g., brainsmith.kernels, mycompany.kernels)
+    """Get ONNX domain for backend based on source.
 
     Args:
-        backend_name: Backend name (e.g., 'brainsmith:LayerNorm_hls', 'finn:MVAU_hls')
+        backend_name: Backend name (short or qualified)
 
     Returns:
         ONNX domain string
@@ -553,8 +542,6 @@ def get_domain_for_backend(backend_name: str) -> str:
         'brainsmith.kernels'
         >>> get_domain_for_backend('finn:MVAU_hls')
         'finn.custom_op.fpgadataflow.hls'
-        >>> get_domain_for_backend('mycompany:CustomKernel_rtl')
-        'mycompany.kernels'
     """
     from brainsmith.settings import get_config
 

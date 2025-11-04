@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class SegmentStatus(Enum):
+    """Execution status for DSE segments.
+
+    Attributes:
+        PENDING: Segment not yet executed
+        RUNNING: Segment currently executing
+        COMPLETED: Segment executed successfully
+        FAILED: Segment execution failed
+        SKIPPED: Segment skipped due to parent failure
+    """
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,6 +34,13 @@ class SegmentStatus(Enum):
 
 
 class OutputType(Enum):
+    """Build output types for DSE execution.
+
+    Attributes:
+        ESTIMATES: Performance estimates only (fastest)
+        RTL: RTL simulation and IP generation
+        BITFILE: Full bitstream generation (slowest)
+    """
     ESTIMATES = "estimates"
     RTL = "rtl"
     BITFILE = "bitfile"
@@ -81,6 +97,17 @@ class OutputType(Enum):
 
 @dataclass
 class SegmentResult:
+    """Result from executing a single DSE segment.
+
+    Attributes:
+        segment_id: Unique identifier for the segment
+        status: Execution status (completed, failed, skipped, etc.)
+        output_model: Path to output ONNX model (if successful)
+        output_dir: Directory containing build artifacts
+        error: Error message (if failed)
+        execution_time: Execution time in seconds
+        cached: Whether result was retrieved from cache
+    """
     segment_id: str
     status: SegmentStatus
     output_model: Optional[Path] = None
@@ -162,5 +189,6 @@ class TreeExecutionResult:
 
 
 class ExecutionError(Exception):
+    """Exception raised during DSE execution failures."""
     pass
 

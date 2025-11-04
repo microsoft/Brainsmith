@@ -147,20 +147,14 @@ class BinaryOperations:
         description="Bitwise XOR"
     )
 
-    # Bit Shift Operations (2)
-    BIT_SHIFT_LEFT = BinaryOperation(
-        name="BitShiftLeft",
+    # Bit Shift Operation (1)
+    # ONNX standard: BitShift with direction attribute ("LEFT" or "RIGHT")
+    BIT_SHIFT = BinaryOperation(
+        name="BitShift",
         category="bitshift",
-        npy_op=np.left_shift,
-        cpp_template="({0} << {1})",
-        description="Left bit shift"
-    )
-    BIT_SHIFT_RIGHT = BinaryOperation(
-        name="BitShiftRight",
-        category="bitshift",
-        npy_op=np.right_shift,
-        cpp_template="({0} >> {1})",
-        description="Right bit shift"
+        npy_op=np.left_shift,  # Default to left shift; actual operation determined by direction attribute
+        cpp_template="({0} << {1})",  # Default template; actual template determined by direction attribute
+        description="Bit shift (direction determined by attribute)"
     )
 
     # Internal registry
@@ -169,7 +163,7 @@ class BinaryOperations:
         AND, OR, XOR,
         EQUAL, LESS, LESS_OR_EQUAL, GREATER, GREATER_OR_EQUAL,
         BITWISE_AND, BITWISE_OR, BITWISE_XOR,
-        BIT_SHIFT_LEFT, BIT_SHIFT_RIGHT
+        BIT_SHIFT
     ]
 
     _OPERATION_MAP = {op.name: op for op in _ALL_OPERATIONS}

@@ -25,36 +25,27 @@ from typing import Iterator, Literal, Optional, Tuple
 
 @dataclass(frozen=True)
 class OrderedDimension:
-    """Ordered dimension values with indexing and navigation.
+    """Ordered dimension for DSE navigation.
 
     Stores discrete values in sorted order, enabling navigation operations
-    like stepping up/down, indexing by percentage, and min/max access.
+    like stepping, percentage-based indexing, and min/max access.
 
     Used for parallelization parameters (PE, SIMD, MW, MH) and other
-    explorable dimensions with natural ordering (depth, num_layers, etc.).
-
-    Contrasts with discrete (unordered) dimensions which only support
-    membership testing and are validated by FINN's nodeattr system.
+    explorable dimensions with natural ordering.
 
     Attributes:
         name: Dimension name (e.g., "SIMD", "PE", "depth")
-        values: Ordered tuple of valid values (immutable, sorted, unique)
-        default: Default value (None = use minimum)
+        values: Sorted tuple of valid values
+        default: Default value (None = minimum)
 
     Examples:
-        >>> # Tiling dimension (from divisors)
         >>> simd = OrderedDimension("SIMD", (1, 2, 4, 8, 16, 32, 64))
         >>> simd.min()
         1
-        >>> simd.max()
-        64
         >>> simd.at_percentage(0.5)
         8
-
-        >>> # Custom DSE dimension
-        >>> depth = OrderedDimension("depth", (128, 256, 512, 1024), default=256)
-        >>> depth.step_up(256, n=2)
-        1024
+        >>> simd.step_up(8, n=2)
+        32
     """
 
     name: str

@@ -338,6 +338,9 @@ class RTLSimExecutor:
         except ImportError:
             pytest.skip("RTLBackend/HLSBackend not available")
 
+        # Track code generation directory for error messages
+        code_gen_dir = None
+
         try:
             # Ensure node has a name (required for HLS synthesis)
             from qonnx.transformation.general import GiveUniqueNodeNames
@@ -363,11 +366,15 @@ class RTLSimExecutor:
                 # HLS backend: Use FINN's transformation pipeline
                 model = model.transform(PrepareIP(self.fpgapart, self.clk_ns))
                 model = model.transform(HLSSynthIP())
+                # Get code_gen_dir for error messages
+                hw_node = model.graph.node[0]
+                op = getHWCustomOp(hw_node, model)
+                code_gen_dir = op.get_nodeattr("code_gen_dir_ipgen")
             elif is_rtl_backend:
                 # RTL backend: Generate HDL directly (no HLS synthesis needed)
                 # For RTL, we still need to set code_gen_dir_ipgen
-                tmpdir = tempfile.mkdtemp(prefix=f"rtlsim_{op.__class__.__name__}_")
-                op.set_nodeattr("code_gen_dir_ipgen", tmpdir)
+                code_gen_dir = tempfile.mkdtemp(prefix=f"rtlsim_{op.__class__.__name__}_")
+                op.set_nodeattr("code_gen_dir_ipgen", code_gen_dir)
                 op.generate_hdl(model, fpgapart=self.fpgapart)
             else:
                 raise RuntimeError(f"Unknown backend type for {op.__class__.__name__}")
@@ -381,6 +388,7 @@ class RTLSimExecutor:
             op = getHWCustomOp(hw_node, model)
 
         except Exception as e:
+            debug_dir_msg = f"1. Check {code_gen_dir} for generated HDL/HLS files\n" if code_gen_dir else ""
             pytest.fail(
                 f"rtlsim preparation failed for {op.__class__.__name__}:\n"
                 f"\n"
@@ -389,7 +397,7 @@ class RTLSimExecutor:
                 f"This indicates an HDL generation or simulation setup bug.\n"
                 f"\n"
                 f"Debug steps:\n"
-                f"1. Check {tmpdir} for generated HDL/HLS files\n"
+                f"{debug_dir_msg}"
                 f"2. Look for Vitis HLS synthesis errors (HLS) or xsim compilation errors (RTL)\n"
                 f"3. Compare with working backend implementation"
             )

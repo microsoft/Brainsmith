@@ -16,10 +16,13 @@ import functools
 
 # Type aliases
 Shape = Tuple[int, ...]
+"""Immutable tensor shape (e.g., (1, 784))"""
 
-# New unified shape expression types for kernel integrator integration
-ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
-ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
+ShapeExpr = Union[int, str]
+"""Single dimension expression: 784 or 'N'"""
+
+ShapeSpec = List[ShapeExpr]
+"""Complete shape specification: [1, 784] or ['N', 768]"""
 
 # Sentinel for "copy full dimension" in tiling specs
 class _FullDimType:
@@ -64,12 +67,12 @@ FULL_SHAPE = _FullShapeType()
 # === Enums ===
 
 class ShapeHierarchy(Enum):
-    """Shape hierarchy level for dimension constraints and relationships.
+    """Shape hierarchy level for constraints and relationships.
 
-    Specifies which level of the shape hierarchy to validate or manipulate:
-    - STREAM: stream_shape (streaming parallelism, elements per cycle)
-    - BLOCK: block_shape (block tiling dimensions)
-    - TENSOR: tensor_shape (full logical dimensions)
+    Attributes:
+        STREAM: Stream shape (parallelism, elements per cycle)
+        BLOCK: Block shape (tiling dimensions)
+        TENSOR: Tensor shape (full logical dimensions)
     """
     STREAM = "stream"
     BLOCK = "block"

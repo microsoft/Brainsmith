@@ -266,6 +266,10 @@ def assert_shapes_match(
 ) -> None:
     """Assert tensor shapes match between implementations.
 
+    Compares shape values only, ignoring container type (tuple vs list).
+    This handles the FINN inconsistency where some methods return lists
+    while others return tuples.
+
     Args:
         manual_shape: Shape from manual implementation
         auto_shape: Shape from auto implementation
@@ -279,12 +283,17 @@ def assert_shapes_match(
         >>> assert_shapes_match((1, 768), (1, 768), index=0, kind="normal input")
         # Passes silently
 
+        >>> assert_shapes_match((1, 768), [1, 768], index=0, kind="normal input")
+        # Passes silently (same values, different container type)
+
         >>> assert_shapes_match((1, 768), (1, 769), index=0, kind="normal input")
         AssertionError: Input 0 normal input shape mismatch:
           Manual: (1, 768)
           Auto:   (1, 769)
     """
-    if manual_shape != auto_shape:
+    # Compare values only, not container types (tuple vs list)
+    # Convert to tuple for comparison to handle FINN's inconsistent return types
+    if tuple(manual_shape) != tuple(auto_shape):
         # Capitalize first letter if kind starts with direction
         if kind.lower().startswith(('input', 'output')):
             description = f"{kind.capitalize()} {index} shape"

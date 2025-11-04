@@ -391,19 +391,17 @@ def backend(obj=None, **kwargs):
 
 # Context manager for source detection
 class source_context:
-    """Context manager for setting current source during discovery.
+    """Context manager for setting component source during discovery.
+
+    Args:
+        source_name: Source identifier for components loaded in this context
 
     Examples:
-        >>> with source_context('user'):
-        ...     import user_plugin  # Auto-detects source='user'
+        >>> with source_context('project'):
+        ...     import project_kernels  # Registered with source='project'
     """
 
     def __init__(self, source_name: str):
-        """Initialize context with source name.
-
-        Args:
-            source_name: Source to set as current
-        """
         self.source_name = source_name
         self.token = None
 

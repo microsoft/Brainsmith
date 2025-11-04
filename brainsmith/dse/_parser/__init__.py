@@ -28,20 +28,15 @@ def parse_blueprint(
     start_step: Optional[str] = None,
     stop_step: Optional[str] = None
 ) -> Tuple[GlobalDesignSpace, DSEConfig]:
-    """
-    Parse blueprint YAML and return GlobalDesignSpace and DSEConfig.
+    """Parse blueprint YAML to design space and configuration.
 
-    Inheritance is resolved bottom-up:
-    1. Start from the root parent (no extends)
-    2. Fully resolve its steps (including operations)
-    3. Pass resolved steps to child for its operations
-    4. Repeat until we reach the target blueprint
+    Supports blueprint inheritance via the 'extends' field.
 
     Args:
         blueprint_path: Path to blueprint YAML file
         model_path: Path to model file
-        start_step: Optional start step override (overrides YAML default)
-        stop_step: Optional stop step override (overrides YAML default)
+        start_step: Optional start step override
+        stop_step: Optional stop step override
 
     Returns:
         Tuple of (GlobalDesignSpace, DSEConfig)
