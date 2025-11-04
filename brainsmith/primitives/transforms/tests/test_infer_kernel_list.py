@@ -112,6 +112,43 @@ def test_infer_kernels_backward_compatible():
     assert modified or model.graph.node[0].op_type == "Add"
 
 
+def test_infer_kernels_filters_infrastructure():
+    """Test that InferKernelList skips infrastructure kernels in backward compatible mode."""
+    from brainsmith.registry import kernel, reset_registry, discover_components
+    from brainsmith.registry import get_component_metadata
+    from brainsmith.dataflow import KernelOp
+
+    # Create a mock infrastructure kernel for testing
+    @kernel(name="TestInfraKernel", is_infrastructure=True)
+    class TestInfraKernel(KernelOp):
+        """Mock infrastructure kernel for testing."""
+        @classmethod
+        def can_infer_from(cls, node, model):
+            return node.op_type == "TestOp"
+
+    # Verify it's marked as infrastructure (registered as 'custom' source)
+    metadata = get_component_metadata("custom:TestInfraKernel", "kernel")
+    assert metadata.is_infrastructure is True
+
+    # Create a simple model with TestOp node
+    in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
+    out0 = helper.make_tensor_value_info("out0", TensorProto.FLOAT, [1, 64])
+    node = helper.make_node("TestOp", ["in0"], ["out0"])
+    graph = helper.make_graph([node], "test", [in0], [out0])
+    onnx_model = helper.make_model(graph, producer_name="test")
+    model = ModelWrapper(onnx_model)
+
+    # Apply InferKernelList in backward compatible mode (kernel_classes=None)
+    transform = InferKernelList()
+    model, modified = transform.apply(model)
+
+    # Infrastructure kernel should be skipped, so node should remain as TestOp
+    assert model.graph.node[0].op_type == "TestOp", \
+        "Infrastructure kernel should be skipped by InferKernelList"
+    # Since no computational kernel matches TestOp, modified should be False
+    assert modified is False
+
+
 def test_infer_kernels_legacy_transform():
     """Test InferKernelList with legacy HWCustomOp class."""
     # This test requires FINN transforms to be registered

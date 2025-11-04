@@ -11,7 +11,7 @@ import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.kernels.crop.auto_crop import Crop
+from brainsmith.kernels.crop.crop import Crop
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.registry import backend

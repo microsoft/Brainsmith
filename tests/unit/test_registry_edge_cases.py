@@ -806,3 +806,47 @@ class TestBackendLinking:
         kernel_meta = _component_index['test:LateKernel']
         assert kernel_meta.kernel_backends is not None
         assert 'test:EarlyBackend_hls' in kernel_meta.kernel_backends
+
+
+# ============================================================================
+# TestInfrastructureMetadata - Infrastructure kernel flag
+# ============================================================================
+
+@pytest.mark.fast
+class TestInfrastructureMetadata:
+    """Test infrastructure kernel metadata flag."""
+
+    def test_default_is_infrastructure_false(self, empty_env):
+        """Kernels default to is_infrastructure=False."""
+        MockKernel = mock_kernel_class('ComputationalKernel', 'Comp')
+        kernel(MockKernel, name='ComputationalKernel')
+
+        from brainsmith.registry import get_component_metadata
+        meta = get_component_metadata('custom:ComputationalKernel', 'kernel')
+        assert meta.is_infrastructure is False
+
+    def test_explicit_is_infrastructure_true(self, empty_env):
+        """Infrastructure kernels can be marked explicitly."""
+        MockKernel = mock_kernel_class('InfraKernel', 'Infra')
+        kernel(MockKernel, name='InfraKernel', is_infrastructure=True)
+
+        from brainsmith.registry import get_component_metadata
+        meta = get_component_metadata('custom:InfraKernel', 'kernel')
+        assert meta.is_infrastructure is True
+
+    def test_is_infrastructure_preserved_in_metadata(self, empty_env):
+        """is_infrastructure flag is preserved in ComponentMetadata."""
+        # Register one of each type
+        CompKernel = mock_kernel_class('CompKernel', 'Comp')
+        InfraKernel = mock_kernel_class('InfraKernel', 'Infra')
+
+        kernel(CompKernel, name='CompKernel', is_infrastructure=False)
+        kernel(InfraKernel, name='InfraKernel', is_infrastructure=True)
+
+        from brainsmith.registry import get_component_metadata
+
+        comp_meta = get_component_metadata('custom:CompKernel', 'kernel')
+        assert comp_meta.is_infrastructure is False
+
+        infra_meta = get_component_metadata('custom:InfraKernel', 'kernel')
+        assert infra_meta.is_infrastructure is True

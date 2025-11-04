@@ -155,6 +155,7 @@ def _register_kernel(
     *,
     name: Optional[str] = None,
     infer_transform: Optional[Type] = None,
+    is_infrastructure: bool = False,  # True for topology-based kernels (DuplicateStreams, FIFO)
     **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
 ) -> Type:
     """Register kernel in global component index."""
@@ -191,7 +192,8 @@ def _register_kernel(
         source=source,
         component_type=ComponentType.KERNEL,
         import_spec=import_spec,
-        loaded_obj=cls  # Already loaded
+        loaded_obj=cls,  # Already loaded
+        is_infrastructure=is_infrastructure,
     )
 
     # Populate type-specific metadata (inline)
@@ -295,6 +297,13 @@ def kernel(obj=None, **kwargs):
     """Register a kernel class.
 
     Supports both @kernel and @kernel(name='custom_name') syntax.
+
+    Args:
+        obj: Class being decorated (when used as @kernel without parens)
+        **kwargs: Decorator parameters:
+            name: Kernel name (default: cls.op_type or cls.__name__)
+            infer_transform: Legacy FINN inference transform
+            is_infrastructure: True for topology-based kernels (default: False)
     """
     def register(cls):
         kwargs.setdefault('name', getattr(cls, 'op_type', cls.__name__))

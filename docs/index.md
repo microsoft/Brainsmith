@@ -1,8 +1,8 @@
 # Brainsmith
 
-**Compile PyTorch models into FPGA accelerators with automatic design space exploration**
+**Open-source AI acceleration on FPGA: from ONNX to RTL**
 
-Brainsmith takes quantized neural networks and generates optimized dataflow accelerators for FPGAs. Instead of manually configuring hundreds of hardware parameters, define your design space once and let Brainsmith explore, compare, and generate implementations automatically.
+Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
 
 !!! info "Launch Date: November 2025"
     This repository is in pre-release and under active co-development by **Microsoft** and **AMD**. Stay tuned for our official release!
@@ -58,8 +58,8 @@ Get performance estimates across all configurations in 30-60 minutes. Choose you
 → [Blueprints](user-guide/blueprints.md) - Learn the configuration format
 
 **Extending Brainsmith?**
-→ [Component Registry](architecture/registry.md) - Add custom kernels and transforms *(Phase 2)*
-→ [Kernel Development](kernel-development/index.md) - Create hardware accelerators *(Phase 2)*
+→ [Component Registry](architecture/registry.md) - Add custom kernels and transforms
+→ [Kernels](architecture/kernels.md) - Understand kernel architecture and create custom operations
 
 ---
 

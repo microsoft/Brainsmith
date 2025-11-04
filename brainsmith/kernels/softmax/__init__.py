@@ -9,9 +9,13 @@
 
 # Softmax implementations using KernelOp and Dataflow Modeling
 from .softmax import Softmax
-from .softmax_hls import Softmax_hls as SoftmaxHLS
+from .softmax_hls import Softmax_hls
+
+# Friendly alias for external use
+SoftmaxHLS = Softmax_hls
 
 __all__ = [
     "Softmax",
-    "SoftmaxHLS",
+    "Softmax_hls",  # Actual class name (for QONNX/FINN discovery)
+    "SoftmaxHLS",   # Friendly alias
 ]

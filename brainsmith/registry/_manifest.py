@@ -74,7 +74,8 @@ def _build_manifest_from_index() -> Dict[str, Any]:
             kernels[full_name] = {
                 **base,
                 'infer': meta.kernel_infer,
-                'backends': meta.kernel_backends or []
+                'backends': meta.kernel_backends or [],
+                'is_infrastructure': meta.is_infrastructure
             }
         elif meta.component_type == ComponentType.BACKEND:
             backends[full_name] = {
@@ -271,7 +272,8 @@ def _populate_index_from_manifest(manifest: Dict[str, Any]) -> None:
             ),
             # Restore kernel-specific metadata
             kernel_infer=data.get('infer'),
-            kernel_backends=data.get('backends')
+            kernel_backends=data.get('backends'),
+            is_infrastructure=data.get('is_infrastructure', False)
         )
 
         _component_index[full_name] = meta

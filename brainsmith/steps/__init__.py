@@ -37,6 +37,12 @@ from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
 # Parameter exploration
 from brainsmith.steps.parameter_exploration import explore_kernel_params_step
 
+# Parallelization
+from brainsmith.steps.parallelization import (
+    apply_parallelization_config_step,
+    target_fps_parallelization_step,
+)
+
 __all__ = [
     'qonnx_to_finn_step',
     'specialize_layers_step',
@@ -47,4 +53,6 @@ __all__ = [
     'infer_kernels_step',
     'normalize_dataflow_layouts_step',
     'explore_kernel_params_step',
+    'apply_parallelization_config_step',
+    'target_fps_parallelization_step',
 ]

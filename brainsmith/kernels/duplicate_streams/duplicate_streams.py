@@ -23,7 +23,8 @@ from brainsmith.registry import kernel
 @kernel(
     description="Stream duplication for tensor fanout (1 input → N outputs)",
     author="Migrated from AMD FINN",
-    metadata={"category": "routing"}
+    metadata={"category": "routing"},
+    is_infrastructure=True,  # Inserted by topology transforms (not pattern matching)
 )
 class DuplicateStreams(KernelOp):
     """Hardware kernel for stream duplication (fanout routing).

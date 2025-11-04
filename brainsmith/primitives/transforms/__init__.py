@@ -20,6 +20,7 @@ from .infer_kernel_list import InferKernelList
 from .specialize_kernels import SpecializeKernels
 from .normalize_dataflow_layouts import NormalizeDataflowLayouts
 from .insert_duplicate_streams import InsertDuplicateStreams
+from .infer_dataflow_graph import InferDataflowGraph
 from .refresh_design_points import RefreshKernelDesignPoints
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "SpecializeKernels",
     "NormalizeDataflowLayouts",
     "InsertDuplicateStreams",
+    "InferDataflowGraph",
     "RefreshKernelDesignPoints",
 ]

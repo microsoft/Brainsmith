@@ -90,6 +90,7 @@ class ComponentMetadata:
     # Kernel metadata
     kernel_infer: Optional[Any] = None  # InferTransform class or lazy import spec
     kernel_backends: Optional[list[str]] = None  # List of backend names targeting this kernel
+    is_infrastructure: bool = False  # True for topology-based kernels (DuplicateStreams, FIFO)
 
     # Backend metadata
     backend_target: Optional[str] = None  # Target kernel name (source:name format)

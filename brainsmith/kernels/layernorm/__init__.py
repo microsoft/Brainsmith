@@ -3,9 +3,13 @@
 
 # LayerNorm implementations using KernelOp and Dataflow Modeling
 from .layernorm import LayerNorm
-from .layernorm_hls import LayerNorm_hls as LayerNormHLS
+from .layernorm_hls import LayerNorm_hls
+
+# Friendly alias for external use
+LayerNormHLS = LayerNorm_hls
 
 __all__ = [
     "LayerNorm",
-    "LayerNormHLS",
+    "LayerNorm_hls",  # Actual class name (for QONNX/FINN discovery)
+    "LayerNormHLS",   # Friendly alias
 ]

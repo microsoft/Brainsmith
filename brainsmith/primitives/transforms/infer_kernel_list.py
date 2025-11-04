@@ -5,11 +5,14 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Meta-transform for inferring multiple hardware kernels.
+"""Meta-transform for inferring multiple hardware kernels via pattern matching.
 
 This module provides InferKernelList, a smart dispatcher that handles both
 new KernelOp kernels and legacy HWCustomOp kernels with their inference
 transforms.
+
+Automatically filters out infrastructure kernels (is_infrastructure=True)
+since they're inserted by topology transforms, not pattern matching.
 
 Example usage:
     from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
@@ -98,18 +101,29 @@ class InferKernelList(Transformation):
         Returns:
             Tuple of (transformed_model, graph_modified_flag)
         """
-        from brainsmith.registry import list_kernels, get_kernel, get_kernel_infer
+        from brainsmith.registry import list_kernels, get_kernel, get_kernel_infer, get_component_metadata
         from brainsmith.dataflow import KernelOp
 
         graph_modified = False
 
         # Determine which kernels to process
         if self.kernel_classes is None:
-            # Backward compatible: infer all registered KernelOp kernels
-            logger.info("No kernel classes specified, inferring all registered KernelOp kernels")
+            # Backward compatible: infer all registered computational kernels
+            # (excluding infrastructure kernels - they're inserted by topology transforms)
+            logger.info("No kernel classes specified, inferring all registered computational kernels")
             all_kernel_names = list_kernels()
             kernels_to_process = []
             for name in all_kernel_names:
+                # Check infrastructure flag before loading
+                try:
+                    metadata = get_component_metadata(name, 'kernel')
+                    if metadata.is_infrastructure:
+                        logger.debug(f"Skipping {name}: infrastructure kernel (inserted by topology transforms)")
+                        continue
+                except KeyError:
+                    logger.debug(f"Skipping {name}: metadata not found")
+                    continue
+
                 cls = get_kernel(name)
                 # Guard: skip if cls is None or not a class
                 if cls is None:

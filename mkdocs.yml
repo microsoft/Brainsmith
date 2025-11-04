@@ -43,21 +43,17 @@ use_directory_urls: true
 
 plugins:
   - search
-  # mkdocstrings disabled for splash page (pre-release)
-  # Reason: Requires brainsmith package installation, which needs deps/ (finn, qonnx, etc.)
-  # Re-enable at November 2025 launch when full API documentation is published
-  # Remember to also add ./docker/fetch-repos.sh step to CI workflow when re-enabling
-  # - mkdocstrings:
-  #     handlers:
-  #       python:
-  #         options:
-  #           docstring_style: google
-  #           show_source: true
-  #           show_root_heading: true
-  #           show_root_full_path: false
-  #           show_signature_annotations: true
-  #           merge_init_into_class: true
-  #           heading_level: 2
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            merge_init_into_class: true
+            heading_level: 2
   - git-revision-date-localized:
       enable_creation_date: true
       type: timeago
@@ -103,11 +99,25 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quickstart.md
     - Configuration: getting-started/configuration.md
+  - Architecture:
+    - Overview: architecture/index.md
+    - Understanding Kernels: architecture/understanding-kernels.md
+    - Dataflow Accelerators: architecture/dataflow.md
+    - Kernel Modeling: architecture/kernel-modeling.md
+    - Design Space Exploration: architecture/dse.md
+    - Kernels: architecture/kernels.md
+    - Component Registry: architecture/registry.md
   - User Guide:
     - Overview: user-guide/index.md
     - Blueprints: user-guide/blueprints.md
     - CLI Reference: user-guide/cli.md
-    - Design Space Exploration: user-guide/design-space.md
+  - API Reference:
+    - Overview: api/index.md
+    - Design Space Exploration: api/dse.md
+    - Component Registry: api/registry.md
+    - Dataflow Modeling: api/dataflow.md
+    - Kernel Base Class: api/kernel_op.md
+    - Settings: api/settings.md
 
 extra_css:
   - stylesheets/extra.css
