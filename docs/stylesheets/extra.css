@@ -1,0 +1,23 @@
+/* Wider content area */
+.md-grid {
+    max-width: 1440px;  /* Default is ~1220px */
+}
+
+/* Wider main content column */
+.md-main__inner {
+    max-width: none;
+}
+
+/* Adjust sidebar width ratio */
+.md-sidebar--primary {
+    width: 15rem;  /* Slightly narrower sidebar */
+}
+
+.md-sidebar--secondary {
+    width: 15rem;  /* Slightly narrower table of contents */
+}
+
+/* More breathing room for content */
+.md-content {
+    max-width: 100%;
+}
