@@ -1,6 +1,9 @@
-# Kernels
+# Kernel Architecture
 
 Kernels are **parameterized hardware implementations of neural network operations**. They are the fundamental building blocks from which Brainsmith constructs dataflow accelerators, with each kernel implementing a specific layer type (matrix multiplication, convolution, normalization, etc.) as a synthesizable hardware module.
+
+!!! tip "Looking for kernel specifications?"
+    This guide covers kernel **architecture** and **creation**. For detailed specifications of individual kernels, see the [Kernel Reference](../../kernels/index.md).
 
 ## Why Layer-Level Kernels?
 
@@ -585,3 +588,22 @@ Understanding kernels is essential for extending Brainsmith with new operations 
 - [Dataflow Accelerators](../1-foundations/dataflow-accelerators.md) - See how kernels compose into accelerators
 - [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Understand how DSE explores kernel configurations
 - [Component Registry](../2-core-systems/component-registry.md) - Learn how to register custom kernels
+
+---
+
+## See Also
+
+### Kernel Specifications
+
+For detailed specifications of individual kernels:
+
+- [Kernel Reference Index](../../kernels/index.md) - Complete kernel catalog organized by namespace
+- [AddStreams](../../kernels/addstreams.md) - Example of fully documented kernel
+- [ElementwiseBinary](../../kernels/elementwise_binary.md) - Polymorphic binary operations
+- [Thresholding](../../kernels/thresholding.md) - Multi-threshold activation
+
+### Related Guides
+
+- [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Kernel parameter optimization
+- [Kernel Modeling](../2-core-systems/kernel-modeling.md) - Design point configuration
+- [Component Registry](../2-core-systems/component-registry.md) - Kernel discovery and registration

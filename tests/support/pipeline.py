@@ -26,9 +26,11 @@ Usage:
     )
 """
 
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Dict
 
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.core.datatype import DataType
+import qonnx.core.data_layout as DataLayout
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
@@ -36,6 +38,54 @@ from finn.util.basic import getHWCustomOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from finn.transformation.fpgadataflow.minimize_accumulator_width import MinimizeAccumulatorWidth
 from finn.transformation.fpgadataflow.minimize_weight_bit_width import MinimizeWeightBitWidth
+
+
+def annotate_model_with_qonnx(
+    model: ModelWrapper,
+    annotations: Dict[str, DataType],
+    layouts: Optional[Dict[str, DataLayout]] = None
+) -> ModelWrapper:
+    """Add QONNX DataType and layout annotations to pure ONNX model.
+
+    This is the Stage 1 → Stage 2 transition:
+    - Takes pure ONNX model (TensorProto types only)
+    - Adds QONNX DataType annotations
+    - Optionally adds DataLayout annotations
+    - Enables InferDataTypes to propagate semantics
+
+    Args:
+        model: Pure ONNX model (no QONNX annotations)
+        annotations: Dict mapping tensor names → QONNX DataTypes
+        layouts: Optional dict mapping tensor names → DataLayouts
+
+    Returns:
+        Model with QONNX annotations added
+
+    Example:
+        >>> # Stage 1: Create pure ONNX
+        >>> onnx_model = make_onnx_model()
+        >>>
+        >>> # Stage 1 → Stage 2: Add QONNX annotations
+        >>> annotations = {
+        ...     "input": DataType["INT8"],
+        ...     "param": DataType["INT8"],
+        ...     "output": DataType["INT16"]
+        ... }
+        >>> qonnx_model = annotate_model_with_qonnx(onnx_model, annotations)
+        >>>
+        >>> # Now InferDataTypes can propagate
+        >>> qonnx_model = qonnx_model.transform(InferDataTypes())
+    """
+    # Add DataType annotations
+    for tensor_name, dtype in annotations.items():
+        model.set_tensor_datatype(tensor_name, dtype)
+
+    # Add layout annotations (optional)
+    if layouts:
+        for tensor_name, layout in layouts.items():
+            model.set_tensor_layout(tensor_name, layout)
+
+    return model
 
 
 class PipelineRunner:
@@ -70,8 +120,22 @@ class PipelineRunner:
         transform: Transformation,
         configure_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None,
         init_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None,
+        qonnx_annotations: Optional[Dict[str, DataType]] = None,
+        qonnx_layouts: Optional[Dict[str, DataLayout]] = None
     ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Run ONNX → Hardware transformation pipeline.
+
+        Standard pipeline sequence:
+        1. Create model (from factory)
+        2. Add QONNX annotations (if provided) ← NEW
+        3. InferShapes
+        4. InferDataTypes (requires QONNX annotations)
+        5. Apply kernel transform
+        6. MinimizeWeightBitWidth
+        7. MinimizeAccumulatorWidth
+        8. Find HW node
+        9. Configure node (optional)
+        10. Initialize node (optional)
 
         Args:
             model_factory: Function that creates (model, node_name).
@@ -81,6 +145,8 @@ class PipelineRunner:
                 Called with (op, model) after node is found but before initialization.
             init_fn: Optional function to initialize the node (prepare_cppsim, etc.).
                 Called with (op, model) after configuration.
+            qonnx_annotations: QONNX DataType annotations (Stage 1→2 transition)
+            qonnx_layouts: QONNX DataLayout annotations (optional)
 
         Returns:
             (op, model): Hardware operator and transformed model
@@ -100,10 +166,14 @@ class PipelineRunner:
                 init_fn=lambda op, model: op.prepare_cppsim(model)
             )
         """
-        # Create model
+        # Create model (Stage 1: Pure ONNX)
         model, node_name = model_factory()
 
-        # Standard preprocessing
+        # Stage 1 → Stage 2: Add QONNX annotations (if provided)
+        if qonnx_annotations:
+            model = annotate_model_with_qonnx(model, qonnx_annotations, qonnx_layouts)
+
+        # Standard preprocessing (requires QONNX annotations for InferDataTypes)
         model = model.transform(InferShapes())
         model = model.transform(InferDataTypes())
 

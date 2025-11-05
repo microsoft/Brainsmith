@@ -1,18 +1,14 @@
-/* Wider content area */
+/* Wider content area for desktop */
 .md-grid {
     max-width: 1440px;  /* Default is ~1220px */
 }
 
-/* Wider main content column */
+/* Wider main content column - constrained to prevent overflow */
 .md-main__inner {
-    max-width: none;
+    max-width: 100%;  /* Changed from 'none' to prevent horizontal overflow */
 }
 
-/* Adjust sidebar width ratio */
-.md-sidebar--primary {
-    width: 15rem;  /* Slightly narrower sidebar */
-}
-
+/* Adjust secondary sidebar (TOC) width - safe to set globally */
 .md-sidebar--secondary {
     width: 15rem;  /* Slightly narrower table of contents */
 }
@@ -20,4 +16,57 @@
 /* More breathing room for content */
 .md-content {
     max-width: 100%;
+}
+
+/* Overflow handling for code blocks and tables */
+.md-content pre {
+    overflow-x: auto;
+}
+
+.md-content code {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.md-content table {
+    display: block;
+    overflow-x: auto;
+}
+
+/* Desktop-only customizations (1220px and above) */
+/* Safe to customize widths here - drawer mode is not active */
+@media screen and (min-width: 76.25em) {
+    .md-sidebar--primary {
+        width: 15rem;  /* Slightly narrower navigation sidebar */
+    }
+}
+
+/* Responsive design for tablet/mobile (below 1220px) */
+/* Let Material theme handle sidebar drawer behavior completely */
+@media screen and (max-width: 76.24em) {
+    /* Do NOT override .md-sidebar--primary - Material's drawer needs full control */
+
+    .md-grid {
+        max-width: 100%;
+        padding: 0 1rem;
+    }
+
+    .md-sidebar--secondary {
+        width: 12rem;
+    }
+}
+
+/* Mobile-specific adjustments (<960px) */
+@media screen and (max-width: 60em) {
+    .md-grid {
+        padding: 0 0.5rem;
+    }
+
+    .md-sidebar--secondary {
+        display: none;  /* Hide table of contents on mobile */
+    }
+
+    .md-content {
+        padding: 0 0.5rem;
+    }
 }

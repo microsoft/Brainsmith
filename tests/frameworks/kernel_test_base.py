@@ -30,9 +30,11 @@ Usage:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional, List
 
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.core.datatype import DataType
+import qonnx.core.data_layout as DataLayout
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 
@@ -43,14 +45,18 @@ class KernelTestConfig(ABC):
     Does NOT provide pipeline/validation/execution logic - subclasses
     use composition (PipelineRunner, GoldenValidator, Executors).
 
-    Abstract Methods (3):
-    - make_test_model(): Create ONNX model
+    Abstract Methods (4):
+    - make_onnx_model(): Create pure ONNX model (Stage 1)
+    - get_qonnx_annotations(): QONNX DataType annotations (Stage 1→2)
     - get_num_inputs(): Number of input tensors
     - get_num_outputs(): Number of output tensors
 
     Optional Hooks:
+    - get_qonnx_layouts(): DataLayout annotations (optional)
     - configure_kernel_node(): Configure PE, SIMD, etc.
     - get_tolerance_*(): Tolerances for golden reference validation
+    - get_dtype_sweep(): Parameterized dtype testing (optional)
+    - get_shape_sweep(): Parameterized shape testing (optional)
     """
 
     # ========================================================================
@@ -58,17 +64,25 @@ class KernelTestConfig(ABC):
     # ========================================================================
 
     @abstractmethod
-    def make_test_model(self) -> Tuple[ModelWrapper, str]:
-        """Create standard ONNX model for testing.
+    def make_onnx_model(self) -> Tuple[ModelWrapper, str]:
+        """Create pure ONNX model with standard TensorProto types (Stage 1).
+
+        This method creates the ONNX representation WITHOUT QONNX annotations.
+        QONNX DataType annotations are added separately via get_qonnx_annotations().
+
+        Stage separation:
+        - Stage 1 (ONNX): make_onnx_model() → TensorProto types
+        - Stage 2 (QONNX): get_qonnx_annotations() → DataType annotations
 
         Returns:
-            (model, node_name): ModelWrapper and name of ONNX node
+            (model, node_name): Pure ONNX model and target node name
 
         Example:
-            def make_test_model(self):
+            def make_onnx_model(self):
                 import onnx.helper as helper
                 from onnx import TensorProto
 
+                # Use standard ONNX TensorProto types
                 inp0 = helper.make_tensor_value_info("input0", TensorProto.FLOAT, [1, 64])
                 inp1 = helper.make_tensor_value_info("input1", TensorProto.FLOAT, [1, 64])
                 out = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 64])
@@ -77,7 +91,167 @@ class KernelTestConfig(ABC):
                 graph = helper.make_graph([node], "test_add", [inp0, inp1], [out])
                 model = helper.make_model(graph)
 
+                # NO QONNX annotations here!
                 return ModelWrapper(model), "Add_0"
+
+        Note:
+            - Use TensorProto.FLOAT for quantized integers (FINN convention)
+            - Use TensorProto.INT8 for true integer types (if ONNX Runtime supports)
+            - Do NOT call model.set_tensor_datatype() here
+            - Do NOT add DataLayout annotations here
+        """
+        pass
+
+    @abstractmethod
+    def get_qonnx_annotations(self) -> Dict[str, DataType]:
+        """Return QONNX DataType annotations for tensors.
+
+        Maps tensor names to QONNX DataTypes for Stage 1 → Stage 2 transition.
+        These annotations enable FINN/Brainsmith semantic interpretation.
+
+        Returns:
+            Dict mapping tensor names → QONNX DataTypes
+
+        Example:
+            def get_qonnx_annotations(self):
+                return {
+                    "input0": DataType["INT8"],
+                    "input1": DataType["INT8"],
+                    "output": DataType["INT16"]  # Accumulation requires wider type
+                }
+
+        Note:
+            - Must cover all inputs and outputs
+            - Should match expected kernel behavior
+            - Used by InferDataTypes to propagate semantics
+        """
+        pass
+
+    def get_qonnx_layouts(self) -> Dict[str, DataLayout]:
+        """Return QONNX DataLayout annotations for tensors (optional).
+
+        Maps tensor names to QONNX DataLayouts (NCHW, NHWC, etc.).
+        Only needed for spatial operations (convolution, pooling, etc.).
+
+        Returns:
+            Dict mapping tensor names → QONNX DataLayouts
+            Default: {} (no layout annotations)
+
+        Example:
+            def get_qonnx_layouts(self):
+                return {
+                    "input": DataLayout.NHWC,
+                    "output": DataLayout.NHWC
+                }
+        """
+        return {}
+
+    # ========================================================================
+    # Parameterization Hooks (Optional)
+    # ========================================================================
+
+    def get_dtype_sweep(self) -> Optional[List[Dict[str, DataType]]]:
+        """Return dtype combinations for parameterized testing (optional).
+
+        Enables testing same operation with multiple dtype configurations.
+        Each dict in the list represents one test configuration.
+
+        Returns:
+            List of annotation dicts for parameterization
+            Default: None (no parameterization)
+
+        Example:
+            def get_dtype_sweep(self):
+                return [
+                    # INT8 × INT8
+                    {"input": DataType["INT8"], "param": DataType["INT8"], "output": DataType["INT16"]},
+                    # FLOAT32 × FLOAT32
+                    {"input": DataType["FLOAT32"], "param": DataType["FLOAT32"], "output": DataType["FLOAT32"]},
+                    # Mixed precision
+                    {"input": DataType["INT8"], "param": DataType["FLOAT32"], "output": DataType["FLOAT32"]},
+                ]
+
+        Note:
+            - Framework will run test for each configuration
+            - Useful for comprehensive dtype validation
+            - Can significantly increase test count
+        """
+        return None
+
+    def get_shape_sweep(self) -> Optional[List[Dict[str, Tuple[int, ...]]]]:
+        """Return shape combinations for parameterized testing (optional).
+
+        Enables testing same operation with multiple shape configurations.
+        Each dict in the list represents one test configuration.
+
+        Returns:
+            List of shape dicts for parameterization
+            Default: None (no parameterization)
+
+        Example:
+            def get_shape_sweep(self):
+                return [
+                    {"input": (1, 64), "param": (64,), "output": (1, 64)},
+                    {"input": (1, 8, 8, 64), "param": (64,), "output": (1, 8, 8, 64)},
+                    {"input": (4, 16, 16, 32), "param": (32,), "output": (4, 16, 16, 32)},
+                ]
+
+        Note:
+            - Broadcasting must be handled by make_onnx_model()
+            - Framework will run test for each configuration
+            - Can be combined with dtype_sweep for comprehensive testing
+        """
+        return None
+
+    def configure_for_dtype_config(self, config: Dict[str, DataType]) -> None:
+        """Apply dtype configuration for parameterized testing.
+
+        Called automatically by pytest fixtures before each parameterized test.
+        Override this to apply dtype configuration to instance attributes.
+
+        Args:
+            config: Dict mapping tensor names to DataTypes from get_dtype_sweep()
+
+        Example:
+            def configure_for_dtype_config(self, config: Dict[str, DataType]):
+                '''Apply dtype configuration to instance attributes.'''
+                self.input_dtype = config["input"]
+                self.param_dtype = config["param"]
+                self.output_dtype = config["output"]
+
+        Note:
+            - This method is called BEFORE make_onnx_model() and get_qonnx_annotations()
+            - Update instance attributes that affect model creation
+            - Default implementation does nothing (override in subclass if needed)
+        """
+        pass
+
+    def configure_for_shape_config(self, config: Dict[str, Tuple[int, ...]]) -> None:
+        """Apply shape configuration for parameterized testing.
+
+        Called automatically by pytest fixtures before each parameterized test.
+        Override this to apply shape configuration to instance attributes.
+
+        Args:
+            config: Dict mapping tensor names to shapes from get_shape_sweep()
+
+        Example:
+            def configure_for_shape_config(self, config: Dict[str, Tuple]):
+                '''Apply shape configuration to instance attributes.'''
+                # Extract dimensions from shape tuples
+                input_shape = config["input"]
+                if len(input_shape) == 4:
+                    self.batch, self.height, self.width, self.channels = input_shape
+                elif len(input_shape) == 2:
+                    self.batch, self.channels = input_shape
+                    self.height = 1
+                    self.width = 1
+
+        Note:
+            - This method is called BEFORE make_onnx_model() and get_qonnx_annotations()
+            - Update instance attributes that affect model creation
+            - Handle different shape tuple lengths appropriately
+            - Default implementation does nothing (override in subclass if needed)
         """
         pass
 

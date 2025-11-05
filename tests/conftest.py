@@ -188,16 +188,20 @@ def setup_parity_imports():
 
 
 def pytest_collection_modifyitems(config, items):
-    """Auto-mark tests based on location.
+    """Auto-mark tests and handle parameterization sweeps.
 
-    Tests are automatically marked based on their directory:
-    - integration/fast/ -> @pytest.mark.fast
-    - integration/finn/ -> @pytest.mark.finn_build
-    - integration/rtl/ -> @pytest.mark.rtlsim, @pytest.mark.slow
-    - integration/hardware/ -> @pytest.mark.bitfile, @pytest.mark.hardware
+    1. Auto-marks tests based on location:
+       - integration/fast/ -> @pytest.mark.fast
+       - integration/finn/ -> @pytest.mark.finn_build
+       - integration/rtl/ -> @pytest.mark.rtlsim, @pytest.mark.slow
+       - integration/hardware/ -> @pytest.mark.bitfile, @pytest.mark.hardware
+
+    2. Parameterizes tests for classes with sweep methods:
+       - Classes with get_dtype_sweep() get N copies per dtype config
+       - Classes with get_shape_sweep() get N copies per shape config
     """
+    # First pass: Auto-mark based on directory
     for item in items:
-        # Auto-mark based on directory
         if "integration/fast" in str(item.fspath):
             item.add_marker(pytest.mark.fast)
         elif "integration/finn" in str(item.fspath):
@@ -208,3 +212,103 @@ def pytest_collection_modifyitems(config, items):
         elif "integration/hardware" in str(item.fspath):
             item.add_marker(pytest.mark.bitfile)
             item.add_marker(pytest.mark.hardware)
+
+    # Second pass: Handle sweep parameterization
+    # Build map of classes that need parameterization
+    sweep_classes = {}  # cls -> (sweep_type, configs)
+
+    for item in items:
+        if item.cls is None:
+            continue
+
+        # Check if already processed this class
+        if item.cls in sweep_classes:
+            continue
+
+        # Check for dtype sweep
+        if hasattr(item.cls, "get_dtype_sweep"):
+            instance = item.cls()
+            sweep_configs = instance.get_dtype_sweep()
+            if sweep_configs:
+                sweep_classes[item.cls] = ("dtype", sweep_configs)
+                continue
+
+        # Check for shape sweep
+        if hasattr(item.cls, "get_shape_sweep"):
+            instance = item.cls()
+            sweep_configs = instance.get_shape_sweep()
+            if sweep_configs:
+                sweep_classes[item.cls] = ("shape", sweep_configs)
+
+    # If no sweep classes found, done
+    if not sweep_classes:
+        return
+
+    # Third pass: Duplicate test items for sweep classes
+    new_items = []
+
+    for item in items:
+        if item.cls not in sweep_classes:
+            # Keep non-sweep tests as-is
+            new_items.append(item)
+            continue
+
+        # This test belongs to a sweep class - create N copies
+        sweep_type, configs = sweep_classes[item.cls]
+
+        for idx, sweep_config in enumerate(configs):
+            # Generate ID for this config
+            if sweep_type == "dtype":
+                id_parts = []
+                for key, dtype in sweep_config.items():
+                    dtype_name = str(dtype).split("[")[-1].rstrip("]").strip("'\"")
+                    id_parts.append(f"{key}={dtype_name}")
+                config_id = "_".join(id_parts)
+            else:  # shape
+                id_parts = []
+                for key, value in sweep_config.items():
+                    if isinstance(value, tuple):
+                        shape_str = "x".join(str(d) for d in value)
+                        id_parts.append(f"{key}={shape_str}")
+                    else:
+                        id_parts.append(f"{key}={value}")
+                config_id = "_".join(id_parts)
+
+            # Create new test item using pytest.Function
+            # This is the proper way to create parameterized test items
+            new_item = pytest.Function.from_parent(
+                parent=item.parent,
+                name=f"{item.name}[{config_id}]",
+                callobj=item.obj,
+            )
+
+            # Store sweep config on the item for pytest_runtest_setup
+            new_item._sweep_config = sweep_config
+            new_item._sweep_type = sweep_type
+
+            new_items.append(new_item)
+
+    # Update items list
+    items[:] = new_items
+
+
+def pytest_runtest_setup(item):
+    """Apply sweep configuration before each test runs.
+
+    This hook runs before each test method executes and applies
+    dtype/shape configuration to the test instance if present.
+    """
+    # Check if this test has sweep configuration (set by pytest_collection_modifyitems)
+    if hasattr(item, "_sweep_config") and hasattr(item, "_sweep_type"):
+        config = item._sweep_config
+        sweep_type = item._sweep_type
+
+        # Get the test instance (only available for class-based tests)
+        if hasattr(item, "instance") and item.instance is not None:
+            # Apply appropriate configuration
+            if sweep_type == "dtype":
+                if hasattr(item.instance, "configure_for_dtype_config"):
+                    item.instance.configure_for_dtype_config(config)
+            elif sweep_type == "shape":
+                if hasattr(item.instance, "configure_for_shape_config"):
+                    item.instance.configure_for_shape_config(config)

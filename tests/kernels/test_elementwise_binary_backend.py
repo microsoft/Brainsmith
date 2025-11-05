@@ -37,6 +37,88 @@ from tests.frameworks.dual_kernel_test import DualKernelTest
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _datatype_to_tensorproto(dtype: DataType) -> int:
+    """Convert QONNX DataType to ONNX TensorProto type.
+
+    This ensures ONNX Runtime receives correct semantic information for operations.
+    For example, INT8 division should use integer division semantics, not float.
+
+    Args:
+        dtype: QONNX DataType to convert
+
+    Returns:
+        ONNX TensorProto type constant
+
+    Examples:
+        >>> _datatype_to_tensorproto(DataType["INT8"])
+        TensorProto.INT8  # ONNX Runtime uses integer division
+
+        >>> _datatype_to_tensorproto(DataType["FLOAT32"])
+        TensorProto.FLOAT  # ONNX Runtime uses float division
+    """
+    if dtype.is_integer():
+        # Integer types → proper integer TensorProto
+        if dtype.signed():
+            if dtype.bitwidth() <= 8:
+                return TensorProto.INT8
+            elif dtype.bitwidth() <= 16:
+                return TensorProto.INT16
+            elif dtype.bitwidth() <= 32:
+                return TensorProto.INT32
+            else:
+                return TensorProto.INT64
+        else:
+            if dtype.bitwidth() <= 8:
+                return TensorProto.UINT8
+            elif dtype.bitwidth() <= 16:
+                return TensorProto.UINT16
+            elif dtype.bitwidth() <= 32:
+                return TensorProto.UINT32
+            else:
+                return TensorProto.UINT64
+    else:
+        # Float types
+        return TensorProto.FLOAT
+
+
+def _datatype_to_numpy(dtype: DataType) -> np.dtype:
+    """Convert QONNX DataType to NumPy dtype.
+
+    Maps QONNX DataTypes to appropriate NumPy dtypes for array creation.
+
+    Args:
+        dtype: QONNX DataType to convert
+
+    Returns:
+        NumPy dtype
+    """
+    if dtype.is_integer():
+        if dtype.signed():
+            if dtype.bitwidth() <= 8:
+                return np.int8
+            elif dtype.bitwidth() <= 16:
+                return np.int16
+            elif dtype.bitwidth() <= 32:
+                return np.int32
+            else:
+                return np.int64
+        else:
+            if dtype.bitwidth() <= 8:
+                return np.uint8
+            elif dtype.bitwidth() <= 16:
+                return np.uint16
+            elif dtype.bitwidth() <= 32:
+                return np.uint32
+            else:
+                return np.uint64
+    else:
+        return np.float32
+
+
+# =============================================================================
 # Base Class: ElementwiseBinaryParityBase
 # =============================================================================
 
@@ -73,45 +155,64 @@ class ElementwiseBinaryParityBase(DualKernelTest):
     param_dtype: DataType = DataType["INT8"]
     output_dtype: Optional[DataType] = None  # Auto-derived if None
 
-    def make_test_model(self) -> Tuple[ModelWrapper, str]:
-        """Create ONNX model with elementwise binary operation.
+    def make_onnx_model(self) -> Tuple[ModelWrapper, str]:
+        """Create pure ONNX model with elementwise binary operation (Stage 1).
 
         Creates Phase 1 pattern:
         - Input: [batch, height, width, channels] streaming (NHWC)
         - Param: [channels] static initializer
         - Output: [batch, height, width, channels]
 
+        QONNX annotations (DataType, DataLayout) are added separately via
+        get_qonnx_annotations() and get_qonnx_layouts() during pipeline execution.
+
         Returns:
-            (model, node_name): ModelWrapper and name of target node
+            (model, node_name): Pure ONNX model and name of target node
         """
         np.random.seed(42)  # Deterministic
 
         # Generate static parameter tensor
         param_shape = (self.channels,)
+
+        # Convert DataType to proper NumPy dtype for value generation
+        param_np_dtype = _datatype_to_numpy(self.param_dtype)
+
         if self.param_dtype.is_integer():
             param_min, param_max = self.param_dtype.min(), self.param_dtype.max()
             param_values = np.random.randint(
                 param_min, param_max + 1, size=param_shape
-            ).astype(np.float32)
+            ).astype(param_np_dtype)
         else:
-            param_values = np.random.randn(*param_shape).astype(np.float32)
+            param_values = np.random.randn(*param_shape).astype(param_np_dtype)
 
         # Input/output shapes
         input_shape = (self.batch, self.height, self.width, self.channels)
         output_shape = input_shape  # Elementwise preserves shape
 
-        # Create ONNX graph
+        # Convert QONNX DataTypes to ONNX TensorProto types
+        # This ensures ONNX Runtime uses correct semantics (e.g., integer division for INT8)
+        input_proto_type = _datatype_to_tensorproto(self.input_dtype)
+        param_proto_type = _datatype_to_tensorproto(self.param_dtype)
+
+        # Output dtype may be None (auto-derived), default to input type for ONNX model
+        if self.output_dtype is not None:
+            output_proto_type = _datatype_to_tensorproto(self.output_dtype)
+        else:
+            # Auto-derive: use FLOAT for flexibility (ONNX Runtime will compute actual type)
+            output_proto_type = TensorProto.FLOAT
+
+        # Create ONNX graph with proper TensorProto types
         input_tensor = helper.make_tensor_value_info(
-            "input", TensorProto.FLOAT, input_shape
+            "input", input_proto_type, input_shape
         )
         output_tensor = helper.make_tensor_value_info(
-            "output", TensorProto.FLOAT, output_shape
+            "output", output_proto_type, output_shape
         )
 
         # Parameter initializer
         param_tensor = helper.make_tensor(
             name="param",
-            data_type=TensorProto.FLOAT,
+            data_type=param_proto_type,
             dims=param_shape,
             vals=param_values.flatten().tolist()
         )
@@ -136,22 +237,43 @@ class ElementwiseBinaryParityBase(DualKernelTest):
 
         model = ModelWrapper(helper.make_model(graph))
 
-        # Set datatypes
-        model.set_tensor_datatype("input", self.input_dtype)
-        model.set_tensor_datatype("param", self.param_dtype)
+        # NO QONNX annotations here! (Stage 1 = pure ONNX)
+        # Annotations added via get_qonnx_annotations() + get_qonnx_layouts()
+
+        return model, node_name
+
+    def get_qonnx_annotations(self) -> Dict[str, DataType]:
+        """Return QONNX DataType annotations for Stage 1 → Stage 2 transition.
+
+        Maps tensor names to QONNX DataTypes for FINN/Brainsmith semantic interpretation.
+
+        Returns:
+            Dict mapping tensor names to DataTypes
+        """
+        annotations = {
+            "input": self.input_dtype,
+            "param": self.param_dtype,
+        }
 
         # Output datatype (auto-derived if not specified)
         if self.output_dtype is not None:
-            model.set_tensor_datatype("output", self.output_dtype)
-        else:
-            # Let inference determine output datatype
-            pass
+            annotations["output"] = self.output_dtype
+        # else: Let InferDataTypes determine output datatype
 
-        # Set data layout (NHWC for spatial data)
-        model.set_tensor_layout("input", DataLayout.NHWC)
-        model.set_tensor_layout("output", DataLayout.NHWC)
+        return annotations
 
-        return model, node_name
+    def get_qonnx_layouts(self) -> Dict[str, "DataLayout"]:
+        """Return QONNX DataLayout annotations (Stage 1 → Stage 2 transition).
+
+        Maps tensor names to QONNX DataLayouts for spatial operations.
+
+        Returns:
+            Dict mapping tensor names to DataLayouts
+        """
+        return {
+            "input": DataLayout.NHWC,
+            "output": DataLayout.NHWC,
+        }
 
     def get_manual_transform(self) -> Type[Transformation]:
         """Return FINN's legacy transform for elementwise binary operations.
@@ -239,11 +361,11 @@ class ElementwiseBinaryParityBase(DualKernelTest):
     def compute_golden_reference(
         self, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        """Compute expected outputs using ONNX Runtime on original ONNX model.
+        """Compute expected outputs using ONNX Runtime on pure ONNX model (Stage 1).
 
-        Uses ONNX Runtime to execute the original ONNX node before any
-        transformations. This provides the canonical "correct" behavior
-        according to the ONNX specification.
+        Uses ONNX Runtime to execute the pure ONNX model before any QONNX annotations
+        or transformations. This provides the canonical "correct" behavior according
+        to the ONNX specification, independent of FINN/Brainsmith conventions.
 
         Note: Falls back to NumPy for operations that require strict type
         checking (e.g., BitShift requires integer tensor types in the graph).
@@ -258,8 +380,8 @@ class ElementwiseBinaryParityBase(DualKernelTest):
         from brainsmith.kernels.elementwise_binary.operations import BinaryOperations
 
         # Try ONNX Runtime first
-        # Create a fresh model (before any transformations)
-        model, node_name = self.make_test_model()
+        # Create pure ONNX model (Stage 1 - no QONNX annotations)
+        model, node_name = self.make_onnx_model()
 
         try:
             # Create ONNX Runtime session
@@ -271,7 +393,15 @@ class ElementwiseBinaryParityBase(DualKernelTest):
             # Filter inputs to only include runtime inputs (exclude initializers)
             # ONNX Runtime rejects initializers passed as runtime inputs
             runtime_input_names = [inp.name for inp in sess.get_inputs()]
-            runtime_inputs = {name: inputs[name] for name in runtime_input_names if name in inputs}
+            runtime_inputs = {}
+
+            # Cast inputs to match expected ONNX types (TensorProto → NumPy dtype)
+            for name in runtime_input_names:
+                if name in inputs:
+                    # Get expected dtype from ONNX model
+                    expected_np_dtype = _datatype_to_numpy(self.input_dtype)
+                    # Cast input to expected dtype
+                    runtime_inputs[name] = inputs[name].astype(expected_np_dtype)
 
             # Execute with actual input dtypes
             ort_outputs = sess.run(None, runtime_inputs)
@@ -301,21 +431,15 @@ class ElementwiseBinaryParityBase(DualKernelTest):
             # Get NumPy operation from registry
             npy_op = BinaryOperations.get_npy_op(self.operation_type)
 
-            # Special handling for BitShift - check direction attribute
+            # Special handling for BitShift - use shift_direction class attribute
             # BinaryOperations.get_npy_op("BitShift") returns default np.left_shift
-            # but we need to use the actual direction from the already-created model
+            # but we need to use the actual direction from the test class
             if self.operation_type == "BitShift":
-                # Read direction from the model we already created above
-                node = model.get_node_from_name(node_name)
-                for attr in node.attribute:
-                    if attr.name == "direction":
-                        from onnx import helper as onnx_helper
-                        direction = onnx_helper.get_attribute_value(attr)
-                        # Note: direction is bytes (b'RIGHT' or b'LEFT'), not string
-                        if direction == b"RIGHT":
-                            npy_op = np.right_shift
-                        # else: already np.left_shift from registry
-                        break
+                # Use shift_direction class attribute (set in BitShift test classes)
+                if hasattr(self, "shift_direction"):
+                    if self.shift_direction == "RIGHT":
+                        npy_op = np.right_shift
+                    # else: "LEFT" - already np.left_shift from registry
 
             # Apply operation (NumPy handles broadcasting automatically)
             # Convert to int64 for intermediate computation (avoid overflow)
@@ -414,11 +538,12 @@ class TestElementwiseBinaryDivParity(ElementwiseBinaryParityBase):
 
     Note: Uses positive values only to avoid division by zero
 
-    Known Issue: Manual cppsim vs golden test fails due to semantic difference:
-    - FINN HLS: Performs integer division (C/C++ semantics) → [1, 0, 7, 3, ...]
-    - ONNX Runtime: Performs FP division internally → [1.627, 0.095, 7.65, ...]
-    This is expected behavior for UINT8÷UINT8. FINN is correct for integer types.
-    Test marked as xfail to document this semantic difference.
+    Known Issue: FINN's Python execute_node uses float division for integer types.
+    - FINN Python: Uses FP division (upstream bug) → [1.627, 0.095, ...]
+    - Golden (ONNX Runtime): Uses integer division (correct) → [1, 0, ...]
+    - FINN cppsim: Uses integer division (correct) → [1, 0, ...]
+
+    Result: Python test fails (marked xfail), cppsim test passes (FIXED!)
     """
     operation_type = "Div"
     input_dtype = DataType["UINT8"]  # Positive values only
@@ -426,13 +551,12 @@ class TestElementwiseBinaryDivParity(ElementwiseBinaryParityBase):
     output_dtype = DataType["UINT8"]
 
     @pytest.mark.xfail(
-        reason="Integer vs FP division semantics: FINN performs correct integer "
-        "division (UINT8÷UINT8→UINT8), while ONNX Runtime uses FP division. "
-        "This is expected behavior, not a bug."
+        reason="FINN's execute_node uses float division for integer types (upstream bug). "
+        "Golden reference and cppsim both correctly use integer division."
     )
-    def test_manual_cppsim_vs_golden(self):
-        """Override to mark as xfail - documents known semantic difference."""
-        super().test_manual_cppsim_vs_golden()
+    def test_manual_python_vs_golden(self):
+        """Override to mark as xfail - FINN Python execution has float division bug."""
+        super().test_manual_python_vs_golden()
 
 
 # =============================================================================
@@ -579,16 +703,17 @@ class TestElementwiseBinaryBitShiftLeftParity(ElementwiseBinaryParityBase):
     - Brainsmith auto pipeline tests work correctly
     """
     operation_type = "BitShift"  # FINN expects "BitShift", not "BitShiftLeft"
+    shift_direction = "LEFT"  # BitShift direction attribute
     param_dtype = DataType["UINT4"]  # Shift amounts 0-15, but use 0-7 for INT8
     output_dtype = DataType["INT8"]
 
-    def make_test_model(self) -> Tuple[ModelWrapper, str]:
+    def make_onnx_model(self) -> Tuple[ModelWrapper, str]:
         """Override to set direction attribute for BitShift operations."""
-        model, node_name = super().make_test_model()
+        model, node_name = super().make_onnx_model()
 
         # Set direction attribute on ONNX node (required for ONNX spec)
         node = model.get_node_from_name(node_name)
-        node.attribute.append(helper.make_attribute("direction", "LEFT"))
+        node.attribute.append(helper.make_attribute("direction", self.shift_direction))
 
         return model, node_name
 
@@ -621,16 +746,17 @@ class TestElementwiseBinaryBitShiftRightParity(ElementwiseBinaryParityBase):
     - Brainsmith auto pipeline tests work correctly
     """
     operation_type = "BitShift"  # FINN expects "BitShift", not "BitShiftRight"
+    shift_direction = "RIGHT"  # BitShift direction attribute
     param_dtype = DataType["UINT4"]  # Shift amounts 0-15, but use 0-7 for INT8
     output_dtype = DataType["INT8"]
 
-    def make_test_model(self) -> Tuple[ModelWrapper, str]:
+    def make_onnx_model(self) -> Tuple[ModelWrapper, str]:
         """Override to set direction attribute for BitShift operations."""
-        model, node_name = super().make_test_model()
+        model, node_name = super().make_onnx_model()
 
         # Set direction attribute on ONNX node (required for ONNX spec)
         node = model.get_node_from_name(node_name)
-        node.attribute.append(helper.make_attribute("direction", "RIGHT"))
+        node.attribute.append(helper.make_attribute("direction", self.shift_direction))
 
         return model, node_name
 
@@ -643,6 +769,169 @@ class TestElementwiseBinaryBitShiftRightParity(ElementwiseBinaryParityBase):
             "These are FINN upstream bugs. Skipping manual (FINN) pipeline tests.\n"
             "Brainsmith auto pipeline tests work correctly."
         )
+
+
+# =============================================================================
+# Parameterized Test Examples (Phase 3.2)
+# =============================================================================
+#
+# These classes demonstrate the parameterization framework for testing multiple
+# dtype and shape configurations. Use these as templates for other kernel tests.
+#
+
+
+class TestElementwiseBinaryDivDtypeSweep(ElementwiseBinaryParityBase):
+    """Test Div operation with multiple dtype configurations.
+
+    Demonstrates dtype sweep parameterization. Tests integer vs float division
+    behavior across different data types.
+
+    This is especially valuable for Div because:
+    - INT8 ÷ INT8 → integer division (7÷2=3)
+    - FLOAT32 ÷ FLOAT32 → float division (7÷2=3.5)
+    - UINT8 ÷ UINT8 → unsigned integer division
+
+    Each configuration generates a full test suite (18 tests).
+
+    Known Issue: FINN's Python execute_node uses float division for integer types,
+    causing test_manual_python_vs_golden to fail for INT8/UINT8 (marked xfail).
+    FLOAT32 tests pass correctly. cppsim tests all pass (integer division works in HLS).
+    """
+    operation_type = "Div"
+
+    def get_dtype_sweep(self):
+        """Define dtype configurations to test."""
+        return [
+            # Signed integer division
+            {"input": DataType["INT8"], "param": DataType["INT8"], "output": DataType["INT8"]},
+            # Float division (different behavior than integer)
+            {"input": DataType["FLOAT32"], "param": DataType["FLOAT32"], "output": DataType["FLOAT32"]},
+            # Unsigned integer division
+            {"input": DataType["UINT8"], "param": DataType["UINT8"], "output": DataType["UINT8"]},
+        ]
+
+    def configure_for_dtype_config(self, config: Dict[str, DataType]):
+        """Apply dtype configuration to instance attributes."""
+        self.input_dtype = config["input"]
+        self.param_dtype = config["param"]
+        self.output_dtype = config["output"]
+
+    def test_manual_python_vs_golden(self):
+        """Override to conditionally mark integer division as xfail.
+
+        FINN's execute_node uses float division for integer types (upstream bug).
+        Float division tests should pass normally.
+        """
+        if self.input_dtype.is_integer() and self.param_dtype.is_integer():
+            pytest.xfail(
+                reason="FINN execute_node uses float division for integer types (upstream bug). "
+                "Golden reference and cppsim both correctly use integer division."
+            )
+        super().test_manual_python_vs_golden()
+
+
+class TestElementwiseBinaryAddShapeSweep(ElementwiseBinaryParityBase):
+    """Test Add operation with multiple shape configurations.
+
+    Demonstrates shape sweep parameterization. Tests different spatial dimensions
+    and batch sizes to validate broadcast behavior and PE parallelization.
+
+    Shape variations test:
+    - 2D tensors (batch, channels)
+    - 4D tensors (batch, height, width, channels) - NHWC layout
+    - Different batch sizes
+    - Different spatial resolutions
+
+    Each configuration generates a full test suite (18 tests).
+    """
+    operation_type = "Add"
+
+    def get_shape_sweep(self):
+        """Define shape configurations to test."""
+        return [
+            # 2D tensor (flattened)
+            {"batch": 1, "height": 1, "width": 64, "channels": 64},
+            # 4D tensor (8x8 spatial)
+            {"batch": 1, "height": 8, "width": 8, "channels": 64},
+            # Larger spatial dimensions
+            {"batch": 1, "height": 16, "width": 16, "channels": 32},
+            # Multi-batch
+            {"batch": 4, "height": 8, "width": 8, "channels": 64},
+        ]
+
+    def configure_for_shape_config(self, config: Dict[str, int]):
+        """Apply shape configuration to instance attributes."""
+        self.batch = config["batch"]
+        self.height = config["height"]
+        self.width = config["width"]
+        self.channels = config["channels"]
+
+
+class TestElementwiseBinaryAddDtypeSweep(ElementwiseBinaryParityBase):
+    """Test Add operation with multiple dtype configurations.
+
+    Demonstrates dtype sweep for accumulation bitwidth expansion testing.
+    Shows how output bitwidth grows to prevent overflow:
+
+    - INT4 + INT4 → INT8 (output needs 1 extra bit)
+    - INT8 + INT8 → INT16 (output needs 1 extra bit)
+    - INT16 + INT16 → INT32 (output needs 1 extra bit)
+
+    Each configuration generates a full test suite (18 tests).
+    """
+    operation_type = "Add"
+
+    def get_dtype_sweep(self):
+        """Define dtype configurations to test bitwidth expansion."""
+        return [
+            # Narrow inputs → wider output
+            {"input": DataType["INT4"], "param": DataType["INT4"], "output": DataType["INT8"]},
+            # Standard configuration
+            {"input": DataType["INT8"], "param": DataType["INT8"], "output": DataType["INT16"]},
+            # Wide inputs → very wide output
+            {"input": DataType["INT16"], "param": DataType["INT16"], "output": DataType["INT32"]},
+        ]
+
+    def configure_for_dtype_config(self, config: Dict[str, DataType]):
+        """Apply dtype configuration to instance attributes."""
+        self.input_dtype = config["input"]
+        self.param_dtype = config["param"]
+        self.output_dtype = config["output"]
+
+
+class TestElementwiseBinaryEqualDtypeSweep(ElementwiseBinaryParityBase):
+    """Test Equal operation with multiple dtype configurations.
+
+    Demonstrates dtype sweep for comparison operations. Comparison operations
+    always produce BINARY output (0 or 1) regardless of input dtype.
+
+    Tests:
+    - INT8 == INT8 → BINARY
+    - FLOAT32 == FLOAT32 → BINARY
+    - UINT8 == UINT8 → BINARY
+
+    This validates that output dtype is always BINARY, independent of inputs.
+
+    Each configuration generates a full test suite (18 tests).
+    """
+    operation_type = "Equal"
+
+    def get_dtype_sweep(self):
+        """Define dtype configurations to test comparison output."""
+        return [
+            # Signed integer comparison
+            {"input": DataType["INT8"], "param": DataType["INT8"], "output": DataType["BINARY"]},
+            # Float comparison
+            {"input": DataType["FLOAT32"], "param": DataType["FLOAT32"], "output": DataType["BINARY"]},
+            # Unsigned integer comparison
+            {"input": DataType["UINT8"], "param": DataType["UINT8"], "output": DataType["BINARY"]},
+        ]
+
+    def configure_for_dtype_config(self, config: Dict[str, DataType]):
+        """Apply dtype configuration to instance attributes."""
+        self.input_dtype = config["input"]
+        self.param_dtype = config["param"]
+        self.output_dtype = config["output"]
 
 
 # =============================================================================

@@ -60,7 +60,7 @@ from tests.frameworks.kernel_test_base import KernelTestConfig
 from tests.support.backend_utils import specialize_to_backend
 
 # Import test fixtures
-from tests.support.context import make_execution_context
+from tests.support.context import make_execution_context_qonnx
 from tests.support.executors import CppSimExecutor, PythonExecutor, RTLSimExecutor
 
 # Import Phase 1 utilities
@@ -108,23 +108,62 @@ class SingleKernelTest(KernelTestConfig):
     def compute_golden_reference(
         self, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        """Compute test-owned golden reference.
+        """Compute golden reference using pure ONNX model (Stage 1).
 
-        Each test defines what "correct" means for its specific test case.
-        This is TEST LOGIC, not production code!
+        IMPORTANT: Golden reference must be independent of QONNX/FINN/Brainsmith.
+
+        Best practice implementation:
+        1. Create pure ONNX model (via make_onnx_model())
+        2. Execute with ONNX Runtime
+        3. Return outputs
+
+        DO NOT:
+        - Use QONNX DataType annotations in golden reference
+        - Use FINN/Brainsmith execution (execute_node, cppsim, etc.)
+        - Depend on kernel inference transforms
 
         Args:
             inputs: Dict mapping input names → numpy arrays
-                   Example: {"input0": arr1, "input1": arr2}
+                   (Generated from pure ONNX model via make_execution_context_onnx)
 
         Returns:
             Dict mapping output names → expected numpy arrays
-            Example: {"output": expected_arr}
 
-        Example:
+        Example (ONNX Runtime - RECOMMENDED):
             def compute_golden_reference(self, inputs):
-                '''Element-wise addition.'''
-                return {"output": inputs["input0"] + inputs["input1"]}
+                import onnxruntime as ort
+
+                # Create pure ONNX model (Stage 1)
+                onnx_model, _ = self.make_onnx_model()
+
+                # Execute with ONNX Runtime
+                sess = ort.InferenceSession(
+                    onnx_model.model.SerializeToString(),
+                    providers=['CPUExecutionProvider']
+                )
+
+                # Filter inputs (exclude initializers)
+                runtime_inputs = {
+                    name: inputs[name]
+                    for name in [inp.name for inp in sess.get_inputs()]
+                    if name in inputs
+                }
+
+                # Execute
+                ort_outputs = sess.run(None, runtime_inputs)
+
+                # Return dict
+                output_names = [out.name for out in sess.get_outputs()]
+                return {name: output for name, output in zip(output_names, ort_outputs)}
+
+        Example (NumPy fallback - ONLY if ONNX Runtime fails):
+            def compute_golden_reference(self, inputs):
+                try:
+                    # Try ONNX Runtime first
+                    return self._golden_via_onnx_runtime(inputs)
+                except:
+                    # Fallback to NumPy (for operations ONNX Runtime doesn't support)
+                    return {"output": np.add(inputs["input0"], inputs["input1"])}
         """
         pass
 
@@ -173,12 +212,14 @@ class SingleKernelTest(KernelTestConfig):
             executor = CppSimExecutor()
             outputs = executor.execute(op, model, inputs)
         """
-        # Stage 1 → Stage 2: ONNX → Base Kernel
+        # Stage 1 → Stage 3: ONNX → QONNX → Base Kernel
         runner = PipelineRunner()
         op, model = runner.run(
-            model_factory=self.make_test_model,
+            model_factory=self.make_onnx_model,
             transform=self.get_kernel_inference_transform(),
-            configure_fn=lambda op, model: self.configure_kernel_node(op, model)
+            configure_fn=lambda op, model: self.configure_kernel_node(op, model),
+            qonnx_annotations=self.get_qonnx_annotations(),
+            qonnx_layouts=self.get_qonnx_layouts()
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (optional)
@@ -369,7 +410,7 @@ class SingleKernelTest(KernelTestConfig):
 
         # Generate test inputs (deterministic)
         np.random.seed(42)
-        inputs = make_execution_context(model, op)
+        inputs = make_execution_context_qonnx(model, op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -420,7 +461,7 @@ class SingleKernelTest(KernelTestConfig):
 
         # Generate test inputs (deterministic)
         np.random.seed(42)
-        inputs = make_execution_context(model, op)
+        inputs = make_execution_context_qonnx(model, op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -478,7 +519,7 @@ class SingleKernelTest(KernelTestConfig):
 
         # Generate test inputs (deterministic)
         np.random.seed(42)
-        inputs = make_execution_context(model, op)
+        inputs = make_execution_context_qonnx(model, op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)

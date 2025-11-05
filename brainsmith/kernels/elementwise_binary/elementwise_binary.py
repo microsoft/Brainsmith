@@ -110,6 +110,22 @@ def _elementwise_binary_output_datatype():
     """
     def resolver(interfaces, param_getter, model, tensor_name):
         func = param_getter("func")
+        lhs_dt = interfaces["lhs"].datatype
+        rhs_dt = interfaces["rhs"].datatype
+
+        # Check if inputs are integer types
+        # For float types, skip bitwidth calculations (matching FINN behavior)
+        if not (lhs_dt.is_integer() and rhs_dt.is_integer()):
+            # Float type handling:
+            # - Comparison operations still return BINARY
+            # - Arithmetic/bitwise operations return LHS datatype (float passthrough)
+            if func in ("Equal", "Less", "LessOrEqual", "Greater", "GreaterOrEqual"):
+                return smallest_datatype_for_range(0, 1)  # Still BINARY for comparisons
+            else:
+                # Float operations preserve input type
+                return lhs_dt
+
+        # Integer type handling (bitwidth-aware derivation):
 
         # Arithmetic operations (context-aware builders from spec_helpers)
         if func == "Add":
@@ -119,8 +135,6 @@ def _elementwise_binary_output_datatype():
         elif func == "Mul":
             # Use FINN's formula: output_width = lhs_width + rhs_width (Vivado HLS UG1399)
             # This follows hardware synthesis rules for multiplication
-            lhs_dt = interfaces["lhs"].datatype
-            rhs_dt = interfaces["rhs"].datatype
             lhs_width = lhs_dt.bitwidth()
             rhs_width = rhs_dt.bitwidth()
             signed = lhs_dt.signed() or rhs_dt.signed()
@@ -144,7 +158,7 @@ def _elementwise_binary_output_datatype():
         # BitShift operations → use LHS datatype (shift doesn't change type)
         # Note: "BitShift" is the standard ONNX operation (direction in attribute)
         elif func == "BitShift":
-            return interfaces["lhs"].datatype
+            return lhs_dt
 
         else:
             raise ValueError(
@@ -274,9 +288,6 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
     },
 
     constraints=[
-        # Both inputs must be integer types
-        df.DatatypeInteger(("lhs", "rhs")),
-
         # Pattern-specific validation (dynamic vs static, broadcasting)
         df.CustomConstraint(
             check_fn=_validate_input_pattern,
@@ -748,6 +759,7 @@ class ElementwiseBinaryOp(KernelOp):
         # Get datatypes
         lhs_dtype = self.design_point.inputs["lhs"].datatype
         rhs_dtype = self.design_point.inputs["rhs"].datatype
+        operation = self.get_nodeattr("func")
 
         # Convert to appropriate types for NumPy
         # Use int64 for integer types to avoid overflow in intermediate computation
@@ -755,7 +767,14 @@ class ElementwiseBinaryOp(KernelOp):
         rhs = rhs.astype(np.int64) if rhs_dtype.is_integer() else rhs
 
         # Apply operation with broadcasting
-        out = self.npy_op(lhs, rhs)
+        # Special handling for division: use truncating division for integer types to match hardware
+        if operation == "Div" and lhs_dtype.is_integer() and rhs_dtype.is_integer():
+            # Integer division: truncate toward zero (C/C++ semantics), not floor division
+            # This matches hardware implementation in HLS/RTL
+            out = np.trunc(np.divide(lhs, rhs)).astype(np.int64)
+        else:
+            # All other operations: use standard NumPy operation
+            out = self.npy_op(lhs, rhs)
 
         # Store result (as float32 container, QONNX convention)
         context[node.output[0]] = out.astype(np.float32)

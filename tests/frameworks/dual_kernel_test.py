@@ -77,7 +77,7 @@ from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecut
 from tests.support.backend_utils import specialize_to_backend
 
 # Import test fixtures and assertions
-from tests.support.context import make_execution_context
+from tests.support.context import make_execution_context_qonnx
 from tests.support.assertions import (
     assert_shapes_match,
     assert_widths_match,
@@ -255,12 +255,14 @@ class DualKernelTest(KernelTestConfig):
             executor = CppSimExecutor()
             outputs = executor.execute(op, model, inputs)
         """
-        # Stage 1 → Stage 2: ONNX → Base Kernel
+        # Stage 1 → Stage 3: ONNX → QONNX → FINN Kernel
         runner = PipelineRunner()
         op, model = runner.run(
-            model_factory=self.make_test_model,
+            model_factory=self.make_onnx_model,
             transform=self.get_manual_transform(),
-            configure_fn=lambda op, model: self.configure_kernel_node(op, model)
+            configure_fn=lambda op, model: self.configure_kernel_node(op, model),
+            qonnx_annotations=self.get_qonnx_annotations(),
+            qonnx_layouts=self.get_qonnx_layouts()
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (optional)
@@ -311,12 +313,14 @@ class DualKernelTest(KernelTestConfig):
             executor = CppSimExecutor()
             outputs = executor.execute(op, model, inputs)
         """
-        # Stage 1 → Stage 2: ONNX → Base Kernel
+        # Stage 1 → Stage 3: ONNX → QONNX → Brainsmith Kernel
         runner = PipelineRunner()
         op, model = runner.run(
-            model_factory=self.make_test_model,
+            model_factory=self.make_onnx_model,
             transform=self.get_auto_transform(),
-            configure_fn=lambda op, model: self.configure_kernel_node(op, model)
+            configure_fn=lambda op, model: self.configure_kernel_node(op, model),
+            qonnx_annotations=self.get_qonnx_annotations(),
+            qonnx_layouts=self.get_qonnx_layouts()
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (optional)
@@ -727,7 +731,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(manual_model, manual_op)
+        inputs = make_execution_context_qonnx(manual_model, manual_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -750,7 +754,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(auto_model, auto_op)
+        inputs = make_execution_context_qonnx(auto_model, auto_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -775,7 +779,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(manual_model, manual_op)
+        inputs = make_execution_context_qonnx(manual_model, manual_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -800,7 +804,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(auto_model, auto_op)
+        inputs = make_execution_context_qonnx(auto_model, auto_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -825,7 +829,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(manual_model, manual_op)
+        inputs = make_execution_context_qonnx(manual_model, manual_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)
@@ -850,7 +854,7 @@ class DualKernelTest(KernelTestConfig):
 
         # Generate test inputs
         np.random.seed(42)
-        inputs = make_execution_context(auto_model, auto_op)
+        inputs = make_execution_context_qonnx(auto_model, auto_op)
 
         # Compute golden reference
         golden_outputs = self.compute_golden_reference(inputs)

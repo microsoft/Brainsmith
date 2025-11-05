@@ -41,6 +41,10 @@ theme:
 
 use_directory_urls: true
 
+# Exclude files from build
+exclude_docs: |
+  kernels/_template.md
+
 plugins:
   - search
   - mkdocstrings:
@@ -81,6 +85,7 @@ markdown_extensions:
   - def_list
   - pymdownx.tasklist:
       custom_checkbox: true
+  - tables
 
   # Navigation
   - toc:
@@ -109,9 +114,24 @@ nav:
       - Kernel Modeling: developer-guide/2-core-systems/kernel-modeling.md
       - Component Registry: developer-guide/2-core-systems/component-registry.md
     - 3. Reference:
-      - Kernels: developer-guide/3-reference/kernels.md
+      - Kernel Architecture: developer-guide/3-reference/kernels.md
       - Blueprints: developer-guide/3-reference/blueprints.md
       - CLI Reference: developer-guide/3-reference/cli.md
+  - Kernel Reference:
+    - Overview: kernels/index.md
+    - Core Kernels:
+      - AddStreams: kernels/addstreams.md
+      - Crop: kernels/crop.md
+      - DuplicateStreams: kernels/duplicate_streams.md
+      - ElementwiseBinary: kernels/elementwise_binary.md
+      - LayerNorm: kernels/layernorm.md
+      - Softmax: kernels/softmax.md
+    - FINN Legacy:
+      - ChannelwiseOp: kernels/channelwise.md
+      - Thresholding: kernels/thresholding.md
+    - Experimental:
+      - RotaryEmbedding: kernels/rotaryembedding.md
+      - Shuffle: kernels/shuffle.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md

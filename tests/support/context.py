@@ -6,22 +6,27 @@ used by executors and test frameworks.
 
 Key Features:
 - Deterministic random data generation with seed support
+- ONNX-native and QONNX-native data generation (stage separation)
 - Automatic shape and datatype inference from operators
 - Handles both streaming inputs and initializers (weights)
 - Pre-allocates output tensors
 
+Architecture:
+    make_execution_context_onnx() - Generate from TensorProto types (Stage 1)
+    make_execution_context_qonnx() - Generate from QONNX DataType (Stage 2+)
+
 Usage:
-    from tests.support.context import make_execution_context
+    from tests.support.context import make_execution_context_onnx, make_execution_context_qonnx
 
-    # Generate test context with random seed
-    context = make_execution_context(model, op, seed=42)
+    # Stage 1: Pure ONNX (for golden reference)
+    context = make_execution_context_onnx(model, input_names, seed=42)
 
-    # Execute operator
-    op.execute_node(context, model.graph)
+    # Stage 2+: QONNX/FINN (for hardware execution)
+    context = make_execution_context_qonnx(model, op, seed=42)
 """
 
 import numpy as np
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from tests.support.constants import (
@@ -29,24 +34,95 @@ from tests.support.constants import (
     SIGNED_TEST_DATA_MIN,
     SIGNED_TEST_DATA_MAX,
 )
+from tests.support.onnx_utils import generate_onnx_test_data, get_onnx_tensor_type
 
 
-def make_execution_context(
+def make_execution_context_onnx(
+    model: ModelWrapper,
+    input_names: List[str],
+    seed: Optional[int] = None
+) -> Dict[str, np.ndarray]:
+    """Create execution context from pure ONNX model (TensorProto types).
+
+    Generates test data based on ONNX TensorProto types, independent of
+    QONNX DataType annotations. Used for golden reference validation.
+
+    This is Stage 1 data generation:
+    - Reads TensorProto types from model (TensorProto.FLOAT, INT8, etc.)
+    - Generates appropriate test data for each type
+    - Independent of FINN/Brainsmith QONNX annotations
+
+    Args:
+        model: ONNX model wrapper (pure ONNX, no QONNX annotations required)
+        input_names: List of input tensor names to generate data for
+        seed: Random seed for reproducibility (optional)
+
+    Returns:
+        Dict mapping tensor names → numpy arrays with test data
+
+    Raises:
+        ValueError: If input tensor not found or has no type info
+
+    Example:
+        >>> # Stage 1: Generate data for pure ONNX model
+        >>> onnx_model, _ = make_onnx_model()  # Pure ONNX
+        >>> input_names = [inp.name for inp in onnx_model.graph.input]
+        >>> context = make_execution_context_onnx(onnx_model, input_names, seed=42)
+        >>>
+        >>> # Execute with ONNX Runtime for golden reference
+        >>> import onnxruntime as ort
+        >>> sess = ort.InferenceSession(onnx_model.model.SerializeToString())
+        >>> outputs = sess.run(None, context)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    context = {}
+
+    for inp_name in input_names:
+        # Skip if it's an initializer (weight/parameter)
+        if model.get_initializer(inp_name) is not None:
+            context[inp_name] = model.get_initializer(inp_name)
+            continue
+
+        # Get TensorProto type and shape
+        try:
+            tensor_type = get_onnx_tensor_type(model, inp_name)
+            shape = model.get_tensor_shape(inp_name)
+
+            # Generate ONNX-native test data
+            data = generate_onnx_test_data(tensor_type, tuple(shape), seed=None)
+            context[inp_name] = data
+
+        except Exception as e:
+            raise ValueError(
+                f"Cannot generate ONNX test data for input '{inp_name}': {e}\n"
+                f"This typically means the tensor is missing type information.\n"
+                f"Ensure the ONNX model has proper type annotations."
+            )
+
+    return context
+
+
+def make_execution_context_qonnx(
     model: ModelWrapper,
     op: HWCustomOp,
     seed: Optional[int] = None
 ) -> Dict[str, np.ndarray]:
-    """Create execution context with random inputs for testing.
+    """Create execution context from QONNX model (DataType annotations).
 
-    Generates random test data based on operator's shape and datatype
-    specifications. This is the single source of truth for test data
-    generation, used by both ParityTestBase and BackendExecutor classes.
+    Generates test data based on QONNX DataType annotations. Used for
+    FINN/Brainsmith hardware execution (Python, cppsim, rtlsim).
+
+    This is Stage 2+ data generation:
+    - Reads QONNX DataType from operator (DataType["INT8"], etc.)
+    - Generates data in DataType's valid range
+    - Uses FINN/QONNX conventions (FLOAT containers for integers)
 
     Args:
-        model: ONNX model wrapper containing the operator
-        op: Hardware custom operator to generate context for
+        model: QONNX model wrapper (with DataType annotations)
+        op: Hardware operator instance (HWCustomOp with DataType info)
         seed: Random seed for reproducibility (optional)
-              If provided, ensures deterministic data generation
 
     Returns:
         Dict mapping tensor names to numpy arrays containing:
@@ -58,9 +134,12 @@ def make_execution_context(
         ValueError: If shape or datatype cannot be determined for any input/output
 
     Example:
-        >>> # Generate deterministic test data
-        >>> context = make_execution_context(model, op, seed=42)
-        >>> op.execute_node(context, model.graph)
+        >>> # Stage 2+: Generate data for QONNX/FINN execution
+        >>> qonnx_model, op = run_inference_pipeline()  # QONNX annotations added
+        >>> context = make_execution_context_qonnx(qonnx_model, op, seed=42)
+        >>>
+        >>> # Execute with FINN
+        >>> op.execute_node(context, qonnx_model.graph)
         >>> output = context[op.onnx_node.output[0]]
     """
     if seed is not None:
@@ -134,3 +213,28 @@ def make_execution_context(
             )
 
     return context
+
+
+def make_execution_context(
+    model: ModelWrapper,
+    op: HWCustomOp,
+    seed: Optional[int] = None
+) -> Dict[str, np.ndarray]:
+    """[DEPRECATED] Use make_execution_context_qonnx() instead.
+
+    This function is kept for backward compatibility but will be removed
+    in a future version. It assumes QONNX annotations are present.
+
+    For new code:
+    - Use make_execution_context_onnx() for golden reference (Stage 1)
+    - Use make_execution_context_qonnx() for FINN execution (Stage 2+)
+    """
+    import warnings
+    warnings.warn(
+        "make_execution_context() is deprecated. "
+        "Use make_execution_context_onnx() for golden reference or "
+        "make_execution_context_qonnx() for FINN/Brainsmith execution.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return make_execution_context_qonnx(model, op, seed)
