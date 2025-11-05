@@ -35,7 +35,7 @@ The build is controlled by a layered CMake setup:
 
 ### 1. Configure
 
-From the brainwave directory:
+From `brainwave` (or top-level CMake) directory:
 
 ```
 bash
