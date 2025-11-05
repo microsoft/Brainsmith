@@ -39,25 +39,29 @@ From your build directory:
 
 ```
 bash
-cmake -S ../ -B build
+cmake -S ./ -B build -DCORE_PATH=<path to the brainsmith export>
 ```
 
-Or explicitly specify components:
+### 2. Build Targets
 
 ```
-cmake -S ../ -B build -DBUILD_SW=ON -DBUILD_PY=ON
+cd build
+make <target>
 ```
-
-### 2. Build Targets (make)
 
 | Target       | Description                                    |
 | :----------- | :--------------------------------------------- |
 | `hw_project` | Creates the Vivado project                     |
-| `hw_synth`   | Runs synthesis and generates checkpoints       |
 | `hw_compile` | Runs implementation and generates bitstream    |
-| `sw_build`   | Builds the shared library and main executable  |
-| `sw_install` | Packages binaries and libraries into `sw/dist` |
 | `sw_python`  | Builds the Python extension module `brainwave` |
+
+Optional targets:
+
+| Target       | Description                                    |
+| :----------- | :--------------------------------------------- |
+| `hw_synth`   | Runs synthesis only and generates checkpoints  |
+| `sw_build`   | Builds the shared library and main executable (cpp)  |
+| `sw_install` | Packages binaries and libraries into `sw/dist` (cpp) |
 
 ## Requirements
 
