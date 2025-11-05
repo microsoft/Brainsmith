@@ -75,3 +75,6 @@ misc/
 *.upgrade_log
 *.d
 old/
+
+# Include a few .xml files
+!component.xml
