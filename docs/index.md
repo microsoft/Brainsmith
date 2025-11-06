@@ -1,11 +1,8 @@
 # Brainsmith
 
-**Open-source AI acceleration on FPGA: from ONNX to RTL**
+## Open-source AI acceleration on FPGA: from ONNX to RTL
 
 Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
-
-!!! info "Launch Date: November 2025"
-    This repository is in pre-release and under active co-development by **Microsoft** and **AMD**. Stay tuned for our official release!
 
 ---
 
@@ -58,6 +55,7 @@ Get performance estimates across all configurations in 30-60 minutes. Choose you
 → [Blueprints](developer-guide/3-reference/blueprints.md) - Learn the configuration format
 
 **Extending Brainsmith?**
+→ [Kernel Op Developer Guide](developer-guide/kernel_ops/README.md) - Complete guide to building FPGA hardware kernels
 → [Component Registry](developer-guide/2-core-systems/component-registry.md) - Add custom kernels and transforms
 → [Kernels](developer-guide/3-reference/kernels.md) - Understand kernel architecture and create custom operations
 

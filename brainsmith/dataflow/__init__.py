@@ -45,6 +45,7 @@ from .spec_helpers import (
     # Dimension/datatype derivation
     derive_dim,
     derive_datatype,
+    constant_datatype,
     value_optimized_datatype,
     # Arithmetic range computation
     compute_add_range,
@@ -65,6 +66,11 @@ from .spec_helpers import (
 from .broadcast_helpers import (
     BroadcastInfo,
     compute_broadcast_info,
+)
+
+# Inference helpers (for kernel inference preprocessing)
+from .inference_helpers import (
+    lift_scalar_to_rank1,
 )
 
 # QONNX types (direct from QONNX)
@@ -170,6 +176,9 @@ __all__ = [
 
     # Transformation
     'TransformationResult',
+
+    # Inference helpers
+    'lift_scalar_to_rank1',  # For scalar input normalization in kernel inference
 
     # Essential types
     'Shape',

@@ -32,6 +32,7 @@ Usage:
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Optional, List
 
+import numpy as np
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
@@ -53,7 +54,10 @@ class KernelTestConfig(ABC):
 
     Optional Hooks:
     - get_qonnx_layouts(): DataLayout annotations (optional)
+    - get_stage1_tensorproto_types(): Actual TensorProto types for Stage 1 (optional)
     - configure_kernel_node(): Configure PE, SIMD, etc.
+    - compute_golden_reference(): Golden reference via ONNX Runtime (default provided)
+    - compute_golden_reference_numpy(): NumPy fallback for ONNX Runtime (optional)
     - get_tolerance_*(): Tolerances for golden reference validation
     - get_dtype_sweep(): Parameterized dtype testing (optional)
     - get_shape_sweep(): Parameterized shape testing (optional)
@@ -145,6 +149,41 @@ class KernelTestConfig(ABC):
                 }
         """
         return {}
+
+    def get_stage1_tensorproto_types(self) -> Dict[str, int]:
+        """Return actual TensorProto types for Stage 1 pure ONNX model (optional).
+
+        Maps tensor names to actual ONNX TensorProto types (INT8, INT16, FLOAT, etc.)
+        for Stage 1 golden reference execution. This is different from Stage 2 which
+        uses FLOAT containers with QONNX DataType annotations (FINN convention).
+
+        Default implementation converts QONNX annotations to actual TensorProto types
+        using datatype_to_actual_tensorproto(). Override for custom type mappings.
+
+        Returns:
+            Dict mapping tensor names → TensorProto type constants
+            Default: Auto-convert from get_qonnx_annotations()
+
+        Example:
+            def get_stage1_tensorproto_types(self):
+                from onnx import TensorProto
+                return {
+                    "input": TensorProto.INT8,     # Actual INT8 type
+                    "param": TensorProto.INT8,      # Actual INT8 type
+                    "output": TensorProto.INT16     # Actual INT16 type
+                }
+
+        Note:
+            - Used for golden reference execution with ONNX Runtime
+            - Ensures correct semantics (e.g., INT8÷INT8 uses integer division)
+            - Stage 2 (QONNX) still uses FLOAT containers for hardware execution
+        """
+        from tests.support.onnx_utils import datatype_to_actual_tensorproto
+        annotations = self.get_qonnx_annotations()
+        return {
+            name: datatype_to_actual_tensorproto(dtype)
+            for name, dtype in annotations.items()
+        }
 
     # ========================================================================
     # Parameterization Hooks (Optional)
@@ -256,6 +295,35 @@ class KernelTestConfig(ABC):
         pass
 
     # ========================================================================
+    # Test Data Configuration
+    # ========================================================================
+
+    def get_test_seed(self) -> int:
+        """Return random seed for test data generation (optional).
+
+        Provides deterministic random seed for reproducible test failures.
+        Override to customize seed per test class or configuration.
+
+        Returns:
+            Random seed integer (default: 42)
+
+        Example:
+            def get_test_seed(self):
+                return 12345  # Custom seed for this test
+
+        Note:
+            - Default seed is 42 for deterministic behavior
+            - Can be overridden by pytest --seed CLI option
+            - Same seed → Same random data → Reproducible failures
+            - Used by make_execution_context_* functions
+
+        CLI usage:
+            pytest --seed=12345    # Override seed for all tests
+            pytest                 # Use default (42) or per-test override
+        """
+        return 42
+
+    # ========================================================================
     # I/O Configuration - Required
     # ========================================================================
 
@@ -323,6 +391,103 @@ class KernelTestConfig(ABC):
                     op._ensure_ready(model)
         """
         pass
+
+    # ========================================================================
+    # Golden Reference Execution (Default Implementation)
+    # ========================================================================
+
+    def compute_golden_reference(
+        self, inputs: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
+        """Compute golden reference using Stage 1 ONNX + ONNX Runtime (default).
+
+        Default implementation:
+        1. Creates pure ONNX model via make_onnx_model()
+        2. Executes with ONNX Runtime (correct TensorProto semantics)
+        3. Falls back to compute_golden_reference_numpy() if ONNX Runtime fails
+
+        Override this method for custom golden reference logic, OR override
+        compute_golden_reference_numpy() to provide NumPy fallback only.
+
+        Args:
+            inputs: Dict mapping input names → NumPy arrays
+
+        Returns:
+            Dict mapping output names → expected NumPy arrays
+
+        Example (Use Default):
+            # No override needed - default uses ONNX Runtime automatically
+            class TestMyKernel(SingleKernelTest):
+                def make_onnx_model(self):
+                    # Create Stage 1 model with actual TensorProto types
+                    return model, "Add_0"
+
+                # compute_golden_reference() inherited - uses ONNX Runtime!
+
+        Example (Custom NumPy Fallback):
+            def compute_golden_reference_numpy(self, inputs):
+                '''NumPy fallback for ops ONNX Runtime doesn't support.'''
+                return {"output": np.add(inputs["input0"], inputs["input1"])}
+
+        Example (Fully Custom):
+            def compute_golden_reference(self, inputs):
+                '''Completely custom golden reference.'''
+                # Custom logic here
+                return {"output": custom_implementation(inputs)}
+
+        Note:
+            - Default works for most kernels (ONNX Runtime supports most ops)
+            - Override compute_golden_reference_numpy() for ONNX Runtime fallback
+            - Override compute_golden_reference() for fully custom logic
+            - Golden reference must be independent of FINN/Brainsmith
+        """
+        from tests.support.golden_reference import execute_onnx_runtime_golden
+
+        # Create Stage 1 model (pure ONNX, actual TensorProto types)
+        model, _ = self.make_onnx_model()
+
+        # Execute with ONNX Runtime (falls back to NumPy if needed)
+        return execute_onnx_runtime_golden(
+            model,
+            inputs,
+            numpy_fallback=lambda inp: self.compute_golden_reference_numpy(inp)
+        )
+
+    def compute_golden_reference_numpy(
+        self, inputs: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
+        """NumPy fallback for compute_golden_reference() (optional).
+
+        Called when ONNX Runtime execution fails (unsupported op, type validation, etc.).
+        Override to provide NumPy-based golden reference for operations that
+        ONNX Runtime doesn't support.
+
+        Default implementation raises RuntimeError (no fallback).
+
+        Args:
+            inputs: Dict mapping input names → NumPy arrays
+
+        Returns:
+            Dict mapping output names → expected NumPy arrays
+
+        Raises:
+            RuntimeError: If not overridden (no fallback available)
+
+        Example:
+            def compute_golden_reference_numpy(self, inputs):
+                '''NumPy fallback for element-wise addition.'''
+                return {"output": inputs["input0"] + inputs["input1"]}
+
+        Note:
+            - Only needed if ONNX Runtime doesn't support your operation
+            - Most kernels work with default ONNX Runtime execution
+            - Use NumPy's broadcasting and dtype handling
+        """
+        raise RuntimeError(
+            f"ONNX Runtime execution failed for {self.__class__.__name__} and "
+            f"no NumPy fallback provided. Override compute_golden_reference_numpy() "
+            f"to provide a NumPy-based golden reference."
+        )
 
     def get_tolerance_python(self) -> Dict[str, float]:
         """Tolerance for Python execution vs golden reference.

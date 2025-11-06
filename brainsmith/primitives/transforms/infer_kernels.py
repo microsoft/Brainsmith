@@ -11,24 +11,24 @@ This module provides InferKernels, a smart dispatcher that handles both
 new KernelOp kernels and legacy HWCustomOp kernels with their inference
 transforms.
 
-Automatically filters out infrastructure kernels (is_infrastructure=True)
-since they're inserted by topology transforms, not pattern matching.
+IMPORTANT: Requires explicit kernel list to avoid ambiguity in tests.
+Auto-discovery has been disabled.
 
 Example usage:
     from brainsmith.primitives.transforms.infer_kernels import InferKernels
-    from brainsmith.kernels.addstreams import AddStreams
+    from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
     from brainsmith.kernels.softmax import Softmax
     from finn.custom_op.fpgadataflow.matrixvectoractivation import MVAU
 
-    # Infer specific kernels (mix of new and legacy)
+    # Explicit list of kernels to infer (REQUIRED)
     model = model.transform(InferKernels([
-        AddStreams,  # New KernelOp → uses InferKernel
-        Softmax,     # New KernelOp → uses InferKernel
-        MVAU,        # Legacy HWCustomOp → uses InferQuantizedMatrixVectorActivation
+        ElementwiseBinaryOp,  # New KernelOp → uses InferKernel
+        Softmax,              # New KernelOp → uses InferKernel
+        MVAU,                 # Legacy HWCustomOp → uses InferQuantizedMatrixVectorActivation
     ]))
 
-    # Infer all registered kernels (backward compatible)
-    model = model.transform(InferKernels())
+    # Error: No auto-discovery
+    model = model.transform(InferKernels())  # ValueError!
 """
 
 import inspect
@@ -55,8 +55,9 @@ class InferKernels(Transformation):
     making the inference process more transparent and controllable.
 
     Args:
-        kernel_classes: List of kernel classes to infer. If None, infers all
-                       registered kernels (backward compatible).
+        kernel_classes: List of kernel classes to infer. REQUIRED - must be
+                       an explicit list to avoid ambiguity about which kernels
+                       are being tested.
 
     Example:
         # Explicit list of kernels to infer
@@ -70,24 +71,30 @@ class InferKernels(Transformation):
             MVAU,        # Legacy FINN kernel
         ]))
 
-        # Backward compatible: infer all registered kernels
-        model = model.transform(InferKernels())
-
     Implementation Notes:
         - Type-based dispatch: checks issubclass(cls, KernelOp)
         - Metadata-driven lookup for legacy transforms
         - Graceful handling of missing transforms (logs warning, continues)
         - Each kernel is processed independently (one failure doesn't stop others)
+        - Auto-discovery disabled: explicit list required for clarity
     """
 
-    def __init__(self, kernel_classes: Optional[List[Type]] = None):
+    def __init__(self, kernel_classes: List[Type]):
         """Initialize transform with kernel classes.
 
         Args:
-            kernel_classes: List of kernel classes to infer.
-                          If None, infers all registered KernelOp kernels.
+            kernel_classes: List of kernel classes to infer. REQUIRED.
+
+        Raises:
+            ValueError: If kernel_classes is None or not provided
         """
         super().__init__()
+        if kernel_classes is None:
+            raise ValueError(
+                "InferKernels requires an explicit list of kernel classes. "
+                "Auto-discovery has been disabled to avoid ambiguity in tests. "
+                "Example: InferKernels([ElementwiseBinaryOp])"
+            )
         self.kernel_classes = kernel_classes
 
     def apply(self, model: ModelWrapper):
@@ -101,48 +108,16 @@ class InferKernels(Transformation):
         Returns:
             Tuple of (transformed_model, graph_modified_flag)
         """
-        from brainsmith.registry import list_kernels, get_kernel, get_kernel_infer, get_component_metadata
+        from brainsmith.registry import get_kernel_infer
         from brainsmith.dataflow import KernelOp
 
         graph_modified = False
 
-        # Determine which kernels to process
-        if self.kernel_classes is None:
-            # Backward compatible: infer all registered computational kernels
-            # (excluding infrastructure kernels - they're inserted by topology transforms)
-            logger.info("No kernel classes specified, inferring all registered computational kernels")
-            all_kernel_names = list_kernels()
-            kernels_to_process = []
-            for name in all_kernel_names:
-                # Check infrastructure flag before loading
-                try:
-                    metadata = get_component_metadata(name, 'kernel')
-                    if metadata.is_infrastructure:
-                        logger.debug(f"Skipping {name}: infrastructure kernel (inserted by topology transforms)")
-                        continue
-                except KeyError:
-                    logger.debug(f"Skipping {name}: metadata not found")
-                    continue
-
-                cls = get_kernel(name)
-                # Guard: skip if cls is None or not a class
-                if cls is None:
-                    logger.debug(f"Skipping {name}: get_kernel() returned None")
-                    continue
-                if not inspect.isclass(cls):
-                    logger.debug(f"Skipping {name}: not a class (type={type(cls)})")
-                    continue
-                # Check if it's a KernelOp subclass
-                if issubclass(cls, KernelOp):
-                    # Include all KernelOp subclasses
-                    # can_infer_from() will determine if transformation applies
-                    kernels_to_process.append(cls)
-        else:
-            # Use explicit list
-            kernels_to_process = self.kernel_classes
+        # Use explicit list (None check already done in __init__)
+        kernels_to_process = self.kernel_classes
 
         if not kernels_to_process:
-            logger.warning("No kernels to infer")
+            logger.warning("Empty kernel list provided to InferKernels")
             return (model, False)
 
         # Process each kernel

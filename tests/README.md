@@ -11,10 +11,11 @@
 2. [Architecture Overview](#architecture-overview)
 3. [Test Framework Guide](#test-framework-guide)
 4. [Backend Integration](#backend-integration)
-5. [Coverage Analysis](#coverage-analysis)
-6. [Running Tests](#running-tests)
-7. [Directory Structure](#directory-structure)
-8. [Examples](#examples)
+5. [KernelOp Execution Model](#kernelop-execution-model)
+6. [Coverage Analysis](#coverage-analysis)
+7. [Running Tests](#running-tests)
+8. [Directory Structure](#directory-structure)
+9. [Examples](#examples)
 
 ---
 
@@ -340,6 +341,55 @@ op, model = specialize_to_backend(
 )
 # op.onnx_node.op_type == "AddStreams_hls"
 # isinstance(op, HLSBackend) == True ✅
+```
+
+---
+
+## KernelOp Execution Model
+
+### Lazy Initialization Pattern
+
+KernelOp uses lazy initialization for design_point (cached on instance):
+- `_ensure_ready(model_w)` must be called before accessing design_point
+- Called automatically during: InferDataTypes, build_design_space(), etc.
+- Requires ModelWrapper for tensor shape/datatype queries
+
+### QONNX Executor Compatibility
+
+QONNX's `execute_onnx()` creates fresh instances per node execution via `getCustomOp(node)`, which only receives NodeProto (no ModelWrapper).
+
+**Solution:** KernelOp.execute_node() calls `_ensure_initialized_for_execution(graph)` to reconstruct ModelWrapper from GraphProto parameter if needed.
+
+**Implementation Pattern:**
+```python
+def execute_node(self, context, graph):
+    # Defensive guard for QONNX executor
+    self._ensure_initialized_for_execution(graph)
+
+    # Now safe to access design_point
+    dtype = self.design_point.inputs["input"].datatype
+```
+
+This pattern is required for ALL KernelOp subclasses that access design_point during execution.
+
+**Why This Works:**
+- GraphProto contains all tensor shapes/datatypes
+- ModelWrapper reconstruction is fast (~1ms)
+- Idempotent guard: safe to call multiple times
+- Only rebuilds when needed (_design_point is None)
+
+**Example Implementation:**
+```python
+class MyKernelOp(KernelOp):
+    def execute_node(self, context, graph):
+        """Execute node in Python simulation."""
+        # ALWAYS call this first!
+        self._ensure_initialized_for_execution(graph)
+
+        # Now safe to access design_point properties
+        input_dtype = self.design_point.inputs["input"].datatype
+
+        # ... rest of implementation
 ```
 
 ---

@@ -30,35 +30,33 @@ void mean_stage(
 ) {
 #pragma HLS pipeline II=1 style=flp
 
-	static ap_uint<clog2(N)+1> count = 0; 
+	static ap_uint<clog2(N)+1> count = 0;
 	static TO sum = TO(0.0f);
-	static TO mean = TO(0.0f);
 #pragma HLS reset variable=count
 #pragma HLS reset variable=sum
-#pragma HLS reset variable=mean
-	
+
 	if (!in_s.empty()) {
 		hls::vector<TO,SIMD> out;
 		hls::vector<TI,SIMD> const in = in_s.read();
 
 		for(unsigned i=0; i<SIMD; i++) {
 #pragma HLS UNROLL
-			out[i] = TO(in[i]);	
+			out[i] = TO(in[i]);
 		}
 		out_s.write(out);
 
-		// Mean calc
+		// Accumulate sum
 		sum += TreeReduction<TO,SIMD>::reduce(out);
-		count+=SIMD;
-		mean = sum / TO(count);
+		count += SIMD;
 
+		// Compute mean only at the end (division by constant N, optimized to multiply)
 		if (count == N) {
+			TO mean = sum / TO(N);  // Constant division - compiler optimizes to multiply
 			count = 0;
-			mean_s.write(mean); 
-			mean = TO(0.0f);
+			mean_s.write(mean);
 			sum = TO(0.0f);
 		}
-		
+
 	}
 
 }

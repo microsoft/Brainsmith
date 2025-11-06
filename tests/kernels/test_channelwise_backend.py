@@ -91,12 +91,18 @@ class ChannelwiseParityBase(DualKernelTest):
     # Required Configuration (from KernelTestConfig)
     # ========================================================================
 
-    def make_test_model(self) -> Tuple[ModelWrapper, str]:
-        """Create ONNX model with channelwise operation.
+    def make_onnx_model(self) -> Tuple[ModelWrapper, str]:
+        """Create pure ONNX model with actual TensorProto types (Stage 1).
+
+        Stage separation:
+        - Stage 1 (here): Pure ONNX with actual TensorProto types
+        - Stage 2: QONNX annotations added via get_qonnx_annotations()
 
         Returns:
-            (model, node_name): ModelWrapper and name of operation node
+            (model, node_name): Pure ONNX model and operation node name
         """
+        from tests.support.onnx_utils import datatype_to_actual_tensorproto
+
         # Configuration
         batch = 1
         h = w = 8
@@ -104,31 +110,26 @@ class ChannelwiseParityBase(DualKernelTest):
         shape = [batch, h, w, ch]  # NHWC format
         node_name = f"{self.operation_type}_test"
 
-        # Datatypes vary by operation
-        if self.operation_type == "Add":
-            idt = DataType["INT8"]
-            pdt = DataType["INT8"]
-            odt = DataType["INT9"]  # Add expands by 1 bit
-        elif self.operation_type == "Mul":
-            idt = DataType["INT8"]
-            pdt = DataType["INT4"]
-            odt = DataType["INT12"]  # Mul: 8+4=12 bits
-        elif self.operation_type in ["LessOrEqual", "GreaterOrEqual"]:
-            idt = DataType["INT8"]
-            pdt = DataType["INT8"]
-            odt = DataType["BINARY"]  # Comparisons produce binary output
-        else:
-            raise ValueError(f"Unknown operation type: {self.operation_type}")
+        # Get QONNX DataTypes (for annotation and type conversion)
+        annotations = self.get_qonnx_annotations()
+        idt = annotations["data"]
+        pdt = annotations["param"]
+        odt = annotations["output"]
 
-        # Create input tensor info
-        inp = helper.make_tensor_value_info("data", TensorProto.FLOAT, shape)
-        outp = helper.make_tensor_value_info("output", TensorProto.FLOAT, shape)
+        # Convert to actual TensorProto types (Stage 1)
+        inp_tp = datatype_to_actual_tensorproto(idt)
+        param_tp = datatype_to_actual_tensorproto(pdt)
+        out_tp = datatype_to_actual_tensorproto(odt)
+
+        # Create input tensor info (with actual types)
+        inp = helper.make_tensor_value_info("data", inp_tp, shape)
+        outp = helper.make_tensor_value_info("output", out_tp, shape)
 
         # Generate parameter tensor (per-channel values)
         np.random.seed(42)  # Deterministic for reproducibility
         param_data = gen_finn_dt_tensor(pdt, [ch])
         param_tensor = helper.make_tensor(
-            "param", TensorProto.FLOAT, [ch], param_data.flatten().tolist()
+            "param", param_tp, [ch], param_data.flatten().tolist()
         )
 
         # Create ONNX node
@@ -136,7 +137,7 @@ class ChannelwiseParityBase(DualKernelTest):
             self.operation_type, ["data", "param"], ["output"], name=node_name
         )
 
-        # Build graph and model
+        # Build graph and model (NO QONNX annotations yet!)
         graph = helper.make_graph(
             nodes=[node],
             name="test_channelwise",
@@ -146,16 +147,46 @@ class ChannelwiseParityBase(DualKernelTest):
         )
         model = ModelWrapper(qonnx_make_model(graph, producer_name="channelwise-test"))
 
-        # Set datatypes
-        model.set_tensor_datatype("data", idt)
-        model.set_tensor_datatype("param", pdt)
-        model.set_tensor_datatype("output", odt)
-
-        # Set data layout (required for FINN inference transforms)
-        model.set_tensor_layout("data", DataLayout.NHWC)
-        model.set_tensor_layout("output", DataLayout.NHWC)
-
         return model, node_name
+
+    def get_qonnx_annotations(self) -> Dict[str, DataType]:
+        """Return QONNX DataType annotations for Stage 1 → Stage 2 transition.
+
+        Returns:
+            Dict mapping tensor names to QONNX DataTypes
+        """
+        # Datatypes vary by operation
+        if self.operation_type == "Add":
+            return {
+                "data": DataType["INT8"],
+                "param": DataType["INT8"],
+                "output": DataType["INT9"],  # Add expands by 1 bit
+            }
+        elif self.operation_type == "Mul":
+            return {
+                "data": DataType["INT8"],
+                "param": DataType["INT4"],
+                "output": DataType["INT12"],  # Mul: 8+4=12 bits
+            }
+        elif self.operation_type in ["LessOrEqual", "GreaterOrEqual"]:
+            return {
+                "data": DataType["INT8"],
+                "param": DataType["INT8"],
+                "output": DataType["BINARY"],  # Comparisons produce binary output
+            }
+        else:
+            raise ValueError(f"Unknown operation type: {self.operation_type}")
+
+    def get_qonnx_layouts(self) -> Dict[str, DataLayout]:
+        """Return QONNX DataLayout annotations for spatial tensors.
+
+        Returns:
+            Dict mapping tensor names to DataLayouts
+        """
+        return {
+            "data": DataLayout.NHWC,
+            "output": DataLayout.NHWC,
+        }
 
     def get_manual_transform(self) -> Type[Transformation]:
         """Return FINN's InferChannelwiseLinearLayer transform.
@@ -180,34 +211,35 @@ class ChannelwiseParityBase(DualKernelTest):
         # DualKernelTest expects a callable that returns a Transformation
         return lambda: InferKernel(ChannelwiseOp)
 
-    def compute_golden_reference(
+    # Note: compute_golden_reference() inherited from KernelTestConfig
+    # Default uses ONNX Runtime on Stage 1 model. Works for Add/Mul automatically
+    # since param is an initializer in the model.
+    #
+    # If comparison ops fail in ONNX Runtime, fallback is provided below.
+
+    def compute_golden_reference_numpy(
         self, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        """Compute golden reference for channelwise operation.
+        """NumPy fallback for operations ONNX Runtime doesn't support.
+
+        This is called automatically if ONNX Runtime execution fails.
+        Needed for comparison operations (LessOrEqual, GreaterOrEqual).
 
         Args:
-            inputs: Dict with "data" key (and "param" is in model initializers)
+            inputs: Dict with "data" key
 
         Returns:
             Dict with "output" key
         """
         # Get input data
         data = inputs["data"]
-
-        # Get parameter from model
-        # Note: This is called after pipeline runs, so we need to get param from model
-        # For golden reference, we'll generate it the same way as make_test_model()
         ch = data.shape[-1]
 
-        # Get datatype for param
-        if self.operation_type == "Add":
-            pdt = DataType["INT8"]
-        elif self.operation_type == "Mul":
-            pdt = DataType["INT4"]
-        elif self.operation_type in ["LessOrEqual", "GreaterOrEqual"]:
-            pdt = DataType["INT8"]
+        # Get QONNX DataType for param
+        annotations = self.get_qonnx_annotations()
+        pdt = annotations["param"]
 
-        # Generate same parameter (deterministic seed)
+        # Generate same parameter as make_onnx_model() (deterministic seed)
         np.random.seed(42)
         param = gen_finn_dt_tensor(pdt, [ch])
 
@@ -221,6 +253,8 @@ class ChannelwiseParityBase(DualKernelTest):
             result = (data <= param.reshape(1, 1, 1, -1)).astype(np.int8)
         elif self.operation_type == "GreaterOrEqual":
             result = (data >= param.reshape(1, 1, 1, -1)).astype(np.int8)
+        else:
+            raise ValueError(f"Unknown operation type: {self.operation_type}")
 
         return {"output": result}
 

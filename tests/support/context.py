@@ -91,7 +91,7 @@ def make_execution_context_onnx(
             shape = model.get_tensor_shape(inp_name)
 
             # Generate ONNX-native test data
-            data = generate_onnx_test_data(tensor_type, tuple(shape), seed=None)
+            data = generate_onnx_test_data(tensor_type, tuple(shape), seed=seed)
             context[inp_name] = data
 
         except Exception as e:

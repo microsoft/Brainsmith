@@ -15,6 +15,7 @@ from brainsmith.dataflow.inference_helpers import (
     check_shapes_equal,
     check_parameter_shape_matches_channels,
     expand_scalar_to_channels,
+    lift_scalar_to_rank1,
 )
 
 
@@ -451,3 +452,187 @@ class TestExpandScalarToChannels:
 
         with pytest.raises(ValueError, match="not an initializer"):
             expand_scalar_to_channels("not_init", num_channels=64, model=model_w)
+
+
+class TestLiftScalarToRank1:
+    """Test lift_scalar_to_rank1 helper."""
+
+    def make_model_with_scalar(self, scalar_value=0.5):
+        """Create model with a scalar initializer."""
+        # Create scalar initializer (rank 0)
+        scalar_init = helper.make_tensor(
+            "scalar",
+            TensorProto.FLOAT,
+            [],  # Empty shape = scalar
+            [scalar_value]
+        )
+
+        # Create dummy node to use the scalar
+        inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 64])
+        output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 64])
+        node = helper.make_node("Add", ["input", "scalar"], ["output"])
+
+        graph = helper.make_graph(
+            nodes=[node],
+            name="test",
+            inputs=[inp],
+            outputs=[output],
+            initializer=[scalar_init]
+        )
+
+        model = qonnx_make_model(graph)
+        model_w = ModelWrapper(model)
+        return model_w
+
+    def make_model_with_rank1(self, values):
+        """Create model with a rank-1 tensor."""
+        # Create rank-1 initializer
+        tensor_init = helper.make_tensor(
+            "tensor",
+            TensorProto.FLOAT,
+            [len(values)],
+            values
+        )
+
+        # Create dummy node
+        inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, len(values)])
+        output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, len(values)])
+        node = helper.make_node("Add", ["input", "tensor"], ["output"])
+
+        graph = helper.make_graph(
+            nodes=[node],
+            name="test",
+            inputs=[inp],
+            outputs=[output],
+            initializer=[tensor_init]
+        )
+
+        model = qonnx_make_model(graph)
+        model_w = ModelWrapper(model)
+        return model_w
+
+    def test_lift_scalar_with_initializer(self):
+        """Test lifting scalar tensor with initializer."""
+        model = self.make_model_with_scalar(scalar_value=0.5)
+
+        # Before lift
+        assert model.get_tensor_shape("scalar") == []
+        init_before = model.get_initializer("scalar")
+        assert init_before.shape == ()
+        assert float(init_before) == 0.5
+
+        # Lift the scalar
+        lifted = lift_scalar_to_rank1("scalar", model)
+
+        # After lift
+        assert lifted == True
+        assert model.get_tensor_shape("scalar") == [1]
+        init_after = model.get_initializer("scalar")
+        assert init_after.shape == (1,)
+        assert float(init_after[0]) == 0.5
+
+    def test_lift_scalar_without_initializer(self):
+        """Test lifting scalar tensor without initializer (shape only)."""
+        # Create model with scalar shape but no initializer
+        inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 64])
+        # Note: "scalar_shape" is just a shape, not an initializer
+        scalar_shape = helper.make_tensor_value_info("scalar_shape", TensorProto.FLOAT, [])
+        output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 64])
+        node = helper.make_node("Add", ["input", "scalar_shape"], ["output"])
+
+        graph = helper.make_graph(
+            nodes=[node],
+            name="test",
+            inputs=[inp, scalar_shape],
+            outputs=[output]
+        )
+
+        model = qonnx_make_model(graph)
+        model_w = ModelWrapper(model)
+
+        # Before lift
+        assert model_w.get_tensor_shape("scalar_shape") == []
+        assert model_w.get_initializer("scalar_shape") is None
+
+        # Lift the scalar
+        lifted = lift_scalar_to_rank1("scalar_shape", model_w)
+
+        # After lift
+        assert lifted == True
+        assert model_w.get_tensor_shape("scalar_shape") == [1]
+        assert model_w.get_initializer("scalar_shape") is None  # Still no initializer
+
+    def test_lift_already_rank1(self):
+        """Test that lifting rank-1 tensor is a no-op."""
+        model = self.make_model_with_rank1([0.5])
+
+        # Already rank 1
+        assert model.get_tensor_shape("tensor") == [1]
+
+        # Lift should return False (no-op)
+        lifted = lift_scalar_to_rank1("tensor", model)
+
+        assert lifted == False
+        assert model.get_tensor_shape("tensor") == [1]  # Unchanged
+
+    def test_lift_higher_rank(self):
+        """Test that lifting higher rank tensor is a no-op."""
+        model = self.make_model_with_rank1([1.0, 2.0, 3.0, 4.0])
+
+        # Rank 1 with length > 1
+        assert model.get_tensor_shape("tensor") == [4]
+
+        # Lift should return False (no-op)
+        lifted = lift_scalar_to_rank1("tensor", model)
+
+        assert lifted == False
+        assert model.get_tensor_shape("tensor") == [4]  # Unchanged
+
+    def test_lift_preserves_onnx_semantics(self):
+        """Verify that scalar [] and rank-1 [1] broadcast identically."""
+        # Test using numpy broadcasting (matches ONNX semantics)
+        lhs_shape = (1, 4, 32, 32)
+
+        # Scalar broadcasts
+        result_scalar = np.broadcast_shapes(lhs_shape, ())
+        # Rank-1 broadcasts
+        result_rank1 = np.broadcast_shapes(lhs_shape, (1,))
+
+        # They should be identical
+        assert result_scalar == result_rank1 == lhs_shape
+
+    def test_lift_multiple_scalars(self):
+        """Test lifting multiple scalar inputs in sequence."""
+        # Create model with two scalar initializers
+        scalar1 = helper.make_tensor("s1", TensorProto.FLOAT, [], [1.0])
+        scalar2 = helper.make_tensor("s2", TensorProto.FLOAT, [], [2.0])
+
+        inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 64])
+        output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 64])
+        node1 = helper.make_node("Add", ["input", "s1"], ["tmp"])
+        node2 = helper.make_node("Add", ["tmp", "s2"], ["output"])
+
+        graph = helper.make_graph(
+            nodes=[node1, node2],
+            name="test",
+            inputs=[inp],
+            outputs=[output],
+            initializer=[scalar1, scalar2]
+        )
+
+        model = qonnx_make_model(graph)
+        model_w = ModelWrapper(model)
+
+        # Both are scalars initially
+        assert model_w.get_tensor_shape("s1") == []
+        assert model_w.get_tensor_shape("s2") == []
+
+        # Lift both
+        lifted1 = lift_scalar_to_rank1("s1", model_w)
+        lifted2 = lift_scalar_to_rank1("s2", model_w)
+
+        # Both should be lifted
+        assert lifted1 == True
+        assert lifted2 == True
+        assert model_w.get_tensor_shape("s1") == [1]
+        assert model_w.get_tensor_shape("s2") == [1]

@@ -91,23 +91,27 @@ class PythonExecutor:
         model: ModelWrapper,
         inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        """Execute operator via Python execute_node().
+        """Execute operator via QONNX execution (includes Quant nodes).
 
         Args:
-            op: Operator to execute
-            model: Model containing operator
-            inputs: Input tensors
+            op: Operator to execute (target kernel node)
+            model: Model containing operator (may include Quant nodes)
+            inputs: Input tensors (with raw_* names if Quant nodes present)
 
         Returns:
             Dict with output tensors
 
         Raises:
             pytest.fail: If execution fails
+
+        Note:
+            Uses QONNX execution to run the entire model, including any Quant nodes
+            that precede the target kernel. This ensures correct quantized execution
+            and matches the golden reference computation.
         """
         try:
-            # Set Python execution mode
+            # Set Python execution mode for target operator
             # Note: KernelOp uses empty string for Python execution, not "python"
-            # Check what exec_mode values are allowed by inspecting the node attributes
             allowed_exec_modes = op.get_nodeattr_allowed_values("exec_mode")
 
             if "" in allowed_exec_modes:
@@ -121,17 +125,16 @@ class PythonExecutor:
                     f"Operator {op.__class__.__name__} has unknown exec_mode values: {allowed_exec_modes}"
                 )
 
-            # Execute via execute_node
-            context = dict(inputs)  # Copy to avoid mutation
-            op.execute_node(context, model.graph)
+            # Execute full model with QONNX (includes Quant nodes)
+            from qonnx.core.onnx_exec import execute_onnx
 
-            # Extract outputs
-            outputs = {}
-            for output_name in op.onnx_node.output:
-                if output_name in context:
-                    outputs[output_name] = context[output_name]
-
-            return outputs
+            # Execute up to and including the target operator
+            return execute_onnx(
+                model,
+                inputs,
+                return_full_exec_context=False,
+                end_node=op.onnx_node
+            )
 
         except Exception as e:
             pytest.fail(
@@ -139,7 +142,7 @@ class PythonExecutor:
                 f"\n"
                 f"Error: {type(e).__name__}: {e}\n"
                 f"\n"
-                f"This indicates a bug in execute_node() implementation.\n"
+                f"This indicates a bug in execute_node() implementation or Quant node execution.\n"
             )
 
 
@@ -224,18 +227,17 @@ class CppSimExecutor:
                 f"3. Compare with working backend implementation"
             )
 
-        # Execute
+        # Execute full model with QONNX (includes Quant nodes + cppsim backend)
         try:
-            context = dict(inputs)  # Copy to avoid mutation
-            op.execute_node(context, model.graph)
+            from qonnx.core.onnx_exec import execute_onnx
 
-            # Extract outputs
-            outputs = {}
-            for output_name in op.onnx_node.output:
-                if output_name in context:
-                    outputs[output_name] = context[output_name]
-
-            return outputs
+            # Execute up to and including the target operator
+            return execute_onnx(
+                model,
+                inputs,
+                return_full_exec_context=False,
+                end_node=op.onnx_node
+            )
 
         except Exception as e:
             pytest.fail(
@@ -244,7 +246,7 @@ class CppSimExecutor:
                 f"Error: {type(e).__name__}: {e}\n"
                 f"\n"
                 f"Code compiled successfully but execution failed.\n"
-                f"Check execute_node() implementation."
+                f"Check execute_node() implementation or Quant node execution."
             )
 
     def _ensure_kernel_ready(self, op: HWCustomOp, model: ModelWrapper) -> None:
@@ -402,18 +404,17 @@ class RTLSimExecutor:
                 f"3. Compare with working backend implementation"
             )
 
-        # Execute
+        # Execute full model with QONNX (includes Quant nodes + rtlsim backend)
         try:
-            context = dict(inputs)  # Copy to avoid mutation
-            op.execute_node(context, model.graph)
+            from qonnx.core.onnx_exec import execute_onnx
 
-            # Extract outputs
-            outputs = {}
-            for output_name in op.onnx_node.output:
-                if output_name in context:
-                    outputs[output_name] = context[output_name]
-
-            return outputs
+            # Execute up to and including the target operator
+            return execute_onnx(
+                model,
+                inputs,
+                return_full_exec_context=False,
+                end_node=op.onnx_node
+            )
 
         except Exception as e:
             pytest.fail(
@@ -422,7 +423,7 @@ class RTLSimExecutor:
                 f"Error: {type(e).__name__}: {e}\n"
                 f"\n"
                 f"HDL generated successfully but execution failed.\n"
-                f"Check execute_node() implementation."
+                f"Check execute_node() implementation or Quant node execution."
             )
 
     def _ensure_kernel_ready(self, op: HWCustomOp, model: ModelWrapper) -> None:

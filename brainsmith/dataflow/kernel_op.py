@@ -42,6 +42,25 @@ class KernelOp(HWCustomOp, ABC):
 
     Shapes extracted from ModelWrapper context, never stored in nodeattrs.
     Subclasses implement build_schema() to construct their KernelSchema.
+
+    Caching Strategy:
+        - design_space: Cached (expensive to build, never invalidated except by structural changes)
+        - design_point: Always regenerated from nodeattrs (guarantees consistency)
+
+    Execution Compatibility:
+        KernelOp uses lazy initialization for performance. When executed via
+        QONNX's execute_onnx(), the executor creates fresh instances per node,
+        losing cached design_space. To handle this, execute_node() implementations
+        should call _ensure_initialized_for_execution(graph) at entry:
+
+            def execute_node(self, context, graph):
+                self._ensure_initialized_for_execution(graph)
+                # Now safe to access design_point
+                # ... rest of implementation
+
+        This reconstructs ModelWrapper from the graph parameter to initialize
+        design_space on demand. The overhead is minimal (~1ms) and only occurs
+        when design_space is None (fresh instances).
     """
 
     def __init__(self, onnx_node, **kwargs):
@@ -49,9 +68,9 @@ class KernelOp(HWCustomOp, ABC):
         # Build and freeze schema from node structure
         self.kernel_schema = self.build_schema(onnx_node, model=None)
 
-        # Two-phase caching system for DSE performance
+        # Design space caching for DSE performance
+        # Design points are regenerated on each access to ensure consistency with nodeattrs
         self._design_space: Optional['KernelDesignSpace'] = None  # Built once, never invalidated
-        self._design_point: Optional['KernelDesignPoint'] = None  # Rebuilt on param change
 
     @classmethod
     @abstractmethod
@@ -118,6 +137,8 @@ class KernelOp(HWCustomOp, ABC):
         - Template parameters (SIMD, PE, etc.)
         - Kernel-specific parameters (epsilon, algorithm, etc.)
 
+        Automatically sets FIFO depth defaults based on kernel schema interface counts.
+
         Only override if build_schema() needs to read nodeattrs (circular dependency).
         In that case, define nodeattrs explicitly before calling build_schema().
         """
@@ -145,6 +166,16 @@ class KernelOp(HWCustomOp, ABC):
                 f"See KernelOp docstring for mode-dependent schema pattern."
             ) from e
 
+        # Auto-configure FIFO depths based on schema interface counts
+        # This prevents IndexError in FINN's InsertFIFO transform for multi-input/output kernels
+        num_inputs = len(self.kernel_schema.inputs)
+        num_outputs = len(self.kernel_schema.outputs)
+
+        if num_inputs > 0:
+            base_attrs["inFIFODepths"] = ("ints", False, [2] * num_inputs)
+        if num_outputs > 0:
+            base_attrs["outFIFODepths"] = ("ints", False, [2] * num_outputs)
+
         return base_attrs
 
     # ====================================================================
@@ -163,27 +194,55 @@ class KernelOp(HWCustomOp, ABC):
 
     @property
     def design_point(self) -> KernelDesignPoint:
-        """Cached kernel instance (call method with model_w first to initialize)."""
-        if self._design_point is None:
+        """Current kernel configuration as design point (regenerated from nodeattrs).
+
+        This property regenerates on every access to ensure consistency with current
+        nodeattrs. For better performance when accessing multiple properties, cache
+        the design point in a local variable:
+
+        Example:
+            # GOOD: Cache locally for multiple accesses
+            point = self.design_point
+            simd = point.inputs["input"].stream_shape[-1]
+            width = point.inputs["input"].tensor_shape[-1]
+            dtype = point.inputs["input"].datatype
+
+            # AVOID: Multiple accesses trigger multiple rebuilds
+            simd = self.design_point.inputs["input"].stream_shape[-1]
+            width = self.design_point.inputs["input"].tensor_shape[-1]
+            dtype = self.design_point.inputs["input"].datatype
+        """
+        if self._design_space is None:
             raise RuntimeError(
-                f"{self.onnx_node.name}: Not initialized. "
+                f"{self.onnx_node.name}: Design space not initialized. "
                 f"Call a method with model_w parameter first."
             )
-        return self._design_point
+
+        # Always regenerate design point from current nodeattrs
+        current_config = {
+            dim_name: self.get_nodeattr(dim_name)
+            for dim_name in self._design_space.dimensions.keys()
+        }
+
+        try:
+            return self._design_space.configure(current_config)
+        except ValueError as e:
+            raise self._error(str(e))
 
     # ====================================================================
     # Public API: Cache Management
     # ====================================================================
 
     def invalidate(self) -> None:
-        """Invalidate cached state after external graph changes.
+        """Invalidate cached design space after external graph changes.
 
         Call this after transforms that change:
         - Tensor shapes (padding, reshape)
         - Datatypes in graph metadata
         - Node rewiring (FIFO insertion)
 
-        Next method call with model_w will rebuild automatically.
+        Next method call with model_w will rebuild design space automatically.
+        Design points regenerate on every access, so no explicit invalidation needed.
 
         Example:
             >>> # After transform changes graph
@@ -194,18 +253,16 @@ class KernelOp(HWCustomOp, ABC):
             ...         op.invalidate()
         """
         self._design_space = None
-        self._design_point = None
 
     # ====================================================================
     # Private API: Lazy Initialization
     # ====================================================================
 
     def _ensure_ready(self, model_w: ModelWrapper) -> None:
-        """Ensure kernel is ready: initialize design space, sync instance with params.
+        """Ensure kernel is ready: initialize design space.
 
-        Idempotent two-phase operation:
-        1. Build design space if not cached (expensive, once per structure)
-        2. Reconfigure instance if params changed (fast, as needed)
+        Idempotent operation that builds design space if not cached.
+        Design points are regenerated on-demand from nodeattrs (not cached).
 
         Args:
             model_w: ModelWrapper for ONNX graph access
@@ -216,7 +273,7 @@ class KernelOp(HWCustomOp, ABC):
         if model_w is None:
             raise self._error("ModelWrapper required")
 
-        # Phase 1: Build design space if not cached
+        # Build design space if not cached (expensive, once per structure)
         if self._design_space is None:
             build_ctx = BuildContext(
                 schema=self.kernel_schema,
@@ -252,19 +309,49 @@ class KernelOp(HWCustomOp, ABC):
                         f"{self.onnx_node.name}: Auto-populated {dim_name}={initial_value}"
                     )
 
-        # Phase 2: Configure instance if not cached
-        if self._design_point is None:
-            current_config = {
-                dim_name: self.get_nodeattr(dim_name)
-                for dim_name in self._design_space.dimensions.keys()
-            }
-            try:
-                self._design_point = self._design_space.configure(current_config)
-                logger.debug(
-                    f"{self.onnx_node.name}: Configured with {current_config}"
-                )
-            except ValueError as e:
-                raise self._error(str(e))
+    def _ensure_initialized_for_execution(self, graph):
+        """Ensure design_space initialized from graph context (for QONNX executor).
+
+        QONNX executor creates fresh instances per node execution, losing cached
+        design_space. This method reconstructs ModelWrapper from the GraphProto
+        to initialize lazy state before execution.
+
+        This is a defensive guard for QONNX execution compatibility. When KernelOp
+        instances are created via getCustomOp(node) during execute_onnx(), they
+        lack the model context needed for lazy initialization. By reconstructing
+        ModelWrapper from the graph parameter, we can safely initialize on demand.
+
+        Args:
+            graph: ONNX GraphProto (from execute_node parameter)
+
+        Note:
+            - Called at start of execute_node() if _design_space is None
+            - Idempotent: safe to call multiple times (checks cache first)
+            - Minimal overhead: only rebuilds if needed (~1ms for small graphs)
+            - Required for Python execution via QONNX executor
+            - Not needed for cppsim/rtlsim (use prepared instances directly)
+            - Design points regenerate automatically, no caching needed
+
+        Example:
+            def execute_node(self, context, graph):
+                # Ensure initialized (QONNX executor creates fresh instances)
+                self._ensure_initialized_for_execution(graph)
+
+                # Now safe to access design_point (regenerates from design_space)
+                dtype = self.design_point.inputs["input"].datatype
+                # ... rest of execution
+        """
+        if self._design_space is None:
+            from qonnx.core.modelwrapper import ModelWrapper
+            from qonnx.util.basic import qonnx_make_model
+
+            # Reconstruct ModelWrapper from GraphProto
+            # This provides tensor shapes/datatypes needed for design space
+            model_proto = qonnx_make_model(graph)
+            model_w = ModelWrapper(model_proto)
+
+            # Initialize design space (design point regenerates on access)
+            self._ensure_ready(model_w)
 
     def build_design_space(self, model_w: ModelWrapper) -> None:
         """FINN API compatibility: Build design space.
@@ -410,7 +497,10 @@ class KernelOp(HWCustomOp, ABC):
         )
 
     def set_nodeattr(self, name: str, value: Any) -> None:
-        """Set nodeattr and auto-invalidate affected caches."""
+        """Set nodeattr and auto-invalidate design space if needed.
+
+        Design points regenerate on each access, so no explicit invalidation needed.
+        """
         try:
             old_value = self.get_nodeattr(name)
         except (AttributeError, Exception):
@@ -419,20 +509,18 @@ class KernelOp(HWCustomOp, ABC):
         if old_value != value:
             super().set_nodeattr(name, value)
 
-            # Only invalidate if attribute affects design space or design point
+            # Only invalidate design space for structural changes (datatypes)
+            # Dimension changes (PE, SIMD, etc.) don't require invalidation since
+            # design points regenerate from nodeattrs on each access
             if name in self.kernel_schema.get_structural_nodeattrs():
-                # Structural changes (datatypes) invalidate everything
-                self._design_space = self._design_point = None
-            elif self._design_space is not None and name in self._design_space.dimensions:
-                # Dimension changes (PE, SIMD, etc.) only invalidate design_point
-                self._design_point = None
-            # else: Runtime attributes (exec_mode, code_gen_dir_*) don't invalidate
+                self._design_space = None
+            # else: Runtime attributes and dimension changes don't invalidate cache
 
     def apply_design_point(self, point: 'KernelDesignPoint') -> None:
         """Apply chosen design point to nodeattrs (persist to ONNX).
 
-        Syncs design point configuration back to node attributes without
-        invalidating cache. Use this after DSE to commit the chosen configuration.
+        Syncs design point configuration back to node attributes.
+        The design_point property will regenerate from these nodeattrs on next access.
 
         Args:
             point: Design point to apply
@@ -469,5 +557,4 @@ class KernelOp(HWCustomOp, ABC):
         for dim_name, value in point.config.items():
             super(KernelOp, self).set_nodeattr(dim_name, value)
 
-        # Update cache (no rebuild needed, we know it's valid)
-        self._design_point = point
+        # Design point will regenerate from nodeattrs on next access

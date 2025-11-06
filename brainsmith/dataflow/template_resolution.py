@@ -73,6 +73,15 @@ def normalize_template(
     # Standard list-based template processing
     template = list(template)  # Allow modification (input may be tuple)
 
+    # Handle rank 0 tensors (scalars) - no dimensions to tile
+    if len(reference_shape) == 0:
+        if len(template) > 0:
+            raise ValueError(
+                f"Cannot apply template with {len(template)} dimensions to rank 0 tensor (scalar). "
+                f"Scalars have no dimensions to tile. Template: {template}"
+            )
+        return []
+
     # Pad template to match reference rank (prepend singletons)
     if len(template) < len(reference_shape):
         padding = len(reference_shape) - len(template)

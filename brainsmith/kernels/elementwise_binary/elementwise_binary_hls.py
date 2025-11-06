@@ -205,7 +205,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         return lut_count
 
-    def dsp_estimation(self):
+    def dsp_estimation(self, fpgapart):
         """DSP usage - only Mul might use DSP blocks."""
         func = self.get_nodeattr("func")
         if func == "Mul":
@@ -375,9 +375,11 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         ret["LhsType"] = lhs_hls_str
         ret["RhsType"] = rhs_hls_str
         ret["OutType"] = out_hls_str
-        ret["LhsSlice"] = f"Slice<{lhs_hls_str}>"
-        ret["RhsSlice"] = f"Slice<{rhs_hls_str}>"
-        ret["OutSlice"] = f"Slice<{out_hls_str}>"
+        # Slice template uses default construction with curly braces, not function-style cast
+        # Pattern from FINN: Slice<LhsType>{}(packed_value)
+        ret["LhsSlice"] = f"Slice<{lhs_hls_str}>{{}}"
+        ret["RhsSlice"] = f"Slice<{rhs_hls_str}>{{}}"
+        ret["OutSlice"] = f"Slice<{out_hls_str}>{{}}"
         return ret
 
     def generate_params(self, model, path):
@@ -385,6 +387,11 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         For dynamic_static pattern: Generates RHS parameter array
         For dynamic_dynamic pattern: Creates empty params.hpp (no static inputs)
+
+        Implements FINN-compatible parameter reshaping:
+        1. Reshape to folded input shape (matches PE-parallelized access)
+        2. Broadcast to PE dimension if needed
+        3. Pad dimensions from left to align with output shape for broadcasting
         """
         code_gen_dir = path
         input_pattern = self.get_nodeattr("input_pattern")
@@ -392,27 +399,48 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         # Collect parameter code for static inputs
         param_code_sections = []
 
+        # Initialize pragmas list if not already exists (needed for parameter pragmas)
+        if "$PRAGMAS$" not in self.code_gen_dict:
+            self.code_gen_dict["$PRAGMAS$"] = []
+
+        # Folded output shape for broadcasting/aligning the input shapes
+        out_shape = self.get_folded_output_shape(ind=0)
+        pe = self.get_nodeattr("PE")
+
         # Check LHS (only static in rare cases, but handle for completeness)
         if not self._needs_streaming_interface("lhs"):
             lhs_parameters = model.get_initializer(self.onnx_node.input[0])
             if lhs_parameters is not None:
                 lhs_dtype = DataType[self.get_input_datatype(0).name]
-                lhs_tensor_shape = self.design_point.inputs["lhs"].tensor_shape
-                lhs_parameters = lhs_parameters.reshape(lhs_tensor_shape)
+
+                # FINN-compatible reshaping: folded shape → PE broadcast → dimension padding
+                lhs_parameters = lhs_parameters.reshape(*self.get_folded_input_shape(ind=0))
+
+                # Broadcast to PE dimension if needed
+                if lhs_parameters.shape[-1] != pe:
+                    lhs_parameters = np.broadcast_to(
+                        lhs_parameters, lhs_parameters.shape[:-1] + (pe,)
+                    )
+
+                # Pad dimensions from left to align with output shape
+                lhs_shape = lhs_parameters.shape
+                lhs_shape = (len(out_shape) - len(lhs_shape)) * (1,) + lhs_shape
+                lhs_parameters = lhs_parameters.reshape(*lhs_shape)
 
                 lhs_code = numpy_to_hls_code(
                     lhs_parameters, lhs_dtype, "lhs", False, False
                 )
 
-                ndim = len(lhs_tensor_shape)
-                ram_style_map = {"auto": "AUTO", "block": "BRAM", "distributed": "LUTRAM", "ultra": "URAM"}
-                ram_style = ram_style_map[self.get_nodeattr("ram_style")]
-
                 param_code_sections.append(f"// LHS parameter tensor\n")
                 param_code_sections.append(lhs_code)
-                param_code_sections.append(f"\n// Pragmas for LHS parameter\n")
-                param_code_sections.append(f"#pragma HLS ARRAY_PARTITION variable=lhs complete dim={ndim}\n")
-                param_code_sections.append(f"#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl={ram_style}\n")
+
+                # Add HLS pragmas for parameter storage and partitioning
+                self.code_gen_dict["$PRAGMAS$"].append(
+                    f"#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl=distributed"
+                )
+                self.code_gen_dict["$PRAGMAS$"].append(
+                    f"#pragma HLS ARRAY_PARTITION variable=lhs complete dim={len(lhs_shape)}"
+                )
 
         # Check RHS (static in dynamic_static pattern)
         if not self._needs_streaming_interface("rhs"):
@@ -424,22 +452,35 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
                 )
 
             rhs_dtype = DataType[self.get_input_datatype(1).name]
-            rhs_tensor_shape = self.design_point.inputs["rhs"].tensor_shape
-            rhs_parameters = rhs_parameters.reshape(rhs_tensor_shape)
+
+            # FINN-compatible reshaping: folded shape → PE broadcast → dimension padding
+            rhs_parameters = rhs_parameters.reshape(*self.get_folded_input_shape(ind=1))
+
+            # Broadcast to PE dimension if needed
+            if rhs_parameters.shape[-1] != pe:
+                rhs_parameters = np.broadcast_to(
+                    rhs_parameters, rhs_parameters.shape[:-1] + (pe,)
+                )
+
+            # Pad dimensions from left to align with output shape
+            rhs_shape = rhs_parameters.shape
+            rhs_shape = (len(out_shape) - len(rhs_shape)) * (1,) + rhs_shape
+            rhs_parameters = rhs_parameters.reshape(*rhs_shape)
 
             rhs_code = numpy_to_hls_code(
                 rhs_parameters, rhs_dtype, "rhs", False, False
             )
 
-            ndim = len(rhs_tensor_shape)
-            ram_style_map = {"auto": "AUTO", "block": "BRAM", "distributed": "LUTRAM", "ultra": "URAM"}
-            ram_style = ram_style_map[self.get_nodeattr("ram_style")]
-
             param_code_sections.append(f"// RHS parameter tensor\n")
             param_code_sections.append(rhs_code)
-            param_code_sections.append(f"\n// Pragmas for RHS parameter\n")
-            param_code_sections.append(f"#pragma HLS ARRAY_PARTITION variable=rhs complete dim={ndim}\n")
-            param_code_sections.append(f"#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl={ram_style}\n")
+
+            # Add HLS pragmas for parameter storage and partitioning
+            self.code_gen_dict["$PRAGMAS$"].append(
+                f"#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl=distributed"
+            )
+            self.code_gen_dict["$PRAGMAS$"].append(
+                f"#pragma HLS ARRAY_PARTITION variable=rhs complete dim={len(rhs_shape)}"
+            )
 
         # Write params.hpp
         with open(f"{code_gen_dir}/params.hpp", "w") as f:
@@ -482,6 +523,9 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             >>> hw_op.set_nodeattr("exec_mode", "cppsim")
             >>> result = hw_op.execute_node(context, model.graph)
         """
+        # Ensure initialized before mode dispatch
+        self._ensure_initialized_for_execution(graph)
+
         mode = self.get_nodeattr("exec_mode")
 
         if mode == "python":
@@ -558,33 +602,58 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
     def global_includes(self):
         """Generate global includes.
 
-        Note: For Phase 1 backward compatibility with FINN, we only include
-        flatten.hpp. FINN's ElementwiseXXX_hls implementations don't use
-        separate params.hpp files - they inline parameter definitions.
+        Note: params.hpp is NOT included here because it depends on type definitions
+        (LhsType, RhsType, OutType) that are generated in defines(). Instead,
+        params.hpp is included in defines() AFTER those type definitions.
         """
         self.code_gen_dict["$GLOBALS$"] = ['#include "flatten.hpp"']
 
     def defines(self, var):
-        """Generate type definitions and constants."""
+        """Generate type definitions and constants.
+
+        CRITICAL: Type definitions must come BEFORE params.hpp include because
+        params.hpp uses these types (LhsType, RhsType) in array declarations.
+        """
         lhs_iface = self.design_point.inputs["lhs"]
         tensor_shape = lhs_iface.tensor_shape
         num_channels = tensor_shape[-1]  # Last dimension is channels
         numReps = tensor_shape[0]  # First dimension is batch
         pe = lhs_iface.stream_shape[-1]  # PE from stream tiling
 
-        # Calculate spatial dimension from tensor shape (NHWC format)
-        if len(tensor_shape) == 4:  # [N, H, W, C]
+        # Calculate spatial dimension from tensor shape
+        if len(tensor_shape) == 4:  # [N, H, W, C] - image data (NHWC format)
             spatial_dim = tensor_shape[1] * tensor_shape[2]
+        elif len(tensor_shape) == 3:  # [N, Seq, C] - sequence data (NLC format)
+            spatial_dim = tensor_shape[1]
         elif len(tensor_shape) == 2:  # [N, C] - fully connected
             spatial_dim = 1
         else:
-            raise Exception(f"Unexpected tensor shape {tensor_shape}")
+            raise Exception(f"Unexpected tensor shape {tensor_shape}. Expected 2D [N,C], 3D [N,Seq,C], or 4D [N,H,W,C]")
+
+        # Get HLS type strings for inputs/outputs
+        lhs_hls_type = self.get_input_datatype(0).get_hls_datatype_str()
+        rhs_hls_type = self.get_input_datatype(1).get_hls_datatype_str()
+        out_hls_type = self.get_output_datatype().get_hls_datatype_str()
 
         self.code_gen_dict["$DEFINES$"] = [
-            f"#define NumChannels {num_channels}",
-            f"#define PE {pe}",
-            f"#define SpatialDim {spatial_dim}",
-            f"#define numReps {numReps}"
+            # Type definitions MUST come first (params.hpp depends on these)
+            f"using LhsType = {lhs_hls_type};",
+            f"using RhsType = {rhs_hls_type};",
+            f"using OutType = {out_hls_type};",
+
+            # Constant definitions
+            # TODO(post-release): Remove unused macros (NumChannels, SpatialDim, numReps)
+            # These are computed but never referenced in generated HLS code.
+            # Only PE is actually used (in out[PE] declarations and loop bounds).
+            # Code generation in docompute() uses dynamic loops from output_shape.
+            f"#define NumChannels {num_channels}",  # UNUSED - remove post-release
+            f"#define PE {pe}",  # Used in generated code
+            f"#define SpatialDim {spatial_dim}",  # UNUSED - remove post-release
+            f"#define numReps {numReps}",  # UNUSED - remove post-release
+
+            # Include params.hpp AFTER type definitions
+            # (params.hpp contains arrays like: LhsType lhs[...], RhsType rhs[...])
+            '#include "params.hpp"'
         ]
 
     def read_npy_data(self):

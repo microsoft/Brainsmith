@@ -420,6 +420,15 @@ class ElementwiseBinaryOp(KernelOp):
             find_dynamic_dynamic_pair,
             get_broadcast_info
         )
+        from brainsmith.dataflow import lift_scalar_to_rank1
+
+        # IMPORTANT: Normalize scalar inputs before pattern detection and validation
+        # ONNX semantics: [] (scalar) broadcasts identically to [1] in all contexts
+        # This lifting is required because our schema system uses template-based tiling
+        # (e.g., block_tiling=[FULL_DIM]) which expects rank ≥ 1 tensors.
+        # Safe to mutate model here - QONNX transforms operate on deep copies by default.
+        for inp in node.input:
+            lift_scalar_to_rank1(inp, model)
 
         # Try dynamic+static pattern first (Phase 1)
         static_dynamic_pair = find_static_dynamic_pair(node.input, model)
@@ -750,6 +759,9 @@ class ElementwiseBinaryOp(KernelOp):
             context: Execution context dict (tensor_name -> numpy array)
             graph: ONNX graph (for metadata)
         """
+        # Ensure initialized (QONNX executor creates fresh instances)
+        self._ensure_initialized_for_execution(graph)
+
         node = self.onnx_node
 
         # Get inputs from context

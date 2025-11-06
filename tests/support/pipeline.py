@@ -192,13 +192,17 @@ class PipelineRunner:
 
         if hw_node is None:
             # Transform may have renamed the node, or node_name was None
-            # Default to first node (common in single-node test models)
-            if len(model.graph.node) == 0:
+            # Default to first non-Quant node (skip Quant nodes from Phase 1)
+            for node in model.graph.node:
+                if "Quant" not in node.op_type:
+                    hw_node = node
+                    break
+
+            if hw_node is None:
                 raise ValueError(
-                    "Model has no nodes after transformation. "
-                    "Transform may have failed or removed the target node."
+                    "Model has no HW nodes after transformation. "
+                    "Transform may have failed or only Quant nodes remain."
                 )
-            hw_node = model.graph.node[0]
 
         # Get HWCustomOp wrapper
         op = getHWCustomOp(hw_node, model)

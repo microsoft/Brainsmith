@@ -154,6 +154,57 @@ def derive_datatype(interface: str) -> Callable[[Dict, Callable, Any, str], 'Bas
     return resolver
 
 
+def constant_datatype(datatype_name: str) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+    """Create constant datatype function (for use in DatatypeSpec).
+
+    Returns a fixed DataType regardless of context. Useful for operations that
+    always output a specific datatype (e.g., Softmax always outputs FLOAT32).
+
+    Args:
+        datatype_name: DataType name (e.g., "FLOAT32", "INT8", "UINT4")
+
+    Returns:
+        Callable that returns the constant DataType
+
+    Example:
+        # Use constant_datatype for fixed output types
+        from brainsmith.dataflow.spec_helpers import constant_datatype
+        datatype=constant_datatype("FLOAT32")  # Always outputs FLOAT32
+
+        # Common use case: Softmax always outputs float
+        outputs=[
+            df.OutputSchema(
+                name="output",
+                block_tiling=[FULL_DIM],
+                stream_tiling=[("input", -1)],
+                datatype=constant_datatype("FLOAT32"),  # Input Int4 → Output FLOAT32
+            )
+        ]
+    """
+    from qonnx.core.datatype import DataType
+
+    # Validate datatype name at schema definition time
+    try:
+        dt = DataType[datatype_name]
+    except KeyError:
+        available = [name for name in dir(DataType) if not name.startswith('_')]
+        raise ValueError(
+            f"Invalid datatype name: '{datatype_name}'. "
+            f"Available: {', '.join(available)}"
+        )
+
+    def resolver(
+        interfaces: Dict[str, Any],
+        param_getter: Callable,
+        model: Any,  # ModelWrapper
+        tensor_name: str
+    ) -> 'BaseDataType':
+        """Return constant DataType (context-independent)."""
+        return dt
+
+    return resolver
+
+
 def value_optimized_datatype() -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
     """Create value-optimized datatype function (for use in DatatypeSpec).
 

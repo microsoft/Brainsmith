@@ -481,8 +481,9 @@ class Crop(KernelOp):
         """
         from onnx import helper
 
-        in_shape = self.get_normal_input_shape(model_w=model_w)
-        out_shape = self.get_normal_output_shape(model_w=model_w)
+        # Extract shapes directly from model (Arete principle - no storage)
+        in_shape = model_w.get_tensor_shape(self.onnx_node.input[0])
+        out_shape = model_w.get_tensor_shape(self.onnx_node.output[0])
 
         return helper.make_node(
             "Crop",

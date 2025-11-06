@@ -32,6 +32,7 @@ theme:
   features:
     - navigation.instant      # Fast page loads
     - navigation.top          # Back to top button
+    - navigation.indexes      # Section index pages
     - search.suggest          # Search suggestions
     - search.highlight        # Highlight search terms
     - content.code.copy       # Copy button for code blocks
@@ -113,14 +114,27 @@ nav:
       - Design Space Exploration: developer-guide/2-core-systems/design-space-exploration.md
       - Kernel Modeling: developer-guide/2-core-systems/kernel-modeling.md
       - Component Registry: developer-guide/2-core-systems/component-registry.md
+    - Kernel Op Developer Guide:
+      - Overview: developer-guide/kernel_ops/README.md
+      - 1. Introduction: developer-guide/kernel_ops/01_introduction.md
+      - 2. Fundamental Concepts: developer-guide/kernel_ops/02_fundamental_concepts.md
+      - 3. Building Your First Kernel: developer-guide/kernel_ops/03_building_your_first_kernel.md
+      - 4. Schema Design: developer-guide/kernel_ops/04_schema_design.md
+      - 5. Design Space Exploration: developer-guide/kernel_ops/05_design_space_exploration.md
+      - 6. Advanced Topics: developer-guide/kernel_ops/06_advanced_topics.md
+      - 7. Best Practices: developer-guide/kernel_ops/07_best_practices.md
     - 3. Reference:
       - Kernel Architecture: developer-guide/3-reference/kernels.md
       - Blueprints: developer-guide/3-reference/blueprints.md
       - CLI Reference: developer-guide/3-reference/cli.md
+  - Tutorials:
+    - Overview: tutorials/index.md
   - Kernel Reference:
     - Overview: kernels/index.md
     - Core Kernels:
-      - AddStreams: kernels/addstreams.md
+      - AddStreams:
+        - Specification: kernels/addstreams.md
+        - HLS Backend: kernels/addstreams-hls.md
       - Crop: kernels/crop.md
       - DuplicateStreams: kernels/duplicate_streams.md
       - ElementwiseBinary: kernels/elementwise_binary.md

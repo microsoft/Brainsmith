@@ -72,10 +72,15 @@ class SingleKernelTest(KernelTestConfig):
     """Test one kernel implementation against golden reference.
 
     Subclasses implement:
-    - make_test_model(): Create ONNX model (from KernelTestConfig)
+    - make_onnx_model(): Create pure ONNX model (from KernelTestConfig)
+    - get_qonnx_annotations(): QONNX DataType annotations (from KernelTestConfig)
     - get_num_inputs/outputs(): I/O counts (from KernelTestConfig)
     - get_kernel_inference_transform(): Returns transform class (e.g., InferKernels)
-    - compute_golden_reference(): Test-owned golden reference
+
+    Optional overrides:
+    - compute_golden_reference(): Custom golden reference (default: ONNX Runtime)
+    - compute_golden_reference_numpy(): NumPy fallback for ONNX Runtime
+    - configure_kernel_node(): Configure PE, SIMD, etc.
 
     Provides 6 inherited tests:
     1. test_pipeline_creates_hw_node: Pipeline creates HW node
@@ -87,7 +92,7 @@ class SingleKernelTest(KernelTestConfig):
     """
 
     # ========================================================================
-    # Abstract Methods - Subclasses MUST implement (2 additional)
+    # Abstract Methods - Subclasses MUST implement (1 additional)
     # ========================================================================
 
     @abstractmethod
@@ -104,68 +109,9 @@ class SingleKernelTest(KernelTestConfig):
         """
         pass
 
-    @abstractmethod
-    def compute_golden_reference(
-        self, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using pure ONNX model (Stage 1).
-
-        IMPORTANT: Golden reference must be independent of QONNX/FINN/Brainsmith.
-
-        Best practice implementation:
-        1. Create pure ONNX model (via make_onnx_model())
-        2. Execute with ONNX Runtime
-        3. Return outputs
-
-        DO NOT:
-        - Use QONNX DataType annotations in golden reference
-        - Use FINN/Brainsmith execution (execute_node, cppsim, etc.)
-        - Depend on kernel inference transforms
-
-        Args:
-            inputs: Dict mapping input names → numpy arrays
-                   (Generated from pure ONNX model via make_execution_context_onnx)
-
-        Returns:
-            Dict mapping output names → expected numpy arrays
-
-        Example (ONNX Runtime - RECOMMENDED):
-            def compute_golden_reference(self, inputs):
-                import onnxruntime as ort
-
-                # Create pure ONNX model (Stage 1)
-                onnx_model, _ = self.make_onnx_model()
-
-                # Execute with ONNX Runtime
-                sess = ort.InferenceSession(
-                    onnx_model.model.SerializeToString(),
-                    providers=['CPUExecutionProvider']
-                )
-
-                # Filter inputs (exclude initializers)
-                runtime_inputs = {
-                    name: inputs[name]
-                    for name in [inp.name for inp in sess.get_inputs()]
-                    if name in inputs
-                }
-
-                # Execute
-                ort_outputs = sess.run(None, runtime_inputs)
-
-                # Return dict
-                output_names = [out.name for out in sess.get_outputs()]
-                return {name: output for name, output in zip(output_names, ort_outputs)}
-
-        Example (NumPy fallback - ONLY if ONNX Runtime fails):
-            def compute_golden_reference(self, inputs):
-                try:
-                    # Try ONNX Runtime first
-                    return self._golden_via_onnx_runtime(inputs)
-                except:
-                    # Fallback to NumPy (for operations ONNX Runtime doesn't support)
-                    return {"output": np.add(inputs["input0"], inputs["input1"])}
-        """
-        pass
+    # Note: compute_golden_reference() is inherited from KernelTestConfig with
+    # default ONNX Runtime implementation. Override for custom golden reference
+    # or override compute_golden_reference_numpy() for NumPy fallback only.
 
     # ========================================================================
     # Pipeline Execution (uses Phase 1 PipelineRunner)

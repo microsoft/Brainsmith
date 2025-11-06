@@ -439,3 +439,100 @@ def get_broadcast_info(
         return BroadcastInfo.compute(lhs_shape, rhs_shape)
     except (ValueError, AttributeError):
         return None
+
+
+# ============================================================================
+# Scalar Tensor Normalization
+# ============================================================================
+
+def lift_scalar_to_rank1(
+    tensor_name: str,
+    model: ModelWrapper
+) -> bool:
+    """Lift scalar tensor (rank 0) to rank-1 tensor with single element.
+
+    ONNX Broadcasting Semantics: Scalar [] and rank-1 [1] are semantically
+    equivalent for all broadcasting operations. This function normalizes
+    scalar inputs to rank-1 to enable template-based tiling in schema system.
+
+    Why This Is Needed:
+    - Brainsmith's schema system uses templates (e.g., block_tiling=[FULL_DIM])
+    - Templates expect rank ≥ 1 tensors for dimension specifications
+    - ONNX models often use scalar parameters (shape=[]) for operations
+    - Lifting [] → [1] preserves semantics while enabling template resolution
+
+    IMPORTANT: This function is safe to call during inference transforms because:
+    - QONNX transforms receive deep copies of models by default (make_deepcopy=True)
+    - Mutations happen on the copy, not the original model
+    - If validation fails, the copy is discarded
+
+    Mutates model in place:
+    - Updates tensor shape: [] → [1]
+    - Reshapes initializer if present: scalar → array[1]
+
+    Args:
+        tensor_name: Name of tensor to potentially lift
+        model: ModelWrapper to mutate (operates on deep copy in practice)
+
+    Returns:
+        True if tensor was lifted, False if already rank ≥ 1
+
+    Example:
+        >>> # Before lift
+        >>> model.get_tensor_shape("bias")
+        []
+        >>> model.get_initializer("bias")
+        array(0.5)
+
+        >>> # Lift the scalar
+        >>> lifted = lift_scalar_to_rank1("bias", model)
+        >>> lifted
+        True
+
+        >>> # After lift
+        >>> model.get_tensor_shape("bias")
+        [1]
+        >>> model.get_initializer("bias")
+        array([0.5])
+
+        >>> # No-op on rank ≥ 1 tensors
+        >>> lift_scalar_to_rank1("weights", model)  # shape=[64]
+        False
+
+    Usage in Kernel Inference:
+        >>> @classmethod
+        >>> def infer_from(cls, node, model, insert_index):
+        ...     # Normalize scalar inputs for template-based tiling
+        ...     for inp in node.input:
+        ...         lift_scalar_to_rank1(inp, model)
+        ...
+        ...     # Now schema validation will work with rank-1 tensors
+        ...     schema = cls.get_schema()
+        ...     design_space = schema.build_design_space(...)
+
+    References:
+        - FINN's lift_to_rank1() in convert_to_hw_layers.py (lines 1740-1748)
+        - ONNX broadcasting semantics: https://github.com/onnx/onnx/blob/main/docs/Broadcasting.md
+    """
+    # Get current tensor shape
+    shape = model.get_tensor_shape(tensor_name)
+
+    # Only lift if scalar (rank 0)
+    if len(shape) != 0:
+        return False
+
+    # Update shape metadata: [] → [1]
+    model.set_tensor_shape(tensor_name, [1])
+
+    # Update initializer if present
+    initializer = model.get_initializer(tensor_name)
+    if initializer is not None:
+        # Reshape scalar to rank-1 array
+        model.set_initializer(tensor_name, initializer.reshape(1))
+
+    logger.debug(
+        f"Lifted scalar tensor '{tensor_name}' from shape [] to [1] "
+        f"(ONNX semantic equivalence for template-based tiling)"
+    )
+
+    return True

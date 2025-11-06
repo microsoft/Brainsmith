@@ -61,6 +61,69 @@ def tensorproto_for_datatype(dtype: DataType) -> int:
     return TensorProto.FLOAT
 
 
+def datatype_to_actual_tensorproto(dtype: DataType) -> int:
+    """Convert QONNX DataType to actual ONNX TensorProto type (Stage 1).
+
+    This is different from tensorproto_for_datatype() which returns FLOAT containers
+    for all integer types (FINN convention, Stage 2). This function returns actual
+    TensorProto types that preserve correct semantics in ONNX Runtime.
+
+    Use Cases:
+    - Stage 1 (pure ONNX golden reference): Use this function for correct semantics
+    - Stage 2 (QONNX FINN/Brainsmith): Use tensorproto_for_datatype() for FLOAT containers
+
+    Examples:
+        >>> # Stage 1: Actual integer types for golden reference
+        >>> datatype_to_actual_tensorproto(DataType["INT8"])
+        TensorProto.INT8  # ONNX Runtime uses integer division (7÷2=3)
+
+        >>> # Stage 2: FLOAT containers for FINN/Brainsmith
+        >>> tensorproto_for_datatype(DataType["INT8"])
+        TensorProto.FLOAT  # Hardware interprets as fixed-point
+
+        >>> # Float types are same in both
+        >>> datatype_to_actual_tensorproto(DataType["FLOAT32"])
+        TensorProto.FLOAT
+
+    Args:
+        dtype: QONNX DataType instance
+
+    Returns:
+        ONNX TensorProto type constant with correct semantics
+
+    Note:
+        Integer division example: INT8(7) ÷ INT8(2) = INT8(3) with actual types,
+        but FLOAT(7) ÷ FLOAT(2) = FLOAT(3.5) with FINN convention.
+    """
+    # FLOAT16 is special - use native TensorProto.FLOAT16
+    if dtype == DataType["FLOAT16"]:
+        return TensorProto.FLOAT16
+
+    if dtype.is_integer():
+        # Integer types → proper integer TensorProto
+        if dtype.signed():
+            if dtype.bitwidth() <= 8:
+                return TensorProto.INT8
+            elif dtype.bitwidth() <= 16:
+                return TensorProto.INT16
+            elif dtype.bitwidth() <= 32:
+                return TensorProto.INT32
+            else:
+                return TensorProto.INT64
+        else:
+            if dtype.bitwidth() <= 8:
+                return TensorProto.UINT8
+            elif dtype.bitwidth() <= 16:
+                return TensorProto.UINT16
+            elif dtype.bitwidth() <= 32:
+                return TensorProto.UINT32
+            else:
+                return TensorProto.UINT64
+    else:
+        # Float types (FLOAT32, DOUBLE, etc.)
+        return TensorProto.FLOAT
+
+
 def generate_onnx_test_data(
     tensor_type: int,
     shape: Tuple[int, ...],

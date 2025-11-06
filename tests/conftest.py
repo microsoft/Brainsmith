@@ -41,6 +41,31 @@ from tests.fixtures.kernel_test_helpers import (
 )
 
 
+def pytest_addoption(parser):
+    """Add custom command-line options for pytest.
+
+    Custom options:
+    - --seed: Random seed for test data generation (default: 42)
+
+    Usage:
+        pytest --seed=12345          # Use specific seed
+        pytest --seed=42             # Default seed (deterministic)
+        pytest                       # Uses default seed (42)
+
+    Reproducibility workflow:
+        1. Test fails with seed=42
+        2. Re-run with same seed: pytest --seed=42
+        3. Same random data generated, failure reproduces
+    """
+    parser.addoption(
+        "--seed",
+        action="store",
+        default=42,
+        type=int,
+        help="Random seed for deterministic test data generation (default: 42)"
+    )
+
+
 def pytest_configure(config):
     """Configure pytest with custom settings.
 
@@ -56,6 +81,36 @@ def pytest_configure(config):
 
     # Markers already defined in pytest.ini
     pass
+
+
+@pytest.fixture(scope="session")
+def test_seed(request):
+    """Provide deterministic random seed for test data generation.
+
+    Returns the seed value from the --seed CLI option (default: 42).
+    Session-scoped to ensure consistent seed across entire test run.
+
+    Individual test classes can override via get_test_seed() method.
+
+    Usage in tests:
+        def test_something(test_seed):
+            # test_seed is available (e.g., 42)
+            inputs = make_execution_context(..., seed=test_seed)
+
+    Usage in test frameworks:
+        class TestMyKernel(SingleKernelTest):
+            def get_test_seed(self):
+                # Override to customize seed
+                return 99
+
+    CLI usage:
+        pytest --seed=12345    # Custom seed
+        pytest                 # Default seed (42)
+
+    Reproducibility:
+        Same seed → Same random data → Same test results
+    """
+    return request.config.getoption("--seed")
 
 
 @pytest.fixture(scope="session")

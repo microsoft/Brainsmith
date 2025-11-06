@@ -94,6 +94,16 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         - TI: Input type from kernel instance inputs["input"].datatype
         - TO: Output type from kernel instance outputs["output"].datatype
         """
+        # TEMPORARY DIAGNOSTIC: Verify design_space is initialized before code generation
+        # This assertion helps validate that the design_point refactoring fixes RTLsim issues
+        # TODO: Remove this assertion after confirming LayerNorm RTLsim passes
+        if self._design_space is None:
+            raise RuntimeError(
+                f"{self.onnx_node.name}: defines() called before design_space initialized! "
+                f"This indicates HLS code generation is happening without proper initialization. "
+                f"The parent class should call methods that trigger _ensure_ready(model) before code generation."
+            )
+
         # Use kernel instance for shape information (not nodeattrs)
         input0 = self.design_point.inputs["input"]
         output0 = self.design_point.outputs["output"]
@@ -371,6 +381,41 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         - IP packaging
         """
         super().code_generation_ipgen(model, fpgapart, clk)
+
+    def get_all_verilog_filenames(self, abspath=False):
+        """Return list of all Verilog AND VHDL files used for this node.
+
+        LayerNorm uses division operations (mean = sum / count, var = pow_sum / count)
+        which Vivado HLS generates as VHDL IP cores (sdiv_*_ip.vhd files).
+
+        FINN's default implementation only collects .v files, causing RTL elaboration
+        to fail when the Verilog wrappers try to instantiate missing VHDL division cores.
+
+        This override includes both .v (Verilog) and .vhd (VHDL) files to ensure
+        division IP cores are packaged correctly for RTL simulation and synthesis.
+
+        Args:
+            abspath: If True, return absolute paths; if False, return filenames only
+
+        Returns:
+            list: Verilog (.v) and VHDL (.vhd) files from all verilog paths
+        """
+        import os
+
+        verilog_files = []
+        verilog_paths = self.get_all_verilog_paths()
+
+        for verilog_path in verilog_paths:
+            for f in os.listdir(verilog_path):
+                # Include both Verilog (.v) and VHDL (.vhd) files
+                # Division IP cores are generated as VHDL by Vivado HLS
+                if f.endswith(".v") or f.endswith(".vhd"):
+                    if abspath:
+                        verilog_files.append(verilog_path + "/" + f)
+                    else:
+                        verilog_files.append(f)
+
+        return verilog_files
 
     def ipgen_extra_includes(self):
         """Provide kernel-specific include paths for IP generation.

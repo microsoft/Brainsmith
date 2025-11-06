@@ -37,7 +37,7 @@ from qonnx.core.datatype import DataType
 
 from tests.frameworks.dual_kernel_test import DualKernelTest
 from brainsmith.kernels.crop import LegacyCrop, LegacyCrop_hls, InferCropFromGather
-from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
+from brainsmith.primitives.transforms.infer_kernels import InferKernels
 from brainsmith.dataflow.kernel_op import KernelOp
 
 
@@ -201,9 +201,9 @@ class CropParityBase(DualKernelTest):
         """Return modern Crop transform class.
 
         Returns:
-            class: InferKernelList (auto-discovers Crop.infer_from())
+            class: InferKernels (auto-discovers Crop.infer_from())
         """
-        return InferKernelList
+        return InferKernels
 
     def get_manual_backend_variants(self):
         """Return legacy backend implementation.

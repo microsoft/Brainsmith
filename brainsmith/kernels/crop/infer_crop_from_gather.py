@@ -24,9 +24,17 @@ def elements_are_consecutive(indices):
 
 
 class InferCropFromGather(Transformation):
-    """
-    Find gather layers that can be converted into a Crop layer
-    and replace them with a Crop layer
+    """Transform Gather nodes with consecutive indices into Crop nodes.
+
+    Supports spatial cropping on height and width dimensions in NHWC layout:
+    - Gather(axis=1, indices=[start:end]) → Crop with crop_north/crop_south
+    - Gather(axis=2, indices=[start:end]) → Crop with crop_east/crop_west
+
+    Requirements:
+    - Data input must be dynamic (not an initializer)
+    - Indices input must be static (initializer)
+    - Indices must be consecutive integers
+    - Axis must be 1 (height) or 2 (width) for NHWC 4D tensors
     """
 
     def __init__(self, simd=1):
@@ -52,32 +60,77 @@ class InferCropFromGather(Transformation):
                 if not self.is_initializer(n.input[1], model):
                     continue
 
-                # ensure that the axis is among the two innermost dimensions
+                # Get input shape and axis
                 input_shape = model.get_tensor_shape(n.input[0])
-                max_index = len(input_shape) - 1
-                axis = get_by_name(n.attribute, "axis").i
-                assert axis in [max_index, max_index - 1], "Crop Operates on two innermost dimensions"
-                is_vertical = axis == max_index # otherwise horizontal
-                assert is_vertical == False, "This operator does not current support vertical crops"
+                axis_attr = get_by_name(n.attribute, "axis")
+                axis = axis_attr.i if axis_attr else 0
 
-                # ensure that the output shape matches the expected output shape
+                # Normalize negative axis
+                if axis < 0:
+                    axis = len(input_shape) + axis
+
+                # Validate axis is spatial dimension (height or width) in NHWC layout
+                # NHWC: [N=0, H=1, W=2, C=3]
+                # Only support axis=1 (height) or axis=2 (width)
+                if len(input_shape) == 4:
+                    assert axis in [1, 2], f"Crop only supports axis=1 (height) or axis=2 (width) in NHWC layout, got axis={axis}"
+                else:
+                    # For non-4D tensors, support two innermost spatial dimensions
+                    max_index = len(input_shape) - 1
+                    assert axis in [max_index - 2, max_index - 1], f"Crop only supports two innermost spatial dimensions"
+
+                # Get output shape
                 output_shape = model.get_tensor_shape(n.output[0])
 
-                # assume that the indices input is an int64 scalar
+                # Validate indices
                 indices = model.get_initializer(n.input[1])
-                assert indices.dtype == np.int64, "Indices must be int64 scalar"
-                assert elements_are_consecutive(indices[0]), "Indices must be consecutive"
+                assert indices is not None, "Indices must be an initializer"
+                assert indices.dtype == np.int64, "Indices must be int64"
+                indices_flat = indices.flatten()
+                assert elements_are_consecutive(indices_flat), "Indices must be consecutive"
 
-                # set the number of pixels to crop off each edge
-                width =  input_shape[-1]
-                assert width % self.simd == 0, "Width must be divisible by SIMD"
-                crop_north = int(np.min(indices))
-                crop_south = input_shape[axis] - int(np.max(indices)) - 1
-                crop_east = 0
-                crop_west = 0
+                # Validate SIMD divisibility
+                channels = input_shape[-1]
+                assert channels % self.simd == 0, f"Channels ({channels}) must be divisible by SIMD ({self.simd})"
+
+                # Compute crop parameters based on axis
+                min_idx = int(np.min(indices_flat))
+                max_idx = int(np.max(indices_flat))
+
+                if axis == 1:  # Height dimension in NHWC
+                    # Cropping height: remove rows from top and bottom
+                    crop_north = min_idx
+                    crop_south = input_shape[axis] - max_idx - 1
+                    crop_east = 0
+                    crop_west = 0
+                elif axis == 2:  # Width dimension in NHWC
+                    # Cropping width: remove columns from left and right
+                    crop_north = 0
+                    crop_south = 0
+                    crop_west = min_idx
+                    crop_east = input_shape[axis] - max_idx - 1
+                else:
+                    # For non-4D tensors, map to innermost spatial dimensions
+                    # This maintains backward compatibility
+                    max_index = len(input_shape) - 1
+                    if axis == max_index - 1:  # Width-like dimension
+                        crop_north = 0
+                        crop_south = 0
+                        crop_west = min_idx
+                        crop_east = input_shape[axis] - max_idx - 1
+                    else:  # axis == max_index - 2, height-like dimension
+                        crop_north = min_idx
+                        crop_south = input_shape[axis] - max_idx - 1
+                        crop_east = 0
+                        crop_west = 0
 
                 idt0 = model.get_tensor_datatype(n.input[0])
                 odt0 = model.get_tensor_datatype(n.output[0])
+
+                # Extract height and width for legacy node attributes
+                # NHWC layout: [N, H, W, C]
+                height = input_shape[-2]
+                width = input_shape[-1]
 
                 # create and insert new node
                 new_node = helper.make_node(
@@ -89,7 +142,7 @@ class InferCropFromGather(Transformation):
                     data_type=idt0.name,
                     name="Crop" + n.name,
                     simd=self.simd,
-                    height=input_shape[-2],
+                    height=height,
                     width=width,
                     channel_fold=1,
                     crop_north=crop_north,

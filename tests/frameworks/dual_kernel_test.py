@@ -94,15 +94,19 @@ class DualKernelTest(KernelTestConfig):
     """Test manual vs auto parity + both against golden reference.
 
     Subclasses implement:
-    - make_test_model(): Create ONNX model (from KernelTestConfig)
+    - make_onnx_model(): Create pure ONNX model (from KernelTestConfig)
+    - get_qonnx_annotations(): QONNX DataType annotations (from KernelTestConfig)
     - get_num_inputs/outputs(): I/O counts (from KernelTestConfig)
     - get_manual_transform(): Returns FINN transform class
     - get_auto_transform(): Returns Brainsmith transform class
-    - compute_golden_reference(): Test-owned golden reference
+    - get_manual_backend_variants(): Backend classes for FINN pipeline
 
-    Optional backend configuration:
+    Optional overrides:
+    - compute_golden_reference(): Custom golden reference (default: ONNX Runtime)
+    - compute_golden_reference_numpy(): NumPy fallback for ONNX Runtime
+    - configure_kernel_node(): Configure PE, SIMD, etc.
     - get_backend_fpgapart(): Enable backend testing (Stage 3)
-    - get_backend_variants(): Backend classes to try in priority order
+    - get_auto_backend_variants(): Backend classes for Brainsmith pipeline
 
     Pipeline Architecture (3 stages):
     - Stage 1: ONNX Node (e.g., Add, Mul)
@@ -200,26 +204,9 @@ class DualKernelTest(KernelTestConfig):
         """
         return None
 
-    @abstractmethod
-    def compute_golden_reference(
-        self, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Compute test-owned golden reference.
-
-        Each test defines what "correct" means for its specific test case.
-        This is TEST LOGIC, not production code!
-
-        Args:
-            inputs: Dict mapping input names → numpy arrays
-
-        Returns:
-            Dict mapping output names → expected numpy arrays
-
-        Example:
-            def compute_golden_reference(self, inputs):
-                return {"output": inputs["input0"] + inputs["input1"]}
-        """
-        pass
+    # Note: compute_golden_reference() is inherited from KernelTestConfig with
+    # default ONNX Runtime implementation. Override for custom golden reference
+    # or override compute_golden_reference_numpy() for NumPy fallback only.
 
     # ========================================================================
     # Pipeline Execution (uses Phase 1 PipelineRunner)
