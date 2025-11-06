@@ -30,7 +30,7 @@ set(IPREPO_DIR     "${HW_ROOT}/iprepo")
 file(MAKE_DIRECTORY "${CHECKPOINT_DIR}" "${REPORT_DIR}" "${BIT_DIR}" "${HDL_DIR}" "${IPREPO_DIR}")
 
 # SW subdirs
-set(EXPORT_DIR      "${SW_ROOT}/include")
+set(EXPORT_DIR      "${SW_ROOT}/export")
 file(MAKE_DIRECTORY "${EXPORT_DIR}")
 
 # =============================================================================
@@ -101,8 +101,9 @@ endif()
 if(BUILD_SW OR BUILD_PY)
   set(MAIN_CPP_PATH 0 CACHE PATH   "Path to main cpp sources (must contain main.cpp).")
   set(MAIN_PY_PATH 0  CACHE PATH   "Path to main python sources (must contain main.py).")
-  file(MAKE_DIRECTORY "${SW_ROOT}/include")
-  file(MAKE_DIRECTORY "${SW_ROOT}/reference")
+  file(MAKE_DIRECTORY "${SW_ROOT}/export/include")
+  file(MAKE_DIRECTORY "${SW_ROOT}/export/config")
+  file(MAKE_DIRECTORY "${SW_ROOT}/export/reference")
 endif()
 
 # =============================================================================
@@ -355,7 +356,7 @@ if(BUILD_SW OR BUILD_PY)
   file(GLOB BWAVE_CXX_SOURCES CONFIGURE_DEPENDS "${BWAVE_DIR}/sw/libc/*.cpp")
 
   set(BWAVE_PUBLIC_INC "${BWAVE_DIR}/sw/libc/include")
-  set(BWAVE_GEN_INC    "${SW_ROOT}/include")
+  set(BWAVE_GEN_INC    "${SW_ROOT}/export/include")
 
   add_library(bwave_core_objs OBJECT ${BWAVE_C_SOURCES} ${BWAVE_CXX_SOURCES})
   target_include_directories(bwave_core_objs PUBLIC "${BWAVE_PUBLIC_INC}" "${BWAVE_GEN_INC}")
@@ -364,6 +365,19 @@ if(BUILD_SW OR BUILD_PY)
   target_compile_definitions(bwave_core_objs PRIVATE _FILE_OFFSET_BITS=64 _GNU_SOURCE _LARGE_FILE_SOURCE)
 
   set_target_properties(bwave_core_objs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  if (DEFINED CORE_PATH AND NOT "${CORE_PATH}" EQUAL 0)
+    file(GLOB NPY_FILES "${CORE_PATH}/*.npy")
+
+    if (NPY_FILES)
+        foreach(f ${NPY_FILES})
+            file(COPY "${f}" DESTINATION "${SW_ROOT}/export/reference")
+        endforeach()
+    endif()
+  endif()
+
+  configure_file("${BWAVE_DIR}/sw/host_config/xfer_config.txt" "${SW_ROOT}/export/config/xfer_config.txt" COPYONLY)
+
 endif()
 
 # ---- SW: library + main + wrapper targets ----
@@ -412,6 +426,8 @@ endfunction()
 
 # ---- PY: pybind11 module ----
 function(create_py)
+  file(MAKE_DIRECTORY "${SW_ROOT}/python/output")
+
   if(NOT MAIN_PY_PATH)
     message(FATAL_ERROR "MAIN_PY_PATH not provided (must contain main.py).")
   endif()

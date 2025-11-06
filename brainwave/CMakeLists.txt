@@ -43,7 +43,7 @@ project(brainsmith)
 
 set(BWAVE_DIR ${CMAKE_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${BWAVE_DIR}/cmake)
-message("** Brainwave directory: ${BWAVE_DIR}")
+message(STATUS "** Brainwave directory: ${BWAVE_DIR}")
 
 # Select what to build
 set(BUILD_HW ON  CACHE BOOL  "Build FPGA hardware")

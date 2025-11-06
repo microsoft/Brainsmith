@@ -150,16 +150,15 @@ def save_single_diff_txt(path: Path, out_t: torch.Tensor, exp_t: torch.Tensor, r
 # Main ------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ref-dir", type=Path, default="${CMAKE_BINARY_DIR}/sw")
+    parser.add_argument("--ref-dir", type=Path, default="${CMAKE_BINARY_DIR}/sw/export/reference")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--rtol", type=float, default=1e-3)
     parser.add_argument("--atol", type=float, default=1e-5)
     parser.add_argument("--diff-file", type=Path, default="${CMAKE_BINARY_DIR}/sw/python/output/out_diff.txt")
     args = parser.parse_args()
 
-    ref = args.ref_dir / "reference"
-
     # Load tensors per header-declared dtypes
+    ref = args.ref_dir
     user_t     = load_input(ref)
     expected_t = load_expected(ref)
     weights_t  = load_weights(ref)

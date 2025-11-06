@@ -46,8 +46,6 @@ source "${CMAKE_BINARY_DIR}/hw/base.tcl"
 puts "[color $clr_flow "** Creating project ..."]"
 puts "[color $clr_flow "**"]"
 
-set proj_dir        "$build_dir/BrainWave_prj"
-
 # Check iprepo
 if { [file isdirectory $iprepo_dir] } {
 	set lib_dir "$iprepo_dir"

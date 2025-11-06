@@ -36,7 +36,7 @@ core_dtypes  = [${CORE_DTYPES_CSV}]
 core_count   = ${CORE_ID_COUNT}
 
 # Path into your repo (CMake substitutes BWAVE_DIR)
-cfg_path     = "${BWAVE_DIR}/sw/host_config/xfer_config.txt"
+cfg_path     = "${CMAKE_BINARY_DIR}/sw/export/config/xfer_config.txt"
 # ---------------------------------------------------------------------------------------------
 
 
