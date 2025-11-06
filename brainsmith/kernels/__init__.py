@@ -15,6 +15,7 @@ from brainsmith.kernels.shuffle.shuffle import Shuffle
 
 # Backends
 from brainsmith.kernels.layernorm.layernorm_hls import LayerNorm_hls
+from brainsmith.kernels.layernorm.layernorm_rtl import LayerNorm_rtl
 from brainsmith.kernels.crop.crop_hls import Crop_hls
 from brainsmith.kernels.softmax.hwsoftmax_hls import Softmax_hls
 from brainsmith.kernels.shuffle.shuffle_hls import Shuffle_hls
@@ -27,6 +28,7 @@ __all__ = [
     'Shuffle',
     # Backends
     'LayerNorm_hls',
+    'LayerNorm_rtl',
     'Crop_hls',
     'Softmax_hls',
     'Shuffle_hls',
