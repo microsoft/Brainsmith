@@ -22,8 +22,8 @@ import tests.fixtures.components.steps
 
 # Phase 4: Fixture imports for global availability
 from tests.fixtures.models import *
-from tests.fixtures.design_spaces import *
-from tests.fixtures.blueprints import *
+from tests.fixtures.dse.design_spaces import *
+from tests.fixtures.dse.blueprints import *
 
 # Import kernel test helpers for easy access in all kernel tests
 # Use these for unit testing kernels (schema, inference, transformation)

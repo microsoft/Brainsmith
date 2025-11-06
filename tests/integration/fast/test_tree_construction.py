@@ -57,7 +57,7 @@ class TestTreeBuilding:
     @pytest.mark.fast
     def test_tree_from_blueprint(self, tmp_path, simple_onnx_model):
         """Build tree from blueprint end-to-end."""
-        from tests.fixtures.blueprints import create_minimal_blueprint
+        from tests.fixtures.dse.blueprints import create_minimal_blueprint
 
         blueprint_path = create_minimal_blueprint(
             tmp_path,

@@ -27,8 +27,7 @@ design_space:
     - "build_dataflow_graph"  # ONNX --> Kernels
     - "build_hw_graph"        # Kernels --> HW Backends
     - "brainsmith:target_fps_parallelization"
-    # - "apply_parallelization_config"
-    # - "apply_folding_config"
+    - "apply_parallelization_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"
     - "hw_codegen"

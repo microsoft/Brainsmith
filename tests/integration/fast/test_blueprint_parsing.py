@@ -12,7 +12,7 @@ from pathlib import Path
 
 from brainsmith.dse import parse_blueprint, GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
-from tests.fixtures.blueprints import (
+from tests.fixtures.dse.blueprints import (
     create_minimal_blueprint,
     create_full_blueprint,
     create_extends_blueprint,

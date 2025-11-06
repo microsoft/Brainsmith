@@ -32,7 +32,7 @@ class TestPipelineIntegration:
         - Estimate report generation
         - Validation of estimate outputs
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create pipeline blueprint (uses FINN_PIPELINE_ESTIMATES by default)
         blueprint_path = create_finn_blueprint(
@@ -84,7 +84,7 @@ class TestPipelineIntegration:
         - Model saved after each transformation step
         - Intermediate models loadable and valid
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create blueprint for testing intermediate model saving
         blueprint_path = create_finn_blueprint(
@@ -211,7 +211,7 @@ design_space:
         - Contains expected fields (LUT, FF, BRAM, DSP)
         - Values are reasonable (non-negative, numeric)
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create estimate pipeline (uses FINN_PIPELINE_ESTIMATES by default)
         blueprint_path = create_finn_blueprint(

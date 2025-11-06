@@ -4,8 +4,10 @@ Organized by purpose:
 - Model construction: model_builders.py (OnnxModelBuilder, convenience functions)
 - Model annotation: model_annotation.py (DataType annotations, Quant insertion)
 - Test data: test_data.py (generate_test_data for all QONNX types)
-- DSE fixtures: blueprints.py, models.py, design_spaces.py
+- ONNX models: models.py (simple_onnx_model, quantized_onnx_model, brevitas_fc_model)
+- DSE fixtures: dse/ (blueprints, design_spaces)
 - Registry: components/ (test kernels, backends, steps)
+- Tests: tests/ (unit tests for fixture utilities)
 
 Usage:
     # Single import for model utilities
@@ -13,6 +15,12 @@ Usage:
         make_binary_op_model,
         annotate_model_datatypes,
         generate_test_data,
+    )
+
+    # DSE utilities
+    from tests.fixtures.dse import (
+        create_finn_blueprint,
+        simple_design_space,
     )
 """
 
@@ -49,10 +57,11 @@ from .test_data import (
     generate_onnx_test_data,
 )
 
-# DSE fixtures (existing imports)
-from .blueprints import *  # noqa: F401, F403
+# ONNX model fixtures
 from .models import *  # noqa: F401, F403
-from .design_spaces import *  # noqa: F401, F403
+
+# DSE fixtures are in dse/ subdirectory
+# Import via: from tests.fixtures.dse import create_finn_blueprint, etc.
 
 __all__ = [
     # Model construction
