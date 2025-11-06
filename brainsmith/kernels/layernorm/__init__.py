@@ -4,6 +4,7 @@
 # Import the main operator, backends, and inference transform for the LayerNorm
 from .layernorm import LayerNorm
 from .layernorm_hls import LayerNorm_hls as LayerNormHLS
+from .layernorm_rtl import LayerNorm_rtl as LayerNormRTL
 from .infer_layernorm import InferLayerNorm
 
-__all__ = ["LayerNorm", "LayerNormHLS", "InferLayerNorm"]
+__all__ = ["LayerNorm", "LayerNormHLS", "LayerNormRTL", "InferLayerNorm"]

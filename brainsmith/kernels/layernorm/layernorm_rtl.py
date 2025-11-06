@@ -8,6 +8,7 @@
 ############################################################################
 
 import os
+import shutil
 
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
@@ -15,7 +16,7 @@ from brainsmith.registry import backend
 
 
 @backend(name='LayerNorm_rtl', target_kernel='brainsmith:LayerNorm', language='rtl')
-class LayerNorm_hls(LayerNorm, RTLBackend):
+class LayerNorm_rtl(LayerNorm, RTLBackend):
     """RTL backend implementation for LayerNorm kernel.
 
     Generates RTL code for hardware synthesis of LayerNorm operations.
@@ -42,11 +43,11 @@ class LayerNorm_hls(LayerNorm, RTLBackend):
     def generate_hdl(self, model, fpgapart, clk):
         # wrapper file is in the same directory as this file
         rtlsrc = os.path.dirname(os.path.abspath(__file__))
-        template_path = rtlsrc + "/layernorm_template_wrapper.v"
+        template_path = rtlsrc + "/layernorm_wrapper_template.v"
         simd = self.get_nodeattr("SIMD")
         topname = self.get_verilog_top_module_name()
         code_gen_dict = {
-            "$N$": int(chans),
+            "$N$": int(self.get_normal_input_shape()[-1]),
             "$SIMD$": int(simd),
             "$TOP_MODULE_NAME$": topname,
         }
@@ -67,8 +68,7 @@ class LayerNorm_hls(LayerNorm, RTLBackend):
         ) as f:
             f.write(template)
 
-        # TODO: add sv files here
-        sv_files = []
+        sv_files = ["layernorm.sv", "queue.sv", "accuf.sv", "binopf.sv", "rsqrtf.sv"]
         for sv_file in sv_files:
             shutil.copy(rtlsrc + "/" + sv_file, code_gen_dir)
         # set ipgen_path and ip_path so that HLS-Synth transformation
@@ -84,8 +84,12 @@ class LayerNorm_hls(LayerNorm, RTLBackend):
             code_gen_dir = ""
             rtllib_dir = ""
 
-        # TODO: add sv files
         verilog_files = [
+            rtllib_dir + "/layernorm.sv",
+            rtllib_dir + "/queue.sv",
+            rtllib_dir + "/accuf.sv",
+            rtllib_dir + "/binopf.sv",
+            rtllib_dir + "/rsqrtf.sv",
             code_gen_dir + self.get_nodeattr("gen_top_module") + ".v",
         ]
         return verilog_files
@@ -94,8 +98,12 @@ class LayerNorm_hls(LayerNorm, RTLBackend):
         """Constructs and returns the TCL for node instantiation in Vivado IPI."""
         code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
 
-        # TODO: needs to be expanded when code is checked in
         sourcefiles = [
+            "layernorm.sv",
+            "queue.sv",
+            "accuf.sv",
+            "binopf.sv",
+            "rsqrtf.sv",
             self.get_nodeattr("gen_top_module") + ".v",
         ]
 
